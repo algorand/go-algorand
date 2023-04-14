@@ -1742,10 +1742,6 @@ func (le lineError) Unwrap() error {
 	return le.Err
 }
 
-func typecheck(expected, got StackType) bool {
-	return got.assignableTo(expected)
-}
-
 // newline not included since handled in scanner
 var tokenSeparators = [256]bool{'\t': true, ' ': true, ';': true}
 
@@ -1868,7 +1864,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 			} else {
 				ops.trace(", %s", argType)
 			}
-			if !typecheck(argType, stype) {
+			if !stype.overlaps(argType) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(instruction, " "), i, argType, stype)
 			}

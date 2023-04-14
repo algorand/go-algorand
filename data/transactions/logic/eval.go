@@ -787,29 +787,30 @@ func (st StackType) constant() (uint64, bool) {
 	return 0, false
 }
 
-// assignableTo indicates whether a value typed st might be
-// usable as other.
-func (st StackType) assignableTo(other StackType) bool {
-	if st.AVMType == avmNone || other.AVMType == avmNone {
+// overlaps checks if there is enough overlap
+// between the given types that the receiver can
+// possible fit in the expected type
+func (st StackType) overlaps(expected StackType) bool {
+	if st.AVMType == avmNone || expected.AVMType == avmNone {
 		return false
 	}
 
-	if st.AVMType == avmAny || other.AVMType == avmAny {
+	if st.AVMType == avmAny || expected.AVMType == avmAny {
 		return true
 	}
 
 	// By now, both are either uint or bytes
 	// and must match
-	if st.AVMType != other.AVMType {
+	if st.AVMType != expected.AVMType {
 		return false
 	}
 
 	// Same type now
 	// Check if our constraints will satisfy the other type
 	smin, smax := st.Bound[0], st.Bound[1]
-	omin, omax := other.Bound[0], other.Bound[1]
+	emin, emax := expected.Bound[0], expected.Bound[1]
 
-	return smin <= omax && smax >= omin
+	return smin <= emax && smax >= emin
 }
 
 func (st StackType) String() string {
@@ -830,7 +831,7 @@ type StackTypes []StackType
 
 // Reverse returns the StackTypes in reverse order
 // useful for displaying the stack as an op sees it
-func (st StackTypes) Reverse() StackTypes {
+func (st StackTypes) Reversed() StackTypes {
 	nst := make(StackTypes, len(st))
 	for idx := 0; idx < len(st); idx++ {
 		nst[idx] = st[len(st)-1-idx]

@@ -2799,7 +2799,7 @@ func TestReturnTypes(t *testing.T) {
 					stackType := cx.stack[i].stackType()
 					retType := spec.Return.Types[i]
 					require.True(
-						t, typecheck(retType, stackType),
+						t, stackType.overlaps(retType),
 						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
 					)
 				}
