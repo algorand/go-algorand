@@ -1490,7 +1490,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## box_create
 
 - Bytecode: 0xb9
-- Stack: ..., A: key, B: uint64 &rarr; ..., bool
+- Stack: ..., A: name, B: uint64 &rarr; ..., bool
 - create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
 - Availability: v8
 - Mode: Application
@@ -1500,7 +1500,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_extract
 
 - Bytecode: 0xba
-- Stack: ..., A: key, B: uint64, C: uint64 &rarr; ..., []byte
+- Stack: ..., A: name, B: uint64, C: uint64 &rarr; ..., []byte
 - read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
 - Availability: v8
 - Mode: Application
@@ -1508,7 +1508,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_replace
 
 - Bytecode: 0xbb
-- Stack: ..., A: key, B: uint64, C: []byte &rarr; ...
+- Stack: ..., A: name, B: uint64, C: []byte &rarr; ...
 - write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
 - Availability: v8
 - Mode: Application
@@ -1516,7 +1516,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_del
 
 - Bytecode: 0xbc
-- Stack: ..., A: key &rarr; ..., bool
+- Stack: ..., A: name &rarr; ..., bool
 - delete box named A if it exists. Return 1 if A existed, 0 otherwise
 - Availability: v8
 - Mode: Application
@@ -1524,7 +1524,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_len
 
 - Bytecode: 0xbd
-- Stack: ..., A: key &rarr; ..., X: uint64, Y: bool
+- Stack: ..., A: name &rarr; ..., X: uint64, Y: bool
 - X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.
 - Availability: v8
 - Mode: Application
@@ -1532,7 +1532,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 ## box_get
 
 - Bytecode: 0xbe
-- Stack: ..., A: key &rarr; ..., X: []byte, Y: bool
+- Stack: ..., A: name &rarr; ..., X: []byte, Y: bool
 - X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.
 - Availability: v8
 - Mode: Application
@@ -1542,7 +1542,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 ## box_put
 
 - Bytecode: 0xbf
-- Stack: ..., A: key, B: []byte &rarr; ...
+- Stack: ..., A: name, B: []byte &rarr; ...
 - replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist
 - Availability: v8
 - Mode: Application

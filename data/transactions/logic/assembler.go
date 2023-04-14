@@ -274,7 +274,7 @@ func newOpStream(version uint64) OpStream {
 	}
 
 	for i := range o.known.scratchSpace {
-		o.known.scratchSpace[i] = StackUint64
+		o.known.scratchSpace[i] = StackZeroUint64
 	}
 
 	return o
@@ -1316,8 +1316,10 @@ func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes
 func typeEquals(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 0 {
-		//Require arg0 and arg1 to have same type
-		return StackTypes{pgm.stack[top], pgm.stack[top]}, nil, nil
+		// Require arg0 and arg1 to have same avm type
+		// but the bounds shouldn't matter
+		widened := pgm.stack[top].widened()
+		return StackTypes{widened, widened}, nil, nil
 	}
 	return nil, nil, nil
 }
@@ -1345,8 +1347,7 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
-		unioned, err := pgm.stack[top-1].union(pgm.stack[top-2])
-		return nil, StackTypes{unioned}, err
+		return nil, StackTypes{pgm.stack[top-1].union(pgm.stack[top-2])}, nil
 	}
 	return nil, nil, nil
 }
@@ -1433,14 +1434,21 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	if top < 0 {
 		return nil, nil, nil
 	}
-	var err error
+
+	// If the index of the scratch slot is a const
+	// we can modify only that scratch slots type
+	if top >= 1 {
+		idx, isConst := pgm.stack[top-1].constant()
+		if isConst {
+			pgm.scratchSpace[idx] = pgm.stack[top]
+			return nil, nil, nil
+		}
+	}
+
 	for i := range pgm.scratchSpace {
 		// We can't know what slot stacktop is being stored in
 		// so we union it into all scratch slots
-		pgm.scratchSpace[i], err = pgm.scratchSpace[i].union(pgm.stack[top])
-		if err != nil {
-			return nil, nil, err
-		}
+		pgm.scratchSpace[i] = pgm.scratchSpace[i].union(pgm.stack[top])
 	}
 	return nil, nil, nil
 }
@@ -1469,6 +1477,16 @@ func typeProto(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 }
 
 func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+
+	top := len(pgm.stack) - 1
+	if top < 0 {
+		return nil, nil, nil
+	}
+
+	if val, isConst := pgm.stack[top].constant(); isConst {
+		return nil, StackTypes{pgm.scratchSpace[val]}, nil
+	}
+
 	scratchType := pgm.scratchSpace[0]
 	for _, item := range pgm.scratchSpace {
 		// If all the scratch slots are one type, then we can say we are loading that type
@@ -1522,6 +1540,33 @@ func typePushInts(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes,
 	}
 
 	return nil, types, nil
+}
+
+func typePushInt(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	types := make(StackTypes, len(args))
+	for i := range types {
+		val, err := strconv.ParseUint(args[i], 10, 64)
+		if err != nil {
+			types[i] = StackUint64
+		} else {
+			types[i] = NewStackType(avmUint64, bound(val, val))
+		}
+	}
+	return nil, types, nil
+}
+
+func typeBzero(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	// Bzero should only allow its input int to be up to maxStringSize bytes
+	return StackTypes{StackUint64.narrowed(bound(0, maxStringSize))}, StackTypes{StackBytes}, nil
+}
+
+func typeByte(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	if len(args) == 0 {
+		return nil, StackTypes{StackBytes}, nil
+	}
+	val, _, _ := parseBinaryArgs(args)
+	l := uint64(len(val))
+	return nil, StackTypes{NewStackType(avmBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
 }
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
@@ -1604,8 +1649,8 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
-	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt)}},
-	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte)}},
+	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt).typed(typePushInt)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte).typed(typeByte)}},
 	// parse basics.Address, actually just another []byte constant
 	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
@@ -1709,10 +1754,6 @@ func (le lineError) Error() string {
 
 func (le lineError) Unwrap() error {
 	return le.Err
-}
-
-func typecheck(expected, got StackType) bool {
-	return got.AssignableTo(expected)
 }
 
 // newline not included since handled in scanner
@@ -1837,7 +1878,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 			} else {
 				ops.trace(", %s", argType)
 			}
-			if !typecheck(argType, stype) {
+			if !stype.overlaps(argType) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(instruction, " "), i, argType, stype)
 			}

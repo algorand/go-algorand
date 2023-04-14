@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
@@ -80,6 +81,22 @@ func opGroupMarkdownTable(names []string, out io.Writer) {
 
 func markdownTableEscape(x string) string {
 	return strings.ReplaceAll(x, "|", "\\|")
+}
+
+func namedStackTypesMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "## StackTypes\n\n")
+	fmt.Fprintf(out, "| Name | Bound | AVM Type |\n")
+	fmt.Fprintf(out, "| ---- | ---- | -------- |\n")
+
+	// Create a slice so we can sort it later
+	rows := []string{}
+	for _, st := range logic.AllStackTypes {
+		bound := fmt.Sprintf("%d - %d", st.Bound[0], st.Bound[1])
+		rows = append(rows, fmt.Sprintf("| %s | %s | %s |", st.String(), bound, st.AVMType.String()))
+	}
+	fmt.Fprint(out, strings.Join(sort.StringSlice(rows), "\n"))
+
+	out.Write([]byte("\n"))
 }
 
 func integerConstantsTableMarkdown(out io.Writer) {
@@ -292,20 +309,41 @@ type OpRecord struct {
 	Groups            []string
 }
 
+type namedType struct {
+	Name         string
+	Abbreviation string
+	Bounds       []uint64
+	AVMType      string
+}
+
 // LanguageSpec records the ops of the language at some version
 type LanguageSpec struct {
 	EvalMaxVersion  int
 	LogicSigVersion uint64
+	NamedTypes      []namedType
 	Ops             []OpRecord
 }
 
-func typeStrings(types []logic.StackType) []string {
-	out := []string{}
-	for _, t := range types {
-		if t.String() != "none" {
-			out = append(out, t.String())
+func typeStrings(types logic.StackTypes) []string {
+	var (
+		out      = make([]string, len(types))
+		allNones = true
+	)
+	for idx, t := range types {
+		out[idx] = t.String()
+		if out[idx] != "none" {
+			allNones = false
 		}
 	}
+
+	// If all the types are none, we just return
+	// an empty array, otherwise leave the nones
+	// in so we don't break the indices by omitting
+	// a valid none in a fields array
+	if allNones {
+		return []string{}
+	}
+
 	return out
 }
 
@@ -376,9 +414,21 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Groups = opGroups[spec.Name]
 		records[i].IntroducedVersion = spec.Version
 	}
+	named := []namedType{}
+	for abbr, t := range logic.AllStackTypes {
+		named = append(named, namedType{
+			Name:         t.String(),
+			Bounds:       []uint64{t.Bound[0], t.Bound[1]},
+			Abbreviation: string(abbr),
+			AVMType:      t.AVMType.String(),
+		})
+	}
+	sort.Slice(named, func(i, j int) bool { return strings.Compare(named[i].Name, named[j].Name) > 0 })
+
 	return &LanguageSpec{
 		EvalMaxVersion:  docVersion,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
+		NamedTypes:      named,
 		Ops:             records,
 	}
 }
@@ -410,6 +460,10 @@ func main() {
 	constants := create("named_integer_constants.md")
 	integerConstantsTableMarkdown(constants)
 	constants.Close()
+
+	namedTypes := create("named_stack_types.md")
+	namedStackTypesMarkdown(namedTypes)
+	namedTypes.Close()
 
 	written := make(map[string]bool)
 	opSpecs := logic.OpcodesByVersion(uint64(docVersion))

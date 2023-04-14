@@ -630,6 +630,23 @@ func (at avmType) String() string {
 	return "internal error, unknown type"
 }
 
+// stackType lifts the avmType to a StackType
+// it can do this because the base StackTypes
+// are a superset of avmType
+func (at avmType) stackType() StackType {
+	switch at {
+	case avmNone:
+		return StackNone
+	case avmAny:
+		return StackAny
+	case avmUint64:
+		return StackUint64
+	case avmBytes:
+		return StackBytes
+	}
+	return StackNone
+}
+
 var (
 	// StackUint64 is any valid uint64
 	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
@@ -660,22 +677,29 @@ var (
 	StackMethodSelector = NewStackType(avmBytes, static(4), "method")
 	// StackStorageKey represents a bytestring that can be used as a key to some storage (global/local/box)
 	StackStorageKey = NewStackType(avmBytes, bound(0, 64), "key")
-	// StackBoxKey represents a bytestring that can be used as a key to a box
-	StackBoxKey = NewStackType(avmBytes, bound(1, 64), "bkey")
+	// StackBoxName represents a bytestring that can be used as a key to a box
+	StackBoxName = NewStackType(avmBytes, bound(1, 64), "name")
 
-	// AllStackTypes is a list of all the stack types we recognize
+	// StackZeroUint64 is a StackUint64 with a minimum value of 0 and a maximum value of 0
+	StackZeroUint64 = NewStackType(avmUint64, bound(0, 0), "0")
+	// StackZeroBytes is a StackBytes with a minimum length of 0 and a maximum length of 0
+	StackZeroBytes = NewStackType(avmUint64, bound(0, 0), "''")
+
+	// AllStackTypes is a map of all the stack types we recognize
 	// so that we can iterate over them in doc prep
-	AllStackTypes = []StackType{
-		StackUint64,
-		StackBytes,
-		StackAny,
-		StackNone,
-		StackBoolean,
-		StackBytes32,
-		StackBigInt,
-		StackMethodSelector,
-		StackStorageKey,
-		StackBoxKey,
+	// and use them for opcode proto shorthand
+	AllStackTypes = map[rune]StackType{
+		'a': StackAny,
+		'b': StackBytes,
+		'i': StackUint64,
+		'x': StackNone,
+		'A': StackAddress,
+		'I': StackBigInt,
+		'T': StackBoolean,
+		'H': StackBytes32,
+		'M': StackMethodSelector,
+		'K': StackStorageKey,
+		'N': StackBoxName,
 	}
 )
 
@@ -709,6 +733,18 @@ type StackType struct {
 // NewStackType Initializes a new StackType with fields passed
 func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	name := at.String()
+
+	// It's static, set the name to show
+	// the static value
+	if bounds[0] == bounds[1] {
+		switch at {
+		case avmBytes:
+			name = fmt.Sprintf("[%d]byte", bounds[0])
+		case avmUint64:
+			name = fmt.Sprintf("%d", bounds[0])
+		}
+	}
+
 	if len(stname) > 0 {
 		name = stname[0]
 	}
@@ -716,52 +752,66 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 	return StackType{Name: name, AVMType: at, Bound: bounds}
 }
 
-func (st StackType) union(b StackType) (StackType, error) {
+func (st StackType) union(b StackType) StackType {
+	// TODO: Can we ever receive one or the other
+	// as None? should that be a panic?
 	if st.AVMType != b.AVMType {
-		return StackAny, nil
+		return StackAny
 	}
 
 	// Same type now, so we can just take the union of the bounds
-	return NewStackType(st.AVMType, union(st.Bound, b.Bound)), nil
+	return NewStackType(st.AVMType, union(st.Bound, b.Bound))
 }
 
 func (st StackType) narrowed(bounds [2]uint64) StackType {
-	// It's static, set the name to show
-	// the static value
-	if bounds[0] == bounds[1] {
-		switch st.AVMType {
-		case avmBytes:
-			return NewStackType(st.AVMType, bounds, fmt.Sprintf("[%d]byte", bounds[0]))
-		case avmUint64:
-			return NewStackType(st.AVMType, bounds, fmt.Sprintf("%d", bounds[0]))
-		}
-	}
 	return NewStackType(st.AVMType, bounds)
 }
 
-// AssignableTo indicates whether a value typed st might be
-// usable as other.
-func (st StackType) AssignableTo(other StackType) bool {
-	if st.AVMType == avmNone || other.AVMType == avmNone {
+func (st StackType) widened() StackType {
+	// Take only the avm type
+	switch st.AVMType {
+	case avmBytes:
+		return StackBytes
+	case avmUint64:
+		return StackUint64
+	case avmAny:
+		return StackAny
+	default:
+		panic(fmt.Sprintf("What are you tyring to widen?: %+v", st))
+	}
+}
+
+func (st StackType) constant() (uint64, bool) {
+	if st.Bound[0] == st.Bound[1] {
+		return st.Bound[0], true
+	}
+	return 0, false
+}
+
+// overlaps checks if there is enough overlap
+// between the given types that the receiver can
+// possible fit in the expected type
+func (st StackType) overlaps(expected StackType) bool {
+	if st.AVMType == avmNone || expected.AVMType == avmNone {
 		return false
 	}
 
-	if st.AVMType == avmAny || other.AVMType == avmAny {
+	if st.AVMType == avmAny || expected.AVMType == avmAny {
 		return true
 	}
 
 	// By now, both are either uint or bytes
 	// and must match
-	if st.AVMType != other.AVMType {
+	if st.AVMType != expected.AVMType {
 		return false
 	}
 
 	// Same type now
 	// Check if our constraints will satisfy the other type
 	smin, smax := st.Bound[0], st.Bound[1]
-	omin, omax := other.Bound[0], other.Bound[1]
+	emin, emax := expected.Bound[0], expected.Bound[1]
 
-	return smin <= omax && smax >= omin
+	return smin <= emax && smax >= emin
 }
 
 func (st StackType) String() string {
@@ -780,9 +830,9 @@ func (st StackType) Typed() bool {
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
 
-// Reverse returns the StackTypes in reverse order
+// Reversed returns the StackTypes in reverse order
 // useful for displaying the stack as an op sees it
-func (st StackTypes) Reverse() StackTypes {
+func (st StackTypes) Reversed() StackTypes {
 	nst := make(StackTypes, len(st))
 	for idx := 0; idx < len(st); idx++ {
 		nst[idx] = st[len(st)-1-idx]
@@ -809,28 +859,11 @@ func parseStackTypes(spec string) StackTypes {
 	}
 	types := make(StackTypes, len(spec))
 	for i, letter := range spec {
-		switch letter {
-		case 'a':
-			types[i] = StackAny
-		case 'b':
-			types[i] = StackBytes
-		case 'i':
-			types[i] = StackUint64
-		case 'x':
-			types[i] = StackNone
-		case 'N':
-			types[i] = StackBigInt
-		case 'T':
-			types[i] = StackBoolean
-		case 'H':
-			types[i] = StackBytes32
-		case 'M':
-			types[i] = StackMethodSelector
-		case 'K':
-			types[i] = StackStorageKey
-		default:
+		st, ok := AllStackTypes[letter]
+		if !ok {
 			panic(spec)
 		}
+		types[i] = st
 	}
 	return types
 }

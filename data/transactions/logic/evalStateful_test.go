@@ -1743,12 +1743,12 @@ func TestAppLocalGlobalErrorCases(t *testing.T) {
 	ep, tx, ledger := makeSampleEnv()
 	ledger.NewApp(tx.Sender, 888, basics.AppParams{})
 
-	testApp(t, fmt.Sprintf(`byte "%v"; int 1; app_global_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1)), ep, "key too long")
+	testApp(t, NoTrack(fmt.Sprintf(`byte "%v"; int 1; app_global_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1))), ep, "key too long")
 
 	testApp(t, fmt.Sprintf(`byte "%v"; int 1; app_global_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
 	ledger.NewLocals(tx.Sender, 888)
-	testApp(t, fmt.Sprintf(`txn Sender; byte "%v"; int 1; app_local_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1)), ep, "key too long")
+	testApp(t, NoTrack(fmt.Sprintf(`txn Sender; byte "%v"; int 1; app_local_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1))), ep, "key too long")
 
 	testApp(t, fmt.Sprintf(`txn Sender; byte "%v"; int 1; app_local_put; int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
@@ -2799,7 +2799,7 @@ func TestReturnTypes(t *testing.T) {
 					stackType := cx.stack[i].stackType()
 					retType := spec.Return.Types[i]
 					require.True(
-						t, typecheck(retType, stackType),
+						t, stackType.overlaps(retType),
 						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
 					)
 				}

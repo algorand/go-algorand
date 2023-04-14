@@ -1,6 +1,107 @@
 {
   "EvalMaxVersion": 8,
   "LogicSigVersion": 8,
+  "NamedTypes": [
+    {
+      "Name": "uint64",
+      "Abbreviation": "i",
+      "Bounds": [
+        0,
+        18446744073709551615
+      ],
+      "AVMType": "uint64"
+    },
+    {
+      "Name": "none",
+      "Abbreviation": "x",
+      "Bounds": [
+        0,
+        0
+      ],
+      "AVMType": "none"
+    },
+    {
+      "Name": "name",
+      "Abbreviation": "N",
+      "Bounds": [
+        1,
+        64
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "method",
+      "Abbreviation": "M",
+      "Bounds": [
+        4,
+        4
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "key",
+      "Abbreviation": "K",
+      "Bounds": [
+        0,
+        64
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "bool",
+      "Abbreviation": "T",
+      "Bounds": [
+        0,
+        1
+      ],
+      "AVMType": "uint64"
+    },
+    {
+      "Name": "bigint",
+      "Abbreviation": "I",
+      "Bounds": [
+        0,
+        64
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "any",
+      "Abbreviation": "a",
+      "Bounds": [
+        0,
+        0
+      ],
+      "AVMType": "any"
+    },
+    {
+      "Name": "addr",
+      "Abbreviation": "A",
+      "Bounds": [
+        32,
+        32
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "[]byte",
+      "Abbreviation": "b",
+      "Bounds": [
+        0,
+        4096
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "[32]byte",
+      "Abbreviation": "H",
+      "Bounds": [
+        32,
+        32
+      ],
+      "AVMType": "[]byte"
+    }
+  ],
   "Ops": [
     {
       "Opcode": 0,
@@ -3954,7 +4055,7 @@
       "Opcode": 185,
       "Name": "box_create",
       "Args": [
-        "key",
+        "name",
         "uint64"
       ],
       "Returns": [
@@ -3972,7 +4073,7 @@
       "Opcode": 186,
       "Name": "box_extract",
       "Args": [
-        "key",
+        "name",
         "uint64",
         "uint64"
       ],
@@ -3990,7 +4091,7 @@
       "Opcode": 187,
       "Name": "box_replace",
       "Args": [
-        "key",
+        "name",
         "uint64",
         "[]byte"
       ],
@@ -4005,7 +4106,7 @@
       "Opcode": 188,
       "Name": "box_del",
       "Args": [
-        "key"
+        "name"
       ],
       "Returns": [
         "bool"
@@ -4021,7 +4122,7 @@
       "Opcode": 189,
       "Name": "box_len",
       "Args": [
-        "key"
+        "name"
       ],
       "Returns": [
         "uint64",
@@ -4038,7 +4139,7 @@
       "Opcode": 190,
       "Name": "box_get",
       "Args": [
-        "key"
+        "name"
       ],
       "Returns": [
         "[]byte",
@@ -4056,7 +4157,7 @@
       "Opcode": 191,
       "Name": "box_put",
       "Args": [
-        "key",
+        "name",
         "[]byte"
       ],
       "Size": 1,

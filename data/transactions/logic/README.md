@@ -40,6 +40,31 @@ has fewer than two elements, the operation fails. Some operations, like
 `frame_dig` and `proto` could fail because of an attempt to access
 above the current stack.
 
+## Stack Types
+
+While every element of the stack is restricted to the types `uint64` and `bytes`, 
+the values of these types may be known to be bounded.  The more common bounded types are 
+named to provide more semantic information in the documentation. They're also used during
+assembly time to do type checking and to provide more informative error messages.
+
+
+## StackTypes
+
+| Name | Bound | AVM Type |
+| ---- | ---- | -------- |
+| none | 0 - 0 | none |
+| addr | 32 - 32 | []byte |
+| bool | 0 - 1 | uint64 |
+| [32]byte | 32 - 32 | []byte |
+| method | 4 - 4 | []byte |
+| key | 0 - 64 | []byte |
+| []byte | 0 - 4096 | []byte |
+| uint64 | 0 - 18446744073709551615 | uint64 |
+| name | 1 - 64 | []byte |
+| any | 0 - 0 | any |
+| bigint | 0 - 64 | []byte |
+
+
 ## Scratch Space
 
 In addition to the stack there are 256 positions of scratch
