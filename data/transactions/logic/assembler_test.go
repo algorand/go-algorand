@@ -777,7 +777,7 @@ int 1
 +
 // comment
 `
-	testProg(t, source, AssemblerMaxVersion, Expect{3, "+ arg 0 wanted type uint64 got []byte"})
+	testProg(t, source, AssemblerMaxVersion, Expect{3, "+ arg 0 wanted type uint64 got [5]byte"})
 }
 
 // mutateProgVersion replaces version (first two symbols) in hex-encoded program
@@ -1858,7 +1858,7 @@ balance
 int 1
 ==`
 	for v := uint64(2); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, Expect{2, "balance arg 0 wanted type uint64 got []byte"})
+		testProg(t, source, v, Expect{2, "balance arg 0 wanted type uint64 got [1]byte"})
 	}
 	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, source, v)
@@ -1874,7 +1874,7 @@ min_balance
 int 1
 ==`
 	for v := uint64(3); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, Expect{2, "min_balance arg 0 wanted type uint64 got []byte"})
+		testProg(t, source, v, Expect{2, "min_balance arg 0 wanted type uint64 got [1]byte"})
 	}
 	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, source, v)
@@ -2638,15 +2638,14 @@ func TestScratchBounds(t *testing.T) {
 	require.Equal(t, sv.AVMType, avmUint64)
 	require.ElementsMatch(t, sv.Bound, bound(1, 1))
 
-	// Since stores may not know at assembly time
-	//os = testProg(t, "int 5; store 1; load 1; int 1; byte 0xff; stores; return;", AssemblerMaxVersion)
-	//sv = os.known.scratchSpace[1]
-	//require.Equal(t, sv.AVMType, avmBytes)
-	//require.ElementsMatch(t, sv.Bound, static(0))
+	os = testProg(t, "int 5; store 1; load 1; int 1; byte 0xff; stores; return;", AssemblerMaxVersion)
+	sv = os.known.scratchSpace[1]
+	require.Equal(t, sv.AVMType, avmBytes)
+	require.ElementsMatch(t, sv.Bound, static(1))
 
-	//osv := os.known.scratchSpace[0]
-	//require.Equal(t, osv.AVMType, avmAny)
-	//require.ElementsMatch(t, osv.Bound, static(0))
+	osv := os.known.scratchSpace[0]
+	require.Equal(t, osv.AVMType, avmUint64)
+	require.ElementsMatch(t, osv.Bound, static(0))
 
 	testProg(t, "byte 0xff; store 1; load 1; return", AssemblerMaxVersion, Expect{1, "return arg 0 wanted type uint64 ..."})
 }
@@ -2701,10 +2700,11 @@ func TestTxTypes(t *testing.T) {
 	t.Parallel()
 	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{1, "itxn_field Sender expects 1 stack argument..."})
 	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type addr got uint64"})
-	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
+	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5, Expect{1, "...wanted type addr got [4]byte"})
+	testProg(t, "itxn_begin; global ZeroAddress; itxn_field Sender", 5)
 
 	testProg(t, "itxn_begin; itxn_field Amount", 5, Expect{1, "itxn_field Amount expects 1 stack argument..."})
-	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{1, "...wanted type uint64 got []byte"})
+	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{1, "...wanted type uint64 got [4]byte"})
 	testProg(t, "itxn_begin; int 1; itxn_field Amount", 5)
 }
 
@@ -2716,14 +2716,14 @@ func TestBadInnerFields(t *testing.T) {
 	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 5, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{1, "...Note field was introduced in v6..."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{1, "...VotePK field was introduced in v6..."})
+	testProg(t, "itxn_begin; global ZeroAddress; itxn_field VotePK", 5, Expect{1, "...VotePK field was introduced in v6..."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 5, Expect{1, "...is not allowed."})
 
 	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 6)
+	testProg(t, "itxn_begin; global ZeroAddress; itxn_field VotePK", 6)
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, Expect{1, "...is not allowed."})
 }
 

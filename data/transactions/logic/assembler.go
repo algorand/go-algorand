@@ -1541,6 +1541,20 @@ func typePushInt(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, 
 	return nil, types, nil
 }
 
+func typeBzero(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	// Bzero should only allow its input int to be up to maxStringSize bytes
+	return StackTypes{StackUint64.narrowed(bound(0, maxStringSize))}, StackTypes{StackBytes}, nil
+}
+
+func typeByte(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	if len(args) == 0 {
+		return nil, StackTypes{StackBytes}, nil
+	}
+	val, _, _ := parseBinaryArgs(args)
+	l := uint64(len(val))
+	return nil, StackTypes{NewStackType(avmBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
+}
+
 func joinIntsOnOr(singularTerminator string, list ...int) string {
 	if len(list) == 1 {
 		switch list[0] {
@@ -1622,7 +1636,7 @@ const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
 	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt).typed(typePushInt)}},
-	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte).typed(typeByte)}},
 	// parse basics.Address, actually just another []byte constant
 	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant

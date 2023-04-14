@@ -630,6 +630,23 @@ func (at avmType) String() string {
 	return "internal error, unknown type"
 }
 
+// stackType lifts the avmType to a StackType
+// it can do this because the base StackTypes
+// are a superset of avmType
+func (at avmType) stackType() StackType {
+	switch at {
+	case avmNone:
+		return StackNone
+	case avmAny:
+		return StackAny
+	case avmUint64:
+		return StackUint64
+	case avmBytes:
+		return StackBytes
+	}
+	return StackNone
+}
+
 var (
 	// StackUint64 is any valid uint64
 	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
@@ -661,7 +678,7 @@ var (
 	// StackStorageKey represents a bytestring that can be used as a key to some storage (global/local/box)
 	StackStorageKey = NewStackType(avmBytes, bound(0, 64), "key")
 	// StackBoxKey represents a bytestring that can be used as a key to a box
-	StackBoxKey = NewStackType(avmBytes, bound(1, 64), "bkey")
+	StackBoxKey = NewStackType(avmBytes, bound(1, 64), "name")
 
 	// StackZeroUint64 is a StackUint64 with a minimum value of 0 and a maximum value of 0
 	StackZeroUint64 = NewStackType(avmUint64, bound(0, 0), "0")
@@ -849,7 +866,7 @@ func parseStackTypes(spec string) StackTypes {
 			types[i] = StackUint64
 		case 'x':
 			types[i] = StackNone
-		case 'N':
+		case 'I':
 			types[i] = StackBigInt
 		case 'T':
 			types[i] = StackBoolean
@@ -859,7 +876,7 @@ func parseStackTypes(spec string) StackTypes {
 			types[i] = StackMethodSelector
 		case 'K':
 			types[i] = StackStorageKey
-		case 'B':
+		case 'N':
 			types[i] = StackBoxKey
 		default:
 			panic(spec)
