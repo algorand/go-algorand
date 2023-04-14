@@ -25,30 +25,37 @@ import (
 
 func init() {
 	// register tests that will run on each KV implementation
-	// registerTest("online-accounts-crud", CustomTestOnlineReadWrite)
+	registerTest("online-accounts-crud", CustomTestOnlineAccountsCrud)
 	registerTest("online-accounts-all", CustomTestOnlineAccountsAll)
 	registerTest("online-accounts-top", CustomTestAccountsOnlineTop)
 	registerTest("online-accounts-get-by-addr", CustomTestLookupOnlineAccountDataByAddress)
 
 }
 
-func CustomTestOnlineReadWrite(t *customT) {
-	oaw, err := t.db.MakeOnlineAccountsOptimizedWriter(false)
+func CustomTestOnlineAccountsCrud(t *customT) {
+	oaw, err := t.db.MakeOnlineAccountsOptimizedWriter(true)
 	require.NoError(t, err)
 
 	oar, err := t.db.MakeOnlineAccountsOptimizedReader()
 	require.NoError(t, err)
 
+	aw, err := t.db.MakeAccountsWriter()
+	require.NoError(t, err)
+
+	// set round to 3
+	// Note: this will be used to check that we read the round
+	expectedRound := basics.Round(3)
+	err = aw.UpdateAccountsRound(expectedRound)
+	require.NoError(t, err)
+
 	// generate some test data
 	addrA := RandomAddress()
-	microAlgosA := basics.MicroAlgos{Raw: uint64(100)}
-	rewardBaseA := uint64(200)
 	updRoundA := uint64(400)
 	lastValidA := uint64(500)
 	dataA := trackerdb.BaseOnlineAccountData{
 		BaseVotingData: trackerdb.BaseVotingData{},
-		MicroAlgos:     microAlgosA,
-		RewardsBase:    rewardBaseA,
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
+		RewardsBase:    uint64(200),
 	}
 	normalizedBalA := dataA.NormalizedOnlineBalance(t.proto)
 
@@ -59,11 +66,30 @@ func CustomTestOnlineReadWrite(t *customT) {
 	// read
 	poA, err := oar.LookupOnline(addrA, basics.Round(updRoundA))
 	require.NoError(t, err)
-
-	// check that the returned ref is the same as the original
 	require.Equal(t, addrA, poA.Addr)
 	require.Equal(t, refA, poA.Ref)
-	require.Equal(t, 1, 2)
+	require.Equal(t, dataA, poA.AccountData)
+	require.Equal(t, basics.Round(updRoundA), poA.UpdRound) // check the "update round" was read
+	require.Equal(t, expectedRound, poA.Round)
+
+	// write a new version
+	dataA.MicroAlgos = basics.MicroAlgos{Raw: uint64(321)}
+	normalizedBalA = dataA.NormalizedOnlineBalance(t.proto)
+	updRoundA = uint64(450)
+	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA, dataA, updRoundA, lastValidA)
+	require.NoError(t, err)
+
+	// read (latest)
+	poA, err = oar.LookupOnline(addrA, basics.Round(500))
+	require.NoError(t, err)
+	require.Equal(t, dataA, poA.AccountData)                // check the data is from the new version
+	require.Equal(t, basics.Round(updRoundA), poA.UpdRound) // check the "update round"
+
+	// read (original)
+	poA, err = oar.LookupOnline(addrA, basics.Round(405))
+	require.NoError(t, err)
+	require.Equal(t, basics.MicroAlgos{Raw: uint64(100)}, poA.AccountData.MicroAlgos) // check the data is from the new version
+	require.Equal(t, basics.Round(400), poA.UpdRound)                                 // check the "update round"
 }
 
 func CustomTestOnlineAccountsAll(t *customT) {

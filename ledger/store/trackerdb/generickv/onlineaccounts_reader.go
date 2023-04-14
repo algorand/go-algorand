@@ -26,31 +26,68 @@ import (
 
 // LookupOnline pulls the Online Account data for a given account+round
 func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (data trackerdb.PersistedOnlineAccountData, err error) {
+	// SQL at the time of writing this:
+	//
+	// SELECT
+	// 		onlineaccounts.rowid, onlineaccounts.updround,
+	//	    acctrounds.rnd,
+	//      onlineaccounts.data
+	// FROM acctrounds
+	//		LEFT JOIN onlineaccounts ON address=? AND updround <= ?
+	// WHERE id='acctbase'
+	// ORDER BY updround DESC LIMIT 1
+
 	// read the current db round
 	data.Round, err = r.AccountsRound()
 	if err != nil {
 		return
 	}
 
-	value, closer, err := r.kvr.Get(onlineAccountKey(addr, rnd))
-	if err == trackerdb.ErrNotFound {
-		// Note: the SQL implementation returns a data value and no error even when the account does not exist.
-		return data, nil
-	} else if err != nil {
+	// read latest account up to `rnd``
+	low := onlineAccountOnlyPartialKey(addr)
+	high := onlineAccountKey(addr, rnd)
+	// inc the last byte to make it inclusive
+	high[len(high)-1]++
+	iter := r.kvr.NewIter(low, high, true)
+	defer iter.Close()
+
+	var value []byte
+	var updRound uint64
+
+	if iter.Next() {
+		// schema: <prefix>-<addr>-<rnd>
+		key := iter.Key()
+		// extract updround, its the last section after the "-"
+		rndOffset := len(kvPrefixOnlineAccount) + 1 + 32 + 1
+		updRound = binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
+		if err != nil {
+			return
+		}
+		data.Addr = addr
+		data.UpdRound = basics.Round(updRound)
+
+		// get value for current item in the iterator
+		value, err = iter.Value()
+		if err != nil {
+			return
+		}
+
+		// parse the value
+		err = protocol.Decode(value, &data.AccountData)
+		if err != nil {
+			return
+		}
+
+		normBalance := data.AccountData.NormalizedOnlineBalance(r.proto)
+		data.Ref = onlineAccountRef{addr, normBalance, rnd}
+
+		// we have the record, we can leave
 		return
 	}
-	defer closer.Close()
 
-	data.Addr = addr
-	err = protocol.Decode(value, &data.AccountData)
-	if err != nil {
-		return
-	}
-
-	normBalance := data.AccountData.NormalizedOnlineBalance(r.proto)
-	data.Ref = onlineAccountRef{addr, normBalance, rnd}
-
-	return
+	// nothing was found
+	// Note: the SQL implementation returns a data value and no error even when the account does not exist.
+	return data, nil
 }
 
 // LookupOnlineTotalsHistory pulls the total Online Algos on a given round
