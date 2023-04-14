@@ -1,6 +1,107 @@
 {
   "EvalMaxVersion": 8,
   "LogicSigVersion": 8,
+  "NamedTypes": [
+    {
+      "Name": "uint64",
+      "Abbreviation": "i",
+      "Bounds": [
+        0,
+        18446744073709551615
+      ],
+      "AVMType": "uint64"
+    },
+    {
+      "Name": "none",
+      "Abbreviation": "x",
+      "Bounds": [
+        0,
+        0
+      ],
+      "AVMType": "none"
+    },
+    {
+      "Name": "name",
+      "Abbreviation": "N",
+      "Bounds": [
+        1,
+        64
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "method",
+      "Abbreviation": "M",
+      "Bounds": [
+        4,
+        4
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "key",
+      "Abbreviation": "K",
+      "Bounds": [
+        0,
+        64
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "bool",
+      "Abbreviation": "T",
+      "Bounds": [
+        0,
+        1
+      ],
+      "AVMType": "uint64"
+    },
+    {
+      "Name": "bigint",
+      "Abbreviation": "I",
+      "Bounds": [
+        0,
+        64
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "any",
+      "Abbreviation": "a",
+      "Bounds": [
+        0,
+        0
+      ],
+      "AVMType": "any"
+    },
+    {
+      "Name": "addr",
+      "Abbreviation": "A",
+      "Bounds": [
+        32,
+        32
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "[]byte",
+      "Abbreviation": "b",
+      "Bounds": [
+        0,
+        4096
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "[32]byte",
+      "Abbreviation": "H",
+      "Bounds": [
+        32,
+        32
+      ],
+      "AVMType": "[]byte"
+    }
+  ],
   "Ops": [
     {
       "Opcode": 0,

@@ -693,6 +693,7 @@ var (
 		'b': StackBytes,
 		'i': StackUint64,
 		'x': StackNone,
+		'A': StackAddress,
 		'I': StackBigInt,
 		'T': StackBoolean,
 		'H': StackBytes32,
