@@ -23,12 +23,12 @@ make build-xrt
 
 1. Inside of `tools/x-repo-types` run the command `./xrt --x-package X_PACKAGE_NAME ...`
 2. `xrt` then does the following:
-    a. `go get`'s the package
-    b. `go build`'s it
-    c. executes a the template `xrt_tmpl.go.tmpl` in a temp folder, providing it the type information for the types to be compared
+   1. `go get`'s the package
+   2. `go build`'s it
+   3. executes a the template `xrt_tmpl.go.tmpl` in a temp folder, providing it the type information for the types to be compared
 3. `xrt_tmpl.go.tmpl` runs the following logic:
-    a. using reflection, build up each type's "Type Tree"
-    b. compare the trees using the rules outlined below
+   1. using reflection, build up each type's "Type Tree"
+   2. compare the trees using the rules outlined below
 4. If the template reports back a non-empty diff, exit with an error.
 
 ### Type Tree Comparison
