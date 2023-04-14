@@ -99,7 +99,7 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 	xPkgSuffix := strings.Join(xParts[3:], "/")
 	yPkgSuffix := strings.Join(yParts[3:], "/")
 
-	// Instantiate the type in a seperate process
+	// Instantiate the type in a separate process
 	err = instantiate(xRepo, xPkgSuffix, xType)
 	if err != nil {
 		return err
@@ -109,9 +109,9 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 		return err
 	}
 
-	// Compare the types by running the template xrt_tmpl.go.tmpl in a seperate process
+	// Compare the types by running the template xrt_tmpl.go.tmpl in a separate process
 	// xrt_tmpl.go will return an error if the types are not the same
-	// here we propogate the error to the caller, so as to fail the test.
+	// here we propagate the error to the caller, so as to fail the test.
 	err = serializationDiff(xRepo, xPkgSuffix, xType, yRepo, yPkgSuffix, yType)
 	if err != nil {
 		return err
@@ -195,6 +195,7 @@ func main() {
 		return err
 	}
 
+	//nolint:gosec
 	cmd := exec.Command("go", "run", tmpFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -236,6 +237,7 @@ func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) er
 		return err
 	}
 
+	//nolint:gosec
 	cmd := exec.Command("go", "run", tmpFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
