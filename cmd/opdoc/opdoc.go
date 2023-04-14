@@ -259,13 +259,26 @@ type LanguageSpec struct {
 	Ops             []OpRecord
 }
 
-func typeStrings(types []logic.StackType) []string {
-	out := []string{}
-	for _, t := range types {
-		if t.String() != "none" {
-			out = append(out, t.String())
+func typeStrings(types logic.StackTypes) []string {
+	var (
+		out      = make([]string, len(types))
+		allNones = true
+	)
+	for idx, t := range types {
+		out[idx] = t.String()
+		if out[idx] != "none" {
+			allNones = false
 		}
 	}
+
+	// If all the types are none, we just return
+	// an empty array, otherwise leave the nones
+	// in so we don't break the indices by omitting
+	// a valid none in a fields array
+	if allNones {
+		return []string{}
+	}
+
 	return out
 }
 

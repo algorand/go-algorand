@@ -677,29 +677,28 @@ var (
 	StackMethodSelector = NewStackType(avmBytes, static(4), "method")
 	// StackStorageKey represents a bytestring that can be used as a key to some storage (global/local/box)
 	StackStorageKey = NewStackType(avmBytes, bound(0, 64), "key")
-	// StackBoxKey represents a bytestring that can be used as a key to a box
-	StackBoxKey = NewStackType(avmBytes, bound(1, 64), "name")
+	// StackBoxName represents a bytestring that can be used as a key to a box
+	StackBoxName = NewStackType(avmBytes, bound(1, 64), "name")
 
 	// StackZeroUint64 is a StackUint64 with a minimum value of 0 and a maximum value of 0
 	StackZeroUint64 = NewStackType(avmUint64, bound(0, 0), "0")
 	// StackZeroBytes is a StackBytes with a minimum length of 0 and a maximum length of 0
 	StackZeroBytes = NewStackType(avmUint64, bound(0, 0), "''")
 
-	// AllStackTypes is a list of all the stack types we recognize
+	// AllStackTypes is a map of all the stack types we recognize
 	// so that we can iterate over them in doc prep
-	AllStackTypes = []StackType{
-		StackUint64,
-		StackBytes,
-		StackAny,
-		StackNone,
-		StackBoolean,
-		StackBytes32,
-		StackBigInt,
-		StackMethodSelector,
-		StackStorageKey,
-		StackBoxKey,
-		StackZeroUint64,
-		StackZeroBytes,
+	// and use them for opcode proto shorthand
+	AllStackTypes = map[rune]StackType{
+		'a': StackAny,
+		'b': StackBytes,
+		'i': StackUint64,
+		'x': StackNone,
+		'I': StackBigInt,
+		'T': StackBoolean,
+		'H': StackBytes32,
+		'M': StackMethodSelector,
+		'K': StackStorageKey,
+		'N': StackBoxName,
 	}
 )
 
@@ -859,30 +858,11 @@ func parseStackTypes(spec string) StackTypes {
 	}
 	types := make(StackTypes, len(spec))
 	for i, letter := range spec {
-		switch letter {
-		case 'a':
-			types[i] = StackAny
-		case 'b':
-			types[i] = StackBytes
-		case 'i':
-			types[i] = StackUint64
-		case 'x':
-			types[i] = StackNone
-		case 'I':
-			types[i] = StackBigInt
-		case 'T':
-			types[i] = StackBoolean
-		case 'H':
-			types[i] = StackBytes32
-		case 'M':
-			types[i] = StackMethodSelector
-		case 'K':
-			types[i] = StackStorageKey
-		case 'N':
-			types[i] = StackBoxKey
-		default:
+		st, ok := AllStackTypes[letter]
+		if !ok {
 			panic(spec)
 		}
+		types[i] = st
 	}
 	return types
 }
