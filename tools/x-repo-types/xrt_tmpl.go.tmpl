@@ -276,6 +276,14 @@ func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 	// if we got here it must be the case that either depth == 0 or
 	// the edges of x and y serialize the same way.
 
+	// First check that the native type for x and y are the same.
+	if xtype.Kind != ytype.Kind {
+		return &Diff{
+			Xdiff: []Target{x},
+			Ydiff: []Target{y},
+		}, nil
+	}
+
 	// So look at the children.
 	// If any children differ report back the diff.
 	xTgts, yTgts := xtype.Targets(), ytype.Targets()
