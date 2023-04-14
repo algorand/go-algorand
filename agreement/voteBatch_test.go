@@ -439,7 +439,7 @@ func TestProcessBatchOneCtxCancled(t *testing.T) {
 	}
 }
 
-// TestProcessBatchDifferentErrors tests the case where one of the jobs in a batch has a cancled ctx
+// TestProcessBatchDifferentErrors tests the differnt error cases handled by ProcessBatch
 func TestProcessBatchDifferentErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
