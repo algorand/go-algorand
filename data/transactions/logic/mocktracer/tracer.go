@@ -58,6 +58,9 @@ type Event struct {
 	// only for AfterTxn
 	TxnApplyData transactions.ApplyData
 
+	// only for AfterTxnGroup and AfterTxn
+	Deltas *ledgercore.StateDelta
+
 	// only for BeforeTxnGroup and AfterTxnGroup
 	GroupSize int
 
@@ -71,8 +74,8 @@ func BeforeTxnGroup(groupSize int) Event {
 }
 
 // AfterTxnGroup creates a new Event with the type AfterTxnGroupEvent
-func AfterTxnGroup(groupSize int, hasError bool) Event {
-	return Event{Type: AfterTxnGroupEvent, GroupSize: groupSize, HasError: hasError}
+func AfterTxnGroup(groupSize int, deltas *ledgercore.StateDelta, hasError bool) Event {
+	return Event{Type: AfterTxnGroupEvent, GroupSize: groupSize, Deltas: copyDeltas(deltas), HasError: hasError}
 }
 
 // BeforeProgram creates a new Event with the type BeforeProgramEvent
@@ -86,8 +89,8 @@ func BeforeTxn(txnType protocol.TxType) Event {
 }
 
 // AfterTxn creates a new Event with the type AfterTxnEvent
-func AfterTxn(txnType protocol.TxType, ad transactions.ApplyData, hasError bool) Event {
-	return Event{Type: AfterTxnEvent, TxnType: txnType, TxnApplyData: ad, HasError: hasError}
+func AfterTxn(txnType protocol.TxType, ad transactions.ApplyData, deltas *ledgercore.StateDelta, hasError bool) Event {
+	return Event{Type: AfterTxnEvent, TxnType: txnType, TxnApplyData: ad, Deltas: copyDeltas(deltas), HasError: hasError}
 }
 
 // AfterProgram creates a new Event with the type AfterProgramEvent
@@ -138,8 +141,8 @@ func (d *Tracer) BeforeTxnGroup(ep *logic.EvalParams) {
 }
 
 // AfterTxnGroup mocks the logic.EvalTracer.AfterTxnGroup method
-func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, update *ledgercore.StateDelta, evalError error) {
-	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), evalError != nil))
+func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
+	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), deltas, evalError != nil))
 }
 
 // BeforeTxn mocks the logic.EvalTracer.BeforeTxn method
@@ -148,8 +151,8 @@ func (d *Tracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 }
 
 // AfterTxn mocks the logic.EvalTracer.AfterTxn method
-func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, update *ledgercore.StateDelta, evalError error) {
-	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad, evalError != nil))
+func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error) {
+	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad, deltas, evalError != nil))
 }
 
 // BeforeProgram mocks the logic.EvalTracer.BeforeProgram method
@@ -170,4 +173,19 @@ func (d *Tracer) BeforeOpcode(cx *logic.EvalContext) {
 // AfterOpcode mocks the logic.EvalTracer.AfterOpcode method
 func (d *Tracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	d.Events = append(d.Events, AfterOpcode(evalError != nil))
+}
+
+// copyDeltas makes a deep copy of the given ledgercore.StateDelta pointer, if it's not nil.
+// This is inefficient, but it should only be used for testing.
+func copyDeltas(deltas *ledgercore.StateDelta) *ledgercore.StateDelta {
+	if deltas == nil {
+		return nil
+	}
+	encoded := protocol.EncodeReflect(deltas)
+	var clone ledgercore.StateDelta
+	err := protocol.DecodeReflect(encoded, &clone)
+	if err != nil {
+		panic(err)
+	}
+	return &clone
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
 
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -205,6 +206,12 @@ func TestPayTxn(t *testing.T) {
 						txn = txn.Txn.Sign(sender.Sk)
 					}
 
+					expectedSenderAcctData := sender.AcctData
+					expectedSenderAcctData.MicroAlgos.Raw -= txn.Txn.Fee.Raw + txn.Txn.Amount.Raw
+
+					expectedReceiverAcctData := receiver.AcctData
+					expectedReceiverAcctData.MicroAlgos.Raw += txn.Txn.Amount.Raw
+
 					return simulationTestCase{
 						input: []transactions.SignedTxn{txn},
 						expected: simulation.Result{
@@ -215,6 +222,24 @@ func TestPayTxn(t *testing.T) {
 									Txns: []simulation.TxnResult{
 										{
 											MissingSignature: !signed,
+										},
+									},
+									Delta: ledgercore.StateDelta{
+										Accts: ledgercore.AccountDeltas{
+											Accts: []ledgercore.BalanceRecord{
+												{
+													Addr:        sender.Addr,
+													AccountData: ledgercore.ToAccountData(expectedSenderAcctData),
+												},
+												{
+													Addr: ledgertesting.SinkAddr(),
+													// AccountData: ledgercore.ToAccountData(ledgercore.AccountData{}),
+												},
+												{
+													Addr:        receiver.Addr,
+													AccountData: ledgercore.ToAccountData(expectedReceiverAcctData),
+												},
+											},
 										},
 									},
 								},

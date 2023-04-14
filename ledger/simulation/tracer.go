@@ -147,6 +147,10 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	tracer.handleError(evalError)
 	tracer.cursorEvalTracer.AfterTxnGroup(ep, deltas, evalError)
+	if ep.GetCaller() == nil && deltas != nil {
+		// If this is the outer txn group, save the state delta
+		tracer.result.TxnGroups[0].Delta = *deltas
+	}
 }
 
 func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {

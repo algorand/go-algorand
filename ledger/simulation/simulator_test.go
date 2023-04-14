@@ -154,14 +154,14 @@ int 1`,
 		// Txn evaluation
 		mocktracer.BeforeTxnGroup(2),
 		mocktracer.BeforeTxn(protocol.PaymentTx),
-		mocktracer.AfterTxn(protocol.PaymentTx, payset[0].ApplyData, false),
+		mocktracer.AfterTxn(protocol.PaymentTx, payset[0].ApplyData, nil, false),
 		mocktracer.BeforeTxn(protocol.ApplicationCallTx),
 		mocktracer.BeforeProgram(logic.ModeApp),
 		mocktracer.BeforeOpcode(),
 		mocktracer.AfterOpcode(false),
 		mocktracer.AfterProgram(logic.ModeApp, false),
-		mocktracer.AfterTxn(protocol.ApplicationCallTx, payset[1].ApplyData, false),
-		mocktracer.AfterTxnGroup(2, false),
+		mocktracer.AfterTxn(protocol.ApplicationCallTx, payset[1].ApplyData, nil, false),
+		mocktracer.AfterTxnGroup(2, nil, false),
 	}
 	require.Equal(t, expectedEvents, mockTracer.Events)
 }

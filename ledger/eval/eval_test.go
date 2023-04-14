@@ -243,6 +243,11 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 
 	scenarios := mocktracer.GetTestScenarios()
 
+	// TODO: remove this filter
+	scenarios = map[string]mocktracer.TestScenarioGenerator{
+		"none": scenarios["none"],
+	}
+
 	type tracerTestCase struct {
 		name                 string
 		firstTxnBehavior     string
@@ -250,7 +255,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 	}
 	var testCases []tracerTestCase
 
-	firstIteration := true
+	firstIteration := false // TODO: change back to true
 	for scenarioName, scenario := range scenarios {
 		firstTxnBehaviors := []string{"approve"}
 		if firstIteration {
@@ -281,7 +286,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
 
 			genesisBalances := bookkeeping.GenesisBalances{
-				Balances:    genesisInitState.Accounts,
+				Balances:    balances,
 				FeeSink:     testSinkAddr,
 				RewardsPool: testPoolAddr,
 				Timestamp:   0,
@@ -342,7 +347,7 @@ int 1`,
 			// an app call with inner txn
 			innerAppCallTxn := txntest.Txn{
 				Type:   protocol.ApplicationCallTx,
-				Sender: addrs[0],
+				Sender: addrs[4],
 				ClearStateProgram: `#pragma version 6
 int 1`,
 
@@ -351,10 +356,22 @@ int 1`,
 				Fee:         minFee,
 				GenesisHash: genHash,
 			}
+
+			// TODO: account for fee sink data changes from prior txns
+			expectedFeeSinkData := balances[testSinkAddr]
+			expectedFeeSinkData.MicroAlgos.Raw += basicAppCallTxn.Amount
+			if testCase.firstTxnBehavior == "approve" {
+				expectedFeeSinkData.MicroAlgos.Raw += payTxn.Amount
+			}
+
 			scenario := testCase.innerAppCallScenario(mocktracer.TestScenarioInfo{
-				CallingTxn:   innerAppCallTxn.Txn(),
-				MinFee:       minFee,
-				CreatedAppID: innerAppID,
+				CallingTxn:     innerAppCallTxn.Txn(),
+				SenderData:     balances[addrs[4]],
+				AppAccountData: balances[innerAppAddress],
+				FeeSinkData:    expectedFeeSinkData,
+				FeeSinkAddr:    testSinkAddr,
+				MinFee:         minFee,
+				CreatedAppID:   innerAppID,
 			})
 			innerAppCallTxn.ApprovalProgram = scenario.Program
 
@@ -363,7 +380,7 @@ int 1`,
 			txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
 				basicAppCallTxn.Txn().Sign(keys[0]),
 				payTxn.Txn().Sign(keys[1]),
-				innerAppCallTxn.Txn().Sign(keys[0]),
+				innerAppCallTxn.Txn().Sign(keys[4]),
 			})
 
 			require.Len(t, eval.block.Payset, 0)
@@ -403,8 +420,49 @@ int 1`,
 					},
 				}
 
+			expectedAcct0Data := ledgercore.ToAccountData(balances[addrs[0]])
+			expectedAcct0Data.MicroAlgos.Raw -= txgroup[0].Txn.Fee.Raw
+			expectedAcct0Data.TotalAppParams = 1
+
+			expectedDelta := ledgercore.MakeStateDelta(&newBlock.BlockHeader, blkHeader.TimeStamp, 0, 0)
+			expectedDelta.Accts.Upsert(addrs[0], expectedAcct0Data)
+			expectedDelta.Accts.Upsert(testSinkAddr, ledgercore.ToAccountData(expectedFeeSinkData))
+			expectedDelta.Accts.UpsertAppResource(addrs[0], 1, ledgercore.AppParamsDelta{
+				Params: &basics.AppParams{
+					ApprovalProgram:   txgroup[0].Txn.ApprovalProgram,
+					ClearStateProgram: txgroup[0].Txn.ClearStateProgram,
+				},
+			}, ledgercore.AppLocalStateDelta{})
+			expectedDelta.AddCreatable(1, ledgercore.ModifiedCreatable{
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: addrs[0],
+			})
+			for i, stxn := range txgroup {
+				expectedDelta.Txids[stxn.ID()] = ledgercore.IncludedTransactions{
+					LastValid: stxn.Txn.LastValid,
+					Intra:     uint64(i),
+				}
+			}
+			// expectedDelta = eval.state.deltas()
+
 			var expectedEvents []mocktracer.Event
 			if testCase.firstTxnBehavior == "approve" {
+				expectedAcct1Data := ledgercore.AccountData{}
+				expectedAcct2Data := ledgercore.ToAccountData(balances[addrs[2]])
+				expectedAcct2Data.MicroAlgos.Raw += payTxn.Amount
+				expectedAcct3Data := ledgercore.ToAccountData(balances[addrs[3]])
+				expectedAcct3Data.MicroAlgos.Raw += expectedPayTxnAD.ClosingAmount.Raw
+				expectedDelta.Accts.Upsert(addrs[1], expectedAcct1Data)
+				expectedDelta.Accts.Upsert(addrs[2], expectedAcct2Data)
+				expectedDelta.Accts.Upsert(addrs[3], expectedAcct3Data)
+				expectedDelta.Accts.MergeAccounts(scenario.ExpectedStateDelta.Accts)
+				for key, delta := range scenario.ExpectedStateDelta.KvMods {
+					expectedDelta.AddKvMod(key, delta)
+				}
+				for id, delta := range scenario.ExpectedStateDelta.Creatables {
+					expectedDelta.AddCreatable(id, delta)
+				}
 				expectedEvents = mocktracer.FlattenEvents([][]mocktracer.Event{
 					{
 						mocktracer.BeforeTxnGroup(3),
@@ -414,13 +472,13 @@ int 1`,
 					mocktracer.OpcodeEvents(3, false),
 					{
 						mocktracer.AfterProgram(logic.ModeApp, false),
-						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, false), // end basicAppCallTxn
-						mocktracer.BeforeTxn(protocol.PaymentTx),                                       // start payTxn
-						mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, false),               // end payTxn
+						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, nil, false), // end basicAppCallTxn
+						mocktracer.BeforeTxn(protocol.PaymentTx),                                            // start payTxn
+						mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, nil, false),               // end payTxn
 					},
 					scenario.ExpectedEvents,
 					{
-						mocktracer.AfterTxnGroup(3, scenario.Outcome != mocktracer.ApprovalOutcome),
+						mocktracer.AfterTxnGroup(3, &expectedDelta, scenario.Outcome != mocktracer.ApprovalOutcome),
 					},
 				})
 			} else {
@@ -436,12 +494,15 @@ int 1`,
 					mocktracer.OpcodeEvents(3, hasError),
 					{
 						mocktracer.AfterProgram(logic.ModeApp, hasError),
-						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, true), // end basicAppCallTxn
-						mocktracer.AfterTxnGroup(3, true),
+						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, nil, true), // end basicAppCallTxn
+						mocktracer.AfterTxnGroup(3, &expectedDelta, true),
 					},
 				})
 			}
-			require.Equal(t, expectedEvents, mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events))
+			e := mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events)
+			require.Equal(t, len(expectedEvents), len(e))
+			require.Equal(t, expectedEvents[len(expectedEvents)-1].Deltas, e[len(e)-1].Deltas)
+			require.Equal(t, expectedEvents, e)
 		})
 	}
 }

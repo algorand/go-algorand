@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -78,9 +79,13 @@ func fillProgramTemplate(beforeInnersOps, innerApprovalProgram, betweenInnersOps
 
 // TestScenarioInfo holds arguments used to call a TestScenarioGenerator
 type TestScenarioInfo struct {
-	CallingTxn   transactions.Transaction
-	MinFee       basics.MicroAlgos
-	CreatedAppID basics.AppIndex
+	CallingTxn     transactions.Transaction
+	SenderData     basics.AccountData
+	AppAccountData basics.AccountData
+	FeeSinkData    basics.AccountData
+	FeeSinkAddr    basics.Address
+	MinFee         basics.MicroAlgos
+	CreatedAppID   basics.AppIndex
 }
 
 func expectedApplyData(info TestScenarioInfo) transactions.ApplyData {
@@ -172,6 +177,7 @@ type TestScenario struct {
 	FailedAt             []uint64
 	ExpectedEvents       []Event
 	ExpectedSimulationAD transactions.ApplyData
+	ExpectedStateDelta   ledgercore.StateDelta
 	AppBudgetAdded       uint64
 	AppBudgetConsumed    uint64
 	TxnAppBudgetConsumed []uint64
@@ -201,6 +207,51 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 	noFailure := func(info TestScenarioInfo) TestScenario {
 		expectedAD := expectedApplyData(info)
 		program := fillProgramTemplate("", successInnerProgram, "", 1, 2, "pushint 1")
+		ops, err := logic.AssembleString(program)
+		if err != nil {
+			panic(err)
+		}
+
+		expectedSenderData := ledgercore.ToAccountData(info.SenderData)
+		expectedSenderData.MicroAlgos.Raw -= info.CallingTxn.Fee.Raw
+		expectedSenderData.TotalAppParams += 1
+		expectedAppAccountData := ledgercore.ToAccountData(info.AppAccountData)
+		expectedAppAccountData.MicroAlgos.Raw -= 3 * info.MinFee.Raw
+		expectedAppAccountData.TotalAppParams += 1
+		expectedFeeSinkData := ledgercore.ToAccountData(info.FeeSinkData)
+		expectedFeeSinkData.MicroAlgos.Raw += info.CallingTxn.Fee.Raw + 3*info.MinFee.Raw
+
+		var expectedDelta ledgercore.StateDelta
+		expectedDelta.Accts.Upsert(info.CallingTxn.Sender, expectedSenderData)
+		expectedDelta.Accts.Upsert(info.CreatedAppID.Address(), expectedAppAccountData)
+		expectedDelta.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
+		expectedDelta.Accts.UpsertAppResource(info.CallingTxn.Sender, info.CreatedAppID, ledgercore.AppParamsDelta{
+			Params: &basics.AppParams{
+				ApprovalProgram:   ops.Program,
+				ClearStateProgram: info.CallingTxn.ClearStateProgram,
+				StateSchemas: basics.StateSchemas{
+					LocalStateSchema:  info.CallingTxn.LocalStateSchema,
+					GlobalStateSchema: info.CallingTxn.GlobalStateSchema,
+				},
+				ExtraProgramPages: info.CallingTxn.ExtraProgramPages,
+			},
+		}, ledgercore.AppLocalStateDelta{})
+		expectedDelta.Accts.UpsertAppResource(info.CreatedAppID.Address(), info.CreatedAppID+1, ledgercore.AppParamsDelta{
+			Params: &basics.AppParams{
+				ApprovalProgram:   successInnerProgramBytes,
+				ClearStateProgram: []byte{0x06, 0x81, 0x01}, // #pragma version 6; int 1;
+			},
+		}, ledgercore.AppLocalStateDelta{})
+		expectedDelta.AddCreatable(basics.CreatableIndex(info.CreatedAppID), ledgercore.ModifiedCreatable{
+			Ctype:   basics.AppCreatable,
+			Created: true,
+			Creator: info.CallingTxn.Sender,
+		})
+		expectedDelta.AddCreatable(basics.CreatableIndex(info.CreatedAppID+1), ledgercore.ModifiedCreatable{
+			Ctype:   basics.AppCreatable,
+			Created: true,
+			Creator: info.CreatedAppID.Address(),
+		})
 		return TestScenario{
 			Outcome:       ApprovalOutcome,
 			Program:       program,
@@ -221,8 +272,8 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				OpcodeEvents(3, false),
 				{
 					AfterProgram(logic.ModeApp, false),
-					AfterTxn(protocol.ApplicationCallTx, expectedAD.EvalDelta.InnerTxns[0].ApplyData, false),
-					AfterTxnGroup(1, false), // end first itxn group
+					AfterTxn(protocol.ApplicationCallTx, expectedAD.EvalDelta.InnerTxns[0].ApplyData, nil, false),
+					AfterTxnGroup(1, nil, false), // end first itxn group
 					AfterOpcode(false),
 				},
 				OpcodeEvents(16, false),
@@ -230,19 +281,20 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					BeforeOpcode(),
 					BeforeTxnGroup(2), // start second itxn group
 					BeforeTxn(protocol.PaymentTx),
-					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[1].ApplyData, false),
+					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[1].ApplyData, nil, false),
 					BeforeTxn(protocol.PaymentTx),
-					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[2].ApplyData, false),
-					AfterTxnGroup(2, false), // end second itxn group
+					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[2].ApplyData, nil, false),
+					AfterTxnGroup(2, nil, false), // end second itxn group
 					AfterOpcode(false),
 				},
 				OpcodeEvents(3, false),
 				{
 					AfterProgram(logic.ModeApp, false),
-					AfterTxn(protocol.ApplicationCallTx, expectedAD, false),
+					AfterTxn(protocol.ApplicationCallTx, expectedAD, nil, false),
 				},
 			}),
 			ExpectedSimulationAD: expectedAD,
+			ExpectedStateDelta:   expectedDelta,
 			AppBudgetAdded:       2100,
 			AppBudgetConsumed:    35,
 			TxnAppBudgetConsumed: []uint64{0, 35},
@@ -294,7 +346,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					OpcodeEvents(4, shouldError),
 					{
 						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, nil, true),
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
@@ -342,11 +394,11 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					OpcodeEvents(3, shouldError),
 					{
 						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallADNoEvalDelta, true),
-						AfterTxnGroup(1, true), // end first itxn group
+						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallADNoEvalDelta, nil, true),
+						AfterTxnGroup(1, nil, true), // end first itxn group
 						AfterOpcode(true),
 						AfterProgram(logic.ModeApp, true),
-						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, nil, true),
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
@@ -392,14 +444,14 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					OpcodeEvents(3, false),
 					{
 						AfterProgram(logic.ModeApp, false),
-						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-						AfterTxnGroup(1, false), // end first itxn group
+						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, nil, false),
+						AfterTxnGroup(1, nil, false), // end first itxn group
 						AfterOpcode(false),
 					},
 					OpcodeEvents(4, shouldError),
 					{
 						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, nil, true),
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
@@ -447,8 +499,8 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						OpcodeEvents(3, false),
 						{
 							AfterProgram(logic.ModeApp, false),
-							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-							AfterTxnGroup(1, false), // end first itxn group
+							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, nil, false),
+							AfterTxnGroup(1, nil, false), // end first itxn group
 							AfterOpcode(false),
 						},
 						OpcodeEvents(16, false),
@@ -456,11 +508,11 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 							BeforeOpcode(),
 							BeforeTxnGroup(2), // start second itxn group
 							BeforeTxn(protocol.PaymentTx),
-							AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, true),
-							AfterTxnGroup(2, true), // end second itxn group
+							AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, nil, true),
+							AfterTxnGroup(2, nil, true), // end second itxn group
 							AfterOpcode(true),
 							AfterProgram(logic.ModeApp, true),
-							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
+							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, nil, true),
 						},
 					}),
 					ExpectedSimulationAD: expectedAD,
@@ -509,8 +561,8 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						OpcodeEvents(3, false),
 						{
 							AfterProgram(logic.ModeApp, false),
-							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-							AfterTxnGroup(1, false), // end first itxn group
+							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, nil, false),
+							AfterTxnGroup(1, nil, false), // end first itxn group
 							AfterOpcode(false),
 						},
 						OpcodeEvents(16, false),
@@ -518,13 +570,13 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 							BeforeOpcode(),
 							BeforeTxnGroup(2), // start second itxn group
 							BeforeTxn(protocol.PaymentTx),
-							AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, false),
+							AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, nil, false),
 							BeforeTxn(protocol.PaymentTx),
-							AfterTxn(protocol.PaymentTx, expectedInnerPay2AD, true),
-							AfterTxnGroup(2, true), // end second itxn group
+							AfterTxn(protocol.PaymentTx, expectedInnerPay2AD, nil, true),
+							AfterTxnGroup(2, nil, true), // end second itxn group
 							AfterOpcode(true),
 							AfterProgram(logic.ModeApp, true),
-							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
+							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, nil, true),
 						},
 					}),
 					ExpectedSimulationAD: expectedAD,
@@ -566,8 +618,8 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					OpcodeEvents(3, false),
 					{
 						AfterProgram(logic.ModeApp, false),
-						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-						AfterTxnGroup(1, false), // end first itxn group
+						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, nil, false),
+						AfterTxnGroup(1, nil, false), // end first itxn group
 						AfterOpcode(false),
 					},
 					OpcodeEvents(16, false),
@@ -575,16 +627,16 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						BeforeOpcode(),
 						BeforeTxnGroup(2), // start second itxn group
 						BeforeTxn(protocol.PaymentTx),
-						AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, false),
+						AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, nil, false),
 						BeforeTxn(protocol.PaymentTx),
-						AfterTxn(protocol.PaymentTx, expectedInnerPay2AD, false),
-						AfterTxnGroup(2, false), // end second itxn group
+						AfterTxn(protocol.PaymentTx, expectedInnerPay2AD, nil, false),
+						AfterTxnGroup(2, nil, false), // end second itxn group
 						AfterOpcode(false),
 					},
 					OpcodeEvents(3, shouldError),
 					{
 						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, nil, true),
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
