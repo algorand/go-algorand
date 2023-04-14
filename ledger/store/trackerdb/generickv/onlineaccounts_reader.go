@@ -116,14 +116,13 @@ func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trac
 	var updround uint64
 
 	// read the current db round
-	var round basics.Round
-	round, err = r.AccountsRound()
+	rnd, err = r.AccountsRound()
 	if err != nil {
 		return
 	}
 
 	for iter.Next() {
-		pitem := trackerdb.PersistedOnlineAccountData{Round: round}
+		pitem := trackerdb.PersistedOnlineAccountData{}
 
 		// schema: <prefix>-<addr>-<rnd>
 		key := iter.Key()
@@ -135,7 +134,8 @@ func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trac
 		}
 		pitem.Addr = addr
 		pitem.UpdRound = basics.Round(updround)
-		// TODO: load "Round" here too
+		// Note: for compatibility with the SQL impl, this is not included on each item
+		// pitem.Round = rnd
 
 		// get value for current item in the iterator
 		value, err = iter.Value()
@@ -147,6 +147,10 @@ func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trac
 		if err != nil {
 			return
 		}
+
+		// set the ref
+		pitem.Ref = onlineAccountRef{addr, pitem.AccountData.NormalizedOnlineBalance(r.proto), pitem.UpdRound}
+
 		// append entry to accum
 		result = append(result, pitem)
 	}
