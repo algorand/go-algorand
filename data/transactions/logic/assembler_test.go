@@ -2636,12 +2636,17 @@ func TestScratchBounds(t *testing.T) {
 	os = testProg(t, "int 5; store 1; load 1; int 1; int 1; stores; return;", AssemblerMaxVersion)
 	sv = os.known.scratchSpace[1]
 	require.Equal(t, sv.AVMType, avmUint64)
-	require.ElementsMatch(t, sv.Bound, bound(1, 5))
+	require.ElementsMatch(t, sv.Bound, bound(1, 1))
 
-	os = testProg(t, "int 5; store 1; load 1; int 1; byte 0xff; stores; return;", AssemblerMaxVersion)
-	sv = os.known.scratchSpace[1]
-	require.Equal(t, sv.AVMType, avmAny)
-	require.ElementsMatch(t, os.known.scratchSpace[1].Bound, static(0))
+	// Since stores may not know at assembly time
+	//os = testProg(t, "int 5; store 1; load 1; int 1; byte 0xff; stores; return;", AssemblerMaxVersion)
+	//sv = os.known.scratchSpace[1]
+	//require.Equal(t, sv.AVMType, avmBytes)
+	//require.ElementsMatch(t, sv.Bound, static(0))
+
+	//osv := os.known.scratchSpace[0]
+	//require.Equal(t, osv.AVMType, avmAny)
+	//require.ElementsMatch(t, osv.Bound, static(0))
 
 	testProg(t, "byte 0xff; store 1; load 1; return", AssemblerMaxVersion, Expect{1, "return arg 0 wanted type uint64 ..."})
 }

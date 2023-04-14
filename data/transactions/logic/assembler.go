@@ -1434,6 +1434,17 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	if top < 0 {
 		return nil, nil, nil
 	}
+
+	// If the index of the scratch slot is a const
+	// we can modify only that scratch slots type
+	if top >= 1 {
+		idx, isConst := pgm.stack[top-1].constant()
+		if isConst {
+			pgm.scratchSpace[idx] = pgm.stack[top]
+			return nil, nil, nil
+		}
+	}
+
 	for i := range pgm.scratchSpace {
 		// We can't know what slot stacktop is being stored in
 		// so we union it into all scratch slots
@@ -1718,7 +1729,7 @@ func (le lineError) Unwrap() error {
 }
 
 func typecheck(expected, got StackType) bool {
-	return got.AssignableTo(expected)
+	return got.assignableTo(expected)
 }
 
 // newline not included since handled in scanner

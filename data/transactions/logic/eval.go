@@ -763,9 +763,16 @@ func (st StackType) widened() StackType {
 	}
 }
 
-// AssignableTo indicates whether a value typed st might be
+func (st StackType) constant() (uint64, bool) {
+	if st.Bound[0] == st.Bound[1] {
+		return st.Bound[0], true
+	}
+	return 0, false
+}
+
+// assignableTo indicates whether a value typed st might be
 // usable as other.
-func (st StackType) AssignableTo(other StackType) bool {
+func (st StackType) assignableTo(other StackType) bool {
 	if st.AVMType == avmNone || other.AVMType == avmNone {
 		return false
 	}
