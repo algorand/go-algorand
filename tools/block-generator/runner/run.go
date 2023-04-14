@@ -139,7 +139,7 @@ func (r *Args) run() error {
 	// create config file in the right data directory
 	f, err := os.Create(path.Join(dataDir, "conduit.yml"))
 	if err != nil {
-		return fmt.Errorf("creating conduit.yml: ", err)
+		return fmt.Errorf("creating conduit.yml: %v", err)
 	}
 	defer f.Close()
 
@@ -150,7 +150,7 @@ func (r *Args) run() error {
 
 	err = t.Execute(f, conduitConfig)
 	if err != nil {
-		return fmt.Errorf("execute template file: ", err)
+		return fmt.Errorf("execute template file: %v", err)
 	}
 
 	// Start indexer

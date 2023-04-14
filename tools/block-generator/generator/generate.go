@@ -373,7 +373,10 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		if err != nil {
 			return err
 		}
-		output.Write(block)
+		_, err = output.Write(block)
+		if err != nil {
+			return err
+		}
 		g.finishRound(numTxnForBlock)
 		return nil
 	}
@@ -438,7 +441,10 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-	output.Write(block)
+	_, err = output.Write(block)
+	if err != nil {
+		return err
+	}
 	g.finishRound(numTxnForBlock)
 	return nil
 }
