@@ -195,7 +195,7 @@ func main() {
 		return err
 	}
 
-	//nolint:gosec
+	//nolint:gosec // tmpFile is defined above so no security concerns here
 	cmd := exec.Command("go", "run", tmpFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -237,7 +237,7 @@ func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) er
 		return err
 	}
 
-	//nolint:gosec
+	//nolint:gosec // tmpFile is defined above so no security concerns here
 	cmd := exec.Command("go", "run", tmpFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

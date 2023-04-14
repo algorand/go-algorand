@@ -26,6 +26,7 @@ var diffExclusions = map[string]bool{
 	`github.com/algorand/go-algorand/data/basics :: "basics.MicroAlgos" (struct)`: true,
 }
 
+// Main is not main for compilation purposes. (see `make template4xrt` for why it's still Main)
 func main() { // replaced by main() in `make template4xrt`
 	x := reflect.TypeOf(xpkg.{{.XTypeInstance}}{}) 		 //  	/* TEMPLATE ONLY  */
 	y := reflect.TypeOf(ypkg.{{.YTypeInstance}}{}) 		 //  	/* TEMPLATE ONLY  */
@@ -90,6 +91,7 @@ type Type struct {
 	children *Children
 }
 
+// String returns fully qualified information about the Type.
 func (t *Type) String() string {
 	return fmt.Sprintf("%s :: %q (%s)", t.Type.PkgPath(), t.Type, t.Kind)
 }
@@ -135,7 +137,7 @@ func (tgt *Target) String() string {
 // SerializationInfo provides the essential data
 // for go to serialize the field or other type.
 func (e *Edge) SerializationInfo() string {
-	// Probably more subtelty is called for.
+	// Probably more subtlety is called for.
 	re := regexp.MustCompile(`^codec:"([^,"]+)`)
 
 	if e.Tag == "" {
@@ -403,6 +405,7 @@ SOURCE: 		%s
 
 // ------- STATISTICS AND DEBUGGING ------------- //
 
+// Print prints out information about the Type's structure using `Visit()`.
 func (t *Type) Print() {
 	action := func(tgt Target) {
 		tabs := strings.Repeat("\t", tgt.Type.Depth)
