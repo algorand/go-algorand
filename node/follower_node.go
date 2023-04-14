@@ -456,6 +456,6 @@ func (node *AlgorandFollowerNode) SetBlockTimeStampOffset(offset int64) error {
 
 // GetBlockTimeStampOffset gets a timestamp offset.
 // This is only available in dev mode.
-func (node *AlgorandFollowerNode) GetBlockTimeStampOffset() *int64 {
-	return nil
+func (node *AlgorandFollowerNode) GetBlockTimeStampOffset() (*int64, error) {
+	return nil, fmt.Errorf("cannot get block timestamp offset in follower mode")
 }

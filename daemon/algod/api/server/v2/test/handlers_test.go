@@ -1975,10 +1975,19 @@ func TestTimestampOffsetInDevMode(t *testing.T) {
 	handler, c, rec, _, _, releasefunc := setupMockNodeForMethodGet(t, cannedStatusReportGolden, true)
 	defer releasefunc()
 
+	// TestSetBlockTimeStampOffset 400
+	err := handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+	require.Equal(t, "{\"message\":\"failed retrieving timestamp offset from node: block timestamp offset was never set, using real clock for timestamps\"}\n", rec.Body.String())
+	c, rec = newReq(t)
+
 	// TestSetBlockTimeStampOffset 200
-	err := handler.SetBlockTimeStampOffset(c, 1)
+	err = handler.SetBlockTimeStampOffset(c, 1)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
+	c, rec = newReq(t)
+
 	// TestGetBlockTimeStampOffset 200
 	err = handler.GetBlockTimeStampOffset(c)
 	require.NoError(t, err)

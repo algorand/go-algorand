@@ -90,15 +90,16 @@ var txnPoolGolden = make([]transactions.SignedTxn, 2)
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
 	mock.Mock
-	ledger    v2.LedgerForAPI
-	genesisID string
-	config    config.Local
-	err       error
-	id        account.ParticipationID
-	keys      account.StateProofKeys
-	usertxns  map[basics.Address][]node.TxnWithStatus
-	status    node.StatusReport
-	devmode   bool
+	ledger          v2.LedgerForAPI
+	genesisID       string
+	config          config.Local
+	err             error
+	id              account.ParticipationID
+	keys            account.StateProofKeys
+	usertxns        map[basics.Address][]node.TxnWithStatus
+	status          node.StatusReport
+	devmode         bool
+	timestampOffset *int64
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
@@ -244,15 +245,17 @@ func (m *mockNode) SetBlockTimeStampOffset(offset int64) error {
 	if !m.devmode {
 		return fmt.Errorf("cannot set block timestamp when not in dev mode")
 	}
+	m.timestampOffset = &offset
 	return nil
 }
 
-func (m *mockNode) GetBlockTimeStampOffset() *int64 {
+func (m *mockNode) GetBlockTimeStampOffset() (*int64, error) {
 	if !m.devmode {
-		return nil
+		return nil, fmt.Errorf("cannot get block timestamp when not in dev mode")
+	} else if m.timestampOffset == nil {
+		return nil, nil
 	}
-	offset := int64(1)
-	return &offset
+	return m.timestampOffset, nil
 }
 
 ////// mock ledger testing environment follows
