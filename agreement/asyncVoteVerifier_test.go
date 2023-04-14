@@ -60,6 +60,8 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 	require.Equal(t, context.Canceled, verifyEqVoteErr)
 }
 
+// TestAsyncVerificationVotes creates MakeAsyncVoteVerifier,
+// sends Votes (50% valid) for verification, and checks the results
 func TestAsyncVerificationVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	errProb := float32(0.5)
@@ -68,6 +70,8 @@ func TestAsyncVerificationVotes(t *testing.T) {
 	sendReceiveVoteVerifications(false, errProb, numVotes, numEqVotes, t)
 }
 
+// TestAsyncVerificationEqVotes creates MakeAsyncVoteVerifier,
+// sends EqVotes (50% valid) for verification, and checks the results
 func TestAsyncVerificationEqVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	errProb := float32(0.5)
@@ -76,6 +80,8 @@ func TestAsyncVerificationEqVotes(t *testing.T) {
 	sendReceiveVoteVerifications(false, errProb, numVotes, numEqVotes, t)
 }
 
+// TestAsyncVerification creates MakeAsyncVoteVerifier, sends
+// Votes and EqVotes (50% valid) for verification, and checks the results
 func TestAsyncVerification(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	errProb := float32(0.5)
@@ -84,6 +90,8 @@ func TestAsyncVerification(t *testing.T) {
 	sendReceiveVoteVerifications(false, errProb, numVotes, numEqVotes, t)
 }
 
+// BenchmarkAsyncVerification benchmarks the performance of verifying votes using MakeAsyncVoteVerifier
+// with varying vote validity rates. Sends votes and eqVotes.
 func BenchmarkAsyncVerification(b *testing.B) {
 	errProbs := []float32{0.0, 0.2, 0.8}
 	for _, errProb := range errProbs {
@@ -98,6 +106,8 @@ func BenchmarkAsyncVerification(b *testing.B) {
 	}
 }
 
+// BenchmarkAsyncVerificationVotes benchmarks the performance of verifying votes using MakeAsyncVoteVerifier
+// with varying vote validity rates. Sends only votes.
 func BenchmarkAsyncVerificationVotes(b *testing.B) {
 	errProbs := []float32{0.0, 0.2, 0.8}
 	for _, errProb := range errProbs {
@@ -112,6 +122,8 @@ func BenchmarkAsyncVerificationVotes(b *testing.B) {
 	}
 }
 
+// BenchmarkAsyncVerificationEqVotes benchmarks the performance of verifying votes using MakeAsyncVoteVerifier
+// with varying vote validity rates. Sends only eqVotes.
 func BenchmarkAsyncVerificationEqVotes(b *testing.B) {
 	errProbs := []float32{0.0, 0.2, 0.8}
 	for _, errProb := range errProbs {
