@@ -11,17 +11,17 @@ import (
 
 	// xpkg "{{.XModulePath}}/{{.XPackagePath}}"  					/* TEMPLATE ONLY  */
 	// ypkg "{{.YModulePath}}/{{.YPackagePath}}"  					/* TEMPLATE ONLY  */
-	// ypkg "github.com/algorand/go-algorand-sdk/v2/types"      // 	/* GENERATOR ONLY */
+	ypkg "github.com/algorand/go-algorand-sdk/v2/types"      // 	/* GENERATOR ONLY */
 	xpkg "github.com/algorand/go-algorand/ledger/ledgercore" // 	/* GENERATOR ONLY */
-	ypkg "github.com/algorand/go-algorand/ledger/ledgercore" // 	/* GENERATOR ONLY */  <--- this one is just for getting the build to pass
+	// ypkg "github.com/algorand/go-algorand/ledger/ledgercore" // 	/* GENERATOR ONLY */  <--- this one is just for getting the build to pass
 )
 
 func Main() { // replaced by main() in `make template4xrt`
 	// x := reflect.TypeOf(xpkg.{{.XTypeInstance}}{}) 		 //  	/* TEMPLATE ONLY  */
 	// y := reflect.TypeOf(ypkg.{{.YTypeInstance}}{}) 		 //  	/* TEMPLATE ONLY  */
-	x := reflect.TypeOf(xpkg.StateDelta{}) //					    /* GENERATOR ONLY */
-	// y := reflect.TypeOf(ypkg.LedgerStateDelta{}) //				/* GENERATOR ONLY */
-	y := reflect.TypeOf(ypkg.StateDelta{}) //						/* GENERATOR ONLY */ <--- this one is just for getting the build to pass
+	x := reflect.TypeOf(xpkg.StateDelta{})       //					    /* GENERATOR ONLY */
+	y := reflect.TypeOf(ypkg.LedgerStateDelta{}) //				/* GENERATOR ONLY */
+	// y := reflect.TypeOf(ypkg.StateDelta{}) //						/* GENERATOR ONLY */ <--- this one is just for getting the build to pass
 
 	// ---- BUILD ---- //
 
@@ -367,7 +367,15 @@ type Diff struct {
 func Report(x, y Target, d *Diff) {
 	xType := x.Type
 	yType := y.Type
-	fmt.Printf("REPORT: comparing [%s] VS [%s]\n", &xType, &yType)
+	fmt.Printf(`
+========================================================
+			REPORT
+comparing 
+	<<<<<%s>>>>>
+VS
+	<<<<<%s>>>>>
+========================================================
+`, &xType, &yType)
 	if d == nil {
 		fmt.Println("No differences found.")
 		return
@@ -378,20 +386,48 @@ func Report(x, y Target, d *Diff) {
 			panic("A common paths was found with no diffs. This should NEVER happen.")
 		}
 		fmt.Println("No differences found.")
-		return
-	}
-	fmt.Print("\nDifference found:\n")
-	fmt.Printf("Common path of length %d:\n", len(d.CommonPath))
-	for depth, tgt := range d.CommonPath {
-		fmt.Printf("%s%s. SOURCE: %s\n", strings.Repeat(" ", depth), &tgt.Edge, &tgt.Type)
-	}
-	fmt.Printf("Xdiff (in %q but not in %q):\n", &xType, &yType)
-	for _, tgt := range d.Xdiff {
-		fmt.Printf("%s%s. SOURCE: %s\n", strings.Repeat(" ", len(d.CommonPath)), &tgt.Edge, &tgt.Type)
-	}
+	} else {
+		fmt.Print(`
+--------------------------------------------------------
+		DIFFERENCES FOUND
+--------------------------------------------------------
+`)
+		fmt.Printf("Common path of length %d:\n", len(d.CommonPath))
+		for depth, tgt := range d.CommonPath {
+			fmt.Printf("%s%s. SOURCE: %s\n", strings.Repeat(" ", depth), &tgt.Edge, &tgt.Type)
+		}
+		fmt.Printf(`
+X-DIFF
+------
+EXISTS IN:	 	%q
+MISSING FROM:		%q
+%d TYPES TOTAL:
+`, &xType, &yType, len(d.Xdiff))
+		for i, tgt := range d.Xdiff {
+			fmt.Printf(`(%d)
+[FIELD](+codec): 	%s
+SOURCE: 		%s`, i+1, &tgt.Edge, &tgt.Type)
+		}
 
-	fmt.Printf("Ydiff (in %q but not in %q):\n", &yType, &xType)
-	for _, tgt := range d.Ydiff {
-		fmt.Printf("%s%s\n", strings.Repeat(" ", len(d.CommonPath)), &tgt.Edge)
+		fmt.Printf(`
+
+
+
+Y-DIFF
+------
+EXISTS IN:	 	%q
+MISSING FROM:		%q
+%d TYPES TOTAL:
+`, &yType, &xType, len(d.Ydiff))
+		for i, tgt := range d.Ydiff {
+			fmt.Printf(`(%d)
+[FIELD](+codec): 	%s
+SOURCE: 		%s
+`, i+1, &tgt.Edge, &tgt.Type)
+		}
 	}
+	fmt.Println(`
+========================================================
+===============        REPORT END        ===============
+========================================================`)
 }

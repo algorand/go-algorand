@@ -5,26 +5,31 @@ template4xrt:
 build-xrt: template4xrt
 	go build -o xrt
 
-state-delta-xrt:
-	./xrt --x-repo "github.com/algorand/go-algorand" \
-		--x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
+goal-v-sdk-state-delta-xrt:
+	./xrt --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
 		--x-type "StateDelta" \
-		--y-repo "github.com/algorand/go-algorand-sdk/v2@develop" \
+		--y-branch "develop" \
 		--y-package "github.com/algorand/go-algorand-sdk/v2/types" \
 		--y-type "LedgerStateDelta"
 
+goal-v-sdk-bookkeeping-genesis:
+	./xrt --x-package "github.com/algorand/go-algorand/data/bookkeeping" \
+		--x-type "Genesis" \
+		--y-branch "develop" \
+		--y-package "github.com/algorand/go-algorand-sdk/v2/types" \
+		--y-type "Genesis"
 
-# stateproof-xrt:
-# 	./xrt --repo "github.com/algorand/go-stateproof-verification@x-repo-types" \
-# 		--package "github.com/algorand/go-stateproof-verification/stateproof" \
-# 		--type "StateProof" 
+goal-v-sdk-stateproof:
+	./xrt --x-package "github.com/algorand/go-algorand/crypto/stateproof" \
+		--x-type "StateProof" \
+		--y-branch "develop" \
+		--y-package "github.com/algorand/go-algorand-sdk/v2/types" \
+		--y-type "StateProof"
 
-# sdk-xrt:
-# 	./xrt --repo "github.com/algorand/go-algorand-sdk/v2@develop" \
-# 		--package "github.com/algorand/go-algorand-sdk/v2/types" \
-# 		--type "LedgerStateDelta" 
+goal-v-spv-stateproof:
+	./xrt --x-package "github.com/algorand/go-algorand/crypto/stateproof" \
+		--x-type "StateProof" \
+		--y-package "github.com/algorand/go-stateproof-verification/stateproof" \
+		--y-type "StateProof"
 
-# goal-xrt:
-# 	./xrt --repo "github.com/algorand/go-algorand" \
-# 		--package "github.com/algorand/go-algorand/ledger/ledgercore" \
-# 		--type "StateDelta"
+all: goal-v-sdk-state-delta-xrt goal-v-sdk-bookkeeping-genesis goal-v-sdk-stateproof goal-v-spv-stateproof

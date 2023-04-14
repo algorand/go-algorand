@@ -21,23 +21,23 @@ import (
 var walkerTmpl string
 
 func main() {
-	var xRepo, xPkg, xType, yRepo, yPkg, yType string
+	var sBranch, xPkg, xType, yBranch, yPkg, yType string
 
 	rootCmd := &cobra.Command{
 		Use:   "xrt",
 		Short: "Compare types across repos",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := runApp(xRepo, xPkg, xType, yRepo, yPkg, yType); err != nil {
+			if err := runApp(sBranch, xPkg, xType, yBranch, yPkg, yType); err != nil {
 				log.Fatal(err)
 			}
 		},
 	}
 
-	rootCmd.Flags().StringVar(&xRepo, "x-repo", "", "GitHub repository URL for type x")
-	rootCmd.Flags().StringVar(&xPkg, "x-package", "", "Go package path in the repo for type x")
+	rootCmd.Flags().StringVar(&sBranch, "x-branch", "", "repository brahnch for type x")
+	rootCmd.Flags().StringVar(&xPkg, "x-package", "", "Go repo and package for type x")
 	rootCmd.Flags().StringVar(&xType, "x-type", "", "Exported type in the package for type x")
-	rootCmd.Flags().StringVar(&yRepo, "y-repo", "", "GitHub repository URL for type y")
-	rootCmd.Flags().StringVar(&yPkg, "y-package", "", "Go package path in the repo for type y")
+	rootCmd.Flags().StringVar(&yBranch, "y-branch", "", "repository branch for type y")
+	rootCmd.Flags().StringVar(&yPkg, "y-package", "", "Go repo and package for type for type y")
 	rootCmd.Flags().StringVar(&yType, "y-type", "", "Exported type in the package for type y")
 
 	if err := rootCmd.Execute(); err != nil {
@@ -45,30 +45,34 @@ func main() {
 	}
 }
 
-func runApp(xRepo, xPkg, xType, yRepo, yPkg, yType string) error {
-	if xRepo == "" || xPkg == "" || xType == "" {
-		return fmt.Errorf("repo:%s, package:%s, and type:%s flags are required", xRepo, xPkg, xType)
+func runApp(xBranch, xPkg, xType, yBranch, yPkg, yType string) error {
+	if xPkg == "" || xType == "" {
+		return fmt.Errorf("package:%s, and type:%s flags are required", xPkg, xType)
 	}
-	if yRepo == "" || yPkg == "" || yType == "" {
-		return fmt.Errorf("repo:%s, package:%s, and type:%s flags are required", yRepo, yPkg, yType)
+	if yPkg == "" || yType == "" {
+		return fmt.Errorf("package:%s, and type:%s flags are required", yPkg, yType)
 	}
 
-	// Download the repo (assuming here that we're in go algorand in which case we don't need to)
-	if xRepo != "github.com/algorand/go-algorand" {
-		err := goGet(xRepo)
-		if err != nil {
-			return err
-		}
+	xPkgBranch := xPkg
+	if xBranch != "" {
+		xPkgBranch += "@" + xBranch
 	}
-	if yRepo != "github.com/algorand/go-algorand" {
-		err := goGet(yRepo)
-		if err != nil {
-			return err
-		}
+	yPkgBranch := yPkg
+	if yBranch != "" {
+		yPkgBranch += "@" + yBranch
+	}
+
+	err := goGet(xPkgBranch)
+	if err != nil {
+		return err
+	}
+	err = goGet(yPkgBranch)
+	if err != nil {
+		return err
 	}
 
 	// Build the package
-	err := goBuild(xPkg)
+	err = goBuild(xPkg)
 	if err != nil {
 		return err
 	}
@@ -87,29 +91,26 @@ func runApp(xRepo, xPkg, xType, yRepo, yPkg, yType string) error {
 		return err
 	}
 
-	xClearRepo := strings.Split(xRepo, "@")[0]
-	if !strings.HasPrefix(xPkg, xClearRepo+"/") {
-		return fmt.Errorf("package %q does not start with repo %q", xPkg, xClearRepo)
-	}
-	yClearRepo := strings.Split(yRepo, "@")[0]
-	if !strings.HasPrefix(yPkg, yClearRepo+"/") {
-		return fmt.Errorf("package %q does not start with repo %q", yPkg, yClearRepo)
-	}
+	xParts := strings.Split(xPkg, "/")
+	yParts := strings.Split(yPkg, "/")
 
-	xPkgOnly := strings.TrimPrefix(xPkg, xClearRepo+"/")
-	yPkgOnly := strings.TrimPrefix(yPkg, yClearRepo+"/")
+	xRepo := strings.Join(xParts[:3], "/")
+	yRepo := strings.Join(yParts[:3], "/")
+
+	xPkgSuffix := strings.Join(xParts[3:], "/")
+	yPkgSuffix := strings.Join(yParts[3:], "/")
 
 	// Instantiate the type
-	err = instantiate(xClearRepo, xPkgOnly, xType)
+	err = instantiate(xRepo, xPkgSuffix, xType)
 	if err != nil {
 		return err
 	}
-	err = instantiate(yClearRepo, yPkgOnly, yType)
+	err = instantiate(yRepo, yPkgSuffix, yType)
 	if err != nil {
 		return err
 	}
 
-	err = serializationDiff(xClearRepo, xPkgOnly, xType, yClearRepo, yPkgOnly, yType)
+	err = serializationDiff(xRepo, xPkgSuffix, xType, yRepo, yPkgSuffix, yType)
 	if err != nil {
 		return err
 	}
@@ -134,7 +135,7 @@ func goBuild(pkg string) error {
 }
 
 func showKind(pkg, typeName string) error {
-	fmt.Println("Instantiating type:", typeName)
+	fmt.Println("Showing kind for:", typeName)
 
 	// Load package
 	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedTypes}
@@ -163,6 +164,8 @@ func showKind(pkg, typeName string) error {
 }
 
 func instantiate(repo, pkgPath, typeName string) error {
+	fmt.Println("Instantiating type for:", typeName)
+
 	pkgParts := strings.Split(pkgPath, "/")
 	pkgOnly := pkgParts[len(pkgParts)-1]
 
