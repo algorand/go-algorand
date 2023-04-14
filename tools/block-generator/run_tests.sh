@@ -17,7 +17,7 @@ help() {
   echo " -r|--report-dir directory where the report should be written."
   echo " -d|--duration   test duration."
   echo " -l|--level      log level to pass to Indexer."
-  echo " -g|--generator  use a different indexer binary to run the generator."
+  echo " -g|--generator  use a different block-generator binary to run the generator."
   exit
 }
 

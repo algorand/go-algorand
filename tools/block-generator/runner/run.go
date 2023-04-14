@@ -17,19 +17,21 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/algorand/go-algorand/tools/block-generator/generator"
-	"github.com/algorand/go-algorand/tools/block-generator/metrics"
 	"github.com/algorand/go-algorand/tools/block-generator/util"
 	"github.com/algorand/go-deadlock"
 )
@@ -38,8 +40,8 @@ import (
 type Args struct {
 	// Path is a directory when passed to RunBatch, otherwise a file path.
 	Path                     string
-	IndexerBinary            string
-	IndexerPort              uint64
+	ConduitBinary            string
+	MetricsPort              uint64
 	PostgresConnectionString string
 	CPUProfilePath           string
 	RunDuration              time.Duration
@@ -50,7 +52,15 @@ type Args struct {
 	KeepDataDir              bool
 }
 
-// Run is a publi8c helper to run the tests.
+type config struct {
+	LogLevel                 string
+	LogFile                  string
+	MetricsPort              string
+	AlgodNet                 string
+	PostgresConnectionString string
+}
+
+// Run is a public helper to run the tests.
 // The test will run against the generator configuration file specified by 'args.Path'.
 // If 'args.Path' is a directory it should contain generator configuration files, a test will run using each file.
 func Run(args Args) error {
@@ -86,8 +96,12 @@ func (r *Args) run() error {
 	baseName := filepath.Base(r.Path)
 	baseNameNoExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
 	reportfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
-	//logfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.indexer-log", baseNameNoExt))
+	logfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.indexer-log", baseNameNoExt))
 	dataDir := path.Join(r.ReportDirectory, fmt.Sprintf("%s_data", baseNameNoExt))
+	// create the data directory.
+	if err := os.Mkdir(dataDir, os.ModeDir|os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
 	if !r.KeepDataDir {
 		defer os.RemoveAll(dataDir)
 	}
@@ -103,7 +117,7 @@ func (r *Args) run() error {
 	}
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
-	indexerNet := fmt.Sprintf("localhost:%d", r.IndexerPort)
+	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
 	generatorShutdownFunc, _ := startGenerator(r.Path, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
@@ -111,17 +125,43 @@ func (r *Args) run() error {
 			fmt.Printf("Failed to shutdown generator: %s\n", err)
 		}
 	}()
+	time.Sleep(1 * time.Second)
+	// write conduit config file
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("current working directory: %w", err)
+	}
+	t, err := template.ParseFiles(path.Join(cwd, "data/conduit.yml"))
+	if err != nil {
+		return fmt.Errorf("unable to open config template file: %w", err)
+	}
 
-	//indexerShutdownFunc, err := startIndexer(dataDir, logfile, r.LogLevel, r.IndexerBinary, algodNet, indexerNet, r.PostgresConnectionString, r.CPUProfilePath)
-	//if err != nil {
-	//	return fmt.Errorf("failed to start indexer: %w", err)
-	//}
-	//defer func() {
-	//	// Shutdown indexer
-	//	if err := indexerShutdownFunc(); err != nil {
-	//		fmt.Printf("Failed to shutdown indexer: %s\n", err)
-	//	}
-	//}()
+	f, err := os.Create(path.Join(dataDir, "conduit.yml"))
+	if err != nil {
+		return fmt.Errorf("creating conduit.yml: ", err)
+	}
+	defer f.Close()
+
+	conduitConfig := config{r.LogLevel, logfile,
+		fmt.Sprintf(":%d", r.MetricsPort),
+		algodNet, r.PostgresConnectionString,
+	}
+
+	err = t.Execute(f, conduitConfig)
+	if err != nil {
+		return fmt.Errorf("execute template file: ", err)
+	}
+
+	indexerShutdownFunc, err := startIndexer(dataDir, r.ConduitBinary)
+	if err != nil {
+		return fmt.Errorf("failed to start indexer: %w", err)
+	}
+	defer func() {
+		// Shutdown indexer
+		if err := indexerShutdownFunc(); err != nil {
+			fmt.Printf("Failed to shutdown indexer: %s\n", err)
+		}
+	}()
 
 	// Create the report file
 	report, err := os.Create(reportfile)
@@ -131,7 +171,7 @@ func (r *Args) run() error {
 	defer report.Close()
 
 	// Run the test, collecting results.
-	if err := r.runTest(report, indexerNet, algodNet); err != nil {
+	if err := r.runTest(report, metricsNet, algodNet); err != nil {
 		return err
 	}
 
@@ -158,23 +198,23 @@ func recordDataToFile(start time.Time, entry Entry, prefix string, out *os.File)
 		}
 	}
 
-	record("_average", metrics.BlockImportTimeName, rate)
-	record("_cumulative", metrics.BlockImportTimeName, floatTotal)
-	record("_average", metrics.ImportedTxnsPerBlockName, rate)
-	record("_cumulative", metrics.ImportedTxnsPerBlockName, intTotal)
-	record("", metrics.ImportedRoundGaugeName, intTotal)
+	record("_average", BlockImportTimeName, rate)
+	record("_cumulative", BlockImportTimeName, floatTotal)
+	record("_average", ImportedTxnsPerBlockName, rate)
+	record("_cumulative", ImportedTxnsPerBlockName, intTotal)
+	record("", ImportedRoundGaugeName, intTotal)
 
 	if len(writeErrors) > 0 {
 		return fmt.Errorf("error writing metrics (%s): %w", strings.Join(writeErrors, ", "), writeErr)
 	}
 
 	// Calculate import transactions per second.
-	totalTxn, err := getMetric(entry, metrics.ImportedTxnsPerBlockName, false)
+	totalTxn, err := getMetric(entry, ImportedTxnsPerBlockName, false)
 	if err != nil {
 		return err
 	}
 
-	importTimeS, err := getMetric(entry, metrics.BlockImportTimeName, false)
+	importTimeS, err := getMetric(entry, BlockImportTimeName, false)
 	if err != nil {
 		return err
 	}
@@ -266,8 +306,8 @@ func getMetric(entry Entry, suffix string, rateMetric bool) (float64, error) {
 }
 
 // Run the test for 'RunDuration', collect metrics and write them to the 'ReportDirectory'
-func (r *Args) runTest(report *os.File, indexerURL string, generatorURL string) error {
-	collector := &MetricsCollector{MetricsURL: fmt.Sprintf("http://%s/metrics", indexerURL)}
+func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) error {
+	collector := &MetricsCollector{MetricsURL: fmt.Sprintf("http://%s/metrics", metricsURL)}
 
 	// Run for r.RunDuration
 	start := time.Now()
@@ -275,12 +315,12 @@ func (r *Args) runTest(report *os.File, indexerURL string, generatorURL string) 
 	for time.Since(start) < r.RunDuration {
 		time.Sleep(r.RunDuration / 10)
 
-		if err := collector.Collect(metrics.AllMetricNames...); err != nil {
+		if err := collector.Collect(AllMetricNames...); err != nil {
 			return fmt.Errorf("problem collecting metrics (%d / %s): %w", count, time.Since(start), err)
 		}
 		count++
 	}
-	if err := collector.Collect(metrics.AllMetricNames...); err != nil {
+	if err := collector.Collect(AllMetricNames...); err != nil {
 		return fmt.Errorf("problem collecting final metrics (%d / %s): %w", count, time.Since(start), err)
 	}
 
@@ -335,6 +375,7 @@ func startGenerator(configFile string, addr string, blockMiddleware func(http.Ha
 	// Start the server
 	go func() {
 		// always returns error. ErrServerClosed on graceful close
+		fmt.Printf("generator serving on %s\n", server.Addr)
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			util.MaybeFail(err, "ListenAndServe() failure to start with config file '%s'", configFile)
 		}
@@ -349,4 +390,35 @@ func startGenerator(configFile string, addr string, blockMiddleware func(http.Ha
 		}
 		return nil
 	}, generator
+}
+
+// startIndexer starts the indexer.
+func startIndexer(dataDir string, conduitBinary string) (func() error, error) {
+	cmd := exec.Command(
+		conduitBinary,
+		"-d", dataDir,
+	)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failure calling Start(): %w", err)
+	}
+	// conduit doesn't have health check endpoint. so, no health check for now
+
+	return func() error {
+		if err := cmd.Process.Signal(os.Interrupt); err != nil {
+			fmt.Printf("failed to kill indexer process: %s\n", err)
+			if err := cmd.Process.Kill(); err != nil {
+				return fmt.Errorf("failed to kill indexer process: %w", err)
+			}
+		}
+		if err := cmd.Wait(); err != nil {
+			fmt.Printf("ignoring error while waiting for process to stop: %s\n", err)
+		}
+		return nil
+	}, nil
 }
