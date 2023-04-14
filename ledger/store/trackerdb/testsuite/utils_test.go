@@ -63,13 +63,13 @@ func registerTest(name string, f func(*customT)) {
 }
 
 // runGenericTestsWithDB runs a generic set of tests on the given database
-func runGenericTestsWithDB(t *testing.T, dbFactory func() (db dbForTests)) {
+func runGenericTestsWithDB(t *testing.T, dbFactory func(config.ConsensusParams) (db dbForTests)) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for _, entry := range genericTests {
 		// run each test defined in the suite using the Golang subtest
 		t.Run(entry.name, func(t *testing.T) {
 			// instantiate a new db for each test
-			entry.f(&customT{dbFactory(), proto, t})
+			entry.f(&customT{dbFactory(proto), proto, t})
 		})
 	}
 }
@@ -118,8 +118,8 @@ type mockIter struct {
 	curr int
 }
 
-func makeMockDB() *mockDB {
-	return &mockDB{data: make(map[string][]byte)}
+func makeMockDB(proto config.ConsensusParams) *mockDB {
+	return &mockDB{proto: proto, data: make(map[string][]byte)}
 }
 
 func (db *mockDB) SetLogger(log logging.Logger) {
