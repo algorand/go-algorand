@@ -12,8 +12,8 @@ import (
 
 	xpkg "{{.XModulePath}}/{{.XPackagePath}}"  					/* TEMPLATE ONLY  */
 	ypkg "{{.YModulePath}}/{{.YPackagePath}}"  					/* TEMPLATE ONLY  */
-	// 	// ypkg "github.com/algorand/go-algorand-sdk/v2/types"      // 	/* GENERATOR ONLY */
-	// 	xpkg "github.com/algorand/go-algorand/ledger/ledgercore" // 	/* GENERATOR ONLY */
+	// 	// ypkg "github.com/algorand/go-algorand-sdk/v2/types"     // 	/* GENERATOR ONLY */
+	// 	xpkg "github.com/algorand/go-algorand/data/bookkeeping"  // 	/* GENERATOR ONLY */
 	// 	ypkg "github.com/algorand/go-algorand/ledger/ledgercore" // 	/* GENERATOR ONLY */  <--- this one is just for getting the build to pass
 )
 
@@ -30,8 +30,8 @@ var diffExclusions = map[string]bool{
 func main() { // replaced by main() in `make template4xrt`
 	x := reflect.TypeOf(xpkg.{{.XTypeInstance}}{}) 		 //  	/* TEMPLATE ONLY  */
 	y := reflect.TypeOf(ypkg.{{.YTypeInstance}}{}) 		 //  	/* TEMPLATE ONLY  */
-	// 	x := reflect.TypeOf(xpkg.StateDelta{}) //					    /* GENERATOR ONLY */
-	// 	// y := reflect.TypeOf(ypkg.LedgerStateDelta{}) //				/* GENERATOR ONLY */
+	// 	x := reflect.TypeOf(xpkg.Genesis{}) //					    	/* GENERATOR ONLY */
+	// 	// y := reflect.TypeOf(ypkg.Genesis{}) //						/* GENERATOR ONLY */
 	// 	y := reflect.TypeOf(ypkg.StateDelta{}) //						/* GENERATOR ONLY */ <--- this one is just for getting the build to pass
 
 	// ---- BUILD ---- //
@@ -336,7 +336,11 @@ func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 			return nil, err
 		}
 		if diff != nil {
-			diff.CommonPath = append([]TargetPair{{xChild, yChild}}, diff.CommonPath...)
+			diff.CommonPath = append([]TargetPair{
+				{X: xChild,
+					Y: yChild,
+				},
+			}, diff.CommonPath...)
 			return diff, nil
 		}
 	}
@@ -376,8 +380,10 @@ VS
 `)
 			fmt.Printf("Common path of length %d:\n", len(d.CommonPath))
 			for depth, tgts := range d.CommonPath {
-				fmt.Printf("%s%s. X-SOURCE: %s\n", strings.Repeat(" ", depth), &tgts.X.Edge, &tgts.X.Type)
-				fmt.Printf("%s%s. Y-SOURCE: %s\n", strings.Repeat(" ", depth), &tgts.Y.Edge, &tgts.Y.Type)
+				indent := strings.Repeat(" ", depth)
+				fmt.Printf("%s_____LEVEL %d_____\n", indent, depth+1)
+				fmt.Printf("%sX-FIELD: %s\n%s\tX-TYPE: %s\n", indent, &tgts.X.Edge, indent, &tgts.X.Type)
+				fmt.Printf("%sY-FIELD: %s\n%s\tY-TYPE: %s\n", indent, &tgts.Y.Edge, indent, &tgts.Y.Type)
 			}
 			fmt.Printf(`
 X-DIFF
