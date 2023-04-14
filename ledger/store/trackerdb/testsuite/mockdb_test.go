@@ -18,11 +18,13 @@ package testsuite
 
 import (
 	"testing"
+
+	"github.com/algorand/go-algorand/config"
 )
 
 func TestMockDB(t *testing.T) {
-	dbFactory := func() dbForTests {
-		db := makeMockDB()
+	dbFactory := func(proto config.ConsensusParams) dbForTests {
+		db := makeMockDB(proto)
 
 		seedDb(t, db)
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
@@ -29,7 +30,7 @@ import (
 )
 
 func TestSqliteDB(t *testing.T) {
-	dbFactory := func() dbForTests {
+	dbFactory := func(config.ConsensusParams) dbForTests {
 		// create a tmp dir for the db, the testing runtime will clean it up automatically
 		fn := fmt.Sprintf("%s/tracker-db.sqlite", t.TempDir())
 		db, err := sqlitedriver.OpenTrackerSQLStore(fn, false)

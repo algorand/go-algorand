@@ -22,15 +22,11 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPebbleDB(t *testing.T) {
-	// initialize the db with default protocol settings
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-	dbFactory := func() dbForTests {
+	dbFactory := func(proto config.ConsensusParams) dbForTests {
 		// create a tmp dir for the db, the testing runtime will clean it up automatically
 		dir := fmt.Sprintf("%s/db", t.TempDir())
 
