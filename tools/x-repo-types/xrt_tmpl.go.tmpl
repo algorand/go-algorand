@@ -379,38 +379,36 @@ VS
 `, &xType, &yType)
 	if d == nil {
 		fmt.Println("No differences found.")
-		return
-	}
-
-	if len(d.Xdiff) == 0 && len(d.Ydiff) == 0 {
-		if len(d.CommonPath) != 0 {
-			panic("A common paths was found with no diffs. This should NEVER happen.")
-		}
-		fmt.Println("No differences found.")
 	} else {
-		fmt.Print(`
+		if len(d.Xdiff) == 0 && len(d.Ydiff) == 0 {
+			if len(d.CommonPath) != 0 {
+				panic("A common paths was found with no diffs. This should NEVER happen.")
+			}
+			fmt.Println("No differences found.")
+		} else {
+			fmt.Print(`
 --------------------------------------------------------
 		DIFFERENCES FOUND
 --------------------------------------------------------
 `)
-		fmt.Printf("Common path of length %d:\n", len(d.CommonPath))
-		for depth, tgt := range d.CommonPath {
-			fmt.Printf("%s%s. SOURCE: %s\n", strings.Repeat(" ", depth), &tgt.Edge, &tgt.Type)
-		}
-		fmt.Printf(`
+			fmt.Printf("Common path of length %d:\n", len(d.CommonPath))
+			for depth, tgt := range d.CommonPath {
+				fmt.Printf("%s%s. SOURCE: %s\n", strings.Repeat(" ", depth), &tgt.Edge, &tgt.Type)
+			}
+			fmt.Printf(`
 X-DIFF
 ------
 EXISTS IN:	 	%q
 MISSING FROM:		%q
 %d TYPES TOTAL:
 `, &xType, &yType, len(d.Xdiff))
-		for i, tgt := range d.Xdiff {
-			fmt.Printf(`(%d)
+			for i, tgt := range d.Xdiff {
+				fmt.Printf(`(%d)
 [FIELD](+codec): 	%s
 SOURCE: 		%s`, i+1, &tgt.Edge, &tgt.Type)
-		}
+			}
 
-		fmt.Printf(`
+			fmt.Printf(`
 
 
 
@@ -420,11 +418,12 @@ EXISTS IN:	 	%q
 MISSING FROM:		%q
 %d TYPES TOTAL:
 `, &yType, &xType, len(d.Ydiff))
-		for i, tgt := range d.Ydiff {
-			fmt.Printf(`(%d)
+			for i, tgt := range d.Ydiff {
+				fmt.Printf(`(%d)
 [FIELD](+codec): 	%s
 SOURCE: 		%s
 `, i+1, &tgt.Edge, &tgt.Type)
+			}
 		}
 	}
 	fmt.Println(`
