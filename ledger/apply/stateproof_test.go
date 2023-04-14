@@ -270,6 +270,6 @@ func TestApplyStateProof(t *testing.T) {
 	// transaction should be applied without stateproof validation (no context, blockheader or valid stateproof needed as it represents a node catching up)
 	err = StateProof(stateProofTx, atRound, applier, false)
 	a.NoError(err)
-	// make sure that the ModStateProofNextRound was updated correctly after applying
+	// make sure that the StateProofNext was updated correctly after applying
 	a.Equal(basics.Round(512+config.Consensus[protocol.ConsensusFuture].StateProofInterval), applier.GetStateProofNextRound())
 }
