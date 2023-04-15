@@ -5,7 +5,7 @@
     {
       "Name": "uint64",
       "Abbreviation": "i",
-      "Bounds": [
+      "Bound": [
         0,
         18446744073709551615
       ],
@@ -14,7 +14,7 @@
     {
       "Name": "none",
       "Abbreviation": "x",
-      "Bounds": [
+      "Bound": [
         0,
         0
       ],
@@ -23,7 +23,7 @@
     {
       "Name": "name",
       "Abbreviation": "N",
-      "Bounds": [
+      "Bound": [
         1,
         64
       ],
@@ -32,7 +32,7 @@
     {
       "Name": "method",
       "Abbreviation": "M",
-      "Bounds": [
+      "Bound": [
         4,
         4
       ],
@@ -41,7 +41,7 @@
     {
       "Name": "key",
       "Abbreviation": "K",
-      "Bounds": [
+      "Bound": [
         0,
         64
       ],
@@ -50,7 +50,7 @@
     {
       "Name": "bool",
       "Abbreviation": "T",
-      "Bounds": [
+      "Bound": [
         0,
         1
       ],
@@ -59,7 +59,7 @@
     {
       "Name": "bigint",
       "Abbreviation": "I",
-      "Bounds": [
+      "Bound": [
         0,
         64
       ],
@@ -68,7 +68,7 @@
     {
       "Name": "any",
       "Abbreviation": "a",
-      "Bounds": [
+      "Bound": [
         0,
         0
       ],
@@ -77,7 +77,7 @@
     {
       "Name": "addr",
       "Abbreviation": "A",
-      "Bounds": [
+      "Bound": [
         32,
         32
       ],
@@ -86,7 +86,7 @@
     {
       "Name": "[]byte",
       "Abbreviation": "b",
-      "Bounds": [
+      "Bound": [
         0,
         4096
       ],
@@ -95,7 +95,7 @@
     {
       "Name": "[32]byte",
       "Abbreviation": "H",
-      "Bounds": [
+      "Bound": [
         32,
         32
       ],
