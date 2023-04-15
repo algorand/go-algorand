@@ -96,7 +96,7 @@ func (spt *spVerificationTracker) newBlock(blk bookkeeping.Block, delta ledgerco
 		spt.appendCommitContext(&blk)
 	}
 
-	if delta.ModStateProofNextRound != 0 {
+	if delta.StateProofNext != 0 {
 		spt.appendDeleteContext(&blk, &delta)
 	}
 }
@@ -306,7 +306,7 @@ func (spt *spVerificationTracker) appendDeleteContext(blk *bookkeeping.Block, de
 
 	deletionContext := verificationDeleteContext{
 		confirmedRound:      blk.Round(),
-		stateProofNextRound: delta.ModStateProofNextRound,
+		stateProofNextRound: delta.StateProofNext,
 	}
 
 	spt.pendingDeleteContexts = append(spt.pendingDeleteContexts, deletionContext)
