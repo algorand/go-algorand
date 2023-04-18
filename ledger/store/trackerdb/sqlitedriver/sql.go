@@ -528,7 +528,9 @@ func (qs *onlineAccountsDbQueries) LookupOnlineTotalsHistory(round basics.Round)
 		row := qs.lookupOnlineTotalsStmt.QueryRow(round)
 		var buf []byte
 		err := row.Scan(&buf)
-		if err != nil {
+		if err == sql.ErrNoRows {
+			return trackerdb.ErrNotFound
+		} else if err != nil {
 			return err
 		}
 		err = protocol.Decode(buf, &data)

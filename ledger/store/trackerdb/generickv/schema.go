@@ -31,7 +31,6 @@ const (
 	kvPrefixCreatorIndex         = "creator"
 	kvPrefixOnlineAccount        = "online_account_base"
 	kvPrefixOnlineAccountBalance = "online_account_balance"
-	kvPrefixOnlineBalanceTotal   = "online_balance_total"
 	kvRoundKey                   = "global_round"
 	kvSchemaVersionKey           = "global_schema_version"
 	kvTotalsKey                  = "global_total"
@@ -116,18 +115,6 @@ func onlineAccountOnlyPartialKey(address basics.Address) []byte {
 	ret := []byte(kvPrefixOnlineAccount)
 	ret = append(ret, "-"...)
 	ret = append(ret, address[:]...)
-	return ret
-}
-
-func onlineAccountsAllPartialKey() []byte {
-	ret := []byte(kvPrefixOnlineAccount)
-	return ret
-}
-
-func onlineBalanceTotalKey(round basics.Round) []byte {
-	ret := []byte(kvPrefixOnlineAccountBalance)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(uint64(round))...)
 	return ret
 }
 

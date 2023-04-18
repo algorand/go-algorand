@@ -19,6 +19,7 @@ package testsuite
 import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
@@ -316,5 +317,32 @@ func CustomTestLookupOnlineAccountDataByAddress(t *customT) {
 }
 
 func CustomTestOnlineAccountTotals(t *customT) {
-	// TODO: write me
+	aw, err := t.db.MakeAccountsWriter()
+	require.NoError(t, err)
+
+	oaor, err := t.db.MakeOnlineAccountsOptimizedReader()
+	require.NoError(t, err)
+
+	// generate some test data
+	roundParams := []ledgercore.OnlineRoundParamsData{
+		{OnlineSupply: 100},
+		{OnlineSupply: 42},
+		{OnlineSupply: 9000},
+	}
+	err = aw.AccountsPutOnlineRoundParams(roundParams, basics.Round(3))
+	require.NoError(t, err)
+
+	//
+	// test
+	//
+
+	// lookup totals
+	totals, err := oaor.LookupOnlineTotalsHistory(basics.Round(4))
+	require.NoError(t, err)
+	require.Equal(t, basics.MicroAlgos{Raw: uint64(42)}, totals)
+
+	// lookup not found
+	_, err = oaor.LookupOnlineTotalsHistory(basics.Round(121))
+	require.Error(t, err)
+	require.Equal(t, trackerdb.ErrNotFound, err)
 }
