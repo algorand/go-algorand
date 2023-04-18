@@ -951,6 +951,16 @@ type PreEncodedSimulateResponse struct {
 	MaxLogSize   uint64                             `codec:"max-log-size"`
 }
 
+// PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
+type PreEncodedSimulateRequestTransactionGroup struct {
+	Txns []transactions.SignedTxn `codec:"txns"`
+}
+
+// PreEncodedSimulateRequest mirrors model.SimulateRequest
+type PreEncodedSimulateRequest struct {
+	TxnGroups []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+}
+
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
 // (POST /v2/transactions/simulate)
 func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
@@ -964,10 +974,39 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 	proto := config.Consensus[stat.LastVersion]
 
-	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
+	requestBuffer := new(bytes.Buffer)
+	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxTealDryrunBytes)
+	_, err = requestBuffer.ReadFrom(requestBodyReader)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
+	requestData := requestBuffer.Bytes()
+
+	var simulateRequest PreEncodedSimulateRequest
+	err = decode(protocol.CodecHandle, requestData, &simulateRequest)
+	if err != nil {
+		err = decode(protocol.JSONStrictHandle, requestData, &simulateRequest)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
+	for _, txgroup := range simulateRequest.TxnGroups {
+		if len(txgroup.Txns) == 0 {
+			err = errors.New("empty txgroup")
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		if len(txgroup.Txns) > proto.MaxTxGroupSize {
+			err = fmt.Errorf("transaction group size %d exceeds protocol max %d", len(txgroup.Txns), proto.MaxTxGroupSize)
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
+	if len(simulateRequest.TxnGroups) != 1 {
+		err := fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups))
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	txgroup := simulateRequest.TxnGroups[0].Txns
 
 	if params.UnlimitLog == nil {
 		defaultValue := false
@@ -993,12 +1032,12 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
-	data, err := encode(handle, &response)
+	responseData, err := encode(handle, &response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
 
-	return ctx.Blob(http.StatusOK, contentType, data)
+	return ctx.Blob(http.StatusOK, contentType, responseData)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.

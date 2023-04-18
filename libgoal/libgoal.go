@@ -1269,15 +1269,15 @@ func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
 	return
 }
 
-// SimulateRawTransaction simulates a raw transaction or raw transaction group and returns relevant simulation results.
-func (c *Client) SimulateRawTransaction(data []byte, unlimitLog bool) (result v2.PreEncodedSimulateResponse, err error) {
+// SimulateTransactionsRaw simulates a transaction group by taking raw request bytes and returns relevant simulation results.
+func (c *Client) SimulateTransactionsRaw(encodedRequest []byte, unlimitLog bool) (result v2.PreEncodedSimulateResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
 	}
 
 	var resp []byte
-	resp, err = algod.RawSimulateRawTransaction(data, unlimitLog)
+	resp, err = algod.RawSimulateRawTransaction(encodedRequest, unlimitLog)
 	if err != nil {
 		return
 	}
@@ -1285,13 +1285,9 @@ func (c *Client) SimulateRawTransaction(data []byte, unlimitLog bool) (result v2
 	return
 }
 
-// SimulateTransactionGroup simulates a transaction group and returns relevant simulation results.
-func (c *Client) SimulateTransactionGroup(txgroup []transactions.SignedTxn, unlimitLog bool) (result v2.PreEncodedSimulateResponse, err error) {
-	var enc []byte
-	for i := range txgroup {
-		enc = append(enc, protocol.Encode(&txgroup[i])...)
-	}
-	return c.SimulateRawTransaction(enc, unlimitLog)
+// SimulateTransactions simulates transactions and returns relevant simulation results.
+func (c *Client) SimulateTransactions(request v2.PreEncodedSimulateRequest, unlimitLog bool) (result v2.PreEncodedSimulateResponse, err error) {
+	return c.SimulateTransactionsRaw(protocol.EncodeReflect(&request), unlimitLog)
 }
 
 // TransactionProof returns a Merkle proof for a transaction in a block.

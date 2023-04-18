@@ -207,3 +207,32 @@ func TestSimulateResponseStruct(t *testing.T) {
 
 	generatedResponseGraph.AssertEquals(t, customResponseGraph)
 }
+
+// TestSimulateRequestStruct ensures that the hand-written PreEncodedSimulateRequest has the same
+// encoding structure as the generated model.SimulateRequest
+func TestSimulateRequestStruct(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	generatedResponseType := reflect.TypeOf(model.SimulateRequest{})
+	generatedResponseGraph := makeTagGraph(generatedResponseType, make(map[reflect.Type]*tagNode))
+
+	customResponseType := reflect.TypeOf(PreEncodedSimulateRequest{})
+	customResponseGraph := makeTagGraph(customResponseType, make(map[reflect.Type]*tagNode))
+
+	expectedGeneratedTxnGraph := map[string]*tagNode{
+		"<value>": {children: make(map[string]*tagNode)},
+	}
+	preEncodedTxPath := func(graph *tagNode) *tagNode {
+		// Resolve the field model.SimulateRequest{}.TxnGroups[0].Txns[0]
+		return graph.children["txn-groups"].children["<value>"].children["txns"].children["<value>"]
+	}
+	if assert.Equal(t, expectedGeneratedTxnGraph, preEncodedTxPath(generatedResponseGraph).children) {
+		// The generated response type uses json.RawMessage to represent a transaction, while
+		// the custom response type uses transactions.SignedTxn. Let's copy that into the generated
+		// type.
+		preEncodedTxPath(generatedResponseGraph).children = preEncodedTxPath(customResponseGraph).children
+	}
+
+	generatedResponseGraph.AssertEquals(t, customResponseGraph)
+}

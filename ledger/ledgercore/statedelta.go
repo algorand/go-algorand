@@ -110,10 +110,10 @@ type StateDelta struct {
 	// new block header; read-only
 	Hdr *bookkeeping.BlockHeader
 
-	// ModStateProofNextRound represents modification on StateProofNextRound field in the block header. If the block contains
+	// StateProofNext represents modification on StateProofNextRound field in the block header. If the block contains
 	// a valid state proof transaction, this field will contain the next round for state proof.
 	// otherwise it will be set to 0.
-	ModStateProofNextRound basics.Round
+	StateProofNext basics.Round
 
 	// previous block timestamp
 	PrevTimestamp int64
@@ -215,7 +215,7 @@ func (sd *StateDelta) PopulateStateDelta(hdr *bookkeeping.BlockHeader, prevTimes
 		sd.initialHint = hint
 	}
 	sd.Hdr = hdr
-	sd.ModStateProofNextRound = stateProofNext
+	sd.StateProofNext = stateProofNext
 	sd.PrevTimestamp = prevTimestamp
 }
 
@@ -248,7 +248,7 @@ func (sd *StateDelta) Reset() {
 	// these fields are going to be populated on next use but resetting them anyway for safety.
 	// we are not resetting sd.initialHint since it should only be reset if reallocating AccountDeltas
 	sd.Hdr = nil
-	sd.ModStateProofNextRound = basics.Round(0)
+	sd.StateProofNext = basics.Round(0)
 	sd.PrevTimestamp = 0
 }
 

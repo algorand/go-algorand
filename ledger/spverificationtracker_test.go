@@ -141,7 +141,7 @@ func feedBlocksUpToRound(spt *spVerificationTracker, prevBlock *blockEntry, targ
 			stateProofDelta = currentStateProofNextRound
 		}
 
-		spt.newBlock(block.block, ledgercore.StateDelta{ModStateProofNextRound: stateProofDelta})
+		spt.newBlock(block.block, ledgercore.StateDelta{StateProofNext: stateProofDelta})
 		prevBlock = &block
 	}
 

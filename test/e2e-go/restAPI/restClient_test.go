@@ -1601,7 +1601,14 @@ func TestSimulateTransaction(t *testing.T) {
 	currentRoundBeforeSimulate, err := testClient.CurrentRound()
 	a.NoError(err)
 
-	result, err := testClient.SimulateTransactionGroup([]transactions.SignedTxn{stxn}, false)
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+	}
+	result, err := testClient.SimulateTransactions(simulateRequest, false)
 	a.NoError(err)
 
 	currentAfterAfterSimulate, err := testClient.CurrentRound()
@@ -1743,7 +1750,13 @@ int 1`
 	a.NoError(err)
 	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
 	a.NoError(err)
-	resp, err := testClient.SimulateRawTransaction(protocol.Encode(&appCallTxnSigned), true)
+	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{appCallTxnSigned},
+			},
+		},
+	}, true)
 	a.NoError(err)
 
 	var logs [][]byte

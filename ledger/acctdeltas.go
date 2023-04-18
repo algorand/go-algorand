@@ -759,13 +759,15 @@ func accountsNewRoundImpl(
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
 				// create a new entry.
+				var ref trackerdb.AccountRef
 				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
-				ref, err := writer.InsertAccount(data.address, normBalance, data.newAcct)
-				if err == nil {
-					updatedAccounts[updatedAccountIdx].Ref = ref
-					updatedAccounts[updatedAccountIdx].AccountData = data.newAcct
-					newAddressesRowIDs[data.address] = ref
+				ref, err = writer.InsertAccount(data.address, normBalance, data.newAcct)
+				if err != nil {
+					return nil, nil, nil, err
 				}
+				updatedAccounts[updatedAccountIdx].Ref = ref
+				updatedAccounts[updatedAccountIdx].AccountData = data.newAcct
+				newAddressesRowIDs[data.address] = ref
 			}
 		} else {
 			// non-zero rowid means we had a previous value.
@@ -773,31 +775,31 @@ func accountsNewRoundImpl(
 				// new value is zero, which means we need to delete the current value.
 				var rowsAffected int64
 				rowsAffected, err = writer.DeleteAccount(data.oldAcct.Ref)
-				if err == nil {
-					// we deleted the entry successfully.
-					updatedAccounts[updatedAccountIdx].Ref = nil
-					updatedAccounts[updatedAccountIdx].AccountData = trackerdb.BaseAccountData{}
-					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.address, data.oldAcct.Ref)
-					}
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				// we deleted the entry successfully.
+				updatedAccounts[updatedAccountIdx].Ref = nil
+				updatedAccounts[updatedAccountIdx].AccountData = trackerdb.BaseAccountData{}
+				if rowsAffected != 1 {
+					err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", data.address, data.oldAcct.Ref)
+					return nil, nil, nil, err
 				}
 			} else {
 				var rowsAffected int64
 				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
 				rowsAffected, err = writer.UpdateAccount(data.oldAcct.Ref, normBalance, data.newAcct)
-				if err == nil {
-					// rowid doesn't change on update.
-					updatedAccounts[updatedAccountIdx].Ref = data.oldAcct.Ref
-					updatedAccounts[updatedAccountIdx].AccountData = data.newAcct
-					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.address, data.oldAcct.Ref)
-					}
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				// rowid doesn't change on update.
+				updatedAccounts[updatedAccountIdx].Ref = data.oldAcct.Ref
+				updatedAccounts[updatedAccountIdx].AccountData = data.newAcct
+				if rowsAffected != 1 {
+					err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", data.address, data.oldAcct.Ref)
+					return nil, nil, nil, err
 				}
 			}
-		}
-
-		if err != nil {
-			return
 		}
 
 		// set the returned persisted account states so that we could store that as the baseAccounts in commitRound
@@ -850,7 +852,7 @@ func accountsNewRoundImpl(
 			acctRef = newAddressesRowIDs[addr]
 			if acctRef == nil && !inMemEntry {
 				err = fmt.Errorf("cannot resolve address %s (%d), aidx %d, data %v", addr.String(), acctRef, aidx, data.newResource)
-				return
+				return nil, nil, nil, err
 			}
 		}
 		var entry trackerdb.PersistedResourcesData
@@ -867,7 +869,7 @@ func accountsNewRoundImpl(
 				// create a new entry.
 				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
 					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, acctRef, aidx, data.newResource)
-					return
+					return nil, nil, nil, err
 				}
 				// check if we need to "upgrade" this insert operation into an update operation due to a scheduled
 				// delete operation of the same resource.
@@ -877,19 +879,22 @@ func accountsNewRoundImpl(
 					delete(pendingResourcesDeletion, resourceKey{acctRef: acctRef, aidx: aidx})
 					var rowsAffected int64
 					rowsAffected, err = writer.UpdateResource(acctRef, aidx, data.newResource)
-					if err == nil {
-						// rowid doesn't change on update.
-						entry = trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
-						if rowsAffected != 1 {
-							err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, acctRef, aidx)
-						}
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					// rowid doesn't change on update.
+					entry = trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
+					if rowsAffected != 1 {
+						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, acctRef, aidx)
+						return nil, nil, nil, err
 					}
 				} else {
 					_, err = writer.InsertResource(acctRef, aidx, data.newResource)
-					if err == nil {
-						// set the returned persisted account states so that we could store that as the baseResources in commitRound
-						entry = trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
+					if err != nil {
+						return nil, nil, nil, err
 					}
+					// set the returned persisted account states so that we could store that as the baseResources in commitRound
+					entry = trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
 				}
 			}
 		} else {
@@ -901,22 +906,20 @@ func accountsNewRoundImpl(
 			} else {
 				if !data.newResource.IsApp() && !data.newResource.IsAsset() {
 					err = fmt.Errorf("unknown creatable for addr %v (%d), aidx %d, data %v", addr, acctRef, aidx, data.newResource)
-					return
+					return nil, nil, nil, err
 				}
 				var rowsAffected int64
 				rowsAffected, err = writer.UpdateResource(acctRef, aidx, data.newResource)
-				if err == nil {
-					// rowid doesn't change on update.
-					entry = trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
-					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, acctRef, aidx)
-					}
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				// rowid doesn't change on update.
+				entry = trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx, Data: data.newResource, Round: lastUpdateRound}
+				if rowsAffected != 1 {
+					err = fmt.Errorf("failed to update resources row for addr %s (%d), aidx %d", addr, acctRef, aidx)
+					return nil, nil, nil, err
 				}
 			}
-		}
-
-		if err != nil {
-			return
 		}
 
 		deltas := updatedResources[addr]
@@ -929,16 +932,15 @@ func accountsNewRoundImpl(
 		// new value is zero, which means we need to delete the current value.
 		var rowsAffected int64
 		rowsAffected, err = writer.DeleteResource(delRes.acctRef, delRes.aidx)
-		if err == nil {
-			// we deleted the entry successfully.
-			// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
-			// because the base account might gone.
-			if rowsAffected != 1 {
-				err = fmt.Errorf("failed to delete resources row (%d), aidx %d", delRes.acctRef, delRes.aidx)
-			}
-		}
 		if err != nil {
-			return
+			return nil, nil, nil, err
+		}
+		// we deleted the entry successfully.
+		// set zero addrid to mark this entry invalid for subsequent addr to addrid resolution
+		// because the base account might gone.
+		if rowsAffected != 1 {
+			err = fmt.Errorf("failed to delete resources row (%d), aidx %d", delRes.acctRef, delRes.aidx)
+			return nil, nil, nil, err
 		}
 	}
 
@@ -950,16 +952,19 @@ func accountsNewRoundImpl(
 				continue // changed back within the delta span
 			}
 			err = writer.UpsertKvPair(key, mv.data)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 			updatedKVs[key] = trackerdb.PersistedKVData{Value: mv.data, Round: lastUpdateRound}
 		} else {
 			if mv.oldData == nil { // Came and went within the delta span
 				continue
 			}
 			err = writer.DeleteKvPair(key)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 			updatedKVs[key] = trackerdb.PersistedKVData{Value: nil, Round: lastUpdateRound}
-		}
-		if err != nil {
-			return
 		}
 	}
 
@@ -970,7 +975,7 @@ func accountsNewRoundImpl(
 			_, err = writer.DeleteCreatable(cidx, cdelta.Ctype)
 		}
 		if err != nil {
-			return
+			return nil, nil, nil, err
 		}
 	}
 
@@ -998,25 +1003,27 @@ func onlineAccountsNewRoundImpl(
 					if newStatus == basics.Online {
 						if newAcct.IsVotingEmpty() {
 							err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), newAcct)
-						} else {
-							// create a new entry.
-							var ref trackerdb.OnlineAccountRef
-							normBalance := newAcct.NormalizedOnlineBalance(proto)
-							ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
-							if err == nil {
-								updated := trackerdb.PersistedOnlineAccountData{
-									Addr:        data.address,
-									AccountData: newAcct,
-									Round:       lastUpdateRound,
-									Ref:         ref,
-									UpdRound:    basics.Round(updRound),
-								}
-								updatedAccounts = append(updatedAccounts, updated)
-								prevAcct = updated
-							}
+							return nil, err
 						}
+						// create a new entry.
+						var ref trackerdb.OnlineAccountRef
+						normBalance := newAcct.NormalizedOnlineBalance(proto)
+						ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+						if err != nil {
+							return nil, err
+						}
+						updated := trackerdb.PersistedOnlineAccountData{
+							Addr:        data.address,
+							AccountData: newAcct,
+							Round:       lastUpdateRound,
+							Ref:         ref,
+							UpdRound:    basics.Round(updRound),
+						}
+						updatedAccounts = append(updatedAccounts, updated)
+						prevAcct = updated
 					} else if !newAcct.IsVotingEmpty() {
 						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
+						return nil, err
 					}
 				}
 			} else {
@@ -1025,45 +1032,43 @@ func onlineAccountsNewRoundImpl(
 					// new value is zero then go offline
 					if newStatus == basics.Online {
 						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), newAcct)
-					} else {
-						var ref trackerdb.OnlineAccountRef
-						ref, err = writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
-						if err == nil {
-							updated := trackerdb.PersistedOnlineAccountData{
-								Addr:        data.address,
-								AccountData: trackerdb.BaseOnlineAccountData{},
-								Round:       lastUpdateRound,
-								Ref:         ref,
-								UpdRound:    basics.Round(updRound),
-							}
-
-							updatedAccounts = append(updatedAccounts, updated)
-							prevAcct = updated
-						}
+						return nil, err
 					}
+					var ref trackerdb.OnlineAccountRef
+					ref, err = writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
+					if err != nil {
+						return nil, err
+					}
+					updated := trackerdb.PersistedOnlineAccountData{
+						Addr:        data.address,
+						AccountData: trackerdb.BaseOnlineAccountData{},
+						Round:       lastUpdateRound,
+						Ref:         ref,
+						UpdRound:    basics.Round(updRound),
+					}
+
+					updatedAccounts = append(updatedAccounts, updated)
+					prevAcct = updated
 				} else {
 					if prevAcct.AccountData != newAcct {
 						var ref trackerdb.OnlineAccountRef
 						normBalance := newAcct.NormalizedOnlineBalance(proto)
 						ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
-						if err == nil {
-							updated := trackerdb.PersistedOnlineAccountData{
-								Addr:        data.address,
-								AccountData: newAcct,
-								Round:       lastUpdateRound,
-								Ref:         ref,
-								UpdRound:    basics.Round(updRound),
-							}
-
-							updatedAccounts = append(updatedAccounts, updated)
-							prevAcct = updated
+						if err != nil {
+							return nil, err
 						}
+						updated := trackerdb.PersistedOnlineAccountData{
+							Addr:        data.address,
+							AccountData: newAcct,
+							Round:       lastUpdateRound,
+							Ref:         ref,
+							UpdRound:    basics.Round(updRound),
+						}
+
+						updatedAccounts = append(updatedAccounts, updated)
+						prevAcct = updated
 					}
 				}
-			}
-
-			if err != nil {
-				return
 			}
 		}
 	}
