@@ -1237,9 +1237,9 @@ var simulateCmd = &cobra.Command{
 		}
 
 		requestOutProvided := cmd.Flags().Changed("request-out")
-		outProvided := cmd.Flags().Changed("outfile")
-		if requestOutProvided && outProvided {
-			reportErrorf("--request-out and --outfile are mutually exclusive")
+		resultOutProvided := cmd.Flags().Changed("result-out")
+		if requestOutProvided && resultOutProvided {
+			reportErrorf("--request-out and --result-out are mutually exclusive")
 		}
 
 		if requestOutProvided {
