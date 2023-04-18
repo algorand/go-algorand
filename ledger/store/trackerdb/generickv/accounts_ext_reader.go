@@ -81,6 +81,10 @@ func (r *accountsReader) LookupAccountRowID(addr basics.Address) (ref trackerdb.
 		return
 	}
 
+	if acc.Ref == nil {
+		return nil, trackerdb.ErrNotFound
+	}
+
 	return acc.Ref, nil
 }
 
