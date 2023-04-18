@@ -35,6 +35,7 @@ func init() {
 	registerTest("txtail-update", CustomTestTxTail)
 	registerTest("online_accounts-round_params-update", CustomTestOnlineAccountParams)
 	registerTest("accounts-lookup_by_rowid", CustomTestAccountLookupByRowID)
+	registerTest("resources-lookup_by_rowid", CustomTestResourceLookupByRowID)
 }
 
 func CustomTestRoundUpdate(t *customT) {
@@ -241,4 +242,54 @@ func CustomTestAccountLookupByRowID(t *customT) {
 	ref, err := ar.LookupAccountRowID(addrA)
 	require.NoError(t, err)
 	require.Equal(t, refA, ref)
+}
+
+func CustomTestResourceLookupByRowID(t *customT) {
+	aow, err := t.db.MakeAccountsOptimizedWriter(true, true, false, false)
+	require.NoError(t, err)
+
+	ar, err := t.db.MakeAccountsReader()
+	require.NoError(t, err)
+
+	// generate some test data
+	addrA := RandomAddress()
+	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	require.NoError(t, err)
+
+	// generate some test data
+	resDataA0 := trackerdb.MakeResourcesData(0)
+	resDataA0.SetAssetParams(basics.AssetParams{
+		Total:     100,
+		UnitName:  "t",
+		AssetName: "test-asset",
+		Manager:   addrA,
+		Reserve:   addrA,
+		Freeze:    addrA,
+		Clawback:  addrA,
+		URL:       "http://127.0.0.1/8000",
+	}, true)
+	resDataA0.SetAssetHolding(basics.AssetHolding{Amount: 10})
+	aidxResA0 := basics.CreatableIndex(0)
+	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0)
+	require.NoError(t, err)
+
+	//
+	// test
+	//
+
+	// non-existing resource
+	_, err = ar.LookupResourceDataByAddrID(refAccA, basics.CreatableIndex(100))
+	require.Error(t, err)
+	require.Equal(t, err, trackerdb.ErrNotFound)
+
+	// read resource
+	data, err := ar.LookupResourceDataByAddrID(refAccA, aidxResA0)
+	require.NoError(t, err)
+	// parse the raw data
+	var res trackerdb.ResourcesData
+	err = protocol.Decode(data, &res)
+	require.NoError(t, err)
+	// assert that we got the resource
+	require.Equal(t, resDataA0, res)
 }
