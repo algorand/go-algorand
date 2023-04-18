@@ -3911,9 +3911,11 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 		assert.Equal(t, v[0], resp.Header.Get(k))
 	}
 
-	minValidHeaderSize := 36 // Fixed overhead of the full status line "HTTP/1.1 101 Switching Protocols" + 4
+	// Fixed overhead of the full status line "HTTP/1.1 101 Switching Protocols" (32) + 4 bytes for two instance of CRLF
+	// one after the status line and one to separate headers from the body
+	minValidHeaderSize := 36
 	for k, v := range resp.Header {
-		minValidHeaderSize += len(k) + len(v[0]) + 4
+		minValidHeaderSize += len(k) + len(v[0]) + 4 // + 4 is for the ": " and CRLF
 	}
 	mconn.Close()
 
