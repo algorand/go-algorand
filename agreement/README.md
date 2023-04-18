@@ -356,5 +356,5 @@ a given period.
 The staging slot for a given period is important because its state is
 the precursor to cert and next votes. Once both a soft threshold for a
 value and the `Block` corresponding to this value has been observed by
-the node, a `proposalCommittableEvent` is emitted, which indicates
+the node, a proposal `committableEvent` is emitted, which indicates
 that the node may cert or next-vote for the proposal.
