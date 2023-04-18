@@ -20,6 +20,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,6 +31,7 @@ func init() {
 	registerTest("online-accounts-top", CustomTestAccountsOnlineTop)
 	registerTest("online-accounts-get-by-addr", CustomTestLookupOnlineAccountDataByAddress)
 	registerTest("online-accounts-history", CustomTestOnlineAccountHistory)
+	registerTest("online-accounts-totals", CustomTestOnlineAccountTotals)
 }
 
 func CustomTestOnlineAccountsCrud(t *customT) {
@@ -272,12 +274,47 @@ func CustomTestAccountsOnlineTop(t *customT) {
 }
 
 func CustomTestLookupOnlineAccountDataByAddress(t *customT) {
+	oaw, err := t.db.MakeOnlineAccountsOptimizedWriter(true)
+	require.NoError(t, err)
+
 	ar, err := t.db.MakeAccountsReader()
 	require.NoError(t, err)
 
-	// check non-existing account
-	addr := RandomAddress()
+	// generate some test data
+	addrA := RandomAddress()
+	updRoundA := uint64(400)
+	lastValidA := uint64(500)
+	dataA := trackerdb.BaseOnlineAccountData{
+		BaseVotingData: trackerdb.BaseVotingData{},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
+		RewardsBase:    uint64(200),
+	}
+	normalizedBalA := dataA.NormalizedOnlineBalance(t.proto)
 
-	_, _, err = ar.LookupOnlineAccountDataByAddress(addr)
+	refA, err := oaw.InsertOnlineAccount(addrA, normalizedBalA, dataA, updRoundA, lastValidA)
+	require.NoError(t, err)
+
+	//
+	// test
+	//
+
+	// check non-existing account
+	nonExistingAddr := RandomAddress()
+	_, _, err = ar.LookupOnlineAccountDataByAddress(nonExistingAddr)
 	require.Error(t, err)
+	require.Equal(t, trackerdb.ErrNotFound, err) // check the error type
+
+	// read existing addr
+	readRef, readData, err := ar.LookupOnlineAccountDataByAddress(addrA)
+	require.NoError(t, err)
+	require.Equal(t, refA, readRef) // check ref is the same
+	// the method returns raw bytes, parse them
+	var badA trackerdb.BaseOnlineAccountData
+	err = protocol.Decode(readData, &badA)
+	require.NoError(t, err)
+	require.Equal(t, dataA, badA)
+}
+
+func CustomTestOnlineAccountTotals(t *customT) {
+	// TODO: write me
 }
