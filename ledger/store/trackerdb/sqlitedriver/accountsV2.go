@@ -399,7 +399,10 @@ func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address)
 
 	var rowid int64
 	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
-	if err != nil {
+	if err == sql.ErrNoRows {
+		err = trackerdb.ErrNotFound
+		return
+	} else if err != nil {
 		return
 	}
 	return sqlRowRef{rowid}, data, err
