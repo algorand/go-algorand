@@ -53,3 +53,15 @@ There are some cases that break the definition above. For example, `basics.Micro
 `go-algorand` but is an alias for `uint64` in `go-algorand-sdk`. Our serializers know to produce the same
 output, but this violates the previous notion of _identical_. Such exceptions are handled by providing the string produced by the type's `Type.String()` method
 as en element in the set `diffExclusions` of `xrt_tmpl.go`.
+
+## For developing this tool
+
+`xrt_tmpl.go` is provided for ease of development, but is not strictly required for running the tool. You can
+run it as a standalone app and debug the algorithms with it. To run `xrt_tmpl.go`:
+
+1. Rename its `Main()` function to `main()` (and to pass compilation, rename `xrt.go`'s `main()`)
+2. Replace the `xpkg, ypkg` imports with the packages you want to test
+3. Replace `x, y` by the types you'd like to take the diff
+
+NOTE: `make build-xrt` generates `xrt_tmpl.go.tmpl` from `xrt_tmpl.go` using specially crafted comments to
+signal how to modify the code.
