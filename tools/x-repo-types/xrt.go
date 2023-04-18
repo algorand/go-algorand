@@ -87,15 +87,6 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 		return err
 	}
 
-	err = goBuild(xPkg)
-	if err != nil {
-		return err
-	}
-	err = goBuild(yPkg)
-	if err != nil {
-		return err
-	}
-
 	// Show the type/outline
 	err = showKind(xPkg, xType)
 	if err != nil {
@@ -138,14 +129,6 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 func goGet(repo string) error {
 	fmt.Println("Downloading repo:", repo)
 	cmd := exec.Command("go", "get", repo)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func goBuild(pkg string) error {
-	fmt.Println("Building package:", pkg)
-	cmd := exec.Command("go", "build", pkg)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
