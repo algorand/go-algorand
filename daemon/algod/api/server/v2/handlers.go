@@ -1692,6 +1692,10 @@ func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
 // This is only available in dev mode.
 // (POST /v2/devmode/blocks/offset/{offset})
 func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error {
+	if offset > math.MaxInt64 {
+		err := fmt.Errorf("block timestamp offset cannot be larger than max int64 value")
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
+	}
 	err := v2.Node.SetBlockTimeStampOffset(int64(offset))
 	if err != nil {
 		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)

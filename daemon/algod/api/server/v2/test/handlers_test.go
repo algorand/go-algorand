@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1975,7 +1976,7 @@ func TestTimestampOffsetInDevMode(t *testing.T) {
 	handler, c, rec, _, _, releasefunc := setupMockNodeForMethodGet(t, cannedStatusReportGolden, true)
 	defer releasefunc()
 
-	// TestSetBlockTimeStampOffset 404
+	// TestGetBlockTimeStampOffset 404
 	err := handler.GetBlockTimeStampOffset(c)
 	require.NoError(t, err)
 	require.Equal(t, 404, rec.Code)
@@ -1992,4 +1993,11 @@ func TestTimestampOffsetInDevMode(t *testing.T) {
 	err = handler.GetBlockTimeStampOffset(c)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 400
+	err = handler.SetBlockTimeStampOffset(c, math.MaxUint64)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: block timestamp offset cannot be larger than max int64 value\"}\n", rec.Body.String())
 }
