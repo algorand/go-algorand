@@ -115,7 +115,7 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 	xPkgSuffix := strings.Join(xParts[3:], "/")
 	yPkgSuffix := strings.Join(yParts[3:], "/")
 
-	// Instantiate the type in a separate process
+	// Instantiate the type in a separate process as a "Smoke Test"
 	err = instantiate(xRepo, xPkgSuffix, xType)
 	if err != nil {
 		return err
