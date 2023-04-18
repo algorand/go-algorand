@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -92,17 +93,21 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 
 // LookupOnlineTotalsHistory pulls the total Online Algos on a given round
 func (r *accountsReader) LookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
-	value, closer, err := r.kvr.Get(onlineBalanceTotalKey(round))
+	// SQL at the time of writing this:
+	//
+	// SELECT data FROM onlineroundparamstail WHERE rnd=?
+
+	value, closer, err := r.kvr.Get(onlineAccountRoundParamsKey(round))
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
 	defer closer.Close()
-	var ma basics.MicroAlgos
-	err = protocol.Decode(value, &ma)
+	data := ledgercore.OnlineRoundParamsData{}
+	err = protocol.Decode(value, &data)
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
-	return ma, nil
+	return basics.MicroAlgos{Raw: data.OnlineSupply}, nil
 }
 
 func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trackerdb.PersistedOnlineAccountData, rnd basics.Round, err error) {
