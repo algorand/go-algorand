@@ -50,7 +50,7 @@ func main() {
 	}
 
 	rootCmd.Flags().StringVar(&xPkg, "x-package", "", "Go repo and package for type x")
-	rootCmd.Flags().StringVar(&xBranch, "x-branch", "", "repository brahnch for type x")
+	rootCmd.Flags().StringVar(&xBranch, "x-branch", "", "repository branch for type x")
 	rootCmd.Flags().StringVar(&xType, "x-type", "", "Exported type in the package for type x")
 	rootCmd.Flags().StringVar(&yPkg, "y-package", "", "Go repo and package for type for type y")
 	rootCmd.Flags().StringVar(&yBranch, "y-branch", "", "repository branch for type y")
