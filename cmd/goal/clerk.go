@@ -150,7 +150,7 @@ func init() {
 	simulateCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test. Mutually exclusive with --request")
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
 	simulateCmd.Flags().StringVar(&requestOutFilename, "request-out", "", "Filename for writing simulate request object. If provided, the command will only write the request object and exit. No simulation will happen")
-	simulateCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing simulation result")
+	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
 }
 
 var clerkCmd = &cobra.Command{
