@@ -440,7 +440,10 @@ func (r *accountsV2Reader) LookupResourceDataByAddrID(accountRef trackerdb.Accou
 	}
 
 	err = selectStmt.QueryRow(addrid, aidx).Scan(&data)
-	if err != nil {
+	if err == sql.ErrNoRows {
+		err = trackerdb.ErrNotFound
+		return
+	} else if err != nil {
 		return
 	}
 	return data, err
