@@ -1975,7 +1975,7 @@ func TestTimestampOffsetInDevMode(t *testing.T) {
 	handler, c, rec, _, _, releasefunc := setupMockNodeForMethodGet(t, cannedStatusReportGolden, true)
 	defer releasefunc()
 
-	// TestSetBlockTimeStampOffset 400
+	// TestSetBlockTimeStampOffset 404
 	err := handler.GetBlockTimeStampOffset(c)
 	require.NoError(t, err)
 	require.Equal(t, 404, rec.Code)
