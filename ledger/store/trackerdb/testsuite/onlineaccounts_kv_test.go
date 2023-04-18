@@ -27,15 +27,16 @@ import (
 
 func init() {
 	// register tests that will run on each KV implementation
-	registerTest("online-accounts-crud", CustomTestOnlineAccountsCrud)
+	registerTest("online-accounts-write-read", CustomTestOnlineAccountsWriteRead)
 	registerTest("online-accounts-all", CustomTestOnlineAccountsAll)
 	registerTest("online-accounts-top", CustomTestAccountsOnlineTop)
 	registerTest("online-accounts-get-by-addr", CustomTestLookupOnlineAccountDataByAddress)
 	registerTest("online-accounts-history", CustomTestOnlineAccountHistory)
 	registerTest("online-accounts-totals", CustomTestOnlineAccountTotals)
+	registerTest("online-accounts-delete", CustomTestOnlineAccountsDelete)
 }
 
-func CustomTestOnlineAccountsCrud(t *customT) {
+func CustomTestOnlineAccountsWriteRead(t *customT) {
 	oaw, err := t.db.MakeOnlineAccountsOptimizedWriter(true)
 	require.NoError(t, err)
 
@@ -345,4 +346,90 @@ func CustomTestOnlineAccountTotals(t *customT) {
 	_, err = oaor.LookupOnlineTotalsHistory(basics.Round(121))
 	require.Error(t, err)
 	require.Equal(t, trackerdb.ErrNotFound, err)
+}
+
+func CustomTestOnlineAccountsDelete(t *customT) {
+	oaw, err := t.db.MakeOnlineAccountsOptimizedWriter(true)
+	require.NoError(t, err)
+
+	ar, err := t.db.MakeAccountsReader()
+	require.NoError(t, err)
+
+	aw, err := t.db.MakeAccountsWriter()
+	require.NoError(t, err)
+
+	// set round to 3
+	// Note: this will be used to check that we read the round
+	expectedRound := basics.Round(3)
+	err = aw.UpdateAccountsRound(expectedRound)
+	require.NoError(t, err)
+
+	// generate some test data
+	addrA := RandomAddress()
+	dataA1 := trackerdb.BaseOnlineAccountData{
+		BaseVotingData: trackerdb.BaseVotingData{},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(20)},
+		RewardsBase:    uint64(200),
+	}
+	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto)
+
+	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA1, dataA1, uint64(0), uint64(2))
+	require.NoError(t, err)
+
+	// generate some test data
+	dataA2 := trackerdb.BaseOnlineAccountData{
+		BaseVotingData: trackerdb.BaseVotingData{},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
+		RewardsBase:    uint64(200),
+	}
+	normalizedBalA2 := dataA2.NormalizedOnlineBalance(t.proto)
+
+	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA2, dataA2, uint64(1), uint64(3))
+	require.NoError(t, err)
+
+	// generate some test data
+	addrB := RandomAddress()
+	dataB1 := trackerdb.BaseOnlineAccountData{
+		BaseVotingData: trackerdb.BaseVotingData{},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(75)},
+		RewardsBase:    uint64(200),
+	}
+	normalizedBalB1 := dataB1.NormalizedOnlineBalance(t.proto)
+
+	_, err = oaw.InsertOnlineAccount(addrB, normalizedBalB1, dataB1, uint64(2), uint64(3))
+	require.NoError(t, err)
+
+	//
+	// the test
+	//
+
+	// delete before 0 (no changes)
+	err = aw.OnlineAccountsDelete(basics.Round(0))
+	require.NoError(t, err)
+
+	// check they are all there
+	oas, err := ar.AccountsOnlineTop(basics.Round(0), 0, 10, t.proto)
+	require.NoError(t, err)
+	require.Len(t, oas, 1)
+	require.Equal(t, oas[addrA].MicroAlgos, basics.MicroAlgos{Raw: uint64(20)}) // check item
+
+	// delete before round 1
+	err = aw.OnlineAccountsDelete(basics.Round(1))
+	require.NoError(t, err)
+
+	// check they are all there
+	oas, err = ar.AccountsOnlineTop(basics.Round(1), 0, 10, t.proto)
+	require.NoError(t, err)
+	require.Len(t, oas, 1)
+	require.Equal(t, oas[addrA].MicroAlgos, basics.MicroAlgos{Raw: uint64(100)}) // check item
+
+	// delete before round 2
+	err = aw.OnlineAccountsDelete(basics.Round(2))
+	require.NoError(t, err)
+
+	// check they are all there
+	oas, err = ar.AccountsOnlineTop(basics.Round(2), 0, 10, t.proto)
+	require.NoError(t, err)
+	require.Len(t, oas, 1)
+	require.Equal(t, oas[addrB].MicroAlgos, basics.MicroAlgos{Raw: uint64(75)}) // check item
 }

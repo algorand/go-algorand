@@ -132,7 +132,8 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 
 	// 1. read from the `onlineAccountBalanceKey` range since we can the addr's that will need to be deleted
 	start := []byte(kvPrefixOnlineAccountBalance + "-")
-	end := []byte(kvPrefixOnlineAccountBalance + ".")
+	end := []byte(kvPrefixOnlineAccountBalance + "-")
+	end = append(end, bigEndianUint64(uint64(forgetBefore))...)
 	iter := w.kvr.NewIter(start, end, false)
 	defer iter.Close()
 
