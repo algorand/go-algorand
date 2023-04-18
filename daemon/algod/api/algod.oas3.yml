@@ -1835,6 +1835,41 @@
         ],
         "type": "object"
       },
+      "SimulateRequest": {
+        "description": "Request type for simulation endpoint.",
+        "properties": {
+          "txn-groups": {
+            "description": "The transaction groups to simulate.",
+            "items": {
+              "$ref": "#/components/schemas/SimulateRequestTransactionGroup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txn-groups"
+        ],
+        "type": "object"
+      },
+      "SimulateRequestTransactionGroup": {
+        "description": "A transaction group to simulate.",
+        "properties": {
+          "txns": {
+            "description": "An atomic transaction group.",
+            "items": {
+              "description": "SignedTxn object. Must be canonically encoded.",
+              "format": "json",
+              "type": "string",
+              "x-algorand-format": "SignedTransaction"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txns"
+        ],
+        "type": "object"
+      },
       "SimulateTransactionGroupResult": {
         "description": "Simulation result for an atomic transaction group",
         "properties": {
@@ -5737,14 +5772,18 @@
         ],
         "requestBody": {
           "content": {
-            "application/x-binary": {
+            "application/json": {
               "schema": {
-                "format": "binary",
-                "type": "string"
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            },
+            "application/msgpack": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
               }
             }
           },
-          "description": "The byte encoded transaction to simulate",
+          "description": "The transactions to simulate, along with any other inputs.",
           "required": true
         },
         "responses": {
@@ -5830,7 +5869,7 @@
                 }
               }
             },
-            "description": "Bad Request - Malformed Algorand transaction"
+            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -5887,7 +5926,7 @@
           "public",
           "nonparticipating"
         ],
-        "x-codegen-request-body-name": "rawtxn"
+        "x-codegen-request-body-name": "request"
       }
     },
     "/versions": {
