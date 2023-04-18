@@ -3871,10 +3871,16 @@ func TestMaxHeaderSize(t *testing.T) {
 	assert.Zero(t, len(netA.peers))
 
 	// Now try to connect with a max header size that is too small
+	logBuffer := bytes.NewBuffer(nil)
+	netA.log.SetOutput(logBuffer)
+
 	netA.wsMaxHeaderBytes = 128
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
+	lg := logBuffer.String()
+	logBuffer.Reset()
 	time.Sleep(250 * time.Millisecond)
+	assert.Contains(t, lg, fmt.Sprintf("ws connect(%s) fail:", gossipB))
 	assert.Zero(t, len(netA.peers))
 
 	// Test that setting 0 disables the max header size check
@@ -3905,21 +3911,21 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 		assert.Equal(t, v[0], resp.Header.Get(k))
 	}
 
-	headerSize := 36 // Fixed overhead of the full status line "HTTP/1.1 101 Switching Protocols" + 4
+	minValidHeaderSize := 36 // Fixed overhead of the full status line "HTTP/1.1 101 Switching Protocols" + 4
 	for k, v := range resp.Header {
-		headerSize += len(k) + len(v[0]) + 4
+		minValidHeaderSize += len(k) + len(v[0]) + 4
 	}
 	mconn.Close()
 
 	// Setting the max header size to 1 byte less than the minimum header size should fail
-	netA.wsMaxHeaderBytes = int64(headerSize) - 1
+	netA.wsMaxHeaderBytes = int64(minValidHeaderSize) - 1
 	netA.wg.Add(1)
 	netA.tryConnect(s.URL, s.URL)
 	time.Sleep(250 * time.Millisecond)
 	assert.Len(t, netA.peers, 0)
 
 	// Now set the max header size to the minimum header size and it should succeed
-	netA.wsMaxHeaderBytes = int64(headerSize)
+	netA.wsMaxHeaderBytes = int64(minValidHeaderSize)
 	netA.wg.Add(1)
 	netA.tryConnect(s.URL, s.URL)
 	p := netA.peers[0]
