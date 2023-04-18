@@ -61,7 +61,7 @@ run it as a standalone app and debug the algorithms with it. To run `xrt_tmpl.go
 
 1. Rename its `Main()` function to `main()` (and to pass compilation, rename `xrt.go`'s `main()`)
 2. Replace the `xpkg, ypkg` imports with the packages you want to test
-3. Replace `x, y` by the types you'd like to take the diff
+3. Replace `x, y` by the types whose diff you are taking
 
 NOTE: `make build-xrt` generates `xrt_tmpl.go.tmpl` from `xrt_tmpl.go` using specially crafted comments to
 signal how to modify the code.
