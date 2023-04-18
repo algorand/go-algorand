@@ -243,12 +243,6 @@ type (
 	}
 )
 
-// DevModeOpts contains fields that we might want to replace in a blockheader
-// in dev mode.
-type DevModeOpts struct {
-	TimeStampOffset int64
-}
-
 // Hash returns the hash of a block header.
 // The hash of a block is the hash of its header.
 func (bh BlockHeader) Hash() BlockHash {
