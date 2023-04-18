@@ -19,6 +19,7 @@ package eval
 import (
 	"bytes"
 	"fmt"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -43,14 +44,16 @@ type TxnGroupDeltaTracer struct {
 	// no-op methods we don't care about
 	logic.NullEvalTracer
 	// txnGroupDeltas stores the StateDelta objects for each round, indexed by all the IDs within the group
-	txnGroupDeltas []map[crypto.Digest]*ledgercore.StateDelta
+	txnGroupDeltas map[basics.Round]map[crypto.Digest]*ledgercore.StateDelta
+	// latestRound is the most recent round seen via the BeforeBlock hdr
+	latestRound basics.Round
 }
 
 // makeTxnGroupDeltaTracer creates a TxnGroupDeltaTracer
 func makeTxnGroupDeltaTracer(lookback uint64) *TxnGroupDeltaTracer {
 	return &TxnGroupDeltaTracer{
 		Lookback:       lookback,
-		txnGroupDeltas: []map[crypto.Digest]*ledgercore.StateDelta{},
+		txnGroupDeltas: make(map[basics.Round]map[crypto.Digest]*ledgercore.StateDelta),
 	}
 }
 
@@ -62,18 +65,15 @@ func TxnGroupDeltaTracerForConfig(cfg config.Local) *TxnGroupDeltaTracer {
 	return txnGroupDeltaTracer
 }
 
+// BeforeBlock implements the EvalTracer interface for pre-block evaluation
+func (tracer TxnGroupDeltaTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
+	// Drop older rounds based on the Lookback parameter
+	delete(tracer.txnGroupDeltas, hdr.Round-basics.Round(tracer.Lookback))
+	tracer.latestRound = hdr.Round
+}
+
 // AfterTxnGroup implements the EvalTracer interface for txn group boundaries
 func (tracer TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
-	var round basics.Round
-	if ep.Ledger != nil {
-		round = ep.Ledger.Round()
-	} else if ep.GetCaller() != nil {
-		round = ep.GetCaller().Ledger.Round()
-	} else {
-		return
-	}
-	// Remove old data if it exists
-	// delete(tracer.txnGroupDeltas, round-basics.Round(tracer.Lookback))
 	var txnDeltaMap = make(map[crypto.Digest]*ledgercore.StateDelta)
 	for _, txn := range ep.TxnGroup {
 		// Add Group ID
@@ -83,18 +83,19 @@ func (tracer TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *le
 		// Add Txn ID
 		txnDeltaMap[crypto.Digest(txn.ID())] = deltas
 		for innerIndex, innerTxn := range txn.ApplyData.EvalDelta.InnerTxns {
-			// TODO which one of these is correct?
 			// Add Inner Txn IDs
 			txnDeltaMap[crypto.Digest(innerTxn.Txn.InnerID(txn.ID(), innerIndex))] = deltas
-			txnDeltaMap[crypto.Digest(innerTxn.ID())] = deltas
 		}
 	}
-	tracer.txnGroupDeltas[round] = txnDeltaMap
+	tracer.txnGroupDeltas[tracer.latestRound] = txnDeltaMap
 }
 
 // GetDeltasForRound supplies all StateDelta objects for txn groups in a given rnd
 func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]ledgercore.StateDelta, error) {
-	rndEntries := tracer.txnGroupDeltas[rnd]
+	rndEntries, exists := tracer.txnGroupDeltas[rnd]
+	if !exists {
+		return nil, fmt.Errorf("round %d not found in txnGroupDeltaTracer", rnd)
+	}
 	// Dedupe entries in our map
 	var deltas = map[*ledgercore.StateDelta]bool{}
 	var entries []ledgercore.StateDelta
