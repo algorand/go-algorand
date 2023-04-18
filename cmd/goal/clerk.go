@@ -149,7 +149,7 @@ func init() {
 
 	simulateCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "Transaction or transaction-group to test. Mutually exclusive with --request")
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
-	simulateCmd.Flags().StringVar(&requestOutFilename, "request-out", "", "Filename for writing simulate request object. If provided, the command will only write the request object and exit. No simulation will happen")
+	simulateCmd.Flags().StringVar(&requestOutFilename, "request-only-out", "", "Filename for writing simulate request object. If provided, the command will only write the request object and exit. No simulation will happen")
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
 }
 
@@ -1236,17 +1236,17 @@ var simulateCmd = &cobra.Command{
 			reportErrorf("exactly one of --txfile or --request must be provided")
 		}
 
-		requestOutProvided := cmd.Flags().Changed("request-out")
+		requestOutProvided := cmd.Flags().Changed("request-only-out")
 		resultOutProvided := cmd.Flags().Changed("result-out")
 		if requestOutProvided && resultOutProvided {
-			reportErrorf("--request-out and --result-out are mutually exclusive")
+			reportErrorf("--request-only-out and --result-out are mutually exclusive")
 		}
 
 		if requestOutProvided {
-			// If request-out is provided, only create a request and write it. Do not actually
+			// If request-only-out is provided, only create a request and write it. Do not actually
 			// simulate.
 			if requestProvided {
-				reportErrorf("--request-out and --request are mutually exclusive")
+				reportErrorf("--request-only-out and --request are mutually exclusive")
 			}
 			txgroup := decodeTxnsFromFile(txFilename)
 			simulateRequest := v2.PreEncodedSimulateRequest{

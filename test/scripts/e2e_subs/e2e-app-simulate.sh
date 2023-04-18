@@ -25,8 +25,8 @@ CONST_FALSE="false"
 # Some of our MacOS nightly tests fail for specifying the bs (block size)
 # value in capital letters (i.e. 11M), so just specify it as 1024 bytes and
 # allocate 11K blocks so we get a 11MB sized file. 
-dd if=/dev/zero of="${TEMPDIR}/toolargerequest" bs=1024 count=11000
-RES=$(${gcmd} clerk simulate --request "${TEMPDIR}/toolargerequest" 2>&1 || true)
+dd if=/dev/zero of="${TEMPDIR}/tooLargeRequest.json" bs=1024 count=11000
+RES=$(${gcmd} clerk simulate --request "${TEMPDIR}/tooLargeRequest.json" 2>&1 || true)
 EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-simulate-test FAIL the simulate API should fail for request bodies exceeding 10MB %Y%m%d_%H%M%S'
@@ -77,7 +77,7 @@ if [[ $RES != $CONST_TRUE ]]; then
 fi
 
 # Test creating and using a simulate request object
-${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx" --request-out "${TEMPDIR}/simulateRequest.json"
+${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx" --request-only-out "${TEMPDIR}/simulateRequest.json"
 
 NUM_GROUPS=$(jq '."txn-groups" | length' < "${TEMPDIR}/simulateRequest.json")
 if [ $NUM_GROUPS -ne 1 ]; then
