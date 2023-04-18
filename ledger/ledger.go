@@ -834,6 +834,8 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 // provides a cap on the size of a single generated block size, when a non-zero value is passed.
 // If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
 // be used instead.
+// The tracer argument is a logic.EvalTracer which will be attached to the evaluator and have its hooked invoked during
+// the eval process for each block. A nil tracer will skip tracer invocation entirely.
 func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
 	return eval.StartEvaluator(l, hdr,
 		eval.EvaluatorOptions{

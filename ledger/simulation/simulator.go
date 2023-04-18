@@ -153,7 +153,6 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 	if err != nil {
 		return nil, err
 	}
-	eval.Tracer = tracer
 
 	group := transactions.WrapSignedTxnsWithAD(stxns)
 
