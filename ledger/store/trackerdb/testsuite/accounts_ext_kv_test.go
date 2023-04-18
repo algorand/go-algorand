@@ -34,6 +34,7 @@ func init() {
 	registerTest("global-totals", CustomTestTotals)
 	registerTest("txtail-update", CustomTestTxTail)
 	registerTest("online_accounts-round_params-update", CustomTestOnlineAccountParams)
+	registerTest("accounts-lookup_by_rowid", CustomTestAccountLookupByRowID)
 }
 
 func CustomTestRoundUpdate(t *customT) {
@@ -209,4 +210,35 @@ func CustomTestOnlineAccountParams(t *customT) {
 	require.Len(t, readParams, 2)                   // assert boundries
 	require.Equal(t, roundParams[1], readParams[0]) // assert ordering, and first item
 	require.Equal(t, basics.Round(2), endRound)     // check round
+}
+
+func CustomTestAccountLookupByRowID(t *customT) {
+	aow, err := t.db.MakeAccountsOptimizedWriter(true, false, false, false)
+	require.NoError(t, err)
+
+	ar, err := t.db.MakeAccountsReader()
+	require.NoError(t, err)
+
+	// generate some test data
+	addrA := RandomAddress()
+	dataA := trackerdb.BaseAccountData{
+		RewardsBase: 1000,
+	}
+	normBalanceA := dataA.NormalizedOnlineBalance(t.proto)
+	refA, err := aow.InsertAccount(addrA, normBalanceA, dataA)
+	require.NoError(t, err)
+
+	//
+	// test
+	//
+
+	// non-existing account
+	_, err = ar.LookupAccountRowID(RandomAddress())
+	require.Error(t, err)
+	require.Equal(t, err, trackerdb.ErrNotFound)
+
+	// read account
+	ref, err := ar.LookupAccountRowID(addrA)
+	require.NoError(t, err)
+	require.Equal(t, refA, ref)
 }
