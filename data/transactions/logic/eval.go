@@ -238,7 +238,7 @@ type LedgerForLogic interface {
 	SetBox(appIdx basics.AppIndex, key string, value []byte) error
 	DelBox(appIdx basics.AppIndex, key string, appAddr basics.Address) (bool, error)
 
-	Perform(gi int, ep *EvalParams) (*ledgercore.StateDelta, error)
+	Perform(gi int, ep *EvalParams) error
 	Counter() uint64
 }
 
@@ -5385,10 +5385,10 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			ep.Tracer.BeforeTxn(ep, i)
 		}
 
-		update, err := cx.Ledger.Perform(i, ep)
+		err := cx.Ledger.Perform(i, ep)
 
 		if ep.Tracer != nil {
-			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, update, err)
+			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, err)
 		}
 
 		if err != nil {

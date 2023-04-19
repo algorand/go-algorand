@@ -271,14 +271,6 @@ func (cb *roundCowState) SetStateProofNextRound(rnd basics.Round) {
 
 func (cb *roundCowState) child(hint int) *roundCowState {
 	ch := childPool.Get().(*roundCowState)
-	cb.reuseChild(ch, hint)
-	return ch
-}
-
-// reuseChild creates a new child of this roundCowState, reusing the provided child object. If the
-// child object was previously used, the caller MUST ensure ch.reset() is called before invoking
-// this function.
-func (cb *roundCowState) reuseChild(ch *roundCowState, hint int) {
 	ch.lookupParent = cb
 	ch.commitParent = cb
 	ch.proto = cb.proto
@@ -294,6 +286,7 @@ func (cb *roundCowState) reuseChild(ch *roundCowState, hint int) {
 			ch.compatibilityGetKeyCache = make(map[basics.Address]map[storagePtr]uint64)
 		}
 	}
+	return ch
 }
 
 func (cb *roundCowState) commitToParent() {

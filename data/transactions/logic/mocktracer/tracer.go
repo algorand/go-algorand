@@ -172,7 +172,7 @@ func (d *Tracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 }
 
 // AfterTxn mocks the logic.EvalTracer.AfterTxn method
-func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, update *ledgercore.StateDelta, evalError error) {
+func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad, evalError != nil))
 }
 

@@ -507,10 +507,9 @@ type Local struct {
 	// from ledger caches and can control the ledger round.
 	EnableFollowMode bool `version[27]:"false"`
 
-	// EnableGranularEval turns on features in the BlockEvaluator which collect data on transactions.
-	// It will create extra CoW structures during eval which could affect performance, and will
-	// store txn deltas potentially consuming much larger amounts of memory.
-	EnableGranularEval bool `version[28]:"false"`
+	// EnableTxnEvalTracer turns on features in the BlockEvaluator which collect data on transactions, exposing them via algod APIs.
+	// It will store txn deltas created during block evaluation, potentially consuming much larger amounts of memory,
+	EnableTxnEvalTracer bool `version[28]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

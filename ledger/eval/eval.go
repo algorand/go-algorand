@@ -600,11 +600,6 @@ type BlockEvaluator struct {
 
 	maxTxnBytesPerBlock int
 
-	// GranularEval controls whether the evaluator should create a child cow for each transaction.
-	// This is purely for debugging/tracing purposes, since this should have no effect on the actual
-	// result.
-	GranularEval bool
-
 	Tracer logic.EvalTracer
 }
 
@@ -685,7 +680,6 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
 		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
-		GranularEval:        evalOpts.GranularEval,
 		Tracer:              evalOpts.Tracer,
 	}
 
@@ -966,7 +960,6 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	defer cow.recycle()
 
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
-	evalParams.GranularEval = eval.GranularEval
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
@@ -985,17 +978,6 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		if eval.GranularEval {
-			if gi == 0 {
-				cowForTxn = cow.child(1)
-				defer cowForTxn.recycle()
-			} else {
-				// Reuse the same cow allocation for all transactions in this group
-				cowForTxn.reset()
-				cow.reuseChild(cowForTxn, 1)
-			}
-		}
-
 		if eval.Tracer != nil {
 			eval.Tracer.BeforeTxn(evalParams, gi)
 		}
@@ -1003,17 +985,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cowForTxn, &txib)
 
 		if eval.Tracer != nil {
-			var deltas *ledgercore.StateDelta
-			if eval.GranularEval {
-				// Only include if we're sure the cowForTxn contains ONLY the deltas from this txn
-				d := cowForTxn.deltas()
-				deltas = &d
-			}
-			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, deltas, err)
-		}
-
-		if eval.GranularEval {
-			cowForTxn.commitToParent()
+			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)
 		}
 
 		if err != nil {
@@ -1589,20 +1561,17 @@ func (validator *evalTxValidator) run() {
 func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, cfg config.Local) (ledgercore.StateDelta, error) {
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
-	var granularEval = false
 	var txnDeltaTracer logic.EvalTracer
-	if cfg.EnableGranularEval {
-		granularEval = true
+	if cfg.EnableTxnEvalTracer {
 		txnDeltaTracer = TxnGroupDeltaTracerForConfig(cfg)
 	}
 
 	eval, err := StartEvaluator(l, blk.BlockHeader,
 		EvaluatorOptions{
-			PaysetHint:   len(blk.Payset),
-			Validate:     validate,
-			Generate:     false,
-			GranularEval: granularEval,
-			Tracer:       txnDeltaTracer,
+			PaysetHint: len(blk.Payset),
+			Validate:   validate,
+			Generate:   false,
+			Tracer:     txnDeltaTracer,
 		})
 	if err != nil {
 		return ledgercore.StateDelta{}, err
