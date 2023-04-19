@@ -4791,12 +4791,12 @@ func opAcctParamsGet(cx *EvalContext) error {
 func opLog(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 
-	if len(cx.txn.EvalDelta.Logs) >= int(cx.MaxLogCalls) {
+	if uint64(len(cx.txn.EvalDelta.Logs)) >= cx.MaxLogCalls {
 		return fmt.Errorf("too many log calls in program. up to %d is allowed", maxLogCalls)
 	}
 	log := cx.stack[last]
 	cx.logSize += len(log.Bytes)
-	if cx.logSize > int(cx.MaxLogSize) {
+	if uint64(cx.logSize) > cx.MaxLogSize {
 		return fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, maxLogSize)
 	}
 	cx.txn.EvalDelta.Logs = append(cx.txn.EvalDelta.Logs, string(log.Bytes))
