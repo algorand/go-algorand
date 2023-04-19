@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -478,7 +479,10 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	}
 
 	blk := vb.Block()
-	if node.timestampOffset != nil {
+
+	// Set block timestamp based on offset, if set.
+	// Make sure block timestamp is not greater than MaxInt64.
+	if node.timestampOffset != nil && prev.TimeStamp+*node.timestampOffset < math.MaxInt64 {
 		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
 	}
 	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
