@@ -104,8 +104,8 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 		return err
 	}
 
-	// Compare the types by running the template xrt_tmpl.go.tmpl in a separate process
-	// xrt_tmpl.go will return an error if the types are not the same
+	// Compare the types by running the template runner/main.tmpl in a separate process
+	// runner/main will return an error if the types are not the same
 	// here we propagate the error to the caller, so as to fail the test.
 	err = serializationDiff(xRepo, xPkgSuffix, xType, yRepo, yPkgSuffix, yType)
 	if err != nil {
