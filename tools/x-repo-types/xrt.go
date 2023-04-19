@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"go/types"
 	"log"
 	"os"
 	"os/exec"
@@ -28,12 +27,11 @@ import (
 	"text/template"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/tools/go/packages"
 
 	_ "embed"
 )
 
-//go:embed xrt_tmpl.go.tmpl
+//go:embed runner/main.tmpl
 var differTmpl string
 
 func main() {
@@ -50,7 +48,7 @@ func main() {
 	}
 
 	rootCmd.Flags().StringVar(&xPkg, "x-package", "", "Go repo and package for type x")
-	rootCmd.Flags().StringVar(&xBranch, "x-branch", "", "repository brahnch for type x")
+	rootCmd.Flags().StringVar(&xBranch, "x-branch", "", "repository branch for type x")
 	rootCmd.Flags().StringVar(&xType, "x-type", "", "Exported type in the package for type x")
 	rootCmd.Flags().StringVar(&yPkg, "y-package", "", "Go repo and package for type for type y")
 	rootCmd.Flags().StringVar(&yBranch, "y-branch", "", "repository branch for type y")
@@ -87,25 +85,6 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 		return err
 	}
 
-	err = goBuild(xPkg)
-	if err != nil {
-		return err
-	}
-	err = goBuild(yPkg)
-	if err != nil {
-		return err
-	}
-
-	// Show the type/outline
-	err = showKind(xPkg, xType)
-	if err != nil {
-		return err
-	}
-	err = showKind(yPkg, yType)
-	if err != nil {
-		return err
-	}
-
 	xParts := strings.Split(xPkg, "/")
 	yParts := strings.Split(yPkg, "/")
 
@@ -115,7 +94,7 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 	xPkgSuffix := strings.Join(xParts[3:], "/")
 	yPkgSuffix := strings.Join(yParts[3:], "/")
 
-	// Instantiate the type in a separate process
+	// Instantiate the type in a separate process as a "Smoke Test"
 	err = instantiate(xRepo, xPkgSuffix, xType)
 	if err != nil {
 		return err
@@ -141,43 +120,6 @@ func goGet(repo string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
-}
-
-func goBuild(pkg string) error {
-	fmt.Println("Building package:", pkg)
-	cmd := exec.Command("go", "build", pkg)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func showKind(pkg, typeName string) error {
-	fmt.Println("Showing kind for:", typeName)
-
-	// Load package
-	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedTypes}
-	pkgs, err := packages.Load(cfg, pkg)
-	if err != nil {
-		return err
-	}
-
-	// Find the type
-	var typ types.Object
-	for _, p := range pkgs {
-		obj := p.Types.Scope().Lookup(typeName)
-		if obj != nil && obj.Exported() {
-			typ = obj
-			break
-		}
-	}
-
-	if typ == nil {
-		return fmt.Errorf("exported type %q not found in package %q", typeName, pkg)
-	}
-
-	// Show the type kind
-	fmt.Printf("Type %q with (kind: %+v)\n\n", typeName, typ.String())
-	return nil
 }
 
 func instantiate(repo, pkgPath, typeName string) error {
@@ -241,20 +183,14 @@ func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) er
 		os.Exit(1)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "serializationDiff-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpDir)
-
-	tmpFile := filepath.Join(tmpDir, "main.go")
-	err = os.WriteFile(tmpFile, buf.Bytes(), 0644)
+	main := filepath.Join("runner", "main.go")
+	typeAnalyzer := filepath.Join("runner", "typeAnalyzer.go")
+	err = os.WriteFile(main, buf.Bytes(), 0644)
 	if err != nil {
 		return err
 	}
 
-	//nolint:gosec // tmpFile is defined above so no security concerns here
-	cmd := exec.Command("go", "run", tmpFile)
+	cmd := exec.Command("go", "run", main, typeAnalyzer)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
