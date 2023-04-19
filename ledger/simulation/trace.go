@@ -68,6 +68,17 @@ func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 // ResultLatestVersion is the latest version of the Result struct
 const ResultLatestVersion = uint64(1)
 
+// LogLimits contains the limits on log opcode during a call to Simulator.Simulate
+type LogLimits struct {
+	MaxLogCalls uint64
+	MaxLogSize  uint64
+}
+
+// EvalConstants contains the limits and parameters during a call to Simulator.Simulate
+type EvalConstants struct {
+	LogLimits *LogLimits
+}
+
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
 	Version       uint64
@@ -75,7 +86,7 @@ type Result struct {
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed  bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
 	LiftLogLimits bool             // true iff we run simulation with `lift-log-limits` option
-	EvalConstants *logic.EvalConstants
+	EvalConstants *EvalConstants
 	Block         *ledgercore.ValidatedBlock
 }
 
@@ -90,10 +101,23 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
-	var evalConstants *logic.EvalConstants
+	var evalConstants EvalConstants
 	if liftLogLimits {
 		opCodeParam := logic.NewSimulateEvalConstants()
-		evalConstants = &opCodeParam
+		evalConstants = EvalConstants{
+			LogLimits: &LogLimits{
+				MaxLogCalls: opCodeParam.MaxLogCalls,
+				MaxLogSize:  opCodeParam.MaxLogSize,
+			},
+		}
+	}
+
+	// MAKE SPACE FOR OTHER PARAMETER OVERRIDING IN SIMULATION
+
+	var emptyEvalConstants EvalConstants
+	var evalConstantsPtr *EvalConstants
+	if evalConstants != emptyEvalConstants {
+		evalConstantsPtr = &evalConstants
 	}
 
 	return Result{
@@ -101,7 +125,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 		LastRound:     lastRound,
 		TxnGroups:     groups,
 		LiftLogLimits: liftLogLimits,
-		EvalConstants: evalConstants,
+		EvalConstants: evalConstantsPtr,
 		WouldSucceed:  true,
 	}, nil
 }

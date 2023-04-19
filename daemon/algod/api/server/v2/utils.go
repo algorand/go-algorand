@@ -388,19 +388,25 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 }
 
 func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
-	var logLimits *PreEncodedSimulateLogLimits
+	var evalChangesInstance PreEncodedSimulateEvalChanges
+
 	if result.EvalConstants != nil {
 		evalConst := *result.EvalConstants
 
-		logLimits = &PreEncodedSimulateLogLimits{
-			MaxLogCalls: evalConst.MaxLogCalls,
-			MaxLogSize:  evalConst.MaxLogSize,
+		if evalConst.LogLimits != nil {
+			evalChangesInstance.LogLimits = &PreEncodedSimulateLogLimits{
+				MaxLogCalls: evalConst.LogLimits.MaxLogCalls,
+				MaxLogSize:  evalConst.LogLimits.MaxLogSize,
+			}
 		}
+
+		// MAKE SPACE FOR OTHER PARAMETER OVERRIDING IN SIMULATION
 	}
 
-	var evalChanges *PreEncodedSimulateEvalChanges
-	if logLimits != nil {
-		evalChanges = &PreEncodedSimulateEvalChanges{LogLimits: logLimits}
+	var evalChangesPtr *PreEncodedSimulateEvalChanges
+	var emptyEvalChanges PreEncodedSimulateEvalChanges
+	if emptyEvalChanges != evalChangesInstance {
+		evalChangesPtr = &evalChangesInstance
 	}
 
 	encodedSimulationResult := PreEncodedSimulateResponse{
@@ -409,7 +415,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 		WouldSucceed:  result.WouldSucceed,
 		LiftLogLimits: &result.LiftLogLimits,
 		TxnGroups:     make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
-		EvalChanges:   evalChanges,
+		EvalChanges:   evalChangesPtr,
 	}
 
 	for i, txnGroup := range result.TxnGroups {
