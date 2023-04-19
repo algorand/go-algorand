@@ -31,7 +31,7 @@ import (
 	_ "embed"
 )
 
-//go:embed runner/main.tmpl
+//go:embed typeAnalyzer/main.tmpl
 var differTmpl string
 
 func main() {
@@ -104,8 +104,8 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 		return err
 	}
 
-	// Compare the types by running the template runner/main.tmpl in a separate process
-	// runner/main will return an error if the types are not the same
+	// Compare the types by running the template typeAnalyzer/main.tmpl in a separate process
+	// typeAnalyzer/main will return an error if the types are not the same
 	// here we propagate the error to the caller, so as to fail the test.
 	err = serializationDiff(xRepo, xPkgSuffix, xType, yRepo, yPkgSuffix, yType)
 	if err != nil {
@@ -183,8 +183,8 @@ func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) er
 		os.Exit(1)
 	}
 
-	main := filepath.Join("runner", "main.go")
-	typeAnalyzer := filepath.Join("runner", "typeAnalyzer.go")
+	main := filepath.Join("typeAnalyzer", "main.go")
+	typeAnalyzer := filepath.Join("typeAnalyzer", "typeAnalyzer.go")
 	err = os.WriteFile(main, buf.Bytes(), 0644)
 	if err != nil {
 		return err

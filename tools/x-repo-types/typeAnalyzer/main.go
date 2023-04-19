@@ -14,25 +14,19 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-/*
-						WARNING
-   THIS FILE ONLY EXISTS FOR DEBUGGING AND TO MAKE THE BUILD HAPPY
-			!!!!! IT OVERWRITTEN BY AT RUNTIME !!!!!
-*/
-
 package main
 
 import (
 	"fmt"
 	"os"
 
-	ypkg "github.com/algorand/go-algorand/data/bookkeeping"
-	xpkg "github.com/algorand/go-algorand/ledger/ledgercore"
+	xpkg "github.com/algorand/go-algorand/crypto/stateproof"
+	ypkg "github.com/algorand/go-stateproof-verification/stateproof"
 )
 
 func main() {
-	xRoot := MakeType(xpkg.StateDelta{})
-	yRoot := MakeType(ypkg.Genesis{})
+	xRoot := MakeType(xpkg.StateProof{})
+	yRoot := MakeType(ypkg.StateProof{})
 
 	// ---- BUILD ---- //
 	x, y := xRoot.Type, yRoot.Type
@@ -65,7 +59,7 @@ func main() {
 	// ---- DIFF ---- //
 
 	fmt.Printf("\n\nCompare the Type Trees %q v %q\n", x, y)
-	xType, yType, diff, err := StructDiff(xpkg.StateDelta{}, ypkg.Genesis{}, diffExclusions)
+	xType, yType, diff, err := StructDiff(xpkg.StateProof{}, ypkg.StateProof{}, diffExclusions)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
