@@ -190,6 +190,7 @@ func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) er
 		return err
 	}
 
+	//nolint:gosec // main and typeAnalyzer are hard-coded above so no security concerns here
 	cmd := exec.Command("go", "run", main, typeAnalyzer)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
