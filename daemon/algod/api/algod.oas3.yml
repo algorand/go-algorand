@@ -1845,6 +1845,10 @@
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
+          "lift-log-limits": {
+            "description": "The boolean flag that lifts the limit on log opcode during simulation.",
+            "type": "boolean"
+          },
           "txn-groups": {
             "description": "The transaction groups to simulate.",
             "items": {
@@ -5793,14 +5797,6 @@
       "post": {
         "operationId": "SimulateTransaction",
         "parameters": [
-          {
-            "description": "The boolean flag that lifts the limit on log opcode during simulation.",
-            "in": "query",
-            "name": "lift-log-limits",
-            "schema": {
-              "type": "boolean"
-            }
-          },
           {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",

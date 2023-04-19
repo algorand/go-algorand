@@ -1257,6 +1257,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
+				LiftLogLimits: &liftLogLimits,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1277,14 +1278,15 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
+				LiftLogLimits: &liftLogLimits,
 			}
-			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest, liftLogLimits)
+			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
 			data, err := readFile(requestFilename)
 			if err != nil {
 				reportErrorf(fileReadError, requestFilename, err)
 			}
-			simulateResponse, responseErr = client.SimulateTransactionsRaw(data, liftLogLimits)
+			simulateResponse, responseErr = client.SimulateTransactionsRaw(data)
 		}
 
 		if responseErr != nil {

@@ -678,16 +678,12 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 }
 
 type simulateRawTransactionParams struct {
-	Format        string `url:"format"`
-	LiftLogLimits bool   `url:"lift-log-limits,omitempty"`
+	Format string `url:"format"`
 }
 
 // RawSimulateRawTransaction simulates the raw transaction or raw transaction group and returns relevant simulation results as raw bytes.
-func (client RestClient) RawSimulateRawTransaction(data []byte, liftLogLimtis bool) (response []byte, err error) {
-	params := simulateRawTransactionParams{
-		Format:        "msgpack",
-		LiftLogLimits: liftLogLimtis,
-	}
+func (client RestClient) RawSimulateRawTransaction(data []byte) (response []byte, err error) {
+	params := simulateRawTransactionParams{Format: "msgpack"}
 	var blob Blob
 	err = client.submitForm(&blob, "/v2/transactions/simulate", params, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
 	response = blob

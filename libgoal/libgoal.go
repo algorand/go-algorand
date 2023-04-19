@@ -1270,14 +1270,13 @@ func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
 }
 
 // SimulateTransactionsRaw simulates a transaction group by taking raw request bytes and returns relevant simulation results.
-func (c *Client) SimulateTransactionsRaw(encodedRequest []byte, liftLogLimits bool) (result v2.PreEncodedSimulateResponse, err error) {
+func (c *Client) SimulateTransactionsRaw(encodedRequest []byte) (result v2.PreEncodedSimulateResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
 	}
-
 	var resp []byte
-	resp, err = algod.RawSimulateRawTransaction(encodedRequest, liftLogLimits)
+	resp, err = algod.RawSimulateRawTransaction(encodedRequest)
 	if err != nil {
 		return
 	}
@@ -1286,8 +1285,8 @@ func (c *Client) SimulateTransactionsRaw(encodedRequest []byte, liftLogLimits bo
 }
 
 // SimulateTransactions simulates transactions and returns relevant simulation results.
-func (c *Client) SimulateTransactions(request v2.PreEncodedSimulateRequest, liftLogLimits bool) (result v2.PreEncodedSimulateResponse, err error) {
-	return c.SimulateTransactionsRaw(protocol.EncodeReflect(&request), liftLogLimits)
+func (c *Client) SimulateTransactions(request v2.PreEncodedSimulateRequest) (result v2.PreEncodedSimulateResponse, err error) {
+	return c.SimulateTransactionsRaw(protocol.EncodeReflect(&request))
 }
 
 // TransactionProof returns a Merkle proof for a transaction in a block.

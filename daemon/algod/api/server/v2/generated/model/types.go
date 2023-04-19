@@ -610,6 +610,9 @@ type PendingTransactionResponse struct {
 
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
+	// LiftLogLimits The boolean flag that lifts the limit on log opcode during simulation.
+	LiftLogLimits *bool `json:"lift-log-limits,omitempty"`
+
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
 }
@@ -1241,9 +1244,6 @@ type PendingTransactionInformationParamsFormat string
 
 // SimulateTransactionParams defines parameters for SimulateTransaction.
 type SimulateTransactionParams struct {
-	// LiftLogLimits The boolean flag that lifts the limit on log opcode during simulation.
-	LiftLogLimits *bool `form:"lift-log-limits,omitempty" json:"lift-log-limits,omitempty"`
-
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *SimulateTransactionParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }

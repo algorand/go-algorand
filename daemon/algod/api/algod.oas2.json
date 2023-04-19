@@ -1265,12 +1265,6 @@
             }
           },
           {
-            "description": "The boolean flag that lifts the limit on log opcode during simulation.",
-            "name": "lift-log-limits",
-            "in": "query",
-            "type": "boolean"
-          },
-          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -3208,6 +3202,10 @@
           "items": {
             "$ref": "#/definitions/SimulateRequestTransactionGroup"
           }
+        },
+        "lift-log-limits": {
+          "description": "The boolean flag that lifts the limit on log opcode during simulation.",
+          "type": "boolean"
         }
       }
     },
