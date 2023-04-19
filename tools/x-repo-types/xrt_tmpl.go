@@ -341,12 +341,6 @@ func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 		yChild := ySerials[k]
 		diff, err := SerializationDiff(xChild, yChild, exclusions)
 
-		// TODO: Remve this debug code:
-		x := fmt.Sprintf("%q", xChild.Type.Type)
-		y := xChild.Type.String()
-		_ = x
-		_ = y
-
 		if err != nil {
 			return nil, err
 		}
