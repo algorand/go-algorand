@@ -1008,17 +1008,13 @@ type PostTransactionsResponse struct {
 
 // SimulateResponse defines model for SimulateResponse.
 type SimulateResponse struct {
+	EvalChanges *map[string]interface{} `json:"eval-changes,omitempty"`
+
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
 	// LiftLogLimits A boolean indicating whether this transaction simulation is lifting log opcode limits
 	LiftLogLimits bool `json:"lift-log-limits"`
-
-	// MaxLogCalls An integer indicating the limit of opcode log usage in simulating a transaction
-	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
-
-	// MaxLogSize An integer indicating the limit of byte number to log in simulating a transaction
-	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
 
 	// TxnGroups A result object for each transaction group that was simulated.
 	TxnGroups []SimulateTransactionGroupResult `json:"txn-groups"`

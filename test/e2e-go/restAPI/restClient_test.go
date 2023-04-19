@@ -1623,8 +1623,6 @@ func TestSimulateTransaction(t *testing.T) {
 		Version:      1,
 		LastRound:    result.LastRound, // checked above
 		WouldSucceed: true,
-		MaxLogSize:   1024,
-		MaxLogCalls:  32,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				Txns: []v2.PreEncodedSimulateTxnResult{
@@ -1765,13 +1763,18 @@ int 1`
 	}
 
 	budgetAdded, budgetUsed := uint64(700), uint64(40)
+
+	expectedEvalChanges := v2.PreEncodedSimulateEvalChanges{
+		MaxLogSize:  65536,
+		MaxLogCalls: 65536,
+	}
+
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:       1,
 		LastRound:     resp.LastRound,
 		WouldSucceed:  true,
-		MaxLogSize:    65536,
-		MaxLogCalls:   65536,
 		LiftLogLimits: true,
+		EvalChanges:   &expectedEvalChanges,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				Txns: []v2.PreEncodedSimulateTxnResult{

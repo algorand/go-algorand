@@ -947,8 +947,13 @@ type PreEncodedSimulateResponse struct {
 	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
 	WouldSucceed  bool                               `codec:"would-succeed"`
 	LiftLogLimits bool                               `codec:"lift-log-limits"`
-	MaxLogCalls   uint64                             `codec:"max-log-calls"`
-	MaxLogSize    uint64                             `codec:"max-log-size"`
+	EvalChanges   *PreEncodedSimulateEvalChanges     `codec:"eval-changes,omitempty"`
+}
+
+// PreEncodedSimulateEvalChanges mirrors `eval-changes` field in model.SimulateResponse
+type PreEncodedSimulateEvalChanges struct {
+	MaxLogCalls uint64 `codec:"max-log-calls"`
+	MaxLogSize  uint64 `codec:"max-log-size"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup

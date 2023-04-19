@@ -75,8 +75,7 @@ type Result struct {
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed  bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
 	LiftLogLimits bool             // true iff we run simulation with `lift-log-limits` option
-	MaxLogCalls   uint64
-	MaxLogSize    uint64
+	EvalConstants *logic.EvalConstants
 	Block         *ledgercore.ValidatedBlock
 }
 
@@ -91,9 +90,10 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
-	opCodeParam := logic.NewRuntimeEvalConstants()
+	var evalConstants *logic.EvalConstants
 	if liftLogLimits {
-		opCodeParam = logic.NewSimulateEvalConstants()
+		opCodeParam := logic.NewSimulateEvalConstants()
+		evalConstants = &opCodeParam
 	}
 
 	return Result{
@@ -101,8 +101,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 		LastRound:     lastRound,
 		TxnGroups:     groups,
 		LiftLogLimits: liftLogLimits,
-		MaxLogCalls:   opCodeParam.MaxLogCalls,
-		MaxLogSize:    opCodeParam.MaxLogSize,
+		EvalConstants: evalConstants,
 		WouldSucceed:  true,
 	}, nil
 }

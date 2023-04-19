@@ -208,13 +208,8 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
     false
 fi
 
-if [[ $(echo "$RES" | jq '."max-log-size"') != "1024" ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without unlimited log should return max log size 1024 %Y%m%d_%H%M%S'
-    false
-fi
-
-if [[ $(echo "$RES" | jq '."max-log-calls"') != "32" ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without unlimited log should return max log calls 32 %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."eval-changes"') != null ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without unlimited log should not return with eval-changes field %Y%m%d_%H%M%S'
     false
 fi
 
@@ -254,12 +249,12 @@ if [[ $(echo "$RES" | jq '."lift-log-limits"' != $CONST_TRUE ) ]]; then
     false
 fi
 
-if [[ $(echo "$RES" | jq '."max-log-size"') != "65536" ]]; then
+if [[ $(echo "$RES" | jq '."eval-changes"."max-log-size"') != "65536" ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log size 65536 %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."max-log-calls"') != "65536" ]]; then
+if [[ $(echo "$RES" | jq '."eval-changes"."max-log-calls"') != "65536" ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log calls 65536 %Y%m%d_%H%M%S'
     false
 fi
