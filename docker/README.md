@@ -80,7 +80,7 @@ The data directory located at `/algod/data`. Mounting a volume at that location 
 
 ### Volume Permissions
 
-The container executes in the context of the `algorand` user with it's own UID and GID which is handled differently depending on your operating system. Here are a few options for how to work with this environment:
+The container executes in the context of the `algorand` user with UID=999 and GID=999 which is handled differently depending on your operating system or deployment platform. During startup the container temporarily runs as `root` in order to modify the permissions of `/algod/data`. It then changes to the `algorand` user. This can sometimes cause problems, for example if your deployment platform doesn't allow containers to run as the root user.
 
 #### Named Volume
 
@@ -91,23 +91,9 @@ docker volume create algod-data
 docker run -it --rm -d -v algod-data:/algod/data algorand/algod
 ```
 
-#### Local Directory without SELinux
+#### Use specific UID and GID
 
-Explicitly set the UID and GID of the container:
-
-```bash
-docker run -it --rm -d -v /srv/data:/algod/data -u $UID:$GID algorand/algod
-```
-
-#### Local Directory with SELinux
-
-Set the UID and GID of the container while add the `Z` option to the volume definition:
-
-```bash
-docker run -it --rm -d -v /srv/data:/algod/data:Z -u $UID:$GID algorand/algod
-```
-
-> See the documentation on [configuring the selinux label](https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label).
+On the host system, ensure the directory being mounted uses UID=999 and GID=999. If the directory already has these permissions you may override the default user with `-u 999:999`.
 
 ### Private Network
 
