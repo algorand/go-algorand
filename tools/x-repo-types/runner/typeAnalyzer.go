@@ -143,7 +143,7 @@ func (t *Type) Targets() []Target {
 
 // IsLeaf returns true if the Type has no children.
 func (t *Type) IsLeaf() bool {
-	return t.children == nil
+	return len(t.children) == 0
 }
 
 // Build the Type tree by finding all child types that belong to a kind and recursively
