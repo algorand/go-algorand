@@ -31,7 +31,7 @@ import (
 	_ "embed"
 )
 
-//go:embed xrt_tmpl.go.tmpl
+//go:embed runner/main.tmpl
 var differTmpl string
 
 func main() {
@@ -183,20 +183,14 @@ func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) er
 		os.Exit(1)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "serializationDiff-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpDir)
-
-	tmpFile := filepath.Join(tmpDir, "main.go")
-	err = os.WriteFile(tmpFile, buf.Bytes(), 0644)
+	main := filepath.Join("runner", "main.go")
+	typeAnalyzer := filepath.Join("runner", "typeAnalyzer.go")
+	err = os.WriteFile(main, buf.Bytes(), 0644)
 	if err != nil {
 		return err
 	}
 
-	//nolint:gosec // tmpFile is defined above so no security concerns here
-	cmd := exec.Command("go", "run", tmpFile)
+	cmd := exec.Command("go", "run", main, typeAnalyzer)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

@@ -6,7 +6,7 @@ This tool is designed to be used in CI systems to alert us if a change is made t
 ## Build the `xrt` binary
 
 ```sh
-make build-xrt
+go build -o xrt
 ```
 
 ## Example run
@@ -27,16 +27,17 @@ goal-v-sdk-state-delta-xrt:
 1. Inside of `tools/x-repo-types` run the command `./xrt --x-package X_PACKAGE_NAME ...`
 2. `xrt` then does the following:
    1. `go get`'s the package
-   2. `go build`'s it
-   3. executes the template `xrt_tmpl.go.tmpl` in a temp folder, providing it the type information for the types to be compared
-3. `xrt_tmpl.go.tmpl` runs the following logic:
+   2. Populates the template `runner/main.tmpl` with comparison types
+   3. Saves it in `runner/main.go`
+   4. Executes it
+3. `runner/main.go` runs the logic defined in `runner/typeAnalyzer.go`:
    1. using reflection, build up each type's "Type Tree"
    2. compare the trees using the rules outlined below
 4. If the template reports back a non-empty diff, exit with an error
 
 ### Type Tree Comparison
 
-`func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error)` in `xrt_tmpl.go` implements the following recursive notion of _identical_ types:
+`func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error)` in `runner/typeAnalyzer.go` implements the following recursive notion of _identical_ types:
 
 * if **X** and **Y** are native types (`int`, `uint64`, `string`, ...), they are _identical_ IFF they are the same type
 * if both **X** and **Y** are compound types (`struct`, slice, `map`, ...) with each of their child types being _identical_ and with _equivalent serialization metadata_, then they are _identical_
@@ -52,16 +53,4 @@ goal-v-sdk-state-delta-xrt:
 There are some cases that break the definition above. For example, `basics.MicroAlgos` is a struct in
 `go-algorand` but is an alias for `uint64` in `go-algorand-sdk`. Our serializers know to produce the same
 output, but this violates the previous notion of _identical_. Such exceptions are handled by providing the string produced by the type's `Type.String()` method
-as en element in the set `diffExclusions` of `xrt_tmpl.go`.
-
-## For developing this tool
-
-`xrt_tmpl.go` is provided for ease of development, but is not strictly required for running the tool. You can
-run it as a standalone app and debug the algorithms with it. To run `xrt_tmpl.go`:
-
-1. Rename its `Main()` function to `main()` (and to pass compilation, rename `xrt.go`'s `main()`)
-2. Replace the `xpkg, ypkg` imports with the packages you want to test
-3. Replace `x, y` by the types whose diff you are taking
-
-NOTE: `make build-xrt` generates `xrt_tmpl.go.tmpl` from `xrt_tmpl.go` using specially crafted comments to
-signal how to modify the code.
+as en element in the set `diffExclusions` of `runner/typeAnalyzer.go`.
