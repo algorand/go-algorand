@@ -170,7 +170,10 @@ func makeTestVoteGenerator() testVoteGenerator {
 	return tg
 }
 
-const notSelected = 8
+const (
+	notSelected = 8
+	validVote   = 10
+)
 
 func (vg *testVoteGenerator) getTestVote(errType int) (v *unVoteTest, err error) {
 	addrSelected := false
@@ -250,13 +253,17 @@ func (vg *testVoteGenerator) getTestVote(errType int) (v *unVoteTest, err error)
 	case notSelected:
 		v = &unVoteTest{uv: &uv, err: fmt.Errorf("address not selected"), id: c}
 
-	default:
+	case validVote:
 		v = &unVoteTest{uv: &uv, err: nil, id: c}
+
+	default:
+		return v, fmt.Errorf("unrecognized option")
 	}
 	return v, nil
 }
 
-func (vg *testVoteGenerator) voteOptions() int {
+// invalidVoteOptions returns the number of invalide vote options produced
+func (vg *testVoteGenerator) invalidVoteOptions() int {
 	return 9
 }
 
@@ -379,14 +386,17 @@ func (vg *testVoteGenerator) getTestEqVote(errType int) (v *unEqVoteTest, err er
 		badSender.Sender = basics.Address{}
 		v = &unEqVoteTest{uev: &badSender, err: fmt.Errorf("error bad sender"), id: c}
 
-	default:
+	case validVote:
 		v = &unEqVoteTest{uev: &ev, err: nil, id: c}
 
+	default:
+		return v, fmt.Errorf("unrecognized option")
 	}
 	return v, nil
 }
 
-func (vg *testVoteGenerator) voteEqOptions() int {
+// invalidEqVoteOptions returns the number of invalide vote options produced
+func (vg *testVoteGenerator) invalidEqVoteOptions() int {
 	return 10
 }
 
@@ -458,7 +468,7 @@ func TestProcessBatchDifferentErrors(t *testing.T) {
 	eqVoteResults := make(map[int]error)
 
 	// Create the batch job that the stream will accumulate jobs and create
-	for v := 0; v < vg.voteOptions()*2; v++ {
+	for v := 0; v < vg.invalidVoteOptions()*2; v++ {
 		vt, err := vg.getTestVote(v)
 		require.NoError(t, err)
 		voteResults[vt.id] = vt.err
@@ -471,7 +481,7 @@ func TestProcessBatchDifferentErrors(t *testing.T) {
 			out:     out}
 		jobs = append(jobs, &req)
 	}
-	for v := 0; v < vg.voteEqOptions()*2; v++ {
+	for v := 0; v < vg.invalidEqVoteOptions()*2; v++ {
 		vt, err := vg.getTestEqVote(v)
 		require.NoError(t, err)
 		eqVoteResults[vt.id] = vt.err
@@ -512,8 +522,8 @@ func TestProcessBatchDifferentErrors(t *testing.T) {
 			}
 		}
 	}
-	require.Equal(t, vg.voteOptions(), errCount)
-	require.Equal(t, vg.voteOptions(), passCount)
-	require.Equal(t, vg.voteEqOptions(), eqErrCount)
-	require.Equal(t, vg.voteEqOptions(), eqPassCount)
+	require.Equal(t, vg.invalidVoteOptions(), errCount)
+	require.Equal(t, vg.invalidVoteOptions(), passCount)
+	require.Equal(t, vg.invalidEqVoteOptions(), eqErrCount)
+	require.Equal(t, vg.invalidEqVoteOptions(), eqPassCount)
 }

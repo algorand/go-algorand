@@ -226,13 +226,13 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 
 	nextErrType := 0
 	for c := 0; c < count; c++ {
-		errType := 99
+		errType := validVote
 		if rand.Float32() < errProb {
 			if onlyBadSigs {
 				errType = 0
 			} else {
 				errType = nextErrType
-				nextErrType = (nextErrType + 1) % (vg.voteOptions() - 1)
+				nextErrType = (nextErrType + 1) % (vg.invalidVoteOptions() - 1)
 			}
 		}
 		v, err := vg.getTestVote(errType)
@@ -246,13 +246,13 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 	nextErrType = 0
 	vg.counter = 0
 	for c := 0; c < eqCount; c++ {
-		errType := 99
+		errType := validVote
 		if rand.Float32() < errProb {
 			if onlyBadSigs {
 				errType = 0
 			} else {
 				errType = nextErrType
-				nextErrType = (nextErrType + 1) % (vg.voteEqOptions() - 1)
+				nextErrType = (nextErrType + 1) % (vg.invalidEqVoteOptions() - 1)
 			}
 		}
 		v, err := vg.getTestEqVote(errType)
