@@ -620,9 +620,7 @@ type EvaluatorOptions struct {
 	Generate            bool
 	MaxTxnBytesPerBlock int
 	Tracer              logic.EvalTracer
-	GranularEval        bool
 	ProtoParams         *config.ConsensusParams
-	Tracer              logic.EvalTracer
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -975,7 +973,6 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
-	cowForTxn := cow
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
@@ -983,7 +980,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 			eval.Tracer.BeforeTxn(evalParams, gi)
 		}
 
-		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cowForTxn, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
 
 		if eval.Tracer != nil {
 			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)

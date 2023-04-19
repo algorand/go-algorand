@@ -870,33 +870,33 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 }
 
 // Perform causes txn to "occur" against the ledger.
-func (l *Ledger) Perform(gi int, ep *EvalParams) (*ledgercore.StateDelta, error) {
+func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 	txn := &ep.TxnGroup[gi]
 	err := l.move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee.Raw)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = l.rekey(&txn.Txn)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	switch txn.Txn.Type {
 	case protocol.PaymentTx:
-		return nil, l.pay(txn.Txn.Sender, txn.Txn.PaymentTxnFields)
+		return l.pay(txn.Txn.Sender, txn.Txn.PaymentTxnFields)
 	case protocol.AssetTransferTx:
-		return nil, l.axfer(txn.Txn.Sender, txn.Txn.AssetTransferTxnFields)
+		return l.axfer(txn.Txn.Sender, txn.Txn.AssetTransferTxnFields)
 	case protocol.AssetConfigTx:
-		return nil, l.acfg(txn.Txn.Sender, txn.Txn.AssetConfigTxnFields, &txn.ApplyData)
+		return l.acfg(txn.Txn.Sender, txn.Txn.AssetConfigTxnFields, &txn.ApplyData)
 	case protocol.AssetFreezeTx:
-		return nil, l.afrz(txn.Txn.Sender, txn.Txn.AssetFreezeTxnFields)
+		return l.afrz(txn.Txn.Sender, txn.Txn.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
-		return nil, l.appl(txn.Txn.Sender, txn.Txn.ApplicationCallTxnFields, &txn.ApplyData, gi, ep)
+		return l.appl(txn.Txn.Sender, txn.Txn.ApplicationCallTxnFields, &txn.ApplyData, gi, ep)
 	case protocol.KeyRegistrationTx:
-		return nil, nil // For now, presume success in test ledger
+		return nil // For now, presume success in test ledger
 	default:
-		return nil, fmt.Errorf("%s txn in AVM", txn.Txn.Type)
+		return fmt.Errorf("%s txn in AVM", txn.Txn.Type)
 	}
 }
 
