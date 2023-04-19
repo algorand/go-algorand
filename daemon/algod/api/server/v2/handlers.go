@@ -946,7 +946,7 @@ type PreEncodedSimulateResponse struct {
 	LastRound     uint64                             `codec:"last-round"`
 	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
 	WouldSucceed  bool                               `codec:"would-succeed"`
-	LiftLogLimits bool                               `codec:"lift-log-limits"`
+	LiftLogLimits *bool                              `codec:"lift-log-limits,omitempty"`
 	EvalChanges   *PreEncodedSimulateEvalChanges     `codec:"eval-changes,omitempty"`
 }
 

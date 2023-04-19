@@ -1769,11 +1769,13 @@ int 1`
 		MaxLogCalls: 65536,
 	}
 
+	expectedLiftLogLimits := true
+
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:       1,
 		LastRound:     resp.LastRound,
 		WouldSucceed:  true,
-		LiftLogLimits: true,
+		LiftLogLimits: &expectedLiftLogLimits,
 		EvalChanges:   &expectedEvalChanges,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{

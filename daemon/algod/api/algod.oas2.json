@@ -4134,7 +4134,6 @@
           "version",
           "last-round",
           "txn-groups",
-          "lift-log-limits",
           "would-succeed"
         ],
         "properties": {

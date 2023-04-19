@@ -787,7 +787,6 @@
               },
               "required": [
                 "last-round",
-                "lift-log-limits",
                 "txn-groups",
                 "version",
                 "would-succeed"
@@ -5837,7 +5836,6 @@
                   },
                   "required": [
                     "last-round",
-                    "lift-log-limits",
                     "txn-groups",
                     "version",
                     "would-succeed"
@@ -5877,7 +5875,6 @@
                   },
                   "required": [
                     "last-round",
-                    "lift-log-limits",
                     "txn-groups",
                     "version",
                     "would-succeed"
