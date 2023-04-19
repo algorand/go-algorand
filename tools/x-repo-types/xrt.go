@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"go/types"
 	"log"
 	"os"
 	"os/exec"
@@ -28,7 +27,6 @@ import (
 	"text/template"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/tools/go/packages"
 
 	_ "embed"
 )
@@ -87,16 +85,6 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 		return err
 	}
 
-	// Show the type/outline
-	err = showKind(xPkg, xType)
-	if err != nil {
-		return err
-	}
-	err = showKind(yPkg, yType)
-	if err != nil {
-		return err
-	}
-
 	xParts := strings.Split(xPkg, "/")
 	yParts := strings.Split(yPkg, "/")
 
@@ -132,35 +120,6 @@ func goGet(repo string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
-}
-
-func showKind(pkg, typeName string) error {
-	fmt.Println("Showing kind for:", typeName)
-
-	// Load package
-	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedTypes}
-	pkgs, err := packages.Load(cfg, pkg)
-	if err != nil {
-		return err
-	}
-
-	// Find the type
-	var typ types.Object
-	for _, p := range pkgs {
-		obj := p.Types.Scope().Lookup(typeName)
-		if obj != nil && obj.Exported() {
-			typ = obj
-			break
-		}
-	}
-
-	if typ == nil {
-		return fmt.Errorf("exported type %q not found in package %q", typeName, pkg)
-	}
-
-	// Show the type kind
-	fmt.Printf("Type %q with (kind: %+v)\n\n", typeName, typ.String())
-	return nil
 }
 
 func instantiate(repo, pkgPath, typeName string) error {
