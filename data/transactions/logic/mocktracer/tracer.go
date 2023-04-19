@@ -74,7 +74,7 @@ type Event struct {
 	Round basics.Round
 }
 
-// BeforeBlock creates a new Event with the type BeforeBlockEvent
+// BeforeBlock creates a new Event with the type BeforeBlockEvent for a particular round
 func BeforeBlock(round basics.Round) Event {
 	return Event{Type: BeforeBlockEvent, Round: round}
 }

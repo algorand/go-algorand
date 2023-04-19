@@ -622,6 +622,7 @@ type EvaluatorOptions struct {
 	Tracer              logic.EvalTracer
 	GranularEval        bool
 	ProtoParams         *config.ConsensusParams
+	Tracer              logic.EvalTracer
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
