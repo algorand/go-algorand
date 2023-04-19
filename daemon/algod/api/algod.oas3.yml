@@ -762,6 +762,10 @@
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                   "type": "integer"
                 },
+                "lift-log-limits": {
+                  "description": "A boolean indicating whether this transaction simulation is lifting log opcode limits",
+                  "type": "boolean"
+                },
                 "max-log-calls": {
                   "description": "An integer indicating the limit of opcode log usage in simulating a transaction",
                   "type": "integer"
@@ -777,10 +781,6 @@
                   },
                   "type": "array"
                 },
-                "unlimited-log": {
-                  "description": "A boolean indicating whether this transaction is simulated with log usage unlimited",
-                  "type": "boolean"
-                },
                 "version": {
                   "description": "The version of this response object.",
                   "type": "integer"
@@ -792,8 +792,8 @@
               },
               "required": [
                 "last-round",
+                "lift-log-limits",
                 "txn-groups",
-                "unlimited-log",
                 "version",
                 "would-succeed"
               ],
@@ -5771,9 +5771,9 @@
         "operationId": "SimulateTransaction",
         "parameters": [
           {
-            "description": "The boolean flag to remove limit on log opcode usage in simulation.",
+            "description": "The boolean flag that lifts the limit on log opcode during simulation.",
             "in": "query",
-            "name": "unlimit-log",
+            "name": "lift-log-limits",
             "schema": {
               "type": "boolean"
             }
@@ -5817,6 +5817,10 @@
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
                     },
+                    "lift-log-limits": {
+                      "description": "A boolean indicating whether this transaction simulation is lifting log opcode limits",
+                      "type": "boolean"
+                    },
                     "max-log-calls": {
                       "description": "An integer indicating the limit of opcode log usage in simulating a transaction",
                       "type": "integer"
@@ -5832,10 +5836,6 @@
                       },
                       "type": "array"
                     },
-                    "unlimited-log": {
-                      "description": "A boolean indicating whether this transaction is simulated with log usage unlimited",
-                      "type": "boolean"
-                    },
                     "version": {
                       "description": "The version of this response object.",
                       "type": "integer"
@@ -5847,8 +5847,8 @@
                   },
                   "required": [
                     "last-round",
+                    "lift-log-limits",
                     "txn-groups",
-                    "unlimited-log",
                     "version",
                     "would-succeed"
                   ],
@@ -5862,6 +5862,10 @@
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
                     },
+                    "lift-log-limits": {
+                      "description": "A boolean indicating whether this transaction simulation is lifting log opcode limits",
+                      "type": "boolean"
+                    },
                     "max-log-calls": {
                       "description": "An integer indicating the limit of opcode log usage in simulating a transaction",
                       "type": "integer"
@@ -5877,10 +5881,6 @@
                       },
                       "type": "array"
                     },
-                    "unlimited-log": {
-                      "description": "A boolean indicating whether this transaction is simulated with log usage unlimited",
-                      "type": "boolean"
-                    },
                     "version": {
                       "description": "The version of this response object.",
                       "type": "integer"
@@ -5892,8 +5892,8 @@
                   },
                   "required": [
                     "last-round",
+                    "lift-log-limits",
                     "txn-groups",
-                    "unlimited-log",
                     "version",
                     "would-succeed"
                   ],

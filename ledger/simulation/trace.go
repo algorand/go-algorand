@@ -70,17 +70,17 @@ const ResultLatestVersion = uint64(1)
 
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
-	Version      uint64
-	LastRound    basics.Round
-	TxnGroups    []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
-	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
-	UnlimitedLog bool             // true iff we run simulation with `unlimit-log` option
-	MaxLogCalls  uint64
-	MaxLogSize   uint64
-	Block        *ledgercore.ValidatedBlock
+	Version       uint64
+	LastRound     basics.Round
+	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
+	WouldSucceed  bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
+	LiftLogLimits bool             // true iff we run simulation with `lift-log-limits` option
+	MaxLogCalls   uint64
+	MaxLogSize    uint64
+	Block         *ledgercore.ValidatedBlock
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64, unlimitedLog bool) (Result, error) {
+func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64, liftLogLimits bool) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
@@ -91,24 +91,24 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
-	opCodeParam := logic.NewRuntimeOpParams()
-	if unlimitedLog {
-		opCodeParam = logic.NewSimulateOpParams()
+	opCodeParam := logic.NewRuntimeEvalConstants()
+	if liftLogLimits {
+		opCodeParam = logic.NewSimulateEvalConstants()
 	}
 
 	return Result{
-		Version:      version,
-		LastRound:    lastRound,
-		TxnGroups:    groups,
-		UnlimitedLog: unlimitedLog,
-		MaxLogCalls:  opCodeParam.MaxLogCalls,
-		MaxLogSize:   opCodeParam.MaxLogSize,
-		WouldSucceed: true,
+		Version:       version,
+		LastRound:     lastRound,
+		TxnGroups:     groups,
+		LiftLogLimits: liftLogLimits,
+		MaxLogCalls:   opCodeParam.MaxLogCalls,
+		MaxLogSize:    opCodeParam.MaxLogSize,
+		WouldSucceed:  true,
 	}, nil
 }
 
 func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn, simConfig SimulatorConfig) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion, simConfig.UnLimitLog)
+	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion, simConfig.LiftLogLimits)
 	if err != nil {
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)

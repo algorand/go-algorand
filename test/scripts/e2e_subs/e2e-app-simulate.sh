@@ -237,7 +237,7 @@ fi
 # SIMULATION! with unlimiting log should call `unlimited_log_test()void`
 ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
 ${gcmd} clerk sign -i "${TEMPDIR}/big_log.tx" -o "${TEMPDIR}/big_log.stx"
-RES=$(${gcmd} clerk simulate --unlimit-log -t "${TEMPDIR}/big_log.stx")
+RES=$(${gcmd} clerk simulate --lift-log-limits -t "${TEMPDIR}/big_log.stx")
 
 if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void would-succeed should be true with unlimiting log %Y%m%d_%H%M%S'
@@ -249,7 +249,7 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."failed-at"' != null) ]]; then
     false
 fi
 
-if [[ $(echo "$RES" | jq '."unlimited-log"' != $CONST_TRUE ) ]]; then
+if [[ $(echo "$RES" | jq '."lift-log-limits"' != $CONST_TRUE ) ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should contain unlmited-log: true %Y%m%d_%H%M%S'
     false
 fi

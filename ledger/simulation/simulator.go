@@ -38,7 +38,7 @@ type simulatorLedger struct {
 
 // SimulatorConfig packs simulation related configurations, that overlaps the configurations in real transactions.
 type SimulatorConfig struct {
-	UnLimitLog bool
+	LiftLogLimits bool
 }
 
 // Latest is part of the LedgerForSimulator interface.

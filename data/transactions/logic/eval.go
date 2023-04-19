@@ -248,8 +248,8 @@ type boxRef struct {
 	name string
 }
 
-// OpCodeParams contains data that opcodes rely on during runtime.
-type OpCodeParams struct {
+// EvalConstants contains data that opcodes rely on during runtime.
+type EvalConstants struct {
 	// MaxLogSize is the limit of total log size from n log calls in a program
 	MaxLogSize uint64
 
@@ -257,18 +257,18 @@ type OpCodeParams struct {
 	MaxLogCalls uint64
 }
 
-// NewRuntimeOpParams gives a set of const params used in normal runtime of opcodes
-func NewRuntimeOpParams() OpCodeParams {
-	return OpCodeParams{
+// NewRuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
+func NewRuntimeEvalConstants() EvalConstants {
+	return EvalConstants{
 		MaxLogSize:  uint64(maxLogSize),
 		MaxLogCalls: uint64(maxLogCalls),
 	}
 }
 
-// NewSimulateOpParams gives a set of const params used in simulation of opcodes
-func NewSimulateOpParams() OpCodeParams {
+// NewSimulateEvalConstants gives a set of const params used in simulation of opcodes
+func NewSimulateEvalConstants() EvalConstants {
 	localConfig := config.GetDefaultLocal()
-	return OpCodeParams{
+	return EvalConstants{
 		MaxLogSize:  localConfig.SimulateLogBytesLimit,
 		MaxLogCalls: localConfig.SimulateLogBytesLimit,
 	}
@@ -325,7 +325,7 @@ type EvalParams struct {
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
 
-	OpCodeParams
+	EvalConstants
 
 	// Caching these here means the hashes can be shared across the TxnGroup
 	// (and inners, because the cache is shared with the inner EvalParams)
@@ -400,7 +400,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
-		OpCodeParams:            NewRuntimeOpParams(),
+		EvalConstants:           NewRuntimeEvalConstants(),
 	}
 	// resources are computed after ep is constructed because app addresses are
 	// calculated there, and we'd like to use the caching mechanism built into
@@ -480,7 +480,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		ioBudget:                caller.ioBudget,
 		readBudgetChecked:       true, // don't check for inners
 		appAddrCache:            caller.appAddrCache,
-		OpCodeParams:            caller.OpCodeParams,
+		EvalConstants:           caller.EvalConstants,
 		// read comment in EvalParams declaration about txid caches
 		caller: caller,
 	}

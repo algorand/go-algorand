@@ -1011,6 +1011,9 @@ type SimulateResponse struct {
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
+	// LiftLogLimits A boolean indicating whether this transaction simulation is lifting log opcode limits
+	LiftLogLimits bool `json:"lift-log-limits"`
+
 	// MaxLogCalls An integer indicating the limit of opcode log usage in simulating a transaction
 	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
 
@@ -1019,9 +1022,6 @@ type SimulateResponse struct {
 
 	// TxnGroups A result object for each transaction group that was simulated.
 	TxnGroups []SimulateTransactionGroupResult `json:"txn-groups"`
-
-	// UnlimitedLog A boolean indicating whether this transaction is simulated with log usage unlimited
-	UnlimitedLog bool `json:"unlimited-log"`
 
 	// Version The version of this response object.
 	Version uint64 `json:"version"`
@@ -1229,8 +1229,8 @@ type PendingTransactionInformationParamsFormat string
 
 // SimulateTransactionParams defines parameters for SimulateTransaction.
 type SimulateTransactionParams struct {
-	// UnlimitLog The boolean flag to remove limit on log opcode usage in simulation.
-	UnlimitLog *bool `form:"unlimit-log,omitempty" json:"unlimit-log,omitempty"`
+	// LiftLogLimits The boolean flag that lifts the limit on log opcode during simulation.
+	LiftLogLimits *bool `form:"lift-log-limits,omitempty" json:"lift-log-limits,omitempty"`
 
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *SimulateTransactionParamsFormat `form:"format,omitempty" json:"format,omitempty"`

@@ -1766,12 +1766,12 @@ int 1`
 
 	budgetAdded, budgetUsed := uint64(700), uint64(40)
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:      1,
-		LastRound:    resp.LastRound,
-		WouldSucceed: true,
-		MaxLogSize:   65536,
-		MaxLogCalls:  65536,
-		UnlimitedLog: true,
+		Version:       1,
+		LastRound:     resp.LastRound,
+		WouldSucceed:  true,
+		MaxLogSize:    65536,
+		MaxLogCalls:   65536,
+		LiftLogLimits: true,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				Txns: []v2.PreEncodedSimulateTxnResult{

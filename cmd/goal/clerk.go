@@ -67,7 +67,7 @@ var (
 	rawOutput          bool
 	requestFilename    string
 	requestOutFilename string
-	unlimitLog         bool
+	liftLogLimits      bool
 )
 
 func init() {
@@ -152,7 +152,7 @@ func init() {
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
 	simulateCmd.Flags().StringVar(&requestOutFilename, "request-only-out", "", "Filename for writing simulate request object. If provided, the command will only write the request object and exit. No simulation will happen")
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
-	simulateCmd.Flags().BoolVar(&unlimitLog, "unlimit-log", false, "Remove limit on log opcode usage in simulation")
+	simulateCmd.Flags().BoolVar(&liftLogLimits, "lift-log-limits", false, "Lift the limits on log opcode during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1278,13 +1278,13 @@ var simulateCmd = &cobra.Command{
 					},
 				},
 			}
-			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest, unlimitLog)
+			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest, liftLogLimits)
 		} else {
 			data, err := readFile(requestFilename)
 			if err != nil {
 				reportErrorf(fileReadError, requestFilename, err)
 			}
-			simulateResponse, responseErr = client.SimulateTransactionsRaw(data, unlimitLog)
+			simulateResponse, responseErr = client.SimulateTransactionsRaw(data, liftLogLimits)
 		}
 
 		if responseErr != nil {

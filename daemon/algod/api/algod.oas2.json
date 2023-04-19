@@ -1265,8 +1265,8 @@
             }
           },
           {
-            "description": "The boolean flag to remove limit on log opcode usage in simulation.",
-            "name": "unlimit-log",
+            "description": "The boolean flag that lifts the limit on log opcode during simulation.",
+            "name": "lift-log-limits",
             "in": "query",
             "type": "boolean"
           },
@@ -4134,7 +4134,7 @@
           "version",
           "last-round",
           "txn-groups",
-          "unlimited-log",
+          "lift-log-limits",
           "would-succeed"
         ],
         "properties": {
@@ -4153,8 +4153,8 @@
               "$ref": "#/definitions/SimulateTransactionGroupResult"
             }
           },
-          "unlimited-log": {
-            "description": "A boolean indicating whether this transaction is simulated with log usage unlimited",
+          "lift-log-limits": {
+            "description": "A boolean indicating whether this transaction simulation is lifting log opcode limits",
             "type": "boolean"
           },
           "max-log-calls": {

@@ -942,13 +942,13 @@ type PreEncodedSimulateTxnGroupResult struct {
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
 type PreEncodedSimulateResponse struct {
-	Version      uint64                             `codec:"version"`
-	LastRound    uint64                             `codec:"last-round"`
-	TxnGroups    []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
-	WouldSucceed bool                               `codec:"would-succeed"`
-	UnlimitedLog bool                               `codec:"unlimited-log"`
-	MaxLogCalls  uint64                             `codec:"max-log-calls"`
-	MaxLogSize   uint64                             `codec:"max-log-size"`
+	Version       uint64                             `codec:"version"`
+	LastRound     uint64                             `codec:"last-round"`
+	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	WouldSucceed  bool                               `codec:"would-succeed"`
+	LiftLogLimits bool                               `codec:"lift-log-limits"`
+	MaxLogCalls   uint64                             `codec:"max-log-calls"`
+	MaxLogSize    uint64                             `codec:"max-log-size"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
@@ -1008,13 +1008,13 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 	txgroup := simulateRequest.TxnGroups[0].Txns
 
-	if params.UnlimitLog == nil {
+	if params.LiftLogLimits == nil {
 		defaultValue := false
-		params.UnlimitLog = &defaultValue
+		params.LiftLogLimits = &defaultValue
 	}
 
 	// Simulate transaction
-	simulatorConfig := simulation.SimulatorConfig{UnLimitLog: *params.UnlimitLog}
+	simulatorConfig := simulation.SimulatorConfig{LiftLogLimits: *params.LiftLogLimits}
 	simulationResult, err := v2.Node.Simulate(txgroup, simulatorConfig)
 	if err != nil {
 		var invalidTxErr simulation.InvalidTxGroupError
