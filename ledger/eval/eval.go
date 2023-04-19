@@ -619,8 +619,8 @@ type EvaluatorOptions struct {
 	Validate            bool
 	Generate            bool
 	MaxTxnBytesPerBlock int
-	Tracer              logic.EvalTracer
 	ProtoParams         *config.ConsensusParams
+	Tracer              logic.EvalTracer
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
