@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -715,7 +716,7 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
-func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
+func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transactions.SignedTxn) []byte) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
 	numAccounts := 5
 	numTransactions := 5
 	offlineAccounts := true
@@ -732,7 +733,7 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int) (handler v
 	var body io.Reader
 	if txnToUse >= 0 {
 		stxn := stxns[txnToUse]
-		bodyBytes := protocol.Encode(&stxn)
+		bodyBytes := txnPrep(stxn)
 		body = bytes.NewReader(bodyBytes)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", body)
@@ -742,7 +743,10 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int) (handler v
 }
 
 func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode)
+	txnPrep := func(stxn transactions.SignedTxn) []byte {
+		return protocol.Encode(&stxn)
+	}
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
 	defer releasefunc()
 	err := handler.RawTransaction(c)
 	require.NoError(t, err)
@@ -758,7 +762,17 @@ func TestPostTransaction(t *testing.T) {
 }
 
 func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode)
+	txnPrep := func(stxn transactions.SignedTxn) []byte {
+		request := v2.PreEncodedSimulateRequest{
+			TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+				{
+					Txns: []transactions.SignedTxn{stxn},
+				},
+			},
+		}
+		return protocol.EncodeReflect(&request)
+	}
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
 	defer releasefunc()
 	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: (*model.SimulateTransactionParamsFormat)(&format)})
 	require.NoError(t, err)
@@ -805,43 +819,30 @@ func TestPostSimulateTransaction(t *testing.T) {
 	}
 }
 
-func copyInnerTxnGroupIDs(t *testing.T, dst, src *model.PendingTransactionResponse) {
+func copyInnerTxnGroupIDs(t *testing.T, dst, src *v2.PreEncodedTxInfo) {
 	t.Helper()
 
-	// msgpack decodes to map[interface{}]interface{} while JSON decodes to map[string]interface{}
-	txn := dst.Txn["txn"]
-	switch dstTxnMap := txn.(type) {
-	case map[string]interface{}:
-		srcTxnMap := src.Txn["txn"].(map[string]interface{})
-		groupID, hasGroupID := srcTxnMap["grp"]
-		if hasGroupID {
-			dstTxnMap["grp"] = groupID
-		}
-	case map[interface{}]interface{}:
-		srcTxnMap := src.Txn["txn"].(map[interface{}]interface{})
-		groupID, hasGroupID := srcTxnMap["grp"]
-		if hasGroupID {
-			dstTxnMap["grp"] = groupID
-		}
+	if !src.Txn.Txn.Group.IsZero() {
+		dst.Txn.Txn.Group = src.Txn.Txn.Group
 	}
 
-	if dst.InnerTxns == nil || src.InnerTxns == nil {
+	if dst.Inners == nil || src.Inners == nil {
 		return
 	}
 
-	assert.Equal(t, len(*dst.InnerTxns), len(*src.InnerTxns))
+	assert.Equal(t, len(*dst.Inners), len(*src.Inners))
 
-	for innerIndex := range *dst.InnerTxns {
-		if innerIndex == len(*src.InnerTxns) {
+	for innerIndex := range *dst.Inners {
+		if innerIndex == len(*src.Inners) {
 			break
 		}
-		dstInner := &(*dst.InnerTxns)[innerIndex]
-		srcInner := &(*src.InnerTxns)[innerIndex]
+		dstInner := &(*dst.Inners)[innerIndex]
+		srcInner := &(*src.Inners)[innerIndex]
 		copyInnerTxnGroupIDs(t, dstInner, srcInner)
 	}
 }
 
-func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual model.SimulateResponse) {
+func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual v2.PreEncodedSimulateResponse) {
 	t.Helper()
 
 	if len(expectedError) != 0 {
@@ -860,23 +861,23 @@ func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, 
 		}
 		expectedGroup := &expected.TxnGroups[groupIndex]
 		actualGroup := &actual.TxnGroups[groupIndex]
-		assert.Equal(t, len(expectedGroup.TxnResults), len(actualGroup.TxnResults))
-		for txnIndex := range expectedGroup.TxnResults {
-			if txnIndex == len(actualGroup.TxnResults) {
+		assert.Equal(t, len(expectedGroup.Txns), len(actualGroup.Txns))
+		for txnIndex := range expectedGroup.Txns {
+			if txnIndex == len(actualGroup.Txns) {
 				break
 			}
-			expectedTxn := &expectedGroup.TxnResults[txnIndex]
-			actualTxn := &actualGroup.TxnResults[txnIndex]
-			if expectedTxn.TxnResult.InnerTxns == nil || actualTxn.TxnResult.InnerTxns == nil {
+			expectedTxn := &expectedGroup.Txns[txnIndex]
+			actualTxn := &actualGroup.Txns[txnIndex]
+			if expectedTxn.Txn.Inners == nil || actualTxn.Txn.Inners == nil {
 				continue
 			}
-			assert.Equal(t, len(*expectedTxn.TxnResult.InnerTxns), len(*actualTxn.TxnResult.InnerTxns))
-			for innerIndex := range *expectedTxn.TxnResult.InnerTxns {
-				if innerIndex == len(*actualTxn.TxnResult.InnerTxns) {
+			assert.Equal(t, len(*expectedTxn.Txn.Inners), len(*actualTxn.Txn.Inners))
+			for innerIndex := range *expectedTxn.Txn.Inners {
+				if innerIndex == len(*actualTxn.Txn.Inners) {
 					break
 				}
-				expectedInner := &(*expectedTxn.TxnResult.InnerTxns)[innerIndex]
-				actualInner := &(*actualTxn.TxnResult.InnerTxns)[innerIndex]
+				expectedInner := &(*expectedTxn.Txn.Inners)[innerIndex]
+				actualInner := &(*actualTxn.Txn.Inners)[innerIndex]
 				copyInnerTxnGroupIDs(t, expectedInner, actualInner)
 			}
 		}
@@ -885,20 +886,20 @@ func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, 
 	require.Equal(t, expected, actual)
 }
 
-func makePendingTxnResponse(t *testing.T, txn transactions.SignedTxnWithAD, handle codec.Handle) model.PendingTransactionResponse {
+func makePendingTxnResponse(t *testing.T, txn transactions.SignedTxnWithAD) v2.PreEncodedTxInfo {
 	t.Helper()
 	preEncoded := v2.ConvertInnerTxn(&txn)
 
-	// encode to bytes
-	var encodedBytes []byte
-	encoder := codec.NewEncoderBytes(&encodedBytes, handle)
-	err := encoder.Encode(&preEncoded)
-	require.NoError(t, err)
+	// In theory we could return preEncoded directly, but there appears to be some subtle differences
+	// once you encode and decode the object, such as *uint64 fields turning from 0 to nil. So to be
+	// safe, let's encode and decode the object.
 
-	// decode to model.PendingTransactionResponse
-	var response model.PendingTransactionResponse
-	decoder := codec.NewDecoderBytes(encodedBytes, handle)
-	err = decoder.Decode(&response)
+	// Encode to bytes
+	encodedBytes := protocol.EncodeReflect(&preEncoded)
+
+	// Decode to v2.PreEncodedTxInfo
+	var response v2.PreEncodedTxInfo
+	err := protocol.DecodeReflect(encodedBytes, &response)
 	require.NoError(t, err)
 
 	return response
@@ -960,10 +961,14 @@ int 1`,
 
 			// build request body
 			var body io.Reader
-			var bodyBytes []byte
-			for _, stxn := range stxns {
-				bodyBytes = append(bodyBytes, protocol.Encode(&stxn)...)
+			request := v2.PreEncodedSimulateRequest{
+				TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+					{
+						Txns: stxns,
+					},
+				},
 			}
+			bodyBytes := protocol.EncodeReflect(&request)
 
 			msgpackFormat := model.SimulateTransactionParamsFormatMsgpack
 			jsonFormat := model.SimulateTransactionParamsFormatJson
@@ -1010,7 +1015,7 @@ int 1`,
 					require.Equal(t, 200, rec.Code, rec.Body.String())
 
 					// decode actual response
-					var actualBody model.SimulateResponse
+					var actualBody v2.PreEncodedSimulateResponse
 					decoder := codec.NewDecoderBytes(rec.Body.Bytes(), responseFormat.handle)
 					err = decoder.Decode(&actualBody)
 					require.NoError(t, err)
@@ -1029,26 +1034,26 @@ int 1`,
 					for i := range scenario.TxnAppBudgetConsumed {
 						txnAppBudgetUsed = append(txnAppBudgetUsed, numOrNil(scenario.TxnAppBudgetConsumed[i]))
 					}
-					expectedBody := model.SimulateResponse{
+					expectedBody := v2.PreEncodedSimulateResponse{
 						Version: 1,
-						TxnGroups: []model.SimulateTransactionGroupResult{
+						TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 							{
 								AppBudgetAdded:    appBudgetAdded,
 								AppBudgetConsumed: appBudgetConsumed,
 								FailedAt:          expectedFailedAt,
-								TxnResults: []model.SimulateTransactionResult{
+								Txns: []v2.PreEncodedSimulateTxnResult{
 									{
-										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[0],
 											// expect no ApplyData info
-										}, responseFormat.handle),
+										}),
 										AppBudgetConsumed: txnAppBudgetUsed[0],
 									},
 									{
-										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[1],
 											ApplyData: scenario.ExpectedSimulationAD,
-										}, responseFormat.handle),
+										}),
 										AppBudgetConsumed: txnAppBudgetUsed[1],
 									},
 								},
@@ -1111,6 +1116,73 @@ func TestSimulateTransactionVerificationFailure(t *testing.T) {
 	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{})
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code, rec.Body.String())
+}
+
+func TestSimulateTransactionMultipleGroups(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// prepare node and handler
+	numAccounts := 5
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+
+	sender := roots[0]
+	receiver := roots[1]
+
+	txn1 := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   1,
+	})
+	txn2 := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   2,
+	})
+
+	stxn1 := txn1.Txn().Sign(sender.Secrets())
+	stxn2 := txn2.Txn().Sign(sender.Secrets())
+
+	// build request body
+	request := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn1},
+			},
+			{
+				Txns: []transactions.SignedTxn{stxn2},
+			},
+		},
+	}
+	bodyBytes := protocol.EncodeReflect(&request)
+	body := bytes.NewReader(bodyBytes)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	rec := httptest.NewRecorder()
+
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// simulate transaction
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{})
+	require.NoError(t, err)
+	bodyString := rec.Body.String()
+	require.Equal(t, 400, rec.Code, bodyString)
+	require.Contains(t, bodyString, "expected 1 transaction group, got 2")
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
@@ -1318,6 +1390,11 @@ func TestTealDisassemble(t *testing.T) {
 	// Test bad program.
 	badProgram := []byte{1, 99}
 	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
+
+	// Create a program with MaxTealSourceBytes+1 bytes
+	// This should fail inside the handler when reading the bytes from the request body.
+	largeProgram := []byte(strings.Repeat("a", v2.MaxTealSourceBytes+1))
+	tealDisassembleTest(t, largeProgram, 400, "http: request body too large", true)
 }
 
 func tealDryrunTest(
@@ -1364,6 +1441,12 @@ func tealDryrunTest(
 		messages := *response.Txns[0].AppCallMessages
 		require.GreaterOrEqual(t, len(messages), 1)
 		require.Equal(t, expResult, messages[len(messages)-1])
+	} else if rec.Code == 400 {
+		var response model.ErrorResponse
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Contains(t, response.Message, expResult)
 	}
 	return
 }
@@ -1429,7 +1512,7 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "msgp", 404, "", false)
 
 	gdr.ProtocolVersion = "unk"
-	tealDryrunTest(t, &gdr, "json", 400, "", true)
+	tealDryrunTest(t, &gdr, "json", 400, "unsupported protocol version", true)
 	gdr.ProtocolVersion = ""
 
 	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
@@ -1442,6 +1525,10 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "json", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "msgp", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "json", 404, "", false)
+
+	// This should fail inside the handler when reading the bytes from the request body.
+	gdr.ProtocolVersion = strings.Repeat("a", v2.MaxTealDryrunBytes+1)
+	tealDryrunTest(t, &gdr, "json", 400, "http: request body too large", true)
 }
 
 func TestAppendParticipationKeys(t *testing.T) {

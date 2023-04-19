@@ -589,10 +589,10 @@ type PendingTransactionResponse struct {
 	// InnerTxns Inner transactions produced by application execution.
 	InnerTxns *[]PendingTransactionResponse `json:"inner-txns,omitempty"`
 
-	// LocalStateDelta \[ld\] Local state key/value changes for the application being executed by this transaction.
+	// LocalStateDelta Local state key/value changes for the application being executed by this transaction.
 	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
 
-	// Logs \[lg\] Logs for the application being executed by this transaction.
+	// Logs Logs for the application being executed by this transaction.
 	Logs *[][]byte `json:"logs,omitempty"`
 
 	// PoolError Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
@@ -606,6 +606,18 @@ type PendingTransactionResponse struct {
 
 	// Txn The raw signed transaction.
 	Txn map[string]interface{} `json:"txn"`
+}
+
+// SimulateRequest Request type for simulation endpoint.
+type SimulateRequest struct {
+	// TxnGroups The transaction groups to simulate.
+	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
+}
+
+// SimulateRequestTransactionGroup A transaction group to simulate.
+type SimulateRequestTransactionGroup struct {
+	// Txns An atomic transaction group.
+	Txns []json.RawMessage `json:"txns"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -1220,3 +1232,6 @@ type TealCompileTextRequestBody = TealCompileTextBody
 
 // TealDryrunJSONRequestBody defines body for TealDryrun for application/json ContentType.
 type TealDryrunJSONRequestBody = DryrunRequest
+
+// SimulateTransactionJSONRequestBody defines body for SimulateTransaction for application/json ContentType.
+type SimulateTransactionJSONRequestBody = SimulateRequest

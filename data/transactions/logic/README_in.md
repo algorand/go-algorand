@@ -193,6 +193,41 @@ _available_.
 
  * Since v7, the account associated with any contract present in the
    `txn.ForeignApplications` field is _available_.
+   
+ * Since v9, there is group-level resource sharing. Any resource that
+   is available in _some_ top-level transaction in a transaction group
+   is available in _all_ v9 or later application calls in the group,
+   whether those application calls are top-level or inner.
+   
+ * When considering whether an asset holding or application local
+   state is available by group-level resource sharing, the holding or
+   local state must be available in a top-level transaction without
+   considering group sharing. For example, if account A is made
+   available in one transaction, and asset X is made available in
+   another, group resource sharing does _not_ make A's X holding
+   available.
+     
+ * Top-level transactions that are not application calls also make
+   resources available to group-level resource sharing. The following
+   resources are made available by other transaction types.
+
+     1. `pay` - `txn.Sender`, `txn.Receiver`, and
+        `txn.CloseRemainderTo` (if set).
+
+     1. `keyreg` - `txn.Sender`
+
+     1. `acfg` - `txn.Sender`, `txn.ConfigAsset`, and the
+        `txn.ConfigAsset` holding of `txn.Sender`.
+
+     1. `axfer` - `txn.Sender`, `txn.AssetReceiver`, `txn.AssetSender`
+        (if set), `txnAssetCloseTo` (if set), `txn.XferAsset`, and the
+        `txn.XferAsset` holding of each of those accounts.
+
+     1. `afrz` - `txn.Sender`, `txn.FreezeAccount`, `txn.FreezeAsset`,
+        and the `txn.FreezeAsset` holding of `txn.FreezeAccount`. The
+        `txn.FreezeAsset` holding of `txn.Sender` is _not_ made
+        available.
+
 
  * A Box is _available_ to an Approval Program if _any_ transaction in
    the same group contains a box reference (`txn.Boxes`) that denotes

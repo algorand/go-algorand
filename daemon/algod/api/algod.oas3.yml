@@ -1795,14 +1795,14 @@
             "type": "array"
           },
           "local-state-delta": {
-            "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+            "description": "Local state key/value changes for the application being executed by this transaction.",
             "items": {
               "$ref": "#/components/schemas/AccountStateDelta"
             },
             "type": "array"
           },
           "logs": {
-            "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+            "description": "Logs for the application being executed by this transaction.",
             "items": {
               "format": "byte",
               "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
@@ -1832,6 +1832,41 @@
         "required": [
           "pool-error",
           "txn"
+        ],
+        "type": "object"
+      },
+      "SimulateRequest": {
+        "description": "Request type for simulation endpoint.",
+        "properties": {
+          "txn-groups": {
+            "description": "The transaction groups to simulate.",
+            "items": {
+              "$ref": "#/components/schemas/SimulateRequestTransactionGroup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txn-groups"
+        ],
+        "type": "object"
+      },
+      "SimulateRequestTransactionGroup": {
+        "description": "A transaction group to simulate.",
+        "properties": {
+          "txns": {
+            "description": "An atomic transaction group.",
+            "items": {
+              "description": "SignedTxn object. Must be canonically encoded.",
+              "format": "json",
+              "type": "string",
+              "x-algorand-format": "SignedTransaction"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txns"
         ],
         "type": "object"
       },
@@ -2120,6 +2155,34 @@
           }
         },
         "summary": "Return metrics about algod functioning.",
+        "tags": [
+          "public",
+          "common"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK."
+          },
+          "500": {
+            "content": {},
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {},
+            "description": "Node not ready yet"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns OK if healthy and fully caught up.",
         "tags": [
           "public",
           "common"
@@ -5709,14 +5772,18 @@
         ],
         "requestBody": {
           "content": {
-            "application/x-binary": {
+            "application/json": {
               "schema": {
-                "format": "binary",
-                "type": "string"
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            },
+            "application/msgpack": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
               }
             }
           },
-          "description": "The byte encoded transaction to simulate",
+          "description": "The transactions to simulate, along with any other inputs.",
           "required": true
         },
         "responses": {
@@ -5802,7 +5869,7 @@
                 }
               }
             },
-            "description": "Bad Request - Malformed Algorand transaction"
+            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -5859,7 +5926,7 @@
           "public",
           "nonparticipating"
         ],
-        "x-codegen-request-body-name": "rawtxn"
+        "x-codegen-request-body-name": "request"
       }
     },
     "/versions": {

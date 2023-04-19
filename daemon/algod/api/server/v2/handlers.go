@@ -54,14 +54,16 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 )
 
-// max compiled teal program is currently 8k
+// MaxTealSourceBytes sets a size limit for TEAL source programs for requests
+// Max TEAL program size is currently 8k
 // but we allow for comments, spacing, and repeated consts
-// in the source teal, allow up to 200kb
-const maxTealSourceBytes = 200_000
+// in the source TEAL, so we allow up to 200KB
+const MaxTealSourceBytes = 200_000
 
+// MaxTealDryrunBytes sets a size limit for dryrun requests
 // With the ability to hold unlimited assets DryrunRequests can
-// become quite large, allow up to 1mb
-const maxTealDryrunBytes = 1_000_000
+// become quite large, so we allow up to 1MB
+const MaxTealDryrunBytes = 1_000_000
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
@@ -921,29 +923,39 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.PostTransactionsResponse{TxId: txid.String()})
 }
 
-// preEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
-type preEncodedSimulateTxnResult struct {
+// PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
+type PreEncodedSimulateTxnResult struct {
 	Txn                    PreEncodedTxInfo `codec:"txn-result"`
 	MissingSignature       *bool            `codec:"missing-signature,omitempty"`
 	AppBudgetConsumed      *uint64          `codec:"app-budget-consumed,omitempty"`
 	LogicSigBudgetConsumed *uint64          `codec:"logic-sig-budget-consumed,omitempty"`
 }
 
-// preEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
-type preEncodedSimulateTxnGroupResult struct {
-	Txns              []preEncodedSimulateTxnResult `codec:"txn-results"`
+// PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
+type PreEncodedSimulateTxnGroupResult struct {
+	Txns              []PreEncodedSimulateTxnResult `codec:"txn-results"`
 	FailureMessage    *string                       `codec:"failure-message,omitempty"`
 	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
 	AppBudgetAdded    *uint64                       `codec:"app-budget-added,omitempty"`
 	AppBudgetConsumed *uint64                       `codec:"app-budget-consumed,omitempty"`
 }
 
-// preEncodedSimulateResponse mirrors model.SimulateResponse
-type preEncodedSimulateResponse struct {
+// PreEncodedSimulateResponse mirrors model.SimulateResponse
+type PreEncodedSimulateResponse struct {
 	Version      uint64                             `codec:"version"`
 	LastRound    uint64                             `codec:"last-round"`
-	TxnGroups    []preEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	TxnGroups    []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
 	WouldSucceed bool                               `codec:"would-succeed"`
+}
+
+// PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
+type PreEncodedSimulateRequestTransactionGroup struct {
+	Txns []transactions.SignedTxn `codec:"txns"`
+}
+
+// PreEncodedSimulateRequest mirrors model.SimulateRequest
+type PreEncodedSimulateRequest struct {
+	TxnGroups []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
@@ -959,10 +971,39 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 	proto := config.Consensus[stat.LastVersion]
 
-	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
+	requestBuffer := new(bytes.Buffer)
+	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxTealDryrunBytes)
+	_, err = requestBuffer.ReadFrom(requestBodyReader)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
+	requestData := requestBuffer.Bytes()
+
+	var simulateRequest PreEncodedSimulateRequest
+	err = decode(protocol.CodecHandle, requestData, &simulateRequest)
+	if err != nil {
+		err = decode(protocol.JSONStrictHandle, requestData, &simulateRequest)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
+	for _, txgroup := range simulateRequest.TxnGroups {
+		if len(txgroup.Txns) == 0 {
+			err = errors.New("empty txgroup")
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		if len(txgroup.Txns) > proto.MaxTxGroupSize {
+			err = fmt.Errorf("transaction group size %d exceeds protocol max %d", len(txgroup.Txns), proto.MaxTxGroupSize)
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
+	if len(simulateRequest.TxnGroups) != 1 {
+		err := fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups))
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	txgroup := simulateRequest.TxnGroups[0].Txns
 
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(txgroup)
@@ -982,12 +1023,12 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
-	data, err := encode(handle, &response)
+	responseData, err := encode(handle, &response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
 
-	return ctx.Blob(http.StatusOK, contentType, data)
+	return ctx.Blob(http.StatusOK, contentType, responseData)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
@@ -998,7 +1039,7 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	}
 	req := ctx.Request()
 	buf := new(bytes.Buffer)
-	req.Body = http.MaxBytesReader(nil, req.Body, maxTealDryrunBytes)
+	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
 	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1100,7 +1141,7 @@ func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64, params m
 	}
 	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
 	if err != nil {
-		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
 	data, err := encode(handle, sDelta)
 	if err != nil {
@@ -1531,7 +1572,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params model.TealCompileParams
 	}
 
 	buf := new(bytes.Buffer)
-	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, MaxTealSourceBytes)
 	_, err = buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1648,7 +1689,7 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 		return ctx.String(http.StatusNotFound, "/teal/disassemble was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
 	buf := new(bytes.Buffer)
-	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, MaxTealSourceBytes)
 	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)

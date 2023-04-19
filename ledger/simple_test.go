@@ -180,3 +180,19 @@ func asaParams(t testing.TB, ledger *Ledger, asset basics.AssetIndex) (basics.As
 	}
 	return basics.AssetParams{}, fmt.Errorf("bad lookup (%d)", asset)
 }
+
+// globals gets the AppParams for an address, app index pair (only works if addr is the creator)
+func globals(t testing.TB, ledger *Ledger, addr basics.Address, app basics.AppIndex) (basics.AppParams, bool) {
+	if globals, ok := lookup(t, ledger, addr).AppParams[app]; ok {
+		return globals, true
+	}
+	return basics.AppParams{}, false
+}
+
+// locals gets the AppLocalState for an address, app index pair
+func locals(t testing.TB, ledger *Ledger, addr basics.Address, app basics.AppIndex) (basics.AppLocalState, bool) {
+	if locals, ok := lookup(t, ledger, addr).AppLocalStates[app]; ok {
+		return locals, true
+	}
+	return basics.AppLocalState{}, false
+}

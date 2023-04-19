@@ -47,6 +47,36 @@
         }
       }
     },
+    "/ready": {
+      "get": {
+        "tags": [
+          "public",
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "scheme": [
+          "http"
+        ],
+        "summary": "Returns OK if healthy and fully caught up.",
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "description": "OK."
+          },
+          "500": {
+            "description": "Internal Error"
+          },
+          "503": {
+            "description": "Node not ready yet"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "tags": [
@@ -1212,7 +1242,8 @@
           "nonparticipating"
         ],
         "consumes": [
-          "application/x-binary"
+          "application/json",
+          "application/msgpack"
         ],
         "produces": [
           "application/json",
@@ -1225,13 +1256,12 @@
         "operationId": "SimulateTransaction",
         "parameters": [
           {
-            "description": "The byte encoded transaction to simulate",
-            "name": "rawtxn",
+            "description": "The transactions to simulate, along with any other inputs.",
+            "name": "request",
             "in": "body",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "binary"
+              "$ref": "#/definitions/SimulateRequest"
             }
           },
           {
@@ -1243,7 +1273,7 @@
             "$ref": "#/responses/SimulateResponse"
           },
           "400": {
-            "description": "Bad Request - Malformed Algorand transaction",
+            "description": "Bad Request",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -2943,15 +2973,15 @@
           "type": "integer"
         },
         "local-state-schema": {
-          "description": "[\\lsch\\] local schema",
+          "description": "\\[lsch\\] local schema",
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "global-state-schema": {
-          "description": "[\\gsch\\] global schema",
+          "description": "\\[gsch\\] global schema",
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "global-state": {
-          "description": "[\\gs\\] global schema",
+          "description": "\\[gs\\] global state",
           "$ref": "#/definitions/TealKeyValueStore"
         }
       }
@@ -3159,6 +3189,41 @@
         }
       }
     },
+    "SimulateRequest": {
+      "description": "Request type for simulation endpoint.",
+      "type": "object",
+      "required": [
+        "txn-groups"
+      ],
+      "properties": {
+        "txn-groups": {
+          "description": "The transaction groups to simulate.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateRequestTransactionGroup"
+          }
+        }
+      }
+    },
+    "SimulateRequestTransactionGroup": {
+      "description": "A transaction group to simulate.",
+      "type": "object",
+      "required": [
+        "txns"
+      ],
+      "properties": {
+        "txns": {
+          "description": "An atomic transaction group.",
+          "type": "array",
+          "items": {
+            "description": "SignedTxn object. Must be canonically encoded.",
+            "type": "string",
+            "format": "json",
+            "x-algorand-format": "SignedTransaction"
+          }
+        }
+      }
+    },
     "Box": {
       "description": "Box name and its content.",
       "type": "object",
@@ -3321,18 +3386,18 @@
           "type": "integer"
         },
         "local-state-delta": {
-          "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+          "description": "Local state key/value changes for the application being executed by this transaction.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/AccountStateDelta"
           }
         },
         "global-state-delta": {
-          "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
+          "description": "Global state key/value changes for the application being executed by this transaction.",
           "$ref": "#/definitions/StateDelta"
         },
         "logs": {
-          "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+          "description": "Logs for the application being executed by this transaction.",
           "type": "array",
           "items": {
             "type": "string",

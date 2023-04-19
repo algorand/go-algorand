@@ -17,6 +17,8 @@
 package mocktracer
 
 import (
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -27,6 +29,8 @@ import (
 type EventType string
 
 const (
+	// BeforeBlockEvent represents the logic.EvalTracer.BeforeBlock event
+	BeforeBlockEvent EventType = "BeforeBlock"
 	// BeforeTxnGroupEvent represents the logic.EvalTracer.BeforeTxnGroup event
 	BeforeTxnGroupEvent EventType = "BeforeTxnGroup"
 	// AfterTxnGroupEvent represents the logic.EvalTracer.AfterTxnGroup event
@@ -43,6 +47,8 @@ const (
 	BeforeOpcodeEvent EventType = "BeforeOpcode"
 	// AfterOpcodeEvent represents the logic.EvalTracer.AfterOpcode event
 	AfterOpcodeEvent EventType = "AfterOpcode"
+	// AfterBlockEvent represents the logic.EvalTracer.AfterBlock event
+	AfterBlockEvent EventType = "AfterBlock"
 )
 
 // Event represents a logic.EvalTracer event
@@ -66,6 +72,14 @@ type Event struct {
 
 	// only for AfterOpcode, AfterProgram, AfterTxn, and AfterTxnGroup
 	HasError bool
+
+	// only for BeforeBlock, AfterBlock
+	Round basics.Round
+}
+
+// BeforeBlock creates a new Event with the type BeforeBlockEvent for a particular round
+func BeforeBlock(round basics.Round) Event {
+	return Event{Type: BeforeBlockEvent, Round: round}
 }
 
 // BeforeTxnGroup creates a new Event with the type BeforeTxnGroupEvent
@@ -108,6 +122,11 @@ func AfterOpcode(hasError bool) Event {
 	return Event{Type: AfterOpcodeEvent, HasError: hasError}
 }
 
+// AfterBlock creates a new Event with the type AfterBlockEvent
+func AfterBlock(round basics.Round) Event {
+	return Event{Type: AfterBlockEvent, Round: round}
+}
+
 // OpcodeEvents returns a slice of events that represent calling `count` opcodes
 func OpcodeEvents(count int, endsWithError bool) []Event {
 	events := make([]Event, 0, count*2)
@@ -133,6 +152,11 @@ func FlattenEvents(rows [][]Event) []Event {
 // Tracer is a mock tracer that implements logic.EvalTracer
 type Tracer struct {
 	Events []Event
+}
+
+// BeforeBlock mocks the logic.EvalTracer.BeforeBlock method
+func (d *Tracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
+	d.Events = append(d.Events, BeforeBlock(hdr.Round))
 }
 
 // BeforeTxnGroup mocks the logic.EvalTracer.BeforeTxnGroup method
@@ -173,6 +197,11 @@ func (d *Tracer) BeforeOpcode(cx *logic.EvalContext) {
 // AfterOpcode mocks the logic.EvalTracer.AfterOpcode method
 func (d *Tracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	d.Events = append(d.Events, AfterOpcode(evalError != nil))
+}
+
+// AfterBlock mocks the logic.EvalTracer.BeforeBlock method
+func (d *Tracer) AfterBlock(hdr *bookkeeping.BlockHeader) {
+	d.Events = append(d.Events, AfterBlock(hdr.Round))
 }
 
 // copyDeltas makes a deep copy of the given ledgercore.StateDelta pointer, if it's not nil.

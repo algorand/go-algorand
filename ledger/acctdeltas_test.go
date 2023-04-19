@@ -3036,6 +3036,217 @@ func TestOnlineAccountsNewRoundError(t *testing.T) {
 	require.Empty(t, updated)
 }
 
+type mockAccountsErrorWriter struct {
+}
+
+var errMockAccountsErrorWriterIns = errors.New("synthetic ins err")
+var errMockAccountsErrorWriterUpd = errors.New("synthetic upd err")
+var errMockAccountsErrorWriterDel = errors.New("synthetic del err")
+
+func (w *mockAccountsErrorWriter) InsertAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseAccountData) (ref trackerdb.AccountRef, err error) {
+	return nil, errMockAccountsErrorWriterIns
+}
+func (w *mockAccountsErrorWriter) DeleteAccount(ref trackerdb.AccountRef) (rowsAffected int64, err error) {
+	return 0, errMockAccountsErrorWriterDel
+}
+func (w *mockAccountsErrorWriter) UpdateAccount(ref trackerdb.AccountRef, normBalance uint64, data trackerdb.BaseAccountData) (rowsAffected int64, err error) {
+	return 0, errMockAccountsErrorWriterUpd
+}
+func (w *mockAccountsErrorWriter) InsertResource(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (ref trackerdb.ResourceRef, err error) {
+	return nil, errMockAccountsErrorWriterIns
+}
+func (w *mockAccountsErrorWriter) DeleteResource(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex) (rowsAffected int64, err error) {
+	return 0, errMockAccountsErrorWriterDel
+}
+func (w *mockAccountsErrorWriter) UpdateResource(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex, data trackerdb.ResourcesData) (rowsAffected int64, err error) {
+	return 0, errMockAccountsErrorWriterUpd
+}
+func (w *mockAccountsErrorWriter) UpsertKvPair(key string, value []byte) error {
+	return errMockAccountsErrorWriterUpd
+}
+func (w *mockAccountsErrorWriter) DeleteKvPair(key string) error {
+	return errMockAccountsErrorWriterDel
+}
+func (w *mockAccountsErrorWriter) InsertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (ref trackerdb.CreatableRef, err error) {
+	return nil, errMockAccountsErrorWriterIns
+}
+func (w *mockAccountsErrorWriter) DeleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {
+	return 0, errMockAccountsErrorWriterDel
+}
+func (w *mockAccountsErrorWriter) Close() {
+}
+
+// TestAccountsNewRoundError checks accountsNewRound propagates errors to the caller
+func TestAccountsNewRoundError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	writer := &mockAccountsErrorWriter{}
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	addrA := ledgertesting.RandomAddress()
+
+	type testcase struct {
+		ad     accountDelta
+		rd     resourceDelta
+		kd     map[string]modifiedKvValue
+		cd     map[basics.CreatableIndex]ledgercore.ModifiedCreatable
+		expErr error
+	}
+
+	tests := []testcase{
+		{
+			ad: accountDelta{ // acct A is new
+				address: addrA,
+				newAcct: trackerdb.BaseAccountData{
+					MicroAlgos:  basics.MicroAlgos{Raw: 100_000_000},
+					UpdateRound: 1,
+				},
+			},
+			expErr: errMockAccountsErrorWriterIns,
+		},
+		{
+			ad: accountDelta{ // acct A is old, update
+				address: addrA,
+				oldAcct: trackerdb.PersistedAccountData{
+					Addr: addrA,
+					Ref:  &mockEntryRef{1},
+					AccountData: trackerdb.BaseAccountData{
+						MicroAlgos:  basics.MicroAlgos{Raw: 100_000_000},
+						UpdateRound: 0,
+					},
+					Round: 0,
+				},
+				newAcct: trackerdb.BaseAccountData{
+					MicroAlgos:  basics.MicroAlgos{Raw: 100_000_000},
+					UpdateRound: 1,
+				},
+			},
+			expErr: errMockAccountsErrorWriterUpd,
+		},
+		{
+			ad: accountDelta{ // acct A is old, delete
+				address: addrA,
+				oldAcct: trackerdb.PersistedAccountData{
+					Addr: addrA,
+					Ref:  &mockEntryRef{1},
+					AccountData: trackerdb.BaseAccountData{
+						MicroAlgos:  basics.MicroAlgos{Raw: 100_000_000},
+						UpdateRound: 0,
+					},
+					Round: 0,
+				},
+				newAcct: trackerdb.BaseAccountData{},
+			},
+			expErr: errMockAccountsErrorWriterDel,
+		},
+		{
+			rd: resourceDelta{ // new entry
+				oldResource: trackerdb.PersistedResourcesData{AcctRef: &mockEntryRef{1}},
+				newResource: trackerdb.ResourcesData{
+					Total:         1,
+					SchemaNumUint: 1,
+				},
+				nAcctDeltas: 1,
+				address:     addrA,
+			},
+			expErr: errMockAccountsErrorWriterIns,
+		},
+		{
+			rd: resourceDelta{ // existing entry
+				oldResource: trackerdb.PersistedResourcesData{
+					AcctRef: &mockEntryRef{1},
+					Data: trackerdb.ResourcesData{
+						Total:         1,
+						SchemaNumUint: 1,
+					},
+				},
+				newResource: trackerdb.ResourcesData{
+					Total:         2,
+					SchemaNumUint: 2,
+				},
+				nAcctDeltas: 1,
+				address:     addrA,
+			},
+			expErr: errMockAccountsErrorWriterUpd,
+		},
+		{
+			rd: resourceDelta{ // deleting entry
+				oldResource: trackerdb.PersistedResourcesData{
+					AcctRef: &mockEntryRef{1},
+					Data: trackerdb.ResourcesData{
+						Total:         2,
+						SchemaNumUint: 2,
+					},
+				},
+				nAcctDeltas: 1,
+				address:     addrA,
+			},
+			expErr: errMockAccountsErrorWriterDel,
+		},
+		{
+			kd: map[string]modifiedKvValue{
+				"key1": {
+					data: []byte("value1"),
+				},
+			},
+			expErr: errMockAccountsErrorWriterUpd,
+		},
+		{
+			kd: map[string]modifiedKvValue{
+				"key1": {
+					oldData: []byte("value1"),
+				},
+			},
+			expErr: errMockAccountsErrorWriterDel,
+		},
+		{
+			cd: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
+				1: {
+					Created: true,
+				},
+			},
+			expErr: errMockAccountsErrorWriterIns,
+		},
+		{
+			cd: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
+				2: {
+					Created: false,
+				},
+			},
+			expErr: errMockAccountsErrorWriterDel,
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			updates := compactAccountDeltas{}
+			resources := compactResourcesDeltas{}
+			if test.ad != (accountDelta{}) {
+				updates.deltas = append(updates.deltas, test.ad)
+			}
+			if test.rd.nAcctDeltas != 0 {
+				resources.deltas = append(resources.deltas, test.rd)
+			}
+			var kvs map[string]modifiedKvValue
+			if len(test.kd) != 0 {
+				kvs = test.kd
+			}
+			var creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable
+			if len(test.cd) != 0 {
+				creatables = test.cd
+			}
+			lastUpdateRound := basics.Round(i + 1)
+			updatedAcct, updatedResources, updatedKvs, err := accountsNewRoundImpl(writer, updates, resources, kvs, creatables, proto, lastUpdateRound)
+			require.Error(t, err)
+			require.Equal(t, test.expErr, err)
+			require.Empty(t, updatedAcct)
+			require.Empty(t, updatedResources)
+			require.Empty(t, updatedKvs)
+		})
+	}
+}
+
 func randomBaseAccountData() trackerdb.BaseAccountData {
 	vd := trackerdb.BaseVotingData{
 		VoteFirstValid:  basics.Round(crypto.RandUint64()),

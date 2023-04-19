@@ -26,31 +26,18 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
-type builder struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	*stateproof.Builder `codec:"bldr"`
-
-	AddrToPos map[Address]uint64      `codec:"addr,allocbound=stateproof.VotersAllocBound"`
-	VotersHdr bookkeeping.BlockHeader `codec:"hdr"`
-	Message   stateproofmsg.Message   `codec:"msg"`
-}
-
-// This is a soft limit on how many builders should be kept in memory, the rest shall be fetched from DB.
-// At most times only 1 should builder should be stored (both in memory and on disk), as this feature
+// This is a soft limit on how many provers should be kept in memory, the rest shall be fetched from DB.
+// At most times only 1 should prover should be stored (both in memory and on disk), as this feature
 // is mostly used for recoverability purposes - in case the StateProof chain is stalled.
-// The builders cache is composed of the X earliest builders as well as the latest builder, for a total of X+1 (in case of stalled chain).
-const buildersCacheLength = 5 // must be at least 2 to function properly (earliest stateproof + latest stateproof)
+// The provers cache is composed of the X earliest provers as well as the latest prover, for a total of X+1 (in case of stalled chain).
+const proversCacheLength = 5 // must be at least 2 to function properly (earliest stateproof + latest stateproof)
 
 // Worker builds state proofs, by broadcasting
 // signatures using this node's participation keys, by collecting
@@ -69,8 +56,8 @@ type Worker struct {
 	net          Network
 	txnSender    TransactionSender
 
-	// builders is indexed by the round of the block being signed.
-	builders map[basics.Round]builder
+	// provers is indexed by the round of the block being signed.
+	provers map[basics.Round]spProver
 
 	ctx      context.Context
 	shutdown context.CancelFunc
@@ -119,7 +106,7 @@ func (spw *Worker) Start() {
 		return
 	}
 
-	spw.initBuilders()
+	spw.initProvers()
 
 	spw.ledger.RegisterVotersCommitListener(spw)
 
@@ -164,7 +151,7 @@ func (spw *Worker) Stop() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	spw.builders = nil
+	spw.provers = nil
 	spw.signedCh = nil
 
 	if spw.db.Handle != nil {
