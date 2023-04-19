@@ -174,7 +174,20 @@ func (r *Args) run() error {
 	defer report.Close()
 
 	// Run the test, collecting results.
-	if err := r.runTest(report, metricsNet, algodNet); err != nil {
+	// check /metrics endpoint is available before running the test
+	var resp *http.Response
+	for retry := 0; retry < 10; retry++ {
+		resp, err = http.Get(fmt.Sprintf("http://%s/metrics", metricsNet))
+		if err == nil {
+			resp.Body.Close()
+			break
+		}
+		time.Sleep(3 * time.Second)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to query metrics endpoint: %w", err)
+	}
+	if err = r.runTest(report, metricsNet, algodNet); err != nil {
 		return err
 	}
 
