@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"sort"
 	"strconv"
@@ -1316,7 +1315,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = oa.onlineTotalsEx(lowest - 1)
-	require.ErrorIs(t, err, sql.ErrNoRows)
+	require.ErrorIs(t, err, trackerdb.ErrNotFound)
 
 	// ensure the cache size for addrA does not have more entries than maxBalLookback + 1
 	// +1 comes from the deletion before X without checking account state at X
