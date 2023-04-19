@@ -35,8 +35,7 @@ type accountsWriter struct {
 }
 
 type accountRef struct {
-	addr        basics.Address
-	normBalance uint64
+	addr basics.Address
 }
 
 func (ref accountRef) AccountRefMarker() {}
@@ -71,15 +70,7 @@ func (w *accountsWriter) InsertAccount(addr basics.Address, normBalance uint64, 
 		return nil, err
 	}
 
-	// TODO: the normalized entry might only be needed if the account is online
-
-	// write secondary index entry by normBalance
-	err = w.kvw.Set(accountBalanceKey(normBalance, addr), []byte{})
-	if err != nil {
-		return nil, err
-	}
-
-	return accountRef{addr, normBalance}, nil
+	return accountRef{addr}, nil
 }
 
 func (w *accountsWriter) DeleteAccount(ref trackerdb.AccountRef) (rowsAffected int64, err error) {
@@ -87,12 +78,6 @@ func (w *accountsWriter) DeleteAccount(ref trackerdb.AccountRef) (rowsAffected i
 
 	// delete account entry
 	err = w.kvw.Delete(accountKey(xref.addr))
-	if err != nil {
-		return 0, err
-	}
-
-	// delete secondary index entry by normBalance
-	err = w.kvw.Delete(accountBalanceKey(xref.normBalance, xref.addr))
 	if err != nil {
 		return 0, err
 	}
@@ -108,23 +93,6 @@ func (w *accountsWriter) UpdateAccount(ref trackerdb.AccountRef, normBalance uin
 	err = w.kvw.Set(accountKey(xref.addr), raw)
 	if err != nil {
 		return 0, err
-	}
-
-	// update the normBalance entry only if the value changed
-	if normBalance != xref.normBalance {
-		// delete *old* secondary index entry by normBalance
-		// Note: we take the old value from the account ref!
-		err = w.kvw.Delete(accountBalanceKey(xref.normBalance, xref.addr))
-		if err != nil {
-			return 0, err
-		}
-
-		// write *new* secondary index entry by normBalance
-		// Note: we make sure to write the *new* value out
-		err = w.kvw.Set(accountBalanceKey(normBalance, xref.addr), []byte{})
-		if err != nil {
-			return 0, err
-		}
 	}
 
 	return 1, nil

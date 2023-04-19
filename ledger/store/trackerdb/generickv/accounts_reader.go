@@ -96,8 +96,7 @@ func (r *accountsReader) LookupAccount(addr basics.Address) (data trackerdb.Pers
 		return
 	}
 
-	normBalance := data.AccountData.NormalizedOnlineBalance(r.proto)
-	data.Ref = accountRef{addr, normBalance}
+	data.Ref = accountRef{addr}
 
 	return
 }
@@ -135,14 +134,7 @@ func (r *accountsReader) LookupResources(addr basics.Address, aidx basics.Creata
 		err = fmt.Errorf("lookupResources asked for an app but got %v", data.Data)
 	}
 
-	// TODO: this is not ideal, but we have nowhere else to get the value from
-	//       the long convo we had about getting rid of normBalance might resolve this
-	acct, err := r.LookupAccount(addr)
-	if err != nil {
-		return
-	}
-	normBalance := acct.AccountData.NormalizedOnlineBalance(r.proto)
-	data.AcctRef = accountRef{addr, normBalance}
+	data.AcctRef = accountRef{addr}
 
 	return
 }

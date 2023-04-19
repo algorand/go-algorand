@@ -25,7 +25,6 @@ import (
 
 const (
 	kvPrefixAccount              = "account"
-	kvPrefixAccountBalance       = "account_balance"
 	kvPrefixResource             = "resource"
 	kvPrefixAppKv                = "appkv"
 	kvPrefixCreatorIndex         = "creator"
@@ -57,16 +56,6 @@ func accountKey(address basics.Address) []byte {
 	ret := []byte(kvPrefixAccount)
 	ret = append(ret, "-"...)
 	ret = append(ret, hex.EncodeToString(address[:])...)
-	return ret
-}
-
-// accountBalanceKey: 4-byte prefix + 8-byte big-endian uint64 + 32-byte address
-func accountBalanceKey(normBalance uint64, address basics.Address) []byte {
-	ret := []byte(kvPrefixAccountBalance)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(normBalance)...)
-	ret = append(ret, "-"...)
-	ret = append(ret, address[:]...)
 	return ret
 }
 
