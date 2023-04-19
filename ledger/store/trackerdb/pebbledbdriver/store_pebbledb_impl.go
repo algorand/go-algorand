@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/cockroachdb/pebble"
-	"github.com/cockroachdb/pebble/bloom"
 	"github.com/cockroachdb/pebble/vfs"
 )
 
@@ -66,34 +65,8 @@ type transactionScope struct {
 
 // OpenTrackerDB opens a Pebble db database
 func OpenTrackerDB(dbdir string, inMem bool, proto config.ConsensusParams) (store *trackerStore, err error) {
-	cache := pebble.NewCache(4 * 1024 * 1024)
-	defer cache.Unref()
-	// based on cockroach DB's DefaultPebbleOptions()
-	opts := &pebble.Options{
-		Cache:                       cache,
-		L0CompactionThreshold:       2,
-		L0StopWritesThreshold:       1000,
-		LBaseMaxBytes:               64 << 20, // 64 MB
-		Levels:                      make([]pebble.LevelOptions, 7),
-		MaxConcurrentCompactions:    func() int { return 3 },
-		MemTableSize:                64 << 20, // 64 MB
-		MemTableStopWritesThreshold: 4,
-	}
-	opts.FlushDelayDeleteRange = 10 * time.Second
-	opts.Experimental.MinDeletionRate = 128 << 20 // 128 MB
-	opts.Experimental.ReadSamplingMultiplier = -1
-	for i := 0; i < len(opts.Levels); i++ {
-		l := &opts.Levels[i]
-		l.BlockSize = 32 << 10       // 32 KB
-		l.IndexBlockSize = 256 << 10 // 256 KB
-		l.FilterPolicy = bloom.FilterPolicy(10)
-		l.FilterType = pebble.TableFilter
-		if i > 0 {
-			l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
-		}
-		l.EnsureDefaults()
-	}
-	opts.Levels[6].FilterPolicy = nil
+	// use default options for now
+	opts := &pebble.Options{}
 	if inMem {
 		opts.FS = vfs.NewMem()
 	}
@@ -101,7 +74,8 @@ func OpenTrackerDB(dbdir string, inMem bool, proto config.ConsensusParams) (stor
 	if err != nil {
 		return nil, err
 	}
-	wo := &pebble.WriteOptions{Sync: true}
+	// no fsync
+	wo := &pebble.WriteOptions{Sync: false}
 	return &trackerStore{Pdb: db, wo: wo, proto: proto}, nil
 }
 
