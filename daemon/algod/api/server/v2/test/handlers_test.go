@@ -1132,7 +1132,7 @@ func TestSimulateTransactionMultipleGroups(t *testing.T) {
 	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
