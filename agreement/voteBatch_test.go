@@ -418,7 +418,7 @@ func TestProcessBatchOneCtxCancled(t *testing.T) {
 	jobs := make([]execpool.InputJob, 0, batchSize)
 	// Create the batch job that the stream will accumulate jobs and create
 	for v := 0; v < batchSize; v++ {
-		tv, err := vg.getTestVote(99)
+		tv, err := vg.getTestVote(validVote)
 		require.NoError(t, err)
 		req := asyncVerifyVoteRequest{
 			ctx:     ctx,
