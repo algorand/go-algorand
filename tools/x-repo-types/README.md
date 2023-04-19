@@ -12,10 +12,10 @@ make build-xrt
 ## Example run
 
 ```sh
-./xrt --x-repo "github.com/algorand/go-algorand" \
-    --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
+goal-v-sdk-state-delta-xrt:
+    ./xrt --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
     --x-type "StateDelta" \
-    --y-repo "github.com/algorand/go-algorand-sdk/v2@develop" \
+    --y-branch "develop" \
     --y-package "github.com/algorand/go-algorand-sdk/v2/types" \
     --y-type "LedgerStateDelta"
 ```
