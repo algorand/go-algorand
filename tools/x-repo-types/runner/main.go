@@ -39,11 +39,11 @@ func main() {
 
 	fmt.Printf("Build the Type Tree for %s\n\n", &xRoot)
 	xRoot.Build()
-	xTgt := Target{Edge{Name: fmt.Sprintf("%q", x)}, xRoot}
+	xTgt := Target{ChildName{Name: fmt.Sprintf("%q", x)}, xRoot}
 
 	fmt.Printf("Build the Type Tree for %s\n\n", &yRoot)
 	yRoot.Build()
-	yTgt := Target{Edge{Name: fmt.Sprintf("%q", y)}, yRoot}
+	yTgt := Target{ChildName{Name: fmt.Sprintf("%q", y)}, yRoot}
 
 	// ---- DEBUG ---- //
 

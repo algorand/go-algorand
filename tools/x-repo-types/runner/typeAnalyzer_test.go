@@ -28,42 +28,42 @@ func TestEdgeFromLabel(t *testing.T) {
 
 	testCases := []struct {
 		label       string
-		expected    Edge
+		expected    ChildName
 		expectError bool
 	}{
 		{
 			label:       "[foo](bar)",
-			expected:    Edge{Name: "foo", Tag: "bar"},
+			expected:    ChildName{Name: "foo", Tag: "bar"},
 			expectError: false,
 		},
 		{
 			label:       "[foo]()",
-			expected:    Edge{Name: "foo", Tag: ""},
+			expected:    ChildName{Name: "foo", Tag: ""},
 			expectError: false,
 		},
 		{
 			label:       "[](bar)",
-			expected:    Edge{Name: "", Tag: "bar"},
+			expected:    ChildName{Name: "", Tag: "bar"},
 			expectError: false,
 		},
 		{
 			label:       "[]()",
-			expected:    Edge{Name: "", Tag: ""},
+			expected:    ChildName{Name: "", Tag: ""},
 			expectError: false,
 		},
 		{
 			label:       "[f[]()oo](()(()",
-			expected:    Edge{Name: "f[]()oo", Tag: "()(("},
+			expected:    ChildName{Name: "f[]()oo", Tag: "()(("},
 			expectError: false,
 		},
 		{
 			label:       "foo:bar",
-			expected:    Edge{},
+			expected:    ChildName{},
 			expectError: true,
 		},
 		{
 			label:       "[f[]()oo](()((",
-			expected:    Edge{},
+			expected:    ChildName{},
 			expectError: true,
 		},
 	}
@@ -72,10 +72,10 @@ func TestEdgeFromLabel(t *testing.T) {
 		tc := tc // capture range variable
 		t.Run(tc.label, func(t *testing.T) {
 			t.Parallel()
-			edge, err := EdgeFromLabel(tc.label)
+			edge, err := ChildNameFromLabel(tc.label)
 			if tc.expectError {
 				require.Error(t, err)
-				require.Equal(t, Edge{}, edge)
+				require.Equal(t, ChildName{}, edge)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tc.expected, edge)

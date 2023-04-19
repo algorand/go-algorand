@@ -39,11 +39,11 @@ var diffExclusions = map[string]bool{
 // TypeNode wraps reflect.Type and reflect.Kind to make it easier to
 // build a tree of types.
 type TypeNode struct {
-	Depth    int
-	Type     reflect.Type
-	Kind     reflect.Kind
-	Edges    []Edge
-	children *Children
+	Depth      int
+	Type       reflect.Type
+	Kind       reflect.Kind
+	ChildNames []ChildName
+	children   *ChildTypes
 }
 
 // String returns fully qualified information about the TypeNode.
@@ -57,47 +57,47 @@ func MakeType(v interface{}) TypeNode {
 	return TypeNode{Type: t, Kind: t.Kind()}
 }
 
-// Children represent a TypeNode's child Types.
-type Children map[string]TypeNode
+// ChildTypes represent a TypeNode's child Types.
+type ChildTypes map[string]TypeNode
 
-// Edge represents the name a type is referred to together with
+// ChildName represents the name a type is referred to together with
 // the Tag metadata (for the case of a struct field)
-type Edge struct {
+type ChildName struct {
 	Name, Tag string
 }
 
-// String represents the Edge as in an invertible manner.
-func (e *Edge) String() string {
+// String representing the ChildName in an invertible manner.
+func (e *ChildName) String() string {
 	return fmt.Sprintf("[%s](%s)", e.Name, e.Tag)
 }
 
-// EdgeFromLabel de-"serialize" and Edge that has be rendered via Edge.String()
-func EdgeFromLabel(s string) (Edge, error) {
+// ChildNameFromLabel de-"serialize"s a ChildName that has been rendered via ChildName.String()
+func ChildNameFromLabel(s string) (ChildName, error) {
 	re := regexp.MustCompile(`^\[(.*)\]\((.*)\)$`)
 	matches := re.FindStringSubmatch(s)
 	if len(matches) == 3 {
-		return Edge{Name: matches[1], Tag: matches[2]}, nil
+		return ChildName{Name: matches[1], Tag: matches[2]}, nil
 	}
-	return Edge{}, fmt.Errorf("invalid label: %s", s)
+	return ChildName{}, fmt.Errorf("invalid label: %s", s)
 }
 
 // Target represents a Type that is a child of another Type by
-// providing the Edge that "points" to it.
+// providing the ChildName that "points" to it.
 // In the case of a "root" TypeNode, it's up to the caller to provide
-// the Edge.
+// the ChildName.
 type Target struct {
-	Edge
+	ChildName
 	TypeNode TypeNode
 }
 
 // String is a convenience method for printing a Target.
 func (tgt *Target) String() string {
-	return fmt.Sprintf("%s|-->%s", &tgt.Edge, &tgt.TypeNode)
+	return fmt.Sprintf("%s|-->%s", &tgt.ChildName, &tgt.TypeNode)
 }
 
 // SerializationInfo provides the essential data
 // for go to serialize the field or other type.
-func (e *Edge) SerializationInfo() string {
+func (e *ChildName) SerializationInfo() string {
 	// Probably more subtlety is called for.
 	re := regexp.MustCompile(`^codec:"([^,"]+)`)
 
@@ -140,8 +140,8 @@ func (d *Diff) Empty() bool {
 // In the case of structs, the order is the same as the order of the fields in the struct.
 // In the case of maps, the key Target precedes the value Target.
 func (t *TypeNode) Targets() []Target {
-	targets := make([]Target, 0, len(t.Edges))
-	for _, edge := range t.Edges {
+	targets := make([]Target, 0, len(t.ChildNames))
+	for _, edge := range t.ChildNames {
 		targets = append(targets, Target{edge, (*t.children)[edge.String()]})
 	}
 	return targets
@@ -168,13 +168,13 @@ func (t *TypeNode) Build() {
 }
 
 func (t *TypeNode) appendChild(typeName, typeTag string, child TypeNode) {
-	edge := Edge{typeName, typeTag}
-	t.Edges = append(t.Edges, edge)
+	cname := ChildName{typeName, typeTag}
+	t.ChildNames = append(t.ChildNames, cname)
 	if t.children == nil {
-		children := make(Children)
+		children := make(ChildTypes)
 		t.children = &children
 	}
-	(*t.children)[edge.String()] = child
+	(*t.children)[cname.String()] = child
 }
 
 func (t *TypeNode) buildStructChildren() {
@@ -196,7 +196,7 @@ func (t *TypeNode) buildStructChildren() {
 
 			embedded := TypeNode{t.Depth, typeField.Type, reflect.Struct, nil, nil}
 			embedded.Build()
-			for _, edge := range embedded.Edges {
+			for _, edge := range embedded.ChildNames {
 				child := (*embedded.children)[edge.String()]
 				t.appendChild(edge.Name, edge.Tag, child)
 			}
@@ -282,10 +282,10 @@ func targetTreeDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 	xTgts, yTgts := xtype.Targets(), ytype.Targets()
 	xSerials, ySerials := make(map[string]Target), make(map[string]Target)
 	for _, tgt := range xTgts {
-		xSerials[tgt.Edge.SerializationInfo()] = tgt
+		xSerials[tgt.ChildName.SerializationInfo()] = tgt
 	}
 	for _, tgt := range yTgts {
-		ySerials[tgt.Edge.SerializationInfo()] = tgt
+		ySerials[tgt.ChildName.SerializationInfo()] = tgt
 	}
 	xDiff, yDiff := []Target{}, []Target{}
 	for k, v := range xSerials {
@@ -366,8 +366,8 @@ VS
 			for depth, tgts := range d.CommonPath {
 				indent := strings.Repeat(" ", depth)
 				sb.WriteString(fmt.Sprintf("%s_____LEVEL %d_____\n", indent, depth+1))
-				sb.WriteString(fmt.Sprintf("%sX-FIELD: %s\n%s\tX-TYPE: %s\n", indent, &tgts.X.Edge, indent, &tgts.X.TypeNode))
-				sb.WriteString(fmt.Sprintf("%sY-FIELD: %s\n%s\tY-TYPE: %s\n", indent, &tgts.Y.Edge, indent, &tgts.Y.TypeNode))
+				sb.WriteString(fmt.Sprintf("%sX-FIELD: %s\n%s\tX-TYPE: %s\n", indent, &tgts.X.ChildName, indent, &tgts.X.TypeNode))
+				sb.WriteString(fmt.Sprintf("%sY-FIELD: %s\n%s\tY-TYPE: %s\n", indent, &tgts.Y.ChildName, indent, &tgts.Y.TypeNode))
 			}
 			sb.WriteString(`
 X-DIFF
@@ -382,7 +382,7 @@ MISSING FROM:		`)
 				sb.WriteString(fmt.Sprintf(`
 (%d)
 [FIELD](+codec): 	%s
-SOURCE: 		%s`, i+1, &tgt.Edge, &tgt.TypeNode))
+SOURCE: 		%s`, i+1, &tgt.ChildName, &tgt.TypeNode))
 			}
 
 			sb.WriteString(`
@@ -401,7 +401,7 @@ MISSING FROM:		`)
 				sb.WriteString(fmt.Sprintf(`(%d)
 [FIELD](+codec): 	%s
 SOURCE: 		%s
-`, i+1, &tgt.Edge, &tgt.TypeNode))
+`, i+1, &tgt.ChildName, &tgt.TypeNode))
 			}
 		}
 	}
@@ -425,9 +425,9 @@ func (t *TypeNode) Print() {
 			fmt.Printf("%s-------B I N G O: A LEAF---------->%q (%s)\n", tabs, tgt.TypeNode.Type, tgt.TypeNode.Kind)
 			return
 		}
-		fmt.Printf("%s=====EDGE: %s=====>\n", tabs, tgt.Edge)
+		fmt.Printf("%s=====EDGE: %s=====>\n", tabs, tgt.ChildName)
 	}
-	(&Target{Edge{}, *t}).Visit(action)
+	(&Target{ChildName{}, *t}).Visit(action)
 }
 
 // PrintSerializable prints the information that determines go-codec serialization.
@@ -437,7 +437,7 @@ func (tgt Target) PrintSerializable() {
 		ttype := tgt.TypeNode
 		tkind := ttype.Kind
 		depth := ttype.Depth
-		edge := tgt.Edge
+		edge := tgt.ChildName
 		if depth == 0 {
 			fmt.Printf("Serialization info for type %q (%s):\n", ttype.Type, tkind)
 			return
