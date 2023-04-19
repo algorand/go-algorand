@@ -3562,6 +3562,35 @@
           "x-algorand-format": "uint64"
         }
       }
+    },
+    "SimulationLogLimits": {
+      "description": "The set of limits on log opcodes during simulation.",
+      "type": "object",
+      "required": [
+        "max-log-calls",
+        "max-log-size"
+      ],
+      "properties": {
+        "max-log-calls": {
+          "description": "The maximum log calls one can make during simulation",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "max-log-size": {
+          "description": "The maximum byte number to log during simulation",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "SimulationEvalChanges": {
+      "description": "The set of parameters and limits override during simulation.",
+      "type": "object",
+      "properties": {
+        "log-limits": {
+          "$ref": "#/definitions/SimulationLogLimits"
+        }
+      }
     }
   },
   "parameters": {
@@ -4157,14 +4186,7 @@
             "type": "boolean"
           },
           "eval-changes": {
-            "max-log-calls": {
-              "description": "An integer indicating the limit of opcode log usage in simulating a transaction",
-              "type": "integer"
-            },
-            "max-log-size": {
-              "description": "An integer indicating the limit of byte number to log in simulating a transaction",
-              "type": "integer"
-            }
+            "$ref": "#/definitions/SimulationEvalChanges"
           },
           "would-succeed": {
             "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",

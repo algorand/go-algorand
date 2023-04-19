@@ -653,6 +653,21 @@ type SimulateTransactionResult struct {
 	TxnResult PendingTransactionResponse `json:"txn-result"`
 }
 
+// SimulationEvalChanges The set of parameters and limits override during simulation.
+type SimulationEvalChanges struct {
+	// LogLimits The set of limits on log opcodes during simulation.
+	LogLimits *SimulationLogLimits `json:"log-limits,omitempty"`
+}
+
+// SimulationLogLimits The set of limits on log opcodes during simulation.
+type SimulationLogLimits struct {
+	// MaxLogCalls The maximum log calls one can make during simulation
+	MaxLogCalls uint64 `json:"max-log-calls"`
+
+	// MaxLogSize The maximum byte number to log during simulation
+	MaxLogSize uint64 `json:"max-log-size"`
+}
+
 // StateDelta Application state delta.
 type StateDelta = []EvalDeltaKeyValue
 
@@ -1008,7 +1023,8 @@ type PostTransactionsResponse struct {
 
 // SimulateResponse defines model for SimulateResponse.
 type SimulateResponse struct {
-	EvalChanges *map[string]interface{} `json:"eval-changes,omitempty"`
+	// EvalChanges The set of parameters and limits override during simulation.
+	EvalChanges *SimulationEvalChanges `json:"eval-changes,omitempty"`
 
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`

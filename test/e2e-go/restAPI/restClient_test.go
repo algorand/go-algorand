@@ -1764,11 +1764,6 @@ int 1`
 
 	budgetAdded, budgetUsed := uint64(700), uint64(40)
 
-	expectedEvalChanges := v2.PreEncodedSimulateEvalChanges{
-		MaxLogSize:  65536,
-		MaxLogCalls: 65536,
-	}
-
 	expectedLiftLogLimits := true
 
 	expectedResult := v2.PreEncodedSimulateResponse{
@@ -1776,7 +1771,12 @@ int 1`
 		LastRound:     resp.LastRound,
 		WouldSucceed:  true,
 		LiftLogLimits: &expectedLiftLogLimits,
-		EvalChanges:   &expectedEvalChanges,
+		EvalChanges: &v2.PreEncodedSimulateEvalChanges{
+			LogLimits: &v2.PreEncodedSimulateLogLimits{
+				MaxLogSize:  65536,
+				MaxLogCalls: 65536,
+			},
+		},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				Txns: []v2.PreEncodedSimulateTxnResult{

@@ -388,13 +388,19 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 }
 
 func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
-	var evalChanges *PreEncodedSimulateEvalChanges
+	var logLimits *PreEncodedSimulateLogLimits
 	if result.EvalConstants != nil {
 		evalConst := *result.EvalConstants
-		evalChanges = &PreEncodedSimulateEvalChanges{
+
+		logLimits = &PreEncodedSimulateLogLimits{
 			MaxLogCalls: evalConst.MaxLogCalls,
 			MaxLogSize:  evalConst.MaxLogSize,
 		}
+	}
+
+	var evalChanges *PreEncodedSimulateEvalChanges
+	if logLimits != nil {
+		evalChanges = &PreEncodedSimulateEvalChanges{LogLimits: logLimits}
 	}
 
 	encodedSimulationResult := PreEncodedSimulateResponse{

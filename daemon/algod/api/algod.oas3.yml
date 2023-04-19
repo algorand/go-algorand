@@ -759,7 +759,7 @@
             "schema": {
               "properties": {
                 "eval-changes": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SimulationEvalChanges"
                 },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
@@ -1933,6 +1933,35 @@
         },
         "required": [
           "txn-result"
+        ],
+        "type": "object"
+      },
+      "SimulationEvalChanges": {
+        "description": "The set of parameters and limits override during simulation.",
+        "properties": {
+          "log-limits": {
+            "$ref": "#/components/schemas/SimulationLogLimits"
+          }
+        },
+        "type": "object"
+      },
+      "SimulationLogLimits": {
+        "description": "The set of limits on log opcodes during simulation.",
+        "properties": {
+          "max-log-calls": {
+            "description": "The maximum log calls one can make during simulation",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "max-log-size": {
+            "description": "The maximum byte number to log during simulation",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "max-log-calls",
+          "max-log-size"
         ],
         "type": "object"
       },
@@ -5808,7 +5837,7 @@
                 "schema": {
                   "properties": {
                     "eval-changes": {
-                      "type": "object"
+                      "$ref": "#/components/schemas/SimulationEvalChanges"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
@@ -5847,7 +5876,7 @@
                 "schema": {
                   "properties": {
                     "eval-changes": {
-                      "type": "object"
+                      "$ref": "#/components/schemas/SimulationEvalChanges"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",

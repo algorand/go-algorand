@@ -952,6 +952,11 @@ type PreEncodedSimulateResponse struct {
 
 // PreEncodedSimulateEvalChanges mirrors `eval-changes` field in model.SimulateResponse
 type PreEncodedSimulateEvalChanges struct {
+	LogLimits *PreEncodedSimulateLogLimits `codec:"log-limits,omitempty"`
+}
+
+// PreEncodedSimulateLogLimits mirrors `log-limits` field in `eval-changes` field in model.SimulateResponse
+type PreEncodedSimulateLogLimits struct {
 	MaxLogCalls uint64 `codec:"max-log-calls"`
 	MaxLogSize  uint64 `codec:"max-log-size"`
 }

@@ -264,12 +264,12 @@ if [[ $(echo "$RES" | jq '."lift-log-limits"' != $CONST_TRUE ) ]]; then
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"."max-log-size"') != "65536" ]]; then
+if [[ $(echo "$RES" | jq '."eval-changes"."log-limits"."max-log-size"') != "65536" ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log size 65536 %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"."max-log-calls"') != "65536" ]]; then
+if [[ $(echo "$RES" | jq '."eval-changes"."log-limits"."max-log-calls"') != "65536" ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log calls 65536 %Y%m%d_%H%M%S'
     false
 fi
