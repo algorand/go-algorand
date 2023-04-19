@@ -266,11 +266,6 @@ type EvalParams struct {
 	// optional tracer
 	Tracer EvalTracer
 
-	// GranularEval controls whether we should create a child cow for each inner transaction. This
-	// is purely for debugging/tracing purposes, since this should have no effect on the actual
-	// result.
-	GranularEval bool
-
 	// MinAvmVersion is the minimum allowed AVM version of this program.
 	// The program must reject if its version is less than this version. If
 	// MinAvmVersion is nil, we will compute it ourselves
@@ -447,7 +442,6 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
 		Tracer:                  caller.Tracer,
-		GranularEval:            caller.GranularEval,
 		MinAvmVersion:           &minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
