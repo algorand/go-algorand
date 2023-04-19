@@ -240,7 +240,7 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 				errType = 0
 			} else {
 				errType = nextErrType
-				nextErrType = (nextErrType + 1) % (vg.invlideVoteOptions() - 1)
+				nextErrType = (nextErrType + 1) % (vg.invalidVoteOptions() - 1)
 			}
 		}
 		v, err := vg.getTestVote(errType)
@@ -395,8 +395,8 @@ func (vg *testVoteGenerator) getTestVote(errType int) (v *unVoteTest, err error)
 	return v, nil
 }
 
-// invlideVoteOptions returns the number of invalide vote options produced
-func (vg *testVoteGenerator) invlideVoteOptions() int {
+// invalidVoteOptions returns the number of invalide vote options produced
+func (vg *testVoteGenerator) invalidVoteOptions() int {
 	return 9
 }
 
