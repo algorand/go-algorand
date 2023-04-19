@@ -37,7 +37,7 @@ goal-v-sdk-state-delta-xrt:
 
 ### Type Tree Comparison
 
-`func StructDiff(x, y interface{}, exclusions map[string]bool) (Type, Type, *Diff, error)` in `runner/typeAnalyzer.go` implements the following recursive notion of _identical_ types:
+`func StructDiff(x, y interface{}, exclusions map[string]bool) (TypeNode, TypeNode, *Diff, error)` in `runner/typeAnalyzer.go` implements the following recursive notion of _identical_ types:
 
 * if **X** and **Y** are native simple types (`int`, `uint64`, `string`, ...), they are _identical_ IFF they are the same type
 * if both **X** and **Y** are compound types (`struct`, slice, `map`, ...) with each of their child types being _identical_ and with _equivalent serialization metadata_, then they are _identical_
@@ -54,5 +54,5 @@ goal-v-sdk-state-delta-xrt:
 
 There are some cases that break the definition above. For example, `basics.MicroAlgos` is a struct in
 `go-algorand` but is an alias for `uint64` in `go-algorand-sdk`. Our serializers know to produce the same
-output, but this violates the previous notion of _identical_. Such exceptions are handled by providing the string produced by the type's `Type.String()` method
+output, but this violates the previous notion of _identical_. Such exceptions are handled by providing the string produced by the type's `TypeNode.String()` method
 as en element in the set `diffExclusions` of `runner/typeAnalyzer.go`.
