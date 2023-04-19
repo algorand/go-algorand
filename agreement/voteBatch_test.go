@@ -469,7 +469,11 @@ func TestProcessBatchDifferentErrors(t *testing.T) {
 
 	// Create the batch job that the stream will accumulate jobs and create
 	for v := 0; v < vg.invalidVoteOptions()*2; v++ {
-		vt, err := vg.getTestVote(v)
+		vo := v
+		if vo >= vg.invalidVoteOptions() {
+			vo = validVote
+		}
+		vt, err := vg.getTestVote(vo)
 		require.NoError(t, err)
 		voteResults[vt.id] = vt.err
 		req := asyncVerifyVoteRequest{
@@ -482,7 +486,11 @@ func TestProcessBatchDifferentErrors(t *testing.T) {
 		jobs = append(jobs, &req)
 	}
 	for v := 0; v < vg.invalidEqVoteOptions()*2; v++ {
-		vt, err := vg.getTestEqVote(v)
+		vo := v
+		if vo >= vg.invalidEqVoteOptions() {
+			vo = validVote
+		}
+		vt, err := vg.getTestEqVote(vo)
 		require.NoError(t, err)
 		eqVoteResults[vt.id] = vt.err
 		req := asyncVerifyVoteRequest{
