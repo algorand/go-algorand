@@ -19,6 +19,8 @@ package runner
 import (
 	"bytes"
 	"context"
+	// embed conduit template config file
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -35,6 +37,9 @@ import (
 	"github.com/algorand/go-algorand/tools/block-generator/util"
 	"github.com/algorand/go-deadlock"
 )
+
+//go:embed template/conduit.yml.tmpl
+var conduitConfigTmpl string
 
 // Args are all the things needed to run a performance test.
 type Args struct {
@@ -127,13 +132,9 @@ func (r *Args) run() error {
 	}()
 
 	// get conduit config template
-	cwd, err := os.Getwd()
+	t, err := template.New("conduit").Parse(conduitConfigTmpl)
 	if err != nil {
-		return fmt.Errorf("current working directory: %w", err)
-	}
-	t, err := template.ParseFiles(path.Join(cwd, "data/conduit.yml"))
-	if err != nil {
-		return fmt.Errorf("unable to open config template file: %w", err)
+		return fmt.Errorf("unable to parse conduit config template: %w", err)
 	}
 
 	// create config file in the right data directory
@@ -153,15 +154,15 @@ func (r *Args) run() error {
 		return fmt.Errorf("execute template file: %v", err)
 	}
 
-	// Start indexer
-	indexerShutdownFunc, err := startIndexer(dataDir, r.ConduitBinary)
+	// Start conduit
+	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary)
 	if err != nil {
-		return fmt.Errorf("failed to start indexer: %w", err)
+		return fmt.Errorf("failed to start Conduit: %w", err)
 	}
 	defer func() {
-		// Shutdown indexer
-		if err := indexerShutdownFunc(); err != nil {
-			fmt.Printf("Failed to shutdown indexer: %s\n", err)
+		// Shutdown conduit
+		if err := conduitShutdownFunc(); err != nil {
+			fmt.Printf("Failed to shutdown Conduit: %s\n", err)
 		}
 	}()
 
@@ -394,8 +395,8 @@ func startGenerator(configFile string, addr string, blockMiddleware func(http.Ha
 	}, generator
 }
 
-// startIndexer starts the indexer.
-func startIndexer(dataDir string, conduitBinary string) (func() error, error) {
+// startConduit starts the indexer.
+func startConduit(dataDir string, conduitBinary string) (func() error, error) {
 	cmd := exec.Command(
 		conduitBinary,
 		"-d", dataDir,
