@@ -1242,7 +1242,8 @@
           "nonparticipating"
         ],
         "consumes": [
-          "application/x-binary"
+          "application/json",
+          "application/msgpack"
         ],
         "produces": [
           "application/json",
@@ -1255,13 +1256,12 @@
         "operationId": "SimulateTransaction",
         "parameters": [
           {
-            "description": "The byte encoded transaction to simulate",
-            "name": "rawtxn",
+            "description": "The transactions to simulate, along with any other inputs.",
+            "name": "request",
             "in": "body",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "binary"
+              "$ref": "#/definitions/SimulateRequest"
             }
           },
           {
@@ -1273,7 +1273,7 @@
             "$ref": "#/responses/SimulateResponse"
           },
           "400": {
-            "description": "Bad Request - Malformed Algorand transaction",
+            "description": "Bad Request",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -3186,6 +3186,41 @@
         "app-index": {
           "type": "integer",
           "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "SimulateRequest": {
+      "description": "Request type for simulation endpoint.",
+      "type": "object",
+      "required": [
+        "txn-groups"
+      ],
+      "properties": {
+        "txn-groups": {
+          "description": "The transaction groups to simulate.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateRequestTransactionGroup"
+          }
+        }
+      }
+    },
+    "SimulateRequestTransactionGroup": {
+      "description": "A transaction group to simulate.",
+      "type": "object",
+      "required": [
+        "txns"
+      ],
+      "properties": {
+        "txns": {
+          "description": "An atomic transaction group.",
+          "type": "array",
+          "items": {
+            "description": "SignedTxn object. Must be canonically encoded.",
+            "type": "string",
+            "format": "json",
+            "x-algorand-format": "SignedTransaction"
+          }
         }
       }
     },
