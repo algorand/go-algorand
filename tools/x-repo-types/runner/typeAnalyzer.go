@@ -51,6 +51,12 @@ func (t *Type) String() string {
 	return fmt.Sprintf("%s :: %q (%s)", t.Type.PkgPath(), t.Type, t.Kind)
 }
 
+// MakeType uses reflection to build a Type from a concrete value.
+func MakeType(v interface{}) Type {
+	t := reflect.TypeOf(v)
+	return Type{Type: t, Kind: t.Kind()}
+}
+
 // Children represent a Type's child Types.
 type Children map[string]Type
 
@@ -181,6 +187,22 @@ func (t *Type) buildStructChildren() {
 			continue
 		}
 
+		if typeField.Anonymous {
+			// embedded struct case
+			actualKind := typeField.Type.Kind()
+			if actualKind != reflect.Struct {
+				panic(fmt.Sprintf("expected [%s] but got unexpected embedded type: %s", reflect.Struct, typeField.Type))
+			}
+
+			embeddedType := Type{t.Depth, typeField.Type, reflect.Struct, nil, nil}
+			embeddedType.Build()
+			for _, edge := range embeddedType.Edges {
+				child := (*embeddedType.children)[edge.String()]
+				t.appendChild(edge.Name, edge.Tag, child)
+			}
+			continue
+		}
+
 		typeTag := string(typeField.Tag)
 		child := Type{t.Depth + 1, typeField.Type, typeField.Type.Kind(), nil, nil}
 		child.Build()
@@ -226,9 +248,20 @@ func (tgt *Target) Visit(actions ...func(Target)) {
 	}
 }
 
-// SerializationDiff recursively computes a diff between two Target's x and y considering only data
+// StructDiff compares two structs by building their type tree and then
+// calling targetTreeDiff on the trees.
+func StructDiff(x, y interface{}, exclusions map[string]bool) (Type, Type, *Diff, error) {
+	xRoot, yRoot := MakeType(x), MakeType(y)
+	xRoot.Build()
+	yRoot.Build()
+
+	diff, err := targetTreeDiff(Target{Type: xRoot}, Target{Type: yRoot}, exclusions)
+	return xRoot, yRoot, diff, err
+}
+
+// targetTreeDiff recursively computes a diff between two Target's x and y considering only data
 // that impacts serialization, but ignoring any assumption on key ordering.
-func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
+func targetTreeDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 	xtype, ytype := x.Type, y.Type
 	if xtype.Depth != ytype.Depth {
 		return nil, fmt.Errorf("cannot compare types at different depth")
@@ -279,7 +312,7 @@ func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 			continue
 		}
 		yChild := ySerials[k]
-		diff, err := SerializationDiff(xChild, yChild, exclusions)
+		diff, err := targetTreeDiff(xChild, yChild, exclusions)
 
 		if err != nil {
 			return nil, err
@@ -299,77 +332,85 @@ func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 
 // --------------- DIFF REPORT ----------------- //
 
-// Report prints out a human readable listing of the differences.
-func Report(x, y Target, d *Diff) {
-	xType := x.Type
-	yType := y.Type
-	fmt.Printf(`
+// Report returns a human-readable listing of the differences as a string.
+func Report(x, y Type, d *Diff) string {
+	var sb strings.Builder
 
+	sb.WriteString(`
 ========================================================
 			REPORT
 comparing
-	<<<<<%s>>>>>
+	<<<<<`)
+	sb.WriteString(x.String())
+	sb.WriteString(`>>>>>
 VS
-	<<<<<%s>>>>>
-========================================================
-`, &xType, &yType)
+	<<<<<`)
+	sb.WriteString(y.String())
+	sb.WriteString(`>>>>>
+========================================================`)
+
 	if d == nil {
-		fmt.Println("No differences found.")
+		sb.WriteString("\nNo differences found.")
 	} else {
 		if len(d.Xdiff) == 0 && len(d.Ydiff) == 0 {
 			if len(d.CommonPath) != 0 {
 				panic("A common paths was found with no diffs. This should NEVER happen.")
 			}
-			fmt.Println("No differences found.")
+			sb.WriteString("\nNo differences found.")
 		} else {
-			fmt.Print(`
+			sb.WriteString(`
 --------------------------------------------------------
 		DIFFERENCES FOUND (partial)
---------------------------------------------------------
-`)
-			fmt.Printf("Common path of length %d:\n", len(d.CommonPath))
+--------------------------------------------------------`)
+			sb.WriteString(fmt.Sprintf("\nCommon path of length %d:\n", len(d.CommonPath)))
 			for depth, tgts := range d.CommonPath {
 				indent := strings.Repeat(" ", depth)
-				fmt.Printf("%s_____LEVEL %d_____\n", indent, depth+1)
-				fmt.Printf("%sX-FIELD: %s\n%s\tX-TYPE: %s\n", indent, &tgts.X.Edge, indent, &tgts.X.Type)
-				fmt.Printf("%sY-FIELD: %s\n%s\tY-TYPE: %s\n", indent, &tgts.Y.Edge, indent, &tgts.Y.Type)
+				sb.WriteString(fmt.Sprintf("%s_____LEVEL %d_____\n", indent, depth+1))
+				sb.WriteString(fmt.Sprintf("%sX-FIELD: %s\n%s\tX-TYPE: %s\n", indent, &tgts.X.Edge, indent, &tgts.X.Type))
+				sb.WriteString(fmt.Sprintf("%sY-FIELD: %s\n%s\tY-TYPE: %s\n", indent, &tgts.Y.Edge, indent, &tgts.Y.Type))
 			}
-			fmt.Printf(`
+			sb.WriteString(`
 X-DIFF
 ------
-EXISTS IN:	 	%q
-MISSING FROM:		%q
-%d TYPES TOTAL:
-`, &xType, &yType, len(d.Xdiff))
+EXISTS IN:	 	`)
+			sb.WriteString(fmt.Sprintf("%q", &x))
+			sb.WriteString(`
+MISSING FROM:		`)
+			sb.WriteString(fmt.Sprintf("%q", &y))
+			sb.WriteString(fmt.Sprintf("\n%d TYPES TOTAL:\n", len(d.Xdiff)))
 			for i, tgt := range d.Xdiff {
-				fmt.Printf(`
+				sb.WriteString(fmt.Sprintf(`
 (%d)
 [FIELD](+codec): 	%s
-SOURCE: 		%s`, i+1, &tgt.Edge, &tgt.Type)
+SOURCE: 		%s`, i+1, &tgt.Edge, &tgt.Type))
 			}
 
-			fmt.Printf(`
+			sb.WriteString(`
 
 
 
 Y-DIFF
 ------
-EXISTS IN:	 	%q
-MISSING FROM:		%q
-%d TYPES TOTAL:
-`, &yType, &xType, len(d.Ydiff))
+EXISTS IN:	 	`)
+			sb.WriteString(fmt.Sprintf("%q", &y))
+			sb.WriteString(`
+MISSING FROM:		`)
+			sb.WriteString(fmt.Sprintf("%q", &x))
+			sb.WriteString(fmt.Sprintf("\n%d TYPES TOTAL:\n", len(d.Ydiff)))
 			for i, tgt := range d.Ydiff {
-				fmt.Printf(`(%d)
+				sb.WriteString(fmt.Sprintf(`(%d)
 [FIELD](+codec): 	%s
 SOURCE: 		%s
-`, i+1, &tgt.Edge, &tgt.Type)
+`, i+1, &tgt.Edge, &tgt.Type))
 			}
 		}
 	}
-	fmt.Println(`
+	sb.WriteString(`
 ========================================================
 ===============        REPORT END        ===============
 ========================================================`)
+
+	return sb.String()
 }
 
 // ------- STATISTICS AND DEBUGGING ------------- //

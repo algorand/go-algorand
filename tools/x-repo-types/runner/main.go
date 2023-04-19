@@ -14,31 +14,33 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-/* THIS FILE ONLY EXISTS FOR DEBUGGING AND TO MAKE THE BUILD HAPPY */
+/*
+						WARNING
+   THIS FILE ONLY EXISTS FOR DEBUGGING AND TO MAKE THE BUILD HAPPY
+			!!!!! IT OVERWRITTEN BY AT RUNTIME !!!!!
+*/
 
 package main
 
 import (
 	"fmt"
 	"os"
-	"reflect"
 
 	ypkg "github.com/algorand/go-algorand/data/bookkeeping"
 	xpkg "github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 func main() {
-	x := reflect.TypeOf(xpkg.StateDelta{})
-	y := reflect.TypeOf(ypkg.Genesis{})
+	xRoot := MakeType(xpkg.StateDelta{})
+	yRoot := MakeType(ypkg.Genesis{})
 
 	// ---- BUILD ---- //
+	x, y := xRoot.Type, yRoot.Type
 
-	xRoot := Type{Type: x, Kind: x.Kind()}
 	fmt.Printf("Build the Type Tree for %s\n\n", &xRoot)
 	xRoot.Build()
 	xTgt := Target{Edge{Name: fmt.Sprintf("%q", x)}, xRoot}
 
-	yRoot := Type{Type: y, Kind: y.Kind()}
 	fmt.Printf("Build the Type Tree for %s\n\n", &yRoot)
 	yRoot.Build()
 	yTgt := Target{Edge{Name: fmt.Sprintf("%q", y)}, yRoot}
@@ -51,7 +53,7 @@ func main() {
 		xTgt.PrintSerializable()
 
 		yRoot.Print()
-		fmt.Printf("\n\nSerialization Tree of %q\n\n", x)
+		fmt.Printf("\n\nSerialization Tree of %q\n\n", y)
 		yTgt.PrintSerializable()
 	*/
 
@@ -63,12 +65,12 @@ func main() {
 	// ---- DIFF ---- //
 
 	fmt.Printf("\n\nCompare the Type Trees %q v %q\n", x, y)
-	diff, err := SerializationDiff(xTgt, yTgt, diffExclusions)
+	xType, yType, diff, err := StructDiff(xpkg.StateDelta{}, ypkg.Genesis{}, diffExclusions)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
 	}
-	Report(xTgt, yTgt, diff)
+	fmt.Println(Report(xType, yType, diff))
 
 	if !diff.Empty() {
 		// signal the this "test" has failed

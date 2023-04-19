@@ -37,15 +37,17 @@ goal-v-sdk-state-delta-xrt:
 
 ### Type Tree Comparison
 
-`func SerializationDiff(x, y Target, exclusions map[string]bool) (*Diff, error)` in `runner/typeAnalyzer.go` implements the following recursive notion of _identical_ types:
+`func StructDiff(x, y interface{}, exclusions map[string]bool) (Type, Type, *Diff, error)` in `runner/typeAnalyzer.go` implements the following recursive notion of _identical_ types:
 
-* if **X** and **Y** are native types (`int`, `uint64`, `string`, ...), they are _identical_ IFF they are the same type
+* if **X** and **Y** are native simple types (`int`, `uint64`, `string`, ...), they are _identical_ IFF they are the same type
 * if both **X** and **Y** are compound types (`struct`, slice, `map`, ...) with each of their child types being _identical_ and with _equivalent serialization metadata_, then they are _identical_
   * _equivalent serialization metadata_ definition:
     * for non-structs: there is no metadata so the metadata are _trivially_ identical
     * for structs:
       * the keys will encode to the same name
       * omission of values based on zeroness, etc. will happen in the same way for both structs
+      * embedded structs will be flattened
+
 * ELSE: they are **not** _identical_
 
 ### Exceptional cases
