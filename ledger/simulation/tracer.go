@@ -44,7 +44,7 @@ func (tracer *cursorEvalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) 
 	tracer.previousInnerTxns = append(tracer.previousInnerTxns, 0)
 }
 
-func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error) {
+func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.previousInnerTxns = tracer.previousInnerTxns[:len(tracer.previousInnerTxns)-1]
 }
 
@@ -157,10 +157,10 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 	applyDataOfCurrentTxn.EvalDelta = evalDelta
 }
 
-func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error) {
+func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
 	tracer.saveApplyData(ad)
-	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, deltas, evalError)
+	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, evalError)
 }
 
 func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDToSave basics.AppIndex) {
