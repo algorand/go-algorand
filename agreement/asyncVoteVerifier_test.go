@@ -234,13 +234,13 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 
 	nextErrType := 0
 	for c := 0; c < count; c++ {
-		errType := 99
+		errType := validVote
 		if rand.Float32() < errProb {
 			if onlyBadSigs {
 				errType = 0
 			} else {
 				errType = nextErrType
-				nextErrType = (nextErrType + 1) % (vg.voteOptions() - 1)
+				nextErrType = (nextErrType + 1) % (vg.invlideVoteOptions() - 1)
 			}
 		}
 		v, err := vg.getTestVote(errType)
@@ -254,13 +254,13 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 	nextErrType = 0
 	vg.counter = 0
 	for c := 0; c < eqCount; c++ {
-		errType := 99
+		errType := validVote
 		if rand.Float32() < errProb {
 			if onlyBadSigs {
 				errType = 0
 			} else {
 				errType = nextErrType
-				nextErrType = (nextErrType + 1) % (vg.voteEqOptions() - 1)
+				nextErrType = (nextErrType + 1) % (vg.invalidEqVoteOptions() - 1)
 			}
 		}
 		v, err := vg.getTestEqVote(errType)
@@ -303,7 +303,10 @@ func makeTestVoteGenerator() testVoteGenerator {
 	return tg
 }
 
-const notSelected = 8
+const (
+	notSelected = 8
+	validVote   = 10
+)
 
 func (vg *testVoteGenerator) getTestVote(errType int) (v *unVoteTest, err error) {
 	addrSelected := false
@@ -383,13 +386,17 @@ func (vg *testVoteGenerator) getTestVote(errType int) (v *unVoteTest, err error)
 	case notSelected:
 		v = &unVoteTest{uv: &uv, err: fmt.Errorf("address not selected"), id: c}
 
-	default:
+	case validVote:
 		v = &unVoteTest{uv: &uv, err: nil, id: c}
+
+	default:
+		return v, fmt.Errorf("unrecognized option")
 	}
 	return v, nil
 }
 
-func (vg *testVoteGenerator) voteOptions() int {
+// invlideVoteOptions returns the number of invalide vote options produced
+func (vg *testVoteGenerator) invlideVoteOptions() int {
 	return 9
 }
 
@@ -512,13 +519,16 @@ func (vg *testVoteGenerator) getTestEqVote(errType int) (v *unEqVoteTest, err er
 		badSender.Sender = basics.Address{}
 		v = &unEqVoteTest{uev: &badSender, err: fmt.Errorf("error bad sender"), id: c}
 
-	default:
+	case validVote:
 		v = &unEqVoteTest{uev: &ev, err: nil, id: c}
 
+	default:
+		return v, fmt.Errorf("unrecognized option")
 	}
 	return v, nil
 }
 
-func (vg *testVoteGenerator) voteEqOptions() int {
+// invalidEqVoteOptions returns the number of invalide vote options produced
+func (vg *testVoteGenerator) invalidEqVoteOptions() int {
 	return 10
 }
