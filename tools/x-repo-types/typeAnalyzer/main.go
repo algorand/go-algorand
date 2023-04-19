@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"os"
 
-	xpkg "github.com/algorand/go-algorand/crypto/stateproof"
-	ypkg "github.com/algorand/go-stateproof-verification/stateproof"
+	xpkg "github.com/algorand/go-algorand/ledger/ledgercore"
+	ypkg "github.com/algorand/go-algorand/data/bookkeeping"
 )
 
-func main() {
-	xRoot := MakeType(xpkg.StateProof{})
-	yRoot := MakeType(ypkg.StateProof{})
+func main() { 
+	xRoot := MakeType(xpkg.StateDelta{})
+	yRoot := MakeType(ypkg.Genesis{})
 
 	// ---- BUILD ---- //
 	x, y := xRoot.Type, yRoot.Type
@@ -59,7 +59,7 @@ func main() {
 	// ---- DIFF ---- //
 
 	fmt.Printf("\n\nCompare the Type Trees %q v %q\n", x, y)
-	xType, yType, diff, err := StructDiff(xpkg.StateProof{}, ypkg.StateProof{}, diffExclusions)
+	xType, yType, diff, err := StructDiff(xpkg.StateDelta{}, ypkg.Genesis{}, diffExclusions)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
