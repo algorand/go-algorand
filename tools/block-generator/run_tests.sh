@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CONNECTION_STRING=""
-INDEXER_BINARY=""
+CONDUIT_BINARY=""
 REPORT_DIR=""
 DURATION="1h"
 LOG_LEVEL="error"
@@ -17,7 +17,7 @@ help() {
   echo " -r|--report-dir directory where the report should be written."
   echo " -d|--duration   test duration."
   echo " -l|--level      log level to pass to Indexer."
-  echo " -g|--generator  use a different block-generator binary to run the generator."
+  echo " -g|--generator  block-generator binary to run the generator."
   exit
 }
 
@@ -34,7 +34,7 @@ while :; do
     shift
     ;;
   -i | --indexer)
-    INDEXER_BINARY="${2-}"
+    CONDUIT_BINARY="${2-}"
     shift
     ;;
   -r | --report-dir)
@@ -66,7 +66,7 @@ if [ -z "$CONNECTION_STRING" ]; then
   exit 1
 fi
 
-if [ -z "$INDEXER_BINARY" ]; then
+if [ -z "$CONDUIT_BINARY" ]; then
   echo "Missing required indexer binary parameter (-i / --indexer)."
   exit 1
 fi
@@ -77,18 +77,17 @@ if [ -z "$SCENARIOS" ]; then
 fi
 
 if [ -z "$GENERATOR_BINARY" ]; then
-  echo "Using indexer binary for generator, override with (-g / --generator)."
-  GENERATOR_BINARY="$INDEXER_BINARY"
+  echo "path to block-generator binary is required"
+  exit 1
 fi
 
-echo "Running with binary: $INDEXER_BINARY"
+echo "Running with binary: $CONDUIT_BINARY"
 echo "Report directory: $REPORT_DIR"
 echo "Duration: $DURATION"
 echo "Log Level: $LOG_LEVEL"
 
-"$GENERATOR_BINARY" \
-         util block-generator runner \
-  -i "$INDEXER_BINARY" \
+"$GENERATOR_BINARY" runner \
+  -i "$CONDUIT_BINARY" \
   -s "$SCENARIOS" \
   -d "$DURATION" \
   -c "$CONNECTION_STRING" \
