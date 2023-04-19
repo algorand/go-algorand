@@ -29,8 +29,8 @@ import (
 // the `Type.String()` method, and these values are ignored when building up the diff.
 // These exclusions represent types that are known to serialize in the same way, but are
 // would not do so without special treatment.
-// For example, `MicroAlgos` are a struct in go-algorand but a uint64 in go-algorand-sdk.
 var diffExclusions = map[string]bool{
+	// MicroAlgos is a struct with custom marshal override in go-algorand. In other repos it is a uint64.
 	`github.com/algorand/go-algorand/data/basics :: "basics.MicroAlgos" (struct)`: true,
 }
 
