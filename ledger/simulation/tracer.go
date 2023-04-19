@@ -146,9 +146,8 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 
 	// Override runtime related constraints against ep, before entering txn group
 	if tracer.config.LiftLogLimits {
-		localDefaults := localConfig.GetDefaultLocal()
-		ep.MaxLogSize = localDefaults.SimulateLogBytesLimit
-		ep.MaxLogCalls = ep.MaxLogSize
+		ep.MaxLogCalls = uint64(localConfig.MaxLogCalls)
+		ep.MaxLogSize = ep.MaxLogCalls
 	}
 }
 

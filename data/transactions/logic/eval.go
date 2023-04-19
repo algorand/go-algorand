@@ -267,10 +267,9 @@ func NewRuntimeEvalConstants() EvalConstants {
 
 // NewSimulateEvalConstants gives a set of const params used in simulation of opcodes
 func NewSimulateEvalConstants() EvalConstants {
-	localConfig := config.GetDefaultLocal()
 	return EvalConstants{
-		MaxLogSize:  localConfig.SimulateLogBytesLimit,
-		MaxLogCalls: localConfig.SimulateLogBytesLimit,
+		MaxLogSize:  uint64(config.MaxLogCalls),
+		MaxLogCalls: uint64(config.MaxLogCalls),
 	}
 }
 
