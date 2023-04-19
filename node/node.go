@@ -482,7 +482,7 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 
 	// Set block timestamp based on offset, if set.
 	// Make sure block timestamp is not greater than MaxInt64.
-	if node.timestampOffset != nil && prev.TimeStamp+*node.timestampOffset < math.MaxInt64 {
+	if node.timestampOffset != nil && *node.timestampOffset < math.MaxInt64-prev.TimeStamp {
 		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
 	}
 	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
