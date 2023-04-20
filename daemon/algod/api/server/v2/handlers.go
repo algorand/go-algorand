@@ -115,6 +115,8 @@ type NodeInterface interface {
 	SetSyncRound(rnd uint64) error
 	GetSyncRound() uint64
 	UnsetSyncRound()
+	GetBlockTimeStampOffset() (*int64, error)
+	SetBlockTimeStampOffset(int64) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -1728,4 +1730,34 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 // ExperimentalCheck is only available when EnabledExperimentalAPI is true
 func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, true)
+}
+
+// GetBlockTimeStampOffset gets the timestamp offset.
+// This is only available in dev mode.
+// (GET /v2/devmode/blocks/offset)
+func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
+	offset, err := v2.Node.GetBlockTimeStampOffset()
+	if err != nil {
+		err = fmt.Errorf("cannot get block timestamp offset because we are not in dev mode")
+		return badRequest(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
+	} else if offset == nil {
+		err = fmt.Errorf("block timestamp offset was never set, using real clock for timestamps")
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
+	}
+	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(*offset)})
+}
+
+// SetBlockTimeStampOffset sets the timestamp offset.
+// This is only available in dev mode.
+// (POST /v2/devmode/blocks/offset/{offset})
+func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error {
+	if offset > math.MaxInt64 {
+		err := fmt.Errorf("block timestamp offset cannot be larger than max int64 value")
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
+	}
+	err := v2.Node.SetBlockTimeStampOffset(int64(offset))
+	if err != nil {
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
+	}
+	return ctx.NoContent(http.StatusOK)
 }

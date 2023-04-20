@@ -152,6 +152,7 @@ int 1`,
 		mocktracer.AfterOpcode(false),
 		mocktracer.AfterProgram(logic.ModeSig, false),
 		// Txn evaluation
+		mocktracer.BeforeBlock(block.Block().Round()),
 		mocktracer.BeforeTxnGroup(2),
 		mocktracer.BeforeTxn(protocol.PaymentTx),
 		mocktracer.AfterTxn(protocol.PaymentTx, payset[0].ApplyData, false),
@@ -162,6 +163,8 @@ int 1`,
 		mocktracer.AfterProgram(logic.ModeApp, false),
 		mocktracer.AfterTxn(protocol.ApplicationCallTx, payset[1].ApplyData, false),
 		mocktracer.AfterTxnGroup(2, false),
+		//Block evaluation
+		mocktracer.AfterBlock(block.Block().Round()),
 	}
 	require.Equal(t, expectedEvents, mockTracer.Events)
 }

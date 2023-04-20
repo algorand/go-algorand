@@ -2429,6 +2429,89 @@
           }
         }
       }
+    },
+    "/v2/devmode/blocks/offset": {
+      "get": {
+        "description": "Gets the current timestamp offset.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns the timestamp offset. Timestamp offsets can only be set in dev mode.",
+        "operationId": "GetBlockTimeStampOffset",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/GetBlockTimeStampOffsetResponse"
+          },
+          "400": {
+            "description": "TimeStamp offset not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/devmode/blocks/offset/{offset}": {
+      "post": {
+        "description": "Sets the timestamp offset (seconds) for blocks in dev mode. Providing an offset of 0 will unset this value and try to use the real clock for the timestamp.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.",
+        "operationId": "SetBlockTimeStampOffset",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The timestamp offset for blocks in dev mode.",
+            "name": "offset",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "type": "object"
+          },
+          "400": {
+            "description": "Cannot set timestamp offset to a negative integer.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -3763,6 +3846,21 @@
     }
   },
   "responses": {
+    "GetBlockTimeStampOffsetResponse": {
+      "description": "Response containing the timestamp offset in seconds",
+      "schema": {
+        "type": "object",
+        "required": [
+          "offset"
+        ],
+        "properties": {
+          "offset": {
+            "description": "Timestamp offset in seconds.",
+            "type": "integer"
+          }
+        }
+      }
+    },
     "GetSyncRoundResponse": {
       "description": "Response containing the ledger's minimum sync round",
       "schema": {
