@@ -168,8 +168,8 @@ func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) erro
 }
 
 func (m *mockNode) Simulate(txgroup []transactions.SignedTxn, config simulation.SimulatorConfig) (simulation.Result, error) {
-	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger), config)
-	return simulator.Simulate(txgroup)
+	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger))
+	return simulator.Simulate(txgroup, config)
 }
 
 func (m *mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {

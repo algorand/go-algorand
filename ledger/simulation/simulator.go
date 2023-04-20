@@ -82,14 +82,12 @@ type EvalFailureError struct {
 // Simulator is a transaction group simulator for the block evaluator.
 type Simulator struct {
 	ledger simulatorLedger
-	config SimulatorConfig
 }
 
 // MakeSimulator creates a new simulator from a ledger.
-func MakeSimulator(ledger *data.Ledger, simConfig SimulatorConfig) *Simulator {
+func MakeSimulator(ledger *data.Ledger) *Simulator {
 	return &Simulator{
 		ledger: simulatorLedger{ledger, ledger.Latest()},
-		config: simConfig,
 	}
 }
 
@@ -196,8 +194,8 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 }
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
-func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
-	simulatorTracer := makeEvalTracer(s.ledger.start, txgroup, s.config)
+func (s Simulator) Simulate(txgroup []transactions.SignedTxn, config SimulatorConfig) (Result, error) {
+	simulatorTracer := makeEvalTracer(s.ledger.start, txgroup, config)
 	block, missingSigIndexes, err := s.simulateWithTracer(txgroup, simulatorTracer)
 	if err != nil {
 		simulatorTracer.result.WouldSucceed = false

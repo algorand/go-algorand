@@ -106,7 +106,7 @@ func TestSimulateWithTrace(t *testing.T) {
 
 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
 	defer l.Close()
-	s := MakeSimulator(l, SimulatorConfig{})
+	s := MakeSimulator(l)
 	sender := accounts[0]
 
 	op, err := logic.AssembleString(`#pragma version 8
