@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/config"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -90,6 +91,15 @@ type Result struct {
 	Block         *ledgercore.ValidatedBlock
 }
 
+// NewSimulateEvalConstants gives a set of const params used in simulation of opcodes
+func NewSimulateEvalConstants() logic.EvalConstants {
+	localConfig := config.GetDefaultLocal()
+	return logic.EvalConstants{
+		MaxLogSize:  localConfig.SimulateLogBytesLimit,
+		MaxLogCalls: uint64(config.MaxLogCalls),
+	}
+}
+
 func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64, liftLogLimits bool) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
@@ -103,7 +113,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 
 	var evalConstants EvalConstants
 	if liftLogLimits {
-		opCodeParam := logic.NewSimulateEvalConstants()
+		opCodeParam := NewSimulateEvalConstants()
 		evalConstants = EvalConstants{
 			LogLimits: &LogLimits{
 				MaxLogCalls: opCodeParam.MaxLogCalls,

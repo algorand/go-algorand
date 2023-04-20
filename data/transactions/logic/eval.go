@@ -265,14 +265,6 @@ func NewRuntimeEvalConstants() EvalConstants {
 	}
 }
 
-// NewSimulateEvalConstants gives a set of const params used in simulation of opcodes
-func NewSimulateEvalConstants() EvalConstants {
-	return EvalConstants{
-		MaxLogSize:  uint64(config.MaxLogCalls),
-		MaxLogCalls: uint64(config.MaxLogCalls),
-	}
-}
-
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	Proto *config.ConsensusParams

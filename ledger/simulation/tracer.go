@@ -19,7 +19,6 @@ package simulation
 import (
 	"fmt"
 
-	localConfig "github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -146,8 +145,9 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 
 	// Override runtime related constraints against ep, before entering txn group
 	if tracer.config.LiftLogLimits {
-		ep.MaxLogCalls = uint64(localConfig.MaxLogCalls)
-		ep.MaxLogSize = ep.MaxLogCalls
+		simulatorEvalConst := NewSimulateEvalConstants()
+		ep.MaxLogCalls = simulatorEvalConst.MaxLogCalls
+		ep.MaxLogSize = simulatorEvalConst.MaxLogSize
 	}
 }
 
