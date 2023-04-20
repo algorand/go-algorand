@@ -208,12 +208,12 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
     false
 fi
 
-if [[ $(echo "$RES" | jq '."lift-log-limits"' != null ) ]]; then
+if [[ $(echo "$RES" | jq '."lift-log-limits"') != null ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with lift-log-limits field %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"' != null) ]]; then
+if [[ $(echo "$RES" | jq '."eval-changes"') != null ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-changes field %Y%m%d_%H%M%S'
     false
 fi
@@ -229,17 +229,17 @@ fi
 
 EXPECTED_FAILURE='logic eval error: program logs too large.'
 
-if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"' != *"${EXPECTED_FAILURE}"*) ]]; then
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_FAILURE}"* ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should fail without unlmited log option %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."lift-log-limits"' != null ) ]]; then
+if [[ $(echo "$RES" | jq '."lift-log-limits"' ) != null ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with lift-log-limits field %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"' != null) ]]; then
+if [[ $(echo "$RES" | jq '."eval-changes"') != null ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-changes field %Y%m%d_%H%M%S'
     false
 fi
@@ -254,22 +254,22 @@ if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_TRUE ]]; then
     false
 fi
 
-if [[ $(echo "$RES" | jq '."txn-groups"[0]."failed-at"' != null) ]]; then
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."failed-at"') != null ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed with unlmited log option %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."lift-log-limits"' != $CONST_TRUE ) ]]; then
+if [[ $(echo "$RES" | jq '."lift-log-limits"') != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should contain lift-log-limits field %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"."log-limits"."max-log-size"') != "2048" ]]; then
+if [[ $(echo "$RES" | jq '."eval-changes"."log-limits"."max-log-size"') -ne 2048 ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log size 65536 %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"."log-limits"."max-log-calls"') != "2048" ]]; then
+if [[ $(echo "$RES" | jq '."eval-changes"."log-limits"."max-log-calls"') -ne 2048 ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log calls 65536 %Y%m%d_%H%M%S'
     false
 fi
