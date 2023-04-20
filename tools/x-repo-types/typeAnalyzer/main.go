@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"os"
 
-	xpkg "github.com/algorand/go-algorand/ledger/ledgercore"
 	ypkg "github.com/algorand/go-algorand/data/bookkeeping"
+	xpkg "github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-func main() { 
+func main() {
 	xRoot := MakeType(xpkg.StateDelta{})
 	yRoot := MakeType(ypkg.Genesis{})
 
