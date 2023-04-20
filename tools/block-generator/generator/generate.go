@@ -72,7 +72,7 @@ type GenerationConfig struct {
 	GenesisAccountInitialBalance uint64 `yaml:"genesis_account_balance"`
 
 	// Block generation
-	TxnPerBlock uint64 `mapstructure:"tx_per_block"`
+	TxnPerBlock uint64 `yaml:"tx_per_block"`
 
 	// TX Distribution
 	PaymentTransactionFraction float32 `yaml:"tx_pay_fraction"`
@@ -120,7 +120,7 @@ func MakeGenerator(config GenerationConfig) (Generator, error) {
 		genesisHash:               [32]byte{},
 		genesisID:                 "blockgen-test",
 		prevBlockHash:             "",
-		round:                     1,
+		round:                     0,
 		txnCounter:                0,
 		timestamp:                 0,
 		rewardsLevel:              0,
@@ -312,7 +312,9 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 		FeeSink:     g.feeSink.String(),
 		Timestamp:   g.timestamp,
 	}
-	return json.NewEncoder(output).Encode(gen)
+
+	_, err := output.Write(protocol.EncodeJSON(gen))
+	return err
 }
 
 func getTransactionOptions() []interface{} {
@@ -357,11 +359,27 @@ func (g *generator) finishRound(txnCount uint64) {
 
 // WriteBlock generates a block full of new transactions and writes it to the writer.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
+
 	if round != g.round {
 		fmt.Printf("Generator only supports sequential block access. Expected %d but received request for %d.\n", g.round, round)
 	}
 
 	numTxnForBlock := g.txnForRound(round)
+
+	// return genesis block
+	if round == 0 {
+		// write the msgpack bytes for a block
+		block, err := rpcs.RawBlockBytes(g.ledger, basics.Round(round))
+		if err != nil {
+			return err
+		}
+		_, err = output.Write(block)
+		if err != nil {
+			return err
+		}
+		g.finishRound(numTxnForBlock)
+		return nil
+	}
 
 	header := bookkeeping.BlockHeader{
 		Round:          basics.Round(g.round),
@@ -414,15 +432,19 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		Certificate: agreement.Certificate{},
 	}
 
-	err := json.NewEncoder(output).Encode(cert)
+	err := g.ledger.AddBlock(cert.Block, cert.Certificate)
 	if err != nil {
 		return err
 	}
-	err = g.ledger.AddBlock(cert.Block, agreement.Certificate{})
+	// write the msgpack bytes for a block
+	block, err := rpcs.RawBlockBytes(g.ledger, basics.Round(round))
 	if err != nil {
 		return err
 	}
-	g.ledger.WaitForCommit(basics.Round(g.round))
+	_, err = output.Write(block)
+	if err != nil {
+		return err
+	}
 	g.finishRound(numTxnForBlock)
 	return nil
 }
