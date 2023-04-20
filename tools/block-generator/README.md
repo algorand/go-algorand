@@ -66,28 +66,32 @@ The results of the testing are written to the directory specified by the **--rep
 
 Here is an example report from running with a test duration of "1h":
 ```
-test_duration_seconds:30
-test_duration_actual_seconds:30.018076
-transaction_asset_close_total:472
-transaction_asset_create_total:711
-transaction_asset_optin_total:1230
-transaction_asset_xfer_total:468
-transaction_pay_total:1457
-transaction_pay_create_total:1472
-early_average_import_time_sec:0.05
-early_cumulative_import_time_sec:11.05
-early_average_imported_tx_per_block:10.00
-early_cumulative_imported_tx_per_block:2390
-early_imported_round:239
-early_overall_transactions_per_second:216.26
-early_uptime_seconds:30.02
-final_average_import_time_sec:0.05
-final_cumulative_import_time_sec:31.36
-final_average_imported_tx_per_block:10.00
-final_cumulative_imported_tx_per_block:5800
-final_imported_round:580
-final_overall_transactions_per_second:184.93
-final_uptime_seconds:30.02
+test_duration_seconds:3600
+test_duration_actual_seconds:3600.056457
+transaction_pay_total:30024226
+transaction_pay_create_total:614242
+early_average_import_time_sec:2.13
+early_cumulative_import_time_sec:1083.26
+early_average_imported_tx_per_block:19999.00
+early_cumulative_imported_tx_per_block:10179491
+early_average_block_upload_time_sec:NaN
+early_cumulative_block_upload_time_sec:0.00
+early_average_postgres_eval_time_sec:0.33
+early_cumulative_postgres_eval_time_sec:167.41
+early_imported_round:509
+early_overall_transactions_per_second:9397.09
+early_uptime_seconds:3600.06
+final_average_import_time_sec:2.35
+final_cumulative_import_time_sec:3602.62
+final_average_imported_tx_per_block:19999.00
+final_cumulative_imported_tx_per_block:30598470
+final_average_block_upload_time_sec:NaN
+final_cumulative_block_upload_time_sec:0.00
+final_average_postgres_eval_time_sec:0.33
+final_cumulative_postgres_eval_time_sec:507.38
+final_imported_round:1530
+final_overall_transactions_per_second:8493.40
+final_uptime_seconds:3600.06
 ```
 
 Here is the help output for **runner**:
