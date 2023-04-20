@@ -100,7 +100,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	Simulate(txgroup []transactions.SignedTxn, config simulation.SimulatorConfig) (result simulation.Result, err error)
+	Simulate(inputs simulation.Request) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -944,23 +944,11 @@ type PreEncodedSimulateTxnGroupResult struct {
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
 type PreEncodedSimulateResponse struct {
-	Version       uint64                             `codec:"version"`
-	LastRound     uint64                             `codec:"last-round"`
-	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
-	WouldSucceed  bool                               `codec:"would-succeed"`
-	LiftLogLimits *bool                              `codec:"lift-log-limits,omitempty"`
-	EvalChanges   *PreEncodedSimulateEvalChanges     `codec:"eval-changes,omitempty"`
-}
-
-// PreEncodedSimulateEvalChanges mirrors `eval-changes` field in model.SimulateResponse
-type PreEncodedSimulateEvalChanges struct {
-	LogLimits *PreEncodedSimulateLogLimits `codec:"log-limits,omitempty"`
-}
-
-// PreEncodedSimulateLogLimits mirrors `log-limits` field in `eval-changes` field in model.SimulateResponse
-type PreEncodedSimulateLogLimits struct {
-	MaxLogCalls uint64 `codec:"max-log-calls"`
-	MaxLogSize  uint64 `codec:"max-log-size"`
+	Version      uint64                             `codec:"version"`
+	LastRound    uint64                             `codec:"last-round"`
+	TxnGroups    []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	WouldSucceed bool                               `codec:"would-succeed"`
+	EvalChanges  *model.SimulationEvalChanges       `codec:"eval-changes,omitempty"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
@@ -1027,8 +1015,12 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 
 	// Simulate transaction
-	simulatorConfig := simulation.SimulatorConfig{LiftLogLimits: *simulateRequest.LiftLogLimits}
-	simulationResult, err := v2.Node.Simulate(txgroup, simulatorConfig)
+	simulationResult, err := v2.Node.Simulate(
+		simulation.Request{
+			TxGroup:       txgroup,
+			LiftLogLimits: *simulateRequest.LiftLogLimits,
+		},
+	)
 	if err != nil {
 		var invalidTxErr simulation.InvalidTxGroupError
 		switch {

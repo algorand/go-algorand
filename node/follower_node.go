@@ -240,7 +240,7 @@ func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transaction
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn, _ simulation.SimulatorConfig) (result simulation.Result, err error) {
+func (node *AlgorandFollowerNode) Simulate(_ simulation.Request) (result simulation.Result, err error) {
 	err = fmt.Errorf("cannot simulate in data mode")
 	return
 }

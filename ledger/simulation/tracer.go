@@ -83,8 +83,8 @@ type evalTracer struct {
 	failedAt TxnPath
 }
 
-func makeEvalTracer(lastRound basics.Round, txgroup []transactions.SignedTxn, simConfig SimulatorConfig) *evalTracer {
-	result := makeSimulationResult(lastRound, [][]transactions.SignedTxn{txgroup}, simConfig)
+func makeEvalTracer(lastRound basics.Round, simulatorInputs Request) *evalTracer {
+	result := makeSimulationResult(lastRound, [][]transactions.SignedTxn{simulatorInputs.TxGroup}, simulatorInputs.LiftLogLimits)
 	return &evalTracer{result: &result}
 }
 

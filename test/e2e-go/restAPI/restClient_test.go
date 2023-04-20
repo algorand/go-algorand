@@ -1767,15 +1767,12 @@ int 1`
 
 	budgetAdded, budgetUsed := uint64(700), uint64(40)
 
-	expectedLiftLogLimits := true
-
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:       1,
-		LastRound:     resp.LastRound,
-		WouldSucceed:  true,
-		LiftLogLimits: &expectedLiftLogLimits,
-		EvalChanges: &v2.PreEncodedSimulateEvalChanges{
-			LogLimits: &v2.PreEncodedSimulateLogLimits{
+		Version:      1,
+		LastRound:    resp.LastRound,
+		WouldSucceed: true,
+		EvalChanges: &model.SimulationEvalChanges{
+			LogLimits: &model.SimulationLogLimits{
 				MaxLogSize:  65536,
 				MaxLogCalls: 2048,
 			},

@@ -36,8 +36,9 @@ type simulatorLedger struct {
 	start basics.Round
 }
 
-// SimulatorConfig packs simulation related configurations, that overlaps the configurations in real transactions.
-type SimulatorConfig struct {
+// Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
+type Request struct {
+	TxGroup       []transactions.SignedTxn
 	LiftLogLimits bool
 }
 
@@ -117,7 +118,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 
 	// Find and prep any transactions that are missing signatures. We will modify a copy of these
 	// transactions to pass signature verification. The modifications will not affect the input
-	// txgroup slice.
+	// TxGroup slice.
 	//
 	// Note: currently we only support missing transaction signatures, but it should be possible to
 	// support unsigned delegated LogicSigs as well. A single-signature unsigned delegated LogicSig
@@ -194,9 +195,9 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 }
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
-func (s Simulator) Simulate(txgroup []transactions.SignedTxn, config SimulatorConfig) (Result, error) {
-	simulatorTracer := makeEvalTracer(s.ledger.start, txgroup, config)
-	block, missingSigIndexes, err := s.simulateWithTracer(txgroup, simulatorTracer)
+func (s Simulator) Simulate(simulateInputs Request) (Result, error) {
+	simulatorTracer := makeEvalTracer(s.ledger.start, simulateInputs)
+	block, missingSigIndexes, err := s.simulateWithTracer(simulateInputs.TxGroup, simulatorTracer)
 	if err != nil {
 		simulatorTracer.result.WouldSucceed = false
 

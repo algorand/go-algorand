@@ -4277,10 +4277,6 @@
               "$ref": "#/definitions/SimulateTransactionGroupResult"
             }
           },
-          "lift-log-limits": {
-            "description": "A boolean indicating whether this transaction simulation is lifting log opcode limits",
-            "type": "boolean"
-          },
           "eval-changes": {
             "$ref": "#/definitions/SimulationEvalChanges"
           },

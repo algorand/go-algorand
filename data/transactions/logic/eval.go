@@ -257,8 +257,8 @@ type EvalConstants struct {
 	MaxLogCalls uint64
 }
 
-// NewRuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
-func NewRuntimeEvalConstants() EvalConstants {
+// RuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
+func RuntimeEvalConstants() EvalConstants {
 	return EvalConstants{
 		MaxLogSize:  uint64(maxLogSize),
 		MaxLogCalls: uint64(maxLogCalls),
@@ -391,7 +391,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
-		EvalConstants:           NewRuntimeEvalConstants(),
+		EvalConstants:           RuntimeEvalConstants(),
 	}
 	// resources are computed after ep is constructed because app addresses are
 	// calculated there, and we'd like to use the caching mechanism built into

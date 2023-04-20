@@ -94,7 +94,7 @@ func NewResultEvalConstantsBuilder() *ResultEvalConstantsBuilder {
 const SimulateLogBytesLimit = 65536
 
 // LiftLogLimits method modify the log limits from lift option:
-// - if lift log limits, then overload result from local config
+// - if lift log limits, then overload result from local Config
 // - otherwise, set `LogLimits` field to be nil
 func (r *ResultEvalConstantsBuilder) LiftLogLimits(lift bool) *ResultEvalConstantsBuilder {
 	if lift {
@@ -121,7 +121,7 @@ func (r *ResultEvalConstantsBuilder) Finalize() *ResultEvalConstants {
 // LogicEvalConstants method infers the logic.EvalConstants from Result.EvalConstants (*ResultEvalConstants)
 // and generate appropriate parameters to override during simulation runtime.
 func (c *ResultEvalConstants) LogicEvalConstants() logic.EvalConstants {
-	logicEvalConstants := logic.NewRuntimeEvalConstants()
+	logicEvalConstants := logic.RuntimeEvalConstants()
 	if c == nil {
 		return logicEvalConstants
 	}
@@ -138,12 +138,11 @@ type Result struct {
 	LastRound     basics.Round
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed  bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
-	LiftLogLimits bool             // true iff we run simulation with `lift-log-limits` option
 	EvalConstants *ResultEvalConstants
 	Block         *ledgercore.ValidatedBlock
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64, simConfig SimulatorConfig) (Result, error) {
+func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64, liftLogLimits bool) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
@@ -154,20 +153,19 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
-	resultEvalConstants := NewResultEvalConstantsBuilder().LiftLogLimits(simConfig.LiftLogLimits).Finalize()
+	resultEvalConstants := NewResultEvalConstantsBuilder().LiftLogLimits(liftLogLimits).Finalize()
 
 	return Result{
 		Version:       version,
 		LastRound:     lastRound,
 		TxnGroups:     groups,
-		LiftLogLimits: simConfig.LiftLogLimits,
 		EvalConstants: resultEvalConstants,
 		WouldSucceed:  true,
 	}, nil
 }
 
-func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn, simConfig SimulatorConfig) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion, simConfig)
+func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn, liftLogLimits bool) Result {
+	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion, liftLogLimits)
 	if err != nil {
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)

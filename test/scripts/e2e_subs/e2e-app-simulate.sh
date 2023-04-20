@@ -208,11 +208,6 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
     false
 fi
 
-if [[ $(echo "$RES" | jq '."lift-log-limits"') != null ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with lift-log-limits field %Y%m%d_%H%M%S'
-    false
-fi
-
 if [[ $(echo "$RES" | jq '."eval-changes"') != null ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-changes field %Y%m%d_%H%M%S'
     false
@@ -234,11 +229,6 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_F
     false
 fi
 
-if [[ $(echo "$RES" | jq '."lift-log-limits"' ) != null ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with lift-log-limits field %Y%m%d_%H%M%S'
-    false
-fi
-
 if [[ $(echo "$RES" | jq '."eval-changes"') != null ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-changes field %Y%m%d_%H%M%S'
     false
@@ -256,11 +246,6 @@ fi
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."failed-at"') != null ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed with unlmited log option %Y%m%d_%H%M%S'
-    false
-fi
-
-if [[ $(echo "$RES" | jq '."lift-log-limits"') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should contain lift-log-limits field %Y%m%d_%H%M%S'
     false
 fi
 

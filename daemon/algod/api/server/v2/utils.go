@@ -387,13 +387,13 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	return encoded
 }
 
-func convertSimulationEvalConstants(evalConstants *simulation.ResultEvalConstants) *PreEncodedSimulateEvalChanges {
+func convertSimulationEvalConstants(evalConstants *simulation.ResultEvalConstants) *model.SimulationEvalChanges {
 	if evalConstants == nil {
 		return nil
 	}
-	var evalChanges PreEncodedSimulateEvalChanges
+	var evalChanges model.SimulationEvalChanges
 	if evalConstants.LogLimits != nil {
-		evalChanges.LogLimits = &PreEncodedSimulateLogLimits{
+		evalChanges.LogLimits = &model.SimulationLogLimits{
 			MaxLogCalls: evalConstants.LogLimits.MaxLogCalls,
 			MaxLogSize:  evalConstants.LogLimits.MaxLogSize,
 		}
@@ -405,12 +405,11 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	evalChanges := convertSimulationEvalConstants(result.EvalConstants)
 
 	encodedSimulationResult := PreEncodedSimulateResponse{
-		Version:       result.Version,
-		LastRound:     uint64(result.LastRound),
-		WouldSucceed:  result.WouldSucceed,
-		LiftLogLimits: &result.LiftLogLimits,
-		TxnGroups:     make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
-		EvalChanges:   evalChanges,
+		Version:      result.Version,
+		LastRound:    uint64(result.LastRound),
+		WouldSucceed: result.WouldSucceed,
+		TxnGroups:    make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		EvalChanges:  evalChanges,
 	}
 
 	for i, txnGroup := range result.TxnGroups {

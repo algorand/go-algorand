@@ -1038,9 +1038,6 @@ type SimulateResponse struct {
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
-	// LiftLogLimits A boolean indicating whether this transaction simulation is lifting log opcode limits
-	LiftLogLimits *bool `json:"lift-log-limits,omitempty"`
-
 	// TxnGroups A result object for each transaction group that was simulated.
 	TxnGroups []SimulateTransactionGroupResult `json:"txn-groups"`
 
