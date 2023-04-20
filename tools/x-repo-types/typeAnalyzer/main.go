@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+/*
+						WARNING
+   THIS FILE ONLY EXISTS FOR DEBUGGING AND TO MAKE THE BUILD HAPPY
+			!!!!! IT OVERWRITTEN BY AT RUNTIME !!!!!
+*/
+
 package main
 
 import (
@@ -42,13 +48,13 @@ func main() {
 	// ---- DEBUG ---- //
 
 	/*
-		xRoot.Print()
-		fmt.Printf("\n\nSerialization Tree of %q\n\n", x)
-		xTgt.PrintSerializable()
+	   xRoot.Print()
+	   fmt.Printf("\n\nSerialization Tree of %q\n\n", x)
+	   xTgt.PrintSerializable()
 
-		yRoot.Print()
-		fmt.Printf("\n\nSerialization Tree of %q\n\n", y)
-		yTgt.PrintSerializable()
+	   yRoot.Print()
+	   fmt.Printf("\n\nSerialization Tree of %q\n\n", y)
+	   yTgt.PrintSerializable()
 	*/
 
 	// ---- STATS ---- //
