@@ -1776,7 +1776,7 @@ int 1`
 		LiftLogLimits: &expectedLiftLogLimits,
 		EvalChanges: &v2.PreEncodedSimulateEvalChanges{
 			LogLimits: &v2.PreEncodedSimulateLogLimits{
-				MaxLogSize:  512000,
+				MaxLogSize:  65536,
 				MaxLogCalls: 2048,
 			},
 		},

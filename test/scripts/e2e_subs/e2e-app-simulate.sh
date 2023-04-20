@@ -264,8 +264,8 @@ if [[ $(echo "$RES" | jq '."lift-log-limits"') != $CONST_TRUE ]]; then
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"."log-limits"."max-log-size"') -ne 512000 ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log size 512000 %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."eval-changes"."log-limits"."max-log-size"') -ne 65536 ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log size 65536 %Y%m%d_%H%M%S'
     false
 fi
 

@@ -90,15 +90,17 @@ func NewResultEvalConstantsBuilder() *ResultEvalConstantsBuilder {
 	return &ResultEvalConstantsBuilder{}
 }
 
+// SimulateLogBytesLimit hardcode limit of how much bytes one can log during simulation (with lift-log-limits)
+const SimulateLogBytesLimit = 65536
+
 // LiftLogLimits method modify the log limits from lift option:
 // - if lift log limits, then overload result from local config
 // - otherwise, set `LogLimits` field to be nil
 func (r *ResultEvalConstantsBuilder) LiftLogLimits(lift bool) *ResultEvalConstantsBuilder {
 	if lift {
-		localConfig := config.GetDefaultLocal()
 		r.Result.LogLimits = &LogLimits{
 			MaxLogCalls: uint64(config.MaxLogCalls),
-			MaxLogSize:  localConfig.SimulateLogBytesLimit,
+			MaxLogSize:  uint64(SimulateLogBytesLimit),
 		}
 	} else {
 		r.Result.LogLimits = nil
