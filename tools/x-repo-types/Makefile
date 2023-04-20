@@ -55,4 +55,5 @@ reset-dummy-main:
 	./xrt --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
 		--x-type "StateDelta" \
 		--y-package "github.com/algorand/go-algorand/data/bookkeeping" \
-		--y-type "Genesis" \
+		--y-type "Genesis"
+	
