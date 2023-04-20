@@ -66,14 +66,14 @@ func TxnGroupDeltaTracerForConfig(cfg config.Local) *TxnGroupDeltaTracer {
 }
 
 // BeforeBlock implements the EvalTracer interface for pre-block evaluation
-func (tracer TxnGroupDeltaTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
+func (tracer *TxnGroupDeltaTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
 	// Drop older rounds based on the Lookback parameter
 	delete(tracer.txnGroupDeltas, hdr.Round-basics.Round(tracer.Lookback))
 	tracer.latestRound = hdr.Round
 }
 
 // AfterTxnGroup implements the EvalTracer interface for txn group boundaries
-func (tracer TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
+func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	var txnDeltaMap = make(map[crypto.Digest]*ledgercore.StateDelta)
 	for _, txn := range ep.TxnGroup {
 		// Add Group ID
