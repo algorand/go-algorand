@@ -18,8 +18,8 @@ package simulation
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/config"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -75,9 +75,59 @@ type LogLimits struct {
 	MaxLogSize  uint64
 }
 
-// EvalConstants contains the limits and parameters during a call to Simulator.Simulate
-type EvalConstants struct {
+// ResultEvalConstants contains the limits and parameters during a call to Simulator.Simulate
+type ResultEvalConstants struct {
 	LogLimits *LogLimits
+}
+
+// ResultEvalConstantsBuilder follows a builder pattern for ResultEvalConstants
+type ResultEvalConstantsBuilder struct {
+	Result ResultEvalConstants
+}
+
+// NewResultEvalConstantsBuilder constructs a builder for ResultEvalConstants
+func NewResultEvalConstantsBuilder() *ResultEvalConstantsBuilder {
+	return &ResultEvalConstantsBuilder{}
+}
+
+// LiftLogLimits method modify the log limits from lift option:
+// - if lift log limits, then overload result from local config
+// - otherwise, set `LogLimits` field to be nil
+func (r *ResultEvalConstantsBuilder) LiftLogLimits(lift bool) *ResultEvalConstantsBuilder {
+	if lift {
+		localConfig := config.GetDefaultLocal()
+		r.Result.LogLimits = &LogLimits{
+			MaxLogCalls: uint64(config.MaxLogCalls),
+			MaxLogSize:  localConfig.SimulateLogBytesLimit,
+		}
+	} else {
+		r.Result.LogLimits = nil
+	}
+	return r
+}
+
+// Finalize method cleanup the *ResultEvalConstants if it is empty ResultEvalConstants{}, then return nil,
+// otherwise it returns the pointer to ResultEvalConstants
+func (r *ResultEvalConstantsBuilder) Finalize() *ResultEvalConstants {
+	// Since ResultEvalConstants is omitempty, we want to check if it is actually empty
+	if r.Result == (ResultEvalConstants{}) {
+		return nil
+	}
+	return &r.Result
+}
+
+// LogicEvalConstants method infers the logic.EvalConstants from Result.EvalConstants (*ResultEvalConstants)
+// and generate appropriate parameters to override during simulation runtime.
+func (c *ResultEvalConstants) LogicEvalConstants() logic.EvalConstants {
+	logicEvalConstants := logic.NewRuntimeEvalConstants()
+	if c == nil || *c == (ResultEvalConstants{}) {
+		return logicEvalConstants
+	}
+	if c.LogLimits != nil {
+		logicEvalConstants.MaxLogSize = c.LogLimits.MaxLogSize
+		logicEvalConstants.MaxLogCalls = c.LogLimits.MaxLogCalls
+	}
+	return logicEvalConstants
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -87,20 +137,11 @@ type Result struct {
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed  bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
 	LiftLogLimits bool             // true iff we run simulation with `lift-log-limits` option
-	EvalConstants *EvalConstants
+	EvalConstants *ResultEvalConstants
 	Block         *ledgercore.ValidatedBlock
 }
 
-// NewSimulateEvalConstants gives a set of const params used in simulation of opcodes
-func NewSimulateEvalConstants() logic.EvalConstants {
-	localConfig := config.GetDefaultLocal()
-	return logic.EvalConstants{
-		MaxLogSize:  localConfig.SimulateLogBytesLimit,
-		MaxLogCalls: uint64(config.MaxLogCalls),
-	}
-}
-
-func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64, liftLogLimits bool) (Result, error) {
+func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64, simConfig SimulatorConfig) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
@@ -111,37 +152,20 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
-	var evalConstants EvalConstants
-	if liftLogLimits {
-		opCodeParam := NewSimulateEvalConstants()
-		evalConstants = EvalConstants{
-			LogLimits: &LogLimits{
-				MaxLogCalls: opCodeParam.MaxLogCalls,
-				MaxLogSize:  opCodeParam.MaxLogSize,
-			},
-		}
-	}
-
-	// MAKE SPACE FOR OTHER PARAMETER OVERRIDING IN SIMULATION
-
-	var emptyEvalConstants EvalConstants
-	var evalConstantsPtr *EvalConstants
-	if evalConstants != emptyEvalConstants {
-		evalConstantsPtr = &evalConstants
-	}
+	resultEvalConstants := NewResultEvalConstantsBuilder().LiftLogLimits(simConfig.LiftLogLimits).Finalize()
 
 	return Result{
 		Version:       version,
 		LastRound:     lastRound,
 		TxnGroups:     groups,
-		LiftLogLimits: liftLogLimits,
-		EvalConstants: evalConstantsPtr,
+		LiftLogLimits: simConfig.LiftLogLimits,
+		EvalConstants: resultEvalConstants,
 		WouldSucceed:  true,
 	}, nil
 }
 
 func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn, simConfig SimulatorConfig) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion, simConfig.LiftLogLimits)
+	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion, simConfig)
 	if err != nil {
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)

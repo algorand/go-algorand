@@ -81,12 +81,11 @@ type evalTracer struct {
 
 	result   *Result
 	failedAt TxnPath
-	config   SimulatorConfig
 }
 
 func makeEvalTracer(lastRound basics.Round, txgroup []transactions.SignedTxn, simConfig SimulatorConfig) *evalTracer {
 	result := makeSimulationResult(lastRound, [][]transactions.SignedTxn{txgroup}, simConfig)
-	return &evalTracer{result: &result, config: simConfig}
+	return &evalTracer{result: &result}
 }
 
 func (tracer *evalTracer) handleError(evalError error) {
@@ -144,11 +143,7 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	}
 
 	// Override runtime related constraints against ep, before entering txn group
-	if tracer.config.LiftLogLimits {
-		simulatorEvalConst := NewSimulateEvalConstants()
-		ep.MaxLogCalls = simulatorEvalConst.MaxLogCalls
-		ep.MaxLogSize = simulatorEvalConst.MaxLogSize
-	}
+	ep.EvalConstants = tracer.result.EvalConstants.LogicEvalConstants()
 }
 
 func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
