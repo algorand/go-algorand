@@ -20,13 +20,13 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 CONST_TRUE="true"
 CONST_FALSE="false"
 
-# First, try to send an extremely large "transaction" in the request body.
+# First, try to send an extremely large "request" in the request body.
 # This should fail with a 413 error.
 # Some of our MacOS nightly tests fail for specifying the bs (block size)
 # value in capital letters (i.e. 11M), so just specify it as 1024 bytes and
 # allocate 11K blocks so we get a 11MB sized file. 
-dd if=/dev/zero of="${TEMPDIR}/toolarge.tx" bs=1024 count=11000
-RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/toolarge.tx" 2>&1 || true)
+dd if=/dev/zero of="${TEMPDIR}/tooLargeRequest.json" bs=1024 count=11000
+RES=$(${gcmd} clerk simulate --request "${TEMPDIR}/tooLargeRequest.json" 2>&1 || true)
 EXPERROR="simulation error: HTTP 413 Request Entity Too Large:"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-simulate-test FAIL the simulate API should fail for request bodies exceeding 10MB %Y%m%d_%H%M%S'
@@ -71,9 +71,29 @@ ${gcmd} clerk sign -i "${TEMPDIR}/grouped-1.tx" -o "${TEMPDIR}/grouped-1.stx"
 cat "${TEMPDIR}/grouped-0.stx" "${TEMPDIR}/grouped-1.stx" > "${TEMPDIR}/grouped.stx"
 
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx" | jq '."would-succeed"')
-
 if [[ $RES != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL should pass to simulate self pay transaction group %Y%m%d_%H%M%S'
+    false
+fi
+
+# Test creating and using a simulate request object
+${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx" --request-only-out "${TEMPDIR}/simulateRequest.json"
+
+NUM_GROUPS=$(jq '."txn-groups" | length' < "${TEMPDIR}/simulateRequest.json")
+if [ $NUM_GROUPS -ne 1 ]; then
+    date '+app-simulate-test FAIL should have 1 transaction group in simulate request %Y%m%d_%H%M%S'
+    false
+fi
+
+NUM_TXNS=$(jq '."txn-groups"[0]."txns" | length' < "${TEMPDIR}/simulateRequest.json")
+if [ $NUM_TXNS -ne 2 ]; then
+    date '+app-simulate-test FAIL should have 2 transactions in simulate request %Y%m%d_%H%M%S'
+    false
+fi
+
+RES=$(${gcmd} clerk simulate --request "${TEMPDIR}/simulateRequest.json" | jq '."would-succeed"')
+if [[ $RES != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL should pass with raw simulate request %Y%m%d_%H%M%S'
     false
 fi
 

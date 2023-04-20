@@ -409,7 +409,7 @@ func startGenerator(configFile string, addr string, blockMiddleware func(http.Ha
 	}, generator
 }
 
-// startConduit starts the conduit.
+// startConduit starts the conduit binary.
 func startConduit(dataDir string, conduitBinary string) (func() error, error) {
 	cmd := exec.Command(
 		conduitBinary,

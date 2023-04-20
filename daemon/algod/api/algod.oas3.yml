@@ -497,6 +497,25 @@
         },
         "description": "DryrunResponse contains per-txn debug information from a dryrun."
       },
+      "GetBlockTimeStampOffsetResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "offset": {
+                  "description": "Timestamp offset in seconds.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "offset"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing the timestamp offset in seconds"
+      },
       "GetSyncRoundResponse": {
         "content": {
           "application/json": {
@@ -1832,6 +1851,41 @@
         "required": [
           "pool-error",
           "txn"
+        ],
+        "type": "object"
+      },
+      "SimulateRequest": {
+        "description": "Request type for simulation endpoint.",
+        "properties": {
+          "txn-groups": {
+            "description": "The transaction groups to simulate.",
+            "items": {
+              "$ref": "#/components/schemas/SimulateRequestTransactionGroup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txn-groups"
+        ],
+        "type": "object"
+      },
+      "SimulateRequestTransactionGroup": {
+        "description": "A transaction group to simulate.",
+        "properties": {
+          "txns": {
+            "description": "An atomic transaction group.",
+            "items": {
+              "description": "SignedTxn object. Must be canonically encoded.",
+              "format": "json",
+              "type": "string",
+              "x-algorand-format": "SignedTransaction"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txns"
         ],
         "type": "object"
       },
@@ -3851,6 +3905,115 @@
         ]
       }
     },
+    "/v2/devmode/blocks/offset": {
+      "get": {
+        "description": "Gets the current timestamp offset.",
+        "operationId": "GetBlockTimeStampOffset",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "offset": {
+                      "description": "Timestamp offset in seconds.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "offset"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing the timestamp offset in seconds"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "TimeStamp offset not set."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns the timestamp offset. Timestamp offsets can only be set in dev mode.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/devmode/blocks/offset/{offset}": {
+      "post": {
+        "description": "Sets the timestamp offset (seconds) for blocks in dev mode. Providing an offset of 0 will unset this value and try to use the real clock for the timestamp.",
+        "operationId": "SetBlockTimeStampOffset",
+        "parameters": [
+          {
+            "description": "The timestamp offset for blocks in dev mode.",
+            "in": "path",
+            "name": "offset",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Cannot set timestamp offset to a negative integer."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
     "/v2/experimental": {
       "get": {
         "operationId": "ExperimentalCheck",
@@ -5737,14 +5900,18 @@
         ],
         "requestBody": {
           "content": {
-            "application/x-binary": {
+            "application/json": {
               "schema": {
-                "format": "binary",
-                "type": "string"
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            },
+            "application/msgpack": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
               }
             }
           },
-          "description": "The byte encoded transaction to simulate",
+          "description": "The transactions to simulate, along with any other inputs.",
           "required": true
         },
         "responses": {
@@ -5830,7 +5997,7 @@
                 }
               }
             },
-            "description": "Bad Request - Malformed Algorand transaction"
+            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -5887,7 +6054,7 @@
           "public",
           "nonparticipating"
         ],
-        "x-codegen-request-body-name": "rawtxn"
+        "x-codegen-request-body-name": "request"
       }
     },
     "/versions": {

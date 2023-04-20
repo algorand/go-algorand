@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,10 +130,11 @@ type AlgorandFullNode struct {
 
 	indexer *indexer.Indexer
 
-	rootDir     string
-	genesisID   string
-	genesisHash crypto.Digest
-	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
+	rootDir         string
+	genesisID       string
+	genesisHash     crypto.Digest
+	devMode         bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
+	timestampOffset *int64
 
 	log logging.Logger
 
@@ -468,6 +470,24 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	if err != nil || vb == nil {
 		return
 	}
+
+	// Make a new validated block.
+	prevRound := vb.Block().Round() - 1
+	prev, err := node.ledger.BlockHdr(prevRound)
+	if err != nil {
+		return err
+	}
+
+	blk := vb.Block()
+
+	// Set block timestamp based on offset, if set.
+	// Make sure block timestamp is not greater than MaxInt64.
+	if node.timestampOffset != nil && *node.timestampOffset < math.MaxInt64-prev.TimeStamp {
+		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
+	}
+	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
+	vb2 := ledgercore.MakeValidatedBlock(blk, vb.Delta())
+	vb = &vb2
 
 	// add the newly generated block to the ledger
 	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{Round: vb.Block().Round()})
@@ -1417,4 +1437,23 @@ func (node *AlgorandFullNode) GetSyncRound() uint64 {
 
 // UnsetSyncRound no-ops
 func (node *AlgorandFullNode) UnsetSyncRound() {
+}
+
+// SetBlockTimeStampOffset sets a timestamp offset in the block header.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
+	if node.devMode {
+		node.timestampOffset = &offset
+		return nil
+	}
+	return fmt.Errorf("cannot set block timestamp offset when not in dev mode")
+}
+
+// GetBlockTimeStampOffset gets a timestamp offset.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) GetBlockTimeStampOffset() (*int64, error) {
+	if node.devMode {
+		return node.timestampOffset, nil
+	}
+	return nil, fmt.Errorf("cannot get block timestamp offset when not in dev mode")
 }
