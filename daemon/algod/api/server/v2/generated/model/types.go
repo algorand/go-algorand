@@ -886,6 +886,12 @@ type DryrunResponse struct {
 	Txns            []DryrunTxnResult `json:"txns"`
 }
 
+// GetBlockTimeStampOffsetResponse defines model for GetBlockTimeStampOffsetResponse.
+type GetBlockTimeStampOffsetResponse struct {
+	// Offset Timestamp offset in seconds.
+	Offset uint64 `json:"offset"`
+}
+
 // GetSyncRoundResponse defines model for GetSyncRoundResponse.
 type GetSyncRoundResponse struct {
 	// Round The minimum sync round for the ledger.
