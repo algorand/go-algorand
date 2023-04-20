@@ -153,18 +153,32 @@ func (t *TypeNode) IsLeaf() bool {
 }
 
 // Build the TypeNode tree by finding all child types that belong to a kind and recursively
-// building their TypeNode trees.
+// building their TypeNode trees. Do not traverse previously visited structs.
 func (t *TypeNode) Build() {
+	visited := make(map[string]bool)
+	t.build(visited)
+}
+
+// build the TypeNode tree by finding all child types that belong to a kind and recursively
+// building their TypeNode trees. Do not traverse previously visited structs.
+// If this type has already been seen, return false - signalling that this type should not
+// be appended as a child.
+func (t *TypeNode) build(visited map[string]bool) bool {
+	me := t.String()
+	if _, alreadySeen := visited[me]; alreadySeen {
+		return false
+	}
 	switch t.Kind {
 	case reflect.Struct:
-		t.buildStructChildren()
+		t.buildStructChildren(visited)
 	case reflect.Slice, reflect.Array:
-		t.buildListChild()
+		t.buildListChild(visited)
 	case reflect.Map:
-		t.buildMapChildren()
+		t.buildMapChildren(visited)
 	case reflect.Ptr:
-		t.buildPtrChild()
+		t.buildPtrChild(visited)
 	}
+	return true
 }
 
 func (t *TypeNode) appendChild(typeName, typeTag string, child TypeNode) {
@@ -177,7 +191,15 @@ func (t *TypeNode) appendChild(typeName, typeTag string, child TypeNode) {
 	(*t.children)[cname.String()] = child
 }
 
-func (t *TypeNode) buildStructChildren() {
+// buildStructChildren builds the children of a struct type.
+func (t *TypeNode) buildStructChildren(visited map[string]bool) {
+	me := t.String()
+	if _, alreadyVisited := visited[me]; alreadyVisited {
+		return
+	}
+	if _, excluded := diffExclusions[me]; !excluded {
+		visited[me] = true
+	}
 	for i := 0; i < t.Type.NumField(); i++ {
 		typeField := t.Type.Field(i)
 		typeName := typeField.Name
@@ -195,45 +217,51 @@ func (t *TypeNode) buildStructChildren() {
 			}
 
 			embedded := TypeNode{t.Depth, typeField.Type, reflect.Struct, nil, nil}
-			embedded.Build()
-			for _, edge := range embedded.ChildNames {
-				child := (*embedded.children)[edge.String()]
-				t.appendChild(edge.Name, edge.Tag, child)
+			if embedded.build(visited) {
+				for _, edge := range embedded.ChildNames {
+					child := (*embedded.children)[edge.String()]
+					t.appendChild(edge.Name, edge.Tag, child)
+				}
 			}
 			continue
 		}
 
 		typeTag := string(typeField.Tag)
 		child := TypeNode{t.Depth + 1, typeField.Type, typeField.Type.Kind(), nil, nil}
-		child.Build()
-		t.appendChild(typeName, typeTag, child)
+		if child.build(visited) {
+			t.appendChild(typeName, typeTag, child)
+		}
 	}
 }
 
-func (t *TypeNode) buildListChild() {
+func (t *TypeNode) buildListChild(visited map[string]bool) {
 	tt := t.Type.Elem()
 	child := TypeNode{t.Depth + 1, tt, tt.Kind(), nil, nil}
-	child.Build()
-	t.appendChild("<list elt>", "", child)
+	if child.build(visited) {
+		t.appendChild("<list elt>", "", child)
+	}
 }
 
-func (t *TypeNode) buildMapChildren() {
+func (t *TypeNode) buildMapChildren(visited map[string]bool) {
 	keyType, valueType := t.Type.Key(), t.Type.Elem()
 
 	keyChild := TypeNode{t.Depth + 1, keyType, keyType.Kind(), nil, nil}
-	keyChild.Build()
-	t.appendChild("<map key>", "", keyChild)
+	if keyChild.build(visited) {
+		t.appendChild("<map key>", "", keyChild)
+	}
 
 	valChild := TypeNode{t.Depth + 1, valueType, valueType.Kind(), nil, nil}
-	valChild.Build()
-	t.appendChild("<map elt>", "", valChild)
+	if valChild.build(visited) {
+		t.appendChild("<map elt>", "", valChild)
+	}
 }
 
-func (t *TypeNode) buildPtrChild() {
+func (t *TypeNode) buildPtrChild(visited map[string]bool) {
 	tt := t.Type.Elem()
 	child := TypeNode{t.Depth + 1, tt, tt.Kind(), nil, nil}
-	child.Build()
-	t.appendChild("<ptr elt>", "", child)
+	if child.build(visited) {
+		t.appendChild("<ptr elt>", "", child)
+	}
 }
 
 // Visit traverses the Target tree and applies any actions provided at each node.
@@ -474,6 +502,20 @@ func LeafStatsReport(xTgt Target) {
 		stats[key]++
 	}
 	printSortedStats(stats)
+}
+
+// MaxDepthReport prints out a report for the max depth of the type tree.
+func MaxDepthReport(xTgt Target) int {
+	fmt.Printf("\n\nMax depth stats for type %s:\n\n", &xTgt.TypeNode)
+	maxDepth := 0
+	maxDepthCollector := func(tgt Target) {
+		if tgt.TypeNode.Depth > maxDepth {
+			maxDepth = tgt.TypeNode.Depth
+		}
+	}
+	xTgt.Visit(maxDepthCollector)
+	fmt.Printf("Max depth is %d\n", maxDepth)
+	return maxDepth
 }
 
 type keyValue struct {

@@ -85,6 +85,119 @@ func TestEdgeFromLabel(t *testing.T) {
 	}
 }
 
+type Node struct {
+	Name string
+	Next *Node
+}
+
+// Max depth of Senior-Parent-Child relationship is actually 4 given how depth is calculated
+// via reflection.
+// Depth 0. main.Senior (struct)
+// Depth 1. []main.Parent (slice)
+// Depth 2. main.Parent (struct)
+// Depth 3. *main.Child (ptr)
+// Depth 4. main.Child (struct)
+// Depth DISQUALIFIED. main.Senior (struct) AS ALREADY SEEN
+type Senior struct {
+	Children []Parent
+}
+
+type Parent struct {
+	Granddaughter *Child
+}
+
+type Child struct {
+	Grandpa Senior
+}
+
+func TestBuild(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testcases := []struct {
+		name  string
+		x     interface{}
+		depth int
+	}{
+		{
+			name:  "recursive 0",
+			x:     Node{},
+			depth: 1,
+		},
+		{
+			name:  "recursive 1",
+			x:     Senior{},
+			depth: 4,
+		},
+		{
+			name:  "recursive 2",
+			x:     Child{},
+			depth: 4,
+		},
+		{
+			name:  "basic struct",
+			x:     struct{ A int }{},
+			depth: 1,
+		},
+		{
+			name: "basic codec",
+			x: struct {
+				B int `codec:"A"`
+			}{},
+			depth: 1,
+		},
+		{
+			name: "deeper unexported",
+			x: struct {
+				a []string
+				B string
+			}{},
+			depth: 1,
+		},
+		{
+			name: "deeper exported",
+			x: struct {
+				A []string
+				b int
+			}{},
+			depth: 2,
+		},
+		{
+			name: "embed flattened",
+			x: func() interface{} {
+				type Embedded struct{ A int }
+				return struct{ Embedded }{}
+			}(),
+			depth: 1,
+		},
+		{
+			name: "primitive alias",
+			x: func() interface{} {
+				type MYINT int
+				var i MYINT
+				return i
+			}(),
+			depth: 0,
+		},
+		{
+			name:  "primitive type",
+			x:     5,
+			depth: 0,
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			xRoot := MakeType(tc.x)
+			xRoot.Build()
+			tgt := Target{TypeNode: xRoot}
+			tgt.PrintSerializable()
+			require.Equal(t, tc.depth, MaxDepthReport(tgt), "test case: %s", tc.name)
+		})
+	}
+}
+
 func TestDiffErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

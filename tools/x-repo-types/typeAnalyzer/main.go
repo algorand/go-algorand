@@ -62,6 +62,9 @@ func main() {
 	LeafStatsReport(xTgt)
 	LeafStatsReport(yTgt)
 
+	MaxDepthReport(xTgt)
+	MaxDepthReport(yTgt)
+
 	// ---- DIFF ---- //
 
 	fmt.Printf("\n\nCompare the Type Trees %q v %q\n", x, y)
