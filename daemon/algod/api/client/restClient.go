@@ -677,15 +677,10 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	return
 }
 
-type simulateRawTransactionParams struct {
-	Format string `url:"format"`
-}
-
-// RawSimulateRawTransaction simulates the raw transaction or raw transaction group and returns relevant simulation results as raw bytes.
+// RawSimulateRawTransaction simulates transactions by taking raw request bytes and returns relevant simulation results as raw bytes.
 func (client RestClient) RawSimulateRawTransaction(data []byte) (response []byte, err error) {
-	params := simulateRawTransactionParams{Format: "msgpack"}
 	var blob Blob
-	err = client.submitForm(&blob, "/v2/transactions/simulate", params, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
+	err = client.submitForm(&blob, "/v2/transactions/simulate", rawFormat{Format: "msgpack"}, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
 	response = blob
 	return
 }
