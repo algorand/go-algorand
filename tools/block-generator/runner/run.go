@@ -19,7 +19,6 @@ package runner
 import (
 	"bytes"
 	"context"
-
 	// embed conduit template config file
 	_ "embed"
 	"encoding/json"
