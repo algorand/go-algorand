@@ -58,72 +58,84 @@ retsub
 
 // unlimited_log_test
 unlimitedlogtest_1:
-byte "Let us go then, you and I,"
+byte "The time has come,"
 log
-byte "When the evening is spread out against the sky"
+byte "To talk of many things"
 log
-byte "Like a patient etherized upon a table;"
+byte "Of shoes--and ships--and sealing-wax--"
 log
-byte "Let us go, through certain half-deserted streets,"
+byte "Of cabbages--and kings--"
 log
-byte "The muttering retreats"
+byte "And why the sea is boiling hot--"
 log
-byte "Of restless nights in one-night cheap hotels"
+byte "And whether pigs have wings."
 log
-byte "And sawdust restaurants with oyster-shells:"
+byte "But wait a bit, the Oysters cried,"
 log
-byte "Streets that follow like a tedious argument"
+byte "Before we have our chat"
 log
-byte "Of insidious intent"
+byte "For some of us are out of breath,"
 log
-byte "To lead you to an overwhelming question ..."
+byte "And all of us are fat!"
 log
-byte "Oh, do not ask, What is it?"
+byte "No hurry! said the Carpenter."
 log
-byte "Let us go and make our visit."
+byte "They thanked him much for that."
 log
-byte "In the room the women come and go"
+byte "A loaf of bread, the Walrus said,"
 log
-byte "Talking of Michelangelo."
+byte "Is what we chiefly need"
 log
-byte "The yellow fog that rubs its back upon the window-panes,"
+byte "Pepper and vinegar besides"
 log
-byte "The yellow smoke that rubs its muzzle on the window-panes,"
+byte "Are very good indeed--"
 log
-byte "Licked its tongue into the corners of the evening,"
+byte "Now if youre ready, Oysters dear,"
 log
-byte "Lingered upon the pools that stand in drains,"
+byte "We can begin to feed."
 log
-byte "Let fall upon its back the soot that falls from chimneys,"
+byte "But not on us! the Oysters cried,"
 log
-byte "Slipped by the terrace, made a sudden leap,"
+byte "Turning a little blue."
 log
-byte "And seeing that it was a soft October night,"
+byte "After such kindness, that would be"
 log
-byte "Curled once about the house, and fell asleep."
+byte "A dismal thing to do!"
 log
-byte "And indeed there will be time"
+byte "The night is fine, the Walrus said."
 log
-byte "For the yellow smoke that slides along the street,"
+byte "Do you admire the view?"
 log
-byte "Rubbing its back upon the window-panes;"
+byte "It was so kind of you to come!"
 log
-byte "There will be time, there will be time"
+byte "And you are very nice!"
 log
-byte "To prepare a face to meet the faces that you meet;"
+byte "The Carpenter said nothing but"
 log
-byte "There will be time to murder and create,"
+byte "Cut us another slice"
 log
-byte "And time for all the works and days of hands"
+byte "I wish you were not quite so deaf--"
 log
-byte "That lift and drop a question on your plate;"
+byte "Ive had to ask you twice!"
 log
-byte "Time for you and time for me,"
+byte "It seems a shame, the Walrus said,"
 log
-byte "And time yet for a hundred indecisions,"
+byte "To play them such a trick,"
 log
-byte "And for a hundred visions and revisions,"
+byte "After weve brought them out so far,"
 log
-byte "Before the taking of a toast and tea."
+byte "And made them trot so quick!"
+log
+byte "The Carpenter said nothing but"
+log
+byte "The butters spread too thick!"
+log
+byte "I weep for you, the Walrus said"
+log
+byte "I deeply sympathize."
+log
+byte "With sobs and tears he sorted out"
+log
+byte "Those of the largest size,"
 log
 retsub

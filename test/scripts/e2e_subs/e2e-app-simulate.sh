@@ -227,7 +227,7 @@ if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
     false
 fi
 
-EXPECTED_FAILURE='logic eval error: program logs too large.'
+EXPECTED_FAILURE='logic eval error: too many log calls in program. up to 32 is allowed.'
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_FAILURE}"* ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should fail without unlmited log option %Y%m%d_%H%M%S'
@@ -274,14 +274,14 @@ if [[ $(echo "$RES" | jq '."eval-changes"."log-limits"."max-log-calls"') -ne 204
     false
 fi
 
-EXPECTED_FIRST_LINE_BIG_LOG='Let us go then, you and I,'
+EXPECTED_FIRST_LINE_BIG_LOG='The time has come,'
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[0] | @base64d') != *"${EXPECTED_FIRST_LINE_BIG_LOG}"* ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed %Y%m%d_%H%M%S'
     false
 fi
 
-EXPECTED_LAST_LINE_BIG_LOG='Before the taking of a toast and tea.'
+EXPECTED_LAST_LINE_BIG_LOG='Those of the largest size,'
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[-1] | @base64d') != *"${EXPECTED_LAST_LINE_BIG_LOG}"* ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed %Y%m%d_%H%M%S'
