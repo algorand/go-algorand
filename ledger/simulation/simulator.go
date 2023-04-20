@@ -118,7 +118,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 
 	// Find and prep any transactions that are missing signatures. We will modify a copy of these
 	// transactions to pass signature verification. The modifications will not affect the input
-	// TxGroup slice.
+	// txgroup slice.
 	//
 	// Note: currently we only support missing transaction signatures, but it should be possible to
 	// support unsigned delegated LogicSigs as well. A single-signature unsigned delegated LogicSig
@@ -195,9 +195,9 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 }
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
-func (s Simulator) Simulate(simulateInputs Request) (Result, error) {
-	simulatorTracer := makeEvalTracer(s.ledger.start, simulateInputs)
-	block, missingSigIndexes, err := s.simulateWithTracer(simulateInputs.TxGroup, simulatorTracer)
+func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
+	simulatorTracer := makeEvalTracer(s.ledger.start, simulateRequest)
+	block, missingSigIndexes, err := s.simulateWithTracer(simulateRequest.TxGroup, simulatorTracer)
 	if err != nil {
 		simulatorTracer.result.WouldSucceed = false
 

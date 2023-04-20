@@ -69,15 +69,10 @@ func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 // ResultLatestVersion is the latest version of the Result struct
 const ResultLatestVersion = uint64(1)
 
-// LogLimits contains the limits on log opcode during a call to Simulator.Simulate
-type LogLimits struct {
-	MaxLogCalls uint64
-	MaxLogSize  uint64
-}
-
 // ResultEvalConstants contains the limits and parameters during a call to Simulator.Simulate
 type ResultEvalConstants struct {
-	LogLimits *LogLimits
+	MaxLogCalls *uint64
+	MaxLogSize  *uint64
 }
 
 // ResultEvalConstantsBuilder follows a builder pattern for ResultEvalConstants
@@ -91,19 +86,18 @@ func NewResultEvalConstantsBuilder() *ResultEvalConstantsBuilder {
 }
 
 // SimulateLogBytesLimit hardcode limit of how much bytes one can log during simulation (with lift-log-limits)
-const SimulateLogBytesLimit = 65536
+const SimulateLogBytesLimit = uint64(65536)
 
 // LiftLogLimits method modify the log limits from lift option:
 // - if lift log limits, then overload result from local Config
 // - otherwise, set `LogLimits` field to be nil
 func (r *ResultEvalConstantsBuilder) LiftLogLimits(lift bool) *ResultEvalConstantsBuilder {
 	if lift {
-		r.Result.LogLimits = &LogLimits{
-			MaxLogCalls: uint64(config.MaxLogCalls),
-			MaxLogSize:  uint64(SimulateLogBytesLimit),
+		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), SimulateLogBytesLimit
+		r.Result = ResultEvalConstants{
+			MaxLogCalls: &maxLogCalls,
+			MaxLogSize:  &maxLogSize,
 		}
-	} else {
-		r.Result.LogLimits = nil
 	}
 	return r
 }
@@ -125,9 +119,11 @@ func (c *ResultEvalConstants) LogicEvalConstants() logic.EvalConstants {
 	if c == nil {
 		return logicEvalConstants
 	}
-	if c.LogLimits != nil {
-		logicEvalConstants.MaxLogSize = c.LogLimits.MaxLogSize
-		logicEvalConstants.MaxLogCalls = c.LogLimits.MaxLogCalls
+	if c.MaxLogSize != nil {
+		logicEvalConstants.MaxLogSize = *c.MaxLogSize
+	}
+	if c.MaxLogCalls != nil {
+		logicEvalConstants.MaxLogCalls = *c.MaxLogCalls
 	}
 	return logicEvalConstants
 }

@@ -658,17 +658,11 @@ type SimulateTransactionResult struct {
 
 // SimulationEvalChanges The set of parameters and limits override during simulation.
 type SimulationEvalChanges struct {
-	// LogLimits The set of limits on log opcodes during simulation.
-	LogLimits *SimulationLogLimits `json:"log-limits,omitempty"`
-}
-
-// SimulationLogLimits The set of limits on log opcodes during simulation.
-type SimulationLogLimits struct {
 	// MaxLogCalls The maximum log calls one can make during simulation
-	MaxLogCalls uint64 `json:"max-log-calls"`
+	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
 
 	// MaxLogSize The maximum byte number to log during simulation
-	MaxLogSize uint64 `json:"max-log-size"`
+	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
 }
 
 // StateDelta Application state delta.

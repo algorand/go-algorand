@@ -1958,15 +1958,6 @@
       "SimulationEvalChanges": {
         "description": "The set of parameters and limits override during simulation.",
         "properties": {
-          "log-limits": {
-            "$ref": "#/components/schemas/SimulationLogLimits"
-          }
-        },
-        "type": "object"
-      },
-      "SimulationLogLimits": {
-        "description": "The set of limits on log opcodes during simulation.",
-        "properties": {
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
             "type": "integer",
@@ -1978,10 +1969,6 @@
             "x-algorand-format": "uint64"
           }
         },
-        "required": [
-          "max-log-calls",
-          "max-log-size"
-        ],
         "type": "object"
       },
       "StateDelta": {

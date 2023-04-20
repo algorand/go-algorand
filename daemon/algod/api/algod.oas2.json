@@ -3644,13 +3644,9 @@
         }
       }
     },
-    "SimulationLogLimits": {
-      "description": "The set of limits on log opcodes during simulation.",
+    "SimulationEvalChanges": {
+      "description": "The set of parameters and limits override during simulation.",
       "type": "object",
-      "required": [
-        "max-log-calls",
-        "max-log-size"
-      ],
       "properties": {
         "max-log-calls": {
           "description": "The maximum log calls one can make during simulation",
@@ -3661,15 +3657,6 @@
           "description": "The maximum byte number to log during simulation",
           "type": "integer",
           "x-algorand-format": "uint64"
-        }
-      }
-    },
-    "SimulationEvalChanges": {
-      "description": "The set of parameters and limits override during simulation.",
-      "type": "object",
-      "properties": {
-        "log-limits": {
-          "$ref": "#/definitions/SimulationLogLimits"
         }
       }
     }

@@ -391,14 +391,10 @@ func convertSimulationEvalConstants(evalConstants *simulation.ResultEvalConstant
 	if evalConstants == nil {
 		return nil
 	}
-	var evalChanges model.SimulationEvalChanges
-	if evalConstants.LogLimits != nil {
-		evalChanges.LogLimits = &model.SimulationLogLimits{
-			MaxLogCalls: evalConstants.LogLimits.MaxLogCalls,
-			MaxLogSize:  evalConstants.LogLimits.MaxLogSize,
-		}
+	return &model.SimulationEvalChanges{
+		MaxLogSize:  evalConstants.MaxLogSize,
+		MaxLogCalls: evalConstants.MaxLogCalls,
 	}
-	return &evalChanges
 }
 
 func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
