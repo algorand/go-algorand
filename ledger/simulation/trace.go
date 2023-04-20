@@ -120,7 +120,7 @@ func (r *ResultEvalConstantsBuilder) Finalize() *ResultEvalConstants {
 // and generate appropriate parameters to override during simulation runtime.
 func (c *ResultEvalConstants) LogicEvalConstants() logic.EvalConstants {
 	logicEvalConstants := logic.NewRuntimeEvalConstants()
-	if c == nil || *c == (ResultEvalConstants{}) {
+	if c == nil {
 		return logicEvalConstants
 	}
 	if c.LogLimits != nil {
