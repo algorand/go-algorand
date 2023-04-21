@@ -370,9 +370,9 @@ func targetTreeDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 		}
 		yChild := ySerials[k]
 		diff, err := targetTreeDiff(xChild, yChild, exclusions)
-
 		if err != nil {
 			return nil, err
+
 		}
 		if diff != nil {
 			diff.CommonPath = append([]TargetPair{
