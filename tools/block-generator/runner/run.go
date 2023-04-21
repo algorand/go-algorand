@@ -19,6 +19,7 @@ package runner
 import (
 	"bytes"
 	"context"
+
 	// embed conduit template config file
 	_ "embed"
 	"encoding/json"
@@ -140,7 +141,7 @@ func (r *Args) run() error {
 	// create config file in the right data directory
 	f, err := os.Create(path.Join(dataDir, "conduit.yml"))
 	if err != nil {
-		return fmt.Errorf("problem creating conduit.yml: %v", err)
+		return fmt.Errorf("problem creating conduit.yml: %w", err)
 	}
 	defer f.Close()
 
@@ -151,7 +152,7 @@ func (r *Args) run() error {
 
 	err = t.Execute(f, conduitConfig)
 	if err != nil {
-		return fmt.Errorf("problem executing template file: %v", err)
+		return fmt.Errorf("problem executing template file: %w", err)
 	}
 
 	// Start conduit

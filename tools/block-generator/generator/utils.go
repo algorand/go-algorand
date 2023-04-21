@@ -75,7 +75,7 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 
 	err := enc.Encode(obj)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode object: %v", err)
+		return nil, fmt.Errorf("failed to encode object: %w", err)
 	}
 	return output, nil
 }
