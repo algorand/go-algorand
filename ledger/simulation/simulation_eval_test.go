@@ -1267,7 +1267,7 @@ int 1`
 					AppBudgetConsumed: 46,
 				},
 			},
-			EvalConstants: &simulation.ResultEvalConstants{
+			EvalOverrides: &simulation.ResultEvalOverrides{
 				MaxLogCalls: &expectedMaxLogCalls,
 				MaxLogSize:  &expectedMaxLogSize,
 			},

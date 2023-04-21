@@ -387,7 +387,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	return encoded
 }
 
-func convertSimulationEvalConstants(evalConstants *simulation.ResultEvalConstants) *model.SimulationEvalChanges {
+func convertSimulationEvalConstants(evalConstants *simulation.ResultEvalOverrides) *model.SimulationEvalChanges {
 	if evalConstants == nil {
 		return nil
 	}
@@ -398,7 +398,7 @@ func convertSimulationEvalConstants(evalConstants *simulation.ResultEvalConstant
 }
 
 func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
-	evalChanges := convertSimulationEvalConstants(result.EvalConstants)
+	evalChanges := convertSimulationEvalConstants(result.EvalOverrides)
 
 	encodedSimulationResult := PreEncodedSimulateResponse{
 		Version:      result.Version,

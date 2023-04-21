@@ -248,7 +248,7 @@ type boxRef struct {
 	name string
 }
 
-// EvalConstants contains data that opcodes rely on during runtime.
+// EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
 type EvalConstants struct {
 	// MaxLogSize is the limit of total log size from n log calls in a program
 	MaxLogSize uint64

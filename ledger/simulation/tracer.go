@@ -143,7 +143,7 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	}
 
 	// Override runtime related constraints against ep, before entering txn group
-	ep.EvalConstants = tracer.result.EvalConstants.LogicEvalConstants()
+	ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
 }
 
 func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {

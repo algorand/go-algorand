@@ -69,18 +69,18 @@ func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 // ResultLatestVersion is the latest version of the Result struct
 const ResultLatestVersion = uint64(1)
 
-// ResultEvalConstants contains the limits and parameters during a call to Simulator.Simulate
-type ResultEvalConstants struct {
+// ResultEvalOverrides contains the limits and parameters during a call to Simulator.Simulate
+type ResultEvalOverrides struct {
 	MaxLogCalls *uint64
 	MaxLogSize  *uint64
 }
 
-// ResultEvalConstantsBuilder follows a builder pattern for ResultEvalConstants
+// ResultEvalConstantsBuilder follows a builder pattern for ResultEvalOverrides
 type ResultEvalConstantsBuilder struct {
-	Result ResultEvalConstants
+	Result ResultEvalOverrides
 }
 
-// NewResultEvalConstantsBuilder constructs a builder for ResultEvalConstants
+// NewResultEvalConstantsBuilder constructs a builder for ResultEvalOverrides
 func NewResultEvalConstantsBuilder() *ResultEvalConstantsBuilder {
 	return &ResultEvalConstantsBuilder{}
 }
@@ -94,7 +94,7 @@ const SimulateLogBytesLimit = uint64(65536)
 func (r *ResultEvalConstantsBuilder) LiftLogLimits(lift bool) *ResultEvalConstantsBuilder {
 	if lift {
 		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), SimulateLogBytesLimit
-		r.Result = ResultEvalConstants{
+		r.Result = ResultEvalOverrides{
 			MaxLogCalls: &maxLogCalls,
 			MaxLogSize:  &maxLogSize,
 		}
@@ -102,19 +102,19 @@ func (r *ResultEvalConstantsBuilder) LiftLogLimits(lift bool) *ResultEvalConstan
 	return r
 }
 
-// Finalize method cleanup the *ResultEvalConstants if it is empty ResultEvalConstants{}, then return nil,
-// otherwise it returns the pointer to ResultEvalConstants
-func (r *ResultEvalConstantsBuilder) Finalize() *ResultEvalConstants {
-	// Since ResultEvalConstants is omitempty, we want to check if it is actually empty
-	if r.Result == (ResultEvalConstants{}) {
+// Finalize method cleanup the *ResultEvalOverrides if it is empty ResultEvalOverrides{}, then return nil,
+// otherwise it returns the pointer to ResultEvalOverrides
+func (r *ResultEvalConstantsBuilder) Finalize() *ResultEvalOverrides {
+	// Since ResultEvalOverrides is omitempty, we want to check if it is actually empty
+	if r.Result == (ResultEvalOverrides{}) {
 		return nil
 	}
 	return &r.Result
 }
 
-// LogicEvalConstants method infers the logic.EvalConstants from Result.EvalConstants (*ResultEvalConstants)
+// LogicEvalConstants method infers the logic.EvalConstants from Result.EvalOverrides (*ResultEvalOverrides)
 // and generate appropriate parameters to override during simulation runtime.
-func (c *ResultEvalConstants) LogicEvalConstants() logic.EvalConstants {
+func (c *ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 	logicEvalConstants := logic.RuntimeEvalConstants()
 	if c == nil {
 		return logicEvalConstants
@@ -134,7 +134,7 @@ type Result struct {
 	LastRound     basics.Round
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed  bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
-	EvalConstants *ResultEvalConstants
+	EvalOverrides *ResultEvalOverrides
 	Block         *ledgercore.ValidatedBlock
 }
 
@@ -155,7 +155,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 		Version:       version,
 		LastRound:     lastRound,
 		TxnGroups:     groups,
-		EvalConstants: resultEvalConstants,
+		EvalOverrides: resultEvalConstants,
 		WouldSucceed:  true,
 	}, nil
 }
