@@ -229,7 +229,7 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value []byte
 		return err
 	}
 	if exists {
-		return fmt.Errorf("attempt to recreate %#x", key)
+		return fmt.Errorf("attempt to recreate box %#x", key)
 	}
 
 	record, err := cs.Get(appAddr, false)
