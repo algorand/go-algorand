@@ -222,7 +222,8 @@ func (t *TypeNode) build(path TypePath) TypePath {
 
 // buildStructChildren builds the children of a struct type.
 func (t *TypeNode) buildStructChildren(path TypePath) TypePath {
-	var cyclicPath TypePath
+func (t *TypeNode) buildStructChildren(path TypePath) TypePath {
+	var cyclePath TypePath
 	for i := 0; i < t.Type.NumField(); i++ {
 		typeField := t.Type.Field(i)
 		typeName := typeField.Name
@@ -240,9 +241,9 @@ func (t *TypeNode) buildStructChildren(path TypePath) TypePath {
 			}
 
 			embedded := TypeNode{t.Depth, typeField.Type, reflect.Struct, nil, nil}
-			embeddedCyclicPath := embedded.build(path)
+			embeddedCyclePath := embedded.build(path)
 			if len(embeddedCyclicPath) > 0 {
-				cyclicPath = embeddedCyclicPath
+				cyclePath = embeddedCyclePath
 			}
 			for _, edge := range embedded.ChildNames {
 				child := (*embedded.children)[edge.String()]
@@ -253,13 +254,13 @@ func (t *TypeNode) buildStructChildren(path TypePath) TypePath {
 
 		typeTag := string(typeField.Tag)
 		child := TypeNode{t.Depth + 1, typeField.Type, typeField.Type.Kind(), nil, nil}
-		childCyclicPath := child.build(path)
-		if len(childCyclicPath) > 0 {
-			cyclicPath = childCyclicPath
+		childCyclePath := child.build(path)
+		if len(childCyclePath) > 0 {
+			cyclePath = childCyclePath
 		}
 		t.appendChild(typeName, typeTag, child)
 	}
-	return cyclicPath
+	return cyclePath
 }
 
 func (t *TypeNode) buildListChild(path TypePath) TypePath {
