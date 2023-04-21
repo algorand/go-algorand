@@ -242,7 +242,7 @@ func TestBoxAvailability(t *testing.T) {
 	logic.TestApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, nil, 8, ledger, logic.NewExpect(1, "invalid Box reference B"))
+	}, nil, 8, ledger, logic.NewExpect(1, "invalid Box reference 0x42"))
 
 	// B is available if indexed by 0 in tx[1].Boxes
 	group := logic.MakeSampleTxnGroup(logic.MakeSampleTxn(), txntest.Txn{

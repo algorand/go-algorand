@@ -229,7 +229,7 @@ func (cs *roundCowState) NewBox(appIdx basics.AppIndex, key string, value []byte
 		return err
 	}
 	if exists {
-		return fmt.Errorf("attempt to recreate %s", key)
+		return fmt.Errorf("attempt to recreate %#x", key)
 	}
 
 	record, err := cs.Get(appAddr, false)
@@ -258,10 +258,10 @@ func (cs *roundCowState) SetBox(appIdx basics.AppIndex, key string, value []byte
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("box %s does not exist for %d", key, appIdx)
+		return fmt.Errorf("box %#x does not exist for %d", key, appIdx)
 	}
 	if len(old) != len(value) {
-		return fmt.Errorf("box %s is wrong size old:%d != new:%d",
+		return fmt.Errorf("box %#x is wrong size old:%d != new:%d",
 			key, len(old), len(value))
 	}
 	return cs.kvPut(fullKey, value)
