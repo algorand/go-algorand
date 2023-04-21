@@ -3644,8 +3644,8 @@
         }
       }
     },
-    "SimulationEvalChanges": {
-      "description": "The set of parameters and limits override during simulation.",
+    "SimulationEvalOverrides": {
+      "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
       "type": "object",
       "properties": {
         "max-log-calls": {
@@ -4264,8 +4264,8 @@
               "$ref": "#/definitions/SimulateTransactionGroupResult"
             }
           },
-          "eval-changes": {
-            "$ref": "#/definitions/SimulationEvalChanges"
+          "eval-overrides": {
+            "$ref": "#/definitions/SimulationEvalOverrides"
           },
           "would-succeed": {
             "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",

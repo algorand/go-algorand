@@ -208,8 +208,8 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"') != null ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-changes field %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."eval-overrides"') != null ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-overrides field %Y%m%d_%H%M%S'
     false
 fi
 
@@ -229,8 +229,8 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_F
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"') != null ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-changes field %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."eval-overrides"') != null ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-overrides field %Y%m%d_%H%M%S'
     false
 fi
 
@@ -249,12 +249,12 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."failed-at"') != null ]]; then
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"."max-log-size"') -ne 65536 ]]; then
+if [[ $(echo "$RES" | jq '."eval-overrides"."max-log-size"') -ne 65536 ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log size 65536 %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-changes"."max-log-calls"') -ne 2048 ]]; then
+if [[ $(echo "$RES" | jq '."eval-overrides"."max-log-calls"') -ne 2048 ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal with unlimited log should return max log calls 2048 %Y%m%d_%H%M%S'
     false
 fi

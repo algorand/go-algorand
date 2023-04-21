@@ -1771,7 +1771,7 @@ int 1`
 		Version:      1,
 		LastRound:    resp.LastRound,
 		WouldSucceed: true,
-		EvalChanges: &model.SimulationEvalChanges{
+		EvalOverrides: &model.SimulationEvalOverrides{
 			MaxLogSize:  &maxLogSize,
 			MaxLogCalls: &maxLogCalls,
 		},

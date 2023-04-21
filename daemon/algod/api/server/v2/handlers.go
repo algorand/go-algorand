@@ -944,11 +944,11 @@ type PreEncodedSimulateTxnGroupResult struct {
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
 type PreEncodedSimulateResponse struct {
-	Version      uint64                             `codec:"version"`
-	LastRound    uint64                             `codec:"last-round"`
-	TxnGroups    []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
-	WouldSucceed bool                               `codec:"would-succeed"`
-	EvalChanges  *model.SimulationEvalChanges       `codec:"eval-changes,omitempty"`
+	Version       uint64                             `codec:"version"`
+	LastRound     uint64                             `codec:"last-round"`
+	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	WouldSucceed  bool                               `codec:"would-succeed"`
+	EvalOverrides *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
@@ -1001,11 +1001,6 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 			err = fmt.Errorf("transaction group size %d exceeds protocol max %d", len(txgroup.Txns), proto.MaxTxGroupSize)
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
-	}
-
-	if len(simulateRequest.TxnGroups) != 1 {
-		err := fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups))
-		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
 	txnGroups := make([][]transactions.SignedTxn, len(simulateRequest.TxnGroups))

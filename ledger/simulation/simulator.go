@@ -200,7 +200,11 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	simulatorTracer := makeEvalTracer(s.ledger.start, simulateRequest)
 
 	if len(simulateRequest.TxnGroups) != 1 {
-		return Result{}, fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups))
+		return Result{}, InvalidTxGroupError{
+			SimulatorError{
+				err: fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups)),
+			},
+		}
 	}
 
 	block, missingSigIndexes, err := s.simulateWithTracer(simulateRequest.TxnGroups[0], simulatorTracer)

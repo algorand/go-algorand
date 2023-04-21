@@ -777,8 +777,8 @@
           "application/json": {
             "schema": {
               "properties": {
-                "eval-changes": {
-                  "$ref": "#/components/schemas/SimulationEvalChanges"
+                "eval-overrides": {
+                  "$ref": "#/components/schemas/SimulationEvalOverrides"
                 },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
@@ -1955,8 +1955,8 @@
         ],
         "type": "object"
       },
-      "SimulationEvalChanges": {
-        "description": "The set of parameters and limits override during simulation.",
+      "SimulationEvalOverrides": {
+        "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
         "properties": {
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
@@ -5943,8 +5943,8 @@
               "application/json": {
                 "schema": {
                   "properties": {
-                    "eval-changes": {
-                      "$ref": "#/components/schemas/SimulationEvalChanges"
+                    "eval-overrides": {
+                      "$ref": "#/components/schemas/SimulationEvalOverrides"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
@@ -5978,8 +5978,8 @@
               "application/msgpack": {
                 "schema": {
                   "properties": {
-                    "eval-changes": {
-                      "$ref": "#/components/schemas/SimulationEvalChanges"
+                    "eval-overrides": {
+                      "$ref": "#/components/schemas/SimulationEvalOverrides"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",

@@ -388,20 +388,20 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 }
 
 func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
-	var evalChanges *model.SimulationEvalChanges
+	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
-		evalChanges = &model.SimulationEvalChanges{
+		evalOverrides = &model.SimulationEvalOverrides{
 			MaxLogSize:  result.EvalOverrides.MaxLogSize,
 			MaxLogCalls: result.EvalOverrides.MaxLogCalls,
 		}
 	}
 
 	encodedSimulationResult := PreEncodedSimulateResponse{
-		Version:      result.Version,
-		LastRound:    uint64(result.LastRound),
-		WouldSucceed: result.WouldSucceed,
-		TxnGroups:    make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
-		EvalChanges:  evalChanges,
+		Version:       result.Version,
+		LastRound:     uint64(result.LastRound),
+		WouldSucceed:  result.WouldSucceed,
+		TxnGroups:     make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		EvalOverrides: evalOverrides,
 	}
 
 	for i, txnGroup := range result.TxnGroups {

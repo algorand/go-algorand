@@ -1181,14 +1181,17 @@ func TestLogLimitLiftingInSimulation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	LogTimes := 40
+	LogLongLine := strings.Repeat("a", 1050)
+
 	appSourceThatLogsALot := `#pragma version 8
 txn NumAppArgs
 int 0
 ==
 bnz final
-` + strings.Repeat(`byte "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+` + strings.Repeat(fmt.Sprintf(`byte "%s"
 log
-`, 17) + `final:
+`, LogLongLine), LogTimes) + `final:
 int 1`
 
 	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
@@ -1232,9 +1235,9 @@ int 1`
 	validateSimulationResult(t, actual)
 
 	expectedMaxLogCalls, expectedMaxLogSize := uint64(2048), uint64(65536)
-	expectedLog := make([]string, 17)
-	for i := 0; i < 17; i++ {
-		expectedLog[i] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	expectedLog := make([]string, LogTimes)
+	for i := 0; i < LogTimes; i++ {
+		expectedLog[i] = LogLongLine
 	}
 	testcase := simulationTestCase{
 		input: []transactions.SignedTxn{signedCreateTxn, signedCallsABunchLogs},
@@ -1260,11 +1263,11 @@ int 1`
 									},
 								},
 							},
-							AppBudgetConsumed: 40,
+							AppBudgetConsumed: 86,
 						},
 					},
 					AppBudgetAdded:    1400,
-					AppBudgetConsumed: 46,
+					AppBudgetConsumed: 92,
 				},
 			},
 			EvalOverrides: simulation.ResultEvalOverrides{

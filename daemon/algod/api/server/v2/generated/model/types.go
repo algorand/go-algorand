@@ -656,8 +656,8 @@ type SimulateTransactionResult struct {
 	TxnResult PendingTransactionResponse `json:"txn-result"`
 }
 
-// SimulationEvalChanges The set of parameters and limits override during simulation.
-type SimulationEvalChanges struct {
+// SimulationEvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
+type SimulationEvalOverrides struct {
 	// MaxLogCalls The maximum log calls one can make during simulation
 	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
 
@@ -1026,8 +1026,8 @@ type PostTransactionsResponse struct {
 
 // SimulateResponse defines model for SimulateResponse.
 type SimulateResponse struct {
-	// EvalChanges The set of parameters and limits override during simulation.
-	EvalChanges *SimulationEvalChanges `json:"eval-changes,omitempty"`
+	// EvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
+	EvalOverrides *SimulationEvalOverrides `json:"eval-overrides,omitempty"`
 
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
