@@ -55,4 +55,4 @@ goal-v-sdk-state-delta-xrt:
 There are some cases that break the definition above. For example, `basics.MicroAlgos` is a struct in
 `go-algorand` but is an alias for `uint64` in `go-algorand-sdk`. Our serializers know to produce the same
 output, but this violates the previous notion of _identical_. Such exceptions are handled by providing the string produced by the type's `TypeNode.String()` method
-as en element in the set `diffExclusions` of `typeAnalyzer/typeAnalyzer.go`.
+as an element in the set `diffExclusions` of `typeAnalyzer/typeAnalyzer.go`.
