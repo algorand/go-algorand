@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -134,13 +135,17 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 	start := []byte(kvPrefixOnlineAccountBalance + "-")
 	end := []byte(kvPrefixOnlineAccountBalance + "-")
 	end = append(end, bigEndianUint64(uint64(forgetBefore))...)
-	iter := w.kvr.NewIter(start, end, false)
+	iter := w.kvr.NewIter(start, end, true)
 	defer iter.Close()
 
-	toDelete := make([]struct {
+	toDeletePrimaryIndex := make([]struct {
 		basics.Address
 		basics.Round
 	}, 0)
+
+	toDeleteSecondaryIndex := make([][]byte, 0)
+
+	var prevAddr basics.Address
 
 	for iter.Next() {
 		// read the key
@@ -157,15 +162,50 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 		var addr basics.Address
 		copy(addr[:], key[addrOffset:addrOffset+32])
 
+		if addr != prevAddr {
+			// new address
+			// if the first (latest) entry is
+			//  - offline then delete all
+			//  - online then safe to delete all previous except this first (latest)
+
+			// reset the state
+			prevAddr = addr
+
+			// delete on voting empty
+			var oad trackerdb.BaseOnlineAccountData
+			data, err := iter.Value()
+			if err != nil {
+				return err
+			}
+			err = protocol.Decode(data, &oad)
+			if err != nil {
+				return err
+			}
+			if oad.IsVotingEmpty() {
+				// delete this and all subsequent
+				toDeletePrimaryIndex = append(toDeletePrimaryIndex, struct {
+					basics.Address
+					basics.Round
+				}{addr, round})
+				toDeleteSecondaryIndex = append(toDeleteSecondaryIndex, key)
+			}
+
+			// restart the loop
+			// if there are some subsequent entries, they will deleted on the next iteration
+			// if no subsequent entries, the loop will reset the state and the latest entry does not get deleted
+			continue
+		}
+
 		// mark the item for deletion
-		toDelete = append(toDelete, struct {
+		toDeletePrimaryIndex = append(toDeletePrimaryIndex, struct {
 			basics.Address
 			basics.Round
 		}{addr, round})
+		toDeleteSecondaryIndex = append(toDeleteSecondaryIndex, key)
 	}
 
 	// 2. delete the individual addr+round entries
-	for _, item := range toDelete {
+	for _, item := range toDeletePrimaryIndex {
 		// TODO: [perf] we might be able to optimize this with a SingleDelete call
 		err = w.kvw.Delete(onlineAccountKey(item.Address, item.Round))
 		if err != nil {
@@ -174,9 +214,12 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 	}
 
 	// 3. delete the range from `onlineAccountBalanceKey`
-	err = w.kvw.DeleteRange(start, end)
-	if err != nil {
-		return err
+	for _, key := range toDeleteSecondaryIndex {
+		// TODO: [perf] we might be able to optimize this with a SingleDelete call
+		err = w.kvw.Delete(key)
+		if err != nil {
+			return
+		}
 	}
 
 	return

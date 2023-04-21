@@ -94,6 +94,12 @@ func CustomTestOnlineAccountsWriteRead(t *customT) {
 	require.NoError(t, err)
 	require.Equal(t, basics.MicroAlgos{Raw: uint64(100)}, poA.AccountData.MicroAlgos) // check the data is from the new version
 	require.Equal(t, basics.Round(400), poA.UpdRound)                                 // check the "update round"
+
+	// read (at upd round)
+	poA, err = oar.LookupOnline(addrA, basics.Round(450))
+	require.NoError(t, err)
+	require.Equal(t, basics.MicroAlgos{Raw: uint64(321)}, poA.AccountData.MicroAlgos) // check the data is from the new version
+	require.Equal(t, basics.Round(450), poA.UpdRound)                                 // check the "update round"
 }
 
 func CustomTestOnlineAccountHistory(t *customT) {
@@ -352,6 +358,9 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 	oaw, err := t.db.MakeOnlineAccountsOptimizedWriter(true)
 	require.NoError(t, err)
 
+	oar, err := t.db.MakeOnlineAccountsOptimizedReader()
+	require.NoError(t, err)
+
 	ar, err := t.db.MakeAccountsReader()
 	require.NoError(t, err)
 
@@ -367,7 +376,8 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 	// generate some test data
 	addrA := RandomAddress()
 	dataA1 := trackerdb.BaseOnlineAccountData{
-		BaseVotingData: trackerdb.BaseVotingData{},
+		// some value so its NOT empty
+		BaseVotingData: trackerdb.BaseVotingData{VoteKeyDilution: 1},
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(20)},
 		RewardsBase:    uint64(200),
 	}
@@ -378,7 +388,8 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 
 	// generate some test data
 	dataA2 := trackerdb.BaseOnlineAccountData{
-		BaseVotingData: trackerdb.BaseVotingData{},
+		// some value so its NOT empty
+		BaseVotingData: trackerdb.BaseVotingData{VoteKeyDilution: 1},
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
 		RewardsBase:    uint64(200),
 	}
@@ -390,7 +401,8 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 	// generate some test data
 	addrB := RandomAddress()
 	dataB1 := trackerdb.BaseOnlineAccountData{
-		BaseVotingData: trackerdb.BaseVotingData{},
+		// some value so its NOT empty
+		BaseVotingData: trackerdb.BaseVotingData{VoteKeyDilution: 1},
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(75)},
 		RewardsBase:    uint64(200),
 	}
@@ -398,6 +410,11 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 
 	_, err = oaw.InsertOnlineAccount(addrB, normalizedBalB1, dataB1, uint64(2), uint64(3))
 	require.NoError(t, err)
+
+	// timeline
+	// round 0: A touched [0]
+	// round 1: A touched [1,0]
+	// round 2: B touched [2] + A remains [1,0]
 
 	//
 	// the test
@@ -412,6 +429,10 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 	require.NoError(t, err)
 	require.Len(t, oas, 1)
 	require.Equal(t, oas[addrA].MicroAlgos, basics.MicroAlgos{Raw: uint64(20)}) // check item
+	// read the accounts directly
+	poaA, err := oar.LookupOnline(addrA, basics.Round(0))
+	require.NoError(t, err)
+	require.NotNil(t, poaA.Ref) // A was found
 
 	// delete before round 1
 	err = aw.OnlineAccountsDelete(basics.Round(1))
@@ -422,6 +443,10 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 	require.NoError(t, err)
 	require.Len(t, oas, 1)
 	require.Equal(t, oas[addrA].MicroAlgos, basics.MicroAlgos{Raw: uint64(100)}) // check item
+	// read the accounts directly
+	poaA, err = oar.LookupOnline(addrA, basics.Round(1))
+	require.NoError(t, err)
+	require.NotNil(t, poaA.Ref) // A was found
 
 	// delete before round 2
 	err = aw.OnlineAccountsDelete(basics.Round(2))
@@ -430,6 +455,14 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 	// check they are all there
 	oas, err = ar.AccountsOnlineTop(basics.Round(2), 0, 10, t.proto)
 	require.NoError(t, err)
-	require.Len(t, oas, 1)
+	require.Len(t, oas, 2)
 	require.Equal(t, oas[addrB].MicroAlgos, basics.MicroAlgos{Raw: uint64(75)}) // check item
+	// read the accounts directly
+	poaA, err = oar.LookupOnline(addrA, basics.Round(2))
+	require.NoError(t, err)
+	require.NotNil(t, poaA.Ref)                      // A is still found, the latest record is kept
+	require.Equal(t, basics.Round(1), poaA.UpdRound) // the latest we find is at 1
+	poaB, err := oar.LookupOnline(addrB, basics.Round(2))
+	require.NoError(t, err)
+	require.NotNil(t, poaB.Ref) // B was found
 }

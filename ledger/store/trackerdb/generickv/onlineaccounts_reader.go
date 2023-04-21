@@ -58,6 +58,7 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 	if iter.Next() {
 		// schema: <prefix>-<addr>-<rnd>
 		key := iter.Key()
+
 		// extract updround, its the last section after the "-"
 		rndOffset := len(kvPrefixOnlineAccount) + 1 + 32 + 1
 		updRound = binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
