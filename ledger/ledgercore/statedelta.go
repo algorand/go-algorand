@@ -219,12 +219,75 @@ func (sd *StateDelta) PopulateStateDelta(hdr *bookkeeping.BlockHeader, prevTimes
 	sd.PrevTimestamp = prevTimestamp
 }
 
+func (sd *StateDelta) Hydrate() {
+	sd.Accts.Hydrate()
+}
+
+func (sd *StateDelta) Dehydrate() {
+	sd.Accts.Dehydrate()
+	sd.initialHint = 0
+	if sd.KvMods == nil {
+		sd.KvMods = make(map[string]KvValueDelta)
+	}
+	if sd.Txids == nil {
+		sd.Txids = make(map[transactions.Txid]IncludedTransactions)
+	}
+	if sd.Txleases == nil {
+		sd.Txleases = make(map[Txlease]basics.Round)
+	}
+	if sd.Creatables == nil {
+		sd.Creatables = make(map[basics.CreatableIndex]ModifiedCreatable)
+	}
+}
+
 // MakeAccountDeltas creates account delta
 // if adding new fields make sure to add them to the .reset() and .isEmpty() methods
 func MakeAccountDeltas(hint int) AccountDeltas {
 	return AccountDeltas{
 		Accts:      make([]BalanceRecord, 0, hint*2),
 		acctsCache: make(map[basics.Address]int, hint*2),
+	}
+}
+
+func (ad *AccountDeltas) Hydrate() {
+	for idx, acct := range ad.Accts {
+		ad.acctsCache[acct.Addr] = idx
+	}
+	for idx, app := range ad.AppResources {
+		ad.appResourcesCache[AccountApp{app.Addr, app.Aidx}] = idx
+	}
+	for idx, asset := range ad.AssetResources {
+		ad.assetResourcesCache[AccountAsset{asset.Addr, asset.Aidx}] = idx
+	}
+}
+
+func (ad *AccountDeltas) Dehydrate() {
+	if ad.Accts == nil {
+		ad.Accts = []BalanceRecord{}
+	}
+	if ad.AppResources == nil {
+		ad.AppResources = []AppResourceRecord{}
+	}
+	if ad.AssetResources == nil {
+		ad.AssetResources = []AssetResourceRecord{}
+	}
+	if ad.acctsCache == nil {
+		ad.acctsCache = make(map[basics.Address]int)
+	}
+	for key := range ad.acctsCache {
+		delete(ad.acctsCache, key)
+	}
+	if ad.appResourcesCache == nil {
+		ad.appResourcesCache = make(map[AccountApp]int)
+	}
+	for key := range ad.appResourcesCache {
+		delete(ad.appResourcesCache, key)
+	}
+	if ad.assetResourcesCache == nil {
+		ad.assetResourcesCache = make(map[AccountAsset]int)
+	}
+	for key := range ad.assetResourcesCache {
+		delete(ad.assetResourcesCache, key)
 	}
 }
 

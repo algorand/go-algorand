@@ -244,14 +244,19 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 	scenarios := mocktracer.GetTestScenarios()
 
 	// TODO: remove this filter
-	scenarios = map[string]mocktracer.TestScenarioGenerator{
-		"none": scenarios["none"],
-		// "before inners,error=true": scenarios["before inners,error=true"],
-		// "before inners,error=false": scenarios["before inners,error=false"],
-		// "first inner,error=true":    scenarios["first inner,error=true"],
-		// "first inner,error=false":   scenarios["first inner,error=false"],
-		// "between inners,error=true": scenarios["between inners,error=true"],
-	}
+	// scenarios = map[string]mocktracer.TestScenarioGenerator{
+	// 	"none":                       scenarios["none"],
+	// 	"before inners,error=true":   scenarios["before inners,error=true"],
+	// 	"before inners,error=false":  scenarios["before inners,error=false"],
+	// 	"first inner,error=true":     scenarios["first inner,error=true"],
+	// 	"first inner,error=false":    scenarios["first inner,error=false"],
+	// 	"between inners,error=true":  scenarios["between inners,error=true"],
+	// 	"between inners,error=false": scenarios["between inners,error=false"],
+	// 	"second inner":               scenarios["second inner"],
+	// 	"third inner":                scenarios["third inner"],
+	// 	"after inners,error=true":    scenarios["after inners,error=true"],
+	// 	"after inners,error=false":   scenarios["after inners,error=false"],
+	// }
 
 	type tracerTestCase struct {
 		name                 string
@@ -544,8 +549,19 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 							},
 						})...)
 					}
-					mocktracer.HydrateStateDeltas(expectedEvents)
 					actualEvents := mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events)
+
+					// Dehydrate deltas for easier comparison
+					for i := range actualEvents {
+						if actualEvents[i].Deltas != nil {
+							actualEvents[i].Deltas.Dehydrate()
+						}
+					}
+					for i := range expectedEvents {
+						if expectedEvents[i].Deltas != nil {
+							expectedEvents[i].Deltas.Dehydrate()
+						}
+					}
 
 					// These extra tests are not necessary for correctness, but they provide more targeted information on failure
 					if assert.Equal(t, len(expectedEvents), len(actualEvents)) {
