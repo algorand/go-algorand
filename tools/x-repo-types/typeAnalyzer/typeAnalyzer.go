@@ -160,7 +160,7 @@ type TypePath []TypeNode
 func (t TypePath) String() string {
 	parts := make([]string, len(t))
 	for i, node := range t {
-		parts[i] = fmt.Sprintf("%q", (&node).String())
+		parts[i] = fmt.Sprintf("%q", node.String())
 	}
 	return fmt.Sprintf("[]string{%s}", strings.Join(parts, ", "))
 }
