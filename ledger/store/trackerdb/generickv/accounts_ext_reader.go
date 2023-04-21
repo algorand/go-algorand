@@ -172,7 +172,6 @@ func (r *accountsReader) LookupOnlineAccountDataByAddress(addr basics.Address) (
 // particular round (past, present, or future).
 func (r *accountsReader) AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (data map[basics.Address]*ledgercore.OnlineAccount, err error) {
 	// The SQL before the impl
-	//
 	// SELECT
 	// 		address, normalizedonlinebalance, data, max(updround) FROM onlineaccounts
 	// WHERE updround <= ?
@@ -185,7 +184,8 @@ func (r *accountsReader) AccountsOnlineTop(rnd basics.Round, offset uint64, n ui
 	data = make(map[basics.Address]*ledgercore.OnlineAccount)
 
 	// prepare iter over online accounts (by balance)
-	low := onlineAccountBalanceOnlyPartialKey(rnd)
+	low := []byte(kvPrefixOnlineAccountBalance)
+	low = append(low, "-"...)
 	high := onlineAccountBalanceOnlyPartialKey(rnd)
 	high[len(high)-1]++
 	// reverse order iterator to get high-to-low
@@ -216,6 +216,11 @@ func (r *accountsReader) AccountsOnlineTop(rnd basics.Round, offset uint64, n ui
 		// extract address
 		var addr basics.Address
 		copy(addr[:], key[offset:])
+
+		// skip if already in map
+		if _, ok := data[addr]; ok {
+			continue
+		}
 
 		value, err = iter.Value()
 		if err != nil {

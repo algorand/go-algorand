@@ -104,6 +104,7 @@ func onlineAccountOnlyPartialKey(address basics.Address) []byte {
 	ret := []byte(kvPrefixOnlineAccount)
 	ret = append(ret, "-"...)
 	ret = append(ret, address[:]...)
+	ret = append(ret, "-"...)
 	return ret
 }
 
@@ -123,6 +124,7 @@ func onlineAccountBalanceOnlyPartialKey(round basics.Round) []byte {
 	ret := []byte(kvPrefixOnlineAccountBalance)
 	ret = append(ret, "-"...)
 	ret = append(ret, bigEndianUint64(uint64(round))...)
+	ret = append(ret, "-"...)
 	return ret
 }
 
