@@ -18,6 +18,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type testCase struct {
@@ -29,6 +31,8 @@ type testCase struct {
 }
 
 func TestRunApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	testCases := []testCase{
 		{
 			name:        "SDK: StateDelta",
