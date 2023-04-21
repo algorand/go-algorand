@@ -205,7 +205,7 @@ func (t *TypeNode) build(path TypePath) TypePath {
 		}
 	}
 
-  var cyclePath TypePath
+	var cyclePath TypePath
 	switch t.Kind {
 	case reflect.Struct:
 		cyclePath = t.buildStructChildren(path)
@@ -221,7 +221,6 @@ func (t *TypeNode) build(path TypePath) TypePath {
 }
 
 // buildStructChildren builds the children of a struct type.
-func (t *TypeNode) buildStructChildren(path TypePath) TypePath {
 func (t *TypeNode) buildStructChildren(path TypePath) TypePath {
 	var cyclePath TypePath
 	for i := 0; i < t.Type.NumField(); i++ {
@@ -242,7 +241,7 @@ func (t *TypeNode) buildStructChildren(path TypePath) TypePath {
 
 			embedded := TypeNode{t.Depth, typeField.Type, reflect.Struct, nil, nil}
 			embeddedCyclePath := embedded.build(path)
-			if len(embeddedCyclicPath) > 0 {
+			if len(embeddedCyclePath) > 0 {
 				cyclePath = embeddedCyclePath
 			}
 			for _, edge := range embedded.ChildNames {
@@ -275,7 +274,7 @@ func (t *TypeNode) buildMapChildren(path TypePath) TypePath {
 	keyType, valueType := t.Type.Key(), t.Type.Elem()
 
 	keyChild := TypeNode{t.Depth + 1, keyType, keyType.Kind(), nil, nil}
-  // don't worry about path because struct keys must be hashable:
+	// don't worry about path because struct keys must be hashable:
 	keyChild.build(path)
 	t.appendChild("<map key>", "", keyChild)
 
