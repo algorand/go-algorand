@@ -365,9 +365,6 @@ func targetTreeDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 	// Otherwise, call the children recursively. If any of them report
 	// a diff, modify the diff's CommonPath to include the current edge and return it.
 	for k, xChild := range xSerials {
-		// if _, ok := exclusions[xChild.TypeNode.String()]; ok {
-		// 	continue
-		// }
 		if exclusions[xChild.TypeNode.String()] {
 			continue
 		}
