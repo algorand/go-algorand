@@ -79,7 +79,7 @@ func main() {
 	fmt.Println(Report(xType, yType, diff))
 
 	if !diff.Empty() {
-		// signal the this "test" has failed
+		// signal that this "test" has failed
 		os.Exit(1)
 	}
 }
