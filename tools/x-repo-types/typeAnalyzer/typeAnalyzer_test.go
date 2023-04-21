@@ -91,14 +91,6 @@ type Node struct {
 	Next *Node
 }
 
-// Max depth of Senior-Parent-Child relationship is actually 4 given how depth is calculated
-// via reflection.
-// Depth 0. main.Senior (struct)
-// Depth 1. []main.Parent (slice)
-// Depth 2. main.Parent (struct)
-// Depth 3. *main.Child (ptr)
-// Depth 4. main.Child (struct)
-// Depth DISQUALIFIED. main.Senior (struct) AS ALREADY SEEN
 type Senior struct {
 	Children []Parent
 }
