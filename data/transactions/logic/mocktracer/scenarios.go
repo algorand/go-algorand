@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -86,6 +87,9 @@ type TestScenarioInfo struct {
 	FeeSinkAddr    basics.Address
 	MinFee         basics.MicroAlgos
 	CreatedAppID   basics.AppIndex
+	GranularEval   bool
+	BlockHeader    bookkeeping.BlockHeader
+	PrevTimestamp  int64
 }
 
 func expectedApplyDataAndStateDelta(info TestScenarioInfo, appCallProgram string, innerProgramBytes []byte) (transactions.ApplyData, ledgercore.StateDelta, ledgercore.StateDelta, ledgercore.StateDelta) {
@@ -168,7 +172,7 @@ pushint 1`,
 	expectedFeeSinkData := ledgercore.ToAccountData(info.FeeSinkData)
 	expectedFeeSinkData.MicroAlgos.Raw += info.CallingTxn.Fee.Raw
 
-	var expectedDeltaCallingTxn ledgercore.StateDelta
+	expectedDeltaCallingTxn := ledgercore.MakeStateDelta(&info.BlockHeader, info.PrevTimestamp, 0, 0)
 	expectedDeltaCallingTxn.Accts.Upsert(info.CallingTxn.Sender, expectedSenderData)
 	expectedDeltaCallingTxn.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
 	expectedDeltaCallingTxn.Accts.UpsertAppResource(info.CallingTxn.Sender, info.CreatedAppID, ledgercore.AppParamsDelta{
@@ -187,13 +191,19 @@ pushint 1`,
 		Created: true,
 		Creator: info.CallingTxn.Sender,
 	})
+	// Cannot call info.CallingTxn.ID() yet, since the txn and its group are not yet final. Instead,
+	// use the Txid zero value as a placeholder. It's up to the caller to update this if they need it.
+	expectedDeltaCallingTxn.Txids[transactions.Txid{}] = ledgercore.IncludedTransactions{
+		LastValid: info.CallingTxn.LastValid,
+		Intra:     0,
+	}
 
 	expectedAppAccountData := ledgercore.ToAccountData(info.AppAccountData)
 	expectedAppAccountData.TotalAppParams += 1
 	expectedAppAccountData.MicroAlgos.Raw -= info.MinFee.Raw
 	expectedFeeSinkData.MicroAlgos.Raw += info.MinFee.Raw
 
-	var expectedDeltaInnerAppCall ledgercore.StateDelta
+	expectedDeltaInnerAppCall := ledgercore.MakeStateDelta(&info.BlockHeader, info.PrevTimestamp, 0, 0)
 	expectedDeltaInnerAppCall.Accts.Upsert(info.CreatedAppID.Address(), expectedAppAccountData)
 	expectedDeltaInnerAppCall.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
 	expectedDeltaInnerAppCall.Accts.UpsertAppResource(info.CreatedAppID.Address(), info.CreatedAppID+1, ledgercore.AppParamsDelta{
@@ -211,25 +221,11 @@ pushint 1`,
 	expectedAppAccountData.MicroAlgos.Raw -= 2 * info.MinFee.Raw
 	expectedFeeSinkData.MicroAlgos.Raw += 2 * info.MinFee.Raw
 
-	var expectedDeltaInnerPays ledgercore.StateDelta
+	expectedDeltaInnerPays := ledgercore.MakeStateDelta(&info.BlockHeader, info.PrevTimestamp, 0, 0)
 	expectedDeltaInnerPays.Accts.Upsert(info.CreatedAppID.Address(), expectedAppAccountData)
 	expectedDeltaInnerPays.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
 
 	return expectedAD, expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPays
-}
-
-func mergeDeltas(deltas ...ledgercore.StateDelta) ledgercore.StateDelta {
-	var result ledgercore.StateDelta
-	for _, delta := range deltas {
-		result.Accts.MergeAccounts(delta.Accts)
-		for key, delta := range delta.KvMods {
-			result.AddKvMod(key, delta)
-		}
-		for id, delta := range delta.Creatables {
-			result.AddCreatable(id, delta)
-		}
-	}
-	return result
 }
 
 // TestScenarioOutcome represents an outcome of a TestScenario
@@ -282,7 +278,13 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 	noFailure := func(info TestScenarioInfo) TestScenario {
 		program := fillProgramTemplate("", successInnerProgram, "", 1, 2, "pushint 1")
 		expectedAD, expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPays := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
-		expectedDelta := mergeDeltas(expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPays)
+		expectedDelta := MergeStateDeltas(expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPays)
+
+		// remove all creatables from granular delta
+		for txid := range expectedDeltaInnerAppCall.Creatables {
+			delete(expectedDeltaInnerAppCall.Creatables, txid)
+		}
+
 		return TestScenario{
 			Outcome:       ApprovalOutcome,
 			Program:       program,
@@ -303,7 +305,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				OpcodeEvents(3, false),
 				{
 					AfterProgram(logic.ModeApp, false),
-					AfterTxn(protocol.ApplicationCallTx, expectedAD.EvalDelta.InnerTxns[0].ApplyData, nil, false),
+					AfterTxn(protocol.ApplicationCallTx, expectedAD.EvalDelta.InnerTxns[0].ApplyData, StateDeltaIfTrue(expectedDeltaInnerAppCall, info.GranularEval), false),
 					AfterTxnGroup(1, nil, false), // end first itxn group
 					AfterOpcode(false),
 				},
@@ -312,16 +314,16 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					BeforeOpcode(),
 					BeforeTxnGroup(2), // start second itxn group
 					BeforeTxn(protocol.PaymentTx),
-					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[1].ApplyData, nil, false),
+					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[1].ApplyData, StateDeltaIfTrue(expectedDeltaInnerPays, info.GranularEval), false),
 					BeforeTxn(protocol.PaymentTx),
-					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[2].ApplyData, nil, false),
+					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[2].ApplyData, StateDeltaIfTrue(expectedDeltaInnerPays, info.GranularEval), false), // TODO: this is wrong because both txns are palaced in the same delta
 					AfterTxnGroup(2, nil, false), // end second itxn group
 					AfterOpcode(false),
 				},
 				OpcodeEvents(3, false),
 				{
 					AfterProgram(logic.ModeApp, false),
-					AfterTxn(protocol.ApplicationCallTx, expectedAD, nil, false),
+					AfterTxn(protocol.ApplicationCallTx, expectedAD, StateDeltaIfTrue(expectedDelta, info.GranularEval), false),
 				},
 			}),
 			ExpectedSimulationAD: expectedAD,
@@ -708,4 +710,62 @@ func StripInnerTxnGroupIDsFromEvents(events []Event) []Event {
 		stripInnerTxnGroupIDs(&events[i].TxnApplyData)
 	}
 	return events
+}
+
+func HydrateStateDeltas(events []Event) []Event {
+	for i := range events {
+		deltas := events[i].Deltas
+		if deltas == nil {
+			continue
+		}
+		if deltas.Accts.AppResources == nil {
+			deltas.Accts.AppResources = make([]ledgercore.AppResourceRecord, 0)
+		}
+		if deltas.Creatables == nil {
+			deltas.Creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+		}
+	}
+	return events
+}
+
+func MergeStateDeltas(deltas ...ledgercore.StateDelta) ledgercore.StateDelta {
+	if len(deltas) == 0 {
+		return ledgercore.StateDelta{}
+	}
+
+	result := ledgercore.StateDelta{
+		// copy basic fields from the first delta
+		Hdr:            deltas[0].Hdr,
+		StateProofNext: deltas[0].StateProofNext,
+		PrevTimestamp:  deltas[0].PrevTimestamp,
+		Totals:         deltas[0].Totals,
+
+		// initialize structure for later use
+		Txids: make(map[transactions.Txid]ledgercore.IncludedTransactions),
+	}
+	for _, delta := range deltas {
+		result.Accts.MergeAccounts(delta.Accts)
+		for key, delta := range delta.KvMods {
+			result.AddKvMod(key, delta)
+		}
+		for id, delta := range delta.Creatables {
+			result.AddCreatable(id, delta)
+		}
+		txidBase := uint64(len(result.Txids))
+		for txid, includedTx := range delta.Txids {
+			includedTx.Intra += txidBase
+			result.Txids[txid] = includedTx
+		}
+		for lease, round := range delta.Txleases {
+			result.Txleases[lease] = round
+		}
+	}
+	return result
+}
+
+func StateDeltaIfTrue(delta ledgercore.StateDelta, cond bool) *ledgercore.StateDelta {
+	if cond {
+		return &delta
+	}
+	return nil
 }

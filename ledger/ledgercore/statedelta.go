@@ -363,7 +363,6 @@ func (ad *AccountDeltas) MergeAccounts(other AccountDeltas) {
 	for _, balanceRecord := range other.Accts {
 		ad.Upsert(balanceRecord.Addr, balanceRecord.AccountData)
 	}
-
 	for _, appResource := range other.AppResources {
 		ad.UpsertAppResource(appResource.Addr, appResource.Aidx, appResource.Params, appResource.State)
 	}
