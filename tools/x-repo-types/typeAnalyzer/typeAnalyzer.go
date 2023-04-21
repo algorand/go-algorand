@@ -205,21 +205,18 @@ func (t *TypeNode) build(path TypePath) TypePath {
 		}
 	}
 
-	x := fmt.Sprintf("%q", t.Type)
-	_ = x
-	var cyclicPath TypePath
 	switch t.Kind {
 	case reflect.Struct:
-		cyclicPath = t.buildStructChildren(path)
+		path = t.buildStructChildren(path)
 	case reflect.Slice, reflect.Array:
-		cyclicPath = t.buildListChild(path)
+		path = t.buildListChild(path)
 	case reflect.Map:
-		cyclicPath = t.buildMapChildren(path)
+		path = t.buildMapChildren(path)
 	case reflect.Ptr:
-		cyclicPath = t.buildPtrChild(path)
+		path = t.buildPtrChild(path)
 	}
 
-	return cyclicPath
+	return path
 }
 
 // buildStructChildren builds the children of a struct type.
