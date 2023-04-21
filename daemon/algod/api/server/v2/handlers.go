@@ -1007,12 +1007,16 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		err := fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups))
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	txgroup := simulateRequest.TxnGroups[0].Txns
+
+	txnGroups := make([][]transactions.SignedTxn, len(simulateRequest.TxnGroups))
+	for i := 0; i < len(simulateRequest.TxnGroups); i++ {
+		txnGroups[i] = simulateRequest.TxnGroups[i].Txns
+	}
 
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(
 		simulation.Request{
-			TxGroup:       txgroup,
+			TxnGroups:     txnGroups,
 			LiftLogLimits: simulateRequest.LiftLogLimits,
 		},
 	)

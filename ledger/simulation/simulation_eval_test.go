@@ -151,7 +151,7 @@ func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, t
 
 	testcase := f(accounts, txnInfo)
 
-	actual, err := s.Simulate(simulation.Request{TxGroup: testcase.input})
+	actual, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{testcase.input}})
 	require.NoError(t, err)
 
 	validateSimulationResult(t, actual)
@@ -457,7 +457,7 @@ func TestStateProofTxn(t *testing.T) {
 		}).SignedTxn(),
 	}
 
-	_, err := s.Simulate(simulation.Request{TxGroup: txgroup})
+	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.ErrorContains(t, err, "cannot simulate StateProof transactions")
 }
 
@@ -490,7 +490,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	}
 
 	// Should fail if there is no group parameter
-	result, err := s.Simulate(simulation.Request{TxGroup: txgroup})
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.NoError(t, err)
 	require.False(t, result.WouldSucceed)
 	require.Len(t, result.TxnGroups, 1)
@@ -510,7 +510,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
 
 	// Should now pass
-	result, err = s.Simulate(simulation.Request{TxGroup: txgroup})
+	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.NoError(t, err)
 	require.False(t, result.WouldSucceed)
 	require.Len(t, result.TxnGroups, 1)
@@ -1121,7 +1121,7 @@ func TestSignatureCheck(t *testing.T) {
 	}
 
 	// should catch missing signature
-	result, err := s.Simulate(simulation.Request{TxGroup: txgroup})
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.NoError(t, err)
 	require.False(t, result.WouldSucceed)
 	require.Len(t, result.TxnGroups, 1)
@@ -1134,7 +1134,7 @@ func TestSignatureCheck(t *testing.T) {
 	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
 
 	// should not error now that we have a signature
-	result, err = s.Simulate(simulation.Request{TxGroup: txgroup})
+	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.NoError(t, err)
 	require.True(t, result.WouldSucceed)
 	require.Len(t, result.TxnGroups, 1)
@@ -1144,7 +1144,7 @@ func TestSignatureCheck(t *testing.T) {
 
 	// should error with invalid signature
 	txgroup[0].Sig[0] += byte(1) // will wrap if > 255
-	result, err = s.Simulate(simulation.Request{TxGroup: txgroup})
+	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
 	require.ErrorContains(t, err, "one signature didn't pass")
 }
@@ -1170,7 +1170,7 @@ func TestInvalidTxGroup(t *testing.T) {
 	}
 
 	// should error with invalid transaction group error
-	_, err := s.Simulate(simulation.Request{TxGroup: txgroup})
+	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
 	require.ErrorContains(t, err, "transaction from incentive pool is invalid")
 }
@@ -1223,7 +1223,7 @@ int 1`
 
 	actual, err := s.Simulate(
 		simulation.Request{
-			TxGroup:       []transactions.SignedTxn{signedCreateTxn, signedCallsABunchLogs},
+			TxnGroups:     [][]transactions.SignedTxn{{signedCreateTxn, signedCallsABunchLogs}},
 			LiftLogLimits: true,
 		},
 	)

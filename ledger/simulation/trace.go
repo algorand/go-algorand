@@ -138,18 +138,18 @@ type Result struct {
 	Block         *ledgercore.ValidatedBlock
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64, liftLogLimits bool) (Result, error) {
+func makeSimulationResultWithVersion(lastRound basics.Round, request Request, version uint64) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
 
-	groups := make([]TxnGroupResult, len(txgroups))
+	groups := make([]TxnGroupResult, len(request.TxnGroups))
 
-	for i, txgroup := range txgroups {
+	for i, txgroup := range request.TxnGroups {
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
-	resultEvalConstants := NewResultEvalConstantsBuilder().LiftLogLimits(liftLogLimits).Finalize()
+	resultEvalConstants := NewResultEvalConstantsBuilder().LiftLogLimits(request.LiftLogLimits).Finalize()
 
 	return Result{
 		Version:       version,
@@ -160,8 +160,8 @@ func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transa
 	}, nil
 }
 
-func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn, liftLogLimits bool) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion, liftLogLimits)
+func makeSimulationResult(lastRound basics.Round, request Request) Result {
+	result, err := makeSimulationResultWithVersion(lastRound, request, ResultLatestVersion)
 	if err != nil {
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)

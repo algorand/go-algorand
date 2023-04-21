@@ -84,7 +84,7 @@ type evalTracer struct {
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request) *evalTracer {
-	result := makeSimulationResult(lastRound, [][]transactions.SignedTxn{request.TxGroup}, request.LiftLogLimits)
+	result := makeSimulationResult(lastRound, request)
 	return &evalTracer{result: &result}
 }
 
