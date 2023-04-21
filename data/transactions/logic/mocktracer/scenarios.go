@@ -88,7 +88,7 @@ type TestScenarioInfo struct {
 	CreatedAppID   basics.AppIndex
 }
 
-func expectedApplyData(info TestScenarioInfo) transactions.ApplyData {
+func expectedApplyDataAndStateDelta(info TestScenarioInfo, appCallProgram string, innerProgramBytes []byte) (transactions.ApplyData, ledgercore.StateDelta, ledgercore.StateDelta, ledgercore.StateDelta) {
 	expectedInnerAppCall := txntest.Txn{
 		Type:   protocol.ApplicationCallTx,
 		Sender: info.CreatedAppID.Address(),
@@ -133,7 +133,8 @@ pushint 1`,
 		Fee:        info.MinFee,
 	}
 	expectedInnerPay2AD := transactions.ApplyData{}
-	return transactions.ApplyData{
+
+	expectedAD := transactions.ApplyData{
 		ApplicationID: info.CreatedAppID,
 		EvalDelta: transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{},
@@ -155,6 +156,80 @@ pushint 1`,
 			Logs: []string{"a", "b", "c"},
 		},
 	}
+
+	ops, err := logic.AssembleString(appCallProgram)
+	if err != nil {
+		panic(err)
+	}
+
+	expectedSenderData := ledgercore.ToAccountData(info.SenderData)
+	expectedSenderData.MicroAlgos.Raw -= info.CallingTxn.Fee.Raw
+	expectedSenderData.TotalAppParams += 1
+	expectedFeeSinkData := ledgercore.ToAccountData(info.FeeSinkData)
+	expectedFeeSinkData.MicroAlgos.Raw += info.CallingTxn.Fee.Raw
+
+	var expectedDeltaCallingTxn ledgercore.StateDelta
+	expectedDeltaCallingTxn.Accts.Upsert(info.CallingTxn.Sender, expectedSenderData)
+	expectedDeltaCallingTxn.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
+	expectedDeltaCallingTxn.Accts.UpsertAppResource(info.CallingTxn.Sender, info.CreatedAppID, ledgercore.AppParamsDelta{
+		Params: &basics.AppParams{
+			ApprovalProgram:   ops.Program,
+			ClearStateProgram: info.CallingTxn.ClearStateProgram,
+			StateSchemas: basics.StateSchemas{
+				LocalStateSchema:  info.CallingTxn.LocalStateSchema,
+				GlobalStateSchema: info.CallingTxn.GlobalStateSchema,
+			},
+			ExtraProgramPages: info.CallingTxn.ExtraProgramPages,
+		},
+	}, ledgercore.AppLocalStateDelta{})
+	expectedDeltaCallingTxn.AddCreatable(basics.CreatableIndex(info.CreatedAppID), ledgercore.ModifiedCreatable{
+		Ctype:   basics.AppCreatable,
+		Created: true,
+		Creator: info.CallingTxn.Sender,
+	})
+
+	expectedAppAccountData := ledgercore.ToAccountData(info.AppAccountData)
+	expectedAppAccountData.TotalAppParams += 1
+	expectedAppAccountData.MicroAlgos.Raw -= info.MinFee.Raw
+	expectedFeeSinkData.MicroAlgos.Raw += info.MinFee.Raw
+
+	var expectedDeltaInnerAppCall ledgercore.StateDelta
+	expectedDeltaInnerAppCall.Accts.Upsert(info.CreatedAppID.Address(), expectedAppAccountData)
+	expectedDeltaInnerAppCall.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
+	expectedDeltaInnerAppCall.Accts.UpsertAppResource(info.CreatedAppID.Address(), info.CreatedAppID+1, ledgercore.AppParamsDelta{
+		Params: &basics.AppParams{
+			ApprovalProgram:   innerProgramBytes,
+			ClearStateProgram: []byte{0x06, 0x81, 0x01}, // #pragma version 6; int 1;
+		},
+	}, ledgercore.AppLocalStateDelta{})
+	expectedDeltaInnerAppCall.AddCreatable(basics.CreatableIndex(info.CreatedAppID+1), ledgercore.ModifiedCreatable{
+		Ctype:   basics.AppCreatable,
+		Created: true,
+		Creator: info.CreatedAppID.Address(),
+	})
+
+	expectedAppAccountData.MicroAlgos.Raw -= 2 * info.MinFee.Raw
+	expectedFeeSinkData.MicroAlgos.Raw += 2 * info.MinFee.Raw
+
+	var expectedDeltaInnerPays ledgercore.StateDelta
+	expectedDeltaInnerPays.Accts.Upsert(info.CreatedAppID.Address(), expectedAppAccountData)
+	expectedDeltaInnerPays.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
+
+	return expectedAD, expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPays
+}
+
+func mergeDeltas(deltas ...ledgercore.StateDelta) ledgercore.StateDelta {
+	var result ledgercore.StateDelta
+	for _, delta := range deltas {
+		result.Accts.MergeAccounts(delta.Accts)
+		for key, delta := range delta.KvMods {
+			result.AddKvMod(key, delta)
+		}
+		for id, delta := range delta.Creatables {
+			result.AddCreatable(id, delta)
+		}
+	}
+	return result
 }
 
 // TestScenarioOutcome represents an outcome of a TestScenario
@@ -205,53 +280,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 	noFailureName := "none"
 	noFailure := func(info TestScenarioInfo) TestScenario {
-		expectedAD := expectedApplyData(info)
 		program := fillProgramTemplate("", successInnerProgram, "", 1, 2, "pushint 1")
-		ops, err := logic.AssembleString(program)
-		if err != nil {
-			panic(err)
-		}
-
-		expectedSenderData := ledgercore.ToAccountData(info.SenderData)
-		expectedSenderData.MicroAlgos.Raw -= info.CallingTxn.Fee.Raw
-		expectedSenderData.TotalAppParams += 1
-		expectedAppAccountData := ledgercore.ToAccountData(info.AppAccountData)
-		expectedAppAccountData.MicroAlgos.Raw -= 3 * info.MinFee.Raw
-		expectedAppAccountData.TotalAppParams += 1
-		expectedFeeSinkData := ledgercore.ToAccountData(info.FeeSinkData)
-		expectedFeeSinkData.MicroAlgos.Raw += info.CallingTxn.Fee.Raw + 3*info.MinFee.Raw
-
-		var expectedDelta ledgercore.StateDelta
-		expectedDelta.Accts.Upsert(info.CallingTxn.Sender, expectedSenderData)
-		expectedDelta.Accts.Upsert(info.CreatedAppID.Address(), expectedAppAccountData)
-		expectedDelta.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
-		expectedDelta.Accts.UpsertAppResource(info.CallingTxn.Sender, info.CreatedAppID, ledgercore.AppParamsDelta{
-			Params: &basics.AppParams{
-				ApprovalProgram:   ops.Program,
-				ClearStateProgram: info.CallingTxn.ClearStateProgram,
-				StateSchemas: basics.StateSchemas{
-					LocalStateSchema:  info.CallingTxn.LocalStateSchema,
-					GlobalStateSchema: info.CallingTxn.GlobalStateSchema,
-				},
-				ExtraProgramPages: info.CallingTxn.ExtraProgramPages,
-			},
-		}, ledgercore.AppLocalStateDelta{})
-		expectedDelta.Accts.UpsertAppResource(info.CreatedAppID.Address(), info.CreatedAppID+1, ledgercore.AppParamsDelta{
-			Params: &basics.AppParams{
-				ApprovalProgram:   successInnerProgramBytes,
-				ClearStateProgram: []byte{0x06, 0x81, 0x01}, // #pragma version 6; int 1;
-			},
-		}, ledgercore.AppLocalStateDelta{})
-		expectedDelta.AddCreatable(basics.CreatableIndex(info.CreatedAppID), ledgercore.ModifiedCreatable{
-			Ctype:   basics.AppCreatable,
-			Created: true,
-			Creator: info.CallingTxn.Sender,
-		})
-		expectedDelta.AddCreatable(basics.CreatableIndex(info.CreatedAppID+1), ledgercore.ModifiedCreatable{
-			Ctype:   basics.AppCreatable,
-			Created: true,
-			Creator: info.CreatedAppID.Address(),
-		})
+		expectedAD, expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPays := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+		expectedDelta := mergeDeltas(expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPays)
 		return TestScenario{
 			Outcome:       ApprovalOutcome,
 			Program:       program,
@@ -325,8 +356,10 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 		beforeInnersName := fmt.Sprintf("before inners,error=%t", shouldError)
 		beforeInners := func(info TestScenarioInfo) TestScenario {
-			expectedAD := expectedApplyData(info)
 			program := fillProgramTemplate(failureOps, successInnerProgram, "", 1, 2, "pushint 1")
+			expectedAD, expectedDeltaCallingTxn, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+			expectedDelta := expectedDeltaCallingTxn
+
 			// EvalDeltas are removed from failed app call transactions
 			expectedADNoED := expectedAD
 			expectedADNoED.EvalDelta = transactions.EvalDelta{}
@@ -350,6 +383,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
+				ExpectedStateDelta:   expectedDelta,
 				AppBudgetAdded:       700,
 				AppBudgetConsumed:    4,
 				TxnAppBudgetConsumed: []uint64{0, 4},
@@ -359,7 +393,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 		firstInnerName := fmt.Sprintf("first inner,error=%t", shouldError)
 		firstInner := func(info TestScenarioInfo) TestScenario {
-			expectedAD := expectedApplyData(info)
+			program := fillProgramTemplate("", failureInnerProgram, "", 1, 2, "pushint 1")
+			expectedAD, expectedDeltaCallingTxn, _, _ := expectedApplyDataAndStateDelta(info, program, failureInnerProgramBytes)
+			expectedDelta := expectedDeltaCallingTxn
 
 			// EvalDeltas are removed from failed app call transactions
 			expectedInnerAppCallADNoEvalDelta := expectedAD.EvalDelta.InnerTxns[0].ApplyData
@@ -372,8 +408,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 			expectedAD.EvalDelta.InnerTxns = expectedAD.EvalDelta.InnerTxns[:1]
 			expectedAD.EvalDelta.InnerTxns[0].Txn.ApprovalProgram = failureInnerProgramBytes
-
-			program := fillProgramTemplate("", failureInnerProgram, "", 1, 2, "pushint 1")
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
@@ -402,6 +436,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
+				ExpectedStateDelta:   expectedDelta,
 				AppBudgetAdded:       1400,
 				AppBudgetConsumed:    15,
 				TxnAppBudgetConsumed: []uint64{0, 15},
@@ -411,7 +446,10 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 		betweenInnersName := fmt.Sprintf("between inners,error=%t", shouldError)
 		betweenInners := func(info TestScenarioInfo) TestScenario {
-			expectedAD := expectedApplyData(info)
+			program := fillProgramTemplate("", successInnerProgram, failureOps, 1, 2, "pushint 1")
+			expectedAD, expectedDeltaCallingTxn, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+			expectedDelta := expectedDeltaCallingTxn
+
 			expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 
 			// EvalDeltas are removed from failed app call transactions
@@ -422,8 +460,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 			expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:2]
 
 			expectedAD.EvalDelta.InnerTxns = expectedAD.EvalDelta.InnerTxns[:1]
-
-			program := fillProgramTemplate("", successInnerProgram, failureOps, 1, 2, "pushint 1")
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
@@ -455,6 +491,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
+				ExpectedStateDelta:   expectedDelta,
 				AppBudgetAdded:       1400,
 				AppBudgetConsumed:    19,
 				TxnAppBudgetConsumed: []uint64{0, 19},
@@ -465,7 +502,10 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 		if shouldError {
 			secondInnerName := "second inner"
 			secondInner := func(info TestScenarioInfo) TestScenario {
-				expectedAD := expectedApplyData(info)
+				program := fillProgramTemplate("", successInnerProgram, "", math.MaxUint64, 2, "pushint 1")
+				expectedAD, expectedDeltaCallingTxn, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+				expectedDelta := expectedDeltaCallingTxn
+
 				expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 				expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
 
@@ -477,8 +517,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:2]
 
 				expectedAD.EvalDelta.InnerTxns[1].Txn.Amount.Raw = math.MaxUint64
-
-				program := fillProgramTemplate("", successInnerProgram, "", math.MaxUint64, 2, "pushint 1")
 				return TestScenario{
 					Outcome:       ErrorOutcome,
 					Program:       program,
@@ -516,6 +554,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						},
 					}),
 					ExpectedSimulationAD: expectedAD,
+					ExpectedStateDelta:   expectedDelta,
 					AppBudgetAdded:       2100,
 					AppBudgetConsumed:    32,
 					TxnAppBudgetConsumed: []uint64{0, 32},
@@ -525,7 +564,9 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 			thirdInnerName := "third inner"
 			thirdInner := func(info TestScenarioInfo) TestScenario {
-				expectedAD := expectedApplyData(info)
+				program := fillProgramTemplate("", successInnerProgram, "", 1, math.MaxUint64, "pushint 1")
+				expectedAD, expectedDeltaCallingTxn, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+				expectedDelta := expectedDeltaCallingTxn
 
 				expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 				expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
@@ -539,8 +580,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:2]
 
 				expectedAD.EvalDelta.InnerTxns[2].Txn.Amount.Raw = math.MaxUint64
-
-				program := fillProgramTemplate("", successInnerProgram, "", 1, math.MaxUint64, "pushint 1")
 				return TestScenario{
 					Outcome:       ErrorOutcome,
 					Program:       program,
@@ -580,6 +619,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						},
 					}),
 					ExpectedSimulationAD: expectedAD,
+					ExpectedStateDelta:   expectedDelta,
 					AppBudgetAdded:       2100,
 					AppBudgetConsumed:    32,
 					TxnAppBudgetConsumed: []uint64{0, 32},
@@ -590,14 +630,16 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 		afterInnersName := fmt.Sprintf("after inners,error=%t", shouldError)
 		afterInners := func(info TestScenarioInfo) TestScenario {
-			expectedAD := expectedApplyData(info)
+			program := fillProgramTemplate("", successInnerProgram, "", 1, 2, singleFailureOp)
+			expectedAD, expectedDeltaCallingTxn, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+			expectedDelta := expectedDeltaCallingTxn
+
 			expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 			expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
 			expectedInnerPay2AD := expectedAD.EvalDelta.InnerTxns[2].ApplyData
 			// EvalDeltas are removed from failed app call transactions
 			expectedADNoED := expectedAD
 			expectedADNoED.EvalDelta = transactions.EvalDelta{}
-			program := fillProgramTemplate("", successInnerProgram, "", 1, 2, singleFailureOp)
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
@@ -640,6 +682,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 				}),
 				ExpectedSimulationAD: expectedAD,
+				ExpectedStateDelta:   expectedDelta,
 				AppBudgetAdded:       2100,
 				AppBudgetConsumed:    35,
 				TxnAppBudgetConsumed: []uint64{0, 35},

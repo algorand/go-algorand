@@ -244,9 +244,14 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 	scenarios := mocktracer.GetTestScenarios()
 
 	// TODO: remove this filter
-	scenarios = map[string]mocktracer.TestScenarioGenerator{
-		"none": scenarios["none"],
-	}
+	// scenarios = map[string]mocktracer.TestScenarioGenerator{
+	// 	"none":                      scenarios["none"],
+	// 	"before inners,error=true":  scenarios["before inners,error=true"],
+	// 	"before inners,error=false": scenarios["before inners,error=false"],
+	// 	"first inner,error=true":    scenarios["first inner,error=true"],
+	// 	"first inner,error=false":   scenarios["first inner,error=false"],
+	// 	"between inners,error=true": scenarios["between inners,error=true"],
+	// }
 
 	type tracerTestCase struct {
 		name                 string
@@ -255,7 +260,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 	}
 	var testCases []tracerTestCase
 
-	firstIteration := false // TODO: change back to true
+	firstIteration := true
 	for scenarioName, scenario := range scenarios {
 		firstTxnBehaviors := []string{"approve"}
 		if firstIteration {
@@ -358,11 +363,10 @@ int 1`,
 				GenesisHash: genHash,
 			}
 
-			// TODO: account for fee sink data changes from prior txns
 			expectedFeeSinkData := balances[testSinkAddr]
-			expectedFeeSinkData.MicroAlgos.Raw += basicAppCallTxn.Amount
+			expectedFeeSinkData.MicroAlgos.Raw += basicAppCallTxn.Txn().Fee.Raw
 			if testCase.firstTxnBehavior == "approve" {
-				expectedFeeSinkData.MicroAlgos.Raw += payTxn.Amount
+				expectedFeeSinkData.MicroAlgos.Raw += payTxn.Txn().Fee.Raw
 			}
 
 			scenario := testCase.innerAppCallScenario(mocktracer.TestScenarioInfo{
@@ -423,7 +427,8 @@ int 1`,
 			expectedAcct0Data.MicroAlgos.Raw -= txgroup[0].Txn.Fee.Raw
 			expectedAcct0Data.TotalAppParams = 1
 
-			expectedDelta := ledgercore.MakeStateDelta(&newBlock.BlockHeader, blkHeader.TimeStamp, 0, 0)
+			expectedBlockHeader := eval.block.BlockHeader
+			expectedDelta := ledgercore.MakeStateDelta(&expectedBlockHeader, blkHeader.TimeStamp, 0, 0)
 			expectedDelta.Accts.Upsert(addrs[0], expectedAcct0Data)
 			expectedDelta.Accts.Upsert(testSinkAddr, ledgercore.ToAccountData(expectedFeeSinkData))
 			expectedDelta.Accts.UpsertAppResource(addrs[0], 1, ledgercore.AppParamsDelta{
@@ -437,18 +442,20 @@ int 1`,
 				Created: true,
 				Creator: addrs[0],
 			})
-			for i, stxn := range txgroup {
-				expectedDelta.Txids[stxn.ID()] = ledgercore.IncludedTransactions{
-					LastValid: stxn.Txn.LastValid,
-					Intra:     uint64(i),
-				}
-			}
-			// expectedDelta = eval.state.deltas()
 
-			var expectedEvents []mocktracer.Event
+			expectedEvents := []mocktracer.Event{mocktracer.BeforeBlock(eval.block.Round())}
 			if testCase.firstTxnBehavior == "approve" {
 				err = eval.endOfBlock()
 				require.NoError(t, err)
+
+				for i, stxn := range txgroup {
+					if i < 2 || scenario.Outcome == mocktracer.ApprovalOutcome {
+						expectedDelta.Txids[stxn.ID()] = ledgercore.IncludedTransactions{
+							LastValid: stxn.Txn.LastValid,
+							Intra:     uint64(i),
+						}
+					}
+				}
 
 				expectedAcct1Data := ledgercore.AccountData{}
 				expectedAcct2Data := ledgercore.ToAccountData(balances[addrs[2]])
@@ -482,8 +489,6 @@ int 1`,
 					scenario.ExpectedEvents,
 					{
 						mocktracer.AfterTxnGroup(3, &expectedDelta, scenario.Outcome != mocktracer.ApprovalOutcome),
-					},
-					{
 						mocktracer.AfterBlock(eval.block.Round()),
 					},
 				})...)
@@ -506,8 +511,21 @@ int 1`,
 				})...)
 			}
 			e := mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events)
+
+			// TODO: remove extra checks
 			require.Equal(t, len(expectedEvents), len(e))
-			require.Equal(t, expectedEvents[len(expectedEvents)-1].Deltas, e[len(e)-1].Deltas)
+			var deltaIndex int
+			if testCase.firstTxnBehavior == "approve" {
+				// account for AfterBlock
+				deltaIndex = len(expectedEvents) - 2
+			} else {
+				deltaIndex = len(expectedEvents) - 1
+			}
+			jsonExpectedDelta := protocol.EncodeJSONStrict(expectedEvents[deltaIndex].Deltas)
+			jsonActualDelta := protocol.EncodeJSONStrict(e[deltaIndex].Deltas)
+			require.Equal(t, expectedEvents[deltaIndex].Deltas, e[deltaIndex].Deltas, "expected: %s\n\nactual %s", jsonExpectedDelta, jsonActualDelta)
+			// end extra checks
+
 			require.Equal(t, expectedEvents, e)
 		})
 	}
