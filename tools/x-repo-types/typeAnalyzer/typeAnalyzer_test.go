@@ -17,6 +17,7 @@
 package main // cannot use main_type for main package?
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -110,6 +111,15 @@ type Child struct {
 	Grandpa Senior
 }
 
+type Family struct {
+	Brother, Sister Kid
+}
+
+type Kid struct {
+	Age  int
+	Name string
+}
+
 func TestBuild(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -121,17 +131,17 @@ func TestBuild(t *testing.T) {
 		{
 			name:  "recursive 0",
 			x:     Node{},
-			depth: 1,
+			depth: 2,
 		},
 		{
 			name:  "recursive 1",
 			x:     Senior{},
-			depth: 4,
+			depth: 5,
 		},
 		{
 			name:  "recursive 2",
 			x:     Child{},
-			depth: 4,
+			depth: 5,
 		},
 		{
 			name:  "basic struct",
@@ -305,6 +315,118 @@ func TestDiffErrors(t *testing.T) {
 			xRoot, yRoot, diff, err := StructDiff(tc.x, tc.y, nil)
 			require.NoError(t, err)
 			require.Equal(t, tc.equal, diff.Empty(), "test case: %s, report: %s", tc.name, Report(xRoot, yRoot, diff))
+		})
+	}
+}
+
+func TestBuildWithCyclicCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testcases := []struct {
+		name string
+		x    interface{}
+		path []string
+	}{
+		{
+			name: "recursive 0",
+			x:    Node{},
+			path: []string{
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Node\" (struct)",
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Node\" (struct)",
+			},
+		},
+		{
+			name: "recursive 1",
+			x:    Senior{},
+			path: []string{
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Senior\" (struct)",
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Parent\" (struct)",
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Child\" (struct)",
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Senior\" (struct)",
+			},
+		},
+		{
+			name: "recursive 2",
+			x:    Child{},
+			path: []string{
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Child\" (struct)",
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Senior\" (struct)",
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Parent\" (struct)",
+				"github.com/algorand/go-algorand/tools/x-repo-types/typeAnalyzer :: \"main.Child\" (struct)",
+			},
+		},
+		{
+			name: "basic struct",
+			x:    struct{ A int }{},
+			path: []string{},
+		},
+		{
+			name: "basic codec",
+			x: struct {
+				B int `codec:"A"`
+			}{},
+			path: []string{},
+		},
+		{
+			name: "deeper unexported",
+			x: struct {
+				a []string
+				B string
+			}{},
+			path: []string{},
+		},
+		{
+			name: "deeper exported",
+			x: struct {
+				A []string
+				b int
+			}{},
+			path: []string{},
+		},
+		{
+			name: "embed flattened",
+			x: func() interface{} {
+				type Embedded struct{ A int }
+				return struct{ Embedded }{}
+			}(),
+			path: []string{},
+		},
+		{
+			name: "primitive alias",
+			x: func() interface{} {
+				type MYINT int
+				var i MYINT
+				return i
+			}(),
+			path: []string{},
+		},
+		{
+			name: "primitive type",
+			x:    5,
+			path: []string{},
+		},
+		{
+			name: "types may reappear with no cycles",
+			x:    Family{},
+			path: []string{},
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			xRoot := MakeType(tc.x)
+			cycle := xRoot.Build()
+			hasCycle := len(cycle) > 0
+			expectedHasCycle := len(tc.path) > 0
+			require.Equal(t, expectedHasCycle, hasCycle, `test case: %s
+			cycle: %s
+			expected: %#v`, tc.name, cycle, tc.path)
+			require.Equal(t, fmt.Sprintf("%#v", tc.path), cycle.String(), `test case: %s
+				cycle: %s
+				expected: %#v`, tc.name, cycle, tc.path,
+			)
 		})
 	}
 }

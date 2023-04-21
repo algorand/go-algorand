@@ -51,6 +51,11 @@ func (t *TypeNode) String() string {
 	return fmt.Sprintf("%s :: %q (%s)", t.Type.PkgPath(), t.Type, t.Kind)
 }
 
+// IsStruct returns true if the TypeNode is a struct.
+func (t *TypeNode) IsStruct() bool {
+	return t.Kind == reflect.Struct
+}
+
 // MakeType uses reflection to build a TypeNode from a concrete value.
 func MakeType(v interface{}) TypeNode {
 	t := reflect.TypeOf(v)
@@ -147,38 +152,28 @@ func (t *TypeNode) Targets() []Target {
 	return targets
 }
 
+// TypePath encapsulates a path in a TypeNode tree.
+type TypePath []TypeNode
+
+// String is a convenience method for printing a TypePath
+// in a go-literal-friendly format.
+func (t TypePath) String() string {
+	parts := make([]string, len(t))
+	for i, node := range t {
+		parts[i] = fmt.Sprintf("%q", (&node).String())
+	}
+	return fmt.Sprintf("[]string{%s}", strings.Join(parts, ", "))
+}
+
 // IsLeaf returns true if the TypeNode has no children.
 func (t *TypeNode) IsLeaf() bool {
 	return t.children == nil || len(*t.children) == 0
 }
 
 // Build the TypeNode tree by finding all child types that belong to a kind and recursively
-// building their TypeNode trees. Do not traverse previously visited structs.
-func (t *TypeNode) Build() {
-	visited := make(map[string]bool)
-	t.build(visited)
-}
-
-// build the TypeNode tree by finding all child types that belong to a kind and recursively
-// building their TypeNode trees. Do not traverse previously visited structs.
-// If this type has already been seen, return false - signalling that this type should not
-// be appended as a child.
-func (t *TypeNode) build(visited map[string]bool) bool {
-	me := t.String()
-	if _, alreadySeen := visited[me]; alreadySeen {
-		return false
-	}
-	switch t.Kind {
-	case reflect.Struct:
-		t.buildStructChildren(visited)
-	case reflect.Slice, reflect.Array:
-		t.buildListChild(visited)
-	case reflect.Map:
-		t.buildMapChildren(visited)
-	case reflect.Ptr:
-		t.buildPtrChild(visited)
-	}
-	return true
+// building their TypeNode trees. Stop traversing when a cycle is detected.
+func (t *TypeNode) Build() TypePath {
+	return t.build(TypePath{})
 }
 
 func (t *TypeNode) appendChild(typeName, typeTag string, child TypeNode) {
@@ -191,15 +186,45 @@ func (t *TypeNode) appendChild(typeName, typeTag string, child TypeNode) {
 	(*t.children)[cname.String()] = child
 }
 
+// build the TypeNode tree by finding all child types that belong to a kind and recursively
+// building their TypeNode trees.
+// Return a path that will be non-trivial only in a case that a cycle is detected.
+func (t *TypeNode) build(path TypePath) TypePath {
+	if t.IsStruct() {
+		me := t.String()
+		foundCycle := false
+		for _, node := range path {
+			if node.String() == me {
+				foundCycle = true
+				break
+			}
+		}
+		path = append(path, *t)
+		if foundCycle {
+			return path
+		}
+	}
+
+	x := fmt.Sprintf("%q", t.Type)
+	_ = x
+	var cyclicPath TypePath
+	switch t.Kind {
+	case reflect.Struct:
+		cyclicPath = t.buildStructChildren(path)
+	case reflect.Slice, reflect.Array:
+		cyclicPath = t.buildListChild(path)
+	case reflect.Map:
+		cyclicPath = t.buildMapChildren(path)
+	case reflect.Ptr:
+		cyclicPath = t.buildPtrChild(path)
+	}
+
+	return cyclicPath
+}
+
 // buildStructChildren builds the children of a struct type.
-func (t *TypeNode) buildStructChildren(visited map[string]bool) {
-	me := t.String()
-	if _, alreadyVisited := visited[me]; alreadyVisited {
-		return
-	}
-	if _, excluded := diffExclusions[me]; !excluded {
-		visited[me] = true
-	}
+func (t *TypeNode) buildStructChildren(path TypePath) TypePath {
+	var cyclicPath TypePath
 	for i := 0; i < t.Type.NumField(); i++ {
 		typeField := t.Type.Field(i)
 		typeName := typeField.Name
@@ -217,51 +242,55 @@ func (t *TypeNode) buildStructChildren(visited map[string]bool) {
 			}
 
 			embedded := TypeNode{t.Depth, typeField.Type, reflect.Struct, nil, nil}
-			if embedded.build(visited) {
-				for _, edge := range embedded.ChildNames {
-					child := (*embedded.children)[edge.String()]
-					t.appendChild(edge.Name, edge.Tag, child)
-				}
+			embeddedCyclicPath := embedded.build(path)
+			if len(embeddedCyclicPath) > 0 {
+				cyclicPath = embeddedCyclicPath
+			}
+			for _, edge := range embedded.ChildNames {
+				child := (*embedded.children)[edge.String()]
+				t.appendChild(edge.Name, edge.Tag, child)
 			}
 			continue
 		}
 
 		typeTag := string(typeField.Tag)
 		child := TypeNode{t.Depth + 1, typeField.Type, typeField.Type.Kind(), nil, nil}
-		if child.build(visited) {
-			t.appendChild(typeName, typeTag, child)
+		childCyclicPath := child.build(path)
+		if len(childCyclicPath) > 0 {
+			cyclicPath = childCyclicPath
 		}
+		t.appendChild(typeName, typeTag, child)
 	}
+	return cyclicPath
 }
 
-func (t *TypeNode) buildListChild(visited map[string]bool) {
+func (t *TypeNode) buildListChild(path TypePath) TypePath {
 	tt := t.Type.Elem()
 	child := TypeNode{t.Depth + 1, tt, tt.Kind(), nil, nil}
-	if child.build(visited) {
-		t.appendChild("<list elt>", "", child)
-	}
+	path = child.build(path)
+	t.appendChild("<list elt>", "", child)
+	return path
 }
 
-func (t *TypeNode) buildMapChildren(visited map[string]bool) {
+func (t *TypeNode) buildMapChildren(path TypePath) TypePath {
 	keyType, valueType := t.Type.Key(), t.Type.Elem()
 
 	keyChild := TypeNode{t.Depth + 1, keyType, keyType.Kind(), nil, nil}
-	if keyChild.build(visited) {
-		t.appendChild("<map key>", "", keyChild)
-	}
+	keyChild.build(path)
+	t.appendChild("<map key>", "", keyChild)
 
 	valChild := TypeNode{t.Depth + 1, valueType, valueType.Kind(), nil, nil}
-	if valChild.build(visited) {
-		t.appendChild("<map elt>", "", valChild)
-	}
+	path = valChild.build(path)
+	t.appendChild("<map val>", "", valChild)
+	return path
 }
 
-func (t *TypeNode) buildPtrChild(visited map[string]bool) {
+func (t *TypeNode) buildPtrChild(path TypePath) TypePath {
 	tt := t.Type.Elem()
 	child := TypeNode{t.Depth + 1, tt, tt.Kind(), nil, nil}
-	if child.build(visited) {
-		t.appendChild("<ptr elt>", "", child)
-	}
+	path = child.build(path)
+	t.appendChild("<ptr elt>", "", child)
+	return path
 }
 
 // Visit traverses the Target tree and applies any actions provided at each node.
@@ -336,7 +365,10 @@ func targetTreeDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 	// Otherwise, call the children recursively. If any of them report
 	// a diff, modify the diff's CommonPath to include the current edge and return it.
 	for k, xChild := range xSerials {
-		if _, ok := exclusions[xChild.TypeNode.String()]; ok {
+		// if _, ok := exclusions[xChild.TypeNode.String()]; ok {
+		// 	continue
+		// }
+		if exclusions[xChild.TypeNode.String()] {
 			continue
 		}
 		yChild := ySerials[k]
@@ -347,7 +379,8 @@ func targetTreeDiff(x, y Target, exclusions map[string]bool) (*Diff, error) {
 		}
 		if diff != nil {
 			diff.CommonPath = append([]TargetPair{
-				{X: xChild,
+				{
+					X: xChild,
 					Y: yChild,
 				},
 			}, diff.CommonPath...)
@@ -450,6 +483,8 @@ func (t *TypeNode) Print() {
 		fmt.Printf("%s[depth=%d]. Value is type %q (%s)\n", tabs, tgt.TypeNode.Depth, tgt.TypeNode.Type, tgt.TypeNode.Kind)
 
 		if tgt.TypeNode.IsLeaf() {
+			x := fmt.Sprintf("%q", tgt.TypeNode.Type)
+			_ = x
 			fmt.Printf("%s-------B I N G O: A LEAF---------->%q (%s)\n", tabs, tgt.TypeNode.Type, tgt.TypeNode.Kind)
 			return
 		}
@@ -473,6 +508,8 @@ func (tgt Target) PrintSerializable() {
 		fmt.Printf("%s%s", strings.Repeat(" ", depth-1), edge.SerializationInfo())
 		suffix := ""
 		if ttype.IsLeaf() {
+			x := ttype.String()
+			_ = x
 			suffix = fmt.Sprintf(":%s", tkind)
 		}
 		fmt.Printf("%s\n", suffix)

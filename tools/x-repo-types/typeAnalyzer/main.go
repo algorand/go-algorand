@@ -38,12 +38,15 @@ func main() {
 	x, y := xRoot.Type, yRoot.Type
 
 	fmt.Printf("Build the Type Tree for %s\n\n", &xRoot)
-	xRoot.Build()
+	xCycle := xRoot.Build()
 	xTgt := Target{ChildName{Name: fmt.Sprintf("%q", x)}, xRoot}
 
 	fmt.Printf("Build the Type Tree for %s\n\n", &yRoot)
-	yRoot.Build()
+	yCycle := yRoot.Build()
 	yTgt := Target{ChildName{Name: fmt.Sprintf("%q", y)}, yRoot}
+
+	fmt.Printf("Potential CYCLE in %s:\n%s\n\n", &xRoot, xCycle)
+	fmt.Printf("Potential CYCLE in %s:\n%s\n\n", &yRoot, yCycle)
 
 	// ---- DEBUG ---- //
 
