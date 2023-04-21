@@ -56,4 +56,3 @@ reset-dummy-main:
 		--x-type "StateDelta" \
 		--y-package "github.com/algorand/go-algorand/data/bookkeeping" \
 		--y-type "Genesis"
-	
