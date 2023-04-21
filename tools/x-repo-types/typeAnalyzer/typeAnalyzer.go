@@ -275,6 +275,7 @@ func (t *TypeNode) buildMapChildren(path TypePath) TypePath {
 	keyType, valueType := t.Type.Key(), t.Type.Elem()
 
 	keyChild := TypeNode{t.Depth + 1, keyType, keyType.Kind(), nil, nil}
+  // don't worry about path because struct keys must be hashable:
 	keyChild.build(path)
 	t.appendChild("<map key>", "", keyChild)
 
