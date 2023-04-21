@@ -54,7 +54,6 @@ function start_public_network() {
 
 function configure_data_dir() {
   cd "$ALGORAND_DATA"
-  algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
 
   # check for config file overrides.
   if [ -f "/etc/algorand/config.json" ]; then
@@ -69,6 +68,14 @@ function configure_data_dir() {
   if [ -f "/etc/algorand/logging.config" ]; then
     cp /etc/algorand/logging.config logging.config
   fi
+
+  # initialize config with profile.
+  if [ "$PROFILE" != "" ]; then
+    algocfg profile set --yes -d "$ALGORAND_DATA" "$PROFILE" 
+  fi
+
+  # call after copying config.json to make sure the port is exposed.
+  algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
 
   # check for token overrides
   if [ "$TOKEN" != "" ]; then
