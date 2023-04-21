@@ -959,7 +959,7 @@ type PreEncodedSimulateRequestTransactionGroup struct {
 // PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
 	TxnGroups     []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
-	LiftLogLimits *bool                                       `codec:"lift-log-limits,omitempty"`
+	LiftLogLimits bool                                        `codec:"lift-log-limits,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
@@ -1009,16 +1009,11 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 	txgroup := simulateRequest.TxnGroups[0].Txns
 
-	if simulateRequest.LiftLogLimits == nil {
-		defaultValue := false
-		simulateRequest.LiftLogLimits = &defaultValue
-	}
-
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(
 		simulation.Request{
 			TxGroup:       txgroup,
-			LiftLogLimits: *simulateRequest.LiftLogLimits,
+			LiftLogLimits: simulateRequest.LiftLogLimits,
 		},
 	)
 	if err != nil {

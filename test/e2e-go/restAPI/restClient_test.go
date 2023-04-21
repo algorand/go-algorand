@@ -1749,14 +1749,13 @@ int 1`
 	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
 	a.NoError(err)
 
-	liftLogLimits := true
 	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{
 				Txns: []transactions.SignedTxn{appCallTxnSigned},
 			},
 		},
-		LiftLogLimits: &liftLogLimits,
+		LiftLogLimits: true,
 	})
 	a.NoError(err)
 

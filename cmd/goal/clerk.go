@@ -1257,7 +1257,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				LiftLogLimits: &liftLogLimits,
+				LiftLogLimits: liftLogLimits,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1278,7 +1278,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				LiftLogLimits: &liftLogLimits,
+				LiftLogLimits: liftLogLimits,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
