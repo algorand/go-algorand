@@ -387,18 +387,14 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	return encoded
 }
 
-func convertSimulationEvalConstants(evalConstants *simulation.ResultEvalOverrides) *model.SimulationEvalChanges {
-	if evalConstants == nil {
-		return nil
-	}
-	return &model.SimulationEvalChanges{
-		MaxLogSize:  evalConstants.MaxLogSize,
-		MaxLogCalls: evalConstants.MaxLogCalls,
-	}
-}
-
 func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
-	evalChanges := convertSimulationEvalConstants(result.EvalOverrides)
+	var evalChanges *model.SimulationEvalChanges
+	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
+		evalChanges = &model.SimulationEvalChanges{
+			MaxLogSize:  result.EvalOverrides.MaxLogSize,
+			MaxLogCalls: result.EvalOverrides.MaxLogCalls,
+		}
+	}
 
 	encodedSimulationResult := PreEncodedSimulateResponse{
 		Version:      result.Version,

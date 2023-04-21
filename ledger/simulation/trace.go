@@ -75,55 +75,30 @@ type ResultEvalOverrides struct {
 	MaxLogSize  *uint64
 }
 
-// ResultEvalConstantsBuilder follows a builder pattern for ResultEvalOverrides
-type ResultEvalConstantsBuilder struct {
-	Result ResultEvalOverrides
-}
-
-// NewResultEvalConstantsBuilder constructs a builder for ResultEvalOverrides
-func NewResultEvalConstantsBuilder() *ResultEvalConstantsBuilder {
-	return &ResultEvalConstantsBuilder{}
-}
-
 // SimulateLogBytesLimit hardcode limit of how much bytes one can log during simulation (with lift-log-limits)
 const SimulateLogBytesLimit = uint64(65536)
 
 // LiftLogLimits method modify the log limits from lift option:
 // - if lift log limits, then overload result from local Config
 // - otherwise, set `LogLimits` field to be nil
-func (r *ResultEvalConstantsBuilder) LiftLogLimits(lift bool) *ResultEvalConstantsBuilder {
+func (eo ResultEvalOverrides) LiftLogLimits(lift bool) ResultEvalOverrides {
 	if lift {
 		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), SimulateLogBytesLimit
-		r.Result = ResultEvalOverrides{
-			MaxLogCalls: &maxLogCalls,
-			MaxLogSize:  &maxLogSize,
-		}
+		eo.MaxLogCalls = &maxLogCalls
+		eo.MaxLogSize = &maxLogSize
 	}
-	return r
-}
-
-// Finalize method cleanup the *ResultEvalOverrides if it is empty ResultEvalOverrides{}, then return nil,
-// otherwise it returns the pointer to ResultEvalOverrides
-func (r *ResultEvalConstantsBuilder) Finalize() *ResultEvalOverrides {
-	// Since ResultEvalOverrides is omitempty, we want to check if it is actually empty
-	if r.Result == (ResultEvalOverrides{}) {
-		return nil
-	}
-	return &r.Result
+	return eo
 }
 
 // LogicEvalConstants method infers the logic.EvalConstants from Result.EvalOverrides (*ResultEvalOverrides)
 // and generate appropriate parameters to override during simulation runtime.
-func (c *ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
+func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 	logicEvalConstants := logic.RuntimeEvalConstants()
-	if c == nil {
-		return logicEvalConstants
+	if eo.MaxLogSize != nil {
+		logicEvalConstants.MaxLogSize = *eo.MaxLogSize
 	}
-	if c.MaxLogSize != nil {
-		logicEvalConstants.MaxLogSize = *c.MaxLogSize
-	}
-	if c.MaxLogCalls != nil {
-		logicEvalConstants.MaxLogCalls = *c.MaxLogCalls
+	if eo.MaxLogCalls != nil {
+		logicEvalConstants.MaxLogCalls = *eo.MaxLogCalls
 	}
 	return logicEvalConstants
 }
@@ -134,7 +109,7 @@ type Result struct {
 	LastRound     basics.Round
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	WouldSucceed  bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
-	EvalOverrides *ResultEvalOverrides
+	EvalOverrides ResultEvalOverrides
 	Block         *ledgercore.ValidatedBlock
 }
 
@@ -149,7 +124,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
-	resultEvalConstants := NewResultEvalConstantsBuilder().LiftLogLimits(request.LiftLogLimits).Finalize()
+	resultEvalConstants := ResultEvalOverrides{}.LiftLogLimits(request.LiftLogLimits)
 
 	return Result{
 		Version:       version,
