@@ -110,7 +110,7 @@ if { [catch {
     }
 
     # check msgpack output to a file with zero exit code
-    set MSGP_EXPECTED_BASE64 "hKRhZGRyxCDn8PhNBoEd+fMcjYeLEVX0Zx1RoYXCAJCGZ/RJWHBooaRhbGdvzgAEj/ikYXBwcIECg6ZhcHByb3bEBQIgAQEipmNsZWFycMQFAiABASKkZ3NjaIGjbmJzAaR0c2NogaNuYnMB"
+    set MSGP_EXPECTED_BASE64 "hKRhZGRyxCDn8PhNBoEd+fMcjYeLEVX0Zx1RoYXCAJCGZ/RJWHBooaRhbGdvzgAEj/ikYXBwcIHNA+qDpmFwcHJvdsQFAiABASKmY2xlYXJwxAUCIAEBIqRnc2NogaNuYnMBpHRzY2iBo25icwE="
     set MSGP_EXPECTED [ exec echo -n $MSGP_EXPECTED_BASE64 | base64 --decode ]
     set BALREC_FILE "$TEST_ROOT_DIR/brec.msgp"
     spawn goal account dump -a $NEW_ACCOUNT_ADDRESS -o $BALREC_FILE --datadir $TEST_PRIMARY_NODE_DIR
