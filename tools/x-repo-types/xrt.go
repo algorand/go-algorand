@@ -18,7 +18,9 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -59,7 +61,109 @@ func main() {
 	}
 }
 
-func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
+func backupFile(src string) (string, error) {
+	content, err := ioutil.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+
+	tmpFile, err := ioutil.TempFile("", "backup-*")
+	if err != nil {
+		return "", err
+	}
+
+	err = ioutil.WriteFile(tmpFile.Name(), content, 0644)
+	if err != nil {
+		return "", err
+	}
+
+	return tmpFile.Name(), nil
+}
+
+func findPkgRoot() (string, error) {
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return "", errors.New(stderr.String())
+	}
+
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+func setUp() (map[string]string, error) {
+	pkgRoot, err := findPkgRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	goModPath := filepath.Join(pkgRoot, "go.mod")
+	goSumPath := filepath.Join(pkgRoot, "go.sum")
+	localMainPath := filepath.Join("typeAnalyzer", "main.go")
+
+	backups := make(map[string]string)
+	for _, path := range []string{goModPath, goSumPath, localMainPath} {
+		backup, err := backupFile(path)
+		if err != nil {
+			return nil, err
+		}
+		backups[backup] = path
+	}
+	return backups, nil
+}
+
+func restoreFile(src, dst string) error {
+	// assuming that dst already exists
+	dstFileInfo, err := os.Stat(dst)
+	if err != nil {
+		return err
+	}
+
+	content, err := ioutil.ReadFile(src)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(dst, content, dstFileInfo.Mode())
+	if err != nil {
+		return err
+	}
+
+	err = os.Remove(src)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func tearDown(fileBackups map[string]string) error {
+	for backup, path := range fileBackups {
+		err := restoreFile(backup, path)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) (err error) {
+	fileBackups, err := setUp()
+	fmt.Printf("fileBackups: %#v\n\n", fileBackups)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		fmt.Printf("tearDown to restore: %#v\n\n", fileBackups)
+		err = tearDown(fileBackups)
+		if err != nil {
+			fmt.Printf("problem during tearDown: %v\n", err)
+		}
+	}()
+
 	if xPkg == "" || xType == "" {
 		return fmt.Errorf("package:%s, and type:%s flags are required", xPkg, xType)
 	}
@@ -76,7 +180,7 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) error {
 		yPkgBranch += "@" + yBranch
 	}
 
-	err := goGet(xPkgBranch)
+	err = goGet(xPkgBranch)
 	if err != nil {
 		return err
 	}

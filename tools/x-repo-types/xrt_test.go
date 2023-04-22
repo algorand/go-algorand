@@ -30,7 +30,7 @@ type testCase struct {
 	skipReason                                 string
 }
 
-func TestRunApp(t *testing.T) {
+func TestCrossRepoTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testCases := []testCase{
