@@ -237,8 +237,8 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 				ops.Program[0] = byte(v)
 				testAppBytes(t, ops.Program, ep, "invalid asset_params_get field")
 			} else {
-				testProg(t, rewriteFor(text, v), v)
-				testApp(t, rewriteFor(text, v), ep)
+				testProg(t, text, v)
+				testApp(t, text, ep)
 			}
 		}
 
@@ -279,7 +279,6 @@ func TestAcctParamsFieldsVersions(t *testing.T) {
 
 		testLogicRange(t, 4, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
 			v := ep.Proto.LogicSigVersion
-			text := rewriteFor(text, v)
 			ledger.NewAccount(txn.Sender, 200_000)
 			if field.version > v {
 				// check assembler fails if version before introduction

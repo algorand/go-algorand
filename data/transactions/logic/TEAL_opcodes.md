@@ -836,40 +836,41 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 - Stack: ..., A &rarr; ..., uint64
 - balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`
 - Availability: v2
+- Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
 
-## opted_in
+## app_opted_in
 
 - Opcode: 0x61
-- Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
+- Stack: ..., A, B: uint64 &rarr; ..., uint64
 - 1 if account A is opted in to application B, else 0
 - Availability: v2
 - Mode: Application
 
-params: An _available_ account address and an _available_ application id. Return: 1 if opted in and 0 otherwise.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.
 
-## local_state_get
+## app_local_get
 
 - Opcode: 0x62
-- Stack: ..., A: []byte, B: []byte &rarr; ..., any
+- Stack: ..., A, B: []byte &rarr; ..., any
 - local state of the key B in the current application in account A
 - Availability: v2
 - Mode: Application
 
-params: An _available_ account address, state key. Return: value. The value is zero (of type uint64) if the key does not exist.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.
 
-## local_state_get_ex
+## app_local_get_ex
 
 - Opcode: 0x63
-- Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., X: any, Y: uint64
+- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: uint64
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
 
-params: An _available_ account address, an _available_ application id, state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
 
-## global_state_get
+## app_global_get
 
 - Opcode: 0x64
 - Stack: ..., A: []byte &rarr; ..., any
@@ -879,7 +880,7 @@ params: An _available_ account address, an _available_ application id, state key
 
 params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.
 
-## global_state_get_ex
+## app_global_get_ex
 
 - Opcode: 0x65
 - Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: uint64
@@ -887,19 +888,19 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 - Availability: v2
 - Mode: Application
 
-params: An _available_ application id, state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
+params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
 
-## local_state_put
+## app_local_put
 
 - Opcode: 0x66
-- Stack: ..., A: []byte, B: []byte, C &rarr; ...
+- Stack: ..., A, B: []byte, C &rarr; ...
 - write C to key B in account A's local state of the current application
 - Availability: v2
 - Mode: Application
 
-params: An _available_ account address, state key, value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.
 
-## global_state_put
+## app_global_put
 
 - Opcode: 0x67
 - Stack: ..., A: []byte, B &rarr; ...
@@ -907,19 +908,19 @@ params: An _available_ account address, state key, value.
 - Availability: v2
 - Mode: Application
 
-## local_state_del
+## app_local_del
 
 - Opcode: 0x68
-- Stack: ..., A: []byte, B: []byte &rarr; ...
+- Stack: ..., A, B: []byte &rarr; ...
 - delete key B from account A's local state of the current application
 - Availability: v2
 - Mode: Application
 
-params: An _available_ account address, state key.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.
 
 Deleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)
 
-## global_state_del
+## app_global_del
 
 - Opcode: 0x69
 - Stack: ..., A: []byte &rarr; ...
@@ -931,10 +932,10 @@ params: state key.
 
 Deleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)
 
-## holding_get f
+## asset_holding_get f
 
 - Opcode: 0x70 {uint8 asset holding field index}
-- Stack: ..., A: []byte, B: uint64 &rarr; ..., X: any, Y: uint64
+- Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0
 - Availability: v2
 - Mode: Application
@@ -947,9 +948,9 @@ Deleting a key which is already absent has no effect on the application global s
 | 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
-params: An _available_ address, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
+params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
 
-## asset_get f
+## asset_params_get f
 
 - Opcode: 0x71 {uint8 asset params field index}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
@@ -975,9 +976,9 @@ params: An _available_ address, an _available_ asset id. Return: did_exist flag 
 | 11 | AssetCreator | []byte | v5  | Creator address |
 
 
-params: An _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
+params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
 
-## app_get f
+## app_params_get f
 
 - Opcode: 0x72 {uint8 app params field index}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
@@ -1000,12 +1001,12 @@ params: An _available_ asset id. Return: did_exist flag (1 if the asset existed 
 | 8 | AppAddress | []byte | Address for which this application has authority |
 
 
-params: An _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.
+params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.
 
-## acct_get f
+## acct_params_get f
 
 - Opcode: 0x73 {uint8 account params field index}
-- Stack: ..., A: []byte &rarr; ..., X: any, Y: uint64
+- Stack: ..., A &rarr; ..., X: any, Y: uint64
 - X is field F from account A. Y is 1 if A owns positive algos, else 0
 - Availability: v6
 - Mode: Application
@@ -1034,6 +1035,7 @@ params: An _available_ app id. Return: did_exist flag (1 if the application exis
 - Stack: ..., A &rarr; ..., uint64
 - minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.
 - Availability: v3
+- Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
 

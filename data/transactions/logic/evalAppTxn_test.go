@@ -147,9 +147,8 @@ func TestAppPay(t *testing.T) {
 
 	// v5 added inners
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		v := ep.Proto.LogicSigVersion
 		test := func(source string, problem ...string) {
-			TestApp(t, RewriteFor(source, v), ep, problem...)
+			TestApp(t, source, ep, problem...)
 		}
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		test("txn Sender; balance; int 0; ==;")
@@ -190,9 +189,8 @@ func TestAppAssetOptIn(t *testing.T) {
 
 	// v5 added inners
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		v := ep.Proto.LogicSigVersion
 		test := func(source string, problem ...string) {
-			TestApp(t, RewriteFor(source, v), ep, problem...)
+			TestApp(t, source, ep, problem...)
 		}
 
 		// Establish 888 as the app id, and fund it.
@@ -298,9 +296,8 @@ func TestRekeyBack(t *testing.T) {
 
 	// v6 added inner rekey
 	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		v := ep.Proto.LogicSigVersion
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-		TestApp(t, RewriteFor("txn Sender; balance; int 0; ==;", v), ep)
+		TestApp(t, "txn Sender; balance; int 0; ==;", ep)
 		TestApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey, ep, "unauthorized")
 		ledger.NewAccount(tx.Sender, 120+3*ep.Proto.MinTxnFee)
 		ledger.Rekey(tx.Sender, basics.AppIndex(888).Address())
@@ -325,13 +322,12 @@ func TestDefaultSender(t *testing.T) {
 
 	// v5 added inners
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		v := ep.Proto.LogicSigVersion
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		tx.Accounts = append(tx.Accounts, appAddr(888))
 		TestApp(t, "txn Accounts 1; int 100"+pay, ep, "insufficient balance")
 		ledger.NewAccount(appAddr(888), 1000000)
 		TestApp(t, "txn Accounts 1; int 100"+pay+"int 1", ep)
-		TestApp(t, RewriteFor("global CurrentApplicationAddress; balance; int 998899; ==", v), ep)
+		TestApp(t, "global CurrentApplicationAddress; balance; int 998899; ==", ep)
 	})
 }
 
@@ -353,16 +349,16 @@ func TestAppAxfer(t *testing.T) {
 
 	// v5 added inners
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		v := ep.Proto.LogicSigVersion
 		test := func(source string, problem ...string) {
-			TestApp(t, RewriteFor(source, v), ep, problem...)
+			t.Helper()
+			TestApp(t, source, ep, problem...)
 		}
 
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAsset(tx.Receiver, 777, basics.AssetParams{}) // not in foreign-assets of sample
 		ledger.NewAsset(tx.Receiver, 77, basics.AssetParams{})  // in foreign-assets of sample
 		test("txn Sender; int 777; asset_holding_get AssetBalance; assert; int 0; ==;",
-			"invalid Asset reference") // 777 not in foreign-assets
+			"unavailable Asset 777") // 777 not in foreign-assets
 		test("txn Sender; int 77; asset_holding_get AssetBalance; assert; int 0; ==;",
 			"assert failed") // because Sender not opted-in
 		test("global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 0; ==;",
@@ -1164,7 +1160,8 @@ func TestInnerApplCreate(t *testing.T) {
 		approve := "byte 0x" + hex.EncodeToString(ops.Program)
 
 		test := func(source string, problems ...string) {
-			TestApp(t, RewriteFor(source, v), ep, problems...)
+			t.Helper()
+			TestApp(t, source, ep, problems...)
 		}
 
 		test(`
@@ -1180,7 +1177,7 @@ int 1
 `)
 
 		test("int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert",
-			"invalid App reference")
+			"unavailable App 5000")
 
 		call := `
 itxn_begin
@@ -2736,7 +2733,7 @@ func TestCreateAndUse(t *testing.T) {
 	TestLogicRange(t, 6, 6, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		v := ep.Proto.LogicSigVersion
 		test := func(source string, problems ...string) {
-			TestApp(t, RewriteFor(source, v), ep, problems...)
+			TestApp(t, source, ep, problems...)
 		}
 
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -2784,7 +2781,7 @@ func TestCreateAndUse(t *testing.T) {
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		v := ep.Proto.LogicSigVersion
 		test := func(source string, problems ...string) {
-			TestApp(t, RewriteFor(source, v), ep, problems...)
+			TestApp(t, source, ep, problems...)
 		}
 
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -2815,9 +2812,8 @@ func TestCreateAndUse(t *testing.T) {
 
 	// Now as ForeignAsset (starts in v6, when inner app calls allowed)
 	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		v := ep.Proto.LogicSigVersion
 		test := func(source string, problems ...string) {
-			TestApp(t, RewriteFor(source, v), ep, problems...)
+			TestApp(t, source, ep, problems...)
 		}
 
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -2854,16 +2850,16 @@ func TestCreateSeeApp(t *testing.T) {
 	TestLogicRange(t, CreatedResourcesVersion, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAccount(appAddr(888), 1*MakeTestProto().MinTxnFee)
-		createAndUse := RewriteFor(`
+		createAndUse := `
   itxn_begin
    int appl;     itxn_field TypeEnum
-   byte	`+hexProgram(t, main(""), 5)+`; dup; itxn_field ApprovalProgram; itxn_field ClearStateProgram;
+   byte	` + hexProgram(t, main(""), 5) + `; dup; itxn_field ApprovalProgram; itxn_field ClearStateProgram;
   itxn_submit
 
   itxn CreatedApplicationID; app_params_get AppAddress; assert
-  addr `+appAddr(5000).String()+`
+  addr ` + appAddr(5000).String() + `
   ==
-`, ep.Proto.LogicSigVersion)
+`
 		TestApp(t, createAndUse, ep)
 		// Again, can't test if this (properly) fails in previous version, because
 		// we can't even create apps this way in previous version.
@@ -2908,7 +2904,7 @@ int 1
 
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
-		TestApp(t, RewriteFor(createAndPay, v), ep)
+		TestApp(t, createAndPay, ep)
 
 		// This test is impossible because CreatedResourcesVersion is also when
 		// inner txns could make apps.
@@ -3099,7 +3095,7 @@ func TestForeignAppAccountAccess(t *testing.T) {
 			problem = []string{"invalid Account reference " + appAddr(111).String()}
 		}
 
-		TestApp(t, RewriteFor(`
+		TestApp(t, `
 itxn_begin
 int pay; itxn_field TypeEnum
 int 100; itxn_field Amount
@@ -3109,6 +3105,6 @@ assert
 itxn_field Receiver
 itxn_submit
 int 1
-`, ep.Proto.LogicSigVersion), ep, problem...)
+`, ep, problem...)
 	})
 }

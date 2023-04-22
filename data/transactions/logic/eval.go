@@ -4019,32 +4019,46 @@ func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
 // not, based on version.
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
-	if cx.version < sharedResourcesVersion {
-		if account.argType() == StackUint64 {
-			addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
-			return addr, account.Uint, err
-		}
-	}
-	addr, err := account.address()
+	addr, idx, err := cx.resolveAccount(account)
 	if err != nil {
 		return addr, 0, err
 	}
 
-	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
-	if err == nil {
-		return addr, idx, nil
+	if idx >= 0 {
+		return addr, uint64(idx), err
 	}
-
-	// IndexByAddress's `err` tells us we can't return the idx into
+	// negative idx tells us we can't return the idx into
 	// txn.Accounts, but the account might still be available (because it was
-	// created in earlier in the group, or because of group sharing)
+	// created earlier in the group, or because of group sharing)
 	ok := cx.availableAccount(addr)
 	if !ok {
-		// nope, it's not available at all. So return the `err` we have from
-		// above, indicating that it was not found.
-		return addr, 0, err
+		return addr, 0, fmt.Errorf("invalid Account reference %s", addr)
 	}
+	// available, but not in txn.Accounts. Return 1 higher to signal.
 	return addr, uint64(len(cx.txn.Txn.Accounts) + 1), nil
+}
+
+// resolveAccount determines the Address and slot indicated by a stackValue, so
+// it is either confirming that the bytes is indeed 32 bytes (and trying to find
+// it in txn.Accounts or returning -1), or it is performing the lookup of the
+// integer arg in txn.Accounts.
+func (cx *EvalContext) resolveAccount(account stackValue) (basics.Address, int, error) {
+	if account.argType() == StackUint64 {
+		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
+		return addr, int(account.Uint), err
+	}
+	addr, err := account.address()
+	if err != nil {
+		return addr, -1, err
+	}
+
+	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
+	if err != nil {
+		// we don't want to convery `err`, because the supplied `account` does
+		// seem to be an address, but we can't give a valid index.
+		return addr, -1, nil
+	}
+	return addr, int(idx), nil
 }
 
 func (cx *EvalContext) availableAccount(addr basics.Address) bool {
@@ -4448,38 +4462,51 @@ func opAppGlobalDel(cx *EvalContext) error {
 
 func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, error) {
 	if cx.version >= directRefEnabledVersion {
-		if ref == 0 || ref == uint64(cx.appID) {
-			return cx.appID, nil
-		}
-		aid := basics.AppIndex(ref)
-		if cx.availableApp(aid) {
-			return aid, nil
-		}
-
-		if cx.version < sharedResourcesVersion {
-			// Allow use of indexes, but this comes last so that clear advice can be
-			// given to anyone who cares about semantics in the first few rounds of
-			// a new network - don't use indexes for references, use the App ID
-			if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-				return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
-			}
-		}
-	} else {
-		// Old rules
-		if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
-			return cx.appID, nil
-		}
-		if foreign {
-			// In old versions, a foreign reference must be an index in ForeignAssets or 0
-			if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-				return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
-			}
-		} else {
-			// Otherwise it's direct
-			return basics.AppIndex(ref), nil
-		}
+		return cx.resolveApp(ref)
 	}
-	return 0, fmt.Errorf("invalid App reference %d", ref)
+
+	// Old rules
+	if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
+		return cx.appID, nil
+	}
+	if foreign {
+		// In old versions, a foreign reference must be an index in ForeignApps or 0
+		if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
+			return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+		}
+		return 0, fmt.Errorf("App index %d beyond txn.ForeignApps", ref)
+	}
+	// Otherwise it's direct
+	return basics.AppIndex(ref), nil
+}
+
+// resolveApp figures out what App an integer is referring to, considering 0 as
+// current app first, then uses the integer as is if it is an availableApp, then
+// tries to perform a slot lookup.
+func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid < firstResource && err == nil {
+				err = fmt.Errorf("low Asset lookup %d", ref)
+			}
+		}()
+	}
+
+	if ref == 0 || ref == uint64(cx.appID) {
+		return cx.appID, nil
+	}
+	aid = basics.AppIndex(ref)
+	if cx.availableApp(aid) {
+		return aid, nil
+	}
+
+	// Allow use of indexes, but this comes last so that clear advice can be
+	// given to anyone who cares about semantics in the first few rounds of
+	// a new network - don't use indexes for references, use the App ID
+	if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
+		return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+	}
+	return 0, fmt.Errorf("unavailable App %d", ref)
 }
 
 // localsReference has the main job of resolving the account (as bytes or u64)
@@ -4489,33 +4516,32 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, 
 // job in certainly old versions that need the slot index while doing a lookup.
 func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.Address, basics.AppIndex, uint64, error) {
 	if cx.version >= sharedResourcesVersion {
-		unused := uint64(0) // see function comment
-		addr, err := account.address()
+		addr, _, err := cx.resolveAccount(account)
 		if err != nil {
 			return basics.Address{}, 0, 0, err
 		}
-		aid := basics.AppIndex(ref)
-		if ref == 0 {
-			aid = cx.appID
-		}
-		if cx.allowsLocals(addr, aid) {
-			return addr, aid, unused, nil
+		aid, err := cx.resolveApp(ref)
+		if err == nil {
+			if cx.allowsLocals(addr, aid) {
+				return addr, aid, 0, nil // >v9 caller doesn't care about slot
+			}
 		}
 
-		// Do some extra lookups to give a more concise err. Whenever a locals
-		// is available, its account and app must be as well (but not vice
-		// versa, anymore). So, if (only) one of them is not available, yell
-		// about it, specifically.
+		// Do an extra check to give a better error. The app is definitely
+		// available. If the addr is too, then the trouble is they must have
+		// come from different transactions, and the HOLDING is the problem.
 
-		_, _, acctErr := cx.accountReference(account)
-		_, appErr := cx.appReference(ref, false)
+		acctOK := cx.availableAccount(addr)
 		switch {
-		case acctErr != nil && appErr == nil:
-			err = acctErr
-		case acctErr == nil && appErr != nil:
-			err = appErr
-		default:
-			err = fmt.Errorf("invalid Local State access %s x %d", addr, aid)
+		case err != nil && acctOK:
+			// do nothing, err contains the an Asset specific problem
+		case err == nil && acctOK:
+			// although both are available, the LOCALS are not
+			err = fmt.Errorf("unavailable Local State %s x %d", addr, aid)
+		case err != nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
+		case err == nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s", addr)
 		}
 
 		return basics.Address{}, 0, 0, err
@@ -4536,62 +4562,77 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 
 func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetIndex, error) {
 	if cx.version >= directRefEnabledVersion {
-		aid := basics.AssetIndex(ref)
-		if cx.availableAsset(aid) {
-			return aid, nil
-		}
-
-		if cx.version < sharedResourcesVersion {
-			// Allow use of indexes, but this comes last so that clear advice can be
-			// given to anyone who cares about semantics in the first few rounds of
-			// a new network - don't use indexes for references, use the asa ID.
-			if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-				return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
-			}
-		}
-	} else {
-		// Old rules
-		if foreign {
-			// In old versions, a foreign reference must be an index in ForeignAssets
-			if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-				return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
-			}
-		} else {
-			// Otherwise it's direct
-			return basics.AssetIndex(ref), nil
-		}
+		return cx.resolveAsset(ref)
 	}
-	return 0, fmt.Errorf("invalid Asset reference %d", ref)
 
+	// Old rules
+	if foreign {
+		// In old versions, a foreign reference must be an index in ForeignAssets
+		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
+			return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+		}
+		return 0, fmt.Errorf("Asset index %d beyond txn.ForeignAssets", ref)
+	}
+	// Otherwise it's direct
+	return basics.AssetIndex(ref), nil
+}
+
+const firstResource = 16
+
+// resolveAsset figures out what Asset an integer is referring to, considering 0 as
+// current app first, then uses the integer as is if it is an availableAsset, then
+// tries to perform a slot lookup.
+func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err error) {
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid < firstResource && err == nil {
+				err = fmt.Errorf("low Asset lookup %d", ref)
+			}
+		}()
+	}
+	aid = basics.AssetIndex(ref)
+	if cx.availableAsset(aid) {
+		return aid, nil
+	}
+
+	// Allow use of indexes, but this comes last so that clear advice can be
+	// given to anyone who cares about semantics in the first few rounds of
+	// a new network - don't use indexes for references, use the Asset ID
+	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
+		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+	}
+	return 0, fmt.Errorf("unavailable Asset %d", ref)
 }
 
 func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.Address, basics.AssetIndex, error) {
 	if cx.version >= sharedResourcesVersion {
-		addr, err := account.address()
+		addr, _, err := cx.resolveAccount(account)
 		if err != nil {
 			return basics.Address{}, 0, err
 		}
-		aid := basics.AssetIndex(ref)
-		if cx.allowsHolding(addr, aid) {
-			return addr, aid, nil
+		aid, err := cx.resolveAsset(ref)
+		if err == nil {
+			if cx.allowsHolding(addr, aid) {
+				return addr, aid, nil
+			}
 		}
 
-		// Do some extra lookups to give a more concise err. Whenever a holding
-		// is available, its account and asset must be as well (but not vice
-		// versa, anymore). So, if (only) one of them is not available, yell
-		// about it, specifically.
+		// Do an extra check to give a better error. The asset is definitely
+		// available. If the addr is too, then the trouble is they must have
+		// come from different transactions, and the HOLDING is the problem.
 
-		_, _, acctErr := cx.accountReference(account)
-		_, assetErr := cx.assetReference(ref, false)
+		acctOK := cx.availableAccount(addr)
 		switch {
-		case acctErr != nil && assetErr == nil:
-			err = acctErr
-		case acctErr == nil && assetErr != nil:
-			err = assetErr
-		default:
-			err = fmt.Errorf("invalid Holding access %s x %d", addr, aid)
+		case err != nil && acctOK:
+			// do nothing, err contains the an Asset specific problem
+		case err == nil && acctOK:
+			// although both are available, the HOLDING is not
+			err = fmt.Errorf("unavailable Holding %s x %d", addr, aid)
+		case err != nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
+		case err == nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s", addr)
 		}
-
 		return basics.Address{}, 0, err
 	}
 

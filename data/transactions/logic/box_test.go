@@ -553,21 +553,17 @@ func TestBoxTotals(t *testing.T) {
 	t.Parallel()
 
 	TestLogicRange(t, 8, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		rw := func(src string) string {
-			return RewriteFor(src, ep.Proto.LogicSigVersion)
-		}
-
 		ledger.NewApp(tx.Sender, 888, basics.AppParams{})
 		// The SENDER certainly has no boxes (but does exist)
-		TestApp(t, rw(`txn Sender; acct_params_get AcctTotalBoxes; pop; !`), ep)
+		TestApp(t, `txn Sender; acct_params_get AcctTotalBoxes; pop; !`, ep)
 		// Nor does the app account, to start
-		TestApp(t, rw(`int 888; app_params_get AppAddress; assert;
-		               acct_params_get AcctTotalBoxes; pop; !; `), ep)
+		TestApp(t, `int 888; app_params_get AppAddress; assert;
+		               acct_params_get AcctTotalBoxes; pop; !; `, ep)
 		// Create a 31 byte box with a 4 byte name
 		TestApp(t, `byte "self"; int 31; box_create`, ep)
-		TestApp(t, rw(`int 888; app_params_get AppAddress; assert;
-		               acct_params_get AcctTotalBoxes; pop; int 1; ==`), ep)
-		TestApp(t, rw(`int 888; app_params_get AppAddress; assert;
-		               acct_params_get AcctTotalBoxBytes; pop; int 35; ==`), ep)
+		TestApp(t, `int 888; app_params_get AppAddress; assert;
+		               acct_params_get AcctTotalBoxes; pop; int 1; ==`, ep)
+		TestApp(t, `int 888; app_params_get AppAddress; assert;
+		            acct_params_get AcctTotalBoxBytes; pop; int 35; ==`, ep)
 	})
 }

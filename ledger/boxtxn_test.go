@@ -158,9 +158,7 @@ func TestBoxCreate(t *testing.T) {
 		dl.txn(adam, "invalid Box reference adam")
 		adam.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("adam")}}
 
-		dl.beginBlock()
-		dl.txn(adam)
-		vb := dl.endBlock()
+		vb := dl.fullBlock(adam)
 
 		// confirm the deltas has the creation
 		require.Len(t, vb.Delta().KvMods, 1)
@@ -285,8 +283,11 @@ func TestBoxCreateAvailability(t *testing.T) {
 		// the app address that we know the app will get. So this is a nice
 		// test, but unrealistic way to actual create a box.
 		psychic := basics.AppIndex(2)
-
 		proto := config.Consensus[cv]
+		if proto.AppForbidLowResources {
+			psychic += 1000
+		}
+
 		dl.txn(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
@@ -352,12 +353,10 @@ func TestBoxCreateAvailability(t *testing.T) {
 			ApplicationID: trampoline,
 		}
 
-		dl.beginBlock()
-		dl.txgroup("", &accessWhenCalled, &call)
-		vb := dl.endBlock()
+		payset := dl.txgroup("", &accessWhenCalled, &call)
 
 		// Make sure that we actually did it.
-		require.Equal(t, "we did it", vb.Block().Payset[1].ApplyData.EvalDelta.InnerTxns[1].EvalDelta.Logs[0])
+		require.Equal(t, "we did it", payset[1].ApplyData.EvalDelta.InnerTxns[1].EvalDelta.Logs[0])
 	})
 }
 
@@ -384,10 +383,8 @@ func TestBoxRW(t *testing.T) {
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
 
-		dl.txn(call.Args("create", "x", "\x10")) // 16
-		dl.beginBlock()
-		dl.txn(call.Args("set", "x", "ABCDEFGHIJ")) // 10 long
-		vb := dl.endBlock()
+		dl.txn(call.Args("create", "x", "\x10"))                // 16
+		vb := dl.fullBlock(call.Args("set", "x", "ABCDEFGHIJ")) // 10 long
 		// confirm the deltas has the change, including the old value
 		require.Len(t, vb.Delta().KvMods, 1)
 		for _, kvDelta := range vb.Delta().KvMods { // There's only one
@@ -672,15 +669,15 @@ func TestBoxInners(t *testing.T) {
 
 		// Try some get/put action
 		dl.txn(call.Args("put", "x", "john doe"))
-		vb := dl.fullBlock(call.Args("get", "x"))
+		tib := dl.txn(call.Args("get", "x"))
 		// we are passing this thru to the underlying box app which logs the get
-		require.Equal(t, "john doe", vb.Block().Payset[0].ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
+		require.Equal(t, "john doe", tib.ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
 		dl.txn(call.Args("check", "x", "john"))
 
 		// bad change because of length
 		dl.txn(call.Args("put", "x", "steve doe"), "box_put wrong size")
-		vb = dl.fullBlock(call.Args("get", "x"))
-		require.Equal(t, "john doe", vb.Block().Payset[0].ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
+		tib = dl.txn(call.Args("get", "x"))
+		require.Equal(t, "john doe", tib.ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
 
 		// good change
 		dl.txn(call.Args("put", "x", "mark doe"))
