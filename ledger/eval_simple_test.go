@@ -666,7 +666,7 @@ func TestAppInsMinBalance(t *testing.T) {
 	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusV30, cfg)
 	defer l.Close()
 
-	const appid basics.AppIndex = 1
+	const appID basics.AppIndex = 1
 
 	maxAppsOptedIn := config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 	require.Greater(t, maxAppsOptedIn, 0)
@@ -700,7 +700,7 @@ func TestAppInsMinBalance(t *testing.T) {
 		optInTxn := txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        addrs[9],
-			ApplicationID: appid + basics.AppIndex(i),
+			ApplicationID: appID + basics.AppIndex(i),
 			OnCompletion:  transactions.OptInOC,
 		}
 		txnsOptIn = append(txnsOptIn, &optInTxn)

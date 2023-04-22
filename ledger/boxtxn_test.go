@@ -146,12 +146,12 @@ func TestBoxCreate(t *testing.T) {
 		proto := config.Consensus[cv]
 		mbr := boxFee(proto, 28)
 
-		appIndex := dl.fundedApp(addrs[0], proto.MinBalance+3*mbr, boxAppSource)
+		appID := dl.fundedApp(addrs[0], proto.MinBalance+3*mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 		}
 
 		adam := call.Args("create", "adam")
@@ -216,12 +216,12 @@ func TestBoxRecreate(t *testing.T) {
 		proto := config.Consensus[cv]
 		mbr := boxFee(proto, 8)
 
-		appIndex := dl.fundedApp(addrs[0], proto.MinBalance+mbr, boxAppSource)
+		appID := dl.fundedApp(addrs[0], proto.MinBalance+mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("adam")}},
 		}
 
@@ -375,11 +375,11 @@ func TestBoxRW(t *testing.T) {
 		log := logging.NewLogger()
 		log.SetOutput(&bufNewLogger)
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
+		appID := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
 
@@ -449,11 +449,11 @@ func TestBoxAccountData(t *testing.T) {
 		log := logging.NewLogger()
 		log.SetOutput(&bufNewLogger)
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
+		appID := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}, {Index: 0, Name: []byte("y")}},
 		}
 
@@ -482,12 +482,12 @@ assert
 ==
 assert
 `)
-		verifyAppIndex := dl.fundedApp(addrs[0], 0, verifyAppSrc)
+		verifyAppID := dl.fundedApp(addrs[0], 0, verifyAppSrc)
 		verifyAppCall := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: verifyAppIndex,
-			Accounts:      []basics.Address{appIndex.Address()},
+			ApplicationID: verifyAppID,
+			Accounts:      []basics.Address{appID.Address()},
 		}
 
 		// The app account has no box data initially
@@ -531,11 +531,11 @@ func TestBoxIOBudgets(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		appIndex := dl.fundedApp(addrs[0], 0, boxAppSource)
+		appID := dl.fundedApp(addrs[0], 0, boxAppSource)
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
 		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
@@ -557,7 +557,7 @@ func TestBoxIOBudgets(t *testing.T) {
 		fundApp := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
-			Receiver: appIndex.Address(),
+			Receiver: appID.Address(),
 			Amount:   proto.MinBalance + boxFee(proto, 4096+1), // remember key len!
 		}
 		create := call.Args("create", "x", "\x10\x00")
@@ -602,13 +602,13 @@ func TestBoxInners(t *testing.T) {
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 
-		boxIndex := dl.fundedApp(addrs[0], 2_000_000, boxAppSource)  // there are some big boxes made
-		passIndex := dl.fundedApp(addrs[0], 120_000, passThruSource) // lowish, show it's not paying for boxes
+		boxID := dl.fundedApp(addrs[0], 2_000_000, boxAppSource)  // there are some big boxes made
+		passID := dl.fundedApp(addrs[0], 120_000, passThruSource) // lowish, show it's not paying for boxes
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: passIndex,
-			ForeignApps:   []basics.AppIndex{boxIndex},
+			ApplicationID: passID,
+			ForeignApps:   []basics.AppIndex{boxID},
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
 		// The current Boxes gives top-level access to "x", not the inner app
@@ -616,7 +616,7 @@ func TestBoxInners(t *testing.T) {
 			"invalid Box reference x")
 
 		// This isn't right: Index should be index into ForeignApps
-		call.Boxes = []transactions.BoxRef{{Index: uint64(boxIndex), Name: []byte("x")}}
+		call.Boxes = []transactions.BoxRef{{Index: uint64(boxID), Name: []byte("x")}}
 		require.Error(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
 
 		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}

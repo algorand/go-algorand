@@ -204,104 +204,104 @@ skipamount:
 submit:  itxn_submit
 `)
 
-		asaIndex := dl.txn(&asa).ApplyData.ConfigAsset
+		asaID := dl.txn(&asa).ApplyData.ConfigAsset
 		// account min balance, optin min balance, plus fees
 		// stay under 1M, to avoid rewards complications
-		appIndex := dl.fundedApp(addrs[0], 300_000, source)
+		appID := dl.fundedApp(addrs[0], 300_000, source)
 
 		fundgold := txntest.Txn{
 			Type:          "axfer",
 			Sender:        addrs[0],
-			XferAsset:     asaIndex,
-			AssetReceiver: appIndex.Address(),
+			XferAsset:     asaID,
+			AssetReceiver: appID.Address(),
 			AssetAmount:   20000,
 		}
 
 		// Fail, because app account is not opted in.
-		dl.txn(&fundgold, fmt.Sprintf("asset %d missing", asaIndex))
+		dl.txn(&fundgold, fmt.Sprintf("asset %d missing", asaID))
 
-		amount, in := holding(t, dl.generator, appIndex.Address(), asaIndex)
+		amount, in := holding(t, dl.generator, appID.Address(), asaID)
 		require.False(t, in)
 		require.Zero(t, amount)
 
 		// Tell the app to opt itself in.
 		optin := txntest.Txn{
 			Type:            "appl",
-			ApplicationID:   appIndex,
+			ApplicationID:   appID,
 			Sender:          addrs[0],
 			ApplicationArgs: [][]byte{[]byte("optin")},
-			ForeignAssets:   []basics.AssetIndex{asaIndex},
+			ForeignAssets:   []basics.AssetIndex{asaID},
 		}
 		dl.txn(&optin)
 
-		amount, in = holding(t, dl.generator, appIndex.Address(), asaIndex)
+		amount, in = holding(t, dl.generator, appID.Address(), asaID)
 		require.True(t, in)
 		require.Zero(t, amount)
 
 		// Now, succeed, because opted in.
 		dl.txn(&fundgold)
 
-		amount, in = holding(t, dl.generator, appIndex.Address(), asaIndex)
+		amount, in = holding(t, dl.generator, appID.Address(), asaID)
 		require.True(t, in)
 		require.Equal(t, uint64(20000), amount)
 
 		withdraw := txntest.Txn{
 			Type:            "appl",
-			ApplicationID:   appIndex,
+			ApplicationID:   appID,
 			Sender:          addrs[0],
 			ApplicationArgs: [][]byte{[]byte("withdraw")},
-			ForeignAssets:   []basics.AssetIndex{asaIndex},
+			ForeignAssets:   []basics.AssetIndex{asaID},
 			Accounts:        []basics.Address{addrs[0]},
 		}
 		dl.txn(&withdraw)
 
-		amount, in = holding(t, dl.generator, appIndex.Address(), asaIndex)
+		amount, in = holding(t, dl.generator, appID.Address(), asaID)
 		require.True(t, in)
 		require.Equal(t, uint64(10000), amount)
 
 		dl.txn(withdraw.Noted("2"))
 
-		amount, in = holding(t, dl.generator, appIndex.Address(), asaIndex)
+		amount, in = holding(t, dl.generator, appID.Address(), asaID)
 		require.True(t, in) // Zero left, but still opted in
 		require.Zero(t, amount)
 
 		dl.txn(withdraw.Noted("3"), "underflow on subtracting")
 
-		amount, in = holding(t, dl.generator, appIndex.Address(), asaIndex)
+		amount, in = holding(t, dl.generator, appID.Address(), asaID)
 		require.True(t, in) // Zero left, but still opted in
 		require.Zero(t, amount)
 
 		close := txntest.Txn{
 			Type:            "appl",
-			ApplicationID:   appIndex,
+			ApplicationID:   appID,
 			Sender:          addrs[0],
 			ApplicationArgs: [][]byte{[]byte("close")},
-			ForeignAssets:   []basics.AssetIndex{asaIndex},
+			ForeignAssets:   []basics.AssetIndex{asaID},
 			Accounts:        []basics.Address{addrs[0]},
 		}
 
 		dl.txn(&close)
 
-		amount, in = holding(t, dl.generator, appIndex.Address(), asaIndex)
+		amount, in = holding(t, dl.generator, appID.Address(), asaID)
 		require.False(t, in) // Zero left, not opted in
 		require.Zero(t, amount)
 
 		// Now, fail again, opted out
-		dl.txn(fundgold.Noted("2"), fmt.Sprintf("asset %d missing", asaIndex))
+		dl.txn(fundgold.Noted("2"), fmt.Sprintf("asset %d missing", asaID))
 
 		// Do it all again, so we can test closeTo when we have a non-zero balance
 		// Tell the app to opt itself in.
 		dl.txns(optin.Noted("a"), fundgold.Noted("a"))
 
-		amount, _ = holding(t, dl.generator, appIndex.Address(), asaIndex)
+		amount, _ = holding(t, dl.generator, appID.Address(), asaID)
 		require.Equal(t, uint64(20000), amount)
-		left, _ := holding(t, dl.generator, addrs[0], asaIndex)
+		left, _ := holding(t, dl.generator, addrs[0], asaID)
 
 		dl.txn(close.Noted("a"))
 
-		amount, _ = holding(t, dl.generator, appIndex.Address(), asaIndex)
+		amount, _ = holding(t, dl.generator, appID.Address(), asaID)
 		require.Zero(t, amount)
-		back, _ := holding(t, dl.generator, addrs[0], asaIndex)
+		back, _ := holding(t, dl.generator, addrs[0], asaID)
 		require.Equal(t, uint64(20000), back-left)
 	})
 }
@@ -331,23 +331,23 @@ func TestClawbackAction(t *testing.T) {
          itxn_submit
 `),
 		}
-		appIndex := dl.txn(&app).ApplyData.ApplicationID
+		appID := dl.txn(&app).ApplyData.ApplicationID
 
 		asa := txntest.Txn{
 			Type:   "acfg",
 			Sender: addrs[0],
 			AssetParams: basics.AssetParams{
 				Total:    1005,
-				Clawback: appIndex.Address(),
+				Clawback: appID.Address(),
 			},
 		}
-		asaIndex := dl.txn(&asa).ApplyData.ConfigAsset
+		asaID := dl.txn(&asa).ApplyData.ConfigAsset
 
 		optin := txntest.Txn{
 			Type:          "axfer",
 			Sender:        addrs[1],
 			AssetReceiver: addrs[1],
-			XferAsset:     asaIndex,
+			XferAsset:     asaID,
 		}
 		dl.txn(&optin)
 
@@ -361,15 +361,15 @@ func TestClawbackAction(t *testing.T) {
 		clawmove := txntest.Txn{
 			Type:          "appl",
 			Sender:        bystander,
-			ApplicationID: appIndex,
-			ForeignAssets: []basics.AssetIndex{asaIndex},
+			ApplicationID: appID,
+			ForeignAssets: []basics.AssetIndex{asaID},
 			Accounts:      []basics.Address{addrs[0], addrs[1]},
 		}
 		dl.txgroup("", &overpay, &clawmove)
 
-		amount, _ := holding(t, dl.generator, addrs[1], asaIndex)
+		amount, _ := holding(t, dl.generator, addrs[1], asaID)
 		require.EqualValues(t, 1000, amount)
-		amount, _ = holding(t, dl.generator, addrs[0], asaIndex)
+		amount, _ = holding(t, dl.generator, addrs[0], asaID)
 		require.EqualValues(t, 5, amount)
 	})
 }
@@ -404,13 +404,13 @@ skipclose:
          itxn_submit
 `),
 		}
-		appIndex := dl.txn(&ezpayer).ApplyData.ApplicationID
+		appID := dl.txn(&ezpayer).ApplyData.ApplicationID
 
 		rekey := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: addrs[0],
-			RekeyTo:  appIndex.Address(),
+			RekeyTo:  appID.Address(),
 		}
 
 		dl.txn(&rekey)
@@ -418,13 +418,13 @@ skipclose:
 		useacct := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Accounts:      []basics.Address{addrs[0], addrs[2]}, // pay 2 from 0 (which was rekeyed)
 		}
 		dl.txn(&useacct)
 
 		// App was never funded (didn't spend from it's own acct)
-		require.Zero(t, micros(t, dl.generator, appIndex.Address()))
+		require.Zero(t, micros(t, dl.generator, appID.Address()))
 		// addrs[2] got paid
 		require.Equal(t, uint64(5000), micros(t, dl.generator, addrs[2])-micros(t, dl.generator, addrs[6]))
 		// addrs[0] paid 5k + rekey fee + inner txn fee
@@ -433,7 +433,7 @@ skipclose:
 		baduse := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Accounts:      []basics.Address{addrs[2], addrs[0]}, // pay 0 from 2
 		}
 		dl.txn(&baduse, "unauthorized")
@@ -444,7 +444,7 @@ skipclose:
 		close := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Accounts:      []basics.Address{addrs[0], addrs[2], addrs[3]}, // close to 3
 		}
 		dl.txn(&close)
@@ -479,7 +479,7 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 		defer dl.Close()
 
 		// use addrs[5] for creation, so addr[0] will be closeable
-		appIndex := dl.fundedApp(addrs[5], 1_000_000,
+		appID := dl.fundedApp(addrs[5], 1_000_000,
 			main(`
          // pay from, and close, account 1
          itxn_begin
@@ -509,13 +509,13 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: addrs[0],
-			RekeyTo:  appIndex.Address(),
+			RekeyTo:  appID.Address(),
 		})
 
 		useacct := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Accounts:      []basics.Address{addrs[0], addrs[2]},
 		}
 		dl.txn(&useacct, "unauthorized")
@@ -549,22 +549,22 @@ func TestDuplicatePayAction(t *testing.T) {
           txn Accounts 1;  itxn_field Receiver
          itxn_submit
 `)
-		appIndex := dl.fundedApp(addrs[0], 200_000, source)
+		appID := dl.fundedApp(addrs[0], 200_000, source)
 
 		paytwice := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Accounts:      []basics.Address{addrs[1]}, // pay self
 		}
 
 		dl.txn(&paytwice)
 		copyID := dl.fundedApp(addrs[0], 200_000, source)
-		require.Equal(t, appIndex+5, copyID) // 4 between (fund, outer, two innner pays)
+		require.Equal(t, appID+5, copyID) // 4 between (fund, outer, two innner pays)
 
 		ad0 := micros(t, dl.generator, addrs[0])
 		ad1 := micros(t, dl.generator, addrs[1])
-		app := micros(t, dl.generator, appIndex.Address())
+		app := micros(t, dl.generator, appID.Address())
 
 		// create(1000) and fund(1000 + 200000), extra create+fund (1000 + 201000)
 		require.Equal(t, 404000, int(genBalances.Balances[addrs[0]].MicroAlgos.Raw-ad0))
@@ -573,7 +573,7 @@ func TestDuplicatePayAction(t *testing.T) {
 		// app still has 188000 (paid out 10000, and paid 2 x fee to do it)
 		require.Equal(t, 188000, int(app))
 
-		// Now create another app, and see if it gets the index we expect (2
+		// Now create another app, and see if it gets the ID we expect (2
 		// higher, because of the intervening fund txn)
 		finalID := dl.fundedApp(addrs[0], 200_000, source)
 		require.Equal(t, copyID+2, finalID)
@@ -592,7 +592,7 @@ func TestInnerTxnCount(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		appIndex := dl.fundedApp(addrs[0], 200000, // account min balance, plus fees
+		appID := dl.fundedApp(addrs[0], 200000, // account min balance, plus fees
 			main(`
          itxn_begin
          int pay
@@ -607,7 +607,7 @@ func TestInnerTxnCount(t *testing.T) {
 		payout1 := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Accounts:      []basics.Address{addrs[1]}, // pay self
 		}
 
@@ -630,7 +630,7 @@ func TestAcfgAction(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		appIndex := dl.fundedApp(addrs[0], 200_000, // exactly account min balance + one asset
+		appID := dl.fundedApp(addrs[0], 200_000, // exactly account min balance + one asset
 			main(`
          itxn_begin
          int acfg
@@ -728,7 +728,7 @@ submit:  itxn_submit
 		createAsa := txntest.Txn{
 			Type:            "appl",
 			Sender:          addrs[1],
-			ApplicationID:   appIndex,
+			ApplicationID:   appID,
 			ApplicationArgs: [][]byte{[]byte("create")},
 		}
 
@@ -738,13 +738,13 @@ submit:  itxn_submit
 		dl.txn(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
-			Receiver: appIndex.Address(),
+			Receiver: appID.Address(),
 			Amount:   10_000,
 		})
-		asaIndex := dl.txn(&createAsa).EvalDelta.InnerTxns[0].ConfigAsset
-		require.NotZero(t, asaIndex)
+		asaID := dl.txn(&createAsa).EvalDelta.InnerTxns[0].ConfigAsset
+		require.NotZero(t, asaID)
 
-		asaParams, err := asaParams(t, dl.generator, asaIndex)
+		asaParams, err := asaParams(t, dl.generator, asaID)
 		require.NoError(t, err)
 
 		require.Equal(t, 1_000_000, int(asaParams.Total))
@@ -753,15 +753,15 @@ submit:  itxn_submit
 		require.Equal(t, "Gold", asaParams.AssetName)
 		require.Equal(t, "https://gold.rush/", asaParams.URL)
 
-		require.Equal(t, appIndex.Address(), asaParams.Manager)
+		require.Equal(t, appID.Address(), asaParams.Manager)
 
 		for _, a := range []string{"reserve", "freeze", "clawback", "manager"} {
 			check := txntest.Txn{
 				Type:            "appl",
 				Sender:          addrs[1],
-				ApplicationID:   appIndex,
+				ApplicationID:   appID,
 				ApplicationArgs: [][]byte{[]byte(a), []byte("junkjunkjunkjunkjunkjunkjunkjunk")},
-				ForeignAssets:   []basics.AssetIndex{asaIndex},
+				ForeignAssets:   []basics.AssetIndex{asaID},
 			}
 			t.Log(a)
 			dl.txn(&check)
@@ -770,9 +770,9 @@ submit:  itxn_submit
 		nodice := txntest.Txn{
 			Type:            "appl",
 			Sender:          addrs[1],
-			ApplicationID:   appIndex,
+			ApplicationID:   appID,
 			ApplicationArgs: [][]byte{[]byte("freeze"), []byte("junkjunkjunkjunkjunkjunkjunkjunk")},
-			ForeignAssets:   []basics.AssetIndex{asaIndex},
+			ForeignAssets:   []basics.AssetIndex{asaID},
 		}
 		dl.txn(&nodice, "this transaction should be issued by the manager")
 	})
@@ -793,14 +793,14 @@ func TestAsaDuringInit(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		appIndex := basics.AppIndex(2)
+		appID := basics.AppIndex(2)
 		if ver >= 37 { // AppForbidLowResources
-			appIndex += 1000
+			appID += 1000
 		}
 		prefund := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
-			Receiver: appIndex.Address(),
+			Receiver: appID.Address(),
 			Amount:   300000, // plenty for min balances, fees
 		}
 
@@ -815,7 +815,7 @@ func TestAsaDuringInit(t *testing.T) {
 		  byte "Gold";  itxn_field ConfigAssetName
          itxn_submit
          itxn CreatedAssetID
-         int ` + strconv.Itoa(int(appIndex+1)) + `
+         int ` + strconv.Itoa(int(appID+1)) + `
          ==
          assert
          itxn CreatedApplicationID; int 0; ==; assert
@@ -823,10 +823,10 @@ func TestAsaDuringInit(t *testing.T) {
 		}
 
 		payset := dl.txns(&prefund, &app)
-		require.Equal(t, appIndex, payset[1].ApplicationID)
+		require.Equal(t, appID, payset[1].ApplicationID)
 
-		asaIndex := payset[1].EvalDelta.InnerTxns[0].ConfigAsset
-		require.EqualValues(t, appIndex+1, asaIndex)
+		asaID := payset[1].EvalDelta.InnerTxns[0].ConfigAsset
+		require.EqualValues(t, appID+1, asaID)
 	})
 }
 
@@ -841,7 +841,7 @@ func TestInnerRekey(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000,
+		appID := dl.fundedApp(addrs[0], 1_000_000,
 			main(`
   itxn_begin
    int pay
@@ -857,12 +857,12 @@ func TestInnerRekey(t *testing.T) {
    itxn_field RekeyTo
   itxn_submit
 `))
-		require.NotZero(t, appIndex)
+		require.NotZero(t, appID)
 
 		rekey := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 		}
 		dl.fullBlock(&rekey)
 		dl.txn(rekey.Noted("2"), "unauthorized")
@@ -880,7 +880,7 @@ func TestNote(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000,
+		appID := dl.fundedApp(addrs[0], 1_000_000,
 			main(`
   itxn_begin
    int pay
@@ -897,7 +897,7 @@ func TestNote(t *testing.T) {
 		note := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 		}
 
 		alphabet := dl.txn(&note).EvalDelta.InnerTxns[0].Txn.Note
@@ -945,21 +945,21 @@ nonpart:
 	eval := nextBlock(t, l)
 	txns(t, l, eval, &app)
 	vb := endBlock(t, l, eval)
-	appIndex := vb.Block().Payset[0].ApplicationID
-	require.NotZero(t, appIndex)
+	appID := vb.Block().Payset[0].ApplicationID
+	require.NotZero(t, appID)
 
 	// Give the app a lot of money
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: appIndex.Address(),
+		Receiver: appID.Address(),
 		Amount:   1_000_000_000,
 	}
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &fund)
 	endBlock(t, l, eval)
 
-	require.Equal(t, 1_000_000_000, int(micros(t, l, appIndex.Address())))
+	require.Equal(t, 1_000_000_000, int(micros(t, l, appID.Address())))
 
 	// Build up Residue in RewardsState so it's ready to pay
 	for i := 1; i < 10; i++ {
@@ -971,26 +971,26 @@ nonpart:
 	pay := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
-		ApplicationID:   appIndex,
+		ApplicationID:   appID,
 		ApplicationArgs: [][]byte{[]byte("pay")},
 	}
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &pay)
 	endBlock(t, l, eval)
 	// 2000 was earned in rewards (- 1000 fee, -1 pay)
-	require.Equal(t, 1_000_000_999, int(micros(t, l, appIndex.Address())))
+	require.Equal(t, 1_000_000_999, int(micros(t, l, appID.Address())))
 
 	// Go nonpart
 	nonpart := txntest.Txn{
 		Type:            "appl",
 		Sender:          addrs[0],
-		ApplicationID:   appIndex,
+		ApplicationID:   appID,
 		ApplicationArgs: [][]byte{[]byte("nonpart")},
 	}
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &nonpart)
 	endBlock(t, l, eval)
-	require.Equal(t, 999_999_999, int(micros(t, l, appIndex.Address())))
+	require.Equal(t, 999_999_999, int(micros(t, l, appID.Address())))
 
 	// Build up Residue in RewardsState so it's ready to pay AGAIN
 	// But expect no rewards
@@ -1003,7 +1003,7 @@ nonpart:
 	txn(t, l, eval, nonpart.Noted("again"), "cannot change online/offline")
 	endBlock(t, l, eval)
 	// Paid fee + 1.  Did not get rewards
-	require.Equal(t, 999_998_998, int(micros(t, l, appIndex.Address())))
+	require.Equal(t, 999_998_998, int(micros(t, l, appID.Address())))
 }
 
 func TestInnerAppCall(t *testing.T) {
@@ -1031,7 +1031,7 @@ func TestInnerAppCall(t *testing.T) {
 	eval := nextBlock(t, l)
 	txn(t, l, eval, &app0)
 	vb := endBlock(t, l, eval)
-	index0 := vb.Block().Payset[0].ApplicationID
+	id0 := vb.Block().Payset[0].ApplicationID
 
 	app1 := txntest.Txn{
 		Type:   "appl",
@@ -1049,22 +1049,22 @@ func TestInnerAppCall(t *testing.T) {
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &app1)
 	vb = endBlock(t, l, eval)
-	index1 := vb.Block().Payset[0].ApplicationID
+	id1 := vb.Block().Payset[0].ApplicationID
 
 	fund0 := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: index0.Address(),
+		Receiver: id0.Address(),
 		Amount:   1_000_000_000,
 	}
 	fund1 := fund0
-	fund1.Receiver = index1.Address()
+	fund1.Receiver = id1.Address()
 
 	call1 := txntest.Txn{
 		Type:          "appl",
 		Sender:        addrs[2],
-		ApplicationID: index1,
-		ForeignApps:   []basics.AppIndex{index0},
+		ApplicationID: id1,
+		ForeignApps:   []basics.AppIndex{id0},
 	}
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &fund0, &fund1, &call1)
@@ -1181,7 +1181,7 @@ func TestCreateAndUse(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000, main(`
+		appID := dl.fundedApp(addrs[0], 1_000_000, main(`
          itxn_begin
           int axfer; itxn_field TypeEnum
           int 0;     itxn_field Amount
@@ -1198,14 +1198,14 @@ func TestCreateAndUse(t *testing.T) {
 				Total: 1000000,
 			},
 		}
-		asaIndex := basics.AssetIndex(appIndex + 2) // accounts for intervening fund txn
+		asaID := basics.AssetIndex(appID + 2) // accounts for intervening fund txn
 
 		use := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			// The point of this test is to show the following (psychic) setting is unnecessary.
-			//ForeignAssets: []basics.AssetIndex{asaIndex},
+			//ForeignAssets: []basics.AssetIndex{asaID},
 		}
 
 		if ver == 30 {
@@ -1214,7 +1214,7 @@ func TestCreateAndUse(t *testing.T) {
 		}
 		// v31 onward, create & use works
 		payset := dl.txgroup("", &createasa, &use)
-		require.Equal(t, asaIndex, payset[0].ApplyData.ConfigAsset)
+		require.Equal(t, asaID, payset[0].ApplyData.ConfigAsset)
 	})
 }
 
@@ -1229,13 +1229,13 @@ func TestGtxnEffects(t *testing.T) {
 		defer dl.Close()
 
 		// needed in very first app, so hardcode
-		asaIndex := basics.AssetIndex(3)
+		asaID := basics.AssetIndex(3)
 		if ver >= 37 {
-			asaIndex += 1000
+			asaID += 1000
 		}
-		appIndex := dl.fundedApp(addrs[0], 1_000_000, main(`
+		appID := dl.fundedApp(addrs[0], 1_000_000, main(`
          gtxn 0 CreatedAssetID
-         int `+strconv.Itoa(int(asaIndex))+`
+         int `+strconv.Itoa(int(asaID))+`
          ==
          assert`))
 
@@ -1253,7 +1253,7 @@ func TestGtxnEffects(t *testing.T) {
 		see := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 		}
 
 		if ver == 30 {
@@ -1261,7 +1261,7 @@ func TestGtxnEffects(t *testing.T) {
 			return
 		}
 		payset := dl.txgroup("", &createasa, &see)
-		require.Equal(t, asaIndex, payset[0].ApplyData.ConfigAsset)
+		require.Equal(t, asaID, payset[0].ApplyData.ConfigAsset)
 	})
 }
 
@@ -1285,13 +1285,13 @@ func TestBasicReentry(t *testing.T) {
    itxn_field ApplicationID
   itxn_submit`),
 		}
-		index0 := dl.txn(&app0).ApplyData.ApplicationID
+		id0 := dl.txn(&app0).ApplyData.ApplicationID
 
 		call1 := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[2],
-			ApplicationID: index0,
-			ForeignApps:   []basics.AppIndex{index0},
+			ApplicationID: id0,
+			ForeignApps:   []basics.AppIndex{id0},
 		}
 		dl.txn(&call1, "self-call")
 	})
@@ -1322,12 +1322,12 @@ func TestIndirectReentry(t *testing.T) {
 	eval := nextBlock(t, l)
 	txn(t, l, eval, &app0)
 	vb := endBlock(t, l, eval)
-	index0 := vb.Block().Payset[0].ApplicationID
+	id0 := vb.Block().Payset[0].ApplicationID
 
 	fund := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: index0.Address(),
+		Receiver: id0.Address(),
 		Amount:   1_000_000,
 	}
 
@@ -1346,13 +1346,13 @@ func TestIndirectReentry(t *testing.T) {
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &app1, &fund)
 	vb = endBlock(t, l, eval)
-	index1 := vb.Block().Payset[0].ApplicationID
+	id1 := vb.Block().Payset[0].ApplicationID
 
 	call1 := txntest.Txn{
 		Type:          "appl",
 		Sender:        addrs[0],
-		ApplicationID: index0,
-		ForeignApps:   []basics.AppIndex{index1, index0},
+		ApplicationID: id0,
+		ForeignApps:   []basics.AppIndex{id1, id0},
 	}
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &call1, "attempt to re-enter")
@@ -1394,12 +1394,12 @@ func TestValidAppReentry(t *testing.T) {
 	eval := nextBlock(t, l)
 	txn(t, l, eval, &app0)
 	vb := endBlock(t, l, eval)
-	index0 := vb.Block().Payset[0].ApplicationID
+	id0 := vb.Block().Payset[0].ApplicationID
 
 	fund0 := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: index0.Address(),
+		Receiver: id0.Address(),
 		Amount:   1_000_000,
 	}
 
@@ -1416,7 +1416,7 @@ func TestValidAppReentry(t *testing.T) {
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &app1, &fund0)
 	vb = endBlock(t, l, eval)
-	index1 := vb.Block().Payset[0].ApplicationID
+	id1 := vb.Block().Payset[0].ApplicationID
 
 	app2 := txntest.Txn{
 		Type:   "appl",
@@ -1433,12 +1433,12 @@ func TestValidAppReentry(t *testing.T) {
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &app2)
 	vb = endBlock(t, l, eval)
-	index2 := vb.Block().Payset[0].ApplicationID
+	id2 := vb.Block().Payset[0].ApplicationID
 
 	fund2 := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: index2.Address(),
+		Receiver: id2.Address(),
 		Amount:   1_000_000,
 	}
 
@@ -1449,8 +1449,8 @@ func TestValidAppReentry(t *testing.T) {
 	call1 := txntest.Txn{
 		Type:          "appl",
 		Sender:        addrs[0],
-		ApplicationID: index0,
-		ForeignApps:   []basics.AppIndex{index2, index1, index0},
+		ApplicationID: id0,
+		ForeignApps:   []basics.AppIndex{id2, id1, id0},
 	}
 	eval = nextBlock(t, l)
 	txn(t, l, eval, &call1)
@@ -1497,12 +1497,12 @@ assert
 			Sender:          addrs[0],
 			ApprovalProgram: main(program),
 		}
-		index0 := dl.txn(&app0).ApplyData.ApplicationID
+		id0 := dl.txn(&app0).ApplyData.ApplicationID
 
 		fund0 := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
-			Receiver: index0.Address(),
+			Receiver: id0.Address(),
 			Amount:   1_000_000,
 		}
 
@@ -1518,21 +1518,21 @@ assert
 		}
 
 		payset := dl.txns(&app1, &fund0)
-		index1 := payset[0].ApplicationID
+		id1 := payset[0].ApplicationID
 
 		callTxGroup := make([]*txntest.Txn, 16)
 		callTxGroup[0] = &txntest.Txn{
 			Type:            "appl",
 			Sender:          addrs[0],
-			ApplicationID:   index0,
-			ForeignApps:     []basics.AppIndex{index1},
+			ApplicationID:   id0,
+			ForeignApps:     []basics.AppIndex{id1},
 			ApplicationArgs: [][]byte{{1, 0}}, // 256 inner calls
 		}
 		for i := 1; i < 16; i++ {
 			callTxGroup[i] = &txntest.Txn{
 				Type:          "appl",
 				Sender:        addrs[0],
-				ApplicationID: index1,
+				ApplicationID: id1,
 				Note:          []byte{byte(i)},
 			}
 		}
@@ -1578,12 +1578,12 @@ assert
 	eval := nextBlock(t, l)
 	txn(t, l, eval, &app0)
 	vb := endBlock(t, l, eval)
-	index0 := vb.Block().Payset[0].ApplicationID
+	id0 := vb.Block().Payset[0].ApplicationID
 
 	fund0 := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: index0.Address(),
+		Receiver: id0.Address(),
 		Amount:   1_000_000,
 	}
 
@@ -1600,13 +1600,13 @@ assert
 	eval = nextBlock(t, l)
 	txns(t, l, eval, &app1, &fund0)
 	vb = endBlock(t, l, eval)
-	index1 := vb.Block().Payset[0].ApplicationID
+	id1 := vb.Block().Payset[0].ApplicationID
 
 	callTx := txntest.Txn{
 		Type:          "appl",
 		Sender:        addrs[0],
-		ApplicationID: index0,
-		ForeignApps:   []basics.AppIndex{index1},
+		ApplicationID: id0,
+		ForeignApps:   []basics.AppIndex{id1},
 	}
 
 	eval = nextBlock(t, l)
@@ -2122,15 +2122,15 @@ func TestInvalidAssetsNotAccessible(t *testing.T) {
 				URL:       "https://gold.rush/",
 			},
 		}
-		asaIndex := dl.txn(&createasa).ConfigAsset
-		require.NotZero(t, asaIndex)
+		asaID := dl.txn(&createasa).ConfigAsset
+		require.NotZero(t, asaID)
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000,
+		appID := dl.fundedApp(addrs[0], 1_000_000,
 			main(`
 			itxn_begin
 			int axfer; itxn_field TypeEnum
 			int 0;     itxn_field Amount
-			int `+strconv.Itoa(int(asaIndex))+`;     itxn_field XferAsset
+			int `+strconv.Itoa(int(asaID))+`;     itxn_field XferAsset
 			global CurrentApplicationAddress;  itxn_field Sender
 			global CurrentApplicationAddress;  itxn_field AssetReceiver
 			itxn_submit
@@ -2139,12 +2139,12 @@ func TestInvalidAssetsNotAccessible(t *testing.T) {
 		use := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 		}
 
-		dl.txn(&use, "invalid Asset reference "+strconv.Itoa(int(asaIndex)))
+		dl.txn(&use, "invalid Asset reference "+strconv.Itoa(int(asaID)))
 		// confirm everything is done right if ForeignAssets _is_ set up
-		use.ForeignAssets = []basics.AssetIndex{asaIndex}
+		use.ForeignAssets = []basics.AssetIndex{asaID}
 		dl.txn(&use)
 
 	})
@@ -2615,19 +2615,19 @@ itxn_submit
 			eval := nextBlock(t, l)
 			txn(t, l, eval, &app0)
 			vb := endBlock(t, l, eval)
-			index0 := vb.Block().Payset[0].ApplicationID
+			id0 := vb.Block().Payset[0].ApplicationID
 
 			fund0 := txntest.Txn{
 				Type:     "pay",
 				Sender:   addrs[0],
-				Receiver: index0.Address(),
+				Receiver: id0.Address(),
 				Amount:   1_000_000,
 			}
 
 			optin := txntest.Txn{
 				Type:          "appl",
 				Sender:        addrs[1],
-				ApplicationID: index0,
+				ApplicationID: id0,
 				OnCompletion:  transactions.OptInOC,
 			}
 
@@ -2647,7 +2647,7 @@ itxn_submit
 			clear := txntest.Txn{
 				Type:          "appl",
 				Sender:        addrs[1],
-				ApplicationID: index0,
+				ApplicationID: id0,
 				OnCompletion:  transactions.ClearStateOC,
 			}
 
@@ -2663,7 +2663,7 @@ itxn_submit
 				// had 2000 bump, now paid 2k, charge 1k, left with 3k total bump
 				require.Equal(t, uint64(3000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
 				// InnerTxn in block
-				require.Equal(t, vb.Block().Payset[0].Txn.ApplicationID, index0)
+				require.Equal(t, vb.Block().Payset[0].Txn.ApplicationID, id0)
 				require.Equal(t, vb.Block().Payset[0].Txn.OnCompletion, transactions.ClearStateOC)
 				require.Len(t, vb.Block().Payset[0].EvalDelta.InnerTxns, 1)
 				require.Equal(t, vb.Block().Payset[0].EvalDelta.InnerTxns[0].Txn.Amount.Raw, uint64(2000))
@@ -2671,7 +2671,7 @@ itxn_submit
 				// Only the fee is paid because pay is "erased", so goes from 2k down to 1k
 				require.Equal(t, uint64(1000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
 				// no InnerTxn in block
-				require.Equal(t, vb.Block().Payset[0].Txn.ApplicationID, index0)
+				require.Equal(t, vb.Block().Payset[0].Txn.ApplicationID, id0)
 				require.Equal(t, vb.Block().Payset[0].Txn.OnCompletion, transactions.ClearStateOC)
 				require.Len(t, vb.Block().Payset[0].EvalDelta.InnerTxns, 0)
 			}
@@ -2765,22 +2765,22 @@ check:
 	eval := nextBlock(t, l)
 	txns(t, l, eval, &appA, &appB, &appC)
 	vb := endBlock(t, l, eval)
-	indexA := vb.Block().Payset[0].ApplicationID
-	indexB := vb.Block().Payset[1].ApplicationID
-	indexC := vb.Block().Payset[2].ApplicationID
+	idA := vb.Block().Payset[0].ApplicationID
+	idB := vb.Block().Payset[1].ApplicationID
+	idC := vb.Block().Payset[2].ApplicationID
 
 	fundA := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: indexA.Address(),
+		Receiver: idA.Address(),
 		Amount:   1_000_000,
 	}
 
 	callA := txntest.Txn{
 		Type:          "appl",
 		Sender:        addrs[0],
-		ApplicationID: indexA,
-		ForeignApps:   []basics.AppIndex{indexB, indexC},
+		ApplicationID: idA,
+		ForeignApps:   []basics.AppIndex{idB, idC},
 	}
 
 	eval = nextBlock(t, l)
@@ -2879,22 +2879,22 @@ check:
 	eval := nextBlock(t, l)
 	txns(t, l, eval, &appA, &appB, &appC)
 	vb := endBlock(t, l, eval)
-	indexA := vb.Block().Payset[0].ApplicationID
-	indexB := vb.Block().Payset[1].ApplicationID
-	indexC := vb.Block().Payset[2].ApplicationID
+	idA := vb.Block().Payset[0].ApplicationID
+	idB := vb.Block().Payset[1].ApplicationID
+	idC := vb.Block().Payset[2].ApplicationID
 
 	fundA := txntest.Txn{
 		Type:     "pay",
 		Sender:   addrs[0],
-		Receiver: indexA.Address(),
+		Receiver: idA.Address(),
 		Amount:   1_000_000,
 	}
 
 	callA := txntest.Txn{
 		Type:          "appl",
 		Sender:        addrs[0],
-		ApplicationID: indexA,
-		ForeignApps:   []basics.AppIndex{indexB, indexC},
+		ApplicationID: idA,
+		ForeignApps:   []basics.AppIndex{idB, idC},
 	}
 
 	eval = nextBlock(t, l)
@@ -2931,23 +2931,23 @@ itxn_submit
 		}
 
 		payset := dl.txns(&appA, &appB)
-		index0 := payset[0].ApplicationID
-		index1 := payset[1].ApplicationID
+		id0 := payset[0].ApplicationID
+		id1 := payset[1].ApplicationID
 
 		fund1 := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
-			Receiver: index1.Address(),
+			Receiver: id1.Address(),
 			Amount:   1_000_000_000,
 		}
 		fund0 := fund1
-		fund0.Receiver = index0.Address()
+		fund0.Receiver = id0.Address()
 
 		callTx := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[2],
-			ApplicationID: index1,
-			ForeignApps:   []basics.AppIndex{index0},
+			ApplicationID: id1,
+			ForeignApps:   []basics.AppIndex{id0},
 		}
 
 		if ver <= 33 {
@@ -2955,7 +2955,7 @@ itxn_submit
 			return
 		}
 		payset = dl.txgroup("", &fund0, &fund1, &callTx)
-		require.Equal(t, index0.Address(), payset[2].EvalDelta.InnerTxns[0].Txn.Receiver)
+		require.Equal(t, id0.Address(), payset[2].EvalDelta.InnerTxns[0].Txn.Receiver)
 		require.Equal(t, uint64(100), payset[2].EvalDelta.InnerTxns[0].Txn.Amount.Raw)
 	})
 }
@@ -3000,36 +3000,36 @@ app_local_put
 		}
 
 		payset := dl.txns(&appA, &appB)
-		index0 := payset[0].ApplicationID
-		index1 := payset[1].ApplicationID
+		id0 := payset[0].ApplicationID
+		id1 := payset[1].ApplicationID
 
 		fund1 := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
-			Receiver: index1.Address(),
+			Receiver: id1.Address(),
 			Amount:   1_000_000_000,
 		}
 		fund0 := fund1
-		fund0.Receiver = index0.Address()
+		fund0.Receiver = id0.Address()
 
 		optin := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[2],
-			ApplicationID: index0,
-			ForeignApps:   []basics.AppIndex{index1},
+			ApplicationID: id0,
+			ForeignApps:   []basics.AppIndex{id1},
 		}
 
 		callTx := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[2],
-			ApplicationID: index1,
-			ForeignApps:   []basics.AppIndex{index0},
+			ApplicationID: id1,
+			ForeignApps:   []basics.AppIndex{id0},
 		}
 
 		var problem string
 		switch {
 		case ver < 34: // before v7, app accounts not available at all
-			problem = "invalid Account reference " + index0.Address().String()
+			problem = "invalid Account reference " + id0.Address().String()
 		case ver < 37: // as of v7, it's the mutation that's the problem
 			problem = "invalid Account reference for mutation"
 		}
@@ -3084,32 +3084,32 @@ done:
 		}
 
 		payset := dl.txns(&appA, &appB)
-		index0 := payset[0].ApplicationID
-		index1 := payset[1].ApplicationID
+		id0 := payset[0].ApplicationID
+		id1 := payset[1].ApplicationID
 
 		fund1 := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
-			Receiver: index1.Address(),
+			Receiver: id1.Address(),
 			Amount:   1_000_000_000,
 		}
 		fund0 := fund1
-		fund0.Receiver = index0.Address()
-		fund1.Receiver = index1.Address()
+		fund0.Receiver = id0.Address()
+		fund1.Receiver = id1.Address()
 
 		callA := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[2],
-			ApplicationID: index0,
-			ForeignApps:   []basics.AppIndex{index1},
+			ApplicationID: id0,
+			ForeignApps:   []basics.AppIndex{id1},
 		}
 
 		callB := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[2],
-			ApplicationID: index1,
-			ForeignApps:   []basics.AppIndex{index0},
-			Accounts:      []basics.Address{index0.Address()},
+			ApplicationID: id1,
+			ForeignApps:   []basics.AppIndex{id0},
+			Accounts:      []basics.Address{id0.Address()},
 		}
 
 		payset = dl.txns(&fund0, &fund1, &callA, &callB)
@@ -3156,9 +3156,9 @@ func TestEvalAppState(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		appIdx := basics.AppIndex(1)
+		appID := basics.AppIndex(1)
 		if ver >= 37 { // AppForbidLowResources
-			appIdx += 1000
+			appID += 1000
 		}
 		appcall1 := txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
@@ -3183,7 +3183,7 @@ ok:
 		appcall2 := txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        addrs[0],
-			ApplicationID: appIdx,
+			ApplicationID: appID,
 		}
 
 		dl.beginBlock()
@@ -3194,7 +3194,7 @@ ok:
 		vb := dl.endBlock()
 		deltas := vb.Delta()
 
-		params, _ := deltas.Accts.GetAppParams(addrs[0], appIdx)
+		params, _ := deltas.Accts.GetAppParams(addrs[0], appID)
 		require.Equal(t, basics.TealKeyValue{
 			"caller":  {Type: basics.TealBytesType, Bytes: string(addrs[0][:])},
 			"creator": {Type: basics.TealBytesType, Bytes: string(addrs[0][:])},
@@ -3488,15 +3488,15 @@ func TestUnfundedSenders(t *testing.T) {
 		}
 
 		payset := dl.txns(&asaCreate, &appCreate)
-		asaIndex := payset[0].ApplyData.ConfigAsset
+		asaID := payset[0].ApplyData.ConfigAsset
 		// we are testing some versions before ApplyData.ConfigAsset was
 		// populated. At that time, initial ID was 1, so we can hardcode.
-		if asaIndex == 0 {
-			asaIndex = 1
+		if asaID == 0 {
+			asaID = 1
 		}
-		appIndex := payset[1].ApplyData.ApplicationID
-		if appIndex == 0 {
-			appIndex = 2
+		appID := payset[1].ApplyData.ApplicationID
+		if appID == 0 {
+			appID = 2
 		}
 
 		// Advance so that rewardsLevel increases
@@ -3533,14 +3533,14 @@ func TestUnfundedSenders(t *testing.T) {
 				Sender:        ghost,
 				AssetReceiver: addrs[0],
 				AssetSender:   addrs[1],
-				XferAsset:     asaIndex,
+				XferAsset:     asaID,
 				Fee:           0,
 			},
 			{ // Freeze
 				Type:          "afrz",
 				Sender:        ghost,
 				FreezeAccount: addrs[0], // creator, therefore is opted in
-				FreezeAsset:   asaIndex,
+				FreezeAsset:   asaID,
 				AssetFrozen:   true,
 				Fee:           0,
 			},
@@ -3548,14 +3548,14 @@ func TestUnfundedSenders(t *testing.T) {
 				Type:          "afrz",
 				Sender:        ghost,
 				FreezeAccount: addrs[0], // creator, therefore is opted in
-				FreezeAsset:   asaIndex,
+				FreezeAsset:   asaID,
 				AssetFrozen:   false,
 				Fee:           0,
 			},
 			{ // App call
 				Type:          "appl",
 				Sender:        ghost,
-				ApplicationID: appIndex,
+				ApplicationID: appID,
 				Fee:           0,
 			},
 			{ // App creation (only works because it's also deleted)
