@@ -158,9 +158,10 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) (err error) {
 	}
 	defer func() {
 		fmt.Printf("tearDown to restore: %#v\n\n", fileBackups)
-		err = tearDown(fileBackups)
-		if err != nil {
-			fmt.Printf("problem during tearDown: %v\n", err)
+		teardownErr := tearDown(fileBackups)
+		if teardownErr != nil {
+			fmt.Printf("problem during tearDown: %v\n", teardownErr)
+			err = teardownErr
 		}
 	}()
 
