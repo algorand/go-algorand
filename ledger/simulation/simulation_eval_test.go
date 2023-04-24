@@ -151,7 +151,7 @@ func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, t
 
 	testcase := f(accounts, txnInfo)
 
-	actual, err := s.Simulate(testcase.input)
+	actual, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{testcase.input}})
 	require.NoError(t, err)
 
 	validateSimulationResult(t, actual)
@@ -457,7 +457,7 @@ func TestStateProofTxn(t *testing.T) {
 		}).SignedTxn(),
 	}
 
-	_, err := s.Simulate(txgroup)
+	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.ErrorContains(t, err, "cannot simulate StateProof transactions")
 }
 
@@ -490,7 +490,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	}
 
 	// Should fail if there is no group parameter
-	result, err := s.Simulate(txgroup)
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.NoError(t, err)
 	require.False(t, result.WouldSucceed)
 	require.Len(t, result.TxnGroups, 1)
@@ -510,7 +510,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
 
 	// Should now pass
-	result, err = s.Simulate(txgroup)
+	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.NoError(t, err)
 	require.False(t, result.WouldSucceed)
 	require.Len(t, result.TxnGroups, 1)
@@ -1121,7 +1121,7 @@ func TestSignatureCheck(t *testing.T) {
 	}
 
 	// should catch missing signature
-	result, err := s.Simulate(txgroup)
+	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.NoError(t, err)
 	require.False(t, result.WouldSucceed)
 	require.Len(t, result.TxnGroups, 1)
@@ -1134,7 +1134,7 @@ func TestSignatureCheck(t *testing.T) {
 	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
 
 	// should not error now that we have a signature
-	result, err = s.Simulate(txgroup)
+	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.NoError(t, err)
 	require.True(t, result.WouldSucceed)
 	require.Len(t, result.TxnGroups, 1)
@@ -1144,7 +1144,7 @@ func TestSignatureCheck(t *testing.T) {
 
 	// should error with invalid signature
 	txgroup[0].Sig[0] += byte(1) // will wrap if > 255
-	result, err = s.Simulate(txgroup)
+	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
 	require.ErrorContains(t, err, "one signature didn't pass")
 }
@@ -1170,9 +1170,264 @@ func TestInvalidTxGroup(t *testing.T) {
 	}
 
 	// should error with invalid transaction group error
-	_, err := s.Simulate(txgroup)
+	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
 	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
 	require.ErrorContains(t, err, "transaction from incentive pool is invalid")
+}
+
+// TestLogLimitLiftingInSimulation tests that an app with log calls that exceed limits during normal runtime
+// can get through during simulation with `lift-log-limits` activated
+func TestLogLimitLiftingInSimulation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	LogTimes := 40
+	LogLongLine := strings.Repeat("a", 1050)
+
+	appSourceThatLogsALot := `#pragma version 8
+txn NumAppArgs
+int 0
+==
+bnz final
+` + strings.Repeat(fmt.Sprintf(`byte "%s"
+log
+`, LogLongLine), LogTimes) + `final:
+int 1`
+
+	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+
+	sender := accounts[0]
+	receiver := accounts[1]
+
+	futureAppID := basics.AppIndex(1)
+
+	createTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            sender.Addr,
+		ApplicationID:     0,
+		ApprovalProgram:   appSourceThatLogsALot,
+		ClearStateProgram: "#pragma version 8\nint 1",
+	})
+
+	callsABunchLogs := txnInfo.NewTxn(txntest.Txn{
+		Type:            protocol.ApplicationCallTx,
+		Sender:          sender.Addr,
+		ApplicationID:   futureAppID,
+		Accounts:        []basics.Address{receiver.Addr},
+		ApplicationArgs: [][]byte{[]byte("first-arg")},
+	})
+
+	txntest.Group(&createTxn, &callsABunchLogs)
+
+	signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+	signedCallsABunchLogs := callsABunchLogs.Txn().Sign(sender.Sk)
+
+	actual, err := s.Simulate(
+		simulation.Request{
+			TxnGroups:     [][]transactions.SignedTxn{{signedCreateTxn, signedCallsABunchLogs}},
+			LiftLogLimits: true,
+		},
+	)
+	require.NoError(t, err)
+
+	validateSimulationResult(t, actual)
+
+	expectedMaxLogCalls, expectedMaxLogSize := uint64(2048), uint64(65536)
+	expectedLog := make([]string, LogTimes)
+	for i := 0; i < LogTimes; i++ {
+		expectedLog[i] = LogLongLine
+	}
+	testcase := simulationTestCase{
+		input: []transactions.SignedTxn{signedCreateTxn, signedCallsABunchLogs},
+		expected: simulation.Result{
+			Version:   1,
+			LastRound: txnInfo.LatestRound(),
+			TxnGroups: []simulation.TxnGroupResult{
+				{
+					Txns: []simulation.TxnResult{
+						{
+							Txn: transactions.SignedTxnWithAD{
+								ApplyData: transactions.ApplyData{
+									ApplicationID: futureAppID,
+								},
+							},
+							AppBudgetConsumed: 6,
+						},
+						{
+							Txn: transactions.SignedTxnWithAD{
+								ApplyData: transactions.ApplyData{
+									EvalDelta: transactions.EvalDelta{
+										Logs: expectedLog,
+									},
+								},
+							},
+							AppBudgetConsumed: 86,
+						},
+					},
+					AppBudgetAdded:    1400,
+					AppBudgetConsumed: 92,
+				},
+			},
+			EvalOverrides: simulation.ResultEvalOverrides{
+				MaxLogCalls: &expectedMaxLogCalls,
+				MaxLogSize:  &expectedMaxLogSize,
+			},
+			WouldSucceed: true,
+		},
+	}
+
+	require.Len(t, testcase.expected.TxnGroups, 1, "Test case must expect a single txn group")
+	require.Len(t, testcase.expected.TxnGroups[0].Txns, len(testcase.input), "Test case expected a different number of transactions than its input")
+
+	for i, inputTxn := range testcase.input {
+		if testcase.expected.TxnGroups[0].Txns[i].Txn.Txn.Type == "" {
+			// Use Type as a marker for whether the transaction was specified or not. If not
+			// specified, replace it with the input txn
+			testcase.expected.TxnGroups[0].Txns[i].Txn.SignedTxn = inputTxn
+		}
+		normalizeEvalDeltas(t, &actual.TxnGroups[0].Txns[i].Txn.EvalDelta, &testcase.expected.TxnGroups[0].Txns[i].Txn.EvalDelta)
+	}
+
+	if len(testcase.expectedError) != 0 {
+		require.Contains(t, actual.TxnGroups[0].FailureMessage, testcase.expectedError)
+		require.False(t, testcase.expected.WouldSucceed, "Test case WouldSucceed value is not consistent with expected failure")
+		// if it matched the expected error, copy the actual one so it will pass the equality check below
+		testcase.expected.TxnGroups[0].FailureMessage = actual.TxnGroups[0].FailureMessage
+	}
+
+	// Do not attempt to compare blocks
+	actual.Block = nil
+	require.Equal(t, testcase.expected, actual)
+}
+
+func TestLogSizeExceedWithLiftInSimulation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	LogTimes := 65
+	LogLongLine := strings.Repeat("a", 1050)
+
+	appSourceThatLogsALot := `#pragma version 8
+txn NumAppArgs
+int 0
+==
+bnz final
+` + strings.Repeat(fmt.Sprintf(`byte "%s"
+log
+`, LogLongLine), LogTimes) + `final:
+int 1`
+
+	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+
+	sender := accounts[0]
+	receiver := accounts[1]
+
+	futureAppID := basics.AppIndex(1)
+
+	createTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            sender.Addr,
+		ApplicationID:     0,
+		ApprovalProgram:   appSourceThatLogsALot,
+		ClearStateProgram: "#pragma version 8\nint 1",
+	})
+
+	callsABunchLogs := txnInfo.NewTxn(txntest.Txn{
+		Type:            protocol.ApplicationCallTx,
+		Sender:          sender.Addr,
+		ApplicationID:   futureAppID,
+		Accounts:        []basics.Address{receiver.Addr},
+		ApplicationArgs: [][]byte{[]byte("first-arg")},
+	})
+
+	txntest.Group(&createTxn, &callsABunchLogs)
+
+	signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+	signedCallsABunchLogs := callsABunchLogs.Txn().Sign(sender.Sk)
+
+	actual, err := s.Simulate(
+		simulation.Request{
+			TxnGroups:     [][]transactions.SignedTxn{{signedCreateTxn, signedCallsABunchLogs}},
+			LiftLogLimits: true,
+		},
+	)
+	require.NoError(t, err)
+
+	validateSimulationResult(t, actual)
+
+	expectedMaxLogCalls, expectedMaxLogSize := uint64(2048), uint64(65536)
+	actualLogTimes := 65536 / len(LogLongLine)
+	expectedLog := make([]string, actualLogTimes)
+	for i := 0; i < actualLogTimes; i++ {
+		expectedLog[i] = LogLongLine
+	}
+	testcase := simulationTestCase{
+		input: []transactions.SignedTxn{signedCreateTxn, signedCallsABunchLogs},
+		expected: simulation.Result{
+			Version:   1,
+			LastRound: txnInfo.LatestRound(),
+			TxnGroups: []simulation.TxnGroupResult{
+				{
+					FailedAt: simulation.TxnPath{1},
+					Txns: []simulation.TxnResult{
+						{
+							Txn: transactions.SignedTxnWithAD{
+								ApplyData: transactions.ApplyData{
+									ApplicationID: futureAppID,
+								},
+							},
+							AppBudgetConsumed: 6,
+						},
+						{
+							Txn: transactions.SignedTxnWithAD{
+								ApplyData: transactions.ApplyData{
+									EvalDelta: transactions.EvalDelta{
+										Logs: expectedLog,
+									},
+								},
+							},
+							AppBudgetConsumed: 131,
+						},
+					},
+					AppBudgetAdded:    1400,
+					AppBudgetConsumed: 137,
+				},
+			},
+			EvalOverrides: simulation.ResultEvalOverrides{
+				MaxLogCalls: &expectedMaxLogCalls,
+				MaxLogSize:  &expectedMaxLogSize,
+			},
+			WouldSucceed: false,
+		},
+		expectedError: "logic eval error: program logs too large. 66150 bytes >  65536 bytes limit.",
+	}
+
+	require.Len(t, testcase.expected.TxnGroups, 1, "Test case must expect a single txn group")
+	require.Len(t, testcase.expected.TxnGroups[0].Txns, len(testcase.input), "Test case expected a different number of transactions than its input")
+
+	for i, inputTxn := range testcase.input {
+		if testcase.expected.TxnGroups[0].Txns[i].Txn.Txn.Type == "" {
+			// Use Type as a marker for whether the transaction was specified or not. If not
+			// specified, replace it with the input txn
+			testcase.expected.TxnGroups[0].Txns[i].Txn.SignedTxn = inputTxn
+		}
+		normalizeEvalDeltas(t, &actual.TxnGroups[0].Txns[i].Txn.EvalDelta, &testcase.expected.TxnGroups[0].Txns[i].Txn.EvalDelta)
+	}
+
+	if len(testcase.expectedError) != 0 {
+		require.Contains(t, actual.TxnGroups[0].FailureMessage, testcase.expectedError)
+		require.False(t, testcase.expected.WouldSucceed, "Test case WouldSucceed value is not consistent with expected failure")
+		// if it matched the expected error, copy the actual one so it will pass the equality check below
+		testcase.expected.TxnGroups[0].FailureMessage = actual.TxnGroups[0].FailureMessage
+	}
+
+	// Do not attempt to compare blocks
+	actual.Block = nil
+	require.Equal(t, testcase.expected, actual)
 }
 
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance

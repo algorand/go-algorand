@@ -100,7 +100,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error)
+	Simulate(request simulation.Request) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -944,10 +944,11 @@ type PreEncodedSimulateTxnGroupResult struct {
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
 type PreEncodedSimulateResponse struct {
-	Version      uint64                             `codec:"version"`
-	LastRound    uint64                             `codec:"last-round"`
-	TxnGroups    []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
-	WouldSucceed bool                               `codec:"would-succeed"`
+	Version       uint64                             `codec:"version"`
+	LastRound     uint64                             `codec:"last-round"`
+	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	WouldSucceed  bool                               `codec:"would-succeed"`
+	EvalOverrides *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
@@ -957,7 +958,8 @@ type PreEncodedSimulateRequestTransactionGroup struct {
 
 // PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
-	TxnGroups []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	TxnGroups     []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	LiftLogLimits bool                                        `codec:"lift-log-limits,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
@@ -1001,14 +1003,18 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 	}
 
-	if len(simulateRequest.TxnGroups) != 1 {
-		err := fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups))
-		return badRequest(ctx, err, err.Error(), v2.Log)
+	txnGroups := make([][]transactions.SignedTxn, len(simulateRequest.TxnGroups))
+	for i := 0; i < len(simulateRequest.TxnGroups); i++ {
+		txnGroups[i] = simulateRequest.TxnGroups[i].Txns
 	}
-	txgroup := simulateRequest.TxnGroups[0].Txns
 
 	// Simulate transaction
-	simulationResult, err := v2.Node.Simulate(txgroup)
+	simulationResult, err := v2.Node.Simulate(
+		simulation.Request{
+			TxnGroups:     txnGroups,
+			LiftLogLimits: simulateRequest.LiftLogLimits,
+		},
+	)
 	if err != nil {
 		var invalidTxErr simulation.InvalidTxGroupError
 		switch {
