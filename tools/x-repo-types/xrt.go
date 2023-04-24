@@ -61,95 +61,6 @@ func main() {
 	}
 }
 
-func backupFile(src string) (string, error) {
-	content, err := ioutil.ReadFile(src)
-	if err != nil {
-		return "", err
-	}
-
-	tmpFile, err := ioutil.TempFile("", "backup-*")
-	if err != nil {
-		return "", err
-	}
-
-	err = ioutil.WriteFile(tmpFile.Name(), content, 0644)
-	if err != nil {
-		return "", err
-	}
-
-	return tmpFile.Name(), nil
-}
-
-func findPkgRoot() (string, error) {
-	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	if err != nil {
-		return "", errors.New(stderr.String())
-	}
-
-	return strings.TrimSpace(stdout.String()), nil
-}
-
-func setUp() (map[string]string, error) {
-	pkgRoot, err := findPkgRoot()
-	if err != nil {
-		return nil, err
-	}
-
-	goModPath := filepath.Join(pkgRoot, "go.mod")
-	goSumPath := filepath.Join(pkgRoot, "go.sum")
-	localMainPath := filepath.Join("typeAnalyzer", "main.go")
-
-	backups := make(map[string]string)
-	for _, path := range []string{goModPath, goSumPath, localMainPath} {
-		backup, err := backupFile(path)
-		if err != nil {
-			return nil, err
-		}
-		backups[backup] = path
-	}
-	return backups, nil
-}
-
-func restoreFile(src, dst string) error {
-	// assuming that dst already exists
-	dstFileInfo, err := os.Stat(dst)
-	if err != nil {
-		return err
-	}
-
-	content, err := ioutil.ReadFile(src)
-	if err != nil {
-		return err
-	}
-
-	err = ioutil.WriteFile(dst, content, dstFileInfo.Mode())
-	if err != nil {
-		return err
-	}
-
-	err = os.Remove(src)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func tearDown(fileBackups map[string]string) error {
-	for backup, path := range fileBackups {
-		err := restoreFile(backup, path)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) (err error) {
 	fileBackups, err := setUp()
 	fmt.Printf("fileBackups: %#v\n\n", fileBackups)
@@ -216,6 +127,95 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) (err error) {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func setUp() (map[string]string, error) {
+	pkgRoot, err := findPkgRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	goModPath := filepath.Join(pkgRoot, "go.mod")
+	goSumPath := filepath.Join(pkgRoot, "go.sum")
+	localMainPath := filepath.Join("typeAnalyzer", "main.go")
+
+	backups := make(map[string]string)
+	for _, path := range []string{goModPath, goSumPath, localMainPath} {
+		backup, err := backupFile(path)
+		if err != nil {
+			return nil, err
+		}
+		backups[backup] = path
+	}
+	return backups, nil
+}
+
+func tearDown(fileBackups map[string]string) error {
+	for backup, path := range fileBackups {
+		err := restoreFile(backup, path)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func backupFile(src string) (string, error) {
+	content, err := ioutil.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+
+	tmpFile, err := ioutil.TempFile("", "backup-*")
+	if err != nil {
+		return "", err
+	}
+
+	err = ioutil.WriteFile(tmpFile.Name(), content, 0644)
+	if err != nil {
+		return "", err
+	}
+
+	return tmpFile.Name(), nil
+}
+
+func findPkgRoot() (string, error) {
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return "", errors.New(stderr.String())
+	}
+
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+func restoreFile(src, dst string) error {
+	// assuming that dst already exists
+	dstFileInfo, err := os.Stat(dst)
+	if err != nil {
+		return err
+	}
+
+	content, err := ioutil.ReadFile(src)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(dst, content, dstFileInfo.Mode())
+	if err != nil {
+		return err
+	}
+
+	err = os.Remove(src)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
