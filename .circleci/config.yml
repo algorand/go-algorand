@@ -97,7 +97,7 @@ workflows:
           filters: &filters-default
             branches:
               ignore:
-                - /pull\/[0-9]+/
+                - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
           <<: *slack-fail-post-step
