@@ -134,7 +134,7 @@ type Diff struct {
 	Xdiff, Ydiff []Target
 }
 
-// Empty reports whethere there was any difference at all.
+// Empty reports whether there was any difference at all.
 func (d *Diff) Empty() bool {
 	return d == nil || (len(d.Xdiff) == 0 && len(d.Ydiff) == 0)
 }
