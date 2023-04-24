@@ -37,7 +37,7 @@ type txnGroupDeltas struct {
 // TxnGroupDeltaTracer collects groups of StateDelta objects covering groups of txns
 type TxnGroupDeltaTracer struct {
 	// lookback is the number of rounds stored at any given time
-	Lookback uint64
+	lookback uint64
 	// no-op methods we don't care about
 	logic.NullEvalTracer
 	// txnGroupDeltas stores the StateDelta objects for each round, indexed by all the IDs within the group
@@ -49,15 +49,15 @@ type TxnGroupDeltaTracer struct {
 // MakeTxnGroupDeltaTracer creates a TxnGroupDeltaTracer
 func MakeTxnGroupDeltaTracer(lookback uint64) *TxnGroupDeltaTracer {
 	return &TxnGroupDeltaTracer{
-		Lookback:       lookback,
+		lookback:       lookback,
 		txnGroupDeltas: make(map[basics.Round]map[crypto.Digest]*ledgercore.StateDelta),
 	}
 }
 
 // BeforeBlock implements the EvalTracer interface for pre-block evaluation
 func (tracer *TxnGroupDeltaTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
-	// Drop older rounds based on the Lookback parameter
-	delete(tracer.txnGroupDeltas, hdr.Round-basics.Round(tracer.Lookback))
+	// Drop older rounds based on the lookback parameter
+	delete(tracer.txnGroupDeltas, hdr.Round-basics.Round(tracer.lookback))
 	tracer.latestRound = hdr.Round
 }
 
