@@ -965,7 +965,6 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		eval.Tracer.BeforeTxnGroup(evalParams)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			// TODO: need to check, is it ok to call .deltas() after .commitToParent()?
 			deltas := cow.deltas()
 			eval.Tracer.AfterTxnGroup(evalParams, &deltas, err)
 		}()
