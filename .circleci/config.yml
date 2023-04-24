@@ -84,7 +84,7 @@ workflows:
           filters: &filters-nightly
             branches:
               only:
-                - /pull/[0-9]+/
+                - /pull\/[0-9]+/
                 - << pipeline.parameters.valid_nightly_branch >>
 
       - test:
@@ -95,7 +95,7 @@ workflows:
           filters: &filters-default
             branches:
               ignore:
-                - /pull/[0-9]+/
+                - /pull\/[0-9]+/
                 - << pipeline.parameters.valid_nightly_branch >>
 
       - test_nightly:
@@ -177,7 +177,7 @@ workflows:
           filters:
             branches:
               only:
-                - /pull/[0-9]+/
+                - /pull\/[0-9]+/
                 - << pipeline.parameters.valid_nightly_branch >>
 
       #- windows_x64_build
