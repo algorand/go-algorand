@@ -219,10 +219,13 @@ func (sd *StateDelta) PopulateStateDelta(hdr *bookkeeping.BlockHeader, prevTimes
 	sd.PrevTimestamp = prevTimestamp
 }
 
+// Hydrate reverses the effects of Dehydrate, restoring internal data.
 func (sd *StateDelta) Hydrate() {
 	sd.Accts.Hydrate()
 }
 
+// Dehydrate normalized the fields of this StateDelta, and clears any redundant internal caching.
+// This is useful for comparing StateDelta objects during testing.
 func (sd *StateDelta) Dehydrate() {
 	sd.Accts.Dehydrate()
 	sd.initialHint = 0
@@ -249,6 +252,7 @@ func MakeAccountDeltas(hint int) AccountDeltas {
 	}
 }
 
+// Hydrate reverses the effects of Dehydrate, restoring internal data.
 func (ad *AccountDeltas) Hydrate() {
 	for idx, acct := range ad.Accts {
 		ad.acctsCache[acct.Addr] = idx
@@ -261,6 +265,8 @@ func (ad *AccountDeltas) Hydrate() {
 	}
 }
 
+// Dehydrate normalized the fields of this AccountDeltas, and clears any redundant internal caching.
+// This is useful for comparing AccountDeltas objects during testing.
 func (ad *AccountDeltas) Dehydrate() {
 	if ad.Accts == nil {
 		ad.Accts = []BalanceRecord{}
