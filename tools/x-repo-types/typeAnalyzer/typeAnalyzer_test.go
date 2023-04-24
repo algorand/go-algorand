@@ -185,6 +185,15 @@ func TestBuild(t *testing.T) {
 			x:     5,
 			depth: 0,
 		},
+		{
+			name: "nested embeds",
+			x: func() interface{} {
+				type Embedded struct{ A int }
+				type Embedded2 struct{ Embedded }
+				return struct{ Embedded2 }{}
+			}(),
+			depth: 1,
+		},
 	}
 
 	for _, tc := range testcases {
@@ -297,6 +306,22 @@ func TestDiffErrors(t *testing.T) {
 			}(),
 			y:     uint(5),
 			equal: false,
+		},
+		{
+			name: "nested embeds",
+			x: func() interface{} {
+				type Embedded struct{ A int }
+				type Embedded2 struct{ Embedded }
+				return struct{ Embedded2 }{}
+			}(),
+			y:     struct{ A int }{},
+			equal: true,
+		},
+		{
+			name:  "field order",
+			x:     struct{ A, B int }{},
+			y:     struct{ B, A int }{},
+			equal: true,
 		},
 	}
 
