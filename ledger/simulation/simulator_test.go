@@ -22,14 +22,17 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,7 +43,7 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, _, _ := simulationtesting.PrepareSimulatorTest(t)
+	env := simulationtesting.PrepareSimulatorTest(t)
 
 	// methods overriden by `simulatorLedger``
 	overridenMethods := []string{
@@ -89,7 +92,7 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 		return false
 	}
 
-	ledgerType := reflect.TypeOf(l)
+	ledgerType := reflect.TypeOf(env.Ledger)
 	for i := 0; i < ledgerType.NumMethod(); i++ {
 		method := ledgerType.Method(i)
 		if methodExistsInEvalLedger(method.Name) && !methodIsSkipped(method.Name) {
@@ -104,10 +107,10 @@ func TestSimulateWithTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := MakeSimulator(l)
-	sender := accounts[0]
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Ledger.Close()
+	s := MakeSimulator(env.Ledger)
+	sender := env.Accounts[0]
 
 	op, err := logic.AssembleString(`#pragma version 8
 int 1`)
@@ -115,13 +118,13 @@ int 1`)
 	program := logic.Program(op.Program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
 
-	payTxn := txnInfo.NewTxn(txntest.Txn{
+	payTxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender.Addr,
 		Receiver: lsigAddr,
 		Amount:   1_000_000,
 	})
-	appCallTxn := txnInfo.NewTxn(txntest.Txn{
+	appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:   protocol.ApplicationCallTx,
 		Sender: lsigAddr,
 		ApprovalProgram: `#pragma version 8
@@ -142,8 +145,49 @@ int 1`,
 	block, _, err := s.simulateWithTracer(txgroup, mockTracer)
 	require.NoError(t, err)
 
-	payset := block.Block().Payset
-	require.Len(t, payset, 2)
+	evalBlock := block.Block()
+	require.Len(t, evalBlock.Payset, 2)
+
+	expectedSenderData := ledgercore.ToAccountData(sender.AcctData)
+	expectedSenderData.MicroAlgos.Raw -= signedPayTxn.Txn.Amount.Raw + signedPayTxn.Txn.Fee.Raw
+	expectedLsigData := ledgercore.AccountData{}
+	expectedLsigData.MicroAlgos.Raw += signedPayTxn.Txn.Amount.Raw - signedAppCallTxn.Txn.Fee.Raw
+	expectedLsigData.TotalAppParams = 1
+	expectedFeeSinkData := ledgercore.ToAccountData(env.FeeSinkAccount.AcctData)
+	expectedFeeSinkData.MicroAlgos.Raw += signedPayTxn.Txn.Fee.Raw + signedAppCallTxn.Txn.Fee.Raw
+
+	expectedAppID := evalBlock.Payset[1].ApplyData.ApplicationID
+	expectedAppParams := ledgercore.AppParamsDelta{
+		Params: &basics.AppParams{
+			ApprovalProgram:   signedAppCallTxn.Txn.ApprovalProgram,
+			ClearStateProgram: signedAppCallTxn.Txn.ClearStateProgram,
+		},
+	}
+
+	// Cannot use evalBlock directly because the tracer is called before many block details are finalized
+	expectedBlockHeader := bookkeeping.MakeBlock(env.TxnInfo.LatestHeader).BlockHeader
+	expectedBlockHeader.TimeStamp = evalBlock.TimeStamp
+	expectedBlockHeader.RewardsRate = evalBlock.RewardsRate
+	expectedBlockHeader.RewardsResidue = evalBlock.RewardsResidue
+
+	expectedDelta := ledgercore.MakeStateDelta(&expectedBlockHeader, env.TxnInfo.LatestHeader.TimeStamp, 0, 0)
+	expectedDelta.Accts.Upsert(sender.Addr, expectedSenderData)
+	expectedDelta.Accts.Upsert(env.FeeSinkAccount.Addr, expectedFeeSinkData)
+	expectedDelta.Accts.Upsert(lsigAddr, expectedLsigData)
+	expectedDelta.Accts.UpsertAppResource(lsigAddr, expectedAppID, expectedAppParams, ledgercore.AppLocalStateDelta{})
+	expectedDelta.AddCreatable(basics.CreatableIndex(expectedAppID), ledgercore.ModifiedCreatable{
+		Ctype:   basics.AppCreatable,
+		Created: true,
+		Creator: lsigAddr,
+	})
+	expectedDelta.Txids[signedPayTxn.Txn.ID()] = ledgercore.IncludedTransactions{
+		LastValid: signedPayTxn.Txn.LastValid,
+		Intra:     0,
+	}
+	expectedDelta.Txids[signedAppCallTxn.Txn.ID()] = ledgercore.IncludedTransactions{
+		LastValid: signedAppCallTxn.Txn.LastValid,
+		Intra:     1,
+	}
 
 	expectedEvents := []mocktracer.Event{
 		// LogicSig evaluation
@@ -155,16 +199,39 @@ int 1`,
 		mocktracer.BeforeBlock(block.Block().Round()),
 		mocktracer.BeforeTxnGroup(2),
 		mocktracer.BeforeTxn(protocol.PaymentTx),
-		mocktracer.AfterTxn(protocol.PaymentTx, payset[0].ApplyData, nil, false),
+		mocktracer.AfterTxn(protocol.PaymentTx, evalBlock.Payset[0].ApplyData, nil, false),
 		mocktracer.BeforeTxn(protocol.ApplicationCallTx),
 		mocktracer.BeforeProgram(logic.ModeApp),
 		mocktracer.BeforeOpcode(),
 		mocktracer.AfterOpcode(false),
 		mocktracer.AfterProgram(logic.ModeApp, false),
-		mocktracer.AfterTxn(protocol.ApplicationCallTx, payset[1].ApplyData, nil, false),
-		mocktracer.AfterTxnGroup(2, nil, false),
+		mocktracer.AfterTxn(protocol.ApplicationCallTx, evalBlock.Payset[1].ApplyData, nil, false),
+		mocktracer.AfterTxnGroup(2, &expectedDelta, false),
 		//Block evaluation
 		mocktracer.AfterBlock(block.Block().Round()),
 	}
-	require.Equal(t, expectedEvents, mockTracer.Events)
+	actualEvents := mockTracer.Events
+
+	// Dehydrate deltas for better comparison
+	for i := range expectedEvents {
+		if expectedEvents[i].Deltas != nil {
+			expectedEvents[i].Deltas.Dehydrate()
+		}
+	}
+	for i := range actualEvents {
+		if actualEvents[i].Deltas != nil {
+			actualEvents[i].Deltas.Dehydrate()
+		}
+	}
+
+	// These extra checks are not necessary for correctness, but they provide more targeted information on failure
+	if assert.Equal(t, len(expectedEvents), len(actualEvents)) {
+		for i := range expectedEvents {
+			jsonExpectedDelta := protocol.EncodeJSONStrict(expectedEvents[i].Deltas)
+			jsonActualDelta := protocol.EncodeJSONStrict(actualEvents[i].Deltas)
+			assert.Equal(t, expectedEvents[i].Deltas, actualEvents[i].Deltas, "StateDelta disagreement: i=%d, event type: (%v,%v)\n\nexpected: %s\n\nactual: %s", i, expectedEvents[i].Type, actualEvents[i].Type, jsonExpectedDelta, jsonActualDelta)
+		}
+	}
+
+	require.Equal(t, expectedEvents, actualEvents)
 }

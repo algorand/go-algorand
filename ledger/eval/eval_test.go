@@ -373,7 +373,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 						GenesisHash: genHash,
 					}
 
-					expectedFeeSinkDataForScenario := balances[testSinkAddr]
+					expectedFeeSinkDataForScenario := ledgercore.ToAccountData(balances[testSinkAddr])
 					expectedFeeSinkDataForScenario.MicroAlgos.Raw += basicAppCallTxn.Txn().Fee.Raw
 					if testCase.firstTxnBehavior == "approve" {
 						expectedFeeSinkDataForScenario.MicroAlgos.Raw += payTxn.Txn().Fee.Raw
@@ -381,8 +381,8 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 
 					scenario := testCase.innerAppCallScenario(mocktracer.TestScenarioInfo{
 						CallingTxn:     innerAppCallTxn.Txn(),
-						SenderData:     balances[addrs[4]],
-						AppAccountData: balances[innerAppAddress],
+						SenderData:     ledgercore.ToAccountData(balances[addrs[4]]),
+						AppAccountData: ledgercore.ToAccountData(balances[innerAppAddress]),
 						FeeSinkData:    expectedFeeSinkDataForScenario,
 						FeeSinkAddr:    testSinkAddr,
 						MinFee:         minFee,
@@ -563,7 +563,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 						}
 					}
 
-					// These extra tests are not necessary for correctness, but they provide more targeted information on failure
+					// These extra checks are not necessary for correctness, but they provide more targeted information on failure
 					if assert.Equal(t, len(expectedEvents), len(actualEvents)) {
 						for i := range expectedEvents {
 							jsonExpectedDelta := protocol.EncodeJSONStrict(expectedEvents[i].Deltas)

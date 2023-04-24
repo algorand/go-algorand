@@ -146,11 +146,11 @@ func validateSimulationResult(t *testing.T, result simulation.Result) {
 
 func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase) {
 	t.Helper()
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Ledger.Close()
+	s := simulation.MakeSimulator(env.Ledger)
 
-	testcase := f(accounts, txnInfo)
+	testcase := f(env.Accounts, env.TxnInfo)
 
 	actual, err := s.Simulate(testcase.input)
 	require.NoError(t, err)
@@ -471,12 +471,12 @@ func TestStateProofTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, _, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Ledger.Close()
+	s := simulation.MakeSimulator(env.Ledger)
 
 	txgroup := []transactions.SignedTxn{
-		txnInfo.NewTxn(txntest.Txn{
+		env.TxnInfo.NewTxn(txntest.Txn{
 			Type: protocol.StateProofTx,
 			// No need to fill out StateProofTxnFields, this should fail at signature verification
 		}).SignedTxn(),
@@ -490,23 +490,23 @@ func TestSimpleGroupTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender1 := accounts[0].Addr
-	sender1Balance := accounts[0].AcctData.MicroAlgos
-	sender2 := accounts[1].Addr
-	sender2Balance := accounts[1].AcctData.MicroAlgos
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Ledger.Close()
+	s := simulation.MakeSimulator(env.Ledger)
+	sender1 := env.Accounts[0].Addr
+	sender1Balance := env.Accounts[0].AcctData.MicroAlgos
+	sender2 := env.Accounts[1].Addr
+	sender2Balance := env.Accounts[1].AcctData.MicroAlgos
 
 	// Send money back and forth
 	txgroup := []transactions.SignedTxn{
-		txnInfo.NewTxn(txntest.Txn{
+		env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender1,
 			Receiver: sender2,
 			Amount:   1_000_000,
 		}).SignedTxn(),
-		txnInfo.NewTxn(txntest.Txn{
+		env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender2,
 			Receiver: sender1,
@@ -526,11 +526,11 @@ func TestSimpleGroupTxn(t *testing.T) {
 	attachGroupID(txgroup)
 
 	// Check balances before transaction
-	sender1Data, _, err := l.LookupWithoutRewards(l.Latest(), sender1)
+	sender1Data, _, err := env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), sender1)
 	require.NoError(t, err)
 	require.Equal(t, sender1Balance, sender1Data.MicroAlgos)
 
-	sender2Data, _, err := l.LookupWithoutRewards(l.Latest(), sender2)
+	sender2Data, _, err := env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), sender2)
 	require.NoError(t, err)
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
 
@@ -543,11 +543,11 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Zero(t, result.TxnGroups[0].FailureMessage)
 
 	// Confirm balances have not changed
-	sender1Data, _, err = l.LookupWithoutRewards(l.Latest(), sender1)
+	sender1Data, _, err = env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), sender1)
 	require.NoError(t, err)
 	require.Equal(t, sender1Balance, sender1Data.MicroAlgos)
 
-	sender2Data, _, err = l.LookupWithoutRewards(l.Latest(), sender2)
+	sender2Data, _, err = env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), sender2)
 	require.NoError(t, err)
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
 }
@@ -1131,13 +1131,13 @@ func TestSignatureCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender := accounts[0].Addr
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Ledger.Close()
+	s := simulation.MakeSimulator(env.Ledger)
+	sender := env.Accounts[0].Addr
 
 	txgroup := []transactions.SignedTxn{
-		txnInfo.NewTxn(txntest.Txn{
+		env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender,
 			Receiver: sender,
@@ -1155,7 +1155,7 @@ func TestSignatureCheck(t *testing.T) {
 	require.Zero(t, result.TxnGroups[0].FailureMessage)
 
 	// add signature
-	signatureSecrets := accounts[0].Sk
+	signatureSecrets := env.Accounts[0].Sk
 	txgroup[0] = txgroup[0].Txn.Sign(signatureSecrets)
 
 	// should not error now that we have a signature
@@ -1180,13 +1180,13 @@ func TestInvalidTxGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	receiver := accounts[0].Addr
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Ledger.Close()
+	s := simulation.MakeSimulator(env.Ledger)
+	receiver := env.Accounts[0].Addr
 
 	txgroup := []transactions.SignedTxn{
-		txnInfo.NewTxn(txntest.Txn{
+		env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   ledgertesting.PoolAddr(),
 			Receiver: receiver,

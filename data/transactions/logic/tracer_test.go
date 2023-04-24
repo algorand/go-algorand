@@ -143,6 +143,9 @@ func TestInnerAppEvalWithTracer(t *testing.T) {
 			mock := mocktracer.Tracer{}
 			ep, tx, ledger := MakeSampleEnv()
 			ep.Tracer = &mock
+			// Note: it does not make sense to test ep.GranularEval=true here,
+			// since these tests use a testing Ledger, which does not use cows
+			// or StateDeltas internally.
 
 			// Establish FirstTestID as the app id, and fund it. We do this so that the created
 			// inner app will get a sequential ID, which is what the mocktracer scenarios expect

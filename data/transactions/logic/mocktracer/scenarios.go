@@ -81,9 +81,9 @@ func fillProgramTemplate(beforeInnersOps, innerApprovalProgram, betweenInnersOps
 // TestScenarioInfo holds arguments used to call a TestScenarioGenerator
 type TestScenarioInfo struct {
 	CallingTxn     transactions.Transaction
-	SenderData     basics.AccountData
-	AppAccountData basics.AccountData
-	FeeSinkData    basics.AccountData
+	SenderData     ledgercore.AccountData
+	AppAccountData ledgercore.AccountData
+	FeeSinkData    ledgercore.AccountData
 	FeeSinkAddr    basics.Address
 	MinFee         basics.MicroAlgos
 	CreatedAppID   basics.AppIndex
@@ -166,10 +166,10 @@ pushint 1`,
 		panic(err)
 	}
 
-	expectedSenderData := ledgercore.ToAccountData(info.SenderData)
+	expectedSenderData := info.SenderData
 	expectedSenderData.MicroAlgos.Raw -= info.CallingTxn.Fee.Raw
-	expectedSenderData.TotalAppParams += 1
-	expectedFeeSinkData := ledgercore.ToAccountData(info.FeeSinkData)
+	expectedSenderData.TotalAppParams++
+	expectedFeeSinkData := info.FeeSinkData
 	expectedFeeSinkData.MicroAlgos.Raw += info.CallingTxn.Fee.Raw
 
 	expectedDeltaCallingTxn := ledgercore.MakeStateDelta(&info.BlockHeader, info.PrevTimestamp, 0, 0)
@@ -198,8 +198,8 @@ pushint 1`,
 		Intra:     0,
 	}
 
-	expectedAppAccountData := ledgercore.ToAccountData(info.AppAccountData)
-	expectedAppAccountData.TotalAppParams += 1
+	expectedAppAccountData := info.AppAccountData
+	expectedAppAccountData.TotalAppParams++
 	expectedAppAccountData.MicroAlgos.Raw -= info.MinFee.Raw
 	expectedFeeSinkData.MicroAlgos.Raw += info.MinFee.Raw
 
@@ -765,6 +765,8 @@ func StripInnerTxnGroupIDsFromEvents(events []Event) []Event {
 	return events
 }
 
+// MergeStateDeltas merges multiple state deltas into one. The arguments are not modified, but the
+// first delta is used to populate non-mergeable fields in the result.
 func MergeStateDeltas(deltas ...ledgercore.StateDelta) ledgercore.StateDelta {
 	if len(deltas) == 0 {
 		return ledgercore.StateDelta{}
@@ -800,6 +802,7 @@ func MergeStateDeltas(deltas ...ledgercore.StateDelta) ledgercore.StateDelta {
 	return result
 }
 
+// StateDeltaIfTrue returns a pointer to the given delta if the given condition is true, or nil
 func StateDeltaIfTrue(delta ledgercore.StateDelta, cond bool) *ledgercore.StateDelta {
 	if cond {
 		return &delta
