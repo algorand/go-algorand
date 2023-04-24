@@ -37,7 +37,7 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 
 	dirty, ok := cx.available.boxes[boxRef{cx.appID, name}]
 	if !ok {
-		return nil, false, fmt.Errorf("invalid Box reference %v", name)
+		return nil, false, fmt.Errorf("invalid Box reference %#x", name)
 	}
 
 	// Since the box is in cx.available, we know this GetBox call is cheap. It
@@ -150,7 +150,7 @@ func opBoxExtract(cx *EvalContext) error {
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("no such box %#v", name)
+		return fmt.Errorf("no such box %#x", name)
 	}
 
 	bytes, err := extractCarefully(contents, start, length)
@@ -178,7 +178,7 @@ func opBoxReplace(cx *EvalContext) error {
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("no such box %#v", name)
+		return fmt.Errorf("no such box %#x", name)
 	}
 
 	bytes, err := replaceCarefully(contents, replacement, start)
