@@ -19,6 +19,7 @@ package logic_test
 import (
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -2745,7 +2746,7 @@ func TestCreateAndUse(t *testing.T) {
 			test(axfer)
 		}
 	})
-	return
+
 	balance := `
   itxn_begin
   int acfg;    itxn_field TypeEnum
@@ -2781,6 +2782,7 @@ func TestCreateAndUse(t *testing.T) {
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		v := ep.Proto.LogicSigVersion
 		test := func(source string, problems ...string) {
+			t.Helper()
 			TestApp(t, source, ep, problems...)
 		}
 
@@ -2788,7 +2790,7 @@ func TestCreateAndUse(t *testing.T) {
 		ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
 
 		if v < CreatedResourcesVersion {
-			test(balance, "invalid Asset reference")
+			test(balance, "unavailable Asset "+strconv.Itoa(FirstTestID))
 		} else {
 			test(balance)
 		}
