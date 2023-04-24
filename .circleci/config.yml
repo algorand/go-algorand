@@ -84,7 +84,7 @@ workflows:
           filters: &filters-nightly
             branches:
               only:
-                - /pull\/[0-9]+/
+                - /pull/
                 - << pipeline.parameters.valid_nightly_branch >>
 
       - test:
@@ -95,7 +95,7 @@ workflows:
           filters: &filters-default
             branches:
               ignore:
-                - /pull\/[0-9]+/
+                - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
 
       - test_nightly:
@@ -165,20 +165,6 @@ workflows:
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
 
-      - upload_binaries:
-          name: << matrix.platform >>_upload_binaries
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_test_nightly_verification
-            - << matrix.platform >>_integration_nightly_verification
-            - << matrix.platform >>_e2e_expect_nightly_verification
-            - << matrix.platform >>_e2e_subs_nightly
-          filters:
-            branches:
-              only:
-                - /pull\/[0-9]+/
-                - << pipeline.parameters.valid_nightly_branch >>
 
       #- windows_x64_build
 
@@ -381,17 +367,6 @@ jobs:
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
 
-  upload_binaries:
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    steps:
-      - prepare_build_dir
-      - prepare_go
-      - upload_binaries_command:
-          platform: << parameters.platform >>
 
 # ===== Command Definitions =====
 commands:
