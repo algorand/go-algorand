@@ -17,7 +17,6 @@
 package main
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,11 +32,9 @@ func Test_getConfigForArg(t *testing.T) {
 		t.Parallel()
 		_, err := getConfigForArg("invalid")
 
-		var names []string
 		for name := range profileNames {
-			names = append(names, name)
+			require.ErrorContains(t, err, name)
 		}
-		require.ErrorContains(t, err, strings.Join(names, ", "))
 
 	})
 
