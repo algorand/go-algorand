@@ -92,6 +92,9 @@ func (r *accountsReader) LookupResourceDataByAddrID(accRef trackerdb.AccountRef,
 	// TODO: this can probably get removed in favor of LookupResources
 	//       the only issue here is that the only caller of this is not doing anything with the ctype
 	//       so we might have to change the signature of LookupResources to skip the ctype, which might be reasonable
+	if accRef == nil {
+		return data, trackerdb.ErrNotFound
+	}
 	xref := accRef.(accountRef)
 
 	value, closer, err := r.kvr.Get(resourceKey(xref.addr, aidx))
