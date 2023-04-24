@@ -1189,20 +1189,40 @@ func TestAssetDisambiguation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// start at 4 when the two meanings were added, stop at 8 because 9 removed the dual meaning
-	testLogicRange(t, 4, 8, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+	// start at 4 when the two meanings were added
+	testLogicRange(t, 4, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		ledger.NewAsset(tx.Sender, 1, basics.AssetParams{AssetName: "one", Total: 1})
-		ledger.NewAsset(tx.Sender, 20, basics.AssetParams{AssetName: "twenty", Total: 20})
-		ledger.NewAsset(tx.Sender, 30, basics.AssetParams{AssetName: "thirty", Total: 30})
-		tx.ForeignAssets = []basics.AssetIndex{20, 30}
-		// Since 1 is not available, 1 must mean the 1th asset slot = 30
+		ledger.NewAsset(tx.Sender, 255, basics.AssetParams{AssetName: "twenty", Total: 255})
+		ledger.NewAsset(tx.Sender, 256, basics.AssetParams{AssetName: "thirty", Total: 256})
+		tx.ForeignAssets = []basics.AssetIndex{255, 256}
+		// Since 1 is not available, 1 must mean the 1th asset slot = 256
 		testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
-		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 30; ==`, ep)
+		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 256; ==`, ep)
 
-		tx.ForeignAssets = []basics.AssetIndex{1, 30}
+		tx.ForeignAssets = []basics.AssetIndex{1, 256}
 		// Since 1 IS available, 1 means the assetid=1, not the 1th slot
 		testApp(t, `int 1; asset_params_get AssetName; assert; byte "one"; ==`, ep)
 		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 1; ==`, ep)
+
+		ep.Proto.AppForbidLowResources = true
+		tx.ForeignAssets = []basics.AssetIndex{255, 256}
+		// Since 1 is not available, 1 must mean the 1th asset slot = 256
+		testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
+		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 256; ==`, ep)
+
+		// but now if that resolution led to a number below 255, boom
+		tx.ForeignAssets = []basics.AssetIndex{256, 255}
+		testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep,
+			"low Asset lookup 255")
+		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 30; ==`, ep,
+			"low Asset lookup 255")
+
+		tx.ForeignAssets = []basics.AssetIndex{1, 256}
+		// Since 1 IS available, 1 means the assetid=1, not the 1th slot
+		testApp(t, `int 1; asset_params_get AssetName; assert; byte "one"; ==`, ep,
+			"low Asset lookup 1")
+		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 1; ==`, ep,
+			"low Asset lookup 1")
 	})
 }
 
@@ -1214,48 +1234,67 @@ func TestAppDisambiguation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// start at 4 when the two meanings were added, stop at 8 because 9 removed the dual meaning
-	testLogicRange(t, 4, 8, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		ledger.NewApp(tx.Sender, 1, basics.AppParams{
-			GlobalState: map[string]basics.TealValue{"a": {
-				Type: basics.TealUintType,
-				Uint: 1,
-			}},
-			ExtraProgramPages: 1,
-		})
-		ledger.NewLocals(tx.Sender, 1)
-		ledger.NewLocal(tx.Sender, 1, "x", basics.TealValue{Type: basics.TealUintType, Uint: 100})
-		ledger.NewApp(tx.Sender, 20, basics.AppParams{
-			GlobalState: map[string]basics.TealValue{"a": {
-				Type: basics.TealUintType,
-				Uint: 20,
-			}},
-			ExtraProgramPages: 20,
-		})
-		ledger.NewLocals(tx.Sender, 20)
-		ledger.NewLocal(tx.Sender, 20, "x", basics.TealValue{Type: basics.TealUintType, Uint: 200})
-		ledger.NewApp(tx.Sender, 30, basics.AppParams{
-			GlobalState: map[string]basics.TealValue{"a": {
-				Type: basics.TealUintType,
-				Uint: 30,
-			}},
-			ExtraProgramPages: 30,
-		})
-		tx.ForeignApps = []basics.AppIndex{20, 30}
+	// start at 4 when the two meanings were added
+	testLogicRange(t, 4, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		// make apps with identifiable properties, so we can tell what we get
+		makeIdentifiableApp := func(appID uint64) {
+			ledger.NewApp(tx.Sender, basics.AppIndex(appID), basics.AppParams{
+				GlobalState: map[string]basics.TealValue{"a": {
+					Type: basics.TealUintType,
+					Uint: appID,
+				}},
+				ExtraProgramPages: uint32(appID),
+			})
+			ledger.NewLocals(tx.Sender, appID)
+			ledger.NewLocal(tx.Sender, appID, "x", basics.TealValue{Type: basics.TealUintType, Uint: appID * 10})
+		}
+		makeIdentifiableApp(1)
+		makeIdentifiableApp(20)
+		makeIdentifiableApp(256)
+
+		tx.ForeignApps = []basics.AppIndex{20, 256}
 		// Since 1 is not available, 1 must mean the first app slot = 20 (recall, 0 mean "this app")
-		if ep.Proto.LogicSigVersion >= 5 {
+		if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
 			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 20; ==`, ep)
 		}
 		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 20; ==`, ep)
 		testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 200; ==`, ep)
 
-		tx.ForeignApps = []basics.AppIndex{1, 30}
-		// Since 1 IS available, 1 means the assetid=1, not the 1th slot
-		if ep.Proto.LogicSigVersion >= 5 {
+		// Make 1 available, so now 1 means the assetid=1, not the 1th slot
+		tx.ForeignApps = []basics.AppIndex{1, 256}
+		if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
 			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 1; ==`, ep)
 		}
 		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 1; ==`, ep)
-		testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 100; ==`, ep)
+		testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 10; ==`, ep)
+
+		// same tests, but as of AppForbidLowResources, using 1 is forbidden
+		ep.Proto.AppForbidLowResources = true
+
+		// repeat the first tests, they are using 20 and 256 directly, which are too low
+		tx.ForeignApps = []basics.AppIndex{20, 256}
+		if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
+			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 20; ==`, ep,
+				"low App lookup 20")
+			testApp(t, `int 2; app_params_get AppExtraProgramPages; assert; int 256; ==`, ep)
+		}
+		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 20; ==`, ep,
+			"low App lookup 20")
+		testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 200; ==`, ep,
+			"low App lookup 20")
+		testApp(t, `int 2; byte "a"; app_global_get_ex; assert; int 256; ==`, ep)
+		testApp(t, `int 0; int 2; byte "x"; app_local_get_ex; assert; int 2560; ==`, ep)
+
+		// repeat the second tests, which are using 1, which is too low
+		tx.ForeignApps = []basics.AppIndex{1, 256}
+		if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
+			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 1; ==`, ep,
+				"low App lookup 1")
+		}
+		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 1; ==`, ep,
+			"low App lookup 1")
+		testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 10; ==`, ep,
+			"low App lookup 1")
 	})
 }
 

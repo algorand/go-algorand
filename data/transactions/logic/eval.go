@@ -4486,8 +4486,9 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, 
 func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 	if cx.Proto.AppForbidLowResources {
 		defer func() {
-			if aid < firstResource && err == nil {
-				err = fmt.Errorf("low Asset lookup %d", ref)
+			fmt.Printf("%d %v\n", aid, err)
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low App lookup %d", aid)
 			}
 		}()
 	}
@@ -4577,7 +4578,7 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetInd
 	return basics.AssetIndex(ref), nil
 }
 
-const firstResource = 16
+const lastForbiddenResource = 255
 
 // resolveAsset figures out what Asset an integer is referring to, considering 0 as
 // current app first, then uses the integer as is if it is an availableAsset, then
@@ -4585,8 +4586,8 @@ const firstResource = 16
 func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err error) {
 	if cx.Proto.AppForbidLowResources {
 		defer func() {
-			if aid < firstResource && err == nil {
-				err = fmt.Errorf("low Asset lookup %d", ref)
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low Asset lookup %d", aid)
 			}
 		}()
 	}
