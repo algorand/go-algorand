@@ -75,7 +75,7 @@ type ResultEvalOverrides struct {
 	MaxLogSize  *uint64
 }
 
-// SimulateLogBytesLimit hardcode limit of how much bytes one can log during simulation (with lift-log-limits)
+// SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with lift-log-limits)
 const SimulateLogBytesLimit = uint64(65536)
 
 // LiftLogLimits method modify the log limits from lift option:
