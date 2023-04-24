@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    28,
+	Version:                                    27,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
