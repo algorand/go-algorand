@@ -186,7 +186,7 @@ func TestBuild(t *testing.T) {
 			depth: 0,
 		},
 		{
-			name: "nested embeds",
+			name: "nested embeds 1",
 			x: func() interface{} {
 				type Embedded struct{ A int }
 				type Embedded2 struct{ Embedded }
@@ -308,7 +308,7 @@ func TestDiffErrors(t *testing.T) {
 			equal: false,
 		},
 		{
-			name: "nested embeds",
+			name: "nested embeds 2",
 			x: func() interface{} {
 				type Embedded struct{ A int }
 				type Embedded2 struct{ Embedded }
