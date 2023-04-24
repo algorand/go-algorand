@@ -53,7 +53,7 @@ func TestBlockEvaluator(t *testing.T) {
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	genHash := l.GenesisHash()
@@ -442,7 +442,7 @@ func TestRekeying(t *testing.T) {
 		genesisHdr, err := l.BlockHdr(basics.Round(0))
 		require.NoError(t, err)
 		newBlock := bookkeeping.MakeBlock(genesisHdr)
-		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {

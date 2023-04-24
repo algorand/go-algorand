@@ -83,8 +83,8 @@ type evalTracer struct {
 	failedAt TxnPath
 }
 
-func makeEvalTracer(lastRound basics.Round, txgroup []transactions.SignedTxn) *evalTracer {
-	result := makeSimulationResult(lastRound, [][]transactions.SignedTxn{txgroup})
+func makeEvalTracer(lastRound basics.Round, request Request) *evalTracer {
+	result := makeSimulationResult(lastRound, request)
 	return &evalTracer{result: &result}
 }
 
@@ -141,6 +141,9 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.FeeCredit != nil {
 		tracer.result.TxnGroups[0].FeeCredit = *ep.FeeCredit
 	}
+
+	// Override runtime related constraints against ep, before entering txn group
+	ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
 }
 
 func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {

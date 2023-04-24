@@ -119,7 +119,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	require.NoError(b, err)
 
 	newBlk := bookkeeping.MakeBlock(blk.BlockHeader)
-	blockEvaluator, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
+	blockEvaluator, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0, nil)
 	require.NoError(b, err)
 
 	bc = &benchConfig{
@@ -326,7 +326,7 @@ func addBlock(bc *benchConfig) {
 	prev, err := bc.l0.BlockHdr(basics.Round(last))
 	require.NoError(bc.b, err)
 	newBlk := bookkeeping.MakeBlock(prev)
-	bc.eval, err = bc.l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
+	bc.eval, err = bc.l0.StartEvaluator(newBlk.BlockHeader, 5000, 0, nil)
 	bc.round++
 	require.NoError(bc.b, err)
 }

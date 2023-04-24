@@ -1242,7 +1242,8 @@
           "nonparticipating"
         ],
         "consumes": [
-          "application/x-binary"
+          "application/json",
+          "application/msgpack"
         ],
         "produces": [
           "application/json",
@@ -1255,13 +1256,12 @@
         "operationId": "SimulateTransaction",
         "parameters": [
           {
-            "description": "The byte encoded transaction to simulate",
-            "name": "rawtxn",
+            "description": "The transactions to simulate, along with any other inputs.",
+            "name": "request",
             "in": "body",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "binary"
+              "$ref": "#/definitions/SimulateRequest"
             }
           },
           {
@@ -1273,7 +1273,7 @@
             "$ref": "#/responses/SimulateResponse"
           },
           "400": {
-            "description": "Bad Request - Malformed Algorand transaction",
+            "description": "Bad Request",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -2429,6 +2429,89 @@
           }
         }
       }
+    },
+    "/v2/devmode/blocks/offset": {
+      "get": {
+        "description": "Gets the current timestamp offset.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns the timestamp offset. Timestamp offsets can only be set in dev mode.",
+        "operationId": "GetBlockTimeStampOffset",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/GetBlockTimeStampOffsetResponse"
+          },
+          "400": {
+            "description": "TimeStamp offset not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/devmode/blocks/offset/{offset}": {
+      "post": {
+        "description": "Sets the timestamp offset (seconds) for blocks in dev mode. Providing an offset of 0 will unset this value and try to use the real clock for the timestamp.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.",
+        "operationId": "SetBlockTimeStampOffset",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The timestamp offset for blocks in dev mode.",
+            "name": "offset",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "type": "object"
+          },
+          "400": {
+            "description": "Cannot set timestamp offset to a negative integer.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -3189,6 +3272,45 @@
         }
       }
     },
+    "SimulateRequest": {
+      "description": "Request type for simulation endpoint.",
+      "type": "object",
+      "required": [
+        "txn-groups"
+      ],
+      "properties": {
+        "txn-groups": {
+          "description": "The transaction groups to simulate.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateRequestTransactionGroup"
+          }
+        },
+        "lift-log-limits": {
+          "description": "The boolean flag that lifts the limit on log opcode during simulation.",
+          "type": "boolean"
+        }
+      }
+    },
+    "SimulateRequestTransactionGroup": {
+      "description": "A transaction group to simulate.",
+      "type": "object",
+      "required": [
+        "txns"
+      ],
+      "properties": {
+        "txns": {
+          "description": "An atomic transaction group.",
+          "type": "array",
+          "items": {
+            "description": "SignedTxn object. Must be canonically encoded.",
+            "type": "string",
+            "format": "json",
+            "x-algorand-format": "SignedTransaction"
+          }
+        }
+      }
+    },
     "Box": {
       "description": "Box name and its content.",
       "type": "object",
@@ -3521,6 +3643,22 @@
           "x-algorand-format": "uint64"
         }
       }
+    },
+    "SimulationEvalOverrides": {
+      "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
+      "type": "object",
+      "properties": {
+        "max-log-calls": {
+          "description": "The maximum log calls one can make during simulation",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "max-log-size": {
+          "description": "The maximum byte number to log during simulation",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
     }
   },
   "parameters": {
@@ -3695,6 +3833,21 @@
     }
   },
   "responses": {
+    "GetBlockTimeStampOffsetResponse": {
+      "description": "Response containing the timestamp offset in seconds",
+      "schema": {
+        "type": "object",
+        "required": [
+          "offset"
+        ],
+        "properties": {
+          "offset": {
+            "description": "Timestamp offset in seconds.",
+            "type": "integer"
+          }
+        }
+      }
+    },
     "GetSyncRoundResponse": {
       "description": "Response containing the ledger's minimum sync round",
       "schema": {
@@ -4110,6 +4263,9 @@
             "items": {
               "$ref": "#/definitions/SimulateTransactionGroupResult"
             }
+          },
+          "eval-overrides": {
+            "$ref": "#/definitions/SimulationEvalOverrides"
           },
           "would-succeed": {
             "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",

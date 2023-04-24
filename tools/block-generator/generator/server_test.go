@@ -45,60 +45,81 @@ func TestInitConfigFileNotExist(t *testing.T) {
 	}
 }
 
-func TestParseRound(t *testing.T) {
+func TestParseURL(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	const blockQueryPrefix = "http://v2/blocks/"
+	const accountQueryPrefix = "http://v2/accounts/"
+	const deltaQueryPrefix = "http://v2/deltas/"
 	var testcases = []struct {
 		name          string
 		url           string
-		expectedRound uint64
+		expectedParam string
 		err           string
 	}{
 		{
 			name:          "no block",
 			url:           "/v2/blocks/",
-			expectedRound: 0,
-			err:           "no block in path",
-		},
-		{
-			name:          "no block 2",
-			url:           "/v2/blocks/?nothing",
-			expectedRound: 0,
-			err:           "no block in path",
-		},
-		{
-			name:          "invalid prefix",
-			url:           "/v2/wrong/prefix/1",
-			expectedRound: 0,
-			err:           "not a blocks query",
+			expectedParam: "",
+			err:           "invalid request path, /v2/blocks/",
 		},
 		{
 			name:          "normal one digit",
 			url:           fmt.Sprintf("%s1", blockQueryPrefix),
-			expectedRound: 1,
+			expectedParam: "1",
 			err:           "",
 		},
 		{
 			name:          "normal long number",
 			url:           fmt.Sprintf("%s12345678", blockQueryPrefix),
-			expectedRound: 12345678,
+			expectedParam: "12345678",
 			err:           "",
 		},
 		{
 			name:          "with query parameters",
 			url:           fmt.Sprintf("%s1234?pretty", blockQueryPrefix),
-			expectedRound: 1234,
+			expectedParam: "1234",
+			err:           "",
+		},
+		{
+			name:          "with query parameters",
+			url:           fmt.Sprintf("%s1234?pretty", blockQueryPrefix),
+			expectedParam: "1234",
+			err:           "",
+		},
+		{
+			name:          "no deltas",
+			url:           "/v2/deltas/",
+			expectedParam: "",
+			err:           "invalid request path, /v2/deltas/",
+		},
+		{
+			name:          "deltas",
+			url:           fmt.Sprintf("%s123?Format=msgp", deltaQueryPrefix),
+			expectedParam: "123",
+			err:           "",
+		},
+		{
+			name:          "no account",
+			url:           "/v2/accounts/",
+			expectedParam: "",
+			err:           "invalid request path, /v2/accounts/",
+		},
+		{
+			name:          "accounts",
+			url:           fmt.Sprintf("%sAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGFFWAF4", accountQueryPrefix),
+			expectedParam: "AIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGFFWAF4",
 			err:           "",
 		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			round, err := parseRound(testcase.url)
+			round, err := parseURL(testcase.url)
 			if len(testcase.err) == 0 {
-				msg := fmt.Sprintf("Unexpected error parsing '%s', expected round '%d' received error: %v",
-					testcase.url, testcase.expectedRound, err)
+				msg := fmt.Sprintf("Unexpected error parsing '%s', expected round '%s' received error: %v",
+					testcase.url, testcase.expectedParam, err)
 				require.NoError(t, err, msg)
-				assert.Equal(t, testcase.expectedRound, round)
+				assert.Equal(t, testcase.expectedParam, round)
 			} else {
 				require.Error(t, err, fmt.Sprintf("Expected an error containing: %s", testcase.err))
 				require.True(t, strings.Contains(err.Error(), testcase.err))

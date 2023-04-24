@@ -248,6 +248,23 @@ type boxRef struct {
 	name string
 }
 
+// EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
+type EvalConstants struct {
+	// MaxLogSize is the limit of total log size from n log calls in a program
+	MaxLogSize uint64
+
+	// MaxLogCalls is the limit of total log calls during a program execution
+	MaxLogCalls uint64
+}
+
+// RuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
+func RuntimeEvalConstants() EvalConstants {
+	return EvalConstants{
+		MaxLogSize:  uint64(maxLogSize),
+		MaxLogCalls: uint64(maxLogCalls),
+	}
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	Proto *config.ConsensusParams
@@ -298,6 +315,8 @@ type EvalParams struct {
 
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
+
+	EvalConstants
 
 	// Caching these here means the hashes can be shared across the TxnGroup
 	// (and inners, because the cache is shared with the inner EvalParams)
@@ -372,6 +391,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
+		EvalConstants:           RuntimeEvalConstants(),
 	}
 	// resources are computed after ep is constructed because app addresses are
 	// calculated there, and we'd like to use the caching mechanism built into
@@ -451,6 +471,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		ioBudget:                caller.ioBudget,
 		readBudgetChecked:       true, // don't check for inners
 		appAddrCache:            caller.appAddrCache,
+		EvalConstants:           caller.EvalConstants,
 		// read comment in EvalParams declaration about txid caches
 		caller: caller,
 	}
@@ -4824,13 +4845,13 @@ func opAcctParamsGet(cx *EvalContext) error {
 func opLog(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 
-	if len(cx.txn.EvalDelta.Logs) >= maxLogCalls {
-		return fmt.Errorf("too many log calls in program. up to %d is allowed", maxLogCalls)
+	if uint64(len(cx.txn.EvalDelta.Logs)) >= cx.MaxLogCalls {
+		return fmt.Errorf("too many log calls in program. up to %d is allowed", cx.MaxLogCalls)
 	}
 	log := cx.stack[last]
 	cx.logSize += len(log.Bytes)
-	if cx.logSize > maxLogSize {
-		return fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, maxLogSize)
+	if uint64(cx.logSize) > cx.MaxLogSize {
+		return fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, cx.MaxLogSize)
 	}
 	cx.txn.EvalDelta.Logs = append(cx.txn.EvalDelta.Logs, string(log.Bytes))
 	cx.stack = cx.stack[:last]
