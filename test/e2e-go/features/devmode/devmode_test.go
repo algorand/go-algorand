@@ -32,7 +32,7 @@ import (
 
 func TestDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Skipf("Skipping flaky test. Re-enable with #3267")
+	// t.Skipf("Skipping flaky test. Re-enable with #3267")
 
 	if testing.Short() {
 		t.Skip()
@@ -54,8 +54,9 @@ func TestDevMode(t *testing.T) {
 
 	// 2 transactions should be sent within one normal confirmation time.
 	for i := uint64(0); i < 2; i++ {
-		txn = fixture.SendMoneyAndWait(firstRound+i, 100000, 1000, sender.Address, receiver.String(), "")
-		require.Equal(t, firstRound+i, txn.Txn.Txn.FirstValid)
+		txn = fixture.SendMoneyAndWait(firstRound+i, 100001, 1000, sender.Address, receiver.String(), "")
+		// SendMoneyAndWait subtracts 1 from firstValid
+		require.Equal(t, firstRound+i-1, uint64(txn.Txn.Txn.FirstValid))
 	}
 	require.True(t, time.Since(start) < 8*time.Second, "Transactions should be quickly confirmed faster than usual.")
 
@@ -63,5 +64,5 @@ func TestDevMode(t *testing.T) {
 	time.Sleep(10 * time.Second)
 	status, err := fixture.LibGoalClient.Status()
 	require.NoError(t, err)
-	require.Equal(t, txn.ConfirmedRound, status.LastRound, "There should be no rounds without a transaction.")
+	require.Equal(t, *txn.ConfirmedRound, status.LastRound, "There should be no rounds without a transaction.")
 }
