@@ -17,12 +17,11 @@
 package eval
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
@@ -59,11 +58,16 @@ func (tracer *TxnGroupDeltaTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
 	// Drop older rounds based on the lookback parameter
 	delete(tracer.txnGroupDeltas, hdr.Round-basics.Round(tracer.lookback))
 	tracer.latestRound = hdr.Round
+	// Initialize the delta map for the round
+	tracer.txnGroupDeltas[tracer.latestRound] = make(map[crypto.Digest]*ledgercore.StateDelta)
 }
 
 // AfterTxnGroup implements the EvalTracer interface for txn group boundaries
 func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
-	var txnDeltaMap = make(map[crypto.Digest]*ledgercore.StateDelta)
+	if deltas == nil {
+		return
+	}
+	txnDeltaMap := tracer.txnGroupDeltas[tracer.latestRound]
 	for _, txn := range ep.TxnGroup {
 		// Add Group ID
 		if !txn.Txn.Group.IsZero() {
@@ -71,12 +75,7 @@ func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *l
 		}
 		// Add Txn ID
 		txnDeltaMap[crypto.Digest(txn.ID())] = deltas
-		for innerIndex, innerTxn := range txn.ApplyData.EvalDelta.InnerTxns {
-			// Add Inner Txn IDs
-			txnDeltaMap[crypto.Digest(innerTxn.Txn.InnerID(txn.ID(), innerIndex))] = deltas
-		}
 	}
-	tracer.txnGroupDeltas[tracer.latestRound] = txnDeltaMap
 }
 
 // GetDeltasForRound supplies all StateDelta objects for txn groups in a given rnd
@@ -100,10 +99,8 @@ func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]ledger
 // GetDeltaForID retruns the StateDelta associated with the group of transaction executed for the supplied ID (txn or group)
 func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (ledgercore.StateDelta, error) {
 	for _, deltasForRound := range tracer.txnGroupDeltas {
-		for idKey, deltaVal := range deltasForRound {
-			if bytes.Equal(idKey[:], id[:]) {
-				return *deltaVal, nil
-			}
+		if delta, exists := deltasForRound[id]; exists {
+			return *delta, nil
 		}
 	}
 	return ledgercore.StateDelta{}, fmt.Errorf("unable to find delta for id: %s", id)
