@@ -4460,11 +4460,20 @@ func opAppGlobalDel(cx *EvalContext) error {
 // more than 2 or so, and was often called an "index".  But it was not a
 // basics.AssetIndex or basics.ApplicationIndex.
 
-func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, error) {
+func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppIndex, err error) {
 	if cx.version >= directRefEnabledVersion {
 		return cx.resolveApp(ref)
 	}
 
+	// resolveApp is already similarly protected (and must be, since it is
+	// called independently)
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low App lookup %d", aid)
+			}
+		}()
+	}
 	// Old rules
 	if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
 		return cx.appID, nil
@@ -4486,7 +4495,6 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, 
 func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 	if cx.Proto.AppForbidLowResources {
 		defer func() {
-			fmt.Printf("%d %v\n", aid, err)
 			if aid <= lastForbiddenResource && err == nil {
 				err = fmt.Errorf("low App lookup %d", aid)
 			}
@@ -4561,11 +4569,20 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 	return addr, app, addrIdx, nil
 }
 
-func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetIndex, error) {
+func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.AssetIndex, err error) {
 	if cx.version >= directRefEnabledVersion {
 		return cx.resolveAsset(ref)
 	}
 
+	// resolveAsset is already similarly protected (and must be, since it is
+	// called independently)
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low Asset lookup %d", aid)
+			}
+		}()
+	}
 	// Old rules
 	if foreign {
 		// In old versions, a foreign reference must be an index in ForeignAssets
