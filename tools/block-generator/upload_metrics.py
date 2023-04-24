@@ -1,26 +1,47 @@
 from datadog import initialize
 from datadog import api
+import os
+import argparse
 
-options = {
-        'api_key': os.getenv('DATADOG_API_KEY'),
-        'app_key': os.getenv('DATADOG_APP_KEY')
-    }
-
-parser = argparse.ArgumentParser(description='Change prefix of files matching a pattern')
-parser.add_argument('-performance-metrics-report', required=True, help='the report created by the block generator')
-parser.add_argument('-conduit-version', required=True, help='Release version or the commit hash of the Conduit binary used during the performance test')
+parser = argparse.ArgumentParser(description="Upload performance metrics to Datadog")
+parser.add_argument(
+    "-f", "--perf-report", required=True, help="Report created by the block generator"
+)
+parser.add_argument(
+    "-c",
+    "--binary-version",
+    required=True,
+    help="Release version or the commit hash of the Conduit binary used during the performance test",
+)
 args = parser.parse_args()
+
+data = dict()
 
 
 def parseReport(report):
     with open(report) as f:
-       for line in f:
-           print line
+        for line in f:
+            tag, value = line.split(":")
+            data[tag] = float(value)
+    f.close()
 
 
-
-if __name__ == '__main__':
-    parseReport(args.performance_metrics_report)
-    tags:= ["conduit_version: "+args.conduit_version, "duration: 1_hour", "scenario:mixed"]
-    transactions_per_block_avg=0
-    # api.Metric.send(metric = transactionsPerBlockAvgMetricName, points = transactions_per_block_avg, tags = tags)
+if __name__ == "__main__":
+    print("initializing datadog")
+    options = {
+        "api_key": os.getenv("DATADOG_API_KEY"),
+        "app_key": os.getenv("DATADOG_APP_KEY"),
+    }
+    initialize(**options)
+    parseReport(args.perf_report)
+    tags = [
+        f"conduit_version: {args.binary_version}",
+        f'duration: {str(data["test_duration_seconds"])}s',
+        "scenario: mixed",
+    ]
+    transactionsPerBlockAvgMetricName = (
+        "conduit.perf.final_overall_transactions_per_second"
+    )
+    tps = data["final_overall_transactions_per_second"]
+    api.Metric.send(metric=transactionsPerBlockAvgMetricName, points=tps, tags=tags)
+    print("uploaded metrics")
