@@ -118,7 +118,7 @@ func OpenLedger(
 	}
 	var tracer logic.EvalTracer
 	if cfg.EnableTxnEvalTracer {
-		tracer = eval.TxnGroupDeltaTracerForConfig(cfg)
+		tracer = eval.MakeTxnGroupDeltaTracer(cfg.MaxAcctLookback)
 	}
 
 	l := &Ledger{

@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
@@ -79,7 +78,7 @@ func TestTransactionGroupWithDeltaTracer(t *testing.T) {
 			blkHeader, err := l.BlockHdr(basics.Round(0))
 			require.NoError(t, err)
 			newBlock := bookkeeping.MakeBlock(blkHeader)
-			tracer := TxnGroupDeltaTracerForConfig(config.Local{})
+			tracer := MakeTxnGroupDeltaTracer(4)
 			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, tracer)
 			require.NoError(t, err)
 			eval.validate = true

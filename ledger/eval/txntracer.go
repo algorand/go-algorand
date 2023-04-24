@@ -21,14 +21,11 @@ import (
 	"fmt"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
-
-var txnGroupDeltaTracer *TxnGroupDeltaTracer
 
 // TODO do we want something like this?
 type txnGroupDeltas struct {
@@ -49,20 +46,12 @@ type TxnGroupDeltaTracer struct {
 	latestRound basics.Round
 }
 
-// makeTxnGroupDeltaTracer creates a TxnGroupDeltaTracer
-func makeTxnGroupDeltaTracer(lookback uint64) *TxnGroupDeltaTracer {
+// MakeTxnGroupDeltaTracer creates a TxnGroupDeltaTracer
+func MakeTxnGroupDeltaTracer(lookback uint64) *TxnGroupDeltaTracer {
 	return &TxnGroupDeltaTracer{
 		Lookback:       lookback,
 		txnGroupDeltas: make(map[basics.Round]map[crypto.Digest]*ledgercore.StateDelta),
 	}
-}
-
-// TxnGroupDeltaTracerForConfig retrieves the TxnGroupDeltaTracer or creates it if it does not already exist
-func TxnGroupDeltaTracerForConfig(cfg config.Local) *TxnGroupDeltaTracer {
-	if txnGroupDeltaTracer == nil {
-		txnGroupDeltaTracer = makeTxnGroupDeltaTracer(cfg.MaxAcctLookback)
-	}
-	return txnGroupDeltaTracer
 }
 
 // BeforeBlock implements the EvalTracer interface for pre-block evaluation
