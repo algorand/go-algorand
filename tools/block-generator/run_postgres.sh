@@ -4,7 +4,7 @@
 # in a debugger. Simply start this script and run with:
 # ./block-generator runner \
 #       -d 5s \
-#       -i ./../algorand-indexer/algorand-indexer \
+#       -i <path to conduit binary> \
 #       -c "host=localhost user=algorand password=algorand dbname=algorand port=15432 sslmode=disable" \
 #       -r results \
 #       -s scenarios/config.payment.small.yml

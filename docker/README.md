@@ -10,11 +10,11 @@ There are a number of special files and environment variables used to control ho
 
 ### Default Configuration
 
-By default the following config.json overrides are applied:
+The following config.json overrides are applied:
 
-| Setting | Value |
-| ------- | ----- |
-| EndpointAddress | 0.0.0.0:8080 |
+| Setting | Value | Description |
+| ------- | ----- | ----------- |
+| EndpointAddress | 0.0.0.0:8080 | Ensure the API is accessible from outside of the container. |
 
 ### Environment Variables
 
@@ -23,14 +23,15 @@ The following environment variables can be supplied. Except when noted, it is po
 | Variable | Description |
 | -------- | ----------- |
 | NETWORK        | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
-| FAST_CATCHUP   | If set to 1 on a public network, attempt to start fast-catchup during initial config.                                                               |
-| TELEMETRY_NAME | If set on a public network, telemetry is reported with this name.                                                                                   |
+| PROFILE        | If set, initializes the config.json file according to the given profile. |
 | DEV_MODE       | If set to 1 on a private network, enable dev mode. Only used during data directory initialization.                                                  |
-| NUM_ROUNDS     | If set on a private network, override default of 30000 participation keys.                                                                          |
+| START_KMD      | When set to 1, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION.                                                            |
+| FAST_CATCHUP   | If set to 1 on a public network, attempt to start fast-catchup during initial config.                                                               |
 | TOKEN          | If set, overrides the REST API token.                                                                                                               |
 | ADMIN_TOKEN    | If set, overrides the REST API admin token.                                                                                                         |
 | KMD_TOKEN      | If set along with `START_KMD`, override the KMD REST API token.                                                                                     |
-| START_KMD      | When set to 1, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION.                                                            |
+| TELEMETRY_NAME | If set on a public network, telemetry is reported with this name.                                                                                   |
+| NUM_ROUNDS     | If set on a private network, override default of 30000 participation keys.                                                                          |
 | PEER_ADDRESS   | If set, override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)                                              |
 
 ### Special Files
@@ -80,7 +81,7 @@ The data directory located at `/algod/data`. Mounting a volume at that location 
 
 ### Volume Permissions
 
-The container executes in the context of the `algorand` user with it's own UID and GID which is handled differently depending on your operating system. Here are a few options for how to work with this environment:
+The container executes in the context of the `algorand` user with UID=999 and GID=999 which is handled differently depending on your operating system or deployment platform. During startup the container temporarily runs as `root` in order to modify the permissions of `/algod/data`. It then changes to the `algorand` user. This can sometimes cause problems, for example if your deployment platform doesn't allow containers to run as the root user.
 
 #### Named Volume
 
@@ -91,23 +92,9 @@ docker volume create algod-data
 docker run -it --rm -d -v algod-data:/algod/data algorand/algod
 ```
 
-#### Local Directory without SELinux
+#### Use specific UID and GID
 
-Explicitly set the UID and GID of the container:
-
-```bash
-docker run -it --rm -d -v /srv/data:/algod/data -u $UID:$GID algorand/algod
-```
-
-#### Local Directory with SELinux
-
-Set the UID and GID of the container while add the `Z` option to the volume definition:
-
-```bash
-docker run -it --rm -d -v /srv/data:/algod/data:Z -u $UID:$GID algorand/algod
-```
-
-> See the documentation on [configuring the selinux label](https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label).
+On the host system, ensure the directory being mounted uses UID=999 and GID=999. If the directory already has these permissions you may override the default user with `-u 999:999`.
 
 ### Private Network
 

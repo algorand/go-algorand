@@ -134,7 +134,7 @@ type Diff struct {
 	Xdiff, Ydiff []Target
 }
 
-// Empty reports whethere there was any difference at all.
+// Empty reports whether there was any difference at all.
 func (d *Diff) Empty() bool {
 	return d == nil || (len(d.Xdiff) == 0 && len(d.Ydiff) == 0)
 }
@@ -270,6 +270,9 @@ func (t *TypeNode) buildListChild(path TypePath) TypePath {
 	return path
 }
 
+// buildMapChildren builds the children of a map type.
+// To distinguish between the key and value children as well as children of lists and structs,
+// the key child is given the name "<map key>" while the value child is given the name "<map val>".
 func (t *TypeNode) buildMapChildren(path TypePath) TypePath {
 	keyType, valueType := t.Type.Key(), t.Type.Elem()
 
@@ -284,11 +287,13 @@ func (t *TypeNode) buildMapChildren(path TypePath) TypePath {
 	return path
 }
 
+// buildPtrChild builds the child of a pointer type. To distinguish between a child
+// that is a pointer and other children, the child is given the name "<pointer>".
 func (t *TypeNode) buildPtrChild(path TypePath) TypePath {
 	tt := t.Type.Elem()
 	child := TypeNode{t.Depth + 1, tt, tt.Kind(), nil, nil}
 	path = child.build(path)
-	t.appendChild("<ptr elt>", "", child)
+	t.appendChild("<pointer>", "", child)
 	return path
 }
 
