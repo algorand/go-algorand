@@ -262,25 +262,29 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 		name                 string
 		firstTxnBehavior     string
 		innerAppCallScenario mocktracer.TestScenarioGenerator
+		granularEval         bool
 	}
 	var testCases []tracerTestCase
 
-	firstIteration := true
-	for scenarioName, scenario := range scenarios {
-		firstTxnBehaviors := []string{"approve"}
-		if firstIteration {
-			// When the first transaction rejects or errors, the behavior of the later transactions
-			// don't matter, so we only want to test these cases with any one mocktracer scenario.
-			firstTxnBehaviors = append(firstTxnBehaviors, "reject", "error")
-			firstIteration = false
-		}
+	for _, granularEval := range []bool{false, true} {
+		firstIteration := true
+		for scenarioName, scenario := range scenarios {
+			firstTxnBehaviors := []string{"approve"}
+			if firstIteration {
+				// When the first transaction rejects or errors, the behavior of the later transactions
+				// don't matter, so we only want to test these cases with any one mocktracer scenario.
+				firstTxnBehaviors = append(firstTxnBehaviors, "reject", "error")
+				firstIteration = false
+			}
 
-		for _, firstTxnTxnBehavior := range firstTxnBehaviors {
-			testCases = append(testCases, tracerTestCase{
-				name:                 fmt.Sprintf("firstTxnBehavior=%s,scenario=%s", firstTxnTxnBehavior, scenarioName),
-				firstTxnBehavior:     firstTxnTxnBehavior,
-				innerAppCallScenario: scenario,
-			})
+			for _, firstTxnTxnBehavior := range firstTxnBehaviors {
+				testCases = append(testCases, tracerTestCase{
+					name:                 fmt.Sprintf("firstTxnBehavior=%s,scenario=%s,granularEval=%t", firstTxnTxnBehavior, scenarioName, granularEval),
+					firstTxnBehavior:     firstTxnTxnBehavior,
+					innerAppCallScenario: scenario,
+					granularEval:         granularEval,
+				})
+			}
 		}
 	}
 
@@ -288,293 +292,287 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			for _, granularEval := range []bool{false, true} {
-				granularEval := granularEval
-				t.Run(fmt.Sprintf("granularEval=%t", granularEval), func(t *testing.T) {
-					t.Parallel()
-					genesisInitState, addrs, keys := ledgertesting.Genesis(10)
+			genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-					innerAppID := basics.AppIndex(3)
-					innerAppAddress := innerAppID.Address()
-					balances := genesisInitState.Accounts
-					balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
+			innerAppID := basics.AppIndex(3)
+			innerAppAddress := innerAppID.Address()
+			balances := genesisInitState.Accounts
+			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
 
-					genesisBalances := bookkeeping.GenesisBalances{
-						Balances:    balances,
-						FeeSink:     testSinkAddr,
-						RewardsPool: testPoolAddr,
-						Timestamp:   0,
-					}
-					l := newTestLedger(t, genesisBalances)
+			genesisBalances := bookkeeping.GenesisBalances{
+				Balances:    balances,
+				FeeSink:     testSinkAddr,
+				RewardsPool: testPoolAddr,
+				Timestamp:   0,
+			}
+			l := newTestLedger(t, genesisBalances)
 
-					blkHeader, err := l.BlockHdr(basics.Round(0))
-					require.NoError(t, err)
-					newBlock := bookkeeping.MakeBlock(blkHeader)
-					tracer := &mocktracer.Tracer{}
-					eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, tracer)
-					require.NoError(t, err)
-					eval.validate = true
-					eval.generate = true
-					eval.GranularEval = granularEval
+			blkHeader, err := l.BlockHdr(basics.Round(0))
+			require.NoError(t, err)
+			newBlock := bookkeeping.MakeBlock(blkHeader)
+			tracer := &mocktracer.Tracer{}
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, tracer)
+			require.NoError(t, err)
+			eval.validate = true
+			eval.generate = true
+			eval.GranularEval = testCase.granularEval
 
-					genHash := l.GenesisHash()
+			genHash := l.GenesisHash()
 
-					var basicAppCallReturn string
-					switch testCase.firstTxnBehavior {
-					case "approve":
-						basicAppCallReturn = "int 1"
-					case "reject":
-						basicAppCallReturn = "int 0"
-					case "error":
-						basicAppCallReturn = "err"
-					default:
-						require.Fail(t, "Unexpected firstTxnBehavior")
-					}
-					// a basic app call
-					basicAppCallTxn := txntest.Txn{
-						Type:   protocol.ApplicationCallTx,
-						Sender: addrs[0],
-						ApprovalProgram: fmt.Sprintf(`#pragma version 6
+			var basicAppCallReturn string
+			switch testCase.firstTxnBehavior {
+			case "approve":
+				basicAppCallReturn = "int 1"
+			case "reject":
+				basicAppCallReturn = "int 0"
+			case "error":
+				basicAppCallReturn = "err"
+			default:
+				require.Fail(t, "Unexpected firstTxnBehavior")
+			}
+			// a basic app call
+			basicAppCallTxn := txntest.Txn{
+				Type:   protocol.ApplicationCallTx,
+				Sender: addrs[0],
+				ApprovalProgram: fmt.Sprintf(`#pragma version 6
 		byte "hello"
 		log
 		%s`, basicAppCallReturn),
-						ClearStateProgram: `#pragma version 6
+				ClearStateProgram: `#pragma version 6
 		int 1`,
 
-						FirstValid:  newBlock.Round(),
-						LastValid:   newBlock.Round() + 1000,
-						Fee:         minFee,
-						GenesisHash: genHash,
-					}
-
-					// a non-app call txn
-					payTxn := txntest.Txn{
-						Type:             protocol.PaymentTx,
-						Sender:           addrs[1],
-						Receiver:         addrs[2],
-						CloseRemainderTo: addrs[3],
-						Amount:           1_000_000,
-
-						FirstValid:  newBlock.Round(),
-						LastValid:   newBlock.Round() + 1000,
-						Fee:         minFee,
-						GenesisHash: genHash,
-					}
-					// an app call with inner txn
-					innerAppCallTxn := txntest.Txn{
-						Type:   protocol.ApplicationCallTx,
-						Sender: addrs[4],
-						ClearStateProgram: `#pragma version 6
-		int 1`,
-
-						FirstValid:  newBlock.Round(),
-						LastValid:   newBlock.Round() + 1000,
-						Fee:         minFee,
-						GenesisHash: genHash,
-					}
-
-					expectedFeeSinkDataForScenario := ledgercore.ToAccountData(balances[testSinkAddr])
-					expectedFeeSinkDataForScenario.MicroAlgos.Raw += basicAppCallTxn.Txn().Fee.Raw
-					if testCase.firstTxnBehavior == "approve" {
-						expectedFeeSinkDataForScenario.MicroAlgos.Raw += payTxn.Txn().Fee.Raw
-					}
-
-					scenario := testCase.innerAppCallScenario(mocktracer.TestScenarioInfo{
-						CallingTxn:     innerAppCallTxn.Txn(),
-						SenderData:     ledgercore.ToAccountData(balances[addrs[4]]),
-						AppAccountData: ledgercore.ToAccountData(balances[innerAppAddress]),
-						FeeSinkData:    expectedFeeSinkDataForScenario,
-						FeeSinkAddr:    testSinkAddr,
-						MinFee:         minFee,
-						CreatedAppID:   innerAppID,
-						GranularEval:   granularEval,
-						BlockHeader:    eval.block.BlockHeader,
-						PrevTimestamp:  blkHeader.TimeStamp,
-					})
-					innerAppCallTxn.ApprovalProgram = scenario.Program
-
-					txntest.Group(&basicAppCallTxn, &payTxn, &innerAppCallTxn)
-
-					// Update the expected state delta to reflect the inner app call txid
-					scenarioTxidValue, ok := scenario.ExpectedStateDelta.Txids[transactions.Txid{}]
-					if ok {
-						delete(scenario.ExpectedStateDelta.Txids, transactions.Txid{})
-						scenario.ExpectedStateDelta.Txids[innerAppCallTxn.Txn().ID()] = scenarioTxidValue
-					}
-					for i := range scenario.ExpectedEvents {
-						deltas := scenario.ExpectedEvents[i].Deltas
-						if deltas == nil {
-							continue
-						}
-						txidValue, ok := deltas.Txids[transactions.Txid{}]
-						if ok {
-							delete(deltas.Txids, transactions.Txid{})
-							deltas.Txids[innerAppCallTxn.Txn().ID()] = txidValue
-						}
-					}
-
-					txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
-						basicAppCallTxn.Txn().Sign(keys[0]),
-						payTxn.Txn().Sign(keys[1]),
-						innerAppCallTxn.Txn().Sign(keys[4]),
-					})
-
-					require.Len(t, eval.block.Payset, 0)
-
-					err = eval.TransactionGroup(txgroup)
-					switch testCase.firstTxnBehavior {
-					case "approve":
-						if len(scenario.ExpectedError) != 0 {
-							require.ErrorContains(t, err, scenario.ExpectedError)
-							require.Len(t, eval.block.Payset, 0)
-						} else {
-							require.NoError(t, err)
-							require.Len(t, eval.block.Payset, 3)
-						}
-					case "reject":
-						require.ErrorContains(t, err, "transaction rejected by ApprovalProgram")
-						require.Len(t, eval.block.Payset, 0)
-					case "error":
-						require.ErrorContains(t, err, "logic eval error: err opcode executed")
-						require.Len(t, eval.block.Payset, 0)
-					}
-
-					expectedBasicAppCallAD := transactions.ApplyData{
-						ApplicationID: 1,
-						EvalDelta: transactions.EvalDelta{
-							GlobalDelta: basics.StateDelta{},
-							LocalDeltas: map[uint64]basics.StateDelta{},
-							Logs:        []string{"hello"},
-						},
-					}
-					expectedPayTxnAD :=
-						transactions.ApplyData{
-							ClosingAmount: basics.MicroAlgos{
-								Raw: balances[payTxn.Sender].MicroAlgos.Raw - payTxn.Amount - txgroup[1].Txn.Fee.Raw,
-							},
-						}
-
-					expectedFeeSinkData := ledgercore.ToAccountData(balances[testSinkAddr])
-					expectedFeeSinkData.MicroAlgos.Raw += txgroup[0].Txn.Fee.Raw
-					expectedAcct0Data := ledgercore.ToAccountData(balances[addrs[0]])
-					expectedAcct0Data.MicroAlgos.Raw -= txgroup[0].Txn.Fee.Raw
-					expectedAcct0Data.TotalAppParams = 1
-
-					expectedBlockHeader := eval.block.BlockHeader
-					expectedBasicAppCallDelta := ledgercore.MakeStateDelta(&expectedBlockHeader, blkHeader.TimeStamp, 0, 0)
-					expectedBasicAppCallDelta.Accts.Upsert(addrs[0], expectedAcct0Data)
-					expectedBasicAppCallDelta.Accts.Upsert(testSinkAddr, expectedFeeSinkData)
-					expectedBasicAppCallDelta.Accts.UpsertAppResource(addrs[0], 1, ledgercore.AppParamsDelta{
-						Params: &basics.AppParams{
-							ApprovalProgram:   txgroup[0].Txn.ApprovalProgram,
-							ClearStateProgram: txgroup[0].Txn.ClearStateProgram,
-						},
-					}, ledgercore.AppLocalStateDelta{})
-					expectedBasicAppCallDelta.AddCreatable(1, ledgercore.ModifiedCreatable{
-						Ctype:   basics.AppCreatable,
-						Created: true,
-						Creator: addrs[0],
-					})
-					expectedBasicAppCallDelta.Txids[txgroup[0].Txn.ID()] = ledgercore.IncludedTransactions{
-						LastValid: txgroup[0].Txn.LastValid,
-						Intra:     0,
-					}
-
-					expectedEvents := []mocktracer.Event{mocktracer.BeforeBlock(eval.block.Round())}
-					if testCase.firstTxnBehavior == "approve" {
-						err = eval.endOfBlock()
-						require.NoError(t, err)
-
-						expectedAcct1Data := ledgercore.AccountData{}
-						expectedAcct2Data := ledgercore.ToAccountData(balances[addrs[2]])
-						expectedAcct2Data.MicroAlgos.Raw += payTxn.Amount
-						expectedAcct3Data := ledgercore.ToAccountData(balances[addrs[3]])
-						expectedAcct3Data.MicroAlgos.Raw += expectedPayTxnAD.ClosingAmount.Raw
-						expectedFeeSinkData.MicroAlgos.Raw += txgroup[1].Txn.Fee.Raw
-
-						expectedPayTxnDelta := ledgercore.MakeStateDelta(&expectedBlockHeader, blkHeader.TimeStamp, 0, 0)
-						expectedPayTxnDelta.Accts.Upsert(addrs[1], expectedAcct1Data)
-						expectedPayTxnDelta.Accts.Upsert(testSinkAddr, expectedFeeSinkData)
-						expectedPayTxnDelta.Accts.Upsert(addrs[2], expectedAcct2Data)
-						expectedPayTxnDelta.Accts.Upsert(addrs[3], expectedAcct3Data)
-						expectedPayTxnDelta.Txids[txgroup[1].Txn.ID()] = ledgercore.IncludedTransactions{
-							LastValid: txgroup[1].Txn.LastValid,
-							Intra:     0, // will be incremented once merged
-						}
-
-						expectedDelta := mocktracer.MergeStateDeltas(expectedBasicAppCallDelta, expectedPayTxnDelta, scenario.ExpectedStateDelta)
-
-						// If the scenario failed, we expect the failed txn ID to be removed from the group state delta
-						if scenario.Outcome != mocktracer.ApprovalOutcome {
-							delete(expectedDelta.Txids, txgroup[2].ID())
-						}
-
-						expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
-							{
-								mocktracer.BeforeTxnGroup(3),
-								mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
-								mocktracer.BeforeProgram(logic.ModeApp),
-							},
-							mocktracer.OpcodeEvents(3, false),
-							{
-								mocktracer.AfterProgram(logic.ModeApp, false),
-								mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, mocktracer.StateDeltaIfTrue(expectedBasicAppCallDelta, granularEval), false), // end basicAppCallTxn
-								mocktracer.BeforeTxn(protocol.PaymentTx), // start payTxn
-								mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, mocktracer.StateDeltaIfTrue(expectedPayTxnDelta, granularEval), false), // end payTxn
-							},
-							scenario.ExpectedEvents,
-							{
-								mocktracer.AfterTxnGroup(3, &expectedDelta, scenario.Outcome != mocktracer.ApprovalOutcome),
-								mocktracer.AfterBlock(eval.block.Round()),
-							},
-						})...)
-					} else {
-						// Removed failed txid from expected state delta
-						delete(expectedBasicAppCallDelta.Txids, txgroup[0].Txn.ID())
-
-						hasError := testCase.firstTxnBehavior == "error"
-						// EvalDeltas are removed from failed app call transactions
-						expectedBasicAppCallAD.EvalDelta = transactions.EvalDelta{}
-						expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
-							{
-								mocktracer.BeforeTxnGroup(3),
-								mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
-								mocktracer.BeforeProgram(logic.ModeApp),
-							},
-							mocktracer.OpcodeEvents(3, hasError),
-							{
-								mocktracer.AfterProgram(logic.ModeApp, hasError),
-								mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, mocktracer.StateDeltaIfTrue(expectedBasicAppCallDelta, granularEval), true), // end basicAppCallTxn
-								mocktracer.AfterTxnGroup(3, &expectedBasicAppCallDelta, true),
-							},
-						})...)
-					}
-					actualEvents := mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events)
-
-					// Dehydrate deltas for easier comparison
-					for i := range actualEvents {
-						if actualEvents[i].Deltas != nil {
-							actualEvents[i].Deltas.Dehydrate()
-						}
-					}
-					for i := range expectedEvents {
-						if expectedEvents[i].Deltas != nil {
-							expectedEvents[i].Deltas.Dehydrate()
-						}
-					}
-
-					// These extra checks are not necessary for correctness, but they provide more targeted information on failure
-					if assert.Equal(t, len(expectedEvents), len(actualEvents)) {
-						for i := range expectedEvents {
-							jsonExpectedDelta := protocol.EncodeJSONStrict(expectedEvents[i].Deltas)
-							jsonActualDelta := protocol.EncodeJSONStrict(actualEvents[i].Deltas)
-							assert.Equal(t, expectedEvents[i].Deltas, actualEvents[i].Deltas, "StateDelta disagreement: i=%d, event type: (%v,%v)\n\nexpected: %s\n\nactual: %s", i, expectedEvents[i].Type, actualEvents[i].Type, jsonExpectedDelta, jsonActualDelta)
-						}
-					}
-
-					require.Equal(t, expectedEvents, actualEvents)
-				})
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round() + 1000,
+				Fee:         minFee,
+				GenesisHash: genHash,
 			}
+
+			// a non-app call txn
+			payTxn := txntest.Txn{
+				Type:             protocol.PaymentTx,
+				Sender:           addrs[1],
+				Receiver:         addrs[2],
+				CloseRemainderTo: addrs[3],
+				Amount:           1_000_000,
+
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round() + 1000,
+				Fee:         minFee,
+				GenesisHash: genHash,
+			}
+			// an app call with inner txn
+			innerAppCallTxn := txntest.Txn{
+				Type:   protocol.ApplicationCallTx,
+				Sender: addrs[4],
+				ClearStateProgram: `#pragma version 6
+		int 1`,
+
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round() + 1000,
+				Fee:         minFee,
+				GenesisHash: genHash,
+			}
+
+			expectedFeeSinkDataForScenario := ledgercore.ToAccountData(balances[testSinkAddr])
+			expectedFeeSinkDataForScenario.MicroAlgos.Raw += basicAppCallTxn.Txn().Fee.Raw
+			if testCase.firstTxnBehavior == "approve" {
+				expectedFeeSinkDataForScenario.MicroAlgos.Raw += payTxn.Txn().Fee.Raw
+			}
+
+			scenario := testCase.innerAppCallScenario(mocktracer.TestScenarioInfo{
+				CallingTxn:     innerAppCallTxn.Txn(),
+				SenderData:     ledgercore.ToAccountData(balances[addrs[4]]),
+				AppAccountData: ledgercore.ToAccountData(balances[innerAppAddress]),
+				FeeSinkData:    expectedFeeSinkDataForScenario,
+				FeeSinkAddr:    testSinkAddr,
+				MinFee:         minFee,
+				CreatedAppID:   innerAppID,
+				GranularEval:   testCase.granularEval,
+				BlockHeader:    eval.block.BlockHeader,
+				PrevTimestamp:  blkHeader.TimeStamp,
+			})
+			innerAppCallTxn.ApprovalProgram = scenario.Program
+
+			txntest.Group(&basicAppCallTxn, &payTxn, &innerAppCallTxn)
+
+			// Update the expected state delta to reflect the inner app call txid
+			scenarioTxidValue, ok := scenario.ExpectedStateDelta.Txids[transactions.Txid{}]
+			if ok {
+				delete(scenario.ExpectedStateDelta.Txids, transactions.Txid{})
+				scenario.ExpectedStateDelta.Txids[innerAppCallTxn.Txn().ID()] = scenarioTxidValue
+			}
+			for i := range scenario.ExpectedEvents {
+				deltas := scenario.ExpectedEvents[i].Deltas
+				if deltas == nil {
+					continue
+				}
+				txidValue, ok := deltas.Txids[transactions.Txid{}]
+				if ok {
+					delete(deltas.Txids, transactions.Txid{})
+					deltas.Txids[innerAppCallTxn.Txn().ID()] = txidValue
+				}
+			}
+
+			txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
+				basicAppCallTxn.Txn().Sign(keys[0]),
+				payTxn.Txn().Sign(keys[1]),
+				innerAppCallTxn.Txn().Sign(keys[4]),
+			})
+
+			require.Len(t, eval.block.Payset, 0)
+
+			err = eval.TransactionGroup(txgroup)
+			switch testCase.firstTxnBehavior {
+			case "approve":
+				if len(scenario.ExpectedError) != 0 {
+					require.ErrorContains(t, err, scenario.ExpectedError)
+					require.Len(t, eval.block.Payset, 0)
+				} else {
+					require.NoError(t, err)
+					require.Len(t, eval.block.Payset, 3)
+				}
+			case "reject":
+				require.ErrorContains(t, err, "transaction rejected by ApprovalProgram")
+				require.Len(t, eval.block.Payset, 0)
+			case "error":
+				require.ErrorContains(t, err, "logic eval error: err opcode executed")
+				require.Len(t, eval.block.Payset, 0)
+			}
+
+			expectedBasicAppCallAD := transactions.ApplyData{
+				ApplicationID: 1,
+				EvalDelta: transactions.EvalDelta{
+					GlobalDelta: basics.StateDelta{},
+					LocalDeltas: map[uint64]basics.StateDelta{},
+					Logs:        []string{"hello"},
+				},
+			}
+			expectedPayTxnAD :=
+				transactions.ApplyData{
+					ClosingAmount: basics.MicroAlgos{
+						Raw: balances[payTxn.Sender].MicroAlgos.Raw - payTxn.Amount - txgroup[1].Txn.Fee.Raw,
+					},
+				}
+
+			expectedFeeSinkData := ledgercore.ToAccountData(balances[testSinkAddr])
+			expectedFeeSinkData.MicroAlgos.Raw += txgroup[0].Txn.Fee.Raw
+			expectedAcct0Data := ledgercore.ToAccountData(balances[addrs[0]])
+			expectedAcct0Data.MicroAlgos.Raw -= txgroup[0].Txn.Fee.Raw
+			expectedAcct0Data.TotalAppParams = 1
+
+			expectedBlockHeader := eval.block.BlockHeader
+			expectedBasicAppCallDelta := ledgercore.MakeStateDelta(&expectedBlockHeader, blkHeader.TimeStamp, 0, 0)
+			expectedBasicAppCallDelta.Accts.Upsert(addrs[0], expectedAcct0Data)
+			expectedBasicAppCallDelta.Accts.Upsert(testSinkAddr, expectedFeeSinkData)
+			expectedBasicAppCallDelta.Accts.UpsertAppResource(addrs[0], 1, ledgercore.AppParamsDelta{
+				Params: &basics.AppParams{
+					ApprovalProgram:   txgroup[0].Txn.ApprovalProgram,
+					ClearStateProgram: txgroup[0].Txn.ClearStateProgram,
+				},
+			}, ledgercore.AppLocalStateDelta{})
+			expectedBasicAppCallDelta.AddCreatable(1, ledgercore.ModifiedCreatable{
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: addrs[0],
+			})
+			expectedBasicAppCallDelta.Txids[txgroup[0].Txn.ID()] = ledgercore.IncludedTransactions{
+				LastValid: txgroup[0].Txn.LastValid,
+				Intra:     0,
+			}
+
+			expectedEvents := []mocktracer.Event{mocktracer.BeforeBlock(eval.block.Round())}
+			if testCase.firstTxnBehavior == "approve" {
+				err = eval.endOfBlock()
+				require.NoError(t, err)
+
+				expectedAcct1Data := ledgercore.AccountData{}
+				expectedAcct2Data := ledgercore.ToAccountData(balances[addrs[2]])
+				expectedAcct2Data.MicroAlgos.Raw += payTxn.Amount
+				expectedAcct3Data := ledgercore.ToAccountData(balances[addrs[3]])
+				expectedAcct3Data.MicroAlgos.Raw += expectedPayTxnAD.ClosingAmount.Raw
+				expectedFeeSinkData.MicroAlgos.Raw += txgroup[1].Txn.Fee.Raw
+
+				expectedPayTxnDelta := ledgercore.MakeStateDelta(&expectedBlockHeader, blkHeader.TimeStamp, 0, 0)
+				expectedPayTxnDelta.Accts.Upsert(addrs[1], expectedAcct1Data)
+				expectedPayTxnDelta.Accts.Upsert(testSinkAddr, expectedFeeSinkData)
+				expectedPayTxnDelta.Accts.Upsert(addrs[2], expectedAcct2Data)
+				expectedPayTxnDelta.Accts.Upsert(addrs[3], expectedAcct3Data)
+				expectedPayTxnDelta.Txids[txgroup[1].Txn.ID()] = ledgercore.IncludedTransactions{
+					LastValid: txgroup[1].Txn.LastValid,
+					Intra:     0, // will be incremented once merged
+				}
+
+				expectedDelta := mocktracer.MergeStateDeltas(expectedBasicAppCallDelta, expectedPayTxnDelta, scenario.ExpectedStateDelta)
+
+				// If the scenario failed, we expect the failed txn ID to be removed from the group state delta
+				if scenario.Outcome != mocktracer.ApprovalOutcome {
+					delete(expectedDelta.Txids, txgroup[2].ID())
+				}
+
+				expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
+					{
+						mocktracer.BeforeTxnGroup(3),
+						mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
+						mocktracer.BeforeProgram(logic.ModeApp),
+					},
+					mocktracer.OpcodeEvents(3, false),
+					{
+						mocktracer.AfterProgram(logic.ModeApp, false),
+						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, mocktracer.StateDeltaIfTrue(expectedBasicAppCallDelta, testCase.granularEval), false), // end basicAppCallTxn
+						mocktracer.BeforeTxn(protocol.PaymentTx), // start payTxn
+						mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, mocktracer.StateDeltaIfTrue(expectedPayTxnDelta, testCase.granularEval), false), // end payTxn
+					},
+					scenario.ExpectedEvents,
+					{
+						mocktracer.AfterTxnGroup(3, &expectedDelta, scenario.Outcome != mocktracer.ApprovalOutcome),
+						mocktracer.AfterBlock(eval.block.Round()),
+					},
+				})...)
+			} else {
+				// Removed failed txid from expected state delta
+				delete(expectedBasicAppCallDelta.Txids, txgroup[0].Txn.ID())
+
+				hasError := testCase.firstTxnBehavior == "error"
+				// EvalDeltas are removed from failed app call transactions
+				expectedBasicAppCallAD.EvalDelta = transactions.EvalDelta{}
+				expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
+					{
+						mocktracer.BeforeTxnGroup(3),
+						mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
+						mocktracer.BeforeProgram(logic.ModeApp),
+					},
+					mocktracer.OpcodeEvents(3, hasError),
+					{
+						mocktracer.AfterProgram(logic.ModeApp, hasError),
+						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, mocktracer.StateDeltaIfTrue(expectedBasicAppCallDelta, testCase.granularEval), true), // end basicAppCallTxn
+						mocktracer.AfterTxnGroup(3, &expectedBasicAppCallDelta, true),
+					},
+				})...)
+			}
+			actualEvents := mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events)
+
+			// Dehydrate deltas for easier comparison
+			for i := range actualEvents {
+				if actualEvents[i].Deltas != nil {
+					actualEvents[i].Deltas.Dehydrate()
+				}
+			}
+			for i := range expectedEvents {
+				if expectedEvents[i].Deltas != nil {
+					expectedEvents[i].Deltas.Dehydrate()
+				}
+			}
+
+			// These extra checks are not necessary for correctness, but they provide more targeted information on failure
+			if assert.Equal(t, len(expectedEvents), len(actualEvents)) {
+				for i := range expectedEvents {
+					jsonExpectedDelta := protocol.EncodeJSONStrict(expectedEvents[i].Deltas)
+					jsonActualDelta := protocol.EncodeJSONStrict(actualEvents[i].Deltas)
+					assert.Equal(t, expectedEvents[i].Deltas, actualEvents[i].Deltas, "StateDelta disagreement: i=%d, event type: (%v,%v)\n\nexpected: %s\n\nactual: %s", i, expectedEvents[i].Type, actualEvents[i].Type, jsonExpectedDelta, jsonActualDelta)
+				}
+			}
+
+			require.Equal(t, expectedEvents, actualEvents)
 		})
 	}
 }

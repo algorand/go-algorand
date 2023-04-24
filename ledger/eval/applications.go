@@ -304,7 +304,10 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (deltas *ledgerco
 			d := cowForTxn.deltas()
 			deltas = &d
 			cowForTxn.commitToParent()
-			cowForTxn.recycle()
+			// cowForTxn.recycle() // DO NOT RECYCLE!
+			// We cannot recycle here since we are returning the underlying StateDelta for this cow.
+			// If we did recycle, there would be a race between the caller looking at the StateDelta
+			// and the next user of the recycled cow.
 		}()
 	}
 

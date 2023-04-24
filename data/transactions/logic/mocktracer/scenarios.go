@@ -287,11 +287,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 		expectedAD, expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPay1, expectedDeltaInnerPay2 := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
 		expectedDelta := MergeStateDeltas(expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPay1, expectedDeltaInnerPay2)
 
-		// remove all creatables from granular delta
-		for i := range expectedDeltaInnerAppCall.Creatables {
-			delete(expectedDeltaInnerAppCall.Creatables, i)
-		}
-
 		return TestScenario{
 			Outcome:       ApprovalOutcome,
 			Program:       program,
@@ -413,11 +408,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 			expectedDeltaCallingTxn.Txids = nil
 			expectedDeltaInnerAppCall.Txids = nil
 
-			// remove all creatables from granular delta
-			for i := range expectedDeltaInnerAppCall.Creatables {
-				delete(expectedDeltaInnerAppCall.Creatables, i)
-			}
-
 			// EvalDeltas are removed from failed app call transactions
 			expectedInnerAppCallADNoEvalDelta := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 			expectedInnerAppCallADNoEvalDelta.EvalDelta = transactions.EvalDelta{}
@@ -473,11 +463,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 			// remove failed txids from granular delta
 			expectedDeltaCallingTxn.Txids = nil
-
-			// remove all creatables from granular delta
-			for i := range expectedDeltaInnerAppCall.Creatables {
-				delete(expectedDeltaInnerAppCall.Creatables, i)
-			}
 
 			expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 
@@ -538,11 +523,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				// remove failed txids from granular delta
 				expectedDeltaCallingTxn.Txids = nil
 				expectedDeltaInnerPay1.Txids = nil
-
-				// remove all creatables from granular delta
-				for i := range expectedDeltaInnerAppCall.Creatables {
-					delete(expectedDeltaInnerAppCall.Creatables, i)
-				}
 
 				expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 				expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
@@ -609,11 +589,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				// remove failed txids from granular delta
 				expectedDeltaCallingTxn.Txids = nil
 				expectedDeltaInnerPay2.Txids = nil
-
-				// remove all creatables from granular delta
-				for i := range expectedDeltaInnerAppCall.Creatables {
-					delete(expectedDeltaInnerAppCall.Creatables, i)
-				}
 
 				expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 				expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
@@ -683,11 +658,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 			// remove failed txids from granular delta
 			expectedDeltaCallingTxn.Txids = nil
-
-			// remove all creatables from granular delta
-			for i := range expectedDeltaInnerAppCall.Creatables {
-				delete(expectedDeltaInnerAppCall.Creatables, i)
-			}
 
 			expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 			expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
