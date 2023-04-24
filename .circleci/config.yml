@@ -97,7 +97,7 @@ workflows:
           filters: &filters-default
             branches:
               ignore:
-                - /rel\/.*/
+                - /pull\/[0-9]+/
                 - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
           <<: *slack-fail-post-step
@@ -409,6 +409,17 @@ jobs:
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
 
+  upload_binaries:
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    steps:
+      - prepare_build_dir
+      - prepare_go
+      - upload_binaries_command:
+          platform: << parameters.platform >>
 
 # ===== Command Definitions =====
 commands:
