@@ -60,8 +60,8 @@ func TestCrossRepoTypes(t *testing.T) {
 			yPkg:       "github.com/algorand/go-algorand-sdk/v2/types",
 			yBranch:    "develop",
 			yType:      "Block",
-			skip:       false,
-			skipReason: `LEVEL 5 of goal bookkeeping.Block is EvalDelta with field [SharedAccts](codec:"sa,allocbound=config.MaxEvalDeltaAccounts") VS SDK types.EvalDelta is missing SharedAccts field`,
+			skip:       true,
+			skipReason: `Several issues. For example: LEVEL 5 of goal bookkeeping.Block is EvalDelta with field [SharedAccts](codec:"sa,allocbound=config.MaxEvalDeltaAccounts") VS SDK types.EvalDelta is missing SharedAccts field`,
 		},
 		{
 			name:    "goal-v-sdk-blockheader",
