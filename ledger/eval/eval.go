@@ -1556,20 +1556,16 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, cfg config.Local) (ledgercore.StateDelta, error) {
+func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, tracer logic.EvalTracer) (ledgercore.StateDelta, error) {
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
-	var txnDeltaTracer logic.EvalTracer
-	if cfg.EnableTxnEvalTracer {
-		txnDeltaTracer = TxnGroupDeltaTracerForConfig(cfg)
-	}
 
 	eval, err := StartEvaluator(l, blk.BlockHeader,
 		EvaluatorOptions{
 			PaysetHint: len(blk.Payset),
 			Validate:   validate,
 			Generate:   false,
-			Tracer:     txnDeltaTracer,
+			Tracer:     tracer,
 		})
 	if err != nil {
 		return ledgercore.StateDelta{}, err

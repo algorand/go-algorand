@@ -599,7 +599,7 @@ type evalTestLedger struct {
 	feeSink             basics.Address
 	rewardsPool         basics.Address
 	latestTotals        ledgercore.AccountTotals
-	cfg                 config.Local
+	tracer              logic.EvalTracer
 }
 
 // newTestLedger creates a in memory Ledger that is as realistic as
@@ -610,7 +610,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 		roundBalances: make(map[basics.Round]map[basics.Address]basics.AccountData),
 		feeSink:       balances.FeeSink,
 		rewardsPool:   balances.RewardsPool,
-		cfg:           config.Local{},
+		tracer:        nil,
 	}
 
 	crypto.RandBytes(l.genesisHash[:])
@@ -641,7 +641,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 func (ledger *evalTestLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
 	verifiedTxnCache := verify.MakeVerifiedTransactionCache(config.GetDefaultLocal().VerifiedTranscationsCacheSize)
 
-	delta, err := Eval(ctx, ledger, blk, true, verifiedTxnCache, executionPool, ledger.cfg)
+	delta, err := Eval(ctx, ledger, blk, true, verifiedTxnCache, executionPool, ledger.tracer)
 	if err != nil {
 		return nil, err
 	}
@@ -1061,7 +1061,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	validatedBlock, err := blkEval.GenerateBlock()
 	require.NoError(t, err)
 
-	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil, l.cfg)
+	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil, l.tracer)
 	require.NoError(t, err)
 
 	acctData, _ := blkEval.state.lookup(recvAddr)
@@ -1072,7 +1072,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlock := *validatedBlock
 
 	// First validate that bad block is fine if we dont touch it...
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.cfg)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
 
 	badBlock = *validatedBlock
@@ -1082,7 +1082,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, basics.Address{1})
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.cfg)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
@@ -1096,7 +1096,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	}
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.cfg)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
@@ -1106,12 +1106,12 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, badBlockObj.ExpiredParticipationAccounts[0])
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.cfg)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
 	// sanity check that bad block is being actually copied and not just the pointer
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.cfg)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
 
 }
