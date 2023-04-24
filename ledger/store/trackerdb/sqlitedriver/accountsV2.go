@@ -474,7 +474,7 @@ func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (ref trackerd
 // LookupResourceDataByAddrID looks up the resource data by account rowid + resource aidx.
 func (r *accountsV2Reader) LookupResourceDataByAddrID(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex) (data []byte, err error) {
 	if accountRef == nil {
-		return data, sql.ErrNoRows
+		return data, trackerdb.ErrNotFound
 	}
 	addrid := accountRef.(sqlRowRef).rowid
 	// optimize this query for repeated usage

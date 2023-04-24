@@ -292,4 +292,9 @@ func CustomTestResourceLookupByRowID(t *customT) {
 	require.NoError(t, err)
 	// assert that we got the resource
 	require.Equal(t, resDataA0, res)
+
+	// read resource on nil account
+	_, err = ar.LookupResourceDataByAddrID(nil, basics.CreatableIndex(100))
+	require.Error(t, err)
+	require.Equal(t, err, trackerdb.ErrNotFound)
 }
