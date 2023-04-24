@@ -4,10 +4,16 @@
 
 set -e
 
+CONDUIT_BINARY=$1
+if [ -z "$CONDUIT_BINARY" ]; then
+  echo "path to conduit binary is required"
+  exit 1
+fi
+
 POSTGRES_CONTAINER=generator-test-container
 POSTGRES_PORT=15432
 POSTGRES_DATABASE=generator_db
-CONFIG=${1:-"$(dirname $0)/test_config.yml"}
+CONFIG=${2:-"$(dirname $0)/test_config.yml"}
 echo "Using config file: $CONFIG"
 
 function start_postgres() {
@@ -38,15 +44,12 @@ rm -rf OUTPUT_RUN_RUNNER_TEST > /dev/null 2>&1
 echo "Building generator."
 pushd $(dirname "$0") > /dev/null
 go build
-cd ../.. > /dev/null
-echo "Building indexer."
-make
 popd
 echo "Starting postgres container."
 start_postgres
 echo "Starting test runner"
 $(dirname "$0")/block-generator runner \
-	--indexer-binary ../algorand-indexer/algorand-indexer \
+	--conduit-binary "$CONDUIT_BINARY" \
 	--report-directory OUTPUT_RUN_RUNNER_TEST \
 	--test-duration 30s \
 	--log-level trace \

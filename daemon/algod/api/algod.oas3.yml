@@ -497,6 +497,25 @@
         },
         "description": "DryrunResponse contains per-txn debug information from a dryrun."
       },
+      "GetBlockTimeStampOffsetResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "offset": {
+                  "description": "Timestamp offset in seconds.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "offset"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing the timestamp offset in seconds"
+      },
       "GetSyncRoundResponse": {
         "content": {
           "application/json": {
@@ -758,6 +777,9 @@
           "application/json": {
             "schema": {
               "properties": {
+                "eval-overrides": {
+                  "$ref": "#/components/schemas/SimulationEvalOverrides"
+                },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                   "type": "integer"
@@ -1838,6 +1860,10 @@
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
+          "lift-log-limits": {
+            "description": "The boolean flag that lifts the limit on log opcode during simulation.",
+            "type": "boolean"
+          },
           "txn-groups": {
             "description": "The transaction groups to simulate.",
             "items": {
@@ -1927,6 +1953,22 @@
         "required": [
           "txn-result"
         ],
+        "type": "object"
+      },
+      "SimulationEvalOverrides": {
+        "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
+        "properties": {
+          "max-log-calls": {
+            "description": "The maximum log calls one can make during simulation",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "max-log-size": {
+            "description": "The maximum byte number to log during simulation",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
         "type": "object"
       },
       "StateDelta": {
@@ -3886,6 +3928,115 @@
         ]
       }
     },
+    "/v2/devmode/blocks/offset": {
+      "get": {
+        "description": "Gets the current timestamp offset.",
+        "operationId": "GetBlockTimeStampOffset",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "offset": {
+                      "description": "Timestamp offset in seconds.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "offset"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing the timestamp offset in seconds"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "TimeStamp offset not set."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns the timestamp offset. Timestamp offsets can only be set in dev mode.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/devmode/blocks/offset/{offset}": {
+      "post": {
+        "description": "Sets the timestamp offset (seconds) for blocks in dev mode. Providing an offset of 0 will unset this value and try to use the real clock for the timestamp.",
+        "operationId": "SetBlockTimeStampOffset",
+        "parameters": [
+          {
+            "description": "The timestamp offset for blocks in dev mode.",
+            "in": "path",
+            "name": "offset",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Cannot set timestamp offset to a negative integer."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
     "/v2/experimental": {
       "get": {
         "operationId": "ExperimentalCheck",
@@ -5792,6 +5943,9 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "eval-overrides": {
+                      "$ref": "#/components/schemas/SimulationEvalOverrides"
+                    },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
@@ -5824,6 +5978,9 @@
               "application/msgpack": {
                 "schema": {
                   "properties": {
+                    "eval-overrides": {
+                      "$ref": "#/components/schemas/SimulationEvalOverrides"
+                    },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"

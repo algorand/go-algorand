@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -64,12 +65,12 @@ import (
 
 const stateProofInterval = uint64(256)
 
-func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+func setupMockNodeForMethodGet(t *testing.T, status node.StatusReport, devmode bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, status)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, devmode)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -81,6 +82,10 @@ func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers,
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	return handler, c, rec, rootkeys, stxns, releasefunc
+}
+
+func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+	return setupMockNodeForMethodGet(t, status, false)
 }
 
 func numOrNil(n uint64) *uint64 {
@@ -187,7 +192,7 @@ func TestSyncRound(t *testing.T) {
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -242,7 +247,6 @@ func TestSyncRound(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	mockCall.Unset()
-	c, rec = newReq(t)
 
 	mock.AssertExpectationsForObjects(t, mockNode)
 }
@@ -722,7 +726,7 @@ func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transaction
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler = v2.Handlers{
 
 		Node:     mockNode,
@@ -915,7 +919,7 @@ func TestSimulateTransaction(t *testing.T) {
 	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_998, 999_999, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1078,7 +1082,7 @@ func TestSimulateTransactionVerificationFailure(t *testing.T) {
 	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1128,7 +1132,7 @@ func TestSimulateTransactionMultipleGroups(t *testing.T) {
 	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1192,7 +1196,7 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nodeError, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nodeError, cannedStatusReportGolden, false)
 	handler := v2.Handlers{Node: mockNode, Log: logging.Base(), Shutdown: dummyShutdownChan}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -1233,7 +1237,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1268,7 +1272,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int,
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -1339,7 +1343,7 @@ func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -1407,7 +1411,7 @@ func tealDryrunTest(
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -1536,7 +1540,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 
 	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
 	defer releasefunc()
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1620,7 +1624,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 	t.Run("Internal error", func(t *testing.T) {
 		// Create mock node with an error.
 		expectedErr := errors.New("expected error")
-		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr, cannedStatusReportGolden)
+		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr, cannedStatusReportGolden, false)
 		handler := v2.Handlers{
 			Node:     mockNode,
 			Log:      logging.Base(),
@@ -2011,4 +2015,60 @@ func TestExperimentalCheck(t *testing.T) {
 
 	require.Equal(t, 200, rec.Code)
 	require.Equal(t, "true\n", string(rec.Body.Bytes()))
+}
+
+func TestTimestampOffsetNotInDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	// TestGetBlockTimeStampOffset 400 - offset is not set and mock node is
+	// not in dev mode
+	err := handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed retrieving timestamp offset from node: cannot get block timestamp offset because we are not in dev mode\"}\n", rec.Body.String())
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 400 - cannot set timestamp offset when not
+	// in dev mode
+	err = handler.SetBlockTimeStampOffset(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: cannot set block timestamp when not in dev mode\"}\n", rec.Body.String())
+}
+
+func TestTimestampOffsetInDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupMockNodeForMethodGet(t, cannedStatusReportGolden, true)
+	defer releasefunc()
+
+	// TestGetBlockTimeStampOffset 404
+	err := handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+	require.Equal(t, "{\"message\":\"failed retrieving timestamp offset from node: block timestamp offset was never set, using real clock for timestamps\"}\n", rec.Body.String())
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 200
+	err = handler.SetBlockTimeStampOffset(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	c, rec = newReq(t)
+
+	// TestGetBlockTimeStampOffset 200
+	err = handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 400
+	err = handler.SetBlockTimeStampOffset(c, math.MaxUint64)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: block timestamp offset cannot be larger than max int64 value\"}\n", rec.Body.String())
 }
