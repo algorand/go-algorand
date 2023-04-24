@@ -447,3 +447,15 @@ func (node *AlgorandFollowerNode) GetSyncRound() uint64 {
 func (node *AlgorandFollowerNode) UnsetSyncRound() {
 	node.catchupService.UnsetDisableSyncRound()
 }
+
+// SetBlockTimeStampOffset sets a timestamp offset in the block header.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) SetBlockTimeStampOffset(offset int64) error {
+	return fmt.Errorf("cannot set block timestamp offset in follower mode")
+}
+
+// GetBlockTimeStampOffset gets a timestamp offset.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) GetBlockTimeStampOffset() (*int64, error) {
+	return nil, fmt.Errorf("cannot get block timestamp offset in follower mode")
+}

@@ -412,10 +412,10 @@ func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value []byte, appAdd
 	}
 	if current, ok := params.boxMods[key]; ok {
 		if current != nil {
-			return fmt.Errorf("attempt to recreate %s", key)
+			return fmt.Errorf("attempt to recreate box %#v", key)
 		}
 	} else if _, ok := params.boxes[key]; ok {
-		return fmt.Errorf("attempt to recreate %s", key)
+		return fmt.Errorf("attempt to recreate box %#x", key)
 	}
 	params.boxMods[key] = value
 	l.applications[appIdx] = params
