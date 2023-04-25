@@ -1034,8 +1034,11 @@ func TestDefaultSignatureCheck(t *testing.T) {
 
 	// should error on missing signature
 	result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
-	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
-	require.ErrorContains(t, err, "signedtxn has no sig")
+	require.NoError(t, err)
+	require.Len(t, result.TxnGroups, 1)
+	require.Len(t, result.TxnGroups[0].Txns, 1)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "signedtxn has no sig")
+	require.Equal(t, result.TxnGroups[0].FailedAt, simulation.TxnPath{0})
 
 	// add signature
 	stxn = stxn.Txn.Sign(sender.Sk)
@@ -1059,25 +1062,34 @@ func TestDefaultSignatureCheck(t *testing.T) {
 func TestInvalidTxGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		receiver := accounts[0].Addr
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	receiver := accounts[0].Addr
-
-	txgroup := []transactions.SignedTxn{
-		txnInfo.NewTxn(txntest.Txn{
-			Type:     protocol.PaymentTx,
+		txn := txnInfo.NewTxn(txntest.Txn{
+			Type: protocol.PaymentTx,
+			// should error with invalid transaction group error
 			Sender:   ledgertesting.PoolAddr(),
 			Receiver: receiver,
 			Amount:   0,
-		}).SignedTxn(),
-	}
+		}).SignedTxn()
 
-	// should error with invalid transaction group error
-	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{txgroup}})
-	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
-	require.ErrorContains(t, err, "transaction from incentive pool is invalid")
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{{txn}},
+			},
+			expectedError: "transaction from incentive pool is invalid",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: txnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{0},
+						Txns:     []simulation.TxnResult{{}},
+					},
+				},
+			},
+		}
+	})
 }
 
 // TestLogLimitLiftingInSimulation tests that an app with log calls that exceed limits during normal runtime

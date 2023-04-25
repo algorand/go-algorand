@@ -42,23 +42,23 @@ ${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay2.tx"
 
 cat "${TEMPDIR}/pay1.tx" "${TEMPDIR}/pay2.tx" | ${gcmd} clerk group -i - -o "${TEMPDIR}/grouped.tx"
 
-# We test transaction group simulation WITHOUT signatures
+# We test transaction group simulation WITHOUT signatures with default arguments
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.tx")
-
-if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
-    date '+app-simulate-test FAIL the simulation transaction group without signatures should not succeed %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the simulation transaction group without signatures not fail %Y%m%d_%H%M%S'
     false
 fi
 
-# check the simulation failing reason, first transaction has no signature
-if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."missing-signature"') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the simulation transaction group FAIL for first transaction has NO signature %Y%m%d_%H%M%S'
+# We test transaction group simulation WITHOUT signatures, but with signatures-optional enabled
+RES=$(${gcmd} clerk simulate --signatures-optional -t "${TEMPDIR}/grouped.tx")
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the simulation transaction group without signatures should not fail when signatures-optional is true %Y%m%d_%H%M%S'
     false
 fi
 
-# check the simulation failing reason, second transaction has no signature
-if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[1]."missing-signature"') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the simulation transaction group FAIL for second transaction has NO signature %Y%m%d_%H%M%S'
+# check the simulation eval overrides reports the right value
+if [[ $(echo "$RES" | jq '."eval-overrides"."signatures-optional"') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the simulation response should report eval overrides %Y%m%d_%H%M%S'
     false
 fi
 
@@ -70,9 +70,14 @@ ${gcmd} clerk sign -i "${TEMPDIR}/grouped-1.tx" -o "${TEMPDIR}/grouped-1.stx"
 
 cat "${TEMPDIR}/grouped-0.stx" "${TEMPDIR}/grouped-1.stx" > "${TEMPDIR}/grouped.stx"
 
-RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx" | jq '."would-succeed"')
-if [[ $RES != $CONST_TRUE ]]; then
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx")
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL should pass to simulate self pay transaction group %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq 'has("eval-overrides")') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the simulation response should not report eval overrides %Y%m%d_%H%M%S'
     false
 fi
 
@@ -91,8 +96,8 @@ if [ $NUM_TXNS -ne 2 ]; then
     false
 fi
 
-RES=$(${gcmd} clerk simulate --request "${TEMPDIR}/simulateRequest.json" | jq '."would-succeed"')
-if [[ $RES != $CONST_TRUE ]]; then
+RES=$(${gcmd} clerk simulate --request "${TEMPDIR}/simulateRequest.json" | jq '."txn-groups" | any(has("failure-message"))')
+if [[ $RES != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL should pass with raw simulate request %Y%m%d_%H%M%S'
     false
 fi
@@ -115,7 +120,7 @@ cat "${TEMPDIR}/grouped-0.stx" "${TEMPDIR}/grouped-1.stx" > "${TEMPDIR}/grouped.
 
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx")
 
-if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
     data '+app-simulate-test FAIL should FAIL for overspending in simulate self pay transaction group %Y%m%d_%H%M%S'
     false
 fi
@@ -148,26 +153,37 @@ ${gcmd} app method --method "empty()void" --app-id $APPID --from $ACCOUNT 2>&1 -
 
 # SIMULATE without a signature first
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/empty.tx")
-
-# confirm that without signature, the simulation should fail
-if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
+# confirm that without signature, the simulation should fail with default args
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the simulation call to empty()void without signature should not succeed %Y%m%d_%H%M%S'
     false
 fi
 
-# check again the simulation failing reason
-if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."missing-signature"') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the simulation call to empty()void without signature should fail with missing-signature %Y%m%d_%H%M%S'
+RES=$(${gcmd} clerk simulate --signatures-optional -t "${TEMPDIR}/empty.tx")
+# confirm that without signature, the simulation should pass with signatures-optional
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the simulation call to empty()void without signature should succeed with signatures-optional %Y%m%d_%H%M%S'
+    false
+fi
+
+# check the simulation eval overrides reports the right value
+if [[ $(echo "$RES" | jq '."eval-overrides"."signatures-optional"') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the simulation call to empty()void without signature should report eval overrides %Y%m%d_%H%M%S'
     false
 fi
 
 # SIMULATE with a signature
 ${gcmd} clerk sign -i "${TEMPDIR}/empty.tx" -o "${TEMPDIR}/empty.stx"
-RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/empty.stx" | jq '."would-succeed"')
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/empty.stx")
 
 # with signature, simulation app-call should succeed
-if [[ $RES != $CONST_TRUE ]]; then
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the simulation call to empty()void should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq 'has("eval-overrides")') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the simulation call to empty()void should not report eval overrides %Y%m%d_%H%M%S'
     false
 fi
 
@@ -196,19 +212,19 @@ ${gcmd} app method --method "small_log()void" --app-id $APPID --from $ACCOUNT 2>
 ${gcmd} clerk sign -i "${TEMPDIR}/small_log.tx" -o "${TEMPDIR}/small_log.stx"
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/small_log.stx")
 
-if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for small_log()void would-succeed should be true %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for small_log()void should not fail %Y%m%d_%H%M%S'
     false
 fi
 
 EXPECTED_SMALL_LOG='yet another ephemeral log'
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[0] | @base64d') != *"${EXPECTED_SMALL_LOG}"* ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for small_log()void should succeed %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for small_log()void should have expected logs %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-overrides"') != null ]]; then
+if [[ $(echo "$RES" | jq 'has("eval-overrides")') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-overrides field %Y%m%d_%H%M%S'
     false
 fi
@@ -217,7 +233,7 @@ ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $A
 ${gcmd} clerk sign -i "${TEMPDIR}/big_log.tx" -o "${TEMPDIR}/big_log.stx"
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/big_log.stx")
 
-if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_FALSE ]]; then
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void would-succeed should be false without unlimiting log %Y%m%d_%H%M%S'
     false
 fi
@@ -229,7 +245,7 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_F
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-overrides"') != null ]]; then
+if [[ $(echo "$RES" | jq 'has("eval-overrides")') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-overrides field %Y%m%d_%H%M%S'
     false
 fi
@@ -239,8 +255,8 @@ ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $A
 ${gcmd} clerk sign -i "${TEMPDIR}/big_log.tx" -o "${TEMPDIR}/big_log.stx"
 RES=$(${gcmd} clerk simulate --lift-log-limits -t "${TEMPDIR}/big_log.stx")
 
-if [[ $(echo "$RES" | jq '."would-succeed"') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void would-succeed should be true with unlimiting log %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should not fail with unlimiting log %Y%m%d_%H%M%S'
     false
 fi
 
@@ -272,5 +288,3 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed %Y%m%d_%H%M%S'
     false
 fi
-
-# TODO: test optional signatures

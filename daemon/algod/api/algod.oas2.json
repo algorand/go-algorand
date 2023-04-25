@@ -4249,8 +4249,7 @@
         "required": [
           "version",
           "last-round",
-          "txn-groups",
-          "would-succeed"
+          "txn-groups"
         ],
         "properties": {
           "version": {

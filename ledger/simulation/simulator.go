@@ -207,11 +207,15 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 
 	block, err := s.simulateWithTracer(simulateRequest.TxnGroups[0], simulatorTracer, simulateRequest.SignaturesOptional)
 	if err != nil {
-		var lsigError verify.LogicSigError
+		var verifyError *verify.TxGroupError
 		switch {
-		case errors.As(err, &lsigError):
-			simulatorTracer.result.TxnGroups[0].FailureMessage = lsigError.Error()
-			simulatorTracer.result.TxnGroups[0].FailedAt = TxnPath{uint64(lsigError.GroupIndex)}
+		case errors.As(err, &verifyError):
+			if verifyError.GroupIndex < 0 {
+				// This group failed verification, but the problem can't be blamed on a single transaction.
+				return Result{}, InvalidTxGroupError{SimulatorError{err}}
+			}
+			simulatorTracer.result.TxnGroups[0].FailureMessage = verifyError.Error()
+			simulatorTracer.result.TxnGroups[0].FailedAt = TxnPath{uint64(verifyError.GroupIndex)}
 		case errors.As(err, &EvalFailureError{}):
 			simulatorTracer.result.TxnGroups[0].FailureMessage = err.Error()
 			simulatorTracer.result.TxnGroups[0].FailedAt = simulatorTracer.failedAt
