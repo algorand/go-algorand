@@ -272,3 +272,5 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed %Y%m%d_%H%M%S'
     false
 fi
+
+# TODO: test optional signatures

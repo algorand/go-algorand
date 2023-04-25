@@ -139,7 +139,7 @@ int 1`,
 	txgroup := []transactions.SignedTxn{signedPayTxn, signedAppCallTxn}
 
 	mockTracer := &mocktracer.Tracer{}
-	block, _, err := s.simulateWithTracer(txgroup, mockTracer)
+	block, err := s.simulateWithTracer(txgroup, mockTracer, false)
 	require.NoError(t, err)
 
 	payset := block.Block().Payset

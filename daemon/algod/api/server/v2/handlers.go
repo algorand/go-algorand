@@ -928,7 +928,6 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 // PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type PreEncodedSimulateTxnResult struct {
 	Txn                    PreEncodedTxInfo `codec:"txn-result"`
-	MissingSignature       *bool            `codec:"missing-signature,omitempty"`
 	AppBudgetConsumed      *uint64          `codec:"app-budget-consumed,omitempty"`
 	LogicSigBudgetConsumed *uint64          `codec:"logic-sig-budget-consumed,omitempty"`
 }
@@ -947,7 +946,6 @@ type PreEncodedSimulateResponse struct {
 	Version       uint64                             `codec:"version"`
 	LastRound     uint64                             `codec:"last-round"`
 	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
-	WouldSucceed  bool                               `codec:"would-succeed"`
 	EvalOverrides *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
 }
 
@@ -958,8 +956,9 @@ type PreEncodedSimulateRequestTransactionGroup struct {
 
 // PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
-	TxnGroups     []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
-	LiftLogLimits bool                                        `codec:"lift-log-limits,omitempty"`
+	TxnGroups          []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	SignaturesOptional bool                                        `codec:"signatures-optional,omitempty"`
+	LiftLogLimits      bool                                        `codec:"lift-log-limits,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
@@ -1003,18 +1002,8 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 	}
 
-	txnGroups := make([][]transactions.SignedTxn, len(simulateRequest.TxnGroups))
-	for i := 0; i < len(simulateRequest.TxnGroups); i++ {
-		txnGroups[i] = simulateRequest.TxnGroups[i].Txns
-	}
-
 	// Simulate transaction
-	simulationResult, err := v2.Node.Simulate(
-		simulation.Request{
-			TxnGroups:     txnGroups,
-			LiftLogLimits: simulateRequest.LiftLogLimits,
-		},
-	)
+	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
 	if err != nil {
 		var invalidTxErr simulation.InvalidTxGroupError
 		switch {

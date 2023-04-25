@@ -3286,6 +3286,10 @@
             "$ref": "#/definitions/SimulateRequestTransactionGroup"
           }
         },
+        "signatures-optional": {
+          "description": "Allow transactions without signatures to be evaluated as if they had correct signatures.",
+          "type": "boolean"
+        },
         "lift-log-limits": {
           "description": "The boolean flag that lifts the limit on log opcode during simulation.",
           "type": "boolean"
@@ -3550,10 +3554,6 @@
         "txn-result": {
           "$ref": "#/definitions/PendingTransactionResponse"
         },
-        "missing-signature": {
-          "description": "A boolean indicating whether this transaction is missing signatures",
-          "type": "boolean"
-        },
         "app-budget-consumed": {
           "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
           "type": "integer"
@@ -3648,6 +3648,10 @@
       "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
       "type": "object",
       "properties": {
+        "signatures-optional": {
+          "description": "If true, transactions without signatures are allowed and treated as if they were properly signed.",
+          "type": "boolean"
+        },
         "max-log-calls": {
           "description": "The maximum log calls one can make during simulation",
           "type": "integer",
@@ -4266,10 +4270,6 @@
           },
           "eval-overrides": {
             "$ref": "#/definitions/SimulationEvalOverrides"
-          },
-          "would-succeed": {
-            "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
-            "type": "boolean"
           }
         }
       }

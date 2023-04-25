@@ -33,7 +33,6 @@ type TxnPath []uint64
 // TxnResult contains the simulation result for a single transaction
 type TxnResult struct {
 	Txn                    transactions.SignedTxnWithAD
-	MissingSignature       bool
 	AppBudgetConsumed      uint64
 	LogicSigBudgetConsumed uint64
 }
@@ -51,9 +50,6 @@ type TxnGroupResult struct {
 
 	// AppBudgetConsumed is the total opcode cost used for this group
 	AppBudgetConsumed uint64
-
-	// FeeCredit is the fees left over after covering fees for this group
-	FeeCredit uint64
 }
 
 func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
@@ -67,12 +63,13 @@ func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 }
 
 // ResultLatestVersion is the latest version of the Result struct
-const ResultLatestVersion = uint64(1)
+const ResultLatestVersion = uint64(2)
 
 // ResultEvalOverrides contains the limits and parameters during a call to Simulator.Simulate
 type ResultEvalOverrides struct {
-	MaxLogCalls *uint64
-	MaxLogSize  *uint64
+	SignaturesOptional bool
+	MaxLogCalls        *uint64
+	MaxLogSize         *uint64
 }
 
 // SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with lift-log-limits)
@@ -108,7 +105,6 @@ type Result struct {
 	Version       uint64
 	LastRound     basics.Round
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
-	WouldSucceed  bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
 	EvalOverrides ResultEvalOverrides
 	Block         *ledgercore.ValidatedBlock
 }
@@ -124,14 +120,15 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
-	resultEvalConstants := ResultEvalOverrides{}.LiftLogLimits(request.LiftLogLimits)
+	resultEvalConstants := ResultEvalOverrides{
+		SignaturesOptional: request.SignaturesOptional,
+	}.LiftLogLimits(request.LiftLogLimits)
 
 	return Result{
 		Version:       version,
 		LastRound:     lastRound,
 		TxnGroups:     groups,
 		EvalOverrides: resultEvalConstants,
-		WouldSucceed:  true,
 	}, nil
 }
 

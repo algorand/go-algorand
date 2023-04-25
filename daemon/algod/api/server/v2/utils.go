@@ -359,7 +359,6 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
 		Txn:                    ConvertInnerTxn(&txnResult.Txn),
-		MissingSignature:       trueOrNil(txnResult.MissingSignature),
 		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed: numOrNil(txnResult.LogicSigBudgetConsumed),
 	}
@@ -391,15 +390,15 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
-			MaxLogSize:  result.EvalOverrides.MaxLogSize,
-			MaxLogCalls: result.EvalOverrides.MaxLogCalls,
+			SignaturesOptional: trueOrNil(result.EvalOverrides.SignaturesOptional),
+			MaxLogSize:         result.EvalOverrides.MaxLogSize,
+			MaxLogCalls:        result.EvalOverrides.MaxLogCalls,
 		}
 	}
 
 	encodedSimulationResult := PreEncodedSimulateResponse{
 		Version:       result.Version,
 		LastRound:     uint64(result.LastRound),
-		WouldSucceed:  result.WouldSucceed,
 		TxnGroups:     make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
 		EvalOverrides: evalOverrides,
 	}
@@ -409,6 +408,18 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	}
 
 	return encodedSimulationResult
+}
+
+func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {
+	txnGroups := make([][]transactions.SignedTxn, len(request.TxnGroups))
+	for i, txnGroup := range request.TxnGroups {
+		txnGroups[i] = txnGroup.Txns
+	}
+	return simulation.Request{
+		TxnGroups:          txnGroups,
+		SignaturesOptional: request.SignaturesOptional,
+		LiftLogLimits:      request.LiftLogLimits,
+	}
 }
 
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.

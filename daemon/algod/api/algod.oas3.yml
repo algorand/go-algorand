@@ -794,17 +794,12 @@
                 "version": {
                   "description": "The version of this response object.",
                   "type": "integer"
-                },
-                "would-succeed": {
-                  "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
-                  "type": "boolean"
                 }
               },
               "required": [
                 "last-round",
                 "txn-groups",
-                "version",
-                "would-succeed"
+                "version"
               ],
               "type": "object"
             }
@@ -1864,6 +1859,10 @@
             "description": "The boolean flag that lifts the limit on log opcode during simulation.",
             "type": "boolean"
           },
+          "signatures-optional": {
+            "description": "Allow transactions without signatures to be evaluated as if they had correct signatures.",
+            "type": "boolean"
+          },
           "txn-groups": {
             "description": "The transaction groups to simulate.",
             "items": {
@@ -1942,10 +1941,6 @@
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
           },
-          "missing-signature": {
-            "description": "A boolean indicating whether this transaction is missing signatures",
-            "type": "boolean"
-          },
           "txn-result": {
             "$ref": "#/components/schemas/PendingTransactionResponse"
           }
@@ -1967,6 +1962,10 @@
             "description": "The maximum byte number to log during simulation",
             "type": "integer",
             "x-algorand-format": "uint64"
+          },
+          "signatures-optional": {
+            "description": "If true, transactions without signatures are allowed and treated as if they were properly signed.",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -5960,17 +5959,12 @@
                     "version": {
                       "description": "The version of this response object.",
                       "type": "integer"
-                    },
-                    "would-succeed": {
-                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
-                      "type": "boolean"
                     }
                   },
                   "required": [
                     "last-round",
                     "txn-groups",
-                    "version",
-                    "would-succeed"
+                    "version"
                   ],
                   "type": "object"
                 }
@@ -5995,17 +5989,12 @@
                     "version": {
                       "description": "The version of this response object.",
                       "type": "integer"
-                    },
-                    "would-succeed": {
-                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
-                      "type": "boolean"
                     }
                   },
                   "required": [
                     "last-round",
                     "txn-groups",
-                    "version",
-                    "would-succeed"
+                    "version"
                   ],
                   "type": "object"
                 }
