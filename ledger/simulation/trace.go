@@ -19,8 +19,10 @@ package simulation
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
@@ -67,36 +69,74 @@ func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 // ResultLatestVersion is the latest version of the Result struct
 const ResultLatestVersion = uint64(1)
 
-// Result contains the result from a call to Simulator.Simulate
-type Result struct {
-	Version      uint64
-	LastRound    basics.Round
-	TxnGroups    []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
-	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
-	Block        *ledgercore.ValidatedBlock
+// ResultEvalOverrides contains the limits and parameters during a call to Simulator.Simulate
+type ResultEvalOverrides struct {
+	MaxLogCalls *uint64
+	MaxLogSize  *uint64
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
+// SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with lift-log-limits)
+const SimulateLogBytesLimit = uint64(65536)
+
+// LiftLogLimits method modify the log limits from lift option:
+// - if lift log limits, then overload result from local Config
+// - otherwise, set `LogLimits` field to be nil
+func (eo ResultEvalOverrides) LiftLogLimits(lift bool) ResultEvalOverrides {
+	if lift {
+		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), SimulateLogBytesLimit
+		eo.MaxLogCalls = &maxLogCalls
+		eo.MaxLogSize = &maxLogSize
+	}
+	return eo
+}
+
+// LogicEvalConstants method infers the logic.EvalConstants from Result.EvalOverrides (*ResultEvalOverrides)
+// and generate appropriate parameters to override during simulation runtime.
+func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
+	logicEvalConstants := logic.RuntimeEvalConstants()
+	if eo.MaxLogSize != nil {
+		logicEvalConstants.MaxLogSize = *eo.MaxLogSize
+	}
+	if eo.MaxLogCalls != nil {
+		logicEvalConstants.MaxLogCalls = *eo.MaxLogCalls
+	}
+	return logicEvalConstants
+}
+
+// Result contains the result from a call to Simulator.Simulate
+type Result struct {
+	Version       uint64
+	LastRound     basics.Round
+	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
+	WouldSucceed  bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
+	EvalOverrides ResultEvalOverrides
+	Block         *ledgercore.ValidatedBlock
+}
+
+func makeSimulationResultWithVersion(lastRound basics.Round, request Request, version uint64) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
 
-	groups := make([]TxnGroupResult, len(txgroups))
+	groups := make([]TxnGroupResult, len(request.TxnGroups))
 
-	for i, txgroup := range txgroups {
+	for i, txgroup := range request.TxnGroups {
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
+	resultEvalConstants := ResultEvalOverrides{}.LiftLogLimits(request.LiftLogLimits)
+
 	return Result{
-		Version:      version,
-		LastRound:    lastRound,
-		TxnGroups:    groups,
-		WouldSucceed: true,
+		Version:       version,
+		LastRound:     lastRound,
+		TxnGroups:     groups,
+		EvalOverrides: resultEvalConstants,
+		WouldSucceed:  true,
 	}, nil
 }
 
-func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion)
+func makeSimulationResult(lastRound basics.Round, request Request) Result {
+	result, err := makeSimulationResultWithVersion(lastRound, request, ResultLatestVersion)
 	if err != nil {
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)
