@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -34,6 +35,12 @@ import (
 type simulatorLedger struct {
 	*data.Ledger
 	start basics.Round
+}
+
+// Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
+type Request struct {
+	TxnGroups     [][]transactions.SignedTxn
+	LiftLogLimits bool
 }
 
 // Latest is part of the LedgerForSimulator interface.
@@ -189,9 +196,18 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 }
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
-func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
-	simulatorTracer := makeEvalTracer(s.ledger.start, txgroup)
-	block, missingSigIndexes, err := s.simulateWithTracer(txgroup, simulatorTracer)
+func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
+	simulatorTracer := makeEvalTracer(s.ledger.start, simulateRequest)
+
+	if len(simulateRequest.TxnGroups) != 1 {
+		return Result{}, InvalidTxGroupError{
+			SimulatorError{
+				err: fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups)),
+			},
+		}
+	}
+
+	block, missingSigIndexes, err := s.simulateWithTracer(simulateRequest.TxnGroups[0], simulatorTracer)
 	if err != nil {
 		simulatorTracer.result.WouldSucceed = false
 

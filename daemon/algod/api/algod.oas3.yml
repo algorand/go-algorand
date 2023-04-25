@@ -777,6 +777,9 @@
           "application/json": {
             "schema": {
               "properties": {
+                "eval-overrides": {
+                  "$ref": "#/components/schemas/SimulationEvalOverrides"
+                },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                   "type": "integer"
@@ -1857,6 +1860,10 @@
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
+          "lift-log-limits": {
+            "description": "The boolean flag that lifts the limit on log opcode during simulation.",
+            "type": "boolean"
+          },
           "txn-groups": {
             "description": "The transaction groups to simulate.",
             "items": {
@@ -1946,6 +1953,22 @@
         "required": [
           "txn-result"
         ],
+        "type": "object"
+      },
+      "SimulationEvalOverrides": {
+        "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
+        "properties": {
+          "max-log-calls": {
+            "description": "The maximum log calls one can make during simulation",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "max-log-size": {
+            "description": "The maximum byte number to log during simulation",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
         "type": "object"
       },
       "StateDelta": {
@@ -5920,6 +5943,9 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "eval-overrides": {
+                      "$ref": "#/components/schemas/SimulationEvalOverrides"
+                    },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
@@ -5952,6 +5978,9 @@
               "application/msgpack": {
                 "schema": {
                   "properties": {
+                    "eval-overrides": {
+                      "$ref": "#/components/schemas/SimulationEvalOverrides"
+                    },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
