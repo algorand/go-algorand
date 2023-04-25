@@ -18,6 +18,7 @@
 package devmode
 
 import (
+	"math"
 	"path/filepath"
 	"testing"
 	"time"
@@ -49,15 +50,28 @@ func TestDevMode(t *testing.T) {
 	txn := fixture.SendMoneyAndWait(0, 100000, 1000, sender.Address, receiver.String(), "")
 	require.NotNil(t, txn.ConfirmedRound)
 	firstRound := *txn.ConfirmedRound + 1
-	start := time.Now()
+	blk, err := fixture.AlgodClient.Block(*txn.ConfirmedRound)
+	require.NoError(t, err)
+	seconds, _ := math.Modf(blk.Block["ts"].(float64))
+	startTime := time.Unix(int64(seconds), 0)
+	blkOffset := uint64(1_000_000)
+	err = fixture.AlgodClient.SetBlockTimestampOffset(blkOffset)
+	require.NoError(t, err)
+	resp, err := fixture.AlgodClient.GetBlockTimestampOffset()
+	require.NoError(t, err)
+	require.Equal(t, blkOffset, resp.Offset)
 
 	// 2 transactions should be sent within one normal confirmation time.
 	for i := uint64(0); i < 2; i++ {
-		txn = fixture.SendMoneyAndWait(firstRound+i, 100001, 1000, sender.Address, receiver.String(), "")
+		round := firstRound + i
+		txn = fixture.SendMoneyAndWait(round, 100001, 1000, sender.Address, receiver.String(), "")
 		// SendMoneyAndWait subtracts 1 from firstValid
-		require.Equal(t, firstRound+i-1, uint64(txn.Txn.Txn.FirstValid))
+		require.Equal(t, round-1, uint64(txn.Txn.Txn.FirstValid))
+		newBlk, err := fixture.AlgodClient.Block(round)
+		require.NoError(t, err)
+		newBlkSeconds, _ := math.Modf(newBlk.Block["ts"].(float64))
+		require.GreaterOrEqual(t, time.Unix(int64(newBlkSeconds), 0), startTime.Add(1_000_000*time.Second))
 	}
-	require.True(t, time.Since(start) < 8*time.Second, "Transactions should be quickly confirmed faster than usual.")
 
 	// Without transactions there should be no rounds even after a normal confirmation time.
 	time.Sleep(10 * time.Second)
