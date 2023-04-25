@@ -2737,9 +2737,6 @@ func TestReturnTypes(t *testing.T) {
 			if skipCmd[name] || spec.trusted {
 				continue
 			}
-			if _, ok := deprecations[name]; ok {
-				continue
-			}
 			m, name, spec := m, name, spec
 			t.Run(fmt.Sprintf("mode=%s,opcode=%s", m, name), func(t *testing.T) {
 				t.Parallel()

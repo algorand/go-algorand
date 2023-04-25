@@ -40,9 +40,6 @@ func opGroupMarkdownTable(names []string, out io.Writer) {
 		if !ok {
 			continue // Allows "future" opcodes to exist, but be omitted from spec.
 		}
-		if spec.Deprecation != "" {
-			continue
-		}
 		fmt.Fprintf(out, "| `%s%s` | %s |\n",
 			markdownTableEscape(spec.Name), immediateMarkdown(&spec),
 			markdownTableEscape(logic.OpDoc(opname)))

@@ -1277,14 +1277,6 @@ func (cx *EvalContext) ensureStackCap(targetCap int) {
 	}
 }
 
-// opDeprecated is used to provide a runtime failure if an opcode has been
-// removed, and no new opcode has been allocated to the same value. If the byte
-// appears, we'd rather have a nice error than simply: "illegal opcode". (Of
-// course, the assembler should never assemble to this byte.)
-func opDeprecated(cx *EvalContext) error {
-	return fmt.Errorf("deprecated opcode %d executed", cx.program[cx.pc])
-}
-
 func opErr(cx *EvalContext) error {
 	return errors.New("err opcode executed")
 }

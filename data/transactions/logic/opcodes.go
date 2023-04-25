@@ -130,8 +130,6 @@ type OpDetails struct {
 	Immediates []immediate // details of each immediate arg to opcode
 
 	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
-
-	Deprecation string // A message to appear explaining the deprecation, else ""
 }
 
 func (d *OpDetails) docCost(argLen int) string {
@@ -178,11 +176,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func detDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false, ""}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false, ""}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
 }
 
 func detBranch() OpDetails {
@@ -228,12 +226,6 @@ func (d OpDetails) costs(cost int) OpDetails {
 func only(m RunMode) OpDetails {
 	d := detDefault()
 	d.Modes = m
-	return d
-}
-
-func deprecated(msg string) OpDetails {
-	d := detDefault()
-	d.Deprecation = msg
 	return d
 }
 
@@ -710,8 +702,6 @@ var OpsByName [LogicVersion + 1]map[string]OpSpec
 // Keeps track of all field names accessible in each version
 var fieldNames [LogicVersion + 1]map[string]bool
 
-var deprecations map[string]uint64 = make(map[string]uint64)
-
 // Migration from v1 to v2.
 // v1 allowed execution of program with version 0.
 // With v2 opcode versions are introduced and they are bound to every opcode.
@@ -750,18 +740,6 @@ func init() {
 		// Update tables with opcodes from the current version
 		for _, oi := range OpSpecs {
 			if oi.Version == v {
-				// if this new entry is blotting out an old, setup that name to report the deprecation
-				if old := opsByOpcode[v][oi.Opcode]; old.Name != "" {
-					if old.Name != oi.Name {
-						deprecations[old.Name] = v
-						delete(OpsByName[v], old.Name)
-					}
-				}
-				// or if it says it's a Deprecation entry
-				if oi.Deprecation != "" {
-					deprecations[oi.Name] = v
-					delete(OpsByName[v], oi.Name)
-				}
 				opsByOpcode[v][oi.Opcode] = oi
 				OpsByName[v][oi.Name] = oi
 			}

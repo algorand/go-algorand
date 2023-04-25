@@ -1062,9 +1062,6 @@ type asmFunc func(*OpStream, *OpSpec, []string) error
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
-	if spec.Deprecation != "" {
-		return ops.errorf("%s opcode was removed in v%d", spec.Name, spec.Version)
-	}
 	expected := len(spec.OpDetails.Immediates)
 	if len(args) != expected {
 		if expected == 1 {

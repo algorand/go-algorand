@@ -503,9 +503,6 @@ func TestAssemble(t *testing.T) {
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			for _, spec := range OpSpecs {
-				if deprecations[spec.Name] != 0 && deprecations[spec.Name] <= v {
-					continue
-				}
 				// Make sure our nonsense covers the ops.
 				hasOp, err := regexp.MatchString("\\s"+regexp.QuoteMeta(spec.Name)+"\\s", nonsense[v])
 				require.NoError(t, err)
