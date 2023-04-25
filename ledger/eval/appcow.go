@@ -467,19 +467,9 @@ func (cb *roundCowState) StatefulEval(gi int, params *logic.EvalParams, aidx bas
 	params.Ledger = calf
 	params.SigLedger = calf
 
-	// Eval the program
-	pass, cx, err := logic.EvalContract(program, gi, aidx, params)
+	pass, err = logic.EvalApp(program, gi, aidx, params)
 	if err != nil {
-		var details string
-		if cx != nil {
-			pc, det := cx.PcDetails()
-			details = fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
-		}
-		// Don't wrap ClearStateBudgetError, so it will be taken seriously
-		if _, ok := err.(logic.ClearStateBudgetError); ok {
-			return false, transactions.EvalDelta{}, err
-		}
-		return false, transactions.EvalDelta{}, ledgercore.LogicEvalError{Err: err, Details: details}
+		return false, transactions.EvalDelta{}, err
 	}
 
 	// If program passed, build our eval delta, and commit to state changes
