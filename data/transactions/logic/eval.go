@@ -691,7 +691,7 @@ func (pe panicError) Error() string {
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
-// EvalError indicates TEAL evaluation failure
+// EvalError indicates AVM evaluation failure
 type EvalError struct {
 	Err     error
 	Details string
