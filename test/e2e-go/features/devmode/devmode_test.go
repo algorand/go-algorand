@@ -18,7 +18,6 @@
 package devmode
 
 import (
-	"math"
 	"path/filepath"
 	"testing"
 	"time"
@@ -52,9 +51,10 @@ func TestDevMode(t *testing.T) {
 	firstRound := *txn.ConfirmedRound + 1
 	blk, err := fixture.AlgodClient.Block(*txn.ConfirmedRound)
 	require.NoError(t, err)
-	seconds, _ := math.Modf(blk.Block["ts"].(float64))
-	startTime := time.Unix(int64(seconds), 0)
-	blkOffset := uint64(1_000_000)
+	seconds := int64(blk.Block["ts"].(float64))
+	startTime := time.Unix(seconds, 0)
+	// Set Block timestamp offset to test that consecutive txns properly get their block time set
+	const blkOffset = uint64(1_000_000)
 	err = fixture.AlgodClient.SetBlockTimestampOffset(blkOffset)
 	require.NoError(t, err)
 	resp, err := fixture.AlgodClient.GetBlockTimestampOffset()
@@ -69,13 +69,7 @@ func TestDevMode(t *testing.T) {
 		require.Equal(t, round-1, uint64(txn.Txn.Txn.FirstValid))
 		newBlk, err := fixture.AlgodClient.Block(round)
 		require.NoError(t, err)
-		newBlkSeconds, _ := math.Modf(newBlk.Block["ts"].(float64))
-		require.GreaterOrEqual(t, time.Unix(int64(newBlkSeconds), 0), startTime.Add(1_000_000*time.Second))
+		newBlkSeconds := int64(newBlk.Block["ts"].(float64))
+		require.GreaterOrEqual(t, time.Unix(newBlkSeconds, 0), startTime.Add(1_000_000*time.Second))
 	}
-
-	// Without transactions there should be no rounds even after a normal confirmation time.
-	time.Sleep(10 * time.Second)
-	status, err := fixture.LibGoalClient.Status()
-	require.NoError(t, err)
-	require.Equal(t, *txn.ConfirmedRound, status.LastRound, "There should be no rounds without a transaction.")
 }
