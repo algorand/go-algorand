@@ -1860,7 +1860,7 @@
             "type": "boolean"
           },
           "signatures-optional": {
-            "description": "Allow transactions without signatures to be evaluated as if they had correct signatures.",
+            "description": "Allow transactions without signatures to be simulated as if they had correct signatures.",
             "type": "boolean"
           },
           "txn-groups": {
@@ -1964,7 +1964,7 @@
             "x-algorand-format": "uint64"
           },
           "signatures-optional": {
-            "description": "If true, transactions without signatures are allowed and treated as if they were properly signed.",
+            "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
             "type": "boolean"
           }
         },

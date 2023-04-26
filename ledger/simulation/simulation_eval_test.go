@@ -85,17 +85,12 @@ func normalizeEvalDeltas(t *testing.T, actual, expected *transactions.EvalDelta)
 func validateSimulationResult(t *testing.T, result simulation.Result) {
 	t.Helper()
 
-	shouldHaveBlock := true
 	for _, groupResult := range result.TxnGroups {
 		if len(groupResult.FailureMessage) != 0 {
 			// The only reason for no block is an eval error.
-			shouldHaveBlock = false
-			break
+			assert.Nil(t, result.Block)
+			return
 		}
-	}
-	if !shouldHaveBlock {
-		assert.Nil(t, result.Block)
-		return
 	}
 	require.NotNil(t, result.Block)
 

@@ -613,7 +613,7 @@ type SimulateRequest struct {
 	// LiftLogLimits The boolean flag that lifts the limit on log opcode during simulation.
 	LiftLogLimits *bool `json:"lift-log-limits,omitempty"`
 
-	// SignaturesOptional Allow transactions without signatures to be evaluated as if they had correct signatures.
+	// SignaturesOptional Allow transactions without signatures to be simulated as if they had correct signatures.
 	SignaturesOptional *bool `json:"signatures-optional,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
@@ -664,7 +664,7 @@ type SimulationEvalOverrides struct {
 	// MaxLogSize The maximum byte number to log during simulation
 	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
 
-	// SignaturesOptional If true, transactions without signatures are allowed and treated as if they were properly signed.
+	// SignaturesOptional If true, transactions without signatures are allowed and simulated as if they were properly signed.
 	SignaturesOptional *bool `json:"signatures-optional,omitempty"`
 }
 
