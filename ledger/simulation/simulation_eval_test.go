@@ -131,16 +131,17 @@ func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, t
 
 	validateSimulationResult(t, actual)
 
-	require.Len(t, testcase.expected.TxnGroups, 1, "Test case must expect a single txn group")
-	require.Len(t, testcase.expected.TxnGroups[0].Txns, len(testcase.input.TxnGroups[0]), "Test case expected a different number of transactions than its input")
+	require.Len(t, testcase.expected.TxnGroups, len(testcase.input.TxnGroups), "Test case must expect the same number of transaction groups as its input")
 
-	for i, inputTxn := range testcase.input.TxnGroups[0] {
-		if testcase.expected.TxnGroups[0].Txns[i].Txn.Txn.Type == "" {
-			// Use Type as a marker for whether the transaction was specified or not. If not
-			// specified, replace it with the input txn
-			testcase.expected.TxnGroups[0].Txns[i].Txn.SignedTxn = inputTxn
+	for i := range testcase.input.TxnGroups {
+		for j := range testcase.input.TxnGroups[i] {
+			if testcase.expected.TxnGroups[i].Txns[j].Txn.Txn.Type == "" {
+				// Use Type as a marker for whether the transaction was specified or not. If not
+				// specified, replace it with the input txn
+				testcase.expected.TxnGroups[i].Txns[j].Txn.SignedTxn = testcase.input.TxnGroups[i][j]
+			}
+			normalizeEvalDeltas(t, &actual.TxnGroups[i].Txns[j].Txn.EvalDelta, &testcase.expected.TxnGroups[i].Txns[j].Txn.EvalDelta)
 		}
-		normalizeEvalDeltas(t, &actual.TxnGroups[0].Txns[i].Txn.EvalDelta, &testcase.expected.TxnGroups[0].Txns[i].Txn.EvalDelta)
 	}
 
 	if len(testcase.expectedError) != 0 {
