@@ -5,7 +5,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description="Upload performance metrics to Datadog")
 parser.add_argument(
-    "-f", "--perf-report", required=True, help="Report created by the block generator"
+    "-f", "--perf-reports", required=True, action='store',
+    dest='files',type=str, nargs='*',help="list of reports created by the block generator"
 )
 parser.add_argument(
     "-c",
@@ -15,15 +16,17 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-data = dict()
-
-
 def parseReport(report):
+    data = dict()
     with open(report) as f:
         for line in f:
             tag, value = line.split(":")
-            data[tag] = float(value)
+            if tag == "scenario":
+                data[tag] = value
+            else:
+                data[tag] = float(value)
     f.close()
+    return data
 
 
 if __name__ == "__main__":
@@ -33,15 +36,17 @@ if __name__ == "__main__":
         "app_key": os.getenv("DATADOG_APP_KEY"),
     }
     initialize(**options)
-    parseReport(args.perf_report)
-    tags = [
-        f"conduit_version: {args.binary_version}",
-        f'duration: {str(data["test_duration_seconds"])}s',
-        "scenario: mixed",
-    ]
-    transactionsPerBlockAvgMetricName = (
-        "conduit.perf.final_overall_transactions_per_second"
-    )
-    tps = data["final_overall_transactions_per_second"]
-    api.Metric.send(metric=transactionsPerBlockAvgMetricName, points=tps, tags=tags)
+    for fp in args.files:
+        print(f"uploading metrics for {fp}")
+        data=parseReport(fp)
+        tags = [
+            f'conduit_version:{args.binary_version}',
+            f'duration:{str(data["test_duration_seconds"])}s',
+            f'scenario:{str(data["scenario"])}',
+        ]
+        transactionsPerBlockAvgMetricName = (
+            "conduit.perf.transactions_per_second"
+        )
+        tps = data["final_overall_transactions_per_second"]
+        api.Metric.send(metric=transactionsPerBlockAvgMetricName, points=tps, tags=tags)
     print("uploaded metrics")
