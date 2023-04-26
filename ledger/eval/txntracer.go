@@ -26,13 +26,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// TODO do we want something like this?
-type txnGroupDeltas struct {
-	// Ids contains all the associated IDs for these changes (group and txn IDs)
-	Ids []crypto.Digest
-	ledgercore.StateDelta
-}
-
 // TxnGroupDeltaTracer collects groups of StateDelta objects covering groups of txns
 type TxnGroupDeltaTracer struct {
 	// lookback is the number of rounds stored at any given time
