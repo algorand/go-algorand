@@ -895,7 +895,7 @@ func TestAppCallClearState(t *testing.T) {
 	// one to opt out, one deallocate, no error from ApplicationCall
 	b.pass = true
 	b.delta = transactions.EvalDelta{GlobalDelta: nil}
-	b.err = ledgercore.LogicEvalError{Err: fmt.Errorf("test error")}
+	b.err = logic.EvalError{Err: fmt.Errorf("test error")}
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
