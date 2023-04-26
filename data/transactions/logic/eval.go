@@ -717,20 +717,7 @@ func (err EvalError) Unwrap() error {
 	return err.Err
 }
 
-// ClearStateBudgetError allows evaluation to signal that the caller should
-// reject the transaction.  Normally, an error in evaluation would not cause a
-// ClearState txn to fail. However, callers fail a txn for ClearStateBudgetError
-// because the transaction has not provided enough budget to let ClearState do
-// its job.
-type ClearStateBudgetError struct {
-	offered int
-}
-
-func (e ClearStateBudgetError) Error() string {
-	return fmt.Sprintf("Attempted ClearState execution with low OpcodeBudget %d", e.offered)
-}
-
-// EvalContract executes stateful TEAL program as the gi'th transaction in params
+// EvalContract executes stateful program as the gi'th transaction in params
 func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
 	if params.Ledger == nil {
 		return false, nil, errors.New("no ledger in contract eval")
@@ -751,7 +738,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	if cx.Proto.IsolateClearState && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
-			return false, nil, ClearStateBudgetError{*cx.PooledApplicationBudget}
+			return false, nil, fmt.Errorf("Attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
 		}
 	}
 
@@ -792,7 +779,11 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 			used = basics.AddSaturate(used, size)
 			if used > cx.ioBudget {
-				return false, nil, fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
+				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
+				if !cx.Proto.EnableBareBudgetError {
+					err = EvalError{err, "", gi, false}
+				}
+				return false, nil, err
 			}
 		}
 		cx.readBudgetChecked = true
