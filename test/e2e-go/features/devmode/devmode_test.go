@@ -52,7 +52,7 @@ func TestDevMode(t *testing.T) {
 	blk, err := fixture.AlgodClient.Block(*txn.ConfirmedRound)
 	require.NoError(t, err)
 	seconds := int64(blk.Block["ts"].(float64))
-	startTime := time.Unix(seconds, 0)
+	prevTime := time.Unix(seconds, 0)
 	// Set Block timestamp offset to test that consecutive txns properly get their block time set
 	const blkOffset = uint64(1_000_000)
 	err = fixture.AlgodClient.SetBlockTimestampOffset(blkOffset)
@@ -70,6 +70,8 @@ func TestDevMode(t *testing.T) {
 		newBlk, err := fixture.AlgodClient.Block(round)
 		require.NoError(t, err)
 		newBlkSeconds := int64(newBlk.Block["ts"].(float64))
-		require.GreaterOrEqual(t, time.Unix(newBlkSeconds, 0), startTime.Add(1_000_000*time.Second))
+		currTime := time.Unix(newBlkSeconds, 0)
+		require.Equal(t, currTime, prevTime.Add(1_000_000*time.Second))
+		prevTime = currTime
 	}
 }
