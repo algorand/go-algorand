@@ -5576,7 +5576,7 @@ func (cx *EvalContext) pcDetails() (pc int, dis string) {
 			break
 		}
 	}
-	return cx.pc, dis
+	return cx.pc, strings.ReplaceAll(strings.TrimSuffix(dis, "\n"), "\n", "; ")
 }
 
 func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {

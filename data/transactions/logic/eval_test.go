@@ -5138,9 +5138,9 @@ func TestPcDetails(t *testing.T) {
 		pc     int
 		det    string
 	}{
-		{"int 1; int 2; -", 5, "pushint 1\npushint 2\n-\n"},
-		{"int 1; err", 3, "pushint 1\nerr\n"},
-		{"int 1; dup; int 2; -; +", 6, "dup\npushint 2\n-\n"},
+		{"int 1; int 2; -", 5, "pushint 1; pushint 2; -"},
+		{"int 1; err", 3, "pushint 1; err"},
+		{"int 1; dup; int 2; -; +", 6, "dup; pushint 2; -"},
 		{"b end; end:", 4, ""},
 	}
 	for i, test := range tests {
