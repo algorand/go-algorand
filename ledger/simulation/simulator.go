@@ -112,7 +112,7 @@ var proxySigner = crypto.PrivateKey{
 // check verifies that the transaction is well-formed and has valid or missing signatures.
 // An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
 // To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
-func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, signaturesOptional bool, tracer logic.EvalTracer) error {
+func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, tracer logic.EvalTracer, overrides ResultEvalOverrides) error {
 	proxySignerSecrets, err := crypto.SecretKeyToSignatureSecrets(proxySigner)
 	if err != nil {
 		return err
@@ -132,7 +132,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 		if stxn.Txn.Type == protocol.StateProofTx {
 			return errors.New("cannot simulate StateProof transactions")
 		}
-		if signaturesOptional && txnHasNoSignature(stxn) {
+		if overrides.SignaturesOptional && txnHasNoSignature(stxn) {
 			// Replace the signed txn with one signed by the proxySigner. At evaluation this would
 			// raise an error, since the proxySigner's public key likely does not have authority
 			// over the sender's account. However, this will pass validation, since the signature
@@ -175,7 +175,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 	return vb, nil
 }
 
-func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer logic.EvalTracer, signaturesOptional bool) (*ledgercore.ValidatedBlock, error) {
+func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer logic.EvalTracer, overrides ResultEvalOverrides) (*ledgercore.ValidatedBlock, error) {
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 	hdr := nextBlock.BlockHeader
 
 	// check that the transaction is well-formed and mark whether signatures are missing
-	err = s.check(hdr, txgroup, signaturesOptional, tracer)
+	err = s.check(hdr, txgroup, tracer, overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
-	block, err := s.simulateWithTracer(simulateRequest.TxnGroups[0], simulatorTracer, simulateRequest.SignaturesOptional)
+	block, err := s.simulateWithTracer(simulateRequest.TxnGroups[0], simulatorTracer, simulatorTracer.result.EvalOverrides)
 	if err != nil {
 		var verifyError *verify.TxGroupError
 		switch {
