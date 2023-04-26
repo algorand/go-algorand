@@ -296,7 +296,7 @@ func (r *accountsReader) AccountsOnlineRoundParams() (onlineRoundParamsData []le
 // the returned list of PersistedOnlineAccountData includes all of the available
 // data for each included account in ascending order of account and round
 // (example [account-1-round-1, account1-round-2, ..., account2-round-1, ...])
-func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) (data []trackerdb.PersistedOnlineAccountData, err error) {
+func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.PersistedOnlineAccountData, error) {
 	// The SQL at the time of impl:
 	//
 	// SELECT rowid, address, updround, data
@@ -307,15 +307,17 @@ func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) (data []trackerdb
 
 	// read the current db round
 	var round basics.Round
-	round, err = r.AccountsRound()
+	round, err := r.AccountsRound()
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	low := []byte(kvPrefixOnlineAccount + "-")
 	high := []byte(kvPrefixOnlineAccount + ".")
 	iter := r.kvr.NewIter(low, high, false)
 	defer iter.Close()
+
+	result := make([]trackerdb.PersistedOnlineAccountData, 0, maxAccounts)
 
 	var value []byte
 	var updround uint64
@@ -344,12 +346,12 @@ func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) (data []trackerdb
 		// get value for current item in the iterator
 		value, err = iter.Value()
 		if err != nil {
-			return
+			return nil, err
 		}
 		// decode raw value
 		err = protocol.Decode(value, &pitem.AccountData)
 		if err != nil {
-			return
+			return nil, err
 		}
 		// set ref
 		normBalance := pitem.AccountData.NormalizedOnlineBalance(r.proto)
@@ -363,15 +365,15 @@ func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) (data []trackerdb
 			}
 			// this newest account seen is beyond the maxAccounts requested, meaning we've seen all the data we need
 			if seen > maxAccounts {
-				return
+				break
 			}
 		}
 
 		// append entry to accum
-		data = append(data, pitem)
+		result = append(result, pitem)
 	}
 
-	return
+	return result, nil
 }
 
 func (r *accountsReader) LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*trackerdb.TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
