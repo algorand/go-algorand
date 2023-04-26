@@ -351,7 +351,9 @@ func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) (data []trackerdb
 		if err != nil {
 			return
 		}
-
+		// set ref
+		normBalance := pitem.AccountData.NormalizedOnlineBalance(r.proto)
+		pitem.Ref = onlineAccountRef{addr, normBalance, pitem.UpdRound}
 		// if maxAccounts is supplied, potentially stop reading data if we've collected enough
 		if maxAccounts > 0 {
 			// we have encountered a new address

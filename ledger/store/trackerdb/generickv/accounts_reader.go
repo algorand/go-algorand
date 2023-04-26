@@ -157,7 +157,7 @@ func (r *accountsReader) LookupAllResources(addr basics.Address) (data []tracker
 	}
 
 	for iter.Next() {
-		pitem := trackerdb.PersistedResourcesData{Round: rnd}
+		pitem := trackerdb.PersistedResourcesData{AcctRef: accountRef{addr}, Round: rnd}
 
 		// read the key to parse the aidx
 		key := string(iter.Key())
