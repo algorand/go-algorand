@@ -5158,7 +5158,7 @@ func TestPcDetails(t *testing.T) {
 
 			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
 
-			pc, det := cx.PcDetails()
+			pc, det := cx.pcDetails()
 			assert.Equal(t, test.pc, pc)
 			assert.Equal(t, test.det, det)
 		})

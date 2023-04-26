@@ -693,17 +693,24 @@ var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
 // EvalError indicates AVM evaluation failure
 type EvalError struct {
-	Err     error
-	Details string
+	Err        error
+	details    string
+	groupIndex int
+	logicsig   bool
 }
 
 // Error satisfies builtin interface `error`
 func (err EvalError) Error() string {
-	msg := fmt.Sprintf("logic eval error: %v", err.Err)
-	if len(err.Details) > 0 {
-		msg = fmt.Sprintf("%s. Details: %s", msg, err.Details)
+	var msg string
+	if err.logicsig {
+		msg = fmt.Sprintf("rejected by logic err=%v", err.Err)
+	} else {
+		msg = fmt.Sprintf("logic eval error: %v", err.Err)
 	}
-	return msg
+	if err.details == "" {
+		return msg
+	}
+	return msg + ". Details: " + err.details
 }
 
 func (err EvalError) Unwrap() error {
@@ -796,9 +803,9 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	}
 	pass, err := eval(program, &cx)
 	if err != nil {
-		pc, det := cx.PcDetails()
+		pc, det := cx.pcDetails()
 		details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
-		err = EvalError{err, details}
+		err = EvalError{err, details, gi, false}
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
@@ -835,9 +842,9 @@ func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 	pass, err := eval(cx.txn.Lsig.Logic, &cx)
 
 	if err != nil {
-		pc, det := cx.PcDetails()
+		pc, det := cx.pcDetails()
 		details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
-		err = EvalError{err, details}
+		err = EvalError{err, details, gi, true}
 	}
 
 	return pass, &cx, err
@@ -5553,8 +5560,8 @@ func opBlock(cx *EvalContext) error {
 	}
 }
 
-// PcDetails return PC and disassembled instructions at PC up to 2 opcodes back
-func (cx *EvalContext) PcDetails() (pc int, dis string) {
+// pcDetails return PC and disassembled instructions at PC up to 2 opcodes back
+func (cx *EvalContext) pcDetails() (pc int, dis string) {
 	const maxNumAdditionalOpcodes = 2
 	text, ds, err := disassembleInstrumented(cx.program, nil)
 	if err != nil {
