@@ -753,3 +753,15 @@ func (client RestClient) GetLedgerStateDelta(round uint64) (response model.Ledge
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d", round), nil)
 	return
 }
+
+// SetBlockTimestampOffset sets the offset in seconds to add to the block timestamp when in devmode
+func (client RestClient) SetBlockTimestampOffset(offset uint64) (err error) {
+	err = client.post(nil, fmt.Sprintf("/v2/devmode/blocks/offset/%d", offset), nil, nil, true)
+	return
+}
+
+// GetBlockTimestampOffset gets the offset in seconds which is being added to devmode blocks
+func (client RestClient) GetBlockTimestampOffset() (response model.GetBlockTimeStampOffsetResponse, err error) {
+	err = client.get(&response, "/v2/devmode/blocks/offset", nil)
+	return
+}

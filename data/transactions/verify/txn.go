@@ -440,7 +440,7 @@ func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *Group
 	pass, cx, err := logic.EvalSignatureFull(groupIndex, &ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic err=%w", txn.ID(), err)
+		return fmt.Errorf("transaction %v: %w", txn.ID(), err)
 	}
 	if !pass {
 		logicRejTotal.Inc(nil)
