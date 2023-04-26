@@ -138,9 +138,6 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.PooledApplicationBudget != nil && tracer.result.TxnGroups[0].AppBudgetAdded == 0 {
 		tracer.result.TxnGroups[0].AppBudgetAdded = uint64(*ep.PooledApplicationBudget)
 	}
-	if ep.FeeCredit != nil {
-		tracer.result.TxnGroups[0].FeeCredit = *ep.FeeCredit
-	}
 
 	// Override runtime related constraints against ep, before entering txn group
 	ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()

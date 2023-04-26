@@ -794,17 +794,12 @@
                 "version": {
                   "description": "The version of this response object.",
                   "type": "integer"
-                },
-                "would-succeed": {
-                  "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
-                  "type": "boolean"
                 }
               },
               "required": [
                 "last-round",
                 "txn-groups",
-                "version",
-                "would-succeed"
+                "version"
               ],
               "type": "object"
             }
@@ -1860,8 +1855,12 @@
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
-          "lift-log-limits": {
-            "description": "The boolean flag that lifts the limit on log opcode during simulation.",
+          "allow-empty-signatures": {
+            "description": "Allow transactions without signatures to be simulated as if they had correct signatures.",
+            "type": "boolean"
+          },
+          "allow-more-logging": {
+            "description": "Lifts limits on log opcode usage during simulation.",
             "type": "boolean"
           },
           "txn-groups": {
@@ -1942,10 +1941,6 @@
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
           },
-          "missing-signature": {
-            "description": "A boolean indicating whether this transaction is missing signatures",
-            "type": "boolean"
-          },
           "txn-result": {
             "$ref": "#/components/schemas/PendingTransactionResponse"
           }
@@ -1958,6 +1953,10 @@
       "SimulationEvalOverrides": {
         "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
         "properties": {
+          "allow-empty-signatures": {
+            "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
+            "type": "boolean"
+          },
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
             "type": "integer",
@@ -5960,17 +5959,12 @@
                     "version": {
                       "description": "The version of this response object.",
                       "type": "integer"
-                    },
-                    "would-succeed": {
-                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
-                      "type": "boolean"
                     }
                   },
                   "required": [
                     "last-round",
                     "txn-groups",
-                    "version",
-                    "would-succeed"
+                    "version"
                   ],
                   "type": "object"
                 }
@@ -5995,17 +5989,12 @@
                     "version": {
                       "description": "The version of this response object.",
                       "type": "integer"
-                    },
-                    "would-succeed": {
-                      "description": "Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.",
-                      "type": "boolean"
                     }
                   },
                   "required": [
                     "last-round",
                     "txn-groups",
-                    "version",
-                    "would-succeed"
+                    "version"
                   ],
                   "type": "object"
                 }

@@ -610,8 +610,11 @@ type PendingTransactionResponse struct {
 
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
-	// LiftLogLimits The boolean flag that lifts the limit on log opcode during simulation.
-	LiftLogLimits *bool `json:"lift-log-limits,omitempty"`
+	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
+	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
+	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
+	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
@@ -649,15 +652,15 @@ type SimulateTransactionResult struct {
 	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
 	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
 
-	// MissingSignature A boolean indicating whether this transaction is missing signatures
-	MissingSignature *bool `json:"missing-signature,omitempty"`
-
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`
 }
 
 // SimulationEvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
 type SimulationEvalOverrides struct {
+	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
+	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
 	// MaxLogCalls The maximum log calls one can make during simulation
 	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
 
@@ -1037,9 +1040,6 @@ type SimulateResponse struct {
 
 	// Version The version of this response object.
 	Version uint64 `json:"version"`
-
-	// WouldSucceed Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.
-	WouldSucceed bool `json:"would-succeed"`
 }
 
 // StateProofResponse Represents a state proof and its corresponding message
