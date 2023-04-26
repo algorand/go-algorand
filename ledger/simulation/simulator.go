@@ -39,9 +39,9 @@ type simulatorLedger struct {
 
 // Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
 type Request struct {
-	TxnGroups          [][]transactions.SignedTxn
-	SignaturesOptional bool
-	LiftLogLimits      bool
+	TxnGroups            [][]transactions.SignedTxn
+	AllowEmptySignatures bool
+	AllowMoreLogging     bool
 }
 
 // Latest is part of the LedgerForSimulator interface.
@@ -132,7 +132,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 		if stxn.Txn.Type == protocol.StateProofTx {
 			return errors.New("cannot simulate StateProof transactions")
 		}
-		if overrides.SignaturesOptional && txnHasNoSignature(stxn) {
+		if overrides.AllowEmptySignatures && txnHasNoSignature(stxn) {
 			// Replace the signed txn with one signed by the proxySigner. At evaluation this would
 			// raise an error, since the proxySigner's public key likely does not have authority
 			// over the sender's account. However, this will pass validation, since the signature

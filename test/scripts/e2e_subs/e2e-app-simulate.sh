@@ -49,15 +49,15 @@ if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONS
     false
 fi
 
-# We test transaction group simulation WITHOUT signatures, but with signatures-optional enabled
-RES=$(${gcmd} clerk simulate --signatures-optional -t "${TEMPDIR}/grouped.tx")
+# We test transaction group simulation WITHOUT signatures, but with allow-empty-signatures enabled
+RES=$(${gcmd} clerk simulate --allow-empty-signatures -t "${TEMPDIR}/grouped.tx")
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
-    date '+app-simulate-test FAIL the simulation transaction group without signatures should not fail when signatures-optional is true %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the simulation transaction group without signatures should not fail when allow-empty-signatures is true %Y%m%d_%H%M%S'
     false
 fi
 
 # check the simulation eval overrides reports the right value
-if [[ $(echo "$RES" | jq '."eval-overrides"."signatures-optional"') != $CONST_TRUE ]]; then
+if [[ $(echo "$RES" | jq '."eval-overrides"."allow-empty-signatures"') != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the simulation response should report eval overrides %Y%m%d_%H%M%S'
     false
 fi
@@ -159,15 +159,15 @@ if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONS
     false
 fi
 
-RES=$(${gcmd} clerk simulate --signatures-optional -t "${TEMPDIR}/empty.tx")
-# confirm that without signature, the simulation should pass with signatures-optional
+RES=$(${gcmd} clerk simulate --allow-empty-signatures -t "${TEMPDIR}/empty.tx")
+# confirm that without signature, the simulation should pass with allow-empty-signatures
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
-    date '+app-simulate-test FAIL the simulation call to empty()void without signature should succeed with signatures-optional %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the simulation call to empty()void without signature should succeed with allow-empty-signatures %Y%m%d_%H%M%S'
     false
 fi
 
 # check the simulation eval overrides reports the right value
-if [[ $(echo "$RES" | jq '."eval-overrides"."signatures-optional"') != $CONST_TRUE ]]; then
+if [[ $(echo "$RES" | jq '."eval-overrides"."allow-empty-signatures"') != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the simulation call to empty()void without signature should report eval overrides %Y%m%d_%H%M%S'
     false
 fi
@@ -225,7 +225,7 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
 fi
 
 if [[ $(echo "$RES" | jq 'has("eval-overrides")') != $CONST_FALSE ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-overrides field %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without allow-more-logging should not return with eval-overrides field %Y%m%d_%H%M%S'
     false
 fi
 
@@ -246,14 +246,14 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_F
 fi
 
 if [[ $(echo "$RES" | jq 'has("eval-overrides")') != $CONST_FALSE ]]; then
-    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without lift-log-limits should not return with eval-overrides field %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to logs-a-lot.teal without allow-more-logging should not return with eval-overrides field %Y%m%d_%H%M%S'
     false
 fi
 
 # SIMULATION! with unlimiting log should call `unlimited_log_test()void`
 ${gcmd} app method --method "unlimited_log_test()void" --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/big_log.tx"
 ${gcmd} clerk sign -i "${TEMPDIR}/big_log.tx" -o "${TEMPDIR}/big_log.stx"
-RES=$(${gcmd} clerk simulate --lift-log-limits -t "${TEMPDIR}/big_log.stx")
+RES=$(${gcmd} clerk simulate --allow-more-logging -t "${TEMPDIR}/big_log.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should not fail with unlimiting log %Y%m%d_%H%M%S'

@@ -390,9 +390,9 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
-			SignaturesOptional: trueOrNil(result.EvalOverrides.SignaturesOptional),
-			MaxLogSize:         result.EvalOverrides.MaxLogSize,
-			MaxLogCalls:        result.EvalOverrides.MaxLogCalls,
+			AllowEmptySignatures: trueOrNil(result.EvalOverrides.AllowEmptySignatures),
+			MaxLogSize:           result.EvalOverrides.MaxLogSize,
+			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
 		}
 	}
 
@@ -416,9 +416,9 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		txnGroups[i] = txnGroup.Txns
 	}
 	return simulation.Request{
-		TxnGroups:          txnGroups,
-		SignaturesOptional: request.SignaturesOptional,
-		LiftLogLimits:      request.LiftLogLimits,
+		TxnGroups:            txnGroups,
+		AllowEmptySignatures: request.AllowEmptySignatures,
+		AllowMoreLogging:     request.AllowMoreLogging,
 	}
 }
 

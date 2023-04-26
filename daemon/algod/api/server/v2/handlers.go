@@ -956,9 +956,9 @@ type PreEncodedSimulateRequestTransactionGroup struct {
 
 // PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
-	TxnGroups          []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
-	SignaturesOptional bool                                        `codec:"signatures-optional,omitempty"`
-	LiftLogLimits      bool                                        `codec:"lift-log-limits,omitempty"`
+	TxnGroups            []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	AllowEmptySignatures bool                                        `codec:"allow-empty-signatures,omitempty"`
+	AllowMoreLogging     bool                                        `codec:"allow-more-logging,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.

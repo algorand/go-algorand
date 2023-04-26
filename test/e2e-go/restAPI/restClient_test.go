@@ -1679,12 +1679,12 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 				Txns: []transactions.SignedTxn{{Txn: txn}}, // no signature
 			},
 		},
-		SignaturesOptional: true,
+		AllowEmptySignatures: true,
 	}
 	result, err := testClient.SimulateTransactions(simulateRequest)
 	a.NoError(err)
 
-	signaturesOptional := true
+	allowEmptySignatures := true
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: result.LastRound,
@@ -1700,7 +1700,7 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 			},
 		},
 		EvalOverrides: &model.SimulationEvalOverrides{
-			SignaturesOptional: &signaturesOptional,
+			AllowEmptySignatures: &allowEmptySignatures,
 		},
 	}
 	a.Equal(expectedResult, result)
@@ -1814,7 +1814,7 @@ int 1`
 				Txns: []transactions.SignedTxn{appCallTxnSigned},
 			},
 		},
-		LiftLogLimits: true,
+		AllowMoreLogging: true,
 	})
 	a.NoError(err)
 

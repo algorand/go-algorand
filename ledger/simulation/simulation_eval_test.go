@@ -292,8 +292,8 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 
 				return simulationTestCase{
 					input: simulation.Request{
-						TxnGroups:          [][]transactions.SignedTxn{{txn}},
-						SignaturesOptional: optionalSigs,
+						TxnGroups:            [][]transactions.SignedTxn{{txn}},
+						AllowEmptySignatures: optionalSigs,
 					},
 					expectedError: fmt.Sprintf("should have been authorized by %s but was actually authorized by %s", sender.Addr, authority.Addr),
 					expected: simulation.Result{
@@ -306,7 +306,7 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
-							SignaturesOptional: optionalSigs,
+							AllowEmptySignatures: optionalSigs,
 						},
 					},
 				}
@@ -1089,7 +1089,7 @@ func TestInvalidTxGroup(t *testing.T) {
 }
 
 // TestLogLimitLiftingInSimulation tests that an app with log calls that exceed limits during normal runtime
-// can get through during simulation with `lift-log-limits` activated
+// can get through during simulation with AllowMoreLogging activated
 func TestLogLimitLiftingInSimulation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1144,7 +1144,7 @@ int 1`
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedCreateTxn, signedCallsABunchLogs},
 				},
-				LiftLogLimits: true,
+				AllowMoreLogging: true,
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
@@ -1239,7 +1239,7 @@ int 1`
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedCreateTxn, signedCallsABunchLogs},
 				},
-				LiftLogLimits: true,
+				AllowMoreLogging: true,
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
@@ -1384,7 +1384,7 @@ int 1`,
 }
 
 // TestOptionalSignatures tests that transactions with signatures and without signatures are both
-// properly handled when SignaturesOptional is enabled.
+// properly handled when AllowEmptySignatures is enabled.
 func TestOptionalSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1411,8 +1411,8 @@ func TestOptionalSignatures(t *testing.T) {
 
 				return simulationTestCase{
 					input: simulation.Request{
-						TxnGroups:          [][]transactions.SignedTxn{{stxn}},
-						SignaturesOptional: true,
+						TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+						AllowEmptySignatures: true,
 					},
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
@@ -1423,7 +1423,7 @@ func TestOptionalSignatures(t *testing.T) {
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
-							SignaturesOptional: true,
+							AllowEmptySignatures: true,
 						},
 					},
 				}
@@ -1433,7 +1433,7 @@ func TestOptionalSignatures(t *testing.T) {
 }
 
 // TestOptionalSignaturesIncorrect tests that an incorrect signature still fails when
-// SignaturesOptional is enabled.
+// AllowEmptySignatures is enabled.
 func TestOptionalSignaturesIncorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1458,7 +1458,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 }
 
 // TestPartialMissingSignatures tests that a group of transactions with some signatures missing is
-// handled properly when SignaturesOptional is enabled.
+// handled properly when AllowEmptySignatures is enabled.
 func TestPartialMissingSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1497,7 +1497,7 @@ func TestPartialMissingSignatures(t *testing.T) {
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedTxn1, signedTxn2},
 				},
-				SignaturesOptional: true,
+				AllowEmptySignatures: true,
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
@@ -1522,7 +1522,7 @@ func TestPartialMissingSignatures(t *testing.T) {
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{
-					SignaturesOptional: true,
+					AllowEmptySignatures: true,
 				},
 			},
 		}
@@ -1530,7 +1530,7 @@ func TestPartialMissingSignatures(t *testing.T) {
 }
 
 // TestPooledFeesAcrossSignedAndUnsigned tests that the simulator's transaction group checks
-// allow for pooled fees across a mix of signed and unsigned transactions when SignaturesOptional is
+// allow for pooled fees across a mix of signed and unsigned transactions when AllowEmptySignatures is
 // enabled.
 //  Transaction 1 is a signed transaction with not enough fees paid on its own.
 //  Transaction 2 is an unsigned transaction with enough fees paid to cover transaction 1.
@@ -1567,7 +1567,7 @@ func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedPay1, signedPay2},
 				},
-				SignaturesOptional: true,
+				AllowEmptySignatures: true,
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
@@ -1580,7 +1580,7 @@ func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{
-					SignaturesOptional: true,
+					AllowEmptySignatures: true,
 				},
 			},
 		}

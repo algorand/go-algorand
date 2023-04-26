@@ -1855,12 +1855,12 @@
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
-          "lift-log-limits": {
-            "description": "The boolean flag that lifts the limit on log opcode during simulation.",
+          "allow-empty-signatures": {
+            "description": "Allow transactions without signatures to be simulated as if they had correct signatures.",
             "type": "boolean"
           },
-          "signatures-optional": {
-            "description": "Allow transactions without signatures to be simulated as if they had correct signatures.",
+          "allow-more-logging": {
+            "description": "Lifts limits on log opcode usage during simulation.",
             "type": "boolean"
           },
           "txn-groups": {
@@ -1953,6 +1953,10 @@
       "SimulationEvalOverrides": {
         "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
         "properties": {
+          "allow-empty-signatures": {
+            "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
+            "type": "boolean"
+          },
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
             "type": "integer",
@@ -1962,10 +1966,6 @@
             "description": "The maximum byte number to log during simulation",
             "type": "integer",
             "x-algorand-format": "uint64"
-          },
-          "signatures-optional": {
-            "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
-            "type": "boolean"
           }
         },
         "type": "object"

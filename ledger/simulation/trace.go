@@ -67,19 +67,19 @@ const ResultLatestVersion = uint64(2)
 
 // ResultEvalOverrides contains the limits and parameters during a call to Simulator.Simulate
 type ResultEvalOverrides struct {
-	SignaturesOptional bool
-	MaxLogCalls        *uint64
-	MaxLogSize         *uint64
+	AllowEmptySignatures bool
+	MaxLogCalls          *uint64
+	MaxLogSize           *uint64
 }
 
-// SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with lift-log-limits)
+// SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
 const SimulateLogBytesLimit = uint64(65536)
 
-// LiftLogLimits method modify the log limits from lift option:
+// AllowMoreLogging method modify the log limits from lift option:
 // - if lift log limits, then overload result from local Config
 // - otherwise, set `LogLimits` field to be nil
-func (eo ResultEvalOverrides) LiftLogLimits(lift bool) ResultEvalOverrides {
-	if lift {
+func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
+	if allow {
 		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), SimulateLogBytesLimit
 		eo.MaxLogCalls = &maxLogCalls
 		eo.MaxLogSize = &maxLogSize
@@ -121,8 +121,8 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 	}
 
 	resultEvalConstants := ResultEvalOverrides{
-		SignaturesOptional: request.SignaturesOptional,
-	}.LiftLogLimits(request.LiftLogLimits)
+		AllowEmptySignatures: request.AllowEmptySignatures,
+	}.AllowMoreLogging(request.AllowMoreLogging)
 
 	return Result{
 		Version:       version,

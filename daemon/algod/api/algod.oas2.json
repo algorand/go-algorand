@@ -3286,12 +3286,12 @@
             "$ref": "#/definitions/SimulateRequestTransactionGroup"
           }
         },
-        "signatures-optional": {
+        "allow-empty-signatures": {
           "description": "Allow transactions without signatures to be simulated as if they had correct signatures.",
           "type": "boolean"
         },
-        "lift-log-limits": {
-          "description": "The boolean flag that lifts the limit on log opcode during simulation.",
+        "allow-more-logging": {
+          "description": "Lifts limits on log opcode usage during simulation.",
           "type": "boolean"
         }
       }
@@ -3648,7 +3648,7 @@
       "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
       "type": "object",
       "properties": {
-        "signatures-optional": {
+        "allow-empty-signatures": {
           "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
           "type": "boolean"
         },

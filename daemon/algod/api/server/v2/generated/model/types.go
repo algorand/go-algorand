@@ -610,11 +610,11 @@ type PendingTransactionResponse struct {
 
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
-	// LiftLogLimits The boolean flag that lifts the limit on log opcode during simulation.
-	LiftLogLimits *bool `json:"lift-log-limits,omitempty"`
+	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
+	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
 
-	// SignaturesOptional Allow transactions without signatures to be simulated as if they had correct signatures.
-	SignaturesOptional *bool `json:"signatures-optional,omitempty"`
+	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
+	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
@@ -658,14 +658,14 @@ type SimulateTransactionResult struct {
 
 // SimulationEvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
 type SimulationEvalOverrides struct {
+	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
+	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
 	// MaxLogCalls The maximum log calls one can make during simulation
 	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
 
 	// MaxLogSize The maximum byte number to log during simulation
 	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
-
-	// SignaturesOptional If true, transactions without signatures are allowed and simulated as if they were properly signed.
-	SignaturesOptional *bool `json:"signatures-optional,omitempty"`
 }
 
 // StateDelta Application state delta.
