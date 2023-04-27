@@ -44,30 +44,31 @@ import (
 )
 
 var (
-	toAddress          string
-	account            string
-	amount             uint64
-	txFilename         string
-	rejectsFilename    string
-	closeToAddress     string
-	noProgramOutput    bool
-	writeSourceMap     bool
-	signProgram        bool
-	programSource      string
-	argB64Strings      []string
-	disassemble        bool
-	verbose            bool
-	progByteFile       string
-	msigParams         string
-	logicSigFile       string
-	timeStamp          int64
-	protoVersion       string
-	rekeyToAddress     string
-	signerAddress      string
-	rawOutput          bool
-	requestFilename    string
-	requestOutFilename string
-	liftLogLimits      bool
+	toAddress                    string
+	account                      string
+	amount                       uint64
+	txFilename                   string
+	rejectsFilename              string
+	closeToAddress               string
+	noProgramOutput              bool
+	writeSourceMap               bool
+	signProgram                  bool
+	programSource                string
+	argB64Strings                []string
+	disassemble                  bool
+	verbose                      bool
+	progByteFile                 string
+	msigParams                   string
+	logicSigFile                 string
+	timeStamp                    int64
+	protoVersion                 string
+	rekeyToAddress               string
+	signerAddress                string
+	rawOutput                    bool
+	requestFilename              string
+	requestOutFilename           string
+	simulateAllowEmptySignatures bool
+	simulateAllowMoreLogging     bool
 )
 
 func init() {
@@ -152,7 +153,8 @@ func init() {
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
 	simulateCmd.Flags().StringVar(&requestOutFilename, "request-only-out", "", "Filename for writing simulate request object. If provided, the command will only write the request object and exit. No simulation will happen")
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
-	simulateCmd.Flags().BoolVar(&liftLogLimits, "lift-log-limits", false, "Lift the limits on log opcode during simulation")
+	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
+	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1257,7 +1259,8 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				LiftLogLimits: liftLogLimits,
+				AllowEmptySignatures: simulateAllowEmptySignatures,
+				AllowMoreLogging:     simulateAllowMoreLogging,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1278,7 +1281,8 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				LiftLogLimits: liftLogLimits,
+				AllowEmptySignatures: simulateAllowEmptySignatures,
+				AllowMoreLogging:     simulateAllowMoreLogging,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
