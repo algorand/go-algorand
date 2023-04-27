@@ -28,6 +28,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-deadlock"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/avm-abi/apps"
@@ -39,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/testdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -1033,64 +1037,69 @@ func TestListCreatables(t *testing.T) {
 	numElementsPerSegement := 25
 
 	// set up the database
-	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
-	dblogger := logging.TestingLog(t)
-	dbs.SetLogger(dblogger)
+	dbs := testdb.OpenForTesting(t)
 	defer dbs.Close()
 
-	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
+	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		accts := make(map[basics.Address]basics.AccountData)
 		_ = tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
-		require.NoError(t, err)
-
-		au := &accountUpdates{}
-		au.accountsq, err = tx.MakeAccountsOptimizedReader()
-		require.NoError(t, err)
-
-		// ******* All results are obtained from the cache. Empty database *******
-		// ******* No deletes                                              *******
-		// get random data. Initial batch, no deletes
-		ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
-		expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-		ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
-		// set the cache
-		au.creatables = ctbsWithDeletes
-		listAndCompareComb(t, au, expectedDbImage)
-
-		// ******* All results are obtained from the database. Empty cache *******
-		// ******* No deletes	                                           *******
-		// sync with the database
-		var updates compactAccountDeltas
-		var resUpdates compactResourcesDeltas
-		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
-		require.NoError(t, err)
-		// nothing left in cache
-		au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-		listAndCompareComb(t, au, expectedDbImage)
-
-		// ******* Results are obtained from the database and from the cache *******
-		// ******* No deletes in the database.                               *******
-		// ******* Data in the database deleted in the cache                 *******
-		au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
-		listAndCompareComb(t, au, expectedDbImage)
-
-		// ******* Results are obtained from the database and from the cache *******
-		// ******* Deletes are in the database and in the cache              *******
-		// sync with the database. This has deletes synced to the database.
-		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
-		require.NoError(t, err)
-		// get new creatables in the cache. There will be deleted in the cache from the previous batch.
-		au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
-		listAndCompareComb(t, au, expectedDbImage)
-
 		return
 	})
 	require.NoError(t, err)
+
+	au := &accountUpdates{}
+	au.accountsq, err = dbs.MakeAccountsOptimizedReader()
+	require.NoError(t, err)
+
+	// ******* All results are obtained from the cache. Empty database *******
+	// ******* No deletes                                              *******
+	// get random data. Initial batch, no deletes
+	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
+	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+	ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	// set the cache
+	au.creatables = ctbsWithDeletes
+	listAndCompareComb(t, au, expectedDbImage)
+
+	// ******* All results are obtained from the database. Empty cache *******
+	// ******* No deletes	                                           *******
+	// sync with the database
+	var updates compactAccountDeltas
+	var resUpdates compactResourcesDeltas
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
+		require.NoError(t, err)
+		return
+	})
+	require.NoError(t, err)
+
+	// nothing left in cache
+	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+	listAndCompareComb(t, au, expectedDbImage)
+
+	// ******* Results are obtained from the database and from the cache *******
+	// ******* No deletes in the database.                               *******
+	// ******* Data in the database deleted in the cache                 *******
+	au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	listAndCompareComb(t, au, expectedDbImage)
+
+	// ******* Results are obtained from the database and from the cache *******
+	// ******* Deletes are in the database and in the cache              *******
+	// sync with the database. This has deletes synced to the database.
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
+		require.NoError(t, err)
+		return
+	})
+	require.NoError(t, err)
+	// get new creatables in the cache. There will be deleted in the cache from the previous batch.
+	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	listAndCompareComb(t, au, expectedDbImage)
 }
 
 func TestBoxNamesByAppIDs(t *testing.T) {
