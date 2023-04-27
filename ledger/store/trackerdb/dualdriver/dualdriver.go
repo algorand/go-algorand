@@ -420,8 +420,9 @@ func (tx *transaction) RunMigrations(ctx context.Context, params trackerdb.Param
 
 // Testing implements trackerdb.Transaction
 func (tx *transaction) Testing() trackerdb.TestTransactionScope {
-	// TODO: implement
-	return nil
+	primary := tx.primary.Testing()
+	secondary := tx.secondary.Testing()
+	return &transactionForTesting{primary, secondary}
 }
 
 // Close implements trackerdb.Transaction
@@ -547,15 +548,13 @@ func (creatableRef) CreatableRefMarker() {}
 //
 
 func coalesceErrors(errP error, errS error) error {
-	// TODO: we need to log that one side errored and the other didn't
 	if errP == nil && errS != nil {
-		logging.Base().Error("secondary engine error", errS)
-		return errS
+		logging.Base().Error("secondary engine error, ", errS)
+		return ErrInconsistentResult
 	}
 	if errP != nil && errS == nil {
-		logging.Base().Error("primary engine error", errP)
-		// TODO: log that the primary didn't error
-		return errP
+		logging.Base().Error("primary engine error, ", errP)
+		return ErrInconsistentResult
 	}
 	// happy case (no errors)
 	if errP == nil && errS == nil {

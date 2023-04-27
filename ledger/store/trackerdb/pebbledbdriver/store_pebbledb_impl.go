@@ -227,7 +227,7 @@ func (s *trackerStore) ResetToV6Test(ctx context.Context) error {
 }
 
 func (s *trackerStore) Close() {
-	// TODO
+	s.Pdb.Close()
 }
 
 func (txs transactionScope) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
@@ -294,11 +294,11 @@ func (txs transactionScope) ResetTransactionWarnDeadline(ctx context.Context, de
 }
 
 func (txs transactionScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	return true
+	return generickv.AccountsInitTest(tb, txs.store, initAccounts, proto)
 }
 
 func (txs transactionScope) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	return true, nil
+	return generickv.AccountsInitLightTest(tb, txs.store, initAccounts, proto)
 }
 
 func (txs transactionScope) Testing() trackerdb.TestTransactionScope {
@@ -343,7 +343,7 @@ func (bs batchScope) ResetTransactionWarnDeadline(ctx context.Context, deadline 
 }
 
 func (bs batchScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	return false
+	return generickv.AccountsInitTest(tb, bs.store, initAccounts, proto)
 }
 
 func (bs batchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error) {
