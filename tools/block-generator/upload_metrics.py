@@ -23,16 +23,12 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-def parseReport(report):
+def parse_report(report):
     data = dict()
     with open(report) as f:
         for line in f:
             tag, value = line.split(":")
-            if tag == "scenario":
-                data[tag] = value
-            else:
-                data[tag] = float(value)
-    f.close()
+            data[tag] = value if tag == "scenario" else float(value)
     return data
 
 
@@ -45,11 +41,11 @@ if __name__ == "__main__":
     initialize(**options)
     for fp in args.files:
         print(f"uploading metrics for {fp}")
-        data = parseReport(fp)
+        data = parse_report(fp)
         tags = [
-            f'conduit_version:{args.binary_version}',
-            f'duration:{str(data["test_duration_seconds"])}s',
-            f'scenario:{str(data["scenario"])}',
+            f"conduit_version:{args.binary_version}",
+            f'duration:{data["test_duration_seconds"]}s',
+            f'scenario:{data["scenario"]}',
         ]
         transactionsPerBlockAvgMetricName = "conduit.perf.transactions_per_second"
         tps = data["final_overall_transactions_per_second"]
