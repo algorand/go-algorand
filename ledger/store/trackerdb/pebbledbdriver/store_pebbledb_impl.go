@@ -98,22 +98,29 @@ func (s *trackerStore) Batch(fn trackerdb.BatchFn) (err error) {
 }
 
 func (s *trackerStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
-	scope := batchScope{store: s, wb: s.Pdb.NewBatch(), wo: s.wo, db: s.Pdb}
-	defer scope.wb.Close()
+	handle, err := s.BeginBatch(ctx)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
 
 	// run the batch
-	err = fn(ctx, scope)
+	err = fn(ctx, handle)
 	if err != nil {
 		return
 	}
 
 	// commit the batch
-	err = scope.wb.Commit(s.wo)
+	err = handle.Commit()
 	if err != nil {
 		return
 	}
 
-	return fn(ctx, scope)
+	return err
+}
+
+func (s *trackerStore) BeginBatch(ctx context.Context) (trackerdb.Batch, error) {
+	return &batchScope{store: s, wb: s.Pdb.NewBatch(), wo: s.wo, db: s.Pdb}, nil
 }
 
 func (s *trackerStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
@@ -121,11 +128,23 @@ func (s *trackerStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 }
 
 func (s *trackerStore) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
-	scope := snapshotScope{db: s.Pdb, snap: s.Pdb.NewSnapshot(), proto: s.proto}
-	defer scope.snap.Close()
+	handle, err := s.BeginSnapshot(ctx)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
 
-	// run the scope
-	return fn(ctx, scope)
+	// run the snapshot
+	err = fn(ctx, handle)
+	if err != nil {
+		return
+	}
+
+	return err
+}
+
+func (s *trackerStore) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {
+	return &snapshotScope{db: s.Pdb, snap: s.Pdb.NewSnapshot(), proto: s.proto}, nil
 }
 
 func (s *trackerStore) Transaction(fn trackerdb.TransactionFn) (err error) {
@@ -133,29 +152,35 @@ func (s *trackerStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 }
 
 func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
-	scope := transactionScope{
-		store: s,
-		db:    s.Pdb,
-		wo:    s.wo,
-		snap:  s.Pdb.NewSnapshot(),
-		wb:    s.Pdb.NewBatch(),
-		proto: s.proto}
-	defer scope.snap.Close()
-	defer scope.wb.Close()
+	handle, err := s.BeginTransaction(ctx)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
 
 	// run the transaction
-	err = fn(ctx, scope)
+	err = fn(ctx, handle)
 	if err != nil {
 		return
 	}
 
 	// commit the transaction
-	err = scope.wb.Commit(s.wo)
+	err = handle.Commit()
 	if err != nil {
 		return
 	}
 
-	return nil
+	return err
+}
+
+func (s *trackerStore) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
+	return &transactionScope{
+		store: s,
+		db:    s.Pdb,
+		wo:    s.wo,
+		snap:  s.Pdb.NewSnapshot(),
+		wb:    s.Pdb.NewBatch(),
+		proto: s.proto}, nil
 }
 
 func (s *trackerStore) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
@@ -280,6 +305,15 @@ func (txs transactionScope) Testing() trackerdb.TestTransactionScope {
 	return txs
 }
 
+func (txs transactionScope) Close() error {
+	txs.snap.Close()
+	return txs.wb.Close()
+}
+
+func (txs transactionScope) Commit() error {
+	return txs.wb.Commit(txs.wo)
+}
+
 func (bs batchScope) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
 	return nil, nil
 }
@@ -324,6 +358,14 @@ func (bs batchScope) Testing() trackerdb.TestBatchScope {
 	return bs
 }
 
+func (bs batchScope) Close() error {
+	return bs.wb.Close()
+}
+
+func (bs batchScope) Commit() error {
+	return bs.wb.Commit(bs.wo)
+}
+
 func (ss snapshotScope) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
 	return generickv.MakeAccountsReader(ss, ss.proto), nil
 }
@@ -338,6 +380,10 @@ func (ss snapshotScope) MakeSpVerificationCtxReader() trackerdb.SpVerificationCt
 
 func (ss snapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
 	return nil
+}
+
+func (ss snapshotScope) Close() error {
+	return ss.snap.Close()
 }
 
 //

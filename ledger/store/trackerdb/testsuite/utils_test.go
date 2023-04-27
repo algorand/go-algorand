@@ -144,6 +144,10 @@ func (db *mockDB) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err e
 	return fn(ctx, mockBatch{db})
 }
 
+func (db *mockDB) BeginBatch(ctx context.Context) (trackerdb.Batch, error) {
+	return &mockBatch{db}, nil
+}
+
 func (db *mockDB) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 	return db.SnapshotContext(context.Background(), fn)
 }
@@ -152,12 +156,20 @@ func (db *mockDB) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) 
 	return fn(ctx, mockSnapshot{db})
 }
 
+func (db *mockDB) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {
+	return &mockSnapshot{db}, nil
+}
+
 func (db *mockDB) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return db.TransactionContext(context.Background(), fn)
 }
 
 func (db *mockDB) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
 	return fn(ctx, mockTransaction{db, db.proto})
+}
+
+func (db *mockDB) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
+	return &mockTransaction{db, db.proto}, nil
 }
 
 func (db *mockDB) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
@@ -275,6 +287,14 @@ func (txs mockTransaction) Testing() trackerdb.TestTransactionScope {
 	return txs
 }
 
+func (txs mockTransaction) Close() error {
+	return nil
+}
+
+func (txs mockTransaction) Commit() error {
+	return nil
+}
+
 func (bs mockBatch) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
 	return nil, nil
 }
@@ -316,6 +336,14 @@ func (bs mockBatch) Testing() trackerdb.TestBatchScope {
 	return bs
 }
 
+func (bs mockBatch) Close() error {
+	return nil
+}
+
+func (bs mockBatch) Commit() error {
+	return nil
+}
+
 func (ss mockSnapshot) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
 	return nil, nil
 }
@@ -329,6 +357,10 @@ func (ss mockSnapshot) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtx
 }
 
 func (ss mockSnapshot) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
+	return nil
+}
+
+func (ss mockSnapshot) Close() error {
 	return nil
 }
 

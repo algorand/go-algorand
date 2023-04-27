@@ -87,6 +87,14 @@ func (s *trackerSQLStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn
 	})
 }
 
+func (s *trackerSQLStore) BeginBatch(ctx context.Context) (trackerdb.Batch, error) {
+	handle, err := s.pair.Wdb.Handle.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &sqlBatchScope{handle}, nil
+}
+
 func (s *trackerSQLStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 	return s.SnapshotContext(context.Background(), fn)
 }
@@ -97,6 +105,14 @@ func (s *trackerSQLStore) SnapshotContext(ctx context.Context, fn trackerdb.Snap
 	})
 }
 
+func (s *trackerSQLStore) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {
+	handle, err := s.pair.Wdb.Handle.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &sqlSnapshotScope{handle}, nil
+}
+
 func (s *trackerSQLStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return s.TransactionContext(context.Background(), fn)
 }
@@ -105,6 +121,14 @@ func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.T
 	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, sqlTransactionScope{tx})
 	})
+}
+
+func (s *trackerSQLStore) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
+	handle, err := s.pair.Wdb.Handle.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &sqlTransactionScope{handle}, nil
 }
 
 func (s *trackerSQLStore) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
@@ -242,6 +266,14 @@ func (txs sqlTransactionScope) AccountsInitLightTest(tb testing.TB, initAccounts
 	return AccountsInitLightTest(tb, txs.tx, initAccounts, proto)
 }
 
+func (txs sqlTransactionScope) Close() error {
+	return txs.tx.Rollback()
+}
+
+func (txs sqlTransactionScope) Commit() error {
+	return txs.tx.Commit()
+}
+
 // Testing returns this scope, exposed as an interface with test functions
 func (bs sqlBatchScope) Testing() trackerdb.TestBatchScope {
 	return bs
@@ -287,6 +319,14 @@ func (bs sqlBatchScope) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCt
 	return makeStateProofVerificationWriter(bs.tx)
 }
 
+func (bs sqlBatchScope) Close() error {
+	return bs.tx.Rollback()
+}
+
+func (bs sqlBatchScope) Commit() error {
+	return bs.tx.Commit()
+}
+
 func (ss sqlSnapshotScope) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
 	return NewAccountsSQLReaderWriter(ss.tx), nil
 }
@@ -301,4 +341,8 @@ func (ss sqlSnapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) tr
 
 func (ss sqlSnapshotScope) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
 	return makeStateProofVerificationReader(ss.tx)
+}
+
+func (ss sqlSnapshotScope) Close() error {
+	return ss.tx.Rollback()
 }
