@@ -1496,6 +1496,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	}
 
 	response := model.BoxResponse{
+		round: lastRound,
 		Name:  boxName,
 		Value: value,
 	}
