@@ -400,6 +400,9 @@ type Box struct {
 	// Name \[name\] box name, base64 encoded
 	Name []byte `json:"name"`
 
+	// Round Round
+	Round *uint64 `json:"round,omitempty"`
+
 	// Value \[value\] box value, base64 encoded.
 	Value []byte `json:"value"`
 }
