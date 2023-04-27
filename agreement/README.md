@@ -22,15 +22,16 @@ into the ordered log of `Blocks`.
 
 Clients instantiate an `agreement.Service` by providing it several
 parameters:
- - `Ledger` represents a data store which supports the reading and
-   writing of data stored within `Block`s.
- - `BlockFactory` produces `Block`s for a given round.
- - `BlockValidator` validates `Block`s for a given round.
- - `KeyManager` holds the participation keys necessary to participate
-   in the protocol.
- - `Network` provides an abstraction over the underlying network.
- - `timers.Clock` provides timekeeping services for timeouts.
- - `db.Accessor` provides persistent storage for internal state.
+
+| Parameter | Description |
+| - | - |
+| **`Ledger`** | represents a data store which supports the reading and writing of data stored within `Block`s. |
+| **`BlockFactory`** | produces `Block`s for a given round. |
+| **`BlockValidator`** | validates `Block`s for a given round. |
+| **`KeyManager`** | holds the participation keys necessary to participate in the protocol. |
+| **`Network`** | provides an abstraction over the underlying network. |
+| **`timers.Clock`** | provides timekeeping services for timeouts. |
+| **`db.Accessor`** | provides persistent storage for internal state. |
 
  `Block`s for which consensus is completed are written using
  `Ledger.EnsureBlock` alongside `Certificate` objects, which are
@@ -52,21 +53,18 @@ throughout this file.
 
 Certain terms in this implementation are used as shorthands for
 specific concepts:
- - "Threshold" and "quorum" both refer to the total weight of votes
-   needed to form a bundle for a given value.
- - A "proposal-vote" refers to a vote whose step is "propose"=0.
- - A "payload" refers to the body of a proposal which contains, among
-   other fields, a `Block`.
- - "Freshness" generally refers to the relevance of some message or
-   event.  Message relay rules which refer to a round, period, or step
-   may be referred to as freshness rules.  Freshness may also be used
-   to describe the relevance of bundles.
- - The "frozen" value in a period p refers to the proposal-value in the
-   proposal-vote which was observed by the state machine to have the lowest
-   credential (i.e., mu(S, r, p)).
- - The "staging" value in a period p refers to the proposal-value which received
-   a quorum of soft votes (i.e., sigma(S, r, p)).
- - Additional terminology is described in the [agreement service doc](../docs/agreement_service.md).
+
+| Term | Description |
+| - | - |
+| **threshold** | the total weight of votes needed to form a bundle for a given value. |
+| **quorum** | same as **"threshold"** |
+| **proposal-vote** | refers to a vote whose step is "propose"=0. |
+| **payload** | refers to the body of a proposal which contains, among other fields, a `Block` |
+ | **freshness** | - generally refers to the relevance of some message or event.<br/>- message relay rules which refer to a round, period, or step may be referred to as freshness rules.<br/>- freshness may also be used to describe the relevance of bundles. |
+ | **frozen** | (the frozen) value in a period p refers to the proposal-value in the    proposal-vote which was observed by the state machine to have the lowest |   credential (i.e., mu(S, r, p)).
+ | **staging** | (the staging) value in a period p refers to the proposal-value which received a quorum of soft votes (i.e., sigma(S, r, p)). |
+
+ Additional terminology is described in the [agreement service doc](../docs/agreement_service.md).
 
 ## Design
 
