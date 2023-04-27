@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// BatchScope is the write scope to the store.
+// BatchScope is an atomic write-only scope to the store.
 type BatchScope interface {
 	MakeCatchpointWriter() (CatchpointWriter, error)
 	MakeAccountsWriter() (AccountsWriterExt, error)
@@ -34,7 +34,14 @@ type BatchScope interface {
 	Testing() TestBatchScope
 }
 
-// SnapshotScope is the read scope to the store.
+// Batch is an atomic write-only accecssor to the store.
+type Batch interface {
+	BatchScope
+	Commit() error
+	Close() error
+}
+
+// SnapshotScope is an atomic read-only scope to the store.
 type SnapshotScope interface {
 	MakeAccountsReader() (AccountsReaderExt, error)
 	MakeCatchpointReader() (CatchpointReader, error)
@@ -42,7 +49,13 @@ type SnapshotScope interface {
 	MakeSpVerificationCtxReader() SpVerificationCtxReader
 }
 
-// TransactionScope is the read/write scope to the store.
+// Snapshot is an atomic read-only accecssor to the store.
+type Snapshot interface {
+	SnapshotScope
+	Close() error
+}
+
+// TransactionScope is an atomic read/write scope to the store.
 type TransactionScope interface {
 	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
 	MakeAccountsReaderWriter() (AccountsReaderWriter, error)
@@ -57,6 +70,13 @@ type TransactionScope interface {
 	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
 	Testing() TestTransactionScope
+}
+
+// Transaction is an atomic read/write accecssor to the store.
+type Transaction interface {
+	TransactionScope
+	Commit() error
+	Close() error
 }
 
 // BatchFn is the callback lambda used in `Batch`.
@@ -76,12 +96,15 @@ type TrackerStore interface {
 
 	Batch(fn BatchFn) (err error)
 	BatchContext(ctx context.Context, fn BatchFn) (err error)
+	BeginBatch(ctx context.Context) (Batch, error)
 
 	Snapshot(fn SnapshotFn) (err error)
 	SnapshotContext(ctx context.Context, fn SnapshotFn) (err error)
+	BeginSnapshot(ctx context.Context) (Snapshot, error)
 
 	Transaction(fn TransactionFn) (err error)
 	TransactionContext(ctx context.Context, fn TransactionFn) (err error)
+	BeginTransaction(ctx context.Context) (Transaction, error)
 
 	MakeAccountsWriter() (AccountsWriterExt, error)
 	MakeAccountsReader() (AccountsReaderExt, error)
