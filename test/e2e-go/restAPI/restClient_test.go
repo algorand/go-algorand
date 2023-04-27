@@ -1529,17 +1529,17 @@ end:
 		operateBoxAndSendTxn("create", []string{string(boxTest.name)}, []string{""})
 		operateBoxAndSendTxn("set", []string{string(boxTest.name)}, []string{string(boxTest.value)})
 
-        currentRoundBeforeBoxes, err := testClient.CurrentRound()
-        a.NoError(err)
+		currentRoundBeforeBoxes, err := testClient.CurrentRound()
+		a.NoError(err)
 		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), boxTest.encodedName)
 		a.NoError(err)
-        currentRoundAfterBoxes, err := testClient.CurrentRound()
-        a.NoError(err)
+		currentRoundAfterBoxes, err := testClient.CurrentRound()
+		a.NoError(err)
 		a.Equal(boxTest.name, boxResponse.Name)
 		a.Equal(boxTest.value, boxResponse.Value)
-    	// To reduce flakiness, only check the round from simulate is within a range.
-    	a.GreaterOrEqual(result.LastRound, currentRoundBeforeBoxes)
-    	a.LessOrEqual(result.LastRound, currentAfterAfterBoxes)
+		// To reduce flakiness, only check the round from simulate is within a range.
+		a.GreaterOrEqual(result.LastRound, currentRoundBeforeBoxes)
+		a.LessOrEqual(result.LastRound, currentAfterAfterBoxes)
 	}
 
 	const numberOfBoxesRemaining = uint64(3)
