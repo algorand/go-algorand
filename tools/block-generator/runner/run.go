@@ -341,11 +341,7 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 	}
 
 	// write scenario to report
-	scenario := r.Path
-	i := strings.LastIndex(r.Path, "/")
-	if i != -1 {
-		scenario = r.Path[i+1:]
-	}
+	scenario := path.Base(r.Path)
 	if _, err := report.WriteString(fmt.Sprintf("scenario:%s\n", scenario)); err != nil {
 		return fmt.Errorf("unable to write scenario to report: %w", err)
 	}
