@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // cursorEvalTracer is responsible for maintaining a TxnPath that points to the currently executing
@@ -47,7 +48,7 @@ func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, a
 	tracer.previousInnerTxns = tracer.previousInnerTxns[:len(tracer.previousInnerTxns)-1]
 }
 
-func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	top := len(tracer.relativeCursor) - 1
 	if len(tracer.previousInnerTxns) != 0 {
 		tracer.previousInnerTxns[len(tracer.previousInnerTxns)-1] += tracer.relativeCursor[top] + 1
@@ -143,9 +144,9 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
 }
 
-func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	tracer.handleError(evalError)
-	tracer.cursorEvalTracer.AfterTxnGroup(ep, evalError)
+	tracer.cursorEvalTracer.AfterTxnGroup(ep, deltas, evalError)
 }
 
 func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
