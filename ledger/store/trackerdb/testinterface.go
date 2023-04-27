@@ -36,8 +36,6 @@ import (
 
 // TestBatchScope is an interface to extend BatchScope with test-only methods
 type TestBatchScope interface {
-	BatchScope
-
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsUpdateSchemaTest(ctx context.Context) (err error)
 	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
@@ -46,8 +44,6 @@ type TestBatchScope interface {
 
 // TestTransactionScope is an interface to extend TransactionScope with test-only methods
 type TestTransactionScope interface {
-	TransactionScope
-
 	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
@@ -55,8 +51,6 @@ type TestTransactionScope interface {
 
 // TestAccountsReaderExt is an interface to extend AccountsReaderExt with test-only methods
 type TestAccountsReaderExt interface {
-	AccountsReaderExt
-
 	AccountsAllTest() (bals map[basics.Address]basics.AccountData, err error)
 	CheckCreatablesTest(t *testing.T, iteration int, expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 }
