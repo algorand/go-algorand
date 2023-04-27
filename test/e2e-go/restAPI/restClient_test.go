@@ -1538,8 +1538,8 @@ end:
 		a.Equal(boxTest.name, boxResponse.Name)
 		a.Equal(boxTest.value, boxResponse.Value)
 		// To reduce flakiness, only check the round from simulate is within a range.
-		a.GreaterOrEqual(result.LastRound, currentRoundBeforeBoxes)
-		a.LessOrEqual(result.LastRound, currentAfterAfterBoxes)
+		a.GreaterOrEqual(boxResponse.Round, currentRoundBeforeBoxes)
+		a.LessOrEqual(boxResponse.Round, currentAfterAfterBoxes)
 	}
 
 	const numberOfBoxesRemaining = uint64(3)
