@@ -1376,7 +1376,7 @@
             "type": "string"
           },
           "round": {
-            "description": "Round",
+            "description": "The round for which this information is relevant",
             "type": "integer"
           },
           "value": {
@@ -1388,6 +1388,7 @@
         },
         "required": [
           "name",
+          "round",
           "value"
         ],
         "type": "object"

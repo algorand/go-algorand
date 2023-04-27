@@ -1517,11 +1517,11 @@ end:
 		name        []byte
 		encodedName string
 		value       []byte
-        round       int
+		round       int
 	}{
-		{[]byte("foo"), "str:foo", []byte("bar12"), 20,},
-		{encodeInt(12321), "int:12321", []byte{0, 1, 254, 3, 2}, 21,},
-		{[]byte{0, 248, 255, 32}, "b64:APj/IA==", []byte("lux56"), 22,},
+		{[]byte("foo"), "str:foo", []byte("bar12"), 20},
+		{encodeInt(12321), "int:12321", []byte{0, 1, 254, 3, 2}, 21},
+		{[]byte{0, 248, 255, 32}, "b64:APj/IA==", []byte("lux56"), 22},
 	}
 	for _, boxTest := range boxTests {
 		// Box values are 5 bytes, as defined by the test TEAL program.
