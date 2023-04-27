@@ -1518,9 +1518,9 @@ end:
 		encodedName string
 		value       []byte
 	}{
-		{[]byte("foo"), "str:foo", []byte("bar12"),},
-		{encodeInt(12321), "int:12321", []byte{0, 1, 254, 3, 2},},
-		{[]byte{0, 248, 255, 32}, "b64:APj/IA==", []byte("lux56"),},
+		{[]byte("foo"), "str:foo", []byte("bar12")},
+		{encodeInt(12321), "int:12321", []byte{0, 1, 254, 3, 2}},
+		{[]byte{0, 248, 255, 32}, "b64:APj/IA==", []byte("lux56")},
 	}
 
 	for _, boxTest := range boxTests {
