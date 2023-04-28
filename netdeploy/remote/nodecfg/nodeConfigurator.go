@@ -96,9 +96,7 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 	for _, nodeDir := range nodeDirs {
 		nodeDir.delaySave = true
-		if nc.SkipMetricsSrv {
-			nodeDir.skipMetricsSrv = true
-		}
+		nodeDir.skipMetricsSrv = nc.SkipMetricsSrv
 		err = nodeDir.configure()
 		if err != nil {
 			break
