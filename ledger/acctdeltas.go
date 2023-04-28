@@ -298,7 +298,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.MakeAccountsReaderWriter()
+	ar, err := tx.MakeAccountsReader()
 	if err != nil {
 		return err
 	}
@@ -317,7 +317,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 		if delta.oldResource.AcctRef != nil {
 			acctRef = delta.oldResource.AcctRef
 		} else if acctRef, ok = knownAddresses[addr]; !ok {
-			acctRef, err = arw.LookupAccountRowID(addr)
+			acctRef, err = ar.LookupAccountRowID(addr)
 			if err != nil {
 				if err != sql.ErrNoRows && err != trackerdb.ErrNotFound {
 					err = fmt.Errorf("base account cannot be read while processing resource for addr=%s, aidx=%d: %w", addr.String(), aidx, err)
@@ -330,7 +330,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 				continue
 			}
 		}
-		resDataBuf, err = arw.LookupResourceDataByAddrID(acctRef, aidx)
+		resDataBuf, err = ar.LookupResourceDataByAddrID(acctRef, aidx)
 		switch err {
 		case nil:
 			if len(resDataBuf) > 0 {
@@ -595,7 +595,7 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx trackerdb.TransactionSco
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.MakeAccountsReaderWriter()
+	ar, err := tx.MakeAccountsReader()
 	if err != nil {
 		return err
 	}
@@ -604,7 +604,7 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx trackerdb.TransactionSco
 	}()
 	for _, idx := range a.misses {
 		addr := a.deltas[idx].address
-		ref, acctDataBuf, err := arw.LookupOnlineAccountDataByAddress(addr)
+		ref, acctDataBuf, err := ar.LookupOnlineAccountDataByAddress(addr)
 		switch err {
 		case nil:
 			if len(acctDataBuf) > 0 {

@@ -52,7 +52,7 @@ type Ledger struct {
 	// Database connections to the DBs storing blocks and tracker state.
 	// We use potentially different databases to avoid SQLite contention
 	// during catchup.
-	trackerDBs trackerdb.TrackerStore
+	trackerDBs trackerdb.Store
 	blockDBs   db.Pair
 
 	// blockQ is the buffer of added blocks that will be flushed to
@@ -285,7 +285,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local) (trackerDBs trackerdb.TrackerStore, blockDBs db.Pair, err error) {
+func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
 	if !dbMem {
@@ -813,7 +813,7 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 }
 
 // ledgerForTracker methods
-func (l *Ledger) trackerDB() trackerdb.TrackerStore {
+func (l *Ledger) trackerDB() trackerdb.Store {
 	return l.trackerDBs
 }
 

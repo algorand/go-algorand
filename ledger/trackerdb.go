@@ -79,11 +79,11 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	if lastBalancesRound > lastestBlockRound {
 		log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, lastestBlockRound)
 		err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-			arw, err := tx.MakeAccountsReaderWriter()
+			aw, err := tx.MakeAccountsWriter()
 			if err != nil {
 				return err
 			}
-			err = arw.AccountsReset(ctx)
+			err = aw.AccountsReset(ctx)
 			if err != nil {
 				return err
 			}

@@ -28,7 +28,7 @@ import (
 )
 
 type dbForInit interface {
-	trackerdb.TrackerStore
+	trackerdb.Store
 	KvRead
 	KvWrite
 }

@@ -19,22 +19,24 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
+
+	"github.com/algorand/go-algorand/util/db"
 )
 
 type kvsIter struct {
-	tx   *sql.Tx
+	q    db.Queryable
 	rows *sql.Rows
 }
 
 // MakeKVsIter creates a KV iterator.
-func MakeKVsIter(ctx context.Context, tx *sql.Tx) (*kvsIter, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT key, value FROM kvstore")
+func MakeKVsIter(ctx context.Context, q db.Queryable) (*kvsIter, error) {
+	rows, err := q.QueryContext(ctx, "SELECT key, value FROM kvstore")
 	if err != nil {
 		return nil, err
 	}
 
 	return &kvsIter{
-		tx:   tx,
+		q:    q,
 		rows: rows,
 	}, nil
 }

@@ -52,10 +52,10 @@ import (
 )
 
 func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
-	arw, err := tx.MakeAccountsReaderWriter()
+	ar, err := tx.MakeAccountsReader()
 	require.NoError(t, err)
 
-	r, err := arw.AccountsRound()
+	r, err := ar.AccountsRound()
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
@@ -83,11 +83,11 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 		}
 	}
 
-	all, err := arw.Testing().AccountsAllTest()
+	all, err := ar.Testing().AccountsAllTest()
 	require.NoError(t, err)
 	require.Equal(t, all, accts)
 
-	totals, err := arw.AccountsTotals(context.Background(), false)
+	totals, err := ar.AccountsTotals(context.Background(), false)
 	require.NoError(t, err)
 	require.Equal(t, totalOnline, totals.Online.Money.Raw, "mismatching total online money")
 	require.Equal(t, totalOffline, totals.Offline.Money.Raw)
@@ -129,7 +129,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 	})
 
 	for i := 0; i < len(onlineAccounts); i++ {
-		dbtop, err := arw.AccountsOnlineTop(rnd, 0, uint64(i), proto)
+		dbtop, err := ar.AccountsOnlineTop(rnd, 0, uint64(i), proto)
 		require.NoError(t, err)
 		require.Equal(t, i, len(dbtop))
 
@@ -139,7 +139,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 		}
 	}
 
-	top, err := arw.AccountsOnlineTop(rnd, 0, uint64(len(onlineAccounts)+1), proto)
+	top, err := ar.AccountsOnlineTop(rnd, 0, uint64(len(onlineAccounts)+1), proto)
 	require.NoError(t, err)
 	require.Equal(t, len(top), len(onlineAccounts))
 }
@@ -215,15 +215,17 @@ func TestAccountDBRound(t *testing.T) {
 	defer dbs.Close()
 
 	dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-		arw, err := tx.MakeAccountsReaderWriter()
+		ar, err := tx.MakeAccountsReader()
+		require.NoError(t, err)
+		aw, err := tx.MakeAccountsWriter()
 		require.NoError(t, err)
 
 		accts := ledgertesting.RandomAccounts(20, true)
 		tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
 		checkAccounts(t, tx, 0, accts)
-		totals, err := arw.AccountsTotals(context.Background(), false)
+		totals, err := ar.AccountsTotals(context.Background(), false)
 		require.NoError(t, err)
-		expectedOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
+		expectedOnlineRoundParams, endRound, err := ar.AccountsOnlineRoundParams()
 		require.NoError(t, err)
 		require.Equal(t, 1, len(expectedOnlineRoundParams))
 		require.Equal(t, 0, int(endRound))
@@ -269,10 +271,10 @@ func TestAccountDBRound(t *testing.T) {
 			err = resourceUpdatesCnt.resourcesLoadOld(tx, knownAddresses)
 			require.NoError(t, err)
 
-			err = arw.AccountsPutTotals(totals, false)
+			err = aw.AccountsPutTotals(totals, false)
 			require.NoError(t, err)
 			onlineRoundParams := ledgercore.OnlineRoundParamsData{RewardsLevel: totals.RewardsLevel, OnlineSupply: totals.Online.Money.Raw, CurrentProtocol: protocol.ConsensusCurrentVersion}
-			err = arw.AccountsPutOnlineRoundParams([]ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
+			err = aw.AccountsPutOnlineRoundParams([]ledgercore.OnlineRoundParamsData{onlineRoundParams}, basics.Round(i))
 			require.NoError(t, err)
 			expectedOnlineRoundParams = append(expectedOnlineRoundParams, onlineRoundParams)
 
@@ -289,7 +291,7 @@ func TestAccountDBRound(t *testing.T) {
 			updatedOnlineAccts, err := onlineAccountsNewRound(tx, updatesOnlineCnt, proto, basics.Round(i))
 			require.NoError(t, err)
 
-			err = arw.UpdateAccountsRound(basics.Round(i))
+			err = aw.UpdateAccountsRound(basics.Round(i))
 			require.NoError(t, err)
 
 			// TODO: calculate exact number of updates?
@@ -297,7 +299,7 @@ func TestAccountDBRound(t *testing.T) {
 			require.NotEmpty(t, updatedOnlineAccts)
 
 			checkAccounts(t, tx, basics.Round(i), accts)
-			arw.Testing().CheckCreatablesTest(t, i, expectedDbImage)
+			ar.Testing().CheckCreatablesTest(t, i, expectedDbImage)
 		}
 
 		// test the accounts totals
@@ -307,11 +309,11 @@ func TestAccountDBRound(t *testing.T) {
 		}
 
 		expectedTotals := ledgertesting.CalculateNewRoundAccountTotals(t, updates, 0, proto, nil, ledgercore.AccountTotals{})
-		actualTotals, err := arw.AccountsTotals(context.Background(), false)
+		actualTotals, err := ar.AccountsTotals(context.Background(), false)
 		require.NoError(t, err)
 		require.Equal(t, expectedTotals, actualTotals)
 
-		actualOnlineRoundParams, endRound, err := arw.AccountsOnlineRoundParams()
+		actualOnlineRoundParams, endRound, err := ar.AccountsOnlineRoundParams()
 		require.NoError(t, err)
 		require.Equal(t, expectedOnlineRoundParams, actualOnlineRoundParams)
 		require.Equal(t, 9, int(endRound))
@@ -321,7 +323,7 @@ func TestAccountDBRound(t *testing.T) {
 		acctCb := func(addr basics.Address, data basics.AccountData) {
 			loaded[addr] = data
 		}
-		count, err := arw.LoadAllFullAccounts(context.Background(), "accountbase", "resources", acctCb)
+		count, err := ar.LoadAllFullAccounts(context.Background(), "accountbase", "resources", acctCb)
 		require.NoError(t, err)
 		require.Equal(t, count, len(accts))
 		require.Equal(t, count, len(loaded))
@@ -619,14 +621,14 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		benchmarkInitBalances(b, b.N, tx, protocol.ConsensusCurrentVersion)
-		arw, err := tx.MakeAccountsReaderWriter()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
 		b.ResetTimer()
 		// read all the balances in the database.
 		var err2 error
-		bal, err2 = arw.Testing().AccountsAllTest()
+		bal, err2 = ar.Testing().AccountsAllTest()
 		require.NoError(b, err2)
 		return nil
 	})
@@ -771,7 +773,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		normalizedAccountBalances, err := prepareNormalizedBalancesV6(chunk.Balances, proto)
 		require.NoError(b, err)
 		b.StartTimer()
-		err = l.trackerDBs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) (err error) {
+		err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 			cw, err := tx.MakeCatchpointWriter()
 			if err != nil {
 				return err
@@ -1449,13 +1451,13 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	require.NoError(t, err)
 
 	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		arw, err := tx.MakeAccountsReaderWriter()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
 
 		for addr, addrid := range addrsids {
-			retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, addrid)
+			retAddr, err := ar.LookupAccountAddressFromAddressID(ctx, addrid)
 			if err != nil {
 				return err
 			}
@@ -1464,7 +1466,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 			}
 		}
 		// test fail case:
-		retAddr, err := arw.LookupAccountAddressFromAddressID(ctx, nil)
+		retAddr, err := ar.LookupAccountAddressFromAddressID(ctx, nil)
 
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("unexpected error : %w", err)
@@ -2238,14 +2240,15 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 
-		arw, err := tx.MakeAccountsReaderWriter()
-		if err != nil {
-			return err
-		}
+		ar, err := tx.MakeAccountsReader()
+		require.NoError(t, err)
+
+		aw, err := tx.MakeAccountsWriter()
+		require.NoError(t, err)
 
 		var accts map[basics.Address]basics.AccountData
 		tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
-		totals, err := arw.AccountsTotals(context.Background(), false)
+		totals, err := ar.AccountsTotals(context.Background(), false)
 		require.NoError(t, err)
 
 		var baseAccounts lruAccounts
@@ -2329,7 +2332,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 			err = updatesOnlineCnt.accountsLoadOld(tx)
 			require.NoError(t, err)
 
-			err = arw.AccountsPutTotals(totals, false)
+			err = aw.AccountsPutTotals(totals, false)
 			require.NoError(t, err)
 			updatedAccts, _, _, err := accountsNewRound(tx, updatesCnt, compactResourcesDeltas{}, nil, nil, proto, rnd)
 			require.NoError(t, err)
@@ -2339,7 +2342,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, updatedOnlineAccts)
 
-			err = arw.UpdateAccountsRound(rnd)
+			err = aw.UpdateAccountsRound(rnd)
 			require.NoError(t, err)
 
 			return
@@ -2367,12 +2370,12 @@ func TestAccountOnlineQueries(t *testing.T) {
 		refoaB3 := round3poads[0].Ref
 		refoaC3 := round3poads[1].Ref
 
-		queries, err := tx.Testing().MakeOnlineAccountsOptimizedReader()
+		queries, err := tx.MakeOnlineAccountsOptimizedReader()
 		require.NoError(t, err)
 
 		// check round 1
 		rnd := basics.Round(1)
-		online, err := arw.AccountsOnlineTop(rnd, 0, 10, proto)
+		online, err := ar.AccountsOnlineTop(rnd, 0, 10, proto)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(online))
 		require.NotContains(t, online, addrC)
@@ -2411,7 +2414,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		// check round 2
 		rnd = basics.Round(2)
-		online, err = arw.AccountsOnlineTop(rnd, 0, 10, proto)
+		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(online))
 		require.NotContains(t, online, addrA)
@@ -2444,7 +2447,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		// check round 3
 		rnd = basics.Round(3)
-		online, err = arw.AccountsOnlineTop(rnd, 0, 10, proto)
+		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(online))
 		require.NotContains(t, online, addrA)
@@ -2475,7 +2478,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 		require.Equal(t, dataC3.AccountBaseData.MicroAlgos, paod.AccountData.MicroAlgos)
 		require.Equal(t, voteIDC, paod.AccountData.VoteID)
 
-		paods, err := arw.OnlineAccountsAll(0)
+		paods, err := ar.OnlineAccountsAll(0)
 		require.NoError(t, err)
 		require.Equal(t, 5, len(paods))
 
@@ -2512,20 +2515,20 @@ func TestAccountOnlineQueries(t *testing.T) {
 		checkAddrC()
 		checkAddrA()
 
-		paods, err = arw.OnlineAccountsAll(3)
+		paods, err = ar.OnlineAccountsAll(3)
 		require.NoError(t, err)
 		require.Equal(t, 5, len(paods))
 		checkAddrB()
 		checkAddrC()
 		checkAddrA()
 
-		paods, err = arw.OnlineAccountsAll(2)
+		paods, err = ar.OnlineAccountsAll(2)
 		require.NoError(t, err)
 		require.Equal(t, 3, len(paods))
 		checkAddrB()
 		checkAddrC()
 
-		paods, err = arw.OnlineAccountsAll(1)
+		paods, err = ar.OnlineAccountsAll(1)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(paods))
 		checkAddrB()

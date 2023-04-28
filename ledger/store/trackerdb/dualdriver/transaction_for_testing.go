@@ -17,6 +17,7 @@
 package dualdriver
 
 import (
+	"context"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -25,13 +26,13 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type transactionForTesting struct {
-	primary   trackerdb.TestTransactionScope
-	secondary trackerdb.TestTransactionScope
+type writerForTesting struct {
+	primary   trackerdb.WriterTestExt
+	secondary trackerdb.WriterTestExt
 }
 
-// AccountsInitLightTest implements trackerdb.TestTransactionScope
-func (tx *transactionForTesting) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabse bool, err error) {
+// AccountsInitLightTest implements trackerdb.WriterTestExt
+func (tx *writerForTesting) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabse bool, err error) {
 	newDatabaseP, errP := tx.primary.AccountsInitLightTest(tb, initAccounts, proto)
 	newDatabaseS, errS := tx.secondary.AccountsInitLightTest(tb, initAccounts, proto)
 	// coalesce errors
@@ -48,21 +49,20 @@ func (tx *transactionForTesting) AccountsInitLightTest(tb testing.TB, initAccoun
 	return newDatabaseP, nil
 }
 
-// AccountsInitTest implements trackerdb.TestTransactionScope
-func (tx *transactionForTesting) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
+// AccountsInitTest implements trackerdb.WriterTestExt
+func (tx *writerForTesting) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	newDatabaseP := tx.primary.AccountsInitTest(tb, initAccounts, proto)
 	tx.secondary.AccountsInitTest(tb, initAccounts, proto)
 	// return primary results
 	return newDatabaseP
 }
 
-// MakeOnlineAccountsOptimizedReader implements trackerdb.TestTransactionScope
-func (tx *transactionForTesting) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
-	primary, errP := tx.primary.MakeOnlineAccountsOptimizedReader()
-	secondary, errS := tx.secondary.MakeOnlineAccountsOptimizedReader()
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &onlineAccountsReader{primary, secondary}, nil
+// AccountsUpdateSchemaTest implements trackerdb.WriterTestExt
+func (*writerForTesting) AccountsUpdateSchemaTest(ctx context.Context) (err error) {
+	panic("unimplemented")
+}
+
+// ModifyAcctBaseTest implements trackerdb.WriterTestExt
+func (*writerForTesting) ModifyAcctBaseTest() error {
+	panic("unimplemented")
 }

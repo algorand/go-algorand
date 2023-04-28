@@ -437,7 +437,7 @@ func (r *accountsReader) LoadAllFullAccounts(ctx context.Context, balancesTable 
 	return
 }
 
-func (r *accountsReader) Testing() trackerdb.TestAccountsReaderExt {
+func (r *accountsReader) Testing() trackerdb.AccountsReaderTestExt {
 	// TODO: this can wait
 	return nil
 }

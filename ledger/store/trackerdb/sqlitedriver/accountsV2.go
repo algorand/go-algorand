@@ -56,8 +56,13 @@ func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	}
 }
 
+// NewAccountsSQLReader creates an SQL reader+writer
+func NewAccountsSQLReader(q db.Queryable) *accountsV2Reader {
+	return &accountsV2Reader{q: q, preparedStatements: make(map[string]*sql.Stmt)}
+}
+
 // Testing returns this reader, exposed as an interface with test functions
-func (r *accountsV2Reader) Testing() trackerdb.TestAccountsReaderExt {
+func (r *accountsV2Reader) Testing() trackerdb.AccountsReaderTestExt {
 	return r
 }
 

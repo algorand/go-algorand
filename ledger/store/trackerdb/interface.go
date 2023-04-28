@@ -120,7 +120,8 @@ type AccountsReaderExt interface {
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
-	Testing() TestAccountsReaderExt
+	// testing
+	Testing() AccountsReaderTestExt
 }
 
 // AccountsReaderWriter is AccountsReader+AccountsWriter

@@ -53,7 +53,7 @@ func setSchemaVersion(ctx context.Context, kvw KvWrite, version int32) error {
 }
 
 type dbForMigrations interface {
-	trackerdb.TrackerStore
+	trackerdb.Store
 	KvRead
 	KvWrite
 }
@@ -141,7 +141,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 			return err
 		}
 
-		arw, err := tx.MakeAccountsReaderWriter()
+		aw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
 		}
@@ -149,7 +149,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 		updRound := basics.Round(0)
 
 		// mark the db as round 0
-		err = arw.UpdateAccountsRound(updRound)
+		err = aw.UpdateAccountsRound(updRound)
 		if err != nil {
 			return err
 		}
@@ -193,7 +193,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 		}
 
 		// insert the totals
-		err = arw.AccountsPutTotals(totals, false)
+		err = aw.AccountsPutTotals(totals, false)
 		if err != nil {
 			return err
 		}
@@ -206,7 +206,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 				CurrentProtocol: m.params.InitProto,
 			},
 		}
-		err = arw.AccountsPutOnlineRoundParams(params, basics.Round(0))
+		err = aw.AccountsPutOnlineRoundParams(params, basics.Round(0))
 		if err != nil {
 			return err
 		}

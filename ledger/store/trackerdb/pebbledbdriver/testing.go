@@ -27,7 +27,7 @@ import (
 )
 
 // OpenForTesting opens a sqlite db file for testing purposes.
-func OpenForTesting(t testing.TB, inMemory bool) trackerdb.TrackerStore {
+func OpenForTesting(t testing.TB, inMemory bool) trackerdb.Store {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	// create a tmp dir for the db, the testing runtime will clean it up automatically

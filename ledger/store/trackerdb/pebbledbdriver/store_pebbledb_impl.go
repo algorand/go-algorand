@@ -19,52 +19,28 @@ package pebbledbdriver
 import (
 	"context"
 	"io"
-	"testing"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/generickv"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/vfs"
 )
 
 type trackerStore struct {
-	Pdb   *pebble.DB
-	wo    *pebble.WriteOptions
+	kvs   kvstore
 	proto config.ConsensusParams
-}
-
-type batchScope struct {
-	// Hack: we should tray to impl without this field
-	store *trackerStore
-	db    *pebble.DB
-	wo    *pebble.WriteOptions
-	wb    *pebble.Batch
-}
-
-type snapshotScope struct {
-	db    *pebble.DB
-	snap  *pebble.Snapshot
-	proto config.ConsensusParams
-}
-
-type transactionScope struct {
-	// Hack: we should tray to impl without this field
-	store *trackerStore
-	db    *pebble.DB
-	wo    *pebble.WriteOptions
-	snap  *pebble.Snapshot
-	wb    *pebble.Batch
-	proto config.ConsensusParams
+	// use the generickv implementations
+	trackerdb.Reader
+	trackerdb.Writer
+	trackerdb.Catchpoint
 }
 
 // OpenTrackerDB opens a Pebble db database
-func OpenTrackerDB(dbdir string, inMem bool, proto config.ConsensusParams) (store *trackerStore, err error) {
+func OpenTrackerDB(dbdir string, inMem bool, proto config.ConsensusParams) (trackerdb.Store, error) {
 	// use default options for now
 	opts := &pebble.Options{}
 	if inMem {
@@ -76,27 +52,51 @@ func OpenTrackerDB(dbdir string, inMem bool, proto config.ConsensusParams) (stor
 	}
 	// no fsync
 	wo := &pebble.WriteOptions{Sync: false}
-	return &trackerStore{Pdb: db, wo: wo, proto: proto}, nil
+	kvs := kvstore{Pdb: db, wo: wo}
+	var store trackerdb.Store
+	store = &trackerStore{
+		kvs,
+		proto,
+		generickv.MakeReader(&kvs, proto),
+		generickv.MakeWriter(store, &kvs, &kvs),
+		generickv.MakeCatchpoint(),
+	}
+	return store, nil
 }
 
-func (s *trackerStore) SetLogger(log logging.Logger) {
-	// TODO
-}
-
-func (s *trackerStore) SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error) {
-	// TODO
-	return nil
-}
-
+// IsSharedCacheConnection implements trackerdb.Store
 func (s *trackerStore) IsSharedCacheConnection() bool {
 	// TODO
 	return false
 }
 
+// SetLogger implements trackerdb.Store
+func (s *trackerStore) SetLogger(log logging.Logger) {
+	// TODO
+}
+
+// SetSynchronousMode implements trackerdb.Store
+func (s *trackerStore) SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error) {
+	// TODO
+	return nil
+}
+
+// RunMigrations implements trackerdb.Store
+func (s *trackerStore) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
+	// create a anonym struct that impls the interface for the migration runner
+	db := struct {
+		*trackerStore
+		*kvstore
+	}{s, &s.kvs}
+	return generickv.RunMigrations(ctx, db, params, targetVersion)
+}
+
+// Batch implements trackerdb.Store
 func (s *trackerStore) Batch(fn trackerdb.BatchFn) (err error) {
 	return s.BatchContext(context.Background(), fn)
 }
 
+// BatchContext implements trackerdb.Store
 func (s *trackerStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
 	handle, err := s.BeginBatch(ctx)
 	if err != nil {
@@ -119,14 +119,22 @@ func (s *trackerStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (
 	return err
 }
 
+// BeginBatch implements trackerdb.Store
 func (s *trackerStore) BeginBatch(ctx context.Context) (trackerdb.Batch, error) {
-	return &batchScope{store: s, wb: s.Pdb.NewBatch(), wo: s.wo, db: s.Pdb}, nil
+	scope := batchScope{store: s, wb: s.kvs.Pdb.NewBatch(), wo: s.kvs.wo, db: s.kvs.Pdb}
+
+	return &struct {
+		batchScope
+		trackerdb.Writer
+	}{scope, generickv.MakeWriter(s, &scope, &s.kvs)}, nil
 }
 
+// Snapshot implements trackerdb.Store
 func (s *trackerStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 	return s.SnapshotContext(context.Background(), fn)
 }
 
+// SnapshotContext implements trackerdb.Store
 func (s *trackerStore) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
 	handle, err := s.BeginSnapshot(ctx)
 	if err != nil {
@@ -143,14 +151,21 @@ func (s *trackerStore) SnapshotContext(ctx context.Context, fn trackerdb.Snapsho
 	return err
 }
 
+// BeginSnapshot implements trackerdb.Store
 func (s *trackerStore) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {
-	return &snapshotScope{db: s.Pdb, snap: s.Pdb.NewSnapshot(), proto: s.proto}, nil
+	scope := snapshotScope{db: s.kvs.Pdb, snap: s.kvs.Pdb.NewSnapshot()}
+	return &struct {
+		snapshotScope
+		trackerdb.Reader
+	}{scope, generickv.MakeReader(&scope, s.proto)}, nil
 }
 
+// Transaction implements trackerdb.Store
 func (s *trackerStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return s.TransactionContext(context.Background(), fn)
 }
 
+// TransactionContext implements trackerdb.Store
 func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
 	handle, err := s.BeginTransaction(ctx)
 	if err != nil {
@@ -173,233 +188,44 @@ func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.Tran
 	return err
 }
 
+// BeginTransaction implements trackerdb.Store
 func (s *trackerStore) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
-	return &transactionScope{
+	scope := transactionScope{
 		store: s,
-		db:    s.Pdb,
-		wo:    s.wo,
-		snap:  s.Pdb.NewSnapshot(),
-		wb:    s.Pdb.NewBatch(),
-		proto: s.proto}, nil
+		db:    s.kvs.Pdb,
+		wo:    s.kvs.wo,
+		snap:  s.kvs.Pdb.NewSnapshot(),
+		wb:    s.kvs.Pdb.NewBatch(),
+	}
+
+	return &struct {
+		transactionScope
+		trackerdb.Reader
+		trackerdb.Writer
+		trackerdb.Catchpoint
+	}{scope, generickv.MakeReader(&scope, s.proto), generickv.MakeWriter(s, &scope, &scope), generickv.MakeCatchpoint()}, nil
 }
 
-func (s *trackerStore) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
-	return generickv.MakeAccountsWriter(s, s), nil
-}
-
-func (s *trackerStore) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
-	return generickv.MakeAccountsReader(s, s.proto), nil
-}
-
-func (s *trackerStore) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	return generickv.MakeAccountsWriter(s, s), nil
-}
-
-func (s *trackerStore) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
-	return generickv.MakeAccountsReader(s, s.proto), nil
-}
-
-func (s *trackerStore) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (trackerdb.OnlineAccountsWriter, error) {
-	return generickv.MakeOnlineAccountsWriter(s), nil
-}
-
-func (s *trackerStore) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
-	return generickv.MakeAccountsReader(s, s.proto), nil
-}
-
-func (s *trackerStore) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
-	return generickv.MakeStateproofWriter(s)
-}
-
-func (s *trackerStore) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
-	return generickv.MakeStateproofReader(s)
-}
-
-func (s *trackerStore) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
-	// TODO
-	return nil, nil
-}
-
+// Vacuum implements trackerdb.Store
 func (s *trackerStore) Vacuum(ctx context.Context) (stats db.VacuumStats, err error) {
 	// TODO
 	return db.VacuumStats{}, nil
 }
 
-func (s *trackerStore) CleanupTest(dbName string, inMemory bool) {
-	// TODO
-}
-
+// ResetToV6Test implements trackerdb.Store
 func (s *trackerStore) ResetToV6Test(ctx context.Context) error {
 	// TODO
 	return nil
 }
 
+// CleanupTest implements trackerdb.Store
+func (s *trackerStore) CleanupTest(dbName string, inMemory bool) {
+	// TODO
+}
+
+// Close implements trackerdb.Store
 func (s *trackerStore) Close() {
-	s.Pdb.Close()
-}
-
-func (txs transactionScope) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
-	return nil, nil
-}
-
-type accountsReaderWriter struct {
-	trackerdb.AccountsReaderExt
-	trackerdb.AccountsWriterExt
-}
-
-func (txs transactionScope) MakeAccountsReaderWriter() (trackerdb.AccountsReaderWriter, error) {
-	return accountsReaderWriter{
-		generickv.MakeAccountsReader(txs, txs.proto),
-		generickv.MakeAccountsWriter(txs, txs),
-	}, nil
-}
-
-func (txs transactionScope) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
-	return generickv.MakeAccountsReader(txs, txs.proto), nil
-}
-
-func (txs transactionScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	// Note: the arguments are for the SQL implementation, nothing to do about them here.
-	return generickv.MakeAccountsWriter(txs, txs), nil
-}
-
-func (txs transactionScope) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (trackerdb.OnlineAccountsWriter, error) {
-	return generickv.MakeOnlineAccountsWriter(txs), nil
-}
-
-func (txs transactionScope) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
-	return generickv.MakeAccountsReader(txs, txs.proto), nil
-}
-
-func (txs transactionScope) MakeMerkleCommitter(staging bool) (trackerdb.MerkleCommitter, error) {
-	return nil, nil
-}
-
-func (txs transactionScope) MakeOrderedAccountsIter(accountCount int) trackerdb.OrderedAccountsIter {
-	return nil
-}
-
-func (txs transactionScope) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
-	return nil, nil
-}
-
-func (txs transactionScope) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
-	return nil
-}
-
-type stateproofReaderWriter struct {
-	trackerdb.SpVerificationCtxReader
-	trackerdb.SpVerificationCtxWriter
-}
-
-func (txs transactionScope) MakeSpVerificationCtxReaderWriter() trackerdb.SpVerificationCtxReaderWriter {
-	return stateproofReaderWriter{
-		generickv.MakeStateproofReader(txs),
-		generickv.MakeStateproofWriter(txs),
-	}
-}
-
-func (txs transactionScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
-	// TODO: pass the scope down? this should also work with a reduced batch scope
-	// this can be done by making the transaction scope be the batch scope + snapshot scope
-	return generickv.RunMigrations(ctx, txs.store, params, targetVersion)
-}
-
-func (txs transactionScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
-	return time.Now(), nil
-}
-
-func (txs transactionScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	return generickv.AccountsInitTest(tb, txs.store, initAccounts, proto)
-}
-
-func (txs transactionScope) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	return generickv.AccountsInitLightTest(tb, txs.store, initAccounts, proto)
-}
-
-func (txs transactionScope) Testing() trackerdb.TestTransactionScope {
-	return txs
-}
-
-func (txs transactionScope) Close() error {
-	txs.snap.Close()
-	return txs.wb.Close()
-}
-
-func (txs transactionScope) Commit() error {
-	return txs.wb.Commit(txs.wo)
-}
-
-func (bs batchScope) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
-	return nil, nil
-}
-
-func (bs batchScope) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
-	return nil, nil
-}
-
-func (bs batchScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	// Note: the arguments are for the SQL implementation, nothing to do about them here.
-	// TODO: not the safest to give the batch the store for reading
-	return generickv.MakeAccountsWriter(bs, bs.store), nil
-}
-
-func (bs batchScope) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
-	return generickv.MakeStateproofWriter(bs)
-}
-
-func (bs batchScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
-	// TODO: pass the scope down? this should also work with a reduced batch scope
-	// this can be done by making the transaction scope be the batch scope + snapshot scope
-	return generickv.RunMigrations(ctx, bs.store, params, targetVersion)
-}
-
-func (bs batchScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
-	return time.Now(), nil
-}
-
-func (bs batchScope) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	return generickv.AccountsInitTest(tb, bs.store, initAccounts, proto)
-}
-
-func (bs batchScope) AccountsUpdateSchemaTest(ctx context.Context) (err error) {
-	return nil
-}
-
-func (bs batchScope) ModifyAcctBaseTest() error {
-	return nil
-}
-
-func (bs batchScope) Testing() trackerdb.TestBatchScope {
-	return bs
-}
-
-func (bs batchScope) Close() error {
-	return bs.wb.Close()
-}
-
-func (bs batchScope) Commit() error {
-	return bs.wb.Commit(bs.wo)
-}
-
-func (ss snapshotScope) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
-	return generickv.MakeAccountsReader(ss, ss.proto), nil
-}
-
-func (ss snapshotScope) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
-	return nil, nil
-}
-
-func (ss snapshotScope) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
-	return generickv.MakeStateproofReader(ss)
-}
-
-func (ss snapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
-	return nil
-}
-
-func (ss snapshotScope) Close() error {
-	return ss.snap.Close()
+	s.kvs.Pdb.Close()
 }
 
 //
@@ -415,27 +241,40 @@ func mapPebbleErrors(err error) error {
 	}
 }
 
-func (s *trackerStore) Set(key, value []byte) error {
+type kvstore struct {
+	Pdb *pebble.DB
+	wo  *pebble.WriteOptions
+}
+
+func (s *kvstore) Set(key, value []byte) error {
 	return s.Pdb.Set(key, value, s.wo)
 }
 
-func (s *trackerStore) Get(key []byte) (value []byte, closer io.Closer, err error) {
+func (s *kvstore) Get(key []byte) (value []byte, closer io.Closer, err error) {
 	value, closer, err = s.Pdb.Get(key)
 	err = mapPebbleErrors(err)
 	return
 }
 
-func (s *trackerStore) NewIter(low, high []byte, reverse bool) generickv.KvIter {
+func (s *kvstore) NewIter(low, high []byte, reverse bool) generickv.KvIter {
 	opts := pebble.IterOptions{LowerBound: low, UpperBound: high}
 	return newIter(s.Pdb.NewIter(&opts), reverse)
 }
 
-func (s *trackerStore) Delete(key []byte) error {
+func (s *kvstore) Delete(key []byte) error {
 	return s.Pdb.Delete(key, s.wo)
 }
 
-func (s *trackerStore) DeleteRange(start, end []byte) error {
+func (s *kvstore) DeleteRange(start, end []byte) error {
 	return s.Pdb.DeleteRange(start, end, s.wo)
+}
+
+type batchScope struct {
+	// Hack: we should tray to impl without this field
+	store *trackerStore
+	db    *pebble.DB
+	wo    *pebble.WriteOptions
+	wb    *pebble.Batch
 }
 
 func (bs batchScope) Set(key, value []byte) error {
@@ -448,6 +287,48 @@ func (bs batchScope) Delete(key []byte) error {
 
 func (bs batchScope) DeleteRange(start, end []byte) error {
 	return bs.wb.DeleteRange(start, end, bs.wo)
+}
+
+func (bs batchScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
+	// noop
+	return time.Now(), nil
+}
+
+func (bs batchScope) Commit() error {
+	return bs.wb.Commit(bs.wo)
+}
+
+func (bs batchScope) Close() error {
+	return bs.wb.Close()
+}
+
+type snapshotScope struct {
+	db   *pebble.DB
+	snap *pebble.Snapshot
+}
+
+func (ss snapshotScope) Get(key []byte) (value []byte, closer io.Closer, err error) {
+	value, closer, err = ss.snap.Get(key)
+	err = mapPebbleErrors(err)
+	return
+}
+
+func (ss snapshotScope) NewIter(low, high []byte, reverse bool) generickv.KvIter {
+	opts := pebble.IterOptions{LowerBound: low, UpperBound: high}
+	return newIter(ss.snap.NewIter(&opts), reverse)
+}
+
+func (ss snapshotScope) Close() error {
+	return ss.snap.Close()
+}
+
+type transactionScope struct {
+	// Hack: we should tray to impl without this field
+	store *trackerStore
+	db    *pebble.DB
+	wo    *pebble.WriteOptions
+	snap  *pebble.Snapshot
+	wb    *pebble.Batch
 }
 
 func (txs transactionScope) Set(key, value []byte) error {
@@ -473,15 +354,27 @@ func (txs transactionScope) DeleteRange(start, end []byte) error {
 	return txs.wb.DeleteRange(start, end, txs.wo)
 }
 
-func (ss snapshotScope) Get(key []byte) (value []byte, closer io.Closer, err error) {
-	value, closer, err = ss.snap.Get(key)
-	err = mapPebbleErrors(err)
-	return
+func (txs *transactionScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
+	// create a anonym struct that impls the interface for the migration runner
+	db := struct {
+		*trackerStore
+		*kvstore
+	}{txs.store, &txs.store.kvs}
+	return generickv.RunMigrations(ctx, db, params, targetVersion)
 }
 
-func (ss snapshotScope) NewIter(low, high []byte, reverse bool) generickv.KvIter {
-	opts := pebble.IterOptions{LowerBound: low, UpperBound: high}
-	return newIter(ss.snap.NewIter(&opts), reverse)
+func (txs transactionScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
+	// noop
+	return time.Now(), nil
+}
+
+func (txs transactionScope) Commit() error {
+	return txs.wb.Commit(txs.wo)
+}
+
+func (txs transactionScope) Close() error {
+	txs.snap.Close() // ignore error
+	return txs.wb.Close()
 }
 
 type pebbleIter struct {
