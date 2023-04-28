@@ -207,6 +207,14 @@ func (s *trackerStore) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAcco
 	return generickv.MakeAccountsReader(s, s.proto), nil
 }
 
+func (s *trackerStore) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
+	return generickv.MakeStateproofWriter(s)
+}
+
+func (s *trackerStore) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
+	return generickv.MakeStateproofReader(s)
+}
+
 func (s *trackerStore) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	// TODO
 	return nil, nil
@@ -279,8 +287,16 @@ func (txs transactionScope) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccou
 	return nil
 }
 
+type stateproofReaderWriter struct {
+	trackerdb.SpVerificationCtxReader
+	trackerdb.SpVerificationCtxWriter
+}
+
 func (txs transactionScope) MakeSpVerificationCtxReaderWriter() trackerdb.SpVerificationCtxReaderWriter {
-	return nil
+	return stateproofReaderWriter{
+		generickv.MakeStateproofReader(txs),
+		generickv.MakeStateproofWriter(txs),
+	}
 }
 
 func (txs transactionScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
@@ -329,7 +345,7 @@ func (bs batchScope) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasK
 }
 
 func (bs batchScope) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
-	return nil
+	return generickv.MakeStateproofWriter(bs)
 }
 
 func (bs batchScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
@@ -375,7 +391,7 @@ func (ss snapshotScope) MakeCatchpointReader() (trackerdb.CatchpointReader, erro
 }
 
 func (ss snapshotScope) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
-	return nil
+	return generickv.MakeStateproofReader(ss)
 }
 
 func (ss snapshotScope) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {

@@ -196,6 +196,14 @@ func (db *mockDB) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsR
 	return generickv.MakeAccountsReader(db, db.proto), nil
 }
 
+func (db *mockDB) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
+	return generickv.MakeStateproofWriter(db)
+}
+
+func (db *mockDB) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
+	return generickv.MakeStateproofReader(db)
+}
+
 func (db *mockDB) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	// TODO
 	return nil, nil
