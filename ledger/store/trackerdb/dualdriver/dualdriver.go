@@ -205,6 +205,18 @@ func (s *trackerStore) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAcco
 	return &onlineAccountsReader{primary, secondary}, nil
 }
 
+func (s *trackerStore) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
+	primary := s.primary.MakeSpVerificationCtxWriter()
+	secondary := s.secondary.MakeSpVerificationCtxWriter()
+	return &stateproofWriter{primary, secondary}
+}
+
+func (s *trackerStore) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
+	primary := s.primary.MakeSpVerificationCtxReader()
+	secondary := s.secondary.MakeSpVerificationCtxReader()
+	return &stateproofReader{primary, secondary}
+}
+
 func (s *trackerStore) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	// TODO
 	return nil, nil
@@ -269,8 +281,9 @@ func (b *batch) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
 
 // MakeSpVerificationCtxWriter implements trackerdb.Batch
 func (b *batch) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
-	// TODO:
-	return nil
+	primary := b.primary.MakeSpVerificationCtxWriter()
+	secondary := b.secondary.MakeSpVerificationCtxWriter()
+	return &stateproofWriter{primary, secondary}
 }
 
 // ResetTransactionWarnDeadline implements trackerdb.Batch
@@ -387,10 +400,16 @@ func (tx *transaction) MakeOrderedAccountsIter(accountCount int) trackerdb.Order
 	return nil
 }
 
+type stateproofReaderWriter struct {
+	stateproofReader
+	stateproofWriter
+}
+
 // MakeSpVerificationCtxReaderWriter implements trackerdb.Transaction
 func (tx *transaction) MakeSpVerificationCtxReaderWriter() trackerdb.SpVerificationCtxReaderWriter {
-	// TODO: implement
-	return nil
+	primary := tx.primary.MakeSpVerificationCtxReaderWriter()
+	secondary := tx.secondary.MakeSpVerificationCtxReaderWriter()
+	return &stateproofReaderWriter{stateproofReader{primary, secondary}, stateproofWriter{primary, secondary}}
 }
 
 // ResetTransactionWarnDeadline implements trackerdb.Transaction
@@ -471,8 +490,9 @@ func (s *snapshot) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
 
 // MakeSpVerificationCtxReader implements trackerdb.Snapshot
 func (s *snapshot) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
-	// TODO: implement
-	return nil
+	primary := s.primary.MakeSpVerificationCtxReader()
+	secondary := s.secondary.MakeSpVerificationCtxReader()
+	return &stateproofReader{primary, secondary}
 }
 
 // Close implements trackerdb.Snapshot

@@ -155,6 +155,14 @@ func (s *trackerSQLStore) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineA
 	return OnlineAccountsInitDbQueries(s.pair.Rdb.Handle)
 }
 
+func (s trackerSQLStore) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
+	return makeStateProofVerificationWriter(s.pair.Wdb.Handle)
+}
+
+func (s trackerSQLStore) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
+	return makeStateProofVerificationReader(s.pair.Rdb.Handle)
+}
+
 func (s *trackerSQLStore) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	w := NewCatchpointSQLReaderWriter(s.pair.Wdb.Handle)
 	return w, nil

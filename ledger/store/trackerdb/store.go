@@ -115,6 +115,9 @@ type TrackerStore interface {
 	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (OnlineAccountsWriter, error)
 	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
 
+	MakeSpVerificationCtxWriter() SpVerificationCtxWriter
+	MakeSpVerificationCtxReader() SpVerificationCtxReader
+
 	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
 
 	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)

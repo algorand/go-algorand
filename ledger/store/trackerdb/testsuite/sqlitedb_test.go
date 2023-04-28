@@ -17,15 +17,11 @@
 package testsuite
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,16 +32,7 @@ func TestSqliteDB(t *testing.T) {
 		db, err := sqlitedriver.OpenTrackerSQLStore(fn, false)
 		require.NoError(t, err)
 
-		// initialize db
-		err = db.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-			accounts := make(map[basics.Address]basics.AccountData)
-			tx.Testing().AccountsInitTest(t, accounts, protocol.ConsensusCurrentVersion)
-
-			return nil
-		})
-		require.NoError(t, err)
-
-		// TODO: we should eventually move the sql to use the seedDb()
+		seedDb(t, db)
 
 		return db
 	}

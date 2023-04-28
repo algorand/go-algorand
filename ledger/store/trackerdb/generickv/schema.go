@@ -35,6 +35,7 @@ const (
 	kvTotalsKey                  = "global_total"
 	kvTxTail                     = "txtail"
 	kvOnlineAccountRoundParams   = "online_account_round_params"
+	kvPrefixStateproof           = "stateproofs"
 )
 
 // return the big-endian binary encoding of a uint64
@@ -158,6 +159,13 @@ func txTailKey(rnd basics.Round) []byte {
 
 func onlineAccountRoundParamsKey(rnd basics.Round) []byte {
 	ret := []byte(kvOnlineAccountRoundParams)
+	ret = append(ret, "-"...)
+	ret = append(ret, bigEndianUint64(uint64(rnd))...)
+	return ret
+}
+
+func stateproofKey(rnd basics.Round) []byte {
+	ret := []byte(kvPrefixStateproof)
 	ret = append(ret, "-"...)
 	ret = append(ret, bigEndianUint64(uint64(rnd))...)
 	return ret
