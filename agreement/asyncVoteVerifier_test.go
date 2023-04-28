@@ -58,7 +58,7 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 // This behavior is possible, since the ctx is cancled from a different go-routine.
 // bypassAsyncVoteVerifierCtxCheck is important to test what happens when the service shuts down, and a vote sneaks
 // through the ctx check.
-func bypassAsyncVoteVerifierCtxCheck(avv *AsyncVoteVerifier, verctx context.Context, l LedgerReader,
+func bypassAsyncVoteVerifierCtxCheck(avv *AsyncVoteVerifier, verctx context.Context, l LedgerReader, //nolint:revive // verctx is OK as second argument
 	uv unauthenticatedVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) {
 	req := asyncVerifyVoteRequest{ctx: verctx, l: l, uv: &uv, index: index, message: message, out: out}
 	avv.wg.Add(1)
