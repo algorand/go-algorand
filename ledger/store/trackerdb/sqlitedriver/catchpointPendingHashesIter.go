@@ -19,27 +19,29 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
+
+	"github.com/algorand/go-algorand/util/db"
 )
 
 // catchpointPendingHashesIterator allows us to iterate over the hashes in the catchpointpendinghashes table in their order.
 type catchpointPendingHashesIterator struct {
 	hashCount int
-	tx        *sql.Tx
+	q         db.Queryable
 	rows      *sql.Rows
 }
 
 // MakeCatchpointPendingHashesIterator create a pending hashes iterator that retrieves the hashes in the catchpointpendinghashes table.
-func MakeCatchpointPendingHashesIterator(hashCount int, tx *sql.Tx) *catchpointPendingHashesIterator {
+func MakeCatchpointPendingHashesIterator(hashCount int, q db.Queryable) *catchpointPendingHashesIterator {
 	return &catchpointPendingHashesIterator{
 		hashCount: hashCount,
-		tx:        tx,
+		q:         q,
 	}
 }
 
 // Next returns an array containing the hashes, returning HashCount hashes at a time.
 func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hashes [][]byte, err error) {
 	if iterator.rows == nil {
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT data FROM catchpointpendinghashes ORDER BY data")
+		iterator.rows, err = iterator.q.QueryContext(ctx, "SELECT data FROM catchpointpendinghashes ORDER BY data")
 		if err != nil {
 			return
 		}

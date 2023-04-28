@@ -278,7 +278,7 @@ func (ar *accountsReaderExt) OnlineAccountsAll(maxAccounts uint64) (accounts []t
 }
 
 // Testing implements trackerdb.AccountsReaderExt
-func (ar *accountsReaderExt) Testing() trackerdb.TestAccountsReaderExt {
+func (ar *accountsReaderExt) Testing() trackerdb.AccountsReaderTestExt {
 	// TODO
 	return nil
 }

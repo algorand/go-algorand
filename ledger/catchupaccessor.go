@@ -103,7 +103,7 @@ type stagingWriter interface {
 }
 
 type stagingWriterImpl struct {
-	wdb trackerdb.TrackerStore
+	wdb trackerdb.Store
 }
 
 func (w *stagingWriterImpl) writeBalances(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
@@ -304,7 +304,7 @@ func (c *catchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 	}
 	start := time.Now()
 	ledgerResetstagingbalancesCount.Inc(nil)
-	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx trackerdb.BatchScope) (err error) {
+	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		crw, err := tx.MakeCatchpointWriter()
 		if err != nil {
 			return err
@@ -423,7 +423,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
-	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx trackerdb.BatchScope) (err error) {
+	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		cw, err := tx.MakeCatchpointWriter()
 		if err != nil {
 			return err
@@ -723,7 +723,7 @@ func countHashes(hashes [][]byte) (accountCount, kvCount uint64) {
 // BuildMerkleTrie would process the catchpointpendinghashes and insert all the items in it into the merkle trie
 func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64, uint64)) (err error) {
 	dbs := c.ledger.trackerDB()
-	err = dbs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) (err error) {
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		crw, err := tx.MakeCatchpointWriter()
 		if err != nil {
 			return err
@@ -754,7 +754,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		defer wg.Done()
 		defer close(writerQueue)
 
-		dbErr := dbs.Snapshot(func(transactionCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		dbErr := dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
 			it := tx.MakeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize)
 			var hashes [][]byte
 			for {
@@ -955,7 +955,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	start := time.Now()
 	ledgerVerifycatchpointCount.Inc(nil)
 	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		arw, err := tx.MakeAccountsReaderWriter()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
@@ -976,12 +976,12 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to get trie root hash: %v", err)
 		}
 
-		totals, err = arw.AccountsTotals(ctx, true)
+		totals, err = ar.AccountsTotals(ctx, true)
 		if err != nil {
 			return fmt.Errorf("unable to get accounts totals: %v", err)
 		}
 
-		rawStateProofVerificationContext, err = tx.MakeSpVerificationCtxReaderWriter().GetAllSPContextsFromCatchpointTbl(ctx)
+		rawStateProofVerificationContext, err = tx.MakeSpVerificationCtxReader().GetAllSPContextsFromCatchpointTbl(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
@@ -1026,7 +1026,7 @@ func (c *catchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 	balancesRound := blk.Round() - basics.Round(catchpointLookback)
 	start := time.Now()
 	ledgerStorebalancesroundCount.Inc(nil)
-	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx trackerdb.BatchScope) (err error) {
+	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		crw, err := tx.MakeCatchpointWriter()
 		if err != nil {
 			return err
@@ -1132,7 +1132,12 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		arw, err := tx.MakeAccountsReaderWriter()
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+
+		aw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
 		}
@@ -1150,13 +1155,13 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		totals, err = arw.AccountsTotals(ctx, true)
+		totals, err = ar.AccountsTotals(ctx, true)
 		if err != nil {
 			return err
 		}
 
 		if hashRound == 0 {
-			err = arw.ResetAccountHashes(ctx)
+			err = aw.ResetAccountHashes(ctx)
 			if err != nil {
 				return err
 			}
@@ -1168,7 +1173,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		// it might be necessary to restore it into the latest database version. To do that, one
 		// will need to run the 6->7 migration code manually here or in a similar function to create
 		// onlineaccounts and other V7 tables.
-		err = arw.AccountsReset(ctx)
+		err = aw.AccountsReset(ctx)
 		if err != nil {
 			return err
 		}
@@ -1193,7 +1198,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		err = arw.AccountsPutTotals(totals, false)
+		err = aw.AccountsPutTotals(totals, false)
 		if err != nil {
 			return err
 		}

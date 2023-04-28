@@ -33,13 +33,16 @@ var ErrInconsistentResult = errors.New("inconsistent results between store engin
 var allowAllUnexported = cmp.Exporter(func(f reflect.Type) bool { return true })
 
 type trackerStore struct {
-	primary   trackerdb.TrackerStore
-	secondary trackerdb.TrackerStore
+	primary   trackerdb.Store
+	secondary trackerdb.Store
+	trackerdb.Reader
+	trackerdb.Writer
+	trackerdb.Catchpoint
 }
 
 // MakeStore creates a dual tracker store that verifies that both stores return the same results.
-func MakeStore(primary trackerdb.TrackerStore, secondary trackerdb.TrackerStore) *trackerStore {
-	return &trackerStore{primary, secondary}
+func MakeStore(primary trackerdb.Store, secondary trackerdb.Store) trackerdb.Store {
+	return &trackerStore{primary, secondary, &reader{primary, secondary}, &writer{primary, secondary}, &catchpoint{primary, secondary}}
 }
 
 func (s *trackerStore) SetLogger(log logging.Logger) {
@@ -84,7 +87,7 @@ func (s *trackerStore) BeginBatch(ctx context.Context) (trackerdb.Batch, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &batch{primary, secondary}, nil
+	return &batch{primary, secondary, &writer{primary, secondary}}, nil
 }
 
 func (s *trackerStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
@@ -113,7 +116,7 @@ func (s *trackerStore) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, e
 	if err != nil {
 		return nil, err
 	}
-	return &snapshot{primary, secondary}, nil
+	return &snapshot{primary, secondary, &reader{primary, secondary}}, nil
 }
 
 func (s *trackerStore) Transaction(fn trackerdb.TransactionFn) (err error) {
@@ -142,84 +145,24 @@ func (s *trackerStore) BeginTransaction(ctx context.Context) (trackerdb.Transact
 	if err != nil {
 		return nil, err
 	}
-	return &transaction{primary, secondary}, nil
+	return &transaction{primary, secondary, &reader{primary, secondary}, &writer{primary, secondary}, &catchpoint{primary, secondary}}, nil
 }
 
-func (s *trackerStore) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
-	primary, errP := s.primary.MakeAccountsWriter()
-	secondary, errS := s.secondary.MakeAccountsWriter()
-	err := coalesceErrors(errP, errS)
+// RunMigrations implements trackerdb.Transaction
+func (s *trackerStore) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
+	paramsP, errP := s.primary.RunMigrations(ctx, params, log, targetVersion)
+	paramsS, errS := s.secondary.RunMigrations(ctx, params, log, targetVersion)
+	err = coalesceErrors(errP, errS)
 	if err != nil {
-		return nil, err
+		return
 	}
-	return &accountsWriterExt{primary, secondary}, nil
-}
-
-func (s *trackerStore) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
-	primary, errP := s.primary.MakeAccountsReader()
-	secondary, errS := s.secondary.MakeAccountsReader()
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
+	// check results
+	if paramsP != paramsS {
+		err = ErrInconsistentResult
+		return
 	}
-	return &accountsReaderExt{primary, secondary}, nil
-}
-
-func (s *trackerStore) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	primary, errP := s.primary.MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
-	secondary, errS := s.secondary.MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &accountsWriter{primary, secondary}, nil
-}
-
-func (s *trackerStore) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
-	primary, errP := s.primary.MakeAccountsOptimizedReader()
-	secondary, errS := s.secondary.MakeAccountsOptimizedReader()
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &accountsReader{primary, secondary}, nil
-}
-
-func (s *trackerStore) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (trackerdb.OnlineAccountsWriter, error) {
-	primary, errP := s.primary.MakeOnlineAccountsOptimizedWriter(hasAccounts)
-	secondary, errS := s.secondary.MakeOnlineAccountsOptimizedWriter(hasAccounts)
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &onlineAccountsWriter{primary, secondary}, nil
-}
-
-func (s *trackerStore) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
-	primary, errP := s.primary.MakeOnlineAccountsOptimizedReader()
-	secondary, errS := s.secondary.MakeOnlineAccountsOptimizedReader()
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &onlineAccountsReader{primary, secondary}, nil
-}
-
-func (s *trackerStore) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
-	primary := s.primary.MakeSpVerificationCtxWriter()
-	secondary := s.secondary.MakeSpVerificationCtxWriter()
-	return &stateproofWriter{primary, secondary}
-}
-
-func (s *trackerStore) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
-	primary := s.primary.MakeSpVerificationCtxReader()
-	secondary := s.secondary.MakeSpVerificationCtxReader()
-	return &stateproofReader{primary, secondary}
-}
-
-func (s *trackerStore) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
-	// TODO
-	return nil, nil
+	// return primary result
+	return paramsP, nil
 }
 
 func (s *trackerStore) Vacuum(ctx context.Context) (stats db.VacuumStats, err error) {
@@ -246,15 +189,60 @@ func (s *trackerStore) Close() {
 	s.secondary.Close()
 }
 
-type batch struct {
-	primary   trackerdb.Batch
-	secondary trackerdb.Batch
+type reader struct {
+	primary   trackerdb.Reader
+	secondary trackerdb.Reader
 }
 
-// MakeAccountsOptimizedWriter implements trackerdb.Batch
-func (b *batch) MakeAccountsOptimizedWriter(hasAccounts bool, hasResources bool, hasKvPairs bool, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	primary, errP := b.primary.MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
-	secondary, errS := b.secondary.MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
+// MakeAccountsOptimizedReader implements trackerdb.Reader
+func (r *reader) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
+	primary, errP := r.primary.MakeAccountsOptimizedReader()
+	secondary, errS := r.secondary.MakeAccountsOptimizedReader()
+	err := coalesceErrors(errP, errS)
+	if err != nil {
+		return nil, err
+	}
+	return &accountsReader{primary, secondary}, nil
+}
+
+// MakeAccountsReader implements trackerdb.Reader
+func (r *reader) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
+	primary, errP := r.primary.MakeAccountsReader()
+	secondary, errS := r.secondary.MakeAccountsReader()
+	err := coalesceErrors(errP, errS)
+	if err != nil {
+		return nil, err
+	}
+	return &accountsReaderExt{primary, secondary}, nil
+}
+
+// MakeOnlineAccountsOptimizedReader implements trackerdb.Reader
+func (r *reader) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
+	primary, errP := r.primary.MakeOnlineAccountsOptimizedReader()
+	secondary, errS := r.secondary.MakeOnlineAccountsOptimizedReader()
+	err := coalesceErrors(errP, errS)
+	if err != nil {
+		return nil, err
+	}
+	return &onlineAccountsReader{primary, secondary}, nil
+}
+
+// MakeSpVerificationCtxReader implements trackerdb.Reader
+func (r *reader) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
+	primary := r.primary.MakeSpVerificationCtxReader()
+	secondary := r.secondary.MakeSpVerificationCtxReader()
+	return &stateproofReader{primary, secondary}
+}
+
+type writer struct {
+	primary   trackerdb.Writer
+	secondary trackerdb.Writer
+}
+
+// MakeAccountsOptimizedWriter implements trackerdb.Writer
+func (w *writer) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
+	primary, errP := w.primary.MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
+	secondary, errS := w.secondary.MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
 	err := coalesceErrors(errP, errS)
 	if err != nil {
 		return nil, err
@@ -262,10 +250,10 @@ func (b *batch) MakeAccountsOptimizedWriter(hasAccounts bool, hasResources bool,
 	return &accountsWriter{primary, secondary}, nil
 }
 
-// MakeAccountsWriter implements trackerdb.Batch
-func (b *batch) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
-	primary, errP := b.primary.MakeAccountsWriter()
-	secondary, errS := b.secondary.MakeAccountsWriter()
+// MakeAccountsWriter implements trackerdb.Writer
+func (w *writer) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
+	primary, errP := w.primary.MakeAccountsWriter()
+	secondary, errS := w.secondary.MakeAccountsWriter()
 	err := coalesceErrors(errP, errS)
 	if err != nil {
 		return nil, err
@@ -273,17 +261,88 @@ func (b *batch) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
 	return &accountsWriterExt{primary, secondary}, nil
 }
 
-// MakeCatchpointWriter implements trackerdb.Batch
-func (b *batch) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
-	// TODO:
+// MakeOnlineAccountsOptimizedWriter implements trackerdb.Writer
+func (w *writer) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (trackerdb.OnlineAccountsWriter, error) {
+	primary, errP := w.primary.MakeOnlineAccountsOptimizedWriter(hasAccounts)
+	secondary, errS := w.secondary.MakeOnlineAccountsOptimizedWriter(hasAccounts)
+	err := coalesceErrors(errP, errS)
+	if err != nil {
+		return nil, err
+	}
+	return &onlineAccountsWriter{primary, secondary}, nil
+}
+
+// MakeSpVerificationCtxWriter implements trackerdb.Writer
+func (w *writer) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
+	primary := w.primary.MakeSpVerificationCtxWriter()
+	secondary := w.secondary.MakeSpVerificationCtxWriter()
+	return &stateproofWriter{primary, secondary}
+}
+
+// Testing implements trackerdb.Writer
+func (w *writer) Testing() trackerdb.WriterTestExt {
+	primary := w.primary.Testing()
+	secondary := w.secondary.Testing()
+	return &writerForTesting{primary, secondary}
+}
+
+type catchpoint struct {
+	primary   trackerdb.Catchpoint
+	secondary trackerdb.Catchpoint
+}
+
+// MakeCatchpointPendingHashesIterator implements trackerdb.Catchpoint
+func (*catchpoint) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
+	// TODO: catchpoint
+	return nil
+}
+
+// MakeCatchpointReader implements trackerdb.Catchpoint
+func (*catchpoint) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
+	// TODO: catchpoint
 	return nil, nil
 }
 
-// MakeSpVerificationCtxWriter implements trackerdb.Batch
-func (b *batch) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
-	primary := b.primary.MakeSpVerificationCtxWriter()
-	secondary := b.secondary.MakeSpVerificationCtxWriter()
-	return &stateproofWriter{primary, secondary}
+// MakeCatchpointReaderWriter implements trackerdb.Catchpoint
+func (*catchpoint) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
+	// TODO: catchpoint
+	return nil, nil
+}
+
+// MakeCatchpointWriter implements trackerdb.Catchpoint
+func (*catchpoint) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
+	// TODO: catchpoint
+	return nil, nil
+}
+
+// MakeEncodedAccoutsBatchIter implements trackerdb.Catchpoint
+func (*catchpoint) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
+	// TODO: catchpoint
+	return nil
+}
+
+// MakeKVsIter implements trackerdb.Catchpoint
+func (*catchpoint) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
+	// TODO: catchpoint
+	return nil, nil
+}
+
+// MakeMerkleCommitter implements trackerdb.Catchpoint
+func (*catchpoint) MakeMerkleCommitter(staging bool) (trackerdb.MerkleCommitter, error) {
+	// TODO: catchpoint
+	return nil, nil
+}
+
+// MakeOrderedAccountsIter implements trackerdb.Catchpoint
+func (*catchpoint) MakeOrderedAccountsIter(accountCount int) trackerdb.OrderedAccountsIter {
+	// TODO: catchpoint
+	return nil
+}
+
+type batch struct {
+	primary   trackerdb.Batch
+	secondary trackerdb.Batch
+	trackerdb.Writer
 }
 
 // ResetTransactionWarnDeadline implements trackerdb.Batch
@@ -294,9 +353,11 @@ func (b *batch) ResetTransactionWarnDeadline(ctx context.Context, deadline time.
 	return
 }
 
-// Testing implements trackerdb.Batch
-func (b *batch) Testing() trackerdb.TestBatchScope {
-	// TODO:
+// Commit implements trackerdb.Batch
+func (b *batch) Commit() error {
+	b.primary.Commit()
+	b.secondary.Commit()
+	// errors are unlikely to match between engines
 	return nil
 }
 
@@ -308,108 +369,12 @@ func (b *batch) Close() error {
 	return nil
 }
 
-// Commit implements trackerdb.Batch
-func (b *batch) Commit() error {
-	b.primary.Commit()
-	b.secondary.Commit()
-	// errors are unlikely to match between engines
-	return nil
-}
-
 type transaction struct {
 	primary   trackerdb.Transaction
 	secondary trackerdb.Transaction
-}
-
-// MakeAccountsOptimizedReader implements trackerdb.Transaction
-func (tx *transaction) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
-	primary, errP := tx.primary.MakeAccountsOptimizedReader()
-	secondary, errS := tx.secondary.MakeAccountsOptimizedReader()
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &accountsReader{primary, secondary}, nil
-}
-
-// MakeAccountsOptimizedWriter implements trackerdb.Transaction
-func (tx *transaction) MakeAccountsOptimizedWriter(hasAccounts bool, hasResources bool, hasKvPairs bool, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	primary, errP := tx.primary.MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
-	secondary, errS := tx.secondary.MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables)
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &accountsWriter{primary, secondary}, nil
-}
-
-type accountsReaderWriter struct {
-	accountsReaderExt
-	accountsWriterExt
-}
-
-// MakeAccountsReaderWriter implements trackerdb.Transaction
-func (tx *transaction) MakeAccountsReaderWriter() (trackerdb.AccountsReaderWriter, error) {
-	primary, errP := tx.primary.MakeAccountsReaderWriter()
-	secondary, errS := tx.secondary.MakeAccountsReaderWriter()
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &accountsReaderWriter{accountsReaderExt{primary, secondary}, accountsWriterExt{primary, secondary}}, nil
-}
-
-// MakeCatchpointReaderWriter implements trackerdb.Transaction
-func (tx *transaction) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
-	// TODO: implement
-	return nil, nil
-}
-
-// MakeEncodedAccoutsBatchIter implements trackerdb.Transaction
-func (tx *transaction) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
-	// TODO: implement
-	return nil
-}
-
-// MakeKVsIter implements trackerdb.Transaction
-func (tx *transaction) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
-	// TODO: implement
-	return nil, nil
-}
-
-// MakeMerkleCommitter implements trackerdb.Transaction
-func (tx *transaction) MakeMerkleCommitter(staging bool) (trackerdb.MerkleCommitter, error) {
-	// TODO: implement
-	return nil, nil
-}
-
-// MakeOnlineAccountsOptimizedWriter implements trackerdb.Transaction
-func (tx *transaction) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (trackerdb.OnlineAccountsWriter, error) {
-	primary, errP := tx.primary.MakeOnlineAccountsOptimizedWriter(hasAccounts)
-	secondary, errS := tx.secondary.MakeOnlineAccountsOptimizedWriter(hasAccounts)
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &onlineAccountsWriter{primary, secondary}, nil
-}
-
-// MakeOrderedAccountsIter implements trackerdb.Transaction
-func (tx *transaction) MakeOrderedAccountsIter(accountCount int) trackerdb.OrderedAccountsIter {
-	// TODO: implement
-	return nil
-}
-
-type stateproofReaderWriter struct {
-	stateproofReader
-	stateproofWriter
-}
-
-// MakeSpVerificationCtxReaderWriter implements trackerdb.Transaction
-func (tx *transaction) MakeSpVerificationCtxReaderWriter() trackerdb.SpVerificationCtxReaderWriter {
-	primary := tx.primary.MakeSpVerificationCtxReaderWriter()
-	secondary := tx.secondary.MakeSpVerificationCtxReaderWriter()
-	return &stateproofReaderWriter{stateproofReader{primary, secondary}, stateproofWriter{primary, secondary}}
+	trackerdb.Reader
+	trackerdb.Writer
+	trackerdb.Catchpoint
 }
 
 // ResetTransactionWarnDeadline implements trackerdb.Transaction
@@ -437,11 +402,12 @@ func (tx *transaction) RunMigrations(ctx context.Context, params trackerdb.Param
 	return paramsP, nil
 }
 
-// Testing implements trackerdb.Transaction
-func (tx *transaction) Testing() trackerdb.TestTransactionScope {
-	primary := tx.primary.Testing()
-	secondary := tx.secondary.Testing()
-	return &transactionForTesting{primary, secondary}
+// Commit implements trackerdb.Transaction
+func (tx *transaction) Commit() error {
+	tx.primary.Commit()
+	tx.secondary.Commit()
+	// errors are unlikely to match between engines
+	return nil
 }
 
 // Close implements trackerdb.Transaction
@@ -452,47 +418,10 @@ func (tx *transaction) Close() error {
 	return nil
 }
 
-// Commit implements trackerdb.Transaction
-func (tx *transaction) Commit() error {
-	tx.primary.Commit()
-	tx.secondary.Commit()
-	// errors are unlikely to match between engines
-	return nil
-}
-
 type snapshot struct {
 	primary   trackerdb.Snapshot
 	secondary trackerdb.Snapshot
-}
-
-// MakeAccountsReader implements trackerdb.Snapshot
-func (s *snapshot) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
-	primary, errP := s.primary.MakeAccountsReader()
-	secondary, errS := s.secondary.MakeAccountsReader()
-	err := coalesceErrors(errP, errS)
-	if err != nil {
-		return nil, err
-	}
-	return &accountsReaderExt{primary, secondary}, nil
-}
-
-// MakeCatchpointPendingHashesIterator implements trackerdb.Snapshot
-func (s *snapshot) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
-	// TODO: implement
-	return nil
-}
-
-// MakeCatchpointReader implements trackerdb.Snapshot
-func (s *snapshot) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
-	// TODO: implement
-	return nil, nil
-}
-
-// MakeSpVerificationCtxReader implements trackerdb.Snapshot
-func (s *snapshot) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
-	primary := s.primary.MakeSpVerificationCtxReader()
-	secondary := s.secondary.MakeSpVerificationCtxReader()
-	return &stateproofReader{primary, secondary}
+	trackerdb.Reader
 }
 
 // Close implements trackerdb.Snapshot

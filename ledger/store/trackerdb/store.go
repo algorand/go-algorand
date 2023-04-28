@@ -24,14 +24,90 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// BatchScope is an atomic write-only scope to the store.
-type BatchScope interface {
-	MakeCatchpointWriter() (CatchpointWriter, error)
+// Store is the interface for the tracker db.
+type Store interface {
+	ReaderWriter
+	// settings
+	SetLogger(log logging.Logger)
+	SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error)
+	IsSharedCacheConnection() bool
+	// batch support
+	Batch(fn BatchFn) (err error)
+	BatchContext(ctx context.Context, fn BatchFn) (err error)
+	BeginBatch(ctx context.Context) (Batch, error)
+	// snapshot support
+	Snapshot(fn SnapshotFn) (err error)
+	SnapshotContext(ctx context.Context, fn SnapshotFn) (err error)
+	BeginSnapshot(ctx context.Context) (Snapshot, error)
+	// transaction support
+	Transaction(fn TransactionFn) (err error)
+	TransactionContext(ctx context.Context, fn TransactionFn) (err error)
+	BeginTransaction(ctx context.Context) (Transaction, error)
+	// maintenance
+	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)
+	// testing
+	CleanupTest(dbName string, inMemory bool)
+	ResetToV6Test(ctx context.Context) error
+	// cleanup
+	Close()
+}
+
+// Reader is the interface for the trackerdb read operations.
+type Reader interface {
+	MakeAccountsReader() (AccountsReaderExt, error)
+	MakeAccountsOptimizedReader() (AccountsReader, error)
+	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
+	MakeSpVerificationCtxReader() SpVerificationCtxReader
+}
+
+// Writer is the interface for the trackerdb write operations.
+type Writer interface {
+	// trackerdb
 	MakeAccountsWriter() (AccountsWriterExt, error)
 	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
+	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (OnlineAccountsWriter, error)
 	MakeSpVerificationCtxWriter() SpVerificationCtxWriter
+	// testing
+	Testing() WriterTestExt
+}
+
+// TODO: we still need to do a refactoring pass on catchpoint
+//
+//	there are two distinct set of methods present:
+//	- read/write ops for managing catchpoint data
+//	- read/write ops on trackerdb to support building catchpoints
+//	we should split these two sets of methods into two separate interfaces
+type Catchpoint interface {
+	// reader
+	MakeCatchpointReader() (CatchpointReader, error)
+	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
+	MakeOrderedAccountsIter(accountCount int) OrderedAccountsIter
+	MakeKVsIter(ctx context.Context) (KVsIter, error)
+	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
+	// writer
+	MakeCatchpointWriter() (CatchpointWriter, error)
+	// reader/writer
+	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
+	MakeMerkleCommitter(staging bool) (MerkleCommitter, error)
+}
+
+// ReaderWriter is the interface for the trackerdb read/write operations.
+//
+// Some of the operatiosn available here might not be present in neither the Reader nor the Writer interfaces.
+// This is because some operations might require to be able to read and write at the same time.
+type ReaderWriter interface {
+	Reader
+	Writer
+	// init
+	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
+	// Note: at the moment, catchpoint methods are only accesible via reader/writer
+	Catchpoint
+}
+
+// BatchScope is an atomic write-only scope to the store.
+type BatchScope interface {
+	Writer
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
-	Testing() TestBatchScope
 }
 
 // Batch is an atomic write-only accecssor to the store.
@@ -43,10 +119,7 @@ type Batch interface {
 
 // SnapshotScope is an atomic read-only scope to the store.
 type SnapshotScope interface {
-	MakeAccountsReader() (AccountsReaderExt, error)
-	MakeCatchpointReader() (CatchpointReader, error)
-	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
-	MakeSpVerificationCtxReader() SpVerificationCtxReader
+	Reader
 }
 
 // Snapshot is an atomic read-only accecssor to the store.
@@ -57,19 +130,8 @@ type Snapshot interface {
 
 // TransactionScope is an atomic read/write scope to the store.
 type TransactionScope interface {
-	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
-	MakeAccountsReaderWriter() (AccountsReaderWriter, error)
-	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
-	MakeAccountsOptimizedReader() (AccountsReader, error)
-	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error)
-	MakeMerkleCommitter(staging bool) (MerkleCommitter, error)
-	MakeOrderedAccountsIter(accountCount int) OrderedAccountsIter
-	MakeKVsIter(ctx context.Context) (KVsIter, error)
-	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
-	MakeSpVerificationCtxReaderWriter() SpVerificationCtxReaderWriter
-	RunMigrations(ctx context.Context, params Params, log logging.Logger, targetVersion int32) (mgr InitParams, err error)
+	ReaderWriter
 	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
-	Testing() TestTransactionScope
 }
 
 // Transaction is an atomic read/write accecssor to the store.
@@ -87,42 +149,3 @@ type SnapshotFn func(ctx context.Context, tx SnapshotScope) error
 
 // TransactionFn is the callback lambda used in `Transaction`.
 type TransactionFn func(ctx context.Context, tx TransactionScope) error
-
-// TrackerStore is the interface for the tracker db.
-type TrackerStore interface {
-	SetLogger(log logging.Logger)
-	SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error)
-	IsSharedCacheConnection() bool
-
-	Batch(fn BatchFn) (err error)
-	BatchContext(ctx context.Context, fn BatchFn) (err error)
-	BeginBatch(ctx context.Context) (Batch, error)
-
-	Snapshot(fn SnapshotFn) (err error)
-	SnapshotContext(ctx context.Context, fn SnapshotFn) (err error)
-	BeginSnapshot(ctx context.Context) (Snapshot, error)
-
-	Transaction(fn TransactionFn) (err error)
-	TransactionContext(ctx context.Context, fn TransactionFn) (err error)
-	BeginTransaction(ctx context.Context) (Transaction, error)
-
-	MakeAccountsWriter() (AccountsWriterExt, error)
-	MakeAccountsReader() (AccountsReaderExt, error)
-
-	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
-	MakeAccountsOptimizedReader() (AccountsReader, error)
-
-	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (OnlineAccountsWriter, error)
-	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
-
-	MakeSpVerificationCtxWriter() SpVerificationCtxWriter
-	MakeSpVerificationCtxReader() SpVerificationCtxReader
-
-	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
-
-	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)
-	Close()
-	CleanupTest(dbName string, inMemory bool)
-
-	ResetToV6Test(ctx context.Context) error
-}

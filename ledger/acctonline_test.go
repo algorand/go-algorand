@@ -79,7 +79,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 				require.NoError(t, err)
 			}
 			err := ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-				arw, err := tx.MakeAccountsReaderWriter()
+				aw, err := tx.MakeAccountsWriter()
 				if err != nil {
 					return err
 				}
@@ -91,7 +91,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 					}
 				}
 
-				return arw.UpdateAccountsRound(newBase)
+				return aw.UpdateAccountsRound(newBase)
 			})
 			require.NoError(t, err)
 		}()

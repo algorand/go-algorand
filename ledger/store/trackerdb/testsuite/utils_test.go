@@ -46,7 +46,7 @@ type customT struct {
 type dbForTests interface {
 	// generickv.KvWrite
 	// generickv.KvRead
-	trackerdb.TrackerStore
+	trackerdb.Store
 }
 
 type genericTestEntry struct {
@@ -95,31 +95,25 @@ func RandomAddress() basics.Address {
 }
 
 type mockDB struct {
+	kvs   kvstore
 	proto config.ConsensusParams
-	data  map[string][]byte
+	// use the generickv implementations
+	trackerdb.Reader
+	trackerdb.Writer
+	trackerdb.Catchpoint
 }
 
-type mockSnapshot struct {
-	db *mockDB
-}
-
-type mockTransaction struct {
-	db    *mockDB
-	proto config.ConsensusParams
-}
-
-type mockBatch struct {
-	db *mockDB
-}
-
-type mockIter struct {
-	db   *mockDB
-	keys []string
-	curr int
-}
-
-func makeMockDB(proto config.ConsensusParams) *mockDB {
-	return &mockDB{proto: proto, data: make(map[string][]byte)}
+func makeMockDB(proto config.ConsensusParams) trackerdb.Store {
+	kvs := kvstore{data: make(map[string][]byte)}
+	var db trackerdb.Store
+	db = &mockDB{
+		kvs,
+		proto,
+		generickv.MakeReader(&kvs, proto),
+		generickv.MakeWriter(db, &kvs, &kvs),
+		generickv.MakeCatchpoint(),
+	}
+	return db
 }
 
 func (db *mockDB) SetLogger(log logging.Logger) {
@@ -136,77 +130,122 @@ func (db *mockDB) IsSharedCacheConnection() bool {
 	return false
 }
 
+// RunMigrations implements trackerdb.Store
+func (db *mockDB) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
+	// create a anonym struct that impls the interface for the migration runner
+	aux := struct {
+		*mockDB
+		*kvstore
+	}{db, &db.kvs}
+	return generickv.RunMigrations(ctx, aux, params, targetVersion)
+}
+
+// Batch implements trackerdb.Store
 func (db *mockDB) Batch(fn trackerdb.BatchFn) (err error) {
 	return db.BatchContext(context.Background(), fn)
 }
 
+// BatchContext implements trackerdb.Store
 func (db *mockDB) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
-	return fn(ctx, mockBatch{db})
+	handle, err := db.BeginBatch(ctx)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
+
+	// run the batch
+	err = fn(ctx, handle)
+	if err != nil {
+		return
+	}
+
+	// commit the batch
+	err = handle.Commit()
+	if err != nil {
+		return
+	}
+
+	return err
 }
 
+// BeginBatch implements trackerdb.Store
 func (db *mockDB) BeginBatch(ctx context.Context) (trackerdb.Batch, error) {
-	return &mockBatch{db}, nil
+	scope := mockBatch{db}
+	return &struct {
+		mockBatch
+		trackerdb.Writer
+	}{scope, generickv.MakeWriter(db, &scope, &db.kvs)}, nil
 }
 
+// Snapshot implements trackerdb.Store
 func (db *mockDB) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 	return db.SnapshotContext(context.Background(), fn)
 }
 
+// SnapshotContext implements trackerdb.Store
 func (db *mockDB) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
-	return fn(ctx, mockSnapshot{db})
+	handle, err := db.BeginSnapshot(ctx)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
+
+	// run the snapshot
+	err = fn(ctx, handle)
+	if err != nil {
+		return
+	}
+
+	return err
 }
 
+// BeginSnapshot implements trackerdb.Store
 func (db *mockDB) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {
-	return &mockSnapshot{db}, nil
+	scope := mockSnapshot{db}
+	return &struct {
+		mockSnapshot
+		trackerdb.Reader
+	}{scope, generickv.MakeReader(&scope, db.proto)}, nil
 }
 
+// Transaction implements trackerdb.Store
 func (db *mockDB) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return db.TransactionContext(context.Background(), fn)
 }
 
+// TransactionContext implements trackerdb.Store
 func (db *mockDB) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
-	return fn(ctx, mockTransaction{db, db.proto})
+	handle, err := db.BeginTransaction(ctx)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
+
+	// run the transaction
+	err = fn(ctx, handle)
+	if err != nil {
+		return
+	}
+
+	// commit the transaction
+	err = handle.Commit()
+	if err != nil {
+		return
+	}
+
+	return err
 }
 
+// BeginTransaction implements trackerdb.Store
 func (db *mockDB) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
-	return &mockTransaction{db, db.proto}, nil
-}
+	scope := mockTransaction{db, db.proto}
 
-func (db *mockDB) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
-	return generickv.MakeAccountsWriter(db, db), nil
-}
-
-func (db *mockDB) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
-	return generickv.MakeAccountsReader(db, db.proto), nil
-}
-
-func (db *mockDB) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	return generickv.MakeAccountsWriter(db, db), nil
-}
-
-func (db *mockDB) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
-	return generickv.MakeAccountsReader(db, db.proto), nil
-}
-
-func (db *mockDB) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (trackerdb.OnlineAccountsWriter, error) {
-	return generickv.MakeOnlineAccountsWriter(db), nil
-}
-
-func (db *mockDB) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsReader, error) {
-	return generickv.MakeAccountsReader(db, db.proto), nil
-}
-
-func (db *mockDB) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
-	return generickv.MakeStateproofWriter(db)
-}
-
-func (db *mockDB) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
-	return generickv.MakeStateproofReader(db)
-}
-
-func (db *mockDB) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
-	// TODO
-	return nil, nil
+	return &struct {
+		mockTransaction
+		trackerdb.Reader
+		trackerdb.Writer
+		trackerdb.Catchpoint
+	}{scope, generickv.MakeReader(&scope, db.proto), generickv.MakeWriter(db, &scope, &scope), generickv.MakeCatchpoint()}, nil
 }
 
 func (db *mockDB) Vacuum(ctx context.Context) (stats db.VacuumStats, err error) {
@@ -227,160 +266,17 @@ func (db *mockDB) Close() {
 	// TODO
 }
 
-func (txs mockTransaction) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
-	return nil, nil
+type kvstore struct {
+	data map[string][]byte
 }
 
-func (txs mockTransaction) MakeAccountsReaderWriter() (trackerdb.AccountsReaderWriter, error) {
-	return struct {
-		trackerdb.AccountsReaderExt
-		trackerdb.AccountsWriterExt
-	}{generickv.MakeAccountsReader(txs, txs.proto), generickv.MakeAccountsWriter(txs, txs)}, nil
-}
-
-func (txs mockTransaction) MakeAccountsOptimizedReader() (trackerdb.AccountsReader, error) {
-	return generickv.MakeAccountsReader(txs, txs.proto), nil
-}
-
-func (txs mockTransaction) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	// Note: the arguments are for the SQL implementation, nothing to do about them here.
-	return generickv.MakeAccountsWriter(txs, txs), nil
-}
-
-func (txs mockTransaction) MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w trackerdb.OnlineAccountsWriter, err error) {
-	return generickv.MakeOnlineAccountsWriter(txs), nil
-}
-
-func (txs mockTransaction) MakeOnlineAccountsOptimizedReader() (r trackerdb.OnlineAccountsReader, err error) {
-	return generickv.MakeAccountsReader(txs, txs.proto), nil
-}
-
-func (txs mockTransaction) MakeMerkleCommitter(staging bool) (trackerdb.MerkleCommitter, error) {
-	return nil, nil
-}
-
-func (txs mockTransaction) MakeOrderedAccountsIter(accountCount int) trackerdb.OrderedAccountsIter {
+func (kvs *kvstore) Set(key, value []byte) error {
+	kvs.data[string(key)] = value
 	return nil
 }
 
-func (txs mockTransaction) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
-	return nil, nil
-}
-
-func (txs mockTransaction) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
-	return nil
-}
-
-func (txs mockTransaction) MakeSpVerificationCtxReaderWriter() trackerdb.SpVerificationCtxReaderWriter {
-	return nil
-}
-
-func (txs mockTransaction) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
-	return generickv.RunMigrations(ctx, txs.db, params, targetVersion)
-}
-
-func (txs mockTransaction) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
-	return time.Now(), nil
-}
-
-func (txs mockTransaction) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	return true
-}
-
-func (txs mockTransaction) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	return true, nil
-}
-
-func (txs mockTransaction) Testing() trackerdb.TestTransactionScope {
-	return txs
-}
-
-func (txs mockTransaction) Close() error {
-	return nil
-}
-
-func (txs mockTransaction) Commit() error {
-	return nil
-}
-
-func (bs mockBatch) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
-	return nil, nil
-}
-
-func (bs mockBatch) MakeAccountsWriter() (trackerdb.AccountsWriterExt, error) {
-	return generickv.MakeAccountsWriter(bs, bs.db), nil
-}
-
-func (bs mockBatch) MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (trackerdb.AccountsWriter, error) {
-	// Note: the arguments are for the SQL implementation, nothing to do about them here.
-	return generickv.MakeAccountsWriter(bs, bs.db), nil
-}
-
-func (bs mockBatch) MakeSpVerificationCtxWriter() trackerdb.SpVerificationCtxWriter {
-	return nil
-}
-
-func (bs mockBatch) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
-	return generickv.RunMigrations(ctx, bs.db, params, targetVersion)
-}
-
-func (bs mockBatch) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
-	return time.Now(), nil
-}
-
-func (bs mockBatch) AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	return false
-}
-
-func (bs mockBatch) AccountsUpdateSchemaTest(ctx context.Context) (err error) {
-	return nil
-}
-
-func (bs mockBatch) ModifyAcctBaseTest() error {
-	return nil
-}
-
-func (bs mockBatch) Testing() trackerdb.TestBatchScope {
-	return bs
-}
-
-func (bs mockBatch) Close() error {
-	return nil
-}
-
-func (bs mockBatch) Commit() error {
-	return nil
-}
-
-func (ss mockSnapshot) MakeAccountsReader() (trackerdb.AccountsReaderExt, error) {
-	return nil, nil
-}
-
-func (ss mockSnapshot) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
-	return nil, nil
-}
-
-func (ss mockSnapshot) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
-	return nil
-}
-
-func (ss mockSnapshot) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
-	return nil
-}
-
-func (ss mockSnapshot) Close() error {
-	return nil
-}
-
-// kv impls
-
-func (db *mockDB) Set(key, value []byte) error {
-	db.data[string(key)] = value
-	return nil
-}
-
-func (db *mockDB) Get(key []byte) (data []byte, closer io.Closer, err error) {
-	data, ok := db.data[string(key)]
+func (kvs *kvstore) Get(key []byte) (data []byte, closer io.Closer, err error) {
+	data, ok := kvs.data[string(key)]
 	if !ok {
 		err = trackerdb.ErrNotFound
 		return
@@ -388,14 +284,14 @@ func (db *mockDB) Get(key []byte) (data []byte, closer io.Closer, err error) {
 	return data, io.NopCloser(bytes.NewReader(data)), nil
 }
 
-func (db *mockDB) NewIter(low, high []byte, reverse bool) generickv.KvIter {
+func (kvs *kvstore) NewIter(low, high []byte, reverse bool) generickv.KvIter {
 	//
 	var keys []string
 
 	slow := string(low)
 	shigh := string(high)
 
-	for k := range db.data {
+	for k := range kvs.data {
 		if k > slow && k < shigh {
 			keys = append(keys, k)
 		}
@@ -408,62 +304,121 @@ func (db *mockDB) NewIter(low, high []byte, reverse bool) generickv.KvIter {
 		}
 	}
 
-	return &mockIter{db, keys, -1}
+	return &mockIter{kvs, keys, -1}
 }
 
-func (db *mockDB) Delete(key []byte) error {
-	delete(db.data, string(key))
+func (kvs *kvstore) Delete(key []byte) error {
+	delete(kvs.data, string(key))
 	return nil
 }
 
-func (db *mockDB) DeleteRange(start, end []byte) error {
+func (kvs *kvstore) DeleteRange(start, end []byte) error {
 	var toDelete []string
-	for k := range db.data {
+	for k := range kvs.data {
 		if k > string(start) && k < string(end) {
 			toDelete = append(toDelete, k)
 		}
 	}
 	for i := range toDelete {
-		delete(db.data, toDelete[i])
+		delete(kvs.data, toDelete[i])
 	}
 	return nil
 }
 
-//
-
-func (bs mockBatch) Set(key, value []byte) error {
-	return bs.db.Set(key, value)
+type mockSnapshot struct {
+	db *mockDB
 }
 
-func (bs mockBatch) Delete(key []byte) error {
-	return bs.db.Delete(key)
+func (ss mockSnapshot) Get(key []byte) (value []byte, closer io.Closer, err error) {
+	return ss.db.kvs.Get(key)
 }
 
-func (bs mockBatch) DeleteRange(start, end []byte) error {
-	return bs.db.DeleteRange(start, end)
+func (ss mockSnapshot) NewIter(low, high []byte, reverse bool) generickv.KvIter {
+	return ss.db.kvs.NewIter(low, high, reverse)
+}
+func (ss mockSnapshot) Close() error {
+	return nil
+}
+
+type mockTransaction struct {
+	db    *mockDB
+	proto config.ConsensusParams
+}
+
+func (txs mockTransaction) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
+	// create a anonym struct that impls the interface for the migration runner
+	aux := struct {
+		*mockDB
+		*kvstore
+	}{txs.db, &txs.db.kvs}
+	return generickv.RunMigrations(ctx, aux, params, targetVersion)
+}
+
+func (txs mockTransaction) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
+	return time.Now(), nil
+}
+
+func (txs mockTransaction) Close() error {
+	return nil
+}
+
+func (txs mockTransaction) Commit() error {
+	return nil
 }
 
 func (txs mockTransaction) Set(key, value []byte) error {
-	return txs.db.Set(key, value)
+	return txs.db.kvs.Set(key, value)
 }
 
 func (txs mockTransaction) Get(key []byte) (value []byte, closer io.Closer, err error) {
-	return txs.db.Get(key)
+	return txs.db.kvs.Get(key)
 }
 
 func (txs mockTransaction) NewIter(low, high []byte, reverse bool) generickv.KvIter {
-	return txs.db.NewIter(low, high, reverse)
+	return txs.db.kvs.NewIter(low, high, reverse)
 }
 
 func (txs mockTransaction) Delete(key []byte) error {
-	return txs.db.Delete(key)
+	return txs.db.kvs.Delete(key)
 }
 
 func (txs mockTransaction) DeleteRange(start, end []byte) error {
-	return txs.db.DeleteRange(start, end)
+	return txs.db.kvs.DeleteRange(start, end)
 }
 
-//
+type mockBatch struct {
+	db *mockDB
+}
+
+func (bs mockBatch) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
+	return time.Now(), nil
+}
+
+func (bs mockBatch) Close() error {
+	return nil
+}
+
+func (bs mockBatch) Commit() error {
+	return nil
+}
+
+func (bs mockBatch) Set(key, value []byte) error {
+	return bs.db.kvs.Set(key, value)
+}
+
+func (bs mockBatch) Delete(key []byte) error {
+	return bs.db.kvs.Delete(key)
+}
+
+func (bs mockBatch) DeleteRange(start, end []byte) error {
+	return bs.db.kvs.DeleteRange(start, end)
+}
+
+type mockIter struct {
+	kvs  *kvstore
+	keys []string
+	curr int
+}
 
 func (iter *mockIter) Next() bool {
 	if iter.curr < len(iter.keys)-1 {
@@ -483,7 +438,7 @@ func (iter *mockIter) KeySlice() generickv.Slice {
 }
 
 func (iter *mockIter) Value() ([]byte, error) {
-	return iter.db.data[iter.keys[iter.curr]], nil
+	return iter.kvs.data[iter.keys[iter.curr]], nil
 }
 
 func (iter *mockIter) ValueSlice() (generickv.Slice, error) {
