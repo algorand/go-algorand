@@ -669,6 +669,18 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 		minRound++
 	}
 
+	// If we did find the transaction, we know there is no point
+	// checking rounds earlier or later than validity rounds
+	if found {
+		if tx.Txn.FirstValid > minRound {
+			minRound = tx.Txn.FirstValid
+		}
+
+		if tx.Txn.LastValid < maxRound {
+			maxRound = tx.Txn.LastValid
+		}
+	}
+
 	for r := maxRound; r >= minRound; r-- {
 		tx, found, err := node.ledger.LookupTxid(txID, r)
 		if err != nil || !found {
