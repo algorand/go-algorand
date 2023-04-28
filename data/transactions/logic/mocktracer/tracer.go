@@ -21,6 +21,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -161,7 +162,7 @@ func (d *Tracer) BeforeTxnGroup(ep *logic.EvalParams) {
 }
 
 // AfterTxnGroup mocks the logic.EvalTracer.AfterTxnGroup method
-func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), evalError != nil))
 }
 

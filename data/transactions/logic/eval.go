@@ -5420,7 +5420,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		ep.Tracer.BeforeTxnGroup(ep)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			ep.Tracer.AfterTxnGroup(ep, err)
+			ep.Tracer.AfterTxnGroup(ep, nil, err)
 		}()
 	}
 
