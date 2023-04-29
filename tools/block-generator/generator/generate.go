@@ -453,7 +453,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
 	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round))
 	if err != nil {
-		return fmt.Errorf("err getting state delta for round %d, %v", round, err)
+		return fmt.Errorf("err getting state delta for round %d: %w", round, err)
 	}
 	// msgp encode deltas
 	data, err := encode(protocol.CodecHandle, delta)

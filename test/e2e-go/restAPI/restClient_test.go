@@ -1522,15 +1522,23 @@ end:
 		{encodeInt(12321), "int:12321", []byte{0, 1, 254, 3, 2}},
 		{[]byte{0, 248, 255, 32}, "b64:APj/IA==", []byte("lux56")},
 	}
+
 	for _, boxTest := range boxTests {
 		// Box values are 5 bytes, as defined by the test TEAL program.
 		operateBoxAndSendTxn("create", []string{string(boxTest.name)}, []string{""})
 		operateBoxAndSendTxn("set", []string{string(boxTest.name)}, []string{string(boxTest.value)})
 
+		currentRoundBeforeBoxes, err := testClient.CurrentRound()
+		a.NoError(err)
 		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), boxTest.encodedName)
+		a.NoError(err)
+		currentRoundAfterBoxes, err := testClient.CurrentRound()
 		a.NoError(err)
 		a.Equal(boxTest.name, boxResponse.Name)
 		a.Equal(boxTest.value, boxResponse.Value)
+		// To reduce flakiness, only check the round from boxes is within a range.
+		a.GreaterOrEqual(boxResponse.Round, currentRoundBeforeBoxes)
+		a.LessOrEqual(boxResponse.Round, currentRoundAfterBoxes)
 	}
 
 	const numberOfBoxesRemaining = uint64(3)
