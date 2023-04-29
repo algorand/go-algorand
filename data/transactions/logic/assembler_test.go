@@ -1877,7 +1877,7 @@ func TestAssembleAsset(t *testing.T) {
 				Expect{1, "asset_holding_get unknown field: \"ABC\""})
 
 			testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
-				Expect{1, "asset_params_get" + " ABC 1 arg 0 wanted type uint64..."})
+				Expect{1, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
 
 			// Test that AssetUnitName is known to return bytes
 			testProg(t, "int 1; asset_params_get AssetUnitName; pop; int 1; +", v,

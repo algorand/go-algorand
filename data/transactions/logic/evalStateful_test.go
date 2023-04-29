@@ -1955,10 +1955,10 @@ int 0x77
 				// 100 is in the ForeignApps array, name it by slot
 				source = strings.ReplaceAll(source, "THISAPP", "int 1")
 			} else {
+				// use the actual app number
 				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 					return
 				}
-				// use the actual app number
 				source = strings.ReplaceAll(source, "THISAPP", "int 100")
 			}
 			delta := testApp(t, source, ep)
@@ -2096,13 +2096,12 @@ byte "myval"
 `
 
 			if bySlot {
-				// use the actual app number
 				source = strings.ReplaceAll(source, "OTHERAPP", "int 2")
 			} else {
+				// use the actual app number if allowed
 				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 					return
 				}
-				// use the actual app number
 				source = strings.ReplaceAll(source, "OTHERAPP", "int 101")
 			}
 
@@ -2219,10 +2218,10 @@ app_global_get_ex
 				// 100 is in the ForeignApps array, name it by slot
 				source = strings.ReplaceAll(source, "THISAPP", "int 1")
 			} else {
+				// use the actual app number if allowed
 				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 					return
 				}
-				// use the actual app number
 				source = strings.ReplaceAll(source, "THISAPP", "int 100")
 			}
 			txn.ForeignApps = []basics.AppIndex{txn.ApplicationID}
@@ -2665,7 +2664,6 @@ func TestReturnTypes(t *testing.T) {
 		"balance":         ": txn Sender; balance",
 		"min_balance":     ": txn Sender; min_balance",
 		"acct_params_get": ": txn Sender; acct_params_get AcctMinBalance",
-		"app_params_get":  "app_params_get AppGlobalNumUint",
 
 		// Use "bury" here to take advantage of args pushed on stack by test
 		"app_local_get":    "txn Accounts 1; bury 2; app_local_get",
@@ -2676,6 +2674,7 @@ func TestReturnTypes(t *testing.T) {
 
 		"asset_params_get":  ": int 400; asset_params_get AssetUnitName",
 		"asset_holding_get": ": txn Sender; int 400; asset_holding_get AssetBalance",
+		"app_params_get":    "app_params_get AppGlobalNumUint",
 
 		"itxn_field":  "itxn_begin; itxn_field TypeEnum",
 		"itxn_next":   "itxn_begin; int pay; itxn_field TypeEnum; itxn_next",
