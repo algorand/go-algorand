@@ -852,7 +852,6 @@ func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, 
 	if len(expectedError) != 0 {
 		require.NotNil(t, actual.TxnGroups[0].FailureMessage)
 		require.Contains(t, *actual.TxnGroups[0].FailureMessage, expectedError)
-		require.False(t, expected.WouldSucceed, "Test case WouldSucceed value is not consistent with expected failure")
 		// if it matched the expected error, copy the actual one so it will pass the equality check below
 		expected.TxnGroups[0].FailureMessage = actual.TxnGroups[0].FailureMessage
 	}
@@ -1039,7 +1038,7 @@ int 1`,
 						txnAppBudgetUsed = append(txnAppBudgetUsed, numOrNil(scenario.TxnAppBudgetConsumed[i]))
 					}
 					expectedBody := v2.PreEncodedSimulateResponse{
-						Version: 1,
+						Version: 2,
 						TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 							{
 								AppBudgetAdded:    appBudgetAdded,
@@ -1063,7 +1062,6 @@ int 1`,
 								},
 							},
 						},
-						WouldSucceed: scenario.Outcome == mocktracer.ApprovalOutcome,
 					}
 					assertSimulationResultsEqual(t, scenario.ExpectedError, expectedBody, actualBody)
 				})

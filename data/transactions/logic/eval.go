@@ -678,33 +678,46 @@ func (st StackType) Typed() bool {
 	return false
 }
 
-// PanicError wraps a recover() catching a panic()
-type PanicError struct {
+// panicError wraps a recover() catching a panic()
+type panicError struct {
 	PanicValue interface{}
 	StackTrace string
 }
 
-func (pe PanicError) Error() string {
+func (pe panicError) Error() string {
 	return fmt.Sprintf("panic in TEAL Eval: %v\n%s", pe.PanicValue, pe.StackTrace)
 }
 
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
-// ClearStateBudgetError allows evaluation to signal that the caller should
-// reject the transaction.  Normally, an error in evaluation would not cause a
-// ClearState txn to fail. However, callers fail a txn for ClearStateBudgetError
-// because the transaction has not provided enough budget to let ClearState do
-// its job.
-type ClearStateBudgetError struct {
-	offered int
+// EvalError indicates AVM evaluation failure
+type EvalError struct {
+	Err        error
+	details    string
+	groupIndex int
+	logicsig   bool
 }
 
-func (e ClearStateBudgetError) Error() string {
-	return fmt.Sprintf("Attempted ClearState execution with low OpcodeBudget %d", e.offered)
+// Error satisfies builtin interface `error`
+func (err EvalError) Error() string {
+	var msg string
+	if err.logicsig {
+		msg = fmt.Sprintf("rejected by logic err=%v", err.Err)
+	} else {
+		msg = fmt.Sprintf("logic eval error: %v", err.Err)
+	}
+	if err.details == "" {
+		return msg
+	}
+	return msg + ". Details: " + err.details
 }
 
-// EvalContract executes stateful TEAL program as the gi'th transaction in params
+func (err EvalError) Unwrap() error {
+	return err.Err
+}
+
+// EvalContract executes stateful program as the gi'th transaction in params
 func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
 	if params.Ledger == nil {
 		return false, nil, errors.New("no ledger in contract eval")
@@ -725,7 +738,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	if cx.Proto.IsolateClearState && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
-			return false, nil, ClearStateBudgetError{*cx.PooledApplicationBudget}
+			return false, nil, fmt.Errorf("Attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
 		}
 	}
 
@@ -766,7 +779,11 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 			used = basics.AddSaturate(used, size)
 			if used > cx.ioBudget {
-				return false, nil, fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
+				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
+				if !cx.Proto.EnableBareBudgetError {
+					err = EvalError{err, "", gi, false}
+				}
+				return false, nil, err
 			}
 		}
 		cx.readBudgetChecked = true
@@ -776,6 +793,11 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.txn.Txn.OnCompletion, cx.txn.Txn.ApplicationArgs)
 	}
 	pass, err := eval(program, &cx)
+	if err != nil {
+		pc, det := cx.pcDetails()
+		details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+		err = EvalError{err, details, gi, false}
+	}
 
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
@@ -798,7 +820,7 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 // EvalSignatureFull evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
 // It returns EvalContext suitable for obtaining additional info about the execution.
-func EvalSignatureFull(gi int, params *EvalParams) (pass bool, pcx *EvalContext, err error) {
+func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 	if params.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in signature eval")
 	}
@@ -808,14 +830,21 @@ func EvalSignatureFull(gi int, params *EvalParams) (pass bool, pcx *EvalContext,
 		groupIndex:   gi,
 		txn:          &params.TxnGroup[gi],
 	}
-	pass, err = eval(cx.txn.Lsig.Logic, &cx)
+	pass, err := eval(cx.txn.Lsig.Logic, &cx)
+
+	if err != nil {
+		pc, det := cx.pcDetails()
+		details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+		err = EvalError{err, details, gi, true}
+	}
+
 	return pass, &cx, err
 }
 
 // EvalSignature evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
-	pass, _, err = EvalSignatureFull(gi, params)
+func EvalSignature(gi int, params *EvalParams) (bool, error) {
+	pass, _, err := EvalSignatureFull(gi, params)
 	return pass, err
 }
 
@@ -831,7 +860,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 			if cx.Trace != nil {
 				errstr += cx.Trace.String()
 			}
-			err = PanicError{x, errstr}
+			err = panicError{x, errstr}
 			cx.EvalParams.log().Errorf("recovered panic in Eval: %v", err)
 		}
 	}()
@@ -941,7 +970,7 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 			if params.Trace != nil {
 				errstr += params.Trace.String()
 			}
-			err = PanicError{x, errstr}
+			err = panicError{x, errstr}
 			params.log().Errorf("recovered panic in Check: %s", err)
 		}
 	}()
@@ -5446,7 +5475,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		ep.Tracer.BeforeTxnGroup(ep)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			ep.Tracer.AfterTxnGroup(ep, err)
+			ep.Tracer.AfterTxnGroup(ep, nil, err)
 		}()
 	}
 
@@ -5577,8 +5606,8 @@ func opBlock(cx *EvalContext) error {
 	}
 }
 
-// PcDetails return PC and disassembled instructions at PC up to 2 opcodes back
-func (cx *EvalContext) PcDetails() (pc int, dis string) {
+// pcDetails return PC and disassembled instructions at PC up to 2 opcodes back
+func (cx *EvalContext) pcDetails() (pc int, dis string) {
 	const maxNumAdditionalOpcodes = 2
 	text, ds, err := disassembleInstrumented(cx.program, nil)
 	if err != nil {
@@ -5602,7 +5631,7 @@ func (cx *EvalContext) PcDetails() (pc int, dis string) {
 			break
 		}
 	}
-	return cx.pc, dis
+	return cx.pc, strings.ReplaceAll(strings.TrimSuffix(dis, "\n"), "\n", "; ")
 }
 
 func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
