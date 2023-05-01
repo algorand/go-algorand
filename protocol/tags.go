@@ -43,6 +43,77 @@ const (
 	VoteBundleTag Tag = "VB"
 )
 
+func (t Tag) MaxMessageSize() int {
+	switch t {
+	case AgreementVoteTag:
+		return 1024
+	case MsgOfInterestTag:
+		return 1024
+	case MsgDigestSkipTag:
+		return 1024
+	case NetPrioResponseTag:
+		return 1024
+	case NetIDVerificationTag:
+		return 1024
+	case PingTag:
+		return 1024
+	case PingReplyTag:
+		return 1024
+	case ProposalPayloadTag:
+		return 1024
+	case StateProofSigTag:
+		return 1024
+	case TopicMsgRespTag:
+		return 1024
+	case TxnTag:
+	case UniEnsBlockReqTag:
+		return 1024
+	case VoteBundleTag:
+		return 1024
+	default:
+	}
+	return 1024
+}
+
+// func (tag Tag) MaxMessageSizes() {
+// 	wn.maxMessageSizes = make(map[protocol.Tag]int, len(protocol.TagList))
+// 	for _, tag := range protocol.TagList {
+// 		switch tag {
+// 		case protocol.AgreementVoteTag:
+// 			wn.maxMessageSizes[tag] = 1024
+// 		case protocol.MsgOfInterestTag:
+// 			return 1024
+// 		case protocol.MsgDigestSkipTag:
+// 			wn.maxMessageSizes[tag] = crypto.DigestSize
+// 		case protocol.NetPrioResponseTag:
+// 			wn.maxMessageSizes[tag] = node.NetPrioMaxSize()
+// 		case protocol.NetIDVerificationTag:
+// 			wn.maxMessageSizes[tag] = (&identityChallengeSigned{}).MaxSize()
+// 		case protocol.PingTag:
+// 			wn.maxMessageSizes[tag] = pingMessageSize
+// 		case protocol.PingReplyTag:
+// 			wn.maxMessageSizes[tag] = 1024
+// 		case protocol.ProposalPayloadTag:
+// 			wn.maxMessageSizes[tag] = 1024
+// 		case protocol.StateProofSigTag:
+// 			wn.maxMessageSizes[tag] = 1024
+// 		case protocol.TopicMsgRespTag:
+// 			wn.maxMessageSizes[tag] = 1024
+// 		case protocol.TxnTag:
+// 			wn.maxMessageSizes[tag] = config.MaxTxGroupSize * (&transactions.SignedTxn{}).MaxSize()
+// 		case protocol.UniEnsBlockReqTag:
+// 			wn.maxMessageSizes[tag] = 1024
+// 		case protocol.VoteBundleTag:
+// 			wn.maxMessageSizes[tag] = 1024
+// 		default:
+// 			wn.maxMessageSizes[tag] = 0
+// 		}
+// 		switch tag {
+
+// 		}
+// 	}
+// }
+
 // TagList is a list of all currently used protocol tags.
 var TagList = []Tag{
 	AgreementVoteTag,

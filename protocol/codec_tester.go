@@ -383,6 +383,12 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	e1 := EncodeMsgp(v0.(msgp.Marshaler))
 	e2 := EncodeReflect(v0)
 
+	if v1Sizer, ok := template.(msgp.MaxSizer); ok {
+		if v1Sizer.MaxSize() < len(e1) {
+			return fmt.Errorf("Encoded size is larger than the msgp.MaxSizer.MaxSize()")
+		}
+	}
+
 	// for debug, write out the encodings to a file
 	if debugCodecTester {
 		err = os.WriteFile("/tmp/e1", e1, 0666)

@@ -14,6 +14,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // netPrioResponseSigned
 //           |-----> (*) MarshalMsg
@@ -22,6 +23,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -128,6 +130,12 @@ func (z *netPrioResponse) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *netPrioResponse) MsgIsZero() bool {
 	return ((*z).Nonce == "")
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *netPrioResponse) MaxSize() (s int) {
+	s = 1 + 6 + msgp.StringPrefixSize + len((*z).Nonce)
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -416,4 +424,10 @@ func (z *netPrioResponseSigned) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *netPrioResponseSigned) MsgIsZero() bool {
 	return ((*z).Response.Nonce == "") && ((*z).Round.MsgIsZero()) && ((*z).Sender.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *netPrioResponseSigned) MaxSize() (s int) {
+	s = 1 + 9 + 1 + 6 + msgp.StringPrefixSize + len((*z).Response.Nonce) + 6 + (*z).Round.MaxSize() + 7 + (*z).Sender.MaxSize() + 4 + (*z).Sig.MaxSize()
+	return
 }

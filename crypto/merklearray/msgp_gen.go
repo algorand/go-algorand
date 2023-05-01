@@ -16,6 +16,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
+//   |-----> MaxSize
 //
 // Proof
 //   |-----> (*) MarshalMsg
@@ -24,6 +25,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//   |-----> (*) MaxSize
 //
 // SingleLeafProof
 //        |-----> (*) MarshalMsg
@@ -32,6 +34,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // Tree
 //   |-----> (*) MarshalMsg
@@ -40,6 +43,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//   |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -113,6 +117,15 @@ func (z Layer) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z Layer) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z Layer) MaxSize() (s int) {
+	s = msgp.ArrayHeaderSize
+	for za0001 := range z {
+		s += z[za0001].MaxSize()
+	}
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -320,6 +333,16 @@ func (z *Proof) MsgIsZero() bool {
 	return (len((*z).Path) == 0) && ((*z).HashFactory.MsgIsZero()) && ((*z).TreeDepth == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *Proof) MaxSize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Path {
+		s += (*z).Path[zb0001].MaxSize()
+	}
+	s += 4 + (*z).HashFactory.MaxSize() + 3 + msgp.Uint8Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *SingleLeafProof) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -523,6 +546,16 @@ func (z *SingleLeafProof) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *SingleLeafProof) MsgIsZero() bool {
 	return (len((*z).Proof.Path) == 0) && ((*z).Proof.HashFactory.MsgIsZero()) && ((*z).Proof.TreeDepth == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *SingleLeafProof) MaxSize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Proof.Path {
+		s += (*z).Proof.Path[zb0001].MaxSize()
+	}
+	s += 4 + (*z).Proof.HashFactory.MaxSize() + 3 + msgp.Uint8Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -803,4 +836,17 @@ func (z *Tree) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Tree) MsgIsZero() bool {
 	return (len((*z).Levels) == 0) && ((*z).NumOfElements == 0) && ((*z).Hash.MsgIsZero()) && ((*z).IsVectorCommitment == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *Tree) MaxSize() (s int) {
+	s = 1 + 5 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Levels {
+		s += msgp.ArrayHeaderSize
+		for zb0002 := range (*z).Levels[zb0001] {
+			s += (*z).Levels[zb0001][zb0002].MaxSize()
+		}
+	}
+	s += 3 + msgp.Uint64Size + 4 + (*z).Hash.MaxSize() + 3 + msgp.BoolSize
+	return
 }

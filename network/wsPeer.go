@@ -504,7 +504,9 @@ func (wp *wsPeer) readLoop() {
 			wp.reportReadErr(err)
 			return
 		}
+		// should we check if this is invalid tag already?
 		msg.Tag = Tag(string(tag[:]))
+
 		slurper.Reset()
 		err = slurper.Read(reader)
 		if err != nil {
@@ -834,6 +836,7 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 
 const pingLength = 8
 const maxPingWait = 60 * time.Second
+const pingMessageSize = len(protocol.PingTag) + pingLength
 
 // sendPing sends a ping block to the peer.
 // return true if either a ping request was enqueued or there is already ping request in flight in the past maxPingWait time.
@@ -846,7 +849,7 @@ func (wp *wsPeer) sendPing() bool {
 	}
 
 	tagBytes := []byte(protocol.PingTag)
-	mbytes := make([]byte, len(tagBytes)+pingLength)
+	mbytes := make([]byte, pingMessageSize)
 	copy(mbytes, tagBytes)
 	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]

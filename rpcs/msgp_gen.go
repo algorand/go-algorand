@@ -14,6 +14,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -125,4 +126,10 @@ func (z *EncodedBlockCert) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *EncodedBlockCert) MsgIsZero() bool {
 	return ((*z).Block.MsgIsZero()) && ((*z).Certificate.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *EncodedBlockCert) MaxSize() (s int) {
+	s = 1 + 6 + (*z).Block.MaxSize() + 5 + (*z).Certificate.MaxSize()
+	return
 }

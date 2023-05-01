@@ -14,6 +14,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> (*) MaxSize
 //
 // AlgoCount
 //     |-----> (*) MarshalMsg
@@ -22,6 +23,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> (*) MaxSize
 //
 // OnlineRoundParamsData
 //           |-----> (*) MarshalMsg
@@ -30,6 +32,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> (*) MaxSize
 //
 // StateProofVerificationContext
 //               |-----> (*) MarshalMsg
@@ -38,6 +41,7 @@ import (
 //               |-----> (*) CanUnmarshalMsg
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
+//               |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -665,6 +669,12 @@ func (z *AccountTotals) MsgIsZero() bool {
 	return (((*z).Online.Money.MsgIsZero()) && ((*z).Online.RewardUnits == 0)) && (((*z).Offline.Money.MsgIsZero()) && ((*z).Offline.RewardUnits == 0)) && (((*z).NotParticipating.Money.MsgIsZero()) && ((*z).NotParticipating.RewardUnits == 0)) && ((*z).RewardsLevel == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *AccountTotals) MaxSize() (s int) {
+	s = 1 + 7 + 1 + 4 + (*z).Online.Money.MaxSize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + (*z).Offline.Money.MaxSize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + (*z).NotParticipating.Money.MaxSize() + 4 + msgp.Uint64Size + 7 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *AlgoCount) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -792,6 +802,12 @@ func (z *AlgoCount) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AlgoCount) MsgIsZero() bool {
 	return ((*z).Money.MsgIsZero()) && ((*z).RewardUnits == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *AlgoCount) MaxSize() (s int) {
+	s = 1 + 4 + (*z).Money.MaxSize() + 4 + msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -944,6 +960,12 @@ func (z *OnlineRoundParamsData) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *OnlineRoundParamsData) MsgIsZero() bool {
 	return ((*z).OnlineSupply == 0) && ((*z).RewardsLevel == 0) && ((*z).CurrentProtocol.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *OnlineRoundParamsData) MaxSize() (s int) {
+	s = 1 + 7 + msgp.Uint64Size + 7 + msgp.Uint64Size + 6 + (*z).CurrentProtocol.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1119,4 +1141,10 @@ func (z *StateProofVerificationContext) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *StateProofVerificationContext) MsgIsZero() bool {
 	return ((*z).LastAttestedRound.MsgIsZero()) && ((*z).VotersCommitment.MsgIsZero()) && ((*z).OnlineTotalWeight.MsgIsZero()) && ((*z).Version.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *StateProofVerificationContext) MaxSize() (s int) {
+	s = 1 + 8 + (*z).LastAttestedRound.MaxSize() + 3 + (*z).VotersCommitment.MaxSize() + 3 + (*z).OnlineTotalWeight.MaxSize() + 2 + (*z).Version.MaxSize()
+	return
 }

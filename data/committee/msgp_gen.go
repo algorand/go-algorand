@@ -14,6 +14,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> (*) MaxSize
 //
 // Seed
 //   |-----> (*) MarshalMsg
@@ -22,6 +23,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//   |-----> (*) MaxSize
 //
 // UnauthenticatedCredential
 //             |-----> (*) MarshalMsg
@@ -30,6 +32,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> (*) MaxSize
 //
 // hashableCredential
 //          |-----> (*) MarshalMsg
@@ -38,6 +41,7 @@ import (
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
+//          |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -238,6 +242,12 @@ func (z *Credential) MsgIsZero() bool {
 	return ((*z).Weight == 0) && ((*z).VrfOut.MsgIsZero()) && ((*z).DomainSeparationEnabled == false) && ((*z).Hashable.MsgIsZero()) && ((*z).UnauthenticatedCredential.Proof.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *Credential) MaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 2 + (*z).VrfOut.MaxSize() + 3 + msgp.BoolSize + 3 + (*z).Hashable.MaxSize() + 3 + (*z).UnauthenticatedCredential.Proof.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Seed) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -275,6 +285,12 @@ func (z *Seed) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Seed) MsgIsZero() bool {
 	return (*z) == (Seed{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *Seed) MaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -381,6 +397,12 @@ func (z *UnauthenticatedCredential) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *UnauthenticatedCredential) MsgIsZero() bool {
 	return ((*z).Proof.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *UnauthenticatedCredential) MaxSize() (s int) {
+	s = 1 + 3 + (*z).Proof.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -533,4 +555,10 @@ func (z *hashableCredential) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *hashableCredential) MsgIsZero() bool {
 	return ((*z).RawOut.MsgIsZero()) && ((*z).Member.MsgIsZero()) && ((*z).Iter == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *hashableCredential) MaxSize() (s int) {
+	s = 1 + 2 + (*z).RawOut.MaxSize() + 2 + (*z).Member.MaxSize() + 2 + msgp.Uint64Size
+	return
 }

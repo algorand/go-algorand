@@ -32,6 +32,7 @@ import (
 )
 
 // diskState represents the state required by the agreement protocol to be persistent.
+//msgp:maxsize ignore diskState
 type diskState struct {
 	_struct struct{} `codec:","`
 

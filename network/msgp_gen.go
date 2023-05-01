@@ -14,6 +14,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> Msgsize
 //         |-----> MsgIsZero
+//         |-----> MaxSize
 //
 // identityChallenge
 //         |-----> (*) MarshalMsg
@@ -22,6 +23,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> (*) MaxSize
 //
 // identityChallengeResponse
 //             |-----> (*) MarshalMsg
@@ -30,6 +32,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> (*) MaxSize
 //
 // identityChallengeResponseSigned
 //                |-----> (*) MarshalMsg
@@ -38,6 +41,7 @@ import (
 //                |-----> (*) CanUnmarshalMsg
 //                |-----> (*) Msgsize
 //                |-----> (*) MsgIsZero
+//                |-----> (*) MaxSize
 //
 // identityChallengeSigned
 //            |-----> (*) MarshalMsg
@@ -46,6 +50,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> (*) MaxSize
 //
 // identityChallengeValue
 //            |-----> (*) MarshalMsg
@@ -54,6 +59,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> (*) MaxSize
 //
 // identityVerificationMessage
 //              |-----> (*) MarshalMsg
@@ -62,6 +68,7 @@ import (
 //              |-----> (*) CanUnmarshalMsg
 //              |-----> (*) Msgsize
 //              |-----> (*) MsgIsZero
+//              |-----> (*) MaxSize
 //
 // identityVerificationMessageSigned
 //                 |-----> (*) MarshalMsg
@@ -70,6 +77,7 @@ import (
 //                 |-----> (*) CanUnmarshalMsg
 //                 |-----> (*) Msgsize
 //                 |-----> (*) MsgIsZero
+//                 |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -116,6 +124,12 @@ func (z disconnectReason) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z disconnectReason) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z disconnectReason) MaxSize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -290,6 +304,12 @@ func (z *identityChallenge) MsgIsZero() bool {
 	return ((*z).Key.MsgIsZero()) && ((*z).Challenge == (identityChallengeValue{})) && (len((*z).PublicAddress) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *identityChallenge) MaxSize() (s int) {
+	s = 1 + 3 + (*z).Key.MaxSize() + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + msgp.BytesPrefixSize + len((*z).PublicAddress)
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *identityChallengeResponse) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -442,6 +462,12 @@ func (z *identityChallengeResponse) MsgIsZero() bool {
 	return ((*z).Key.MsgIsZero()) && ((*z).Challenge == (identityChallengeValue{})) && ((*z).ResponseChallenge == (identityChallengeValue{}))
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *identityChallengeResponse) MaxSize() (s int) {
+	s = 1 + 3 + (*z).Key.MaxSize() + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *identityChallengeResponseSigned) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -569,6 +595,12 @@ func (z *identityChallengeResponseSigned) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *identityChallengeResponseSigned) MsgIsZero() bool {
 	return ((*z).Msg.MsgIsZero()) && ((*z).Signature.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *identityChallengeResponseSigned) MaxSize() (s int) {
+	s = 1 + 4 + (*z).Msg.MaxSize() + 4 + (*z).Signature.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -700,6 +732,12 @@ func (z *identityChallengeSigned) MsgIsZero() bool {
 	return ((*z).Msg.MsgIsZero()) && ((*z).Signature.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *identityChallengeSigned) MaxSize() (s int) {
+	s = 1 + 3 + (*z).Msg.MaxSize() + 4 + (*z).Signature.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *identityChallengeValue) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -737,6 +775,12 @@ func (z *identityChallengeValue) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *identityChallengeValue) MsgIsZero() bool {
 	return (*z) == (identityChallengeValue{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *identityChallengeValue) MaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -843,6 +887,12 @@ func (z *identityVerificationMessage) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *identityVerificationMessage) MsgIsZero() bool {
 	return ((*z).ResponseChallenge == (identityChallengeValue{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *identityVerificationMessage) MaxSize() (s int) {
+	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1085,4 +1135,10 @@ func (z *identityVerificationMessageSigned) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *identityVerificationMessageSigned) MsgIsZero() bool {
 	return ((*z).Msg.ResponseChallenge == (identityChallengeValue{})) && ((*z).Signature.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *identityVerificationMessageSigned) MaxSize() (s int) {
+	s = 1 + 4 + 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 4 + (*z).Signature.MaxSize()
+	return
 }

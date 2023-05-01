@@ -17,6 +17,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> Msgsize
 //            |-----> MsgIsZero
+//            |-----> MaxSize
 //
 // CatchpointFileHeader
 //           |-----> (*) MarshalMsg
@@ -25,6 +26,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> (*) MaxSize
 //
 // catchpointFileBalancesChunkV5
 //               |-----> (*) MarshalMsg
@@ -49,6 +51,7 @@ import (
 //                    |-----> (*) CanUnmarshalMsg
 //                    |-----> (*) Msgsize
 //                    |-----> (*) MsgIsZero
+//                    |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -95,6 +98,12 @@ func (z CatchpointCatchupState) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z CatchpointCatchupState) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z CatchpointCatchupState) MaxSize() (s int) {
+	s = msgp.Int32Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -385,6 +394,12 @@ func (z *CatchpointFileHeader) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *CatchpointFileHeader) MsgIsZero() bool {
 	return ((*z).Version == 0) && ((*z).BalancesRound.MsgIsZero()) && ((*z).BlocksRound.MsgIsZero()) && ((*z).Totals.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).TotalKVs == 0) && ((*z).Catchpoint == "") && ((*z).BlockHeaderDigest.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *CatchpointFileHeader) MaxSize() (s int) {
+	s = 1 + 8 + msgp.Uint64Size + 14 + (*z).BalancesRound.MaxSize() + 12 + (*z).BlocksRound.MaxSize() + 14 + (*z).Totals.MaxSize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 9 + msgp.Uint64Size + 11 + msgp.StringPrefixSize + len((*z).Catchpoint) + 18 + (*z).BlockHeaderDigest.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -935,4 +950,13 @@ func (z *catchpointStateProofVerificationContext) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointStateProofVerificationContext) MsgIsZero() bool {
 	return (len((*z).Data) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *catchpointStateProofVerificationContext) MaxSize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Data {
+		s += (*z).Data[zb0001].MaxSize()
+	}
+	return
 }

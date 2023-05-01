@@ -25,6 +25,7 @@ import (
 
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
+//msgp:maxsize ignore player
 type player struct {
 	_struct struct{} `codec:","`
 	// Round, Period, and Step hold the current round, period, and step of

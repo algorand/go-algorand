@@ -14,6 +14,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> Msgsize
 //         |-----> MsgIsZero
+//         |-----> MaxSize
 //
 // Error
 //   |-----> MarshalMsg
@@ -22,6 +23,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
+//   |-----> MaxSize
 //
 // HashID
 //    |-----> MarshalMsg
@@ -30,6 +32,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
+//    |-----> MaxSize
 //
 // NetworkID
 //     |-----> MarshalMsg
@@ -38,6 +41,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
+//     |-----> MaxSize
 //
 // StateProofType
 //        |-----> MarshalMsg
@@ -46,6 +50,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
+//        |-----> MaxSize
 //
 // Tag
 //  |-----> MarshalMsg
@@ -54,6 +59,7 @@ import (
 //  |-----> (*) CanUnmarshalMsg
 //  |-----> Msgsize
 //  |-----> MsgIsZero
+//  |-----> MaxSize
 //
 // TxType
 //    |-----> MarshalMsg
@@ -62,6 +68,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
+//    |-----> MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -110,6 +117,12 @@ func (z ConsensusVersion) MsgIsZero() bool {
 	return z == ""
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z ConsensusVersion) MaxSize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z Error) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -154,6 +167,12 @@ func (z Error) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z Error) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z Error) MaxSize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -202,6 +221,12 @@ func (z HashID) MsgIsZero() bool {
 	return z == ""
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z HashID) MaxSize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z NetworkID) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -246,6 +271,12 @@ func (z NetworkID) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z NetworkID) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z NetworkID) MaxSize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -294,6 +325,12 @@ func (z StateProofType) MsgIsZero() bool {
 	return z == 0
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z StateProofType) MaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z Tag) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -340,6 +377,12 @@ func (z Tag) MsgIsZero() bool {
 	return z == ""
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z Tag) MaxSize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z TxType) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -384,4 +427,10 @@ func (z TxType) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z TxType) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z TxType) MaxSize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
 }

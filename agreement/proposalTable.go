@@ -18,6 +18,7 @@ package agreement
 
 // A proposalTable stores proposals which need to be authenticated
 // after their prior votes have been processed.
+//msgp:maxsize ignore proposalTable
 type proposalTable struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 

@@ -39,6 +39,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+replace github.com/algorand/msgp => /Users/iansuvak/Code/msgp
+
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect

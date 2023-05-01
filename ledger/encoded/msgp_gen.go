@@ -32,6 +32,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -584,4 +585,10 @@ func (z *KVRecordV6) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *KVRecordV6) MsgIsZero() bool {
 	return (len((*z).Key) == 0) && (len((*z).Value) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *KVRecordV6) MaxSize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Key) + 2 + msgp.BytesPrefixSize + len((*z).Value)
+	return
 }

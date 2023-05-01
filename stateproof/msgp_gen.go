@@ -18,6 +18,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> (*) MaxSize
 //
 // spProver
 //     |-----> (*) MarshalMsg
@@ -26,6 +27,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -178,6 +180,12 @@ func (z *sigFromAddr) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *sigFromAddr) MsgIsZero() bool {
 	return ((*z).SignerAddress.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *sigFromAddr) MaxSize() (s int) {
+	s = 1 + 2 + (*z).SignerAddress.MaxSize() + 2 + (*z).Round.MaxSize() + 2 + (*z).Sig.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -464,4 +472,24 @@ func (z *spProver) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *spProver) MsgIsZero() bool {
 	return ((*z).Prover == nil) && (len((*z).AddrToPos) == 0) && ((*z).VotersHdr.MsgIsZero()) && ((*z).Message.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *spProver) MaxSize() (s int) {
+	s = 1 + 4
+	if (*z).Prover == nil {
+		s += msgp.NilSize
+	} else {
+		s += (*z).Prover.MaxSize()
+	}
+	s += 5 + msgp.MapHeaderSize
+	if (*z).AddrToPos != nil {
+		for zb0001, zb0002 := range (*z).AddrToPos {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize() + msgp.Uint64Size
+		}
+	}
+	s += 4 + (*z).VotersHdr.MaxSize() + 4 + (*z).Message.MaxSize()
+	return
 }

@@ -41,6 +41,10 @@ type sigFromAddr struct {
 	Sig           merklesignature.Signature `codec:"s"`
 }
 
+func StateProofSigTag() int {
+	return (&sigFromAddr{}).MaxSize()
+}
+
 func (spw *Worker) signer(latest basics.Round) {
 	nextRnd := spw.nextStateProofRound(latest)
 	for { // Start signing StateProofs from nextRnd onwards

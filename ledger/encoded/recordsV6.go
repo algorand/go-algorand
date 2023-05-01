@@ -44,6 +44,7 @@ const (
 type SortUint64 = basics.SortUint64
 
 // BalanceRecordV6 is the encoded account balance record.
+//msgp:maxsize ignore BalanceRecordV6
 type BalanceRecordV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 

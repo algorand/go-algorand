@@ -16,6 +16,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -254,4 +255,10 @@ func (z *Message) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Message) MsgIsZero() bool {
 	return (len((*z).BlockHeadersCommitment) == 0) && (len((*z).VotersCommitment) == 0) && ((*z).LnProvenWeight == 0) && ((*z).FirstAttestedRound == 0) && ((*z).LastAttestedRound == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *Message) MaxSize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).BlockHeadersCommitment) + 2 + msgp.BytesPrefixSize + len((*z).VotersCommitment) + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	return
 }

@@ -14,6 +14,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> (*) MaxSize
 //
 // StateProofKeys
 //        |-----> MarshalMsg
@@ -22,6 +23,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
+//        |-----> MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -245,6 +247,12 @@ func (z *ParticipationKeyIdentity) MsgIsZero() bool {
 	return ((*z).Parent.MsgIsZero()) && ((*z).VRFSK.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && ((*z).KeyDilution == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *ParticipationKeyIdentity) MaxSize() (s int) {
+	s = 1 + 5 + (*z).Parent.MaxSize() + 6 + (*z).VRFSK.MaxSize() + 8 + (*z).VoteID.MaxSize() + 3 + (*z).FirstValid.MaxSize() + 3 + (*z).LastValid.MaxSize() + 3 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z StateProofKeys) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -316,4 +324,13 @@ func (z StateProofKeys) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z StateProofKeys) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z StateProofKeys) MaxSize() (s int) {
+	s = msgp.ArrayHeaderSize
+	for za0001 := range z {
+		s += z[za0001].MaxSize()
+	}
+	return
 }

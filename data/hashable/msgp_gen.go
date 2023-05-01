@@ -14,6 +14,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -120,4 +121,10 @@ func (z *Message) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Message) MsgIsZero() bool {
 	return ((*z).Message == "")
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *Message) MaxSize() (s int) {
+	s = 1 + 4 + msgp.StringPrefixSize + len((*z).Message)
+	return
 }

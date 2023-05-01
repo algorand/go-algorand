@@ -108,6 +108,10 @@ func (a MicroAlgos) MsgIsZero() bool {
 	return a.Raw == 0
 }
 
+func (a MicroAlgos) MaxSize() (s int) {
+	return msgp.Uint64Size
+}
+
 // Round represents a protocol round index
 type Round uint64
 

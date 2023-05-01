@@ -21,6 +21,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> (*) MaxSize
 //
 // ConsensusVersionView
 //           |-----> (*) MarshalMsg
@@ -29,6 +30,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> (*) MaxSize
 //
 // actionType
 //      |-----> MarshalMsg
@@ -37,6 +39,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> Msgsize
 //      |-----> MsgIsZero
+//      |-----> MaxSize
 //
 // blockAssembler
 //        |-----> (*) MarshalMsg
@@ -45,6 +48,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // bundle
 //    |-----> (*) MarshalMsg
@@ -53,6 +57,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> (*) MaxSize
 //
 // compoundMessage
 //        |-----> (*) MarshalMsg
@@ -61,6 +66,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // diskState
 //     |-----> (*) MarshalMsg
@@ -77,6 +83,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> (*) MaxSize
 //
 // equivocationVoteAuthenticator
 //               |-----> (*) MarshalMsg
@@ -85,6 +92,7 @@ import (
 //               |-----> (*) CanUnmarshalMsg
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
+//               |-----> (*) MaxSize
 //
 // eventType
 //     |-----> MarshalMsg
@@ -93,6 +101,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
+//     |-----> MaxSize
 //
 // freshnessData
 //       |-----> (*) MarshalMsg
@@ -101,6 +110,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> (*) MaxSize
 //
 // message
 //    |-----> (*) MarshalMsg
@@ -125,6 +135,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> (*) MaxSize
 //
 // period
 //    |-----> MarshalMsg
@@ -133,6 +144,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
+//    |-----> MaxSize
 //
 // periodRouter
 //       |-----> (*) MarshalMsg
@@ -141,6 +153,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> (*) MaxSize
 //
 // player
 //    |-----> (*) MarshalMsg
@@ -157,6 +170,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> (*) MaxSize
 //
 // proposalManager
 //        |-----> (*) MarshalMsg
@@ -165,6 +179,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // proposalSeeker
 //        |-----> (*) MarshalMsg
@@ -173,6 +188,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // proposalStore
 //       |-----> (*) MarshalMsg
@@ -181,6 +197,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> (*) MaxSize
 //
 // proposalTable
 //       |-----> (*) MarshalMsg
@@ -197,6 +214,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // proposalTrackerContract
 //            |-----> (*) MarshalMsg
@@ -205,6 +223,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> (*) MaxSize
 //
 // proposalValue
 //       |-----> (*) MarshalMsg
@@ -213,6 +232,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> (*) MaxSize
 //
 // proposalVoteCounter
 //          |-----> (*) MarshalMsg
@@ -221,6 +241,7 @@ import (
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
+//          |-----> (*) MaxSize
 //
 // proposerSeed
 //       |-----> (*) MarshalMsg
@@ -229,6 +250,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> (*) MaxSize
 //
 // rawVote
 //    |-----> (*) MarshalMsg
@@ -237,6 +259,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> (*) MaxSize
 //
 // rootRouter
 //      |-----> (*) MarshalMsg
@@ -245,6 +268,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> (*) MaxSize
 //
 // roundRouter
 //      |-----> (*) MarshalMsg
@@ -253,6 +277,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> (*) MaxSize
 //
 // seedInput
 //     |-----> (*) MarshalMsg
@@ -261,6 +286,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> (*) MaxSize
 //
 // selector
 //     |-----> (*) MarshalMsg
@@ -269,6 +295,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> (*) MaxSize
 //
 // serializableError
 //         |-----> MarshalMsg
@@ -277,6 +304,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> Msgsize
 //         |-----> MsgIsZero
+//         |-----> MaxSize
 //
 // step
 //   |-----> MarshalMsg
@@ -285,6 +313,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
+//   |-----> MaxSize
 //
 // stepRouter
 //      |-----> (*) MarshalMsg
@@ -293,6 +322,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> (*) MaxSize
 //
 // thresholdEvent
 //        |-----> (*) MarshalMsg
@@ -301,6 +331,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // transmittedPayload
 //          |-----> (*) MarshalMsg
@@ -309,6 +340,7 @@ import (
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
+//          |-----> (*) MaxSize
 //
 // unauthenticatedBundle
 //           |-----> (*) MarshalMsg
@@ -317,6 +349,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> (*) MaxSize
 //
 // unauthenticatedEquivocationVote
 //                |-----> (*) MarshalMsg
@@ -325,6 +358,7 @@ import (
 //                |-----> (*) CanUnmarshalMsg
 //                |-----> (*) Msgsize
 //                |-----> (*) MsgIsZero
+//                |-----> (*) MaxSize
 //
 // unauthenticatedProposal
 //            |-----> (*) MarshalMsg
@@ -333,6 +367,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> (*) MaxSize
 //
 // unauthenticatedVote
 //          |-----> (*) MarshalMsg
@@ -341,6 +376,7 @@ import (
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
+//          |-----> (*) MaxSize
 //
 // vote
 //   |-----> (*) MarshalMsg
@@ -349,6 +385,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//   |-----> (*) MaxSize
 //
 // voteAggregator
 //        |-----> (*) MarshalMsg
@@ -357,6 +394,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // voteAuthenticator
 //         |-----> (*) MarshalMsg
@@ -365,6 +403,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> (*) MaxSize
 //
 // voteTracker
 //      |-----> (*) MarshalMsg
@@ -373,6 +412,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> (*) MaxSize
 //
 // voteTrackerContract
 //          |-----> (*) MarshalMsg
@@ -381,6 +421,7 @@ import (
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
+//          |-----> (*) MaxSize
 //
 // voteTrackerPeriod
 //         |-----> (*) MarshalMsg
@@ -389,6 +430,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> (*) MaxSize
 //
 // voteTrackerRound
 //         |-----> (*) MarshalMsg
@@ -397,6 +439,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> (*) MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -741,6 +784,19 @@ func (z *Certificate) MsgIsZero() bool {
 	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).Proposal.MsgIsZero()) && (len((*z).Votes) == 0) && (len((*z).EquivocationVotes) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *Certificate) MaxSize() (s int) {
+	s = 1 + 4 + (*z).Round.MaxSize() + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + (*z).Proposal.MaxSize() + 5 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Votes {
+		s += (*z).Votes[zb0001].MaxSize()
+	}
+	s += 4 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).EquivocationVotes {
+		s += (*z).EquivocationVotes[zb0002].MaxSize()
+	}
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *ConsensusVersionView) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -892,6 +948,18 @@ func (z *ConsensusVersionView) MsgIsZero() bool {
 	return ((*z).Err == nil) && ((*z).Version.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *ConsensusVersionView) MaxSize() (s int) {
+	s = 1 + 4
+	if (*z).Err == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.StringPrefixSize + len(string(*(*z).Err))
+	}
+	s += 8 + (*z).Version.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z actionType) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -936,6 +1004,12 @@ func (z actionType) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z actionType) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z actionType) MaxSize() (s int) {
+	s = msgp.Uint8Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1140,6 +1214,15 @@ func (z *blockAssembler) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *blockAssembler) MsgIsZero() bool {
 	return ((*z).Pipeline.MsgIsZero()) && ((*z).Filled == false) && ((*z).Payload.MsgIsZero()) && ((*z).Assembled == false) && (len((*z).Authenticators) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *blockAssembler) MaxSize() (s int) {
+	s = 1 + 9 + (*z).Pipeline.MaxSize() + 7 + msgp.BoolSize + 8 + (*z).Payload.MaxSize() + 10 + msgp.BoolSize + 15 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Authenticators {
+		s += (*z).Authenticators[zb0001].MaxSize()
+	}
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1399,6 +1482,19 @@ func (z *bundle) MsgIsZero() bool {
 	return ((*z).U.MsgIsZero()) && (len((*z).Votes) == 0) && (len((*z).EquivocationVotes) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *bundle) MaxSize() (s int) {
+	s = 1 + 2 + (*z).U.MaxSize() + 5 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Votes {
+		s += (*z).Votes[zb0001].MaxSize()
+	}
+	s += 4 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).EquivocationVotes {
+		s += (*z).EquivocationVotes[zb0002].MaxSize()
+	}
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *compoundMessage) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -1508,6 +1604,12 @@ func (z *compoundMessage) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *compoundMessage) MsgIsZero() bool {
 	return ((*z).Vote.MsgIsZero()) && ((*z).Proposal.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *compoundMessage) MaxSize() (s int) {
+	s = 1 + 5 + (*z).Vote.MaxSize() + 9 + (*z).Proposal.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2082,6 +2184,19 @@ func (z *equivocationVote) MsgIsZero() bool {
 	return ((*z).Sender.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).Cred.MsgIsZero()) && (((*z).Proposals[0].MsgIsZero()) && ((*z).Proposals[1].MsgIsZero())) && (((*z).Sigs[0].MsgIsZero()) && ((*z).Sigs[1].MsgIsZero()))
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *equivocationVote) MaxSize() (s int) {
+	s = 1 + 4 + (*z).Sender.MaxSize() + 4 + (*z).Round.MaxSize() + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + (*z).Cred.MaxSize() + 6 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Proposals {
+		s += (*z).Proposals[zb0001].MaxSize()
+	}
+	s += 5 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).Sigs {
+		s += (*z).Sigs[zb0002].MaxSize()
+	}
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *equivocationVoteAuthenticator) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2293,6 +2408,19 @@ func (z *equivocationVoteAuthenticator) MsgIsZero() bool {
 	return ((*z).Sender.MsgIsZero()) && ((*z).Cred.MsgIsZero()) && (((*z).Sigs[0].MsgIsZero()) && ((*z).Sigs[1].MsgIsZero())) && (((*z).Proposals[0].MsgIsZero()) && ((*z).Proposals[1].MsgIsZero()))
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *equivocationVoteAuthenticator) MaxSize() (s int) {
+	s = 1 + 4 + (*z).Sender.MaxSize() + 5 + (*z).Cred.MaxSize() + 4 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Sigs {
+		s += (*z).Sigs[zb0001].MaxSize()
+	}
+	s += 6 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).Proposals {
+		s += (*z).Proposals[zb0002].MaxSize()
+	}
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z eventType) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2337,6 +2465,12 @@ func (z eventType) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z eventType) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z eventType) MaxSize() (s int) {
+	s = msgp.Uint8Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2506,6 +2640,12 @@ func (z *freshnessData) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *freshnessData) MsgIsZero() bool {
 	return ((*z).PlayerRound.MsgIsZero()) && ((*z).PlayerPeriod == 0) && ((*z).PlayerStep == 0) && ((*z).PlayerLastConcluding == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *freshnessData) MaxSize() (s int) {
+	s = 1 + 12 + (*z).PlayerRound.MaxSize() + 13 + msgp.Uint64Size + 11 + msgp.Uint64Size + 21 + msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3259,6 +3399,12 @@ func (z *nextThresholdStatusEvent) MsgIsZero() bool {
 	return ((*z).Bottom == false) && ((*z).Proposal.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *nextThresholdStatusEvent) MaxSize() (s int) {
+	s = 1 + 7 + msgp.BoolSize + 9 + (*z).Proposal.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z period) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -3303,6 +3449,12 @@ func (z period) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z period) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z period) MaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3547,6 +3699,24 @@ func (z *periodRouter) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *periodRouter) MsgIsZero() bool {
 	return ((*z).ProposalTracker.MsgIsZero()) && ((*z).VoteTrackerPeriod.MsgIsZero()) && ((*z).ProposalTrackerContract.MsgIsZero()) && (len((*z).Children) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *periodRouter) MaxSize() (s int) {
+	s = 1 + 16 + (*z).ProposalTracker.MaxSize() + 18 + (*z).VoteTrackerPeriod.MaxSize() + 24 + (*z).ProposalTrackerContract.MaxSize() + 9 + msgp.MapHeaderSize
+	if (*z).Children != nil {
+		for zb0001, zb0002 := range (*z).Children {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize()
+			if zb0002 == nil {
+				s += msgp.NilSize
+			} else {
+				s += zb0002.MaxSize()
+			}
+		}
+	}
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4676,6 +4846,24 @@ func (z *proposal) MsgIsZero() bool {
 	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *proposal) MaxSize() (s int) {
+	s = 3 + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.Round.MaxSize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.Branch.MaxSize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.Seed.MaxSize() + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MaxSize() + 7 + (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID) + 3 + (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MaxSize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MaxSize() + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MaxSize() + 6 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MaxSize() + 10 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MaxSize() + 8 + msgp.Uint64Size + 11 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MaxSize() + 11 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MaxSize() + 12 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MaxSize() + 13 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
+	if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking != nil {
+		for zb0001, zb0002 := range (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+		}
+	}
+	s += 11 + msgp.ArrayHeaderSize
+	for zb0003 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
+		s += (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].MaxSize()
+	}
+	s += 5 + (*z).unauthenticatedProposal.Block.Payset.MaxSize() + 5 + (*z).unauthenticatedProposal.SeedProof.MaxSize() + 5 + msgp.Uint64Size + 6 + (*z).unauthenticatedProposal.OriginalProposer.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *proposalManager) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -4752,6 +4940,12 @@ func (z *proposalManager) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *proposalManager) MsgIsZero() bool {
 	return true
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *proposalManager) MaxSize() (s int) {
+	s = 1
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4880,6 +5074,12 @@ func (z *proposalSeeker) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *proposalSeeker) MsgIsZero() bool {
 	return ((*z).Lowest.MsgIsZero()) && ((*z).Filled == false) && ((*z).Frozen == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *proposalSeeker) MaxSize() (s int) {
+	s = 1 + 7 + (*z).Lowest.MaxSize() + 7 + msgp.BoolSize + 7 + msgp.BoolSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -5145,6 +5345,27 @@ func (z *proposalStore) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *proposalStore) MsgIsZero() bool {
 	return (len((*z).Relevant) == 0) && ((*z).Pinned.MsgIsZero()) && (len((*z).Assemblers) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *proposalStore) MaxSize() (s int) {
+	s = 1 + 9 + msgp.MapHeaderSize
+	if (*z).Relevant != nil {
+		for zb0001, zb0002 := range (*z).Relevant {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+		}
+	}
+	s += 7 + (*z).Pinned.MaxSize() + 11 + msgp.MapHeaderSize
+	if (*z).Assemblers != nil {
+		for zb0003, zb0004 := range (*z).Assemblers {
+			_ = zb0003
+			_ = zb0004
+			s += 0 + zb0003.MaxSize() + zb0004.MaxSize()
+		}
+	}
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -5573,6 +5794,20 @@ func (z *proposalTracker) MsgIsZero() bool {
 	return (len((*z).Duplicate) == 0) && ((*z).Freezer.MsgIsZero()) && ((*z).Staging.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *proposalTracker) MaxSize() (s int) {
+	s = 1 + 10 + msgp.MapHeaderSize
+	if (*z).Duplicate != nil {
+		for zb0001, zb0002 := range (*z).Duplicate {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize() + msgp.BoolSize
+		}
+	}
+	s += 8 + (*z).Freezer.MaxSize() + 8 + (*z).Staging.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *proposalTrackerContract) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -5716,6 +5951,12 @@ func (z *proposalTrackerContract) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *proposalTrackerContract) MsgIsZero() bool {
 	return ((*z).SawOneVote == false) && ((*z).Froze == false) && ((*z).SawSoftThreshold == false) && ((*z).SawCertThreshold == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *proposalTrackerContract) MaxSize() (s int) {
+	s = 1 + 11 + msgp.BoolSize + 6 + msgp.BoolSize + 17 + msgp.BoolSize + 17 + msgp.BoolSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -5901,6 +6142,12 @@ func (z *proposalValue) MsgIsZero() bool {
 	return ((*z).OriginalPeriod == 0) && ((*z).OriginalProposer.MsgIsZero()) && ((*z).BlockDigest.MsgIsZero()) && ((*z).EncodingDigest.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *proposalValue) MaxSize() (s int) {
+	s = 1 + 5 + msgp.Uint64Size + 6 + (*z).OriginalProposer.MaxSize() + 4 + (*z).BlockDigest.MaxSize() + 7 + (*z).EncodingDigest.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *proposalVoteCounter) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -6080,6 +6327,19 @@ func (z *proposalVoteCounter) MsgIsZero() bool {
 	return ((*z).Count == 0) && (len((*z).Votes) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *proposalVoteCounter) MaxSize() (s int) {
+	s = 1 + 6 + msgp.Uint64Size + 6 + msgp.MapHeaderSize
+	if (*z).Votes != nil {
+		for zb0001, zb0002 := range (*z).Votes {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+		}
+	}
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *proposerSeed) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -6189,6 +6449,12 @@ func (z *proposerSeed) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *proposerSeed) MsgIsZero() bool {
 	return ((*z).Addr.MsgIsZero()) && ((*z).VRF.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *proposerSeed) MaxSize() (s int) {
+	s = 1 + 5 + (*z).Addr.MaxSize() + 4 + (*z).VRF.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -6403,6 +6669,12 @@ func (z *rawVote) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *rawVote) MsgIsZero() bool {
 	return ((*z).Sender.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).Proposal.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *rawVote) MaxSize() (s int) {
+	s = 1 + 4 + (*z).Sender.MaxSize() + 4 + (*z).Round.MaxSize() + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + (*z).Proposal.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -6778,6 +7050,24 @@ func (z *rootRouter) MsgIsZero() bool {
 	return (len((*z).Children) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *rootRouter) MaxSize() (s int) {
+	s = 1 + 16 + 1 + 15 + 1 + 9 + msgp.MapHeaderSize
+	if (*z).Children != nil {
+		for zb0001, zb0002 := range (*z).Children {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize()
+			if zb0002 == nil {
+				s += msgp.NilSize
+			} else {
+				s += zb0002.MaxSize()
+			}
+		}
+	}
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *roundRouter) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -7139,6 +7429,24 @@ func (z *roundRouter) MsgIsZero() bool {
 	return ((*z).ProposalStore.MsgIsZero()) && (((*z).VoteTrackerRound.Freshest.MsgIsZero()) && ((*z).VoteTrackerRound.Ok == false)) && (len((*z).Children) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *roundRouter) MaxSize() (s int) {
+	s = 1 + 14 + (*z).ProposalStore.MaxSize() + 17 + 1 + 9 + (*z).VoteTrackerRound.Freshest.MaxSize() + 3 + msgp.BoolSize + 9 + msgp.MapHeaderSize
+	if (*z).Children != nil {
+		for zb0001, zb0002 := range (*z).Children {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize()
+			if zb0002 == nil {
+				s += msgp.NilSize
+			} else {
+				s += zb0002.MaxSize()
+			}
+		}
+	}
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *seedInput) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -7248,6 +7556,12 @@ func (z *seedInput) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *seedInput) MsgIsZero() bool {
 	return ((*z).Alpha.MsgIsZero()) && ((*z).History.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *seedInput) MaxSize() (s int) {
+	s = 1 + 6 + (*z).Alpha.MaxSize() + 5 + (*z).History.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -7411,6 +7725,12 @@ func (z *selector) MsgIsZero() bool {
 	return ((*z).Seed.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *selector) MaxSize() (s int) {
+	s = 1 + 5 + (*z).Seed.MaxSize() + 4 + (*z).Round.MaxSize() + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z serializableError) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -7457,6 +7777,12 @@ func (z serializableError) MsgIsZero() bool {
 	return z == ""
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z serializableError) MaxSize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z step) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -7501,6 +7827,12 @@ func (z step) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z step) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z step) MaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -7612,6 +7944,12 @@ func (z *stepRouter) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *stepRouter) MsgIsZero() bool {
 	return ((*z).VoteTracker.MsgIsZero()) && ((*z).VoteTrackerContract.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *stepRouter) MaxSize() (s int) {
+	s = 1 + 12 + (*z).VoteTracker.MaxSize() + 20 + (*z).VoteTrackerContract.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -7832,6 +8170,12 @@ func (z *thresholdEvent) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *thresholdEvent) MsgIsZero() bool {
 	return ((*z).T == 0) && ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).Proposal.MsgIsZero()) && ((*z).Bundle.MsgIsZero()) && ((*z).Proto.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *thresholdEvent) MaxSize() (s int) {
+	s = 1 + 2 + msgp.Uint8Size + 6 + (*z).Round.MaxSize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 9 + (*z).Proposal.MaxSize() + 7 + (*z).Bundle.MaxSize() + 6 + (*z).Proto.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -8747,6 +9091,24 @@ func (z *transmittedPayload) MsgIsZero() bool {
 	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero()) && ((*z).PriorVote.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *transmittedPayload) MaxSize() (s int) {
+	s = 3 + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.Round.MaxSize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.Branch.MaxSize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.Seed.MaxSize() + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MaxSize() + 7 + (*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID) + 3 + (*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MaxSize() + 5 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MaxSize() + 4 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MaxSize() + 6 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MaxSize() + 10 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MaxSize() + 8 + msgp.Uint64Size + 11 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MaxSize() + 11 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MaxSize() + 12 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MaxSize() + 13 + (*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
+	if (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking != nil {
+		for zb0001, zb0002 := range (*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+		}
+	}
+	s += 11 + msgp.ArrayHeaderSize
+	for zb0003 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
+		s += (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].MaxSize()
+	}
+	s += 5 + (*z).unauthenticatedProposal.Block.Payset.MaxSize() + 5 + (*z).unauthenticatedProposal.SeedProof.MaxSize() + 5 + msgp.Uint64Size + 6 + (*z).unauthenticatedProposal.OriginalProposer.MaxSize() + 3 + (*z).PriorVote.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *unauthenticatedBundle) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -9089,6 +9451,19 @@ func (z *unauthenticatedBundle) MsgIsZero() bool {
 	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).Proposal.MsgIsZero()) && (len((*z).Votes) == 0) && (len((*z).EquivocationVotes) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *unauthenticatedBundle) MaxSize() (s int) {
+	s = 1 + 4 + (*z).Round.MaxSize() + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + (*z).Proposal.MaxSize() + 5 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Votes {
+		s += (*z).Votes[zb0001].MaxSize()
+	}
+	s += 4 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).EquivocationVotes {
+		s += (*z).EquivocationVotes[zb0002].MaxSize()
+	}
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *unauthenticatedEquivocationVote) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -9408,6 +9783,19 @@ func (z *unauthenticatedEquivocationVote) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *unauthenticatedEquivocationVote) MsgIsZero() bool {
 	return ((*z).Sender.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).Cred.MsgIsZero()) && (((*z).Proposals[0].MsgIsZero()) && ((*z).Proposals[1].MsgIsZero())) && (((*z).Sigs[0].MsgIsZero()) && ((*z).Sigs[1].MsgIsZero()))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *unauthenticatedEquivocationVote) MaxSize() (s int) {
+	s = 1 + 4 + (*z).Sender.MaxSize() + 4 + (*z).Round.MaxSize() + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + (*z).Cred.MaxSize() + 6 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Proposals {
+		s += (*z).Proposals[zb0001].MaxSize()
+	}
+	s += 5 + msgp.ArrayHeaderSize
+	for zb0002 := range (*z).Sigs {
+		s += (*z).Sigs[zb0002].MaxSize()
+	}
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -10300,6 +10688,24 @@ func (z *unauthenticatedProposal) MsgIsZero() bool {
 	return ((*z).Block.BlockHeader.Round.MsgIsZero()) && ((*z).Block.BlockHeader.Branch.MsgIsZero()) && ((*z).Block.BlockHeader.Seed.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TimeStamp == 0) && ((*z).Block.BlockHeader.GenesisID == "") && ((*z).Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).Block.BlockHeader.TxnCounter == 0) && (len((*z).Block.BlockHeader.StateProofTracking) == 0) && (len((*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).Block.Payset.MsgIsZero()) && ((*z).SeedProof.MsgIsZero()) && ((*z).OriginalPeriod == 0) && ((*z).OriginalProposer.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *unauthenticatedProposal) MaxSize() (s int) {
+	s = 3 + 4 + (*z).Block.BlockHeader.Round.MaxSize() + 5 + (*z).Block.BlockHeader.Branch.MaxSize() + 5 + (*z).Block.BlockHeader.Seed.MaxSize() + 4 + (*z).Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MaxSize() + 7 + (*z).Block.BlockHeader.TxnCommitments.Sha256Commitment.MaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).Block.BlockHeader.GenesisID) + 3 + (*z).Block.BlockHeader.GenesisHash.MaxSize() + 5 + (*z).Block.BlockHeader.RewardsState.FeeSink.MaxSize() + 4 + (*z).Block.BlockHeader.RewardsState.RewardsPool.MaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.MaxSize() + 6 + (*z).Block.BlockHeader.UpgradeState.CurrentProtocol.MaxSize() + 10 + (*z).Block.BlockHeader.UpgradeState.NextProtocol.MaxSize() + 8 + msgp.Uint64Size + 11 + (*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MaxSize() + 11 + (*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MaxSize() + 12 + (*z).Block.BlockHeader.UpgradeVote.UpgradePropose.MaxSize() + 13 + (*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.MaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
+	if (*z).Block.BlockHeader.StateProofTracking != nil {
+		for zb0001, zb0002 := range (*z).Block.BlockHeader.StateProofTracking {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+		}
+	}
+	s += 11 + msgp.ArrayHeaderSize
+	for zb0003 := range (*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
+		s += (*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].MaxSize()
+	}
+	s += 5 + (*z).Block.Payset.MaxSize() + 5 + (*z).SeedProof.MaxSize() + 5 + msgp.Uint64Size + 6 + (*z).OriginalProposer.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *unauthenticatedVote) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -10450,6 +10856,12 @@ func (z *unauthenticatedVote) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *unauthenticatedVote) MsgIsZero() bool {
 	return ((*z).R.MsgIsZero()) && ((*z).Cred.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *unauthenticatedVote) MaxSize() (s int) {
+	s = 1 + 2 + (*z).R.MaxSize() + 5 + (*z).Cred.MaxSize() + 4 + (*z).Sig.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -10604,6 +11016,12 @@ func (z *vote) MsgIsZero() bool {
 	return ((*z).R.MsgIsZero()) && ((*z).Cred.MsgIsZero()) && ((*z).Sig.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *vote) MaxSize() (s int) {
+	s = 1 + 2 + (*z).R.MaxSize() + 5 + (*z).Cred.MaxSize() + 4 + (*z).Sig.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *voteAggregator) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -10680,6 +11098,12 @@ func (z *voteAggregator) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *voteAggregator) MsgIsZero() bool {
 	return true
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *voteAggregator) MaxSize() (s int) {
+	s = 1
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -10820,6 +11244,12 @@ func (z *voteAuthenticator) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *voteAuthenticator) MsgIsZero() bool {
 	return ((*z).Sender.MsgIsZero()) && ((*z).Cred.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *voteAuthenticator) MaxSize() (s int) {
+	s = 1 + 4 + (*z).Sender.MaxSize() + 5 + (*z).Cred.MaxSize() + 4 + (*z).Sig.MaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -11174,6 +11604,36 @@ func (z *voteTracker) MsgIsZero() bool {
 	return (len((*z).Voters) == 0) && (len((*z).Counts) == 0) && (len((*z).Equivocators) == 0) && ((*z).EquivocatorsCount == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *voteTracker) MaxSize() (s int) {
+	s = 1 + 7 + msgp.MapHeaderSize
+	if (*z).Voters != nil {
+		for zb0001, zb0002 := range (*z).Voters {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+		}
+	}
+	s += 7 + msgp.MapHeaderSize
+	if (*z).Counts != nil {
+		for zb0003, zb0004 := range (*z).Counts {
+			_ = zb0003
+			_ = zb0004
+			s += 0 + zb0003.MaxSize() + zb0004.MaxSize()
+		}
+	}
+	s += 13 + msgp.MapHeaderSize
+	if (*z).Equivocators != nil {
+		for zb0005, zb0006 := range (*z).Equivocators {
+			_ = zb0005
+			_ = zb0006
+			s += 0 + zb0005.MaxSize() + zb0006.MaxSize()
+		}
+	}
+	s += 18 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *voteTrackerContract) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -11308,6 +11768,12 @@ func (z *voteTrackerContract) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *voteTrackerContract) MsgIsZero() bool {
 	return ((*z).Step == 0) && ((*z).StepOk == false) && ((*z).Emitted == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *voteTrackerContract) MaxSize() (s int) {
+	s = 1 + 5 + msgp.Uint64Size + 7 + msgp.BoolSize + 8 + msgp.BoolSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -11538,6 +12004,12 @@ func (z *voteTrackerPeriod) MsgIsZero() bool {
 	return (((*z).Cached.Bottom == false) && ((*z).Cached.Proposal.MsgIsZero()))
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func (z *voteTrackerPeriod) MaxSize() (s int) {
+	s = 1 + 7 + 1 + 7 + msgp.BoolSize + 9 + (*z).Cached.Proposal.MaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *voteTrackerRound) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -11647,4 +12119,10 @@ func (z *voteTrackerRound) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *voteTrackerRound) MsgIsZero() bool {
 	return ((*z).Freshest.MsgIsZero()) && ((*z).Ok == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z *voteTrackerRound) MaxSize() (s int) {
+	s = 1 + 9 + (*z).Freshest.MaxSize() + 3 + msgp.BoolSize
+	return
 }

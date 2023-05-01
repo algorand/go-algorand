@@ -22,6 +22,7 @@ import (
 )
 
 // BalanceRecordV5 is the encoded account balance record.
+//msgp:maxsize ignore BalanceRecordV5
 type BalanceRecordV5 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 

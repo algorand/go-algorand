@@ -14,6 +14,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
+//     |-----> MaxSize
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -84,4 +85,10 @@ func (z testSlice) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z testSlice) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func (z testSlice) MaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + (16 * (msgp.Uint64Size))
+	return
 }
