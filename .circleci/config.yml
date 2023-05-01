@@ -8,6 +8,7 @@ orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
   slack: circleci/slack@4.10.1
+  codecov: codecov/codecov@3.2.4
 
 parameters:
   ubuntu_image:
@@ -245,7 +246,7 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
-      - upload_coverage
+      - codecov/upload
 
   test_nightly:
     parameters:
@@ -260,7 +261,7 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
-      - upload_coverage
+      - codecov/upload
 
   integration:
     parameters:
