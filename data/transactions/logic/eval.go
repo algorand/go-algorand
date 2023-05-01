@@ -4516,7 +4516,8 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppInd
 			}
 		}()
 	}
-	// Old rules
+	// Old rules, pre directRefEnabledVersion, when a ref has to be a slot for
+	// some opcodes, and had to be an ID for others.
 	if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
 		return cx.appID, nil
 	}
@@ -4625,7 +4626,8 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 			}
 		}()
 	}
-	// Old rules
+	// Old rules, pre directRefEnabledVersion, when a ref has to be a slot for
+	// some opcodes, and had to be an ID for others.
 	if foreign {
 		// In old versions, a foreign reference must be an index in ForeignAssets
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {

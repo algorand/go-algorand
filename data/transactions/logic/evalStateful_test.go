@@ -345,6 +345,14 @@ log
 			"int 0; int 0; app_params_get AppApprovalProgram": 5,
 			"byte 0x01; log":                                  5,
 			sender + "acct_params_get AcctBalance":            7,
+
+			"byte 0x1234; int 12; box_create":             8,
+			"byte 0x1234; int 12; int 4; box_extract":     8,
+			"byte 0x1234; int 12; byte 0x24; box_replace": 8,
+			"byte 0x1234; box_del":                        8,
+			"byte 0x1234; box_len":                        8,
+			"byte 0x1234; box_get":                        8,
+			"byte 0x1234; byte 0x12; box_put":             8,
 		}
 		for source, introduced := range statefulOpcodeCalls {
 			if v < introduced {
@@ -1267,7 +1275,7 @@ func TestAppDisambiguation(t *testing.T) {
 
 	// It would be nice to start at 2, when apps were added, but `assert` is
 	// very convenient for testing, and nothing important changed from 2 to
-	// 3. (Between directRefEnabledVersion=4, so that change is a big deal.)
+	// 3. (But directRefEnabledVersion=4, so that change is a big deal.)
 	testLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		// make apps with identifiable properties, so we can tell what we get
 		makeIdentifiableApp := func(appID uint64) {

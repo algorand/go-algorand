@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
@@ -63,7 +64,16 @@ func TestTransactionGroupWithDeltaTracer(t *testing.T) {
 			// SETUP THE BLOCK
 			genesisInitState, addrs, keys := ledgertesting.Genesis(4)
 
-			innerAppID := basics.AppIndex(3)
+			// newTestLedger uses ConsensusFuture, so we check it to find out if
+			// we should use 1001 as the initial resources ID.
+			protoVersion := protocol.ConsensusFuture
+			proto := config.Consensus[protoVersion]
+			offset := basics.AppIndex(0)
+			if proto.AppForbidLowResources {
+				offset += 1000
+			}
+
+			innerAppID := basics.AppIndex(3) + offset
 			innerAppAddress := innerAppID.Address()
 			balances := genesisInitState.Accounts
 			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
@@ -199,7 +209,7 @@ int 1`,
 				},
 				AppResources: []ledgercore.AppResourceRecord{
 					{
-						Aidx: 1,
+						Aidx: 1 + offset,
 						Addr: addrs[0],
 						Params: ledgercore.AppParamsDelta{
 							Params: &basics.AppParams{
@@ -209,7 +219,7 @@ int 1`,
 						},
 					},
 					{
-						Aidx: 3,
+						Aidx: 3 + offset,
 						Addr: addrs[0],
 						Params: ledgercore.AppParamsDelta{
 							Params: &basics.AppParams{
@@ -223,7 +233,7 @@ int 1`,
 						},
 					},
 					{
-						Aidx: 4,
+						Aidx: 4 + offset,
 						Addr: innerAppAddress,
 						Params: ledgercore.AppParamsDelta{
 							Params: &basics.AppParams{

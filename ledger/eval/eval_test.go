@@ -701,7 +701,7 @@ func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Ad
 	res := ledgercore.AppResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
-		return res, fmt.Errorf("no such account %s", addr.String())
+		return res, fmt.Errorf("no such account %s while looking up app", addr.String())
 	}
 	if params, ok := ad.AppParams[aidx]; ok {
 		res.AppParams = &params
@@ -716,7 +716,7 @@ func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address,
 	res := ledgercore.AssetResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
-		return res, fmt.Errorf("no such account %s", addr.String())
+		return res, fmt.Errorf("no such account %s while looking up asset", addr.String())
 	}
 	if params, ok := ad.AssetParams[aidx]; ok {
 		res.AssetParams = &params

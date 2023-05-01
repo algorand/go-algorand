@@ -1609,7 +1609,7 @@ func unknownOpcodeComplaint(name string, v uint64) (OpSpec, error) {
 	if last != -1 && last < int(v) {
 		return standin, fmt.Errorf("%s opcode was removed in v%d", name, last+1)
 	}
-	return standin, fmt.Errorf("unknown opcode: %s", name)
+	return OpSpec{}, fmt.Errorf("unknown opcode: %s", name)
 }
 
 // pseudoOps allows us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
