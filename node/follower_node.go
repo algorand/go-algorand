@@ -412,7 +412,9 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 		defer node.mu.Unlock()
 
 		// update sync round before starting services
-		node.SetSyncRound(uint64(node.ledger.LastRound()))
+		if err := node.SetSyncRound(uint64(node.ledger.LastRound())); err != nil {
+			node.log.Warnf("unable to set sync round while resuming fast catchup: %v", err)
+		}
 
 		// start
 		node.catchupService.Start()
