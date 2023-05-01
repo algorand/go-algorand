@@ -83,19 +83,15 @@ func markdownTableEscape(x string) string {
 	return strings.ReplaceAll(x, "|", "\\|")
 }
 
-func namedStackTypesMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "## StackTypes\n\n")
+func namedStackTypesMarkdown(out io.Writer, stackTypes []namedType) {
+	fmt.Fprintf(out, "#### StackType Definitions\n\n")
 	fmt.Fprintf(out, "| Name | Bound | AVM Type |\n")
 	fmt.Fprintf(out, "| ---- | ---- | -------- |\n")
 
-	// Create a slice so we can sort it later
-	rows := []string{}
-	for _, st := range logic.AllStackTypes {
+	for _, st := range stackTypes {
 		bound := fmt.Sprintf("%d - %d", st.Bound[0], st.Bound[1])
-		rows = append(rows, fmt.Sprintf("| %s | %s | %s |", st.String(), bound, st.AVMType.String()))
+		fmt.Fprintf(out, "| %s | %s | %s |\n", st.Name, bound, st.AVMType)
 	}
-	fmt.Fprint(out, strings.Join(sort.StringSlice(rows), "\n"))
-
 	out.Write([]byte("\n"))
 }
 
@@ -312,7 +308,7 @@ type OpRecord struct {
 type namedType struct {
 	Name         string
 	Abbreviation string
-	Bounds       []uint64
+	Bound        []uint64
 	AVMType      string
 }
 
@@ -398,7 +394,7 @@ func argEnums(name string) ([]string, []string) {
 	}
 }
 
-func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
+func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType) *LanguageSpec {
 	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
 	records := make([]OpRecord, len(opSpecs))
 	for i, spec := range opSpecs {
@@ -414,21 +410,11 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Groups = opGroups[spec.Name]
 		records[i].IntroducedVersion = spec.Version
 	}
-	named := []namedType{}
-	for abbr, t := range logic.AllStackTypes {
-		named = append(named, namedType{
-			Name:         t.String(),
-			Bounds:       []uint64{t.Bound[0], t.Bound[1]},
-			Abbreviation: string(abbr),
-			AVMType:      t.AVMType.String(),
-		})
-	}
-	sort.Slice(named, func(i, j int) bool { return strings.Compare(named[i].Name, named[j].Name) > 0 })
 
 	return &LanguageSpec{
 		EvalMaxVersion:  docVersion,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
-		NamedTypes:      named,
+		NamedTypes:      namedTypes,
 		Ops:             records,
 	}
 }
@@ -461,9 +447,20 @@ func main() {
 	integerConstantsTableMarkdown(constants)
 	constants.Close()
 
-	namedTypes := create("named_stack_types.md")
-	namedStackTypesMarkdown(namedTypes)
-	namedTypes.Close()
+	named := []namedType{}
+	for abbr, t := range logic.AllStackTypes {
+		named = append(named, namedType{
+			Name:         t.String(),
+			Bound:        []uint64{t.Bound[0], t.Bound[1]},
+			Abbreviation: string(abbr),
+			AVMType:      t.AVMType.String(),
+		})
+	}
+	sort.Slice(named, func(i, j int) bool { return strings.Compare(named[i].Name, named[j].Name) > 0 })
+
+	namedStackTypes := create("named_stack_types.md")
+	namedStackTypesMarkdown(namedStackTypes, named)
+	namedStackTypes.Close()
 
 	written := make(map[string]bool)
 	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
@@ -481,7 +478,10 @@ func main() {
 	langspecjs := create("langspec.json")
 	enc := json.NewEncoder(langspecjs)
 	enc.SetIndent("", "  ")
-	enc.Encode(buildLanguageSpec(opGroups))
+	err := enc.Encode(buildLanguageSpec(opGroups, named))
+	if err != nil {
+		panic(err.Error())
+	}
 	langspecjs.Close()
 
 	tealtm := create("teal.tmLanguage.json")

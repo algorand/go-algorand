@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -34,6 +35,13 @@ import (
 type simulatorLedger struct {
 	*data.Ledger
 	start basics.Round
+}
+
+// Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
+type Request struct {
+	TxnGroups            [][]transactions.SignedTxn
+	AllowEmptySignatures bool
+	AllowMoreLogging     bool
 }
 
 // Latest is part of the LedgerForSimulator interface.
@@ -104,30 +112,27 @@ var proxySigner = crypto.PrivateKey{
 // check verifies that the transaction is well-formed and has valid or missing signatures.
 // An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
 // To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
-func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, debugger logic.EvalTracer) ([]int, error) {
+func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, tracer logic.EvalTracer, overrides ResultEvalOverrides) error {
 	proxySignerSecrets, err := crypto.SecretKeyToSignatureSecrets(proxySigner)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	// Find and prep any transactions that are missing signatures. We will modify a copy of these
-	// transactions to pass signature verification. The modifications will not affect the input
-	// txgroup slice.
+	// If signaturesOptional is enabled, find and prep any transactions that are missing signatures.
+	// We will modify a copy of these transactions to pass signature verification. The modifications
+	// will not affect the input txgroup slice.
 	//
 	// Note: currently we only support missing transaction signatures, but it should be possible to
 	// support unsigned delegated LogicSigs as well. A single-signature unsigned delegated LogicSig
 	// is indistinguishable from an escrow LogicSig, so we would need to decide on another way of
 	// denoting that a LogicSig's delegation signature is omitted, e.g. by setting all the bits of
 	// the signature.
-	missingSigs := make([]int, 0, len(txgroup))
 	txnsToVerify := make([]transactions.SignedTxn, len(txgroup))
 	for i, stxn := range txgroup {
 		if stxn.Txn.Type == protocol.StateProofTx {
-			return nil, errors.New("cannot simulate StateProof transactions")
+			return errors.New("cannot simulate StateProof transactions")
 		}
-		if txnHasNoSignature(stxn) {
-			missingSigs = append(missingSigs, i)
-
+		if overrides.AllowEmptySignatures && txnHasNoSignature(stxn) {
 			// Replace the signed txn with one signed by the proxySigner. At evaluation this would
 			// raise an error, since the proxySigner's public key likely does not have authority
 			// over the sender's account. However, this will pass validation, since the signature
@@ -139,21 +144,20 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	}
 
 	// Verify the signed transactions are well-formed and have valid signatures
-	_, err = verify.TxnGroupWithTracer(txnsToVerify, &hdr, nil, s.ledger, debugger)
+	_, err = verify.TxnGroupWithTracer(txnsToVerify, &hdr, nil, s.ledger, tracer)
 	if err != nil {
 		err = InvalidTxGroupError{SimulatorError{err}}
 	}
-	return missingSigs, err
+	return err
 }
 
 func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, error) {
 	// s.ledger has 'StartEvaluator' because *data.Ledger is embedded in the simulatorLedger
 	// and data.Ledger embeds *ledger.Ledger
-	eval, err := s.ledger.StartEvaluator(hdr, len(stxns), 0)
+	eval, err := s.ledger.StartEvaluator(hdr, len(stxns), 0, tracer)
 	if err != nil {
 		return nil, err
 	}
-	eval.Tracer = tracer
 
 	group := transactions.WrapSignedTxnsWithAD(stxns)
 
@@ -171,36 +175,47 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 	return vb, nil
 }
 
-func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, []int, error) {
+func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer logic.EvalTracer, overrides ResultEvalOverrides) (*ledgercore.ValidatedBlock, error) {
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 	hdr := nextBlock.BlockHeader
 
 	// check that the transaction is well-formed and mark whether signatures are missing
-	missingSignatures, err := s.check(hdr, txgroup, tracer)
+	err = s.check(hdr, txgroup, tracer, overrides)
 	if err != nil {
-		return nil, missingSignatures, err
+		return nil, err
 	}
 
 	vb, err := s.evaluate(hdr, txgroup, tracer)
-	return vb, missingSignatures, err
+	return vb, err
 }
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
-func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
-	simulatorTracer := makeEvalTracer(s.ledger.start, txgroup)
-	block, missingSigIndexes, err := s.simulateWithTracer(txgroup, simulatorTracer)
-	if err != nil {
-		simulatorTracer.result.WouldSucceed = false
+func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
+	simulatorTracer := makeEvalTracer(s.ledger.start, simulateRequest)
 
-		var lsigError verify.LogicSigError
+	if len(simulateRequest.TxnGroups) != 1 {
+		return Result{}, InvalidTxGroupError{
+			SimulatorError{
+				err: fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups)),
+			},
+		}
+	}
+
+	block, err := s.simulateWithTracer(simulateRequest.TxnGroups[0], simulatorTracer, simulatorTracer.result.EvalOverrides)
+	if err != nil {
+		var verifyError *verify.TxGroupError
 		switch {
-		case errors.As(err, &lsigError):
-			simulatorTracer.result.TxnGroups[0].FailureMessage = lsigError.Error()
-			simulatorTracer.result.TxnGroups[0].FailedAt = TxnPath{uint64(lsigError.GroupIndex)}
+		case errors.As(err, &verifyError):
+			if verifyError.GroupIndex < 0 {
+				// This group failed verification, but the problem can't be blamed on a single transaction.
+				return Result{}, InvalidTxGroupError{SimulatorError{err}}
+			}
+			simulatorTracer.result.TxnGroups[0].FailureMessage = verifyError.Error()
+			simulatorTracer.result.TxnGroups[0].FailedAt = TxnPath{uint64(verifyError.GroupIndex)}
 		case errors.As(err, &EvalFailureError{}):
 			simulatorTracer.result.TxnGroups[0].FailureMessage = err.Error()
 			simulatorTracer.result.TxnGroups[0].FailedAt = simulatorTracer.failedAt
@@ -211,12 +226,6 @@ func (s Simulator) Simulate(txgroup []transactions.SignedTxn) (Result, error) {
 	}
 
 	simulatorTracer.result.Block = block
-
-	// mark whether signatures are missing
-	for _, index := range missingSigIndexes {
-		simulatorTracer.result.TxnGroups[0].Txns[index].MissingSignature = true
-		simulatorTracer.result.WouldSucceed = false
-	}
 
 	// Update total cost by aggregating individual txn costs
 	totalCost := uint64(0)

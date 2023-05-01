@@ -203,6 +203,7 @@ func TestWriteRound(t *testing.T) {
 	g := makePrivateGenerator(t)
 	var data []byte
 	writer := bytes.NewBuffer(data)
+	g.WriteBlock(writer, 0)
 	g.WriteBlock(writer, 1)
 	var block rpcs.EncodedBlockCert
 	protocol.Decode(data, &block)

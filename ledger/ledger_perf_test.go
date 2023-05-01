@@ -205,7 +205,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 		prev, err := l0.BlockHdr(basics.Round(i))
 		require.NoError(b, err)
 		newBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
+		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0, nil)
 		require.NoError(b, err)
 
 		// build a payset
@@ -319,7 +319,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = eval.Eval(context.Background(), l1, blk, true, vc, nil)
+		_, err = eval.Eval(context.Background(), l1, blk, true, vc, nil, l1.tracer)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)

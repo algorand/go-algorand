@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -73,7 +74,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeTxnGroup(ep *EvalParams) {
 }
 
 // AfterTxnGroup updates inner txn depth
-func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams, evalError error) {
+func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	a.txnDepth--
 }
 

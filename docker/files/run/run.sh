@@ -6,9 +6,17 @@ if [ "$DEBUG" = "1" ]; then
   set -x
 fi
 
+# To allow mounting the data directory we need to change permissions
+# to our algorand user. The script is initially run as the root user
+# in order to change permissions, afterwards the script is re-launched
+# as the algorand user.
+if [ "$(id -u)" = '0' ]; then
+  chown -R algorand:algorand $ALGORAND_DATA
+  exec runuser -u algorand "$BASH_SOURCE"
+fi
+
 # Script to configure or resume a network. Based on environment settings the
 # node will be setup with a private network or connect to a public network.
-
 ####################
 # Helper functions #
 ####################
@@ -46,7 +54,6 @@ function start_public_network() {
 
 function configure_data_dir() {
   cd "$ALGORAND_DATA"
-  algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
 
   # check for config file overrides.
   if [ -f "/etc/algorand/config.json" ]; then
@@ -61,6 +68,14 @@ function configure_data_dir() {
   if [ -f "/etc/algorand/logging.config" ]; then
     cp /etc/algorand/logging.config logging.config
   fi
+
+  # initialize config with profile.
+  if [ "$PROFILE" != "" ]; then
+    algocfg profile set --yes -d "$ALGORAND_DATA" "$PROFILE" 
+  fi
+
+  # call after copying config.json to make sure the port is exposed.
+  algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
 
   # check for token overrides
   if [ "$TOKEN" != "" ]; then

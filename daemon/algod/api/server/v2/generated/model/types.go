@@ -400,6 +400,9 @@ type Box struct {
 	// Name \[name\] box name, base64 encoded
 	Name []byte `json:"name"`
 
+	// Round The round for which this information is relevant
+	Round uint64 `json:"round"`
+
 	// Value \[value\] box value, base64 encoded.
 	Value []byte `json:"value"`
 }
@@ -608,6 +611,24 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// SimulateRequest Request type for simulation endpoint.
+type SimulateRequest struct {
+	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
+	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
+	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
+	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
+
+	// TxnGroups The transaction groups to simulate.
+	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
+}
+
+// SimulateRequestTransactionGroup A transaction group to simulate.
+type SimulateRequestTransactionGroup struct {
+	// Txns An atomic transaction group.
+	Txns []json.RawMessage `json:"txns"`
+}
+
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
 type SimulateTransactionGroupResult struct {
 	// AppBudgetAdded Total budget added during execution of app calls in the transaction group.
@@ -634,11 +655,20 @@ type SimulateTransactionResult struct {
 	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
 	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
 
-	// MissingSignature A boolean indicating whether this transaction is missing signatures
-	MissingSignature *bool `json:"missing-signature,omitempty"`
-
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`
+}
+
+// SimulationEvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
+type SimulationEvalOverrides struct {
+	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
+	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
+	// MaxLogCalls The maximum log calls one can make during simulation
+	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
+
+	// MaxLogSize The maximum byte number to log during simulation
+	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
 }
 
 // StateDelta Application state delta.
@@ -874,6 +904,12 @@ type DryrunResponse struct {
 	Txns            []DryrunTxnResult `json:"txns"`
 }
 
+// GetBlockTimeStampOffsetResponse defines model for GetBlockTimeStampOffsetResponse.
+type GetBlockTimeStampOffsetResponse struct {
+	// Offset Timestamp offset in seconds.
+	Offset uint64 `json:"offset"`
+}
+
 // GetSyncRoundResponse defines model for GetSyncRoundResponse.
 type GetSyncRoundResponse struct {
 	// Round The minimum sync round for the ledger.
@@ -996,6 +1032,9 @@ type PostTransactionsResponse struct {
 
 // SimulateResponse defines model for SimulateResponse.
 type SimulateResponse struct {
+	// EvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
+	EvalOverrides *SimulationEvalOverrides `json:"eval-overrides,omitempty"`
+
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
@@ -1004,9 +1043,6 @@ type SimulateResponse struct {
 
 	// Version The version of this response object.
 	Version uint64 `json:"version"`
-
-	// WouldSucceed Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.
-	WouldSucceed bool `json:"would-succeed"`
 }
 
 // StateProofResponse Represents a state proof and its corresponding message
@@ -1220,3 +1256,6 @@ type TealCompileTextRequestBody = TealCompileTextBody
 
 // TealDryrunJSONRequestBody defines body for TealDryrun for application/json ContentType.
 type TealDryrunJSONRequestBody = DryrunRequest
+
+// SimulateTransactionJSONRequestBody defines body for SimulateTransaction for application/json ContentType.
+type SimulateTransactionJSONRequestBody = SimulateRequest

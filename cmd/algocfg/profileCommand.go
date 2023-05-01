@@ -169,5 +169,10 @@ func getConfigForArg(configType string) (config.Local, error) {
 	if updater, ok := profileNames[configType]; ok {
 		return updater.updateFunc(cfg), nil
 	}
-	return config.Local{}, fmt.Errorf("invalid profile type %v", configType)
+
+	var names []string
+	for name := range profileNames {
+		names = append(names, name)
+	}
+	return config.Local{}, fmt.Errorf("unknown profile provided: '%s' is not in list of valid profiles: %s", configType, strings.Join(names, ", "))
 }

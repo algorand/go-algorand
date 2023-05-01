@@ -80,7 +80,7 @@ type roundCowState struct {
 
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
-	// 2. Stateful TEAL evaluation (see setKey/delKey)
+	// 2. Application evaluation (see setKey/delKey)
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 
@@ -235,8 +235,8 @@ func (cb *roundCowState) Counter() uint64 {
 }
 
 func (cb *roundCowState) GetStateProofNextRound() basics.Round {
-	if cb.mods.ModStateProofNextRound != 0 {
-		return cb.mods.ModStateProofNextRound
+	if cb.mods.StateProofNext != 0 {
+		return cb.mods.StateProofNext
 	}
 	return cb.lookupParent.GetStateProofNextRound()
 }
@@ -266,7 +266,7 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 }
 
 func (cb *roundCowState) SetStateProofNextRound(rnd basics.Round) {
-	cb.mods.ModStateProofNextRound = rnd
+	cb.mods.StateProofNext = rnd
 }
 
 func (cb *roundCowState) child(hint int) *roundCowState {
@@ -274,7 +274,7 @@ func (cb *roundCowState) child(hint int) *roundCowState {
 	ch.lookupParent = cb
 	ch.commitParent = cb
 	ch.proto = cb.proto
-	ch.mods.PopulateStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.ModStateProofNextRound)
+	ch.mods.PopulateStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, hint, cb.mods.StateProofNext)
 
 	if ch.sdeltas == nil {
 		ch.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
@@ -318,7 +318,7 @@ func (cb *roundCowState) commitToParent() {
 			}
 		}
 	}
-	cb.commitParent.mods.ModStateProofNextRound = cb.mods.ModStateProofNextRound
+	cb.commitParent.mods.StateProofNext = cb.mods.StateProofNext
 
 	for key, value := range cb.mods.KvMods {
 		cb.commitParent.mods.AddKvMod(key, value)

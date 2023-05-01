@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -98,6 +99,8 @@ type Ledger struct {
 	cfg config.Local
 
 	dbPathPrefix string
+
+	tracer logic.EvalTracer
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
@@ -113,6 +116,10 @@ func OpenLedger(
 		verifiedCacheSize = cfg.TxPoolSize
 		log.Warnf("The VerifiedTranscationsCacheSize in the config file was misconfigured to have smaller size then the TxPoolSize; The verified cache size was adjusted from %d to %d.", cfg.VerifiedTranscationsCacheSize, cfg.TxPoolSize)
 	}
+	var tracer logic.EvalTracer
+	if cfg.EnableTxnEvalTracer {
+		tracer = eval.MakeTxnGroupDeltaTracer(cfg.MaxAcctLookback)
+	}
 
 	l := &Ledger{
 		log:                            log,
@@ -126,6 +133,7 @@ func OpenLedger(
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
 		dbPathPrefix:                   dbPathPrefix,
+		tracer:                         tracer,
 	}
 
 	l.headerCache.initialize()
@@ -680,7 +688,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := eval.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
+	updates, err := eval.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil, l.tracer)
 	if err != nil {
 		if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
 			return ledgercore.BlockInLedgerError{
@@ -809,7 +817,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eval.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
-	return eval.Eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
+	return eval.Eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil, l.tracer)
 }
 
 // IsWritingCatchpointDataFile returns true when a catchpoint file is being generated.
@@ -833,13 +841,16 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 // provides a cap on the size of a single generated block size, when a non-zero value is passed.
 // If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
 // be used instead.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*eval.BlockEvaluator, error) {
+// The tracer argument is a logic.EvalTracer which will be attached to the evaluator and have its hooked invoked during
+// the eval process for each block. A nil tracer will skip tracer invocation entirely.
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
 	return eval.StartEvaluator(l, hdr,
 		eval.EvaluatorOptions{
 			PaysetHint:          paysetHint,
 			Generate:            true,
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
+			Tracer:              tracer,
 		})
 }
 
@@ -853,7 +864,7 @@ func (l *Ledger) FlushCaches() {
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
-	delta, err := eval.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	delta, err := eval.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool, l.tracer)
 	if err != nil {
 		return nil, err
 	}

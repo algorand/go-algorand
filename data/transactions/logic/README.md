@@ -48,21 +48,22 @@ named to provide more semantic information in the documentation. They're also us
 assembly time to do type checking and to provide more informative error messages.
 
 
-## StackTypes
+#### StackType Definitions
 
 | Name | Bound | AVM Type |
 | ---- | ---- | -------- |
+| uint64 | 0 - 18446744073709551615 | uint64 |
 | none | 0 - 0 | none |
-| addr | 32 - 32 | []byte |
-| bool | 0 - 1 | uint64 |
-| [32]byte | 32 - 32 | []byte |
+| name | 1 - 64 | []byte |
 | method | 4 - 4 | []byte |
 | key | 0 - 64 | []byte |
-| []byte | 0 - 4096 | []byte |
-| uint64 | 0 - 18446744073709551615 | uint64 |
-| name | 1 - 64 | []byte |
-| any | 0 - 0 | any |
+| bool | 0 - 1 | uint64 |
 | bigint | 0 - 64 | []byte |
+| any | 0 - 0 | any |
+| addr | 32 - 32 | []byte |
+| []byte | 0 - 4096 | []byte |
+| [32]byte | 32 - 32 | []byte |
+
 
 
 ## Scratch Space
