@@ -2730,8 +2730,8 @@ func TestCreateAndUse(t *testing.T) {
   int 1
 `
 
-	// First testing use in axfer
-	TestLogicRange(t, 6, 6, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+	// First testing use in axfer, start at v5 so that the failure is tested
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		v := ep.Proto.LogicSigVersion
 		test := func(source string, problems ...string) {
 			TestApp(t, source, ep, problems...)
@@ -2778,7 +2778,7 @@ func TestCreateAndUse(t *testing.T) {
   int 1
 `
 
-	// Now test use in asset balance opcode
+	// Now test use in asset balance opcode, over the same range
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		v := ep.Proto.LogicSigVersion
 		test := func(source string, problems ...string) {
