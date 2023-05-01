@@ -19,6 +19,7 @@ package ledger
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -155,7 +156,7 @@ func TestBoxCreate(t *testing.T) {
 		}
 
 		adam := call.Args("create", "adam")
-		dl.txn(adam, "invalid Box reference adam")
+		dl.txn(adam, fmt.Sprintf("invalid Box reference %#x", "adam"))
 		adam.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("adam")}}
 
 		dl.beginBlock()
@@ -170,28 +171,28 @@ func TestBoxCreate(t *testing.T) {
 		}
 
 		dl.txn(adam.Args("check", "adam", "\x00\x00"))
-		dl.txgroup("box_create\nassert", adam.Noted("one"), adam.Noted("two"))
+		dl.txgroup("box_create; assert", adam.Noted("one"), adam.Noted("two"))
 
 		bobo := call.Args("create", "bobo")
-		dl.txn(bobo, "invalid Box reference bobo")
+		dl.txn(bobo, fmt.Sprintf("invalid Box reference %#x", "bobo"))
 		bobo.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("bobo")}}
 		dl.txn(bobo)
-		dl.txgroup("box_create\nassert", bobo.Noted("one"), bobo.Noted("two"))
+		dl.txgroup("box_create; assert", bobo.Noted("one"), bobo.Noted("two"))
 
 		dl.beginBlock()
 		chaz := call.Args("create", "chaz")
 		chaz.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("chaz")}}
 		dl.txn(chaz)
-		dl.txn(chaz.Noted("again"), "box_create\nassert")
+		dl.txn(chaz.Noted("again"), "box_create; assert")
 		dl.endBlock()
 
 		// new block
-		dl.txn(chaz.Noted("again"), "box_create\nassert")
+		dl.txn(chaz.Noted("again"), "box_create; assert")
 		dogg := call.Args("create", "dogg")
 		dogg.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("dogg")}}
 		dl.txn(dogg, "below min")
 		dl.txn(chaz.Args("delete", "chaz"))
-		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "box_del\nassert")
+		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "box_del; assert")
 		dl.txn(dogg)
 		dl.txn(bobo.Args("delete", "bobo"))
 
@@ -230,7 +231,7 @@ func TestBoxRecreate(t *testing.T) {
 		create := call.Args("create", "adam", "\x04") // box value size is 4 bytes
 		recreate := call.Args("recreate", "adam", "\x04")
 
-		dl.txn(recreate, "box_create\n!\nassert")
+		dl.txn(recreate, "box_create; !; assert")
 		dl.txn(create)
 		dl.txn(recreate)
 		dl.txn(call.Args("set", "adam", "\x01\x02\x03\x04"))
@@ -421,7 +422,7 @@ func TestBoxRW(t *testing.T) {
 		time.Sleep(100 * time.Millisecond) // give commit time to run, and prune au caches
 		dl.fullBlock(call.Args("check", "x", "ABCDEFGH"))
 
-		dl.txn(call.Args("create", "yy"), "invalid Box reference yy")
+		dl.txn(call.Args("create", "yy"), fmt.Sprintf("invalid Box reference %#x", "yy"))
 		withBr := call.Args("create", "yy")
 		withBr.Boxes = append(withBr.Boxes, transactions.BoxRef{Index: 1, Name: []byte("yy")})
 		require.Error(dl.t, withBr.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.GenesisProto()))
@@ -616,7 +617,7 @@ func TestBoxInners(t *testing.T) {
 		}
 		// The current Boxes gives top-level access to "x", not the inner app
 		dl.txn(call.Args("create", "x", "\x10"), // 8
-			"invalid Box reference x")
+			fmt.Sprintf("invalid Box reference %#x", 'x'))
 
 		// This isn't right: Index should be index into ForeignApps
 		call.Boxes = []transactions.BoxRef{{Index: uint64(boxIndex), Name: []byte("x")}}
@@ -658,7 +659,7 @@ func TestBoxInners(t *testing.T) {
 		dl.txgroup("", checkX, checkY)
 
 		require.Len(t, setY.Boxes, 2) // recall that setY has ("y", "nope") right now. no "x"
-		dl.txgroup("invalid Box reference x", checkX, setY)
+		dl.txgroup(fmt.Sprintf("invalid Box reference %#x", 'x'), checkX, setY)
 
 		setY.Boxes = append(setY.Boxes, transactions.BoxRef{Index: 1, Name: []byte("x")})
 		dl.txgroup("", checkX, setY)

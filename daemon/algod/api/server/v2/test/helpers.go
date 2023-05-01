@@ -90,14 +90,16 @@ var txnPoolGolden = make([]transactions.SignedTxn, 2)
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
 	mock.Mock
-	ledger    v2.LedgerForAPI
-	genesisID string
-	config    config.Local
-	err       error
-	id        account.ParticipationID
-	keys      account.StateProofKeys
-	usertxns  map[basics.Address][]node.TxnWithStatus
-	status    node.StatusReport
+	ledger          v2.LedgerForAPI
+	genesisID       string
+	config          config.Local
+	err             error
+	id              account.ParticipationID
+	keys            account.StateProofKeys
+	usertxns        map[basics.Address][]node.TxnWithStatus
+	status          node.StatusReport
+	devmode         bool
+	timestampOffset *int64
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
@@ -135,7 +137,7 @@ func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys acco
 	return m.err
 }
 
-func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, status node.StatusReport) *mockNode {
+func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, status node.StatusReport, devMode bool) *mockNode {
 	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
@@ -143,6 +145,7 @@ func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, sta
 		err:       nodeError,
 		usertxns:  map[basics.Address][]node.TxnWithStatus{},
 		status:    status,
+		devmode:   devMode,
 	}
 }
 
@@ -164,9 +167,9 @@ func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) erro
 	return m.err
 }
 
-func (m *mockNode) Simulate(txgroup []transactions.SignedTxn) (simulation.Result, error) {
+func (m *mockNode) Simulate(request simulation.Request) (simulation.Result, error) {
 	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger))
-	return simulator.Simulate(txgroup)
+	return simulator.Simulate(request)
 }
 
 func (m *mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
@@ -236,6 +239,23 @@ func (m *mockNode) StartCatchup(catchpoint string) error {
 
 func (m *mockNode) AbortCatchup(catchpoint string) error {
 	return m.err
+}
+
+func (m *mockNode) SetBlockTimeStampOffset(offset int64) error {
+	if !m.devmode {
+		return fmt.Errorf("cannot set block timestamp when not in dev mode")
+	}
+	m.timestampOffset = &offset
+	return nil
+}
+
+func (m *mockNode) GetBlockTimeStampOffset() (*int64, error) {
+	if !m.devmode {
+		return nil, fmt.Errorf("cannot get block timestamp when not in dev mode")
+	} else if m.timestampOffset == nil {
+		return nil, nil
+	}
+	return m.timestampOffset, nil
 }
 
 ////// mock ledger testing environment follows

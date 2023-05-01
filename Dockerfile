@@ -49,11 +49,9 @@ ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" KMD_PORT="7833" ALGORAND_DATA="/a
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p "$ALGORAND_DATA" && \
-    groupadd --system algorand && \
-    useradd --no-log-init --create-home --system --gid algorand algorand && \
+    groupadd --gid=999 --system algorand && \
+    useradd --uid=999 --no-log-init --create-home --system --gid algorand algorand && \
     chown -R algorand:algorand /algod
-
-USER algorand
 
 COPY --chown=algorand:algorand --from=builder "/dist/bin/" "/node/bin/"
 COPY --chown=algorand:algorand --from=builder "/dist/files/run/" "/node/run/"

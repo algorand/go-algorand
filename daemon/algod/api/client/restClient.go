@@ -677,7 +677,7 @@ func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	return
 }
 
-// RawSimulateRawTransaction simulates the raw transaction or raw transaction group and returns relevant simulation results as raw bytes.
+// RawSimulateRawTransaction simulates transactions by taking raw request bytes and returns relevant simulation results as raw bytes.
 func (client RestClient) RawSimulateRawTransaction(data []byte) (response []byte, err error) {
 	var blob Blob
 	err = client.submitForm(&blob, "/v2/transactions/simulate", rawFormat{Format: "msgpack"}, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
@@ -751,5 +751,17 @@ func (client RestClient) GetSyncRound() (response model.GetSyncRoundResponse, er
 // GetLedgerStateDelta retrieves the ledger state delta for the round
 func (client RestClient) GetLedgerStateDelta(round uint64) (response model.LedgerStateDeltaResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d", round), nil)
+	return
+}
+
+// SetBlockTimestampOffset sets the offset in seconds to add to the block timestamp when in devmode
+func (client RestClient) SetBlockTimestampOffset(offset uint64) (err error) {
+	err = client.post(nil, fmt.Sprintf("/v2/devmode/blocks/offset/%d", offset), nil, nil, true)
+	return
+}
+
+// GetBlockTimestampOffset gets the offset in seconds which is being added to devmode blocks
+func (client RestClient) GetBlockTimestampOffset() (response model.GetBlockTimeStampOffsetResponse, err error) {
+	err = client.get(&response, "/v2/devmode/blocks/offset", nil)
 	return
 }

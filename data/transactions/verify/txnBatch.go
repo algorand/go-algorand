@@ -194,7 +194,7 @@ func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.Input
 func (ue UnverifiedTxnSigJob) GetNumberOfBatchableItems() (batchSigs uint64, err error) {
 	batchSigs = 0
 	for i := range ue.TxnGroup {
-		count, err := getNumberOfBatchableSigsInTxn(&ue.TxnGroup[i])
+		count, err := getNumberOfBatchableSigsInTxn(&ue.TxnGroup[i], i)
 		if err != nil {
 			return 0, err
 		}
@@ -203,8 +203,8 @@ func (ue UnverifiedTxnSigJob) GetNumberOfBatchableItems() (batchSigs uint64, err
 	return
 }
 
-func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) {
-	sigType, err := checkTxnSigTypeCounts(stx)
+func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) (uint64, error) {
+	sigType, err := checkTxnSigTypeCounts(stx, groupIndex)
 	if err != nil {
 		return 0, err
 	}

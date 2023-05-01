@@ -19,8 +19,10 @@ package simulation
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
@@ -31,7 +33,6 @@ type TxnPath []uint64
 // TxnResult contains the simulation result for a single transaction
 type TxnResult struct {
 	Txn                    transactions.SignedTxnWithAD
-	MissingSignature       bool
 	AppBudgetConsumed      uint64
 	LogicSigBudgetConsumed uint64
 }
@@ -49,9 +50,6 @@ type TxnGroupResult struct {
 
 	// AppBudgetConsumed is the total opcode cost used for this group
 	AppBudgetConsumed uint64
-
-	// FeeCredit is the fees left over after covering fees for this group
-	FeeCredit uint64
 }
 
 func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
@@ -65,38 +63,77 @@ func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 }
 
 // ResultLatestVersion is the latest version of the Result struct
-const ResultLatestVersion = uint64(1)
+const ResultLatestVersion = uint64(2)
+
+// ResultEvalOverrides contains the limits and parameters during a call to Simulator.Simulate
+type ResultEvalOverrides struct {
+	AllowEmptySignatures bool
+	MaxLogCalls          *uint64
+	MaxLogSize           *uint64
+}
+
+// SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
+const SimulateLogBytesLimit = uint64(65536)
+
+// AllowMoreLogging method modify the log limits from lift option:
+// - if lift log limits, then overload result from local Config
+// - otherwise, set `LogLimits` field to be nil
+func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
+	if allow {
+		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), SimulateLogBytesLimit
+		eo.MaxLogCalls = &maxLogCalls
+		eo.MaxLogSize = &maxLogSize
+	}
+	return eo
+}
+
+// LogicEvalConstants method infers the logic.EvalConstants from Result.EvalOverrides (*ResultEvalOverrides)
+// and generate appropriate parameters to override during simulation runtime.
+func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
+	logicEvalConstants := logic.RuntimeEvalConstants()
+	if eo.MaxLogSize != nil {
+		logicEvalConstants.MaxLogSize = *eo.MaxLogSize
+	}
+	if eo.MaxLogCalls != nil {
+		logicEvalConstants.MaxLogCalls = *eo.MaxLogCalls
+	}
+	return logicEvalConstants
+}
 
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
-	Version      uint64
-	LastRound    basics.Round
-	TxnGroups    []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
-	WouldSucceed bool             // true iff no failure message, no missing signatures, and the budget was not exceeded
-	Block        *ledgercore.ValidatedBlock
+	Version       uint64
+	LastRound     basics.Round
+	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
+	EvalOverrides ResultEvalOverrides
+	Block         *ledgercore.ValidatedBlock
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, txgroups [][]transactions.SignedTxn, version uint64) (Result, error) {
+func makeSimulationResultWithVersion(lastRound basics.Round, request Request, version uint64) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
 
-	groups := make([]TxnGroupResult, len(txgroups))
+	groups := make([]TxnGroupResult, len(request.TxnGroups))
 
-	for i, txgroup := range txgroups {
+	for i, txgroup := range request.TxnGroups {
 		groups[i] = makeTxnGroupResult(txgroup)
 	}
 
+	resultEvalConstants := ResultEvalOverrides{
+		AllowEmptySignatures: request.AllowEmptySignatures,
+	}.AllowMoreLogging(request.AllowMoreLogging)
+
 	return Result{
-		Version:      version,
-		LastRound:    lastRound,
-		TxnGroups:    groups,
-		WouldSucceed: true,
+		Version:       version,
+		LastRound:     lastRound,
+		TxnGroups:     groups,
+		EvalOverrides: resultEvalConstants,
 	}, nil
 }
 
-func makeSimulationResult(lastRound basics.Round, txgroups [][]transactions.SignedTxn) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, txgroups, ResultLatestVersion)
+func makeSimulationResult(lastRound basics.Round, request Request) Result {
+	result, err := makeSimulationResultWithVersion(lastRound, request, ResultLatestVersion)
 	if err != nil {
 		// this should never happen, since we pass in ResultLatestVersion
 		panic(err)

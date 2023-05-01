@@ -2961,7 +2961,7 @@ func isNotPanic(t *testing.T, err error) {
 	if err == nil {
 		return
 	}
-	if pe, ok := err.(PanicError); ok {
+	if pe, ok := err.(panicError); ok {
 		t.Error(pe)
 	}
 }
@@ -3188,14 +3188,10 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 				params := defaultEvalParams()
 				params.TxnGroup[0].Lsig.Logic = ops.Program
 				err := CheckSignature(0, params)
-				require.Error(t, err)
-				if pe, ok := err.(PanicError); ok {
-					require.Equal(t, panicString, pe.PanicValue)
-					pes := pe.Error()
-					require.True(t, strings.Contains(pes, "panic"))
-				} else {
-					t.Errorf("expected PanicError object but got %T %#v", err, err)
-				}
+				var pe panicError
+				require.ErrorAs(t, err, &pe)
+				require.Equal(t, panicString, pe.PanicValue)
+				require.ErrorContains(t, pe, "panic")
 
 				var txn transactions.SignedTxn
 				txn.Lsig.Logic = ops.Program
@@ -3206,13 +3202,9 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 					t.Log(params.Trace.String())
 				}
 				require.False(t, pass)
-				if pe, ok := err.(PanicError); ok {
-					require.Equal(t, panicString, pe.PanicValue)
-					pes := pe.Error()
-					require.True(t, strings.Contains(pes, "panic"))
-				} else {
-					t.Errorf("expected PanicError object but got %T %#v", err, err)
-				}
+				require.ErrorAs(t, err, &pe)
+				require.Equal(t, panicString, pe.PanicValue)
+				require.ErrorContains(t, pe, "panic")
 
 				if v >= appsEnabledVersion {
 					txn = transactions.SignedTxn{
@@ -3224,13 +3216,9 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 					params.Ledger = NewLedger(nil)
 					pass, err = EvalApp(ops.Program, 0, 1, params)
 					require.False(t, pass)
-					if pe, ok := err.(PanicError); ok {
-						require.Equal(t, panicString, pe.PanicValue)
-						pes := pe.Error()
-						require.True(t, strings.Contains(pes, "panic"))
-					} else {
-						t.Errorf("expected PanicError object but got %T %#v", err, err)
-					}
+					require.ErrorAs(t, err, &pe)
+					require.Equal(t, panicString, pe.PanicValue)
+					require.ErrorContains(t, pe, "panic")
 				}
 			})
 		})
@@ -5152,9 +5140,9 @@ func TestPcDetails(t *testing.T) {
 		pc     int
 		det    string
 	}{
-		{"int 1; int 2; -", 5, "pushint 1\npushint 2\n-\n"},
-		{"int 1; err", 3, "pushint 1\nerr\n"},
-		{"int 1; dup; int 2; -; +", 6, "dup\npushint 2\n-\n"},
+		{"int 1; int 2; -", 5, "pushint 1; pushint 2; -"},
+		{"int 1; err", 3, "pushint 1; err"},
+		{"int 1; dup; int 2; -; +", 6, "dup; pushint 2; -"},
 		{"b end; end:", 4, ""},
 	}
 	for i, test := range tests {
@@ -5172,7 +5160,7 @@ func TestPcDetails(t *testing.T) {
 
 			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
 
-			pc, det := cx.PcDetails()
+			pc, det := cx.pcDetails()
 			assert.Equal(t, test.pc, pc)
 			assert.Equal(t, test.det, det)
 		})
@@ -5791,8 +5779,7 @@ func TestOpJSONRef(t *testing.T) {
 
 		pass, _, err := EvalContract(ops.Program, 0, 888, ep)
 		require.False(t, pass)
-		require.Error(t, err)
-		require.EqualError(t, err, s.error)
+		require.ErrorContains(t, err, s.error)
 
 		// reset pooled budget for new "app call"
 		*ep.PooledApplicationBudget = ep.Proto.MaxAppProgramCost

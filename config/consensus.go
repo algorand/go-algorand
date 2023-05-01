@@ -488,6 +488,9 @@ type ConsensusParams struct {
 	// returning false, if pubkey is not on the curve.
 	EnablePrecheckECDSACurve bool
 
+	// EnableBareBudgetError specifies that I/O budget overruns should not be considered EvalError
+	EnableBareBudgetError bool
+
 	// StateProofUseTrackerVerification specifies whether the node will use data from state proof verification tracker
 	// in order to verify state proofs.
 	StateProofUseTrackerVerification bool
@@ -1262,6 +1265,7 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnablePrecheckECDSACurve = true
+	vFuture.EnableBareBudgetError = true
 
 	vFuture.StateProofUseTrackerVerification = true
 	vFuture.EnableCatchpointsWithSPContexts = true

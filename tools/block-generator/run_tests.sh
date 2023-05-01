@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CONNECTION_STRING=""
-INDEXER_BINARY=""
+CONDUIT_BINARY=""
 REPORT_DIR=""
 DURATION="1h"
 LOG_LEVEL="error"
@@ -12,12 +12,12 @@ help() {
   echo " -v|--verbose    enable verbose script output."
   echo " -c|--connection-string"
   echo "                 PostgreSQL connection string."
-  echo " -i|--indexer    path to indexer binary."
-  echo " -s|--scenarios  path to indexer test scenarios."
+  echo " -i|--conduit    path to conduit binary."
+  echo " -s|--scenarios  path to conduit test scenarios."
   echo " -r|--report-dir directory where the report should be written."
   echo " -d|--duration   test duration."
-  echo " -l|--level      log level to pass to Indexer."
-  echo " -g|--generator  use a different indexer binary to run the generator."
+  echo " -l|--level      log level to pass to conduit."
+  echo " -g|--generator  block-generator binary to run the generator."
   exit
 }
 
@@ -33,8 +33,8 @@ while :; do
     GENERATOR_BINARY="${2-}"
     shift
     ;;
-  -i | --indexer)
-    INDEXER_BINARY="${2-}"
+  -i | --conduit)
+    CONDUIT_BINARY="${2-}"
     shift
     ;;
   -r | --report-dir)
@@ -66,29 +66,28 @@ if [ -z "$CONNECTION_STRING" ]; then
   exit 1
 fi
 
-if [ -z "$INDEXER_BINARY" ]; then
-  echo "Missing required indexer binary parameter (-i / --indexer)."
+if [ -z "$CONDUIT_BINARY" ]; then
+  echo "Missing required conduit binary parameter (-i / --conduit)."
   exit 1
 fi
 
 if [ -z "$SCENARIOS" ]; then
-  echo "Missing required indexer test scenario parameter (-s / --scenarios)."
+  echo "Missing required conduit test scenario parameter (-s / --scenarios)."
   exit 1
 fi
 
 if [ -z "$GENERATOR_BINARY" ]; then
-  echo "Using indexer binary for generator, override with (-g / --generator)."
-  GENERATOR_BINARY="$INDEXER_BINARY"
+  echo "path to block-generator binary is required"
+  exit 1
 fi
 
-echo "Running with binary: $INDEXER_BINARY"
+echo "Running with binary: $CONDUIT_BINARY"
 echo "Report directory: $REPORT_DIR"
 echo "Duration: $DURATION"
 echo "Log Level: $LOG_LEVEL"
 
-"$GENERATOR_BINARY" \
-         util block-generator runner \
-  -i "$INDEXER_BINARY" \
+"$GENERATOR_BINARY" runner \
+  -i "$CONDUIT_BINARY" \
   -s "$SCENARIOS" \
   -d "$DURATION" \
   -c "$CONNECTION_STRING" \
