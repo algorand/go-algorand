@@ -34,6 +34,7 @@ type TxnGroupDeltaWithIds struct {
 	Delta   StateDeltaSubset
 }
 
+// StateDeltaSubset exports a subset of ledgercore.StateDelta fields for a sparse encoding
 type StateDeltaSubset struct {
 	_struct    struct{} `codec:",omitempty,omitemptyarray"`
 	Accts      ledgercore.AccountDeltas
