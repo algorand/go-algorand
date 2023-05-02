@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"io"
 	"math"
 	"net/http"
@@ -2069,4 +2071,50 @@ func TestTimestampOffsetInDevMode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
 	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: block timestamp offset cannot be larger than max int64 value\"}\n", rec.Body.String())
+}
+
+func TestDeltasForTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	blk1 := bookkeeping.BlockHeader{Round: 1}
+	blk2 := bookkeeping.BlockHeader{Round: 2}
+	delta1 := ledgercore.StateDelta{Hdr: &blk1}
+	delta2 := ledgercore.StateDelta{Hdr: &blk2}
+	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.AssetTransferTx}}}
+
+	tracer := eval.MakeTxnGroupDeltaTracer(2)
+	handlers := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: tracer,
+			},
+		},
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	// Add blocks to tracer
+	tracer.BeforeBlock(&blk1)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil)
+	tracer.BeforeBlock(&blk2)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil)
+	// Get the deltas out
+	jsonFormat := model.GetLedgerStateDeltaForTransactionGroupParamsFormatJson
+	err := handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(1),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormat},
+	)
+	require.NoError(t, err)
+
+	var response model.TransactionGroupLedgerStateDeltaForRoundResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, err)
+	require.Equal(t, []string{txn1.ID().String()}, response[0].Ids)
+	hdr, ok := response[0].Delta["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
 }

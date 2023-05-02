@@ -26,6 +26,12 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
+// TxnGroupDeltaWithIds associates all the Ids (group and Txn) with a single state delta object
+type TxnGroupDeltaWithIds struct {
+	Ids   []string
+	Delta ledgercore.StateDelta
+}
+
 // TxnGroupDeltaTracer collects groups of StateDelta objects covering groups of txns
 type TxnGroupDeltaTracer struct {
 	// lookback is the number of rounds stored at any given time
@@ -72,21 +78,27 @@ func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *l
 }
 
 // GetDeltasForRound supplies all StateDelta objects for txn groups in a given rnd
-func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]ledgercore.StateDelta, error) {
+func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]TxnGroupDeltaWithIds, error) {
 	rndEntries, exists := tracer.txnGroupDeltas[rnd]
 	if !exists {
 		return nil, fmt.Errorf("round %d not found in txnGroupDeltaTracer", rnd)
 	}
-	// Dedupe entries in our map
-	var deltas = map[*ledgercore.StateDelta]bool{}
-	var entries []ledgercore.StateDelta
-	for _, delta := range rndEntries {
+	// Dedupe entries in our map and collect Ids
+	var deltas = map[*ledgercore.StateDelta][]string{}
+	for id, delta := range rndEntries {
 		if _, present := deltas[delta]; !present {
-			deltas[delta] = true
-			entries = append(entries, *delta)
+			deltas[delta] = append(deltas[delta], id.String())
 		}
 	}
-	return entries, nil
+	var deltasForRound []TxnGroupDeltaWithIds
+	for delta, ids := range deltas {
+		deltasForRound = append(deltasForRound, TxnGroupDeltaWithIds{
+			// Does this just pass the same pointer for all deltas because of the range loop?
+			Ids:   ids,
+			Delta: *delta,
+		})
+	}
+	return deltasForRound, nil
 }
 
 // GetDeltaForID retruns the StateDelta associated with the group of transaction executed for the supplied ID (txn or group)

@@ -106,10 +106,22 @@ const (
 	GetTransactionProofParamsFormatMsgpack GetTransactionProofParamsFormat = "msgpack"
 )
 
+// Defines values for GetLedgerStateDeltaForTransactionGroupParamsFormat.
+const (
+	GetLedgerStateDeltaForTransactionGroupParamsFormatJson    GetLedgerStateDeltaForTransactionGroupParamsFormat = "json"
+	GetLedgerStateDeltaForTransactionGroupParamsFormatMsgpack GetLedgerStateDeltaForTransactionGroupParamsFormat = "msgpack"
+)
+
 // Defines values for GetLedgerStateDeltaParamsFormat.
 const (
 	GetLedgerStateDeltaParamsFormatJson    GetLedgerStateDeltaParamsFormat = "json"
 	GetLedgerStateDeltaParamsFormatMsgpack GetLedgerStateDeltaParamsFormat = "msgpack"
+)
+
+// Defines values for GetTransactionGroupLedgerStateDeltasForRoundParamsFormat.
+const (
+	GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson    GetTransactionGroupLedgerStateDeltasForRoundParamsFormat = "json"
+	GetTransactionGroupLedgerStateDeltasForRoundParamsFormatMsgpack GetTransactionGroupLedgerStateDeltasForRoundParamsFormat = "msgpack"
 )
 
 // Defines values for GetPendingTransactionsParamsFormat.
@@ -527,6 +539,13 @@ type KvDelta struct {
 // LedgerStateDelta Ledger StateDelta object
 type LedgerStateDelta = map[string]interface{}
 
+// LedgerStateDeltaForTransactionGroup Contains ledger deltas for a single transaction group
+type LedgerStateDeltaForTransactionGroup struct {
+	// Delta Ledger StateDelta object
+	Delta LedgerStateDelta `json:"delta"`
+	Ids   []string         `json:"ids"`
+}
+
 // LightBlockHeaderProof Proof of membership and position of a light block header.
 type LightBlockHeaderProof struct {
 	// Index The index of the light block header in the vector commitment tree
@@ -916,6 +935,9 @@ type GetSyncRoundResponse struct {
 	Round uint64 `json:"round"`
 }
 
+// LedgerStateDeltaForTransactionGroupResponse Contains ledger deltas for a single transaction group
+type LedgerStateDeltaForTransactionGroupResponse = LedgerStateDeltaForTransactionGroup
+
 // LedgerStateDeltaResponse Ledger StateDelta object
 type LedgerStateDeltaResponse = LedgerStateDelta
 
@@ -1060,6 +1082,9 @@ type SupplyResponse struct {
 	TotalMoney uint64 `json:"total-money"`
 }
 
+// TransactionGroupLedgerStateDeltaForRoundResponse defines model for TransactionGroupLedgerStateDeltaForRoundResponse.
+type TransactionGroupLedgerStateDeltaForRoundResponse = []LedgerStateDeltaForTransactionGroup
+
 // TransactionParametersResponse TransactionParams contains the parameters that help a client construct
 // a new transaction.
 type TransactionParametersResponse struct {
@@ -1198,6 +1223,15 @@ type GetTransactionProofParamsHashtype string
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
 
+// GetLedgerStateDeltaForTransactionGroupParams defines parameters for GetLedgerStateDeltaForTransactionGroup.
+type GetLedgerStateDeltaForTransactionGroupParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *GetLedgerStateDeltaForTransactionGroupParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// GetLedgerStateDeltaForTransactionGroupParamsFormat defines parameters for GetLedgerStateDeltaForTransactionGroup.
+type GetLedgerStateDeltaForTransactionGroupParamsFormat string
+
 // GetLedgerStateDeltaParams defines parameters for GetLedgerStateDelta.
 type GetLedgerStateDeltaParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
@@ -1206,6 +1240,15 @@ type GetLedgerStateDeltaParams struct {
 
 // GetLedgerStateDeltaParamsFormat defines parameters for GetLedgerStateDelta.
 type GetLedgerStateDeltaParamsFormat string
+
+// GetTransactionGroupLedgerStateDeltasForRoundParams defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
+type GetTransactionGroupLedgerStateDeltasForRoundParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *GetTransactionGroupLedgerStateDeltasForRoundParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// GetTransactionGroupLedgerStateDeltasForRoundParamsFormat defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
+type GetTransactionGroupLedgerStateDeltasForRoundParamsFormat string
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {
