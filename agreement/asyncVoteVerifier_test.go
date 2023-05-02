@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -53,20 +54,29 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 	require.Equal(t, context.Canceled, verifyEqVoteErr)
 }
 
-// bypassAsyncVoteVerifierCtxCheck is used to call the quivalent of AsyncVoteVerifier.verifyVote and simulate the case
-// where the ctx is checked in verifyVote before it is cancled.
-// This behavior is possible, since the ctx is cancled from a different go-routine.
+// bypassAsyncVoteVerifierCtxCheck is used to call the quivalent of AsyncVoteVerifier.verifyVote and to simulate the case
+// where the ctx is checked in verifyVote before it is cancled. This likelihood is enhanced by the sleep of 10 ms.
+// This behavior is possible, since the ctx is canceled from a different go-routine.
 // bypassAsyncVoteVerifierCtxCheck is important to test what happens when the service shuts down, and a vote sneaks
 // through the ctx check.
-func bypassAsyncVoteVerifierCtxCheck(avv *AsyncVoteVerifier, verctx context.Context, l LedgerReader, //nolint:revive // verctx is OK as second argument
+func bypassAsyncVoteVerifierCtxCheck(avv *AsyncVoteVerifier, verctx context.Context, l LedgerReader,
 	uv unauthenticatedVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) {
-	req := asyncVerifyVoteRequest{ctx: verctx, l: l, uv: &uv, index: index, message: message, out: out}
-	avv.wg.Add(1)
-	if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeVoteVerification, req, avv.execpoolOut); err != nil {
-		// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
-		// if we got a non-nil, it means that our context has expired, which means that we won't see this task
-		// getting to the verification function.
-		avv.wg.Done()
+	avv.mu.RLock()
+	defer avv.mu.RUnlock()
+	select {
+	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
+	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
+	// instead, enqueue so the worker will set the error value and return the cancelled vote properly.
+	default:
+		time.Sleep(10 * time.Millisecond)
+		req := asyncVerifyVoteRequest{ctx: verctx, l: l, uv: &uv, index: index, message: message, out: out}
+		avv.wg.Add(1)
+		if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeVoteVerification, req, avv.execpoolOut); err != nil {
+			// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
+			// if we got a non-nil, it means that our context has expired, which means that we won't see this task
+			// getting to the verification function.
+			avv.wg.Done()
+		}
 	}
 }
 
@@ -75,6 +85,7 @@ func bypassAsyncVoteVerifierCtxCheck(avv *AsyncVoteVerifier, verctx context.Cont
 // Specifically, tests the case when a vote gets submitted to the pool for verification
 // concurrently when the verifier is quitting
 func TestServiceStop(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	proposal := proposalValue{BlockDigest: randomBlockHash()}
 	proposal.OriginalProposer = addresses[0]
