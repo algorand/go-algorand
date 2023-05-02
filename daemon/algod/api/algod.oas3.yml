@@ -539,11 +539,11 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+              "$ref": "#/components/schemas/LedgerStateDelta"
             }
           }
         },
-        "description": "Response containing a ledger state delta for a single transaction group and the associated Ids."
+        "description": "Response containing a ledger state delta for a single transaction group."
       },
       "LedgerStateDeltaResponse": {
         "content": {
@@ -3876,16 +3876,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  "$ref": "#/components/schemas/LedgerStateDelta"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  "$ref": "#/components/schemas/LedgerStateDelta"
                 }
               }
             },
-            "description": "Response containing a ledger state delta for a single transaction group and the associated Ids."
+            "description": "Response containing a ledger state delta for a single transaction group."
           },
           "401": {
             "content": {

@@ -45,16 +45,14 @@ type StateDeltaSubset struct {
 	Hdr        *bookkeeping.BlockHeader
 }
 
-func convertStateDelta(delta ledgercore.StateDelta) TxnGroupDeltaWithIds {
-	return TxnGroupDeltaWithIds{
-		Delta: StateDeltaSubset{
-			Accts:      delta.Accts,
-			KvMods:     delta.KvMods,
-			Txids:      delta.Txids,
-			Txleases:   delta.Txleases,
-			Creatables: delta.Creatables,
-			Hdr:        delta.Hdr,
-		},
+func convertStateDelta(delta ledgercore.StateDelta) StateDeltaSubset {
+	return StateDeltaSubset{
+		Accts:      delta.Accts,
+		KvMods:     delta.KvMods,
+		Txids:      delta.Txids,
+		Txleases:   delta.Txleases,
+		Creatables: delta.Creatables,
+		Hdr:        delta.Hdr,
 	}
 }
 
@@ -118,19 +116,20 @@ func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]TxnGro
 	}
 	var deltasForRound []TxnGroupDeltaWithIds
 	for delta, ids := range deltas {
-		deltaForGroup := convertStateDelta(*delta)
-		deltaForGroup.Ids = ids
-		deltasForRound = append(deltasForRound, deltaForGroup)
+		deltasForRound = append(deltasForRound, TxnGroupDeltaWithIds{
+			Ids:   ids,
+			Delta: convertStateDelta(*delta),
+		})
 	}
 	return deltasForRound, nil
 }
 
 // GetDeltaForID retruns the StateDelta associated with the group of transaction executed for the supplied ID (txn or group)
-func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (ledgercore.StateDelta, error) {
+func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (StateDeltaSubset, error) {
 	for _, deltasForRound := range tracer.txnGroupDeltas {
 		if delta, exists := deltasForRound[id]; exists {
-			return *delta, nil
+			return convertStateDelta(*delta), nil
 		}
 	}
-	return ledgercore.StateDelta{}, fmt.Errorf("unable to find delta for id: %s", id)
+	return StateDeltaSubset{}, fmt.Errorf("unable to find delta for id: %s", id)
 }

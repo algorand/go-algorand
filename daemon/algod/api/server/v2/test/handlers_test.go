@@ -2082,7 +2082,12 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	delta1 := ledgercore.StateDelta{Hdr: &blk1}
 	delta2 := ledgercore.StateDelta{Hdr: &blk2}
 	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
-	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.AssetTransferTx}}}
+	groupID1, err := crypto.DigestFromString(crypto.Hash([]byte("hello")).String())
+	require.NoError(t, err)
+	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{
+		Type:   protocol.AssetTransferTx,
+		Header: transactions.Header{Group: groupID1}},
+	}}
 
 	tracer := eval.MakeTxnGroupDeltaTracer(2)
 	handlers := v2.Handlers{
@@ -2101,20 +2106,52 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil)
 	tracer.BeforeBlock(&blk2)
 	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil)
-	// Get the deltas out
-	jsonFormat := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson
-	err := handlers.GetTransactionGroupLedgerStateDeltasForRound(
+
+	// Test /v2/deltas/{round}/txn/group
+	jsonFormatForRound := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
 		c,
 		uint64(1),
-		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormat},
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
 	)
 	require.NoError(t, err)
 
-	var response model.TransactionGroupLedgerStateDeltaForRoundResponse
-	err = json.Unmarshal(rec.Body.Bytes(), &response)
+	var roundResponse model.TransactionGroupLedgerStateDeltaForRoundResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &roundResponse)
 	require.NoError(t, err)
-	require.Equal(t, []string{txn1.ID().String()}, response[0].Ids)
-	hdr, ok := response[0].Delta["Hdr"].(map[string]interface{})
+	require.Equal(t, []string{txn1.ID().String()}, roundResponse[0].Ids)
+	hdr, ok := roundResponse[0].Delta["Hdr"].(map[string]interface{})
 	require.True(t, ok)
 	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
+
+	// Test /v2/deltas/txn/group/{id}
+	jsonFormatForTxn := model.GetLedgerStateDeltaForTransactionGroupParamsFormatJson
+	c, rec = newReq(t)
+	// Use TxID
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		txn2.Txn.ID().String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	var groupResponse model.LedgerStateDeltaForTransactionGroupResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	groupHdr, ok := groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Use Group ID
+	c, rec = newReq(t)
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	groupHdr, ok = groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
 }

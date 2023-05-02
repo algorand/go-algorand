@@ -4033,9 +4033,9 @@
       }
     },
     "LedgerStateDeltaForTransactionGroupResponse": {
-      "description": "Response containing a ledger state delta for a single transaction group and the associated Ids.",
+      "description": "Response containing a ledger state delta for a single transaction group.",
       "schema": {
-        "$ref": "#/definitions/LedgerStateDeltaForTransactionGroup"
+        "$ref": "#/definitions/LedgerStateDelta"
       }
     },
     "TransactionGroupLedgerStateDeltaForRoundResponse": {

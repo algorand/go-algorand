@@ -935,8 +935,8 @@ type GetSyncRoundResponse struct {
 	Round uint64 `json:"round"`
 }
 
-// LedgerStateDeltaForTransactionGroupResponse Contains ledger deltas for a single transaction group
-type LedgerStateDeltaForTransactionGroupResponse = LedgerStateDeltaForTransactionGroup
+// LedgerStateDeltaForTransactionGroupResponse Ledger StateDelta object
+type LedgerStateDeltaForTransactionGroupResponse = LedgerStateDelta
 
 // LedgerStateDeltaResponse Ledger StateDelta object
 type LedgerStateDeltaResponse = LedgerStateDelta
