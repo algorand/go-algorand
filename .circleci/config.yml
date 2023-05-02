@@ -100,7 +100,9 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
-          context: slack-secrets
+          context:
+            - codecov
+            - slack-secrets
           <<: *slack-fail-post-step
 
       - test_nightly:
@@ -109,7 +111,9 @@ workflows:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context: slack-secrets
+          context:
+            - codecov
+            - slack-secrets
           <<: *slack-fail-post-step
 
       - integration:
@@ -246,8 +250,7 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
-          post_steps:
-            - codecov/upload
+      - codecov/upload
 
   test_nightly:
     parameters:
@@ -262,8 +265,7 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
-          post_steps:
-            - codecov/upload
+      - codecov/upload
 
   integration:
     parameters:
