@@ -622,7 +622,7 @@ int 1
 		// but can't axfer a different asset
 		appl.ApplicationArgs = [][]byte{senderAcct[:], {asa2}}
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger,
-			logic.NewExpect(1, fmt.Sprintf("invalid Asset reference %d", asa2)))
+			logic.NewExpect(1, fmt.Sprintf("unavailable Asset %d", asa2)))
 		// or correct asset to an unknown address
 		appl.ApplicationArgs = [][]byte{unusedAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger,
@@ -633,7 +633,7 @@ int 1
 		logic.TestApps(t, []string{"", acfgArg}, txntest.Group(&axfer, &appl), 9, ledger)
 		appl.ApplicationArgs = [][]byte{{asa2}} // but not asa2
 		logic.TestApps(t, []string{"", acfgArg}, txntest.Group(&axfer, &appl), 9, ledger,
-			logic.NewExpect(1, fmt.Sprintf("invalid Asset reference %d", asa2)))
+			logic.NewExpect(1, fmt.Sprintf("unavailable Asset %d", asa2)))
 
 		// Now, confirm that access to account from a pay in one tx, and asa
 		// from another don't allow inner axfer in the third (because there's no
@@ -698,7 +698,7 @@ int 1
 		// but still can't axfer a different asset
 		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa2}}
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger,
-			logic.NewExpect(1, fmt.Sprintf("invalid Asset reference %d", asa2)))
+			logic.NewExpect(1, fmt.Sprintf("unavailable Asset %d", asa2)))
 		appl.ForeignAssets = []basics.AssetIndex{asa2}
 		// once added to appl's foreign array, the appl still lacks access to other's holding
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger,
@@ -710,7 +710,7 @@ int 1
 		logic.TestApps(t, []string{"", acfgArg}, txntest.Group(&afrz, &appl), 9, ledger)
 		appl.ApplicationArgs = [][]byte{{asa2}} // but not asa2
 		logic.TestApps(t, []string{"", acfgArg}, txntest.Group(&afrz, &appl), 9, ledger,
-			logic.NewExpect(1, fmt.Sprintf("invalid Asset reference %d", asa2)))
+			logic.NewExpect(1, fmt.Sprintf("unavailable Asset %d", asa2)))
 
 	})
 
@@ -741,7 +741,7 @@ int 1
 		// can't be used at all.
 		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa2}}
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&appl0, &appl), 9, ledger,
-			logic.NewExpect(1, "invalid Asset reference 202"))
+			logic.NewExpect(1, "unavailable Asset 202"))
 		// And adding asa2 does not fix this problem, because the other x 202 holding is unavailable
 		appl.ForeignAssets = []basics.AssetIndex{asa2}
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&appl0, &appl), 9, ledger,

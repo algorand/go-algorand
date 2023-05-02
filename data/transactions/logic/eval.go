@@ -4968,7 +4968,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
-	return 0, fmt.Errorf("invalid Asset reference %d", aid)
+	return 0, fmt.Errorf("unavailable Asset %d", aid)
 }
 
 // availableAsset determines whether an asset is "available". Before
@@ -5017,7 +5017,7 @@ func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 		return aid, nil
 	}
 
-	return 0, fmt.Errorf("invalid App reference %d", aid)
+	return 0, fmt.Errorf("unavailable App %d", aid)
 }
 
 func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {

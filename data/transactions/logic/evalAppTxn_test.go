@@ -191,6 +191,7 @@ func TestAppAssetOptIn(t *testing.T) {
 	// v5 added inners
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		test := func(source string, problem ...string) {
+			t.Helper()
 			TestApp(t, source, ep, problem...)
 		}
 
@@ -207,7 +208,7 @@ txn Sender; itxn_field AssetReceiver;
 itxn_submit
 int 1
 `
-		test(axfer, "invalid Asset reference")
+		test(axfer, "unavailable Asset 25")
 		tx.ForeignAssets = append(tx.ForeignAssets, 25)
 		test(axfer, "not opted in") // app account not opted in
 		optin := `
@@ -380,7 +381,7 @@ func TestAppAxfer(t *testing.T) {
 		save := tx.ForeignAssets
 		tx.ForeignAssets = []basics.AssetIndex{6, 10}
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100000"+axfer,
-			"invalid Asset reference 77")
+			"unavailable Asset 77")
 		tx.ForeignAssets = save
 
 		noid := `
@@ -655,7 +656,7 @@ func TestAssetFreeze(t *testing.T) {
   itxn_submit
   int 1
 `
-		TestApp(t, freeze, ep, "invalid Asset reference")
+		TestApp(t, freeze, ep, "unavailable Asset 5000")
 		tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(5000)}
 		tx.ApplicationArgs = [][]byte{{0x01}}
 		TestApp(t, freeze, ep, "does not hold Asset")
@@ -969,8 +970,7 @@ func TestApplCreation(t *testing.T) {
 	p := "itxn_begin;"
 	s := "; int 1"
 
-	TestApp(t, p+"int 31; itxn_field ApplicationID"+s, ep,
-		"invalid App reference")
+	TestApp(t, p+"int 31; itxn_field ApplicationID"+s, ep, "unavailable App 31")
 	tx.ForeignApps = append(tx.ForeignApps, 31)
 	TestApp(t, p+"int 31; itxn_field ApplicationID"+s, ep)
 
@@ -1008,14 +1008,14 @@ func TestApplCreation(t *testing.T) {
 		"too many foreign accounts")
 
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 5)+s, ep,
-		"invalid App reference")
+		"unavailable App 621")
 	tx.ForeignApps = append(tx.ForeignApps, basics.AppIndex(621))
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 5)+s, ep)
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 6)+s, ep,
 		"too many foreign apps")
 
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 6)+s, ep,
-		"invalid Asset reference")
+		"unavailable Asset 621")
 	tx.ForeignAssets = append(tx.ForeignAssets, basics.AssetIndex(621))
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 6)+s, ep)
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 7)+s, ep,
@@ -1188,7 +1188,7 @@ itxn_submit
 int 1
 `
 		// Can't call it either
-		test(call, "invalid App reference")
+		test(call, "unavailable App 5000")
 
 		tx.ForeignApps = []basics.AppIndex{basics.AppIndex(5000)}
 		test(`
@@ -2734,6 +2734,7 @@ func TestCreateAndUse(t *testing.T) {
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		v := ep.Proto.LogicSigVersion
 		test := func(source string, problems ...string) {
+			t.Helper()
 			TestApp(t, source, ep, problems...)
 		}
 
@@ -2741,7 +2742,7 @@ func TestCreateAndUse(t *testing.T) {
 		ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
 
 		if v < CreatedResourcesVersion {
-			test(axfer, "invalid Asset reference")
+			test(axfer, "unavailable Asset")
 		} else {
 			test(axfer)
 		}

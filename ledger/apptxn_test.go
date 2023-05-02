@@ -1209,7 +1209,7 @@ func TestCreateAndUse(t *testing.T) {
 		}
 
 		if ver == 30 {
-			dl.txgroup("invalid Asset reference", &createasa, &use)
+			dl.txgroup("unavailable Asset", &createasa, &use)
 			return
 		}
 		// v31 onward, create & use works
@@ -2093,7 +2093,7 @@ itxn_submit`),
 			ApplicationID: callerID,
 		}
 
-		dl.txn(&callTx, "invalid App reference "+strconv.Itoa(int(appID)))
+		dl.txn(&callTx, "unavailable App "+strconv.Itoa(int(appID)))
 
 		// confirm everything is done right if ForeignApps _is_ set up
 		callTx.ForeignApps = []basics.AppIndex{appID}
@@ -2142,7 +2142,7 @@ func TestInvalidAssetsNotAccessible(t *testing.T) {
 			ApplicationID: appID,
 		}
 
-		dl.txn(&use, "invalid Asset reference "+strconv.Itoa(int(asaID)))
+		dl.txn(&use, "unavailable Asset "+strconv.Itoa(int(asaID)))
 		// confirm everything is done right if ForeignAssets _is_ set up
 		use.ForeignAssets = []basics.AssetIndex{asaID}
 		dl.txn(&use)
