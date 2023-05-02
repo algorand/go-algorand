@@ -250,7 +250,7 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
-      - codecov/upload
+      - upload_coverage
 
   test_nightly:
     parameters:
@@ -265,7 +265,7 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
-      - codecov/upload
+      - upload_coverage
 
   integration:
     parameters:
