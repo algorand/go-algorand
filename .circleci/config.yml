@@ -247,15 +247,15 @@ jobs:
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 32
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
     steps:
       - generic_build
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
-      - codecov/upload:
-          environment:
-            CODECOV_TOKEN: << pipeline.parameters.codecov >>
+      - codecov/upload
 
   test_nightly:
     parameters:
@@ -264,15 +264,15 @@ jobs:
     executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
     steps:
       - generic_build
       - generic_test:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
-      - codecov/upload:
-          environment:
-            CODECOV_TOKEN: << pipeline.parameters.codecov >>
+      - codecov/upload
 
   integration:
     parameters:
