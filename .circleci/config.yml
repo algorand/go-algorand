@@ -8,7 +8,6 @@ orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
   slack: circleci/slack@4.10.1
-  codecov: codecov/codecov@3.2.4
 
 parameters:
   ubuntu_image:
@@ -103,9 +102,7 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
-          context:
-            - codecov
-            - slack-secrets
+          context: slack-secrets
           <<: *slack-fail-post-step
 
       - test_nightly:
@@ -114,9 +111,7 @@ workflows:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context:
-            - codecov
-            - slack-secrets
+          context: slack-secrets
           <<: *slack-fail-post-step
 
       - integration:
@@ -255,7 +250,7 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
-      - codecov/upload
+      - upload_coverage
 
   test_nightly:
     parameters:
@@ -272,7 +267,7 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
-      - codecov/upload
+      - upload_coverage
 
   integration:
     parameters:
