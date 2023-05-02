@@ -22,14 +22,39 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // TxnGroupDeltaWithIds associates all the Ids (group and Txn) with a single state delta object
 type TxnGroupDeltaWithIds struct {
-	Ids   []string
-	Delta ledgercore.StateDelta
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Ids     []string
+	Delta   StateDeltaSubset
+}
+
+type StateDeltaSubset struct {
+	_struct    struct{} `codec:",omitempty,omitemptyarray"`
+	Accts      ledgercore.AccountDeltas
+	KvMods     map[string]ledgercore.KvValueDelta
+	Txids      map[transactions.Txid]ledgercore.IncludedTransactions
+	Txleases   map[ledgercore.Txlease]basics.Round
+	Creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable
+	Hdr        *bookkeeping.BlockHeader
+}
+
+func convertStateDelta(delta ledgercore.StateDelta) TxnGroupDeltaWithIds {
+	return TxnGroupDeltaWithIds{
+		Delta: StateDeltaSubset{
+			Accts:      delta.Accts,
+			KvMods:     delta.KvMods,
+			Txids:      delta.Txids,
+			Txleases:   delta.Txleases,
+			Creatables: delta.Creatables,
+			Hdr:        delta.Hdr,
+		},
+	}
 }
 
 // TxnGroupDeltaTracer collects groups of StateDelta objects covering groups of txns
@@ -92,11 +117,9 @@ func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]TxnGro
 	}
 	var deltasForRound []TxnGroupDeltaWithIds
 	for delta, ids := range deltas {
-		deltasForRound = append(deltasForRound, TxnGroupDeltaWithIds{
-			// Does this just pass the same pointer for all deltas because of the range loop?
-			Ids:   ids,
-			Delta: *delta,
-		})
+		deltaForGroup := convertStateDelta(*delta)
+		deltaForGroup.Ids = ids
+		deltasForRound = append(deltasForRound, deltaForGroup)
 	}
 	return deltasForRound, nil
 }
