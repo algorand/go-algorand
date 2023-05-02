@@ -2102,11 +2102,11 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	tracer.BeforeBlock(&blk2)
 	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil)
 	// Get the deltas out
-	jsonFormat := model.GetLedgerStateDeltaForTransactionGroupParamsFormatJson
+	jsonFormat := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson
 	err := handlers.GetTransactionGroupLedgerStateDeltasForRound(
 		c,
 		uint64(1),
-		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormat},
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormat},
 	)
 	require.NoError(t, err)
 
