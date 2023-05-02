@@ -17,10 +17,12 @@
 package node
 
 import (
+	"context"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -212,4 +214,22 @@ func TestSyncRoundWithRemake(t *testing.T) {
 	// newRound - maxAcctLookback + 1 = maxAcctLookback + 1
 	syncRound := followNode.GetSyncRound()
 	require.Equal(t, uint64(maxAcctLookback+1), syncRound)
+}
+
+func TestFastCatchupResume(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Call SetCatchpointCatchupMode, it should set the sync round to MaxAcctLookback.
+	node := setupFollowNode(t)
+	node.ctx = context.Background()
+	out := node.SetCatchpointCatchupMode(false)
+	<-out
+
+	// in order to get a non-zero result, set the cache to 0.
+	before := node.config.MaxAcctLookback
+	node.config.MaxAcctLookback = 0
+
+	// GetSyncRound subtracks the cache size, so the old cache size of 4 should be returned.
+	assert.Equal(t, before, node.GetSyncRound())
 }
