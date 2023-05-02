@@ -23,6 +23,9 @@ parameters:
   valid_nightly_branch:
     type: string
     default: /hotfix\/.*/
+  codecov:
+    type: string
+    default: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"
 
 executors:
   amd64_medium:
@@ -250,7 +253,8 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
-      - upload_coverage
+      - codecov/upload:
+          token: << pipeline.parameters.codecov >>
 
   test_nightly:
     parameters:
@@ -265,7 +269,8 @@ jobs:
           platform: << parameters.platform >>
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
-      - upload_coverage
+      - codecov/upload:
+          token: << pipeline.parameters.codecov >>
 
   integration:
     parameters:
