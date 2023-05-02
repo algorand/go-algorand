@@ -254,7 +254,8 @@ jobs:
           result_subdir: << parameters.platform >>_test
           short_test_flag: "-short"
       - codecov/upload:
-          token: << pipeline.parameters.codecov >>
+          environment:
+            CODECOV_TOKEN: << pipeline.parameters.codecov >>
 
   test_nightly:
     parameters:
@@ -270,7 +271,8 @@ jobs:
           result_subdir: << parameters.platform >>_test_nightly
           no_output_timeout: 45m
       - codecov/upload:
-          token: << pipeline.parameters.codecov >>
+          environment:
+            CODECOV_TOKEN: << pipeline.parameters.codecov >>
 
   integration:
     parameters:
