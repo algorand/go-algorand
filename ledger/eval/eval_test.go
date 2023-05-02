@@ -71,7 +71,7 @@ func TestBlockEvaluatorFeeSink(t *testing.T) {
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 }
@@ -90,7 +90,7 @@ func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator,
 	blkHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(blkHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 	eval.validate = true
 	eval.generate = false
@@ -291,7 +291,8 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			blkHeader, err := l.BlockHdr(basics.Round(0))
 			require.NoError(t, err)
 			newBlock := bookkeeping.MakeBlock(blkHeader)
-			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+			tracer := &mocktracer.Tracer{}
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, tracer)
 			require.NoError(t, err)
 			eval.validate = true
 			eval.generate = true
@@ -368,8 +369,6 @@ int 1`,
 
 			require.Len(t, eval.block.Payset, 0)
 
-			tracer := &mocktracer.Tracer{}
-			eval.Tracer = tracer
 			err = eval.TransactionGroup(txgroup)
 			switch testCase.firstTxnBehavior {
 			case "approve":
@@ -403,9 +402,11 @@ int 1`,
 					},
 				}
 
-			var expectedEvents []mocktracer.Event
+			var expectedEvents = []mocktracer.Event{mocktracer.BeforeBlock(eval.block.Round())}
 			if testCase.firstTxnBehavior == "approve" {
-				expectedEvents = mocktracer.FlattenEvents([][]mocktracer.Event{
+				err = eval.endOfBlock()
+				require.NoError(t, err)
+				expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
 					{
 						mocktracer.BeforeTxnGroup(3),
 						mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
@@ -422,12 +423,15 @@ int 1`,
 					{
 						mocktracer.AfterTxnGroup(3, scenario.Outcome != mocktracer.ApprovalOutcome),
 					},
-				})
+					{
+						mocktracer.AfterBlock(eval.block.Round()),
+					},
+				})...)
 			} else {
 				hasError := testCase.firstTxnBehavior == "error"
 				// EvalDeltas are removed from failed app call transactions
 				expectedBasicAppCallAD.EvalDelta = transactions.EvalDelta{}
-				expectedEvents = mocktracer.FlattenEvents([][]mocktracer.Event{
+				expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
 					{
 						mocktracer.BeforeTxnGroup(3),
 						mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
@@ -439,7 +443,7 @@ int 1`,
 						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, true), // end basicAppCallTxn
 						mocktracer.AfterTxnGroup(3, true),
 					},
-				})
+				})...)
 			}
 			require.Equal(t, expectedEvents, mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events))
 		})
@@ -501,7 +505,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	l.genesisHash = genesisInitState.GenesisHash
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	// won't work before funding bank
@@ -595,6 +599,7 @@ type evalTestLedger struct {
 	feeSink             basics.Address
 	rewardsPool         basics.Address
 	latestTotals        ledgercore.AccountTotals
+	tracer              logic.EvalTracer
 }
 
 // newTestLedger creates a in memory Ledger that is as realistic as
@@ -605,10 +610,14 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 		roundBalances: make(map[basics.Round]map[basics.Address]basics.AccountData),
 		feeSink:       balances.FeeSink,
 		rewardsPool:   balances.RewardsPool,
+		tracer:        nil,
 	}
 
+	protoVersion := protocol.ConsensusFuture
+	proto := config.Consensus[protoVersion]
+
 	crypto.RandBytes(l.genesisHash[:])
-	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
+	genBlock, err := bookkeeping.MakeGenesisBlock(protoVersion,
 		balances, "test", l.genesisHash)
 	require.NoError(t, err)
 	l.roundBalances[0] = balances.Balances
@@ -616,12 +625,11 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 
 	// calculate the accounts totals.
 	var ot basics.OverflowTracker
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for _, acctData := range balances.Balances {
 		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
 	l.genesisProto = proto
-	l.genesisProtoVersion = protocol.ConsensusCurrentVersion
+	l.genesisProtoVersion = protoVersion
 
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
@@ -635,7 +643,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 func (ledger *evalTestLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
 	verifiedTxnCache := verify.MakeVerifiedTransactionCache(config.GetDefaultLocal().VerifiedTranscationsCacheSize)
 
-	delta, err := Eval(ctx, ledger, blk, true, verifiedTxnCache, executionPool)
+	delta, err := Eval(ctx, ledger, blk, true, verifiedTxnCache, executionPool, ledger.tracer)
 	if err != nil {
 		return nil, err
 	}
@@ -648,13 +656,14 @@ func (ledger *evalTestLedger) Validate(ctx context.Context, blk bookkeeping.Bloc
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
 // passed, avoiding unnecessary payset slice growth.
-func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
+func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*BlockEvaluator, error) {
 	return StartEvaluator(ledger, hdr,
 		EvaluatorOptions{
 			PaysetHint:          paysetHint,
 			Validate:            true,
 			Generate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
+			Tracer:              tracer,
 		})
 }
 
@@ -834,7 +843,7 @@ func (ledger *evalTestLedger) nextBlock(t testing.TB) *BlockEvaluator {
 	require.NoError(t, err)
 
 	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
-	eval, err := ledger.StartEvaluator(nextHdr, 0, 0)
+	eval, err := ledger.StartEvaluator(nextHdr, 0, 0, nil)
 	require.NoError(t, err)
 	return eval
 }
@@ -1017,7 +1026,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	newBlock := bookkeeping.MakeBlock(l.blocks[0].BlockHeader)
 
-	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	// Advance the evaluator a couple rounds...
@@ -1054,7 +1063,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	validatedBlock, err := blkEval.GenerateBlock()
 	require.NoError(t, err)
 
-	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil)
+	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil, l.tracer)
 	require.NoError(t, err)
 
 	acctData, _ := blkEval.state.lookup(recvAddr)
@@ -1065,7 +1074,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlock := *validatedBlock
 
 	// First validate that bad block is fine if we dont touch it...
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
 
 	badBlock = *validatedBlock
@@ -1075,7 +1084,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, basics.Address{1})
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
@@ -1089,7 +1098,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	}
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
@@ -1099,12 +1108,12 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, badBlockObj.ExpiredParticipationAccounts[0])
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
 	// sanity check that bad block is being actually copied and not just the pointer
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
 
 }
@@ -1158,7 +1167,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 
 	newBlock := bookkeeping.MakeBlock(l.blocks[0].BlockHeader)
 
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	// Advance the evaluator a couple rounds...
@@ -1256,7 +1265,7 @@ func TestExpiredAccountGeneration(t *testing.T) {
 
 	newBlock := bookkeeping.MakeBlock(l.blocks[0].BlockHeader)
 
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	// Advance the evaluator a couple rounds...

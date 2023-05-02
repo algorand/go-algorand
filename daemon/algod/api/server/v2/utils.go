@@ -359,7 +359,6 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
 		Txn:                    ConvertInnerTxn(&txnResult.Txn),
-		MissingSignature:       trueOrNil(txnResult.MissingSignature),
 		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed: numOrNil(txnResult.LogicSigBudgetConsumed),
 	}
@@ -388,11 +387,20 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 }
 
 func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
+	var evalOverrides *model.SimulationEvalOverrides
+	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
+		evalOverrides = &model.SimulationEvalOverrides{
+			AllowEmptySignatures: trueOrNil(result.EvalOverrides.AllowEmptySignatures),
+			MaxLogSize:           result.EvalOverrides.MaxLogSize,
+			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
+		}
+	}
+
 	encodedSimulationResult := PreEncodedSimulateResponse{
-		Version:      result.Version,
-		LastRound:    uint64(result.LastRound),
-		WouldSucceed: result.WouldSucceed,
-		TxnGroups:    make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		Version:       result.Version,
+		LastRound:     uint64(result.LastRound),
+		TxnGroups:     make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		EvalOverrides: evalOverrides,
 	}
 
 	for i, txnGroup := range result.TxnGroups {
@@ -400,6 +408,18 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	}
 
 	return encodedSimulationResult
+}
+
+func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {
+	txnGroups := make([][]transactions.SignedTxn, len(request.TxnGroups))
+	for i, txnGroup := range request.TxnGroups {
+		txnGroups[i] = txnGroup.Txns
+	}
+	return simulation.Request{
+		TxnGroups:            txnGroups,
+		AllowEmptySignatures: request.AllowEmptySignatures,
+		AllowMoreLogging:     request.AllowMoreLogging,
+	}
 }
 
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.

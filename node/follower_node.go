@@ -240,7 +240,7 @@ func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transaction
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (result simulation.Result, err error) {
+func (node *AlgorandFollowerNode) Simulate(_ simulation.Request) (result simulation.Result, err error) {
 	err = fmt.Errorf("cannot simulate in data mode")
 	return
 }
@@ -446,4 +446,16 @@ func (node *AlgorandFollowerNode) GetSyncRound() uint64 {
 // UnsetSyncRound removes the sync round constraint on the catchup service
 func (node *AlgorandFollowerNode) UnsetSyncRound() {
 	node.catchupService.UnsetDisableSyncRound()
+}
+
+// SetBlockTimeStampOffset sets a timestamp offset in the block header.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) SetBlockTimeStampOffset(offset int64) error {
+	return fmt.Errorf("cannot set block timestamp offset in follower mode")
+}
+
+// GetBlockTimeStampOffset gets a timestamp offset.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) GetBlockTimeStampOffset() (*int64, error) {
+	return nil, fmt.Errorf("cannot get block timestamp offset in follower mode")
 }
