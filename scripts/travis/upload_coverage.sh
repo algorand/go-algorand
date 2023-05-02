@@ -12,4 +12,9 @@ if [[ "${UPSTREAM_VERSION}" != "${LOCAL_VERSION}" ]]; then
   echo "WARN: version ${UPSTREAM_VERSION} of the codecov upload script is available."
 fi
 
-/usr/bin/env bash scripts/travis/codecov
+if [ -z "$CODECOV_TOKEN" ]; then
+  echo "WARN: no CODECOV_TOKEN provided"
+  /usr/bin/env bash scripts/travis/codecov
+else
+    /usr/bin/env bash scripts/travis/codecov -t $CODECOV_TOKEN
+fi
