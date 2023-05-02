@@ -613,8 +613,11 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 		tracer:        nil,
 	}
 
+	protoVersion := protocol.ConsensusFuture
+	proto := config.Consensus[protoVersion]
+
 	crypto.RandBytes(l.genesisHash[:])
-	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
+	genBlock, err := bookkeeping.MakeGenesisBlock(protoVersion,
 		balances, "test", l.genesisHash)
 	require.NoError(t, err)
 	l.roundBalances[0] = balances.Balances
@@ -622,12 +625,11 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 
 	// calculate the accounts totals.
 	var ot basics.OverflowTracker
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for _, acctData := range balances.Balances {
 		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
 	l.genesisProto = proto
-	l.genesisProtoVersion = protocol.ConsensusCurrentVersion
+	l.genesisProtoVersion = protoVersion
 
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
