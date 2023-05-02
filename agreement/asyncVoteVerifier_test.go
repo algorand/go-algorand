@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/stretchr/testify/require"
 )
@@ -215,6 +216,7 @@ func sendReceiveVoteVerifications(badSigOnly bool, errProb float32, count, eqCou
 	}
 	wg.Wait()
 }
+
 func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount int, errProb float32) (ledger Ledger,
 	votes []*unVoteTest, eqVotes []*unEqVoteTest, errsV, errsEqv map[int]error) {
 	votes = make([]*unVoteTest, count)
@@ -264,4 +266,133 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 	}
 	wg.Wait()
 	return vg.ledger, votes, eqVotes, errsV, errsEqv
+}
+
+// TestServiceStop stops the agreement service while sending verification votes to the verifier
+// No results should be dropped. If any is dropped, avv.wg.Wait() will get stuck.
+func TestServiceStop(t *testing.T) {
+	errChan := make(chan error)
+	ledger, votes, eqVotes, _, _ := generateTestVotes(false, errChan, 1, 1, 0.0)
+	outChan := make(chan asyncVerifyVoteResponse, 4)
+
+	// flush the output chan
+	go func() {
+		for range outChan {
+		}
+		return
+	}()
+
+	for x := 0; x < 100; x++ {
+		voteVerifier := MakeStartAsyncVoteVerifier(nil)
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				if x%2 == 0 {
+					voteVerifier.verifyVote(context.Background(), ledger, *votes[0].uv, uint64(votes[0].id), message{}, outChan)
+				} else {
+					voteVerifier.verifyEqVote(context.Background(), ledger, *eqVotes[0].uev, uint64(votes[0].id), message{}, outChan)
+				}
+				select {
+				case <-voteVerifier.workerWaitCh:
+					return
+				default:
+				}
+			}
+		}()
+		voteVerifier.Quit()
+		wg.Wait()
+	}
+}
+
+// TestServiceRestart tests to make sure the AsyncVoteVerifier operates across service Shutdown/Start cycles
+// This process is checked at the Service level because that is the layer that starts/stops the verifier.
+func TestServiceRestart(t *testing.T) {
+	errChan := make(chan error)
+	count := 2000
+	eqCount := 2000
+	errProb := float32(0.5)
+
+	ledger, votes, eqVotes, errsV, errsEqv := generateTestVotes(false, errChan, count, eqCount, errProb)
+	mainPool := execpool.MakePool(t)
+	defer mainPool.Shutdown()
+	voteVerifier := MakeStartAsyncVoteVerifier(nil)
+	outChan := make(chan asyncVerifyVoteResponse, voteVerifier.Parallelism())
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	// collect the verification results and check against the error expectation
+	go func() {
+		defer wg.Done()
+		c := 0
+		for res := range outChan {
+			c++
+			var expectedError error
+			if res.req.uv != nil {
+				expectedError = errsV[int(res.index)]
+			} else {
+				expectedError = errsEqv[int(res.index)]
+			}
+			if (expectedError == nil && res.err != nil) || (expectedError != nil && res.err == nil) {
+				if !(c > (count+eqCount)/4 && (res.err == context.Canceled || res.err == execpool.ErrShuttingDownError)) {
+					errChan <- fmt.Errorf("expected %v got %v", expectedError, res.err)
+				}
+			}
+			if c == count+eqCount {
+				break
+			}
+			if c == (count+eqCount)/4 {
+				go voteVerifier.Quit()
+			}
+		}
+		close(errChan)
+	}()
+
+	// stream the votes to the verifier
+	go func() {
+		defer wg.Done()
+		vi := 0
+		evi := 0
+		for c := 0; c < count+eqCount; c++ {
+			// pick a vote if there are votes, and if either there are no eqVotes or the relative prob
+			turnVote := len(votes) > 0 && (len(eqVotes) == 0 || rand.Float32() < (float32(count)/float32(count+eqCount)))
+			if turnVote {
+				uv := votes[vi%count]
+				vi++
+				voteVerifier.verifyVote(context.Background(), ledger, *uv.uv, uint64(uv.id), message{}, outChan)
+			} else {
+				uev := eqVotes[evi%eqCount]
+				evi++
+				voteVerifier.verifyEqVote(context.Background(), ledger, *uev.uev, uint64(uev.id), message{}, outChan)
+			}
+		}
+	}()
+	// monitor the errors returned from the various goroutines
+	for err := range errChan {
+		require.NoError(t, err)
+	}
+	wg.Wait()
+
+}
+
+func makeTestService(ledger Ledger, t *testing.T) (*Service, error) {
+	accounts, _ := createTestAccountsAndBalances(t, 1, (&[32]byte{})[:])
+	keys := makeRecordingKeyManager(accounts)
+	accessor, err := db.MakeAccessor(t.Name()+"_crash.db", false, true)
+	if err != nil {
+		return nil, err
+	}
+	clock := makeTestingClock(nil)
+	endpoint := testingNetworkEndpoint{}
+	params := Parameters{
+		Logger:       logging.Base(),
+		Network:      &endpoint,
+		Accessor:     accessor,
+		Ledger:       ledger, // makeTestLedger(readOnlyGenesis10),
+		BlockFactory: testBlockFactory{Owner: 1},
+		KeyManager:   keys,
+		Clock:        clock,
+	}
+	return MakeService(params)
 }

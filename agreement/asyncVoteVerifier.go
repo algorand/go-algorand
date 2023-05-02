@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-deadlock"
 )
 
 type asyncVerifyVoteRequest struct {
@@ -58,6 +59,7 @@ type AsyncVoteVerifier struct {
 	ctxCancel       context.CancelFunc
 	batchVerifier   *execpool.StreamToBatch
 	batchInputChan  chan execpool.InputJob
+	mu              deadlock.RWMutex
 }
 
 // MakeStartAsyncVoteVerifier creates an AsyncVoteVerifier with workers as the number of CPUs
@@ -104,7 +106,10 @@ func (avv *AsyncVoteVerifier) worker() {
 	}
 }
 
-func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) {
+func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote,
+	index uint64, message message, out chan<- asyncVerifyVoteResponse) {
+	avv.mu.RLock()
+	defer avv.mu.RUnlock()
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -117,7 +122,10 @@ func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader,
 	}
 }
 
-func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) {
+func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote,
+	index uint64, message message, out chan<- asyncVerifyVoteResponse) {
+	avv.mu.RLock()
+	defer avv.mu.RUnlock()
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -133,7 +141,9 @@ func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReade
 // Quit tells the AsyncVoteVerifier to shutdown and waits until all workers terminate.
 func (avv *AsyncVoteVerifier) Quit() {
 	// indicate we're done and wait for all workers to finish
+	avv.mu.Lock()
 	avv.ctxCancel()
+	avv.mu.Unlock()
 
 	// wait until the batchVerifier stops and reports cancled error on remaining unverified sigs (excepts the ones in exec pool)
 	avv.batchVerifier.WaitForStop()

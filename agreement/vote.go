@@ -88,7 +88,7 @@ type (
 	UnauthenticatedVote = unauthenticatedVote
 )
 
-// verify performs checks on the vote that was received from the netwok,
+// getVerificationTask performs checks on the vote that was received from the netwok,
 // and returns the vote verification task to be verified
 func (uv *unauthenticatedVote) getVerificationTask(l LedgerReader, m *committee.Membership) (*crypto.SigVerificationTask, error) {
 	rv := uv.R
