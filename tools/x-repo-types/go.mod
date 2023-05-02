@@ -5,7 +5,7 @@ go 1.17
 replace github.com/algorand/go-algorand => ../..
 
 require (
-	github.com/algorand/go-algorand v0.0.0-00010101000000-000000000000
+	github.com/algorand/go-algorand v0.0.0-20230502140608-e24a35add0bb
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.2
 )
