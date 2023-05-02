@@ -219,17 +219,18 @@ func TestSyncRoundWithRemake(t *testing.T) {
 func TestFastCatchupResume(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-
-	// Call SetCatchpointCatchupMode, it should set the sync round to MaxAcctLookback.
 	node := setupFollowNode(t)
 	node.ctx = context.Background()
+
+	// Initialize sync round to a future round.
+	syncRound := uint64(10000)
+	node.SetSyncRound(syncRound)
+	require.Equal(t, syncRound, node.GetSyncRound())
+
+	// Force catchpoint catchup mode to end, this should set the sync round to the current ledger round (0).
 	out := node.SetCatchpointCatchupMode(false)
 	<-out
 
-	// in order to get a non-zero result, set the cache to 0.
-	before := node.config.MaxAcctLookback
-	node.config.MaxAcctLookback = 0
-
-	// GetSyncRound subtracks the cache size, so the old cache size of 4 should be returned.
-	assert.Equal(t, before, node.GetSyncRound())
+	// Verify the sync was reset.
+	assert.Equal(t, uint64(0), node.GetSyncRound())
 }
