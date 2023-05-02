@@ -12,9 +12,5 @@ if [[ "${UPSTREAM_VERSION}" != "${LOCAL_VERSION}" ]]; then
   echo "WARN: version ${UPSTREAM_VERSION} of the codecov upload script is available."
 fi
 
-if [ -z "$CODECOV_TOKEN" ]; then
-  echo "WARN: no CODECOV_TOKEN provided"
-  /usr/bin/env bash scripts/travis/codecov
-else
-    /usr/bin/env bash scripts/travis/codecov -t $CODECOV_TOKEN
-fi
+# The following is intentional - hardcoding a token for public repos is recommended here to allow fork access
+/usr/bin/env bash scripts/travis/codecov -t 8b4a1f91-f154-4c26-b84c-c9aaa90159c6
