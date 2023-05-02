@@ -1522,15 +1522,23 @@ end:
 		{encodeInt(12321), "int:12321", []byte{0, 1, 254, 3, 2}},
 		{[]byte{0, 248, 255, 32}, "b64:APj/IA==", []byte("lux56")},
 	}
+
 	for _, boxTest := range boxTests {
 		// Box values are 5 bytes, as defined by the test TEAL program.
 		operateBoxAndSendTxn("create", []string{string(boxTest.name)}, []string{""})
 		operateBoxAndSendTxn("set", []string{string(boxTest.name)}, []string{string(boxTest.value)})
 
+		currentRoundBeforeBoxes, err := testClient.CurrentRound()
+		a.NoError(err)
 		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), boxTest.encodedName)
+		a.NoError(err)
+		currentRoundAfterBoxes, err := testClient.CurrentRound()
 		a.NoError(err)
 		a.Equal(boxTest.name, boxResponse.Name)
 		a.Equal(boxTest.value, boxResponse.Value)
+		// To reduce flakiness, only check the round from boxes is within a range.
+		a.GreaterOrEqual(boxResponse.Round, currentRoundBeforeBoxes)
+		a.LessOrEqual(boxResponse.Round, currentRoundAfterBoxes)
 	}
 
 	const numberOfBoxesRemaining = uint64(3)
@@ -1620,9 +1628,8 @@ func TestSimulateTransaction(t *testing.T) {
 
 	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:      1,
-		LastRound:    result.LastRound, // checked above
-		WouldSucceed: true,
+		Version:   2,
+		LastRound: result.LastRound, // checked above
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				Txns: []v2.PreEncodedSimulateTxnResult{
@@ -1645,6 +1652,66 @@ func TestSimulateTransaction(t *testing.T) {
 	closeToBalance, err = testClient.GetBalance(closeToAddress)
 	a.NoError(err)
 	a.Zero(closeToBalance)
+}
+
+func TestSimulateWithOptionalSignatures(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	if senderAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	txn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
+	a.NoError(err)
+
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{{Txn: txn}}, // no signature
+			},
+		},
+		AllowEmptySignatures: true,
+	}
+	result, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	allowEmptySignatures := true
+	expectedResult := v2.PreEncodedSimulateResponse{
+		Version:   2,
+		LastRound: result.LastRound,
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn: v2.PreEncodedTxInfo{
+							Txn: transactions.SignedTxn{Txn: txn},
+						},
+					},
+				},
+			},
+		},
+		EvalOverrides: &model.SimulationEvalOverrides{
+			AllowEmptySignatures: &allowEmptySignatures,
+		},
+	}
+	a.Equal(expectedResult, result)
 }
 
 func TestSimulateWithUnlimitedLog(t *testing.T) {
@@ -1755,7 +1822,7 @@ int 1`
 				Txns: []transactions.SignedTxn{appCallTxnSigned},
 			},
 		},
-		LiftLogLimits: true,
+		AllowMoreLogging: true,
 	})
 	a.NoError(err)
 
@@ -1768,9 +1835,8 @@ int 1`
 	maxLogSize, maxLogCalls := uint64(65536), uint64(2048)
 
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:      1,
-		LastRound:    resp.LastRound,
-		WouldSucceed: true,
+		Version:   2,
+		LastRound: resp.LastRound,
 		EvalOverrides: &model.SimulationEvalOverrides{
 			MaxLogSize:  &maxLogSize,
 			MaxLogCalls: &maxLogCalls,

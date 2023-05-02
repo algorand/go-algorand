@@ -80,7 +80,7 @@ type roundCowState struct {
 
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
-	// 2. Stateful TEAL evaluation (see setKey/delKey)
+	// 2. Application evaluation (see setKey/delKey)
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 

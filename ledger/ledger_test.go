@@ -3187,7 +3187,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 
 	// This implementation is an easy way to feed the delta, which the state proof verification tracker relies on,
 	// to the ledger.
-	delta, err := eval.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
+	delta, err := eval.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil, l.tracer)
 	require.NoError(t, err)
 	delta.StateProofNext = stateProofReceived.StateProofNextRound
 	vb := ledgercore.MakeValidatedBlock(blk, delta)

@@ -19,6 +19,7 @@ package logic
 import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // EvalTracer functions are called by eval function during AVM program execution, if a tracer
@@ -129,7 +130,10 @@ type EvalTracer interface {
 	// AfterTxnGroup is called after a transaction group has been executed. This includes both
 	// top-level and inner transaction groups. The argument ep is the EvalParams object for the
 	// group; if the group is an inner group, this is the EvalParams object for the inner group.
-	AfterTxnGroup(ep *EvalParams, evalError error)
+	// For top-level transaction groups, the deltas argument is the ledgercore.StateDelta changes
+	// that occurred because of this transaction group. For inner transaction groups, this argument
+	// is nil.
+	AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error)
 
 	// BeforeTxn is called before a transaction is executed.
 	//
@@ -170,7 +174,8 @@ func (n NullEvalTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {}
 func (n NullEvalTracer) BeforeTxnGroup(ep *EvalParams) {}
 
 // AfterTxnGroup does nothing
-func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, evalError error) {}
+func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error) {
+}
 
 // BeforeTxn does nothing
 func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {}
