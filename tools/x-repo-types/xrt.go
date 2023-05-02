@@ -36,14 +36,17 @@ import (
 //go:embed typeAnalyzer/main.tmpl
 var differTmpl string
 
+//go:embed typeAnalyzer/typeAnalyzer.go
+var typeAnalyzerGo string
+
 func main() {
-	var xPkg, xBranch, xType, yPkg, yBranch, yType string
+	var xPkg, xBranch, xType, yPkg, yBranch, yType, artifactPath string
 
 	rootCmd := &cobra.Command{
-		Use:   "xrt",
+		Use:   "x-repo-types",
 		Short: "Compare types across repos",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := runApp(xPkg, xBranch, xType, yPkg, yBranch, yType); err != nil {
+			if err := runApp(xPkg, xBranch, xType, yPkg, yBranch, yType, artifactPath); err != nil {
 				log.Fatal(err)
 			}
 		},
@@ -55,13 +58,14 @@ func main() {
 	rootCmd.Flags().StringVar(&yPkg, "y-package", "", "Go repo and package for type for type y")
 	rootCmd.Flags().StringVar(&yBranch, "y-branch", "", "repository branch for type y")
 	rootCmd.Flags().StringVar(&yType, "y-type", "", "Exported type in the package for type y")
+	rootCmd.Flags().StringVar(&artifactPath, "artifact-path", "", "Path to write auxiliary code which will run after downloading go-types. If not provided, a temporary folder will be created.")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) (err error) {
+func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType, artifactPath string) (err error) {
 	fileBackups, err := setUp()
 	fmt.Printf("fileBackups: %#v\n\n", fileBackups)
 	if err != nil {
@@ -123,7 +127,7 @@ func runApp(xPkg, xBranch, xType, yPkg, yBranch, yType string) (err error) {
 	// Compare the types by running the template typeAnalyzer/main.tmpl in a separate process
 	// typeAnalyzer/main will return an error if the types are not the same
 	// here we propagate the error to the caller, so as to fail the test.
-	err = serializationDiff(xRepo, xPkgSuffix, xType, yRepo, yPkgSuffix, yType)
+	err = serializationDiff(artifactPath, xRepo, xPkgSuffix, xType, yRepo, yPkgSuffix, yType)
 	if err != nil {
 		return err
 	}
@@ -135,13 +139,18 @@ func setUp() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	if pkgRoot == "" {
+		fmt.Print("No package root found. Will not attempt to backup go.mod and go.sum files.\n\n")
+		return nil, nil
+	}
+
+	fmt.Printf("Will look for and backup go.mod and go.sum files in pkgRoot: %s\n\n", pkgRoot)
 
 	goModPath := filepath.Join(pkgRoot, "go.mod")
 	goSumPath := filepath.Join(pkgRoot, "go.sum")
-	localMainPath := filepath.Join("typeAnalyzer", "main.go")
 
 	backups := make(map[string]string)
-	for _, path := range []string{goModPath, goSumPath, localMainPath} {
+	for _, path := range []string{goModPath, goSumPath} {
 		backup, err := backupFile(path)
 		if err != nil {
 			return nil, err
@@ -265,7 +274,9 @@ func main() {
 	return cmd.Run()
 }
 
-func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) error {
+// serializationDiff runs the typeAnalyzer/main.tmpl template in a separate process.
+// If you want to persist the generated artifacts, pass in a non-empty artifactPath.
+func serializationDiff(artifactPath, xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) error {
 	fmt.Printf("Diffing %s from package %s VS %s from package %s...\n", xType, xPkgPath, yType, yPkgPath)
 
 	tmpl, err := template.New("code").Parse(differTmpl)
@@ -288,12 +299,31 @@ func serializationDiff(xRepo, xPkgPath, xType, yRepo, yPkgPath, yType string) er
 		os.Exit(1)
 	}
 
-	main := filepath.Join("typeAnalyzer", "main.go")
-	typeAnalyzer := filepath.Join("typeAnalyzer", "typeAnalyzer.go")
+	var main, typeAnalyzer string
+	if artifactPath == "" {
+		ap, err := os.MkdirTemp("", "typeAnalyzer")
+		if err != nil {
+			fmt.Println("Error creating typeAnalyzer temp directory:", err)
+			os.Exit(1)
+		}
+		artifactPath = ap
+		defer os.RemoveAll(artifactPath)
+	}
+
+	main = filepath.Join(artifactPath, "main.go")
+	typeAnalyzer = filepath.Join(artifactPath, "typeAnalyzer.go")
+
 	err = os.WriteFile(main, buf.Bytes(), 0644)
 	if err != nil {
 		return err
 	}
+
+	err = os.WriteFile(typeAnalyzer, []byte(typeAnalyzerGo), 0644)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Saved x-repo-types code to directory: [%s]\n", artifactPath)
 
 	//nolint:gosec // main and typeAnalyzer are hard-coded above so no security concerns here
 	cmd := exec.Command("go", "run", main, typeAnalyzer)

@@ -97,7 +97,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			if tc.skip {
 				t.Skip(tc.skipReason)
 			}
-			err := runApp(tc.xPkg, tc.xBranch, tc.xType, tc.yPkg, tc.yBranch, tc.yType)
+			err := runApp(tc.xPkg, tc.xBranch, tc.xType, tc.yPkg, tc.yBranch, tc.yType, "")
 			require.NoError(t, err)
 		})
 	}
