@@ -38,17 +38,17 @@ type trackerSQLStore struct {
 	trackerdb.Catchpoint
 }
 
-// OpenTrackerSQLStore opens the sqlite database store
-func OpenTrackerSQLStore(dbFilename string, dbMem bool) (store trackerdb.Store, err error) {
+// Open opens the sqlite database store
+func Open(dbFilename string, dbMem bool) (store trackerdb.Store, err error) {
 	pair, err := db.OpenPair(dbFilename, dbMem)
 	if err != nil {
 		return
 	}
-	return CreateTrackerSQLStore(pair), nil
+	return MakeStore(pair), nil
 }
 
-// CreateTrackerSQLStore crates a tracker SQL db from sql db handle.
-func CreateTrackerSQLStore(pair db.Pair) trackerdb.Store {
+// MakeStore crates a tracker SQL db from sql db handle.
+func MakeStore(pair db.Pair) trackerdb.Store {
 	return &trackerSQLStore{pair, &sqlReader{pair.Rdb.Handle}, &sqlWriter{pair.Wdb.Handle}, &sqlCatchpoint{pair.Wdb.Handle}}
 }
 

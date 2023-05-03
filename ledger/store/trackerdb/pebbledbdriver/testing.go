@@ -33,7 +33,7 @@ func OpenForTesting(t testing.TB, inMemory bool) trackerdb.Store {
 	// create a tmp dir for the db, the testing runtime will clean it up automatically
 	dir := fmt.Sprintf("%s/db", t.TempDir())
 
-	db, err := OpenTrackerDB(dir, inMemory, proto)
+	db, err := Open(dir, inMemory, proto)
 	require.NoErrorf(t, err, "Dir : %s\nInMemory: %v", dir, inMemory)
 
 	return db

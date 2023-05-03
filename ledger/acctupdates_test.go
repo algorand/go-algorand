@@ -114,7 +114,7 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 }
 
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
-	dbs, fileName := sqlitedriver.DbOpenTrackerTest(t, inMemory)
+	dbs, fileName := sqlitedriver.OpenForTesting(t, inMemory)
 	dbs.SetLogger(l)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
@@ -186,7 +186,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	dbs.Rdb.SetLogger(dblogger)
 	dbs.Wdb.SetLogger(dblogger)
 
-	newLedgerTracker.dbs = sqlitedriver.CreateTrackerSQLStore(dbs)
+	newLedgerTracker.dbs = sqlitedriver.MakeStore(dbs)
 	return newLedgerTracker
 }
 
