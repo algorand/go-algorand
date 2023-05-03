@@ -298,7 +298,7 @@ printf '#pragma version 8\nint 1' > "${TEMPDIR}/simple-v8.teal"
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/int-pop-400-cost-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v8.teal" --extra-pages 1 --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPSUCCESS='Created app with app index'
 if [[ $RES != *"${EXPSUCCESS}"* ]]; then
-    date '+app-simulate-test FAIL the app creation for logs-a-lot.teal should succeed %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app creation for int-pop-400-cost-a-lot.teal should succeed %Y%m%d_%H%M%S'
     false
 fi
 
