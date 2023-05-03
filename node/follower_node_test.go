@@ -205,10 +205,9 @@ func TestSyncRoundWithRemake(t *testing.T) {
 
 	followNode, _ = remakeableFollowNode(t, tempDir, maxAcctLookback)
 
-	// wait for follower to catch up. This rarely is neeeded, but it can happen
-	// and cause flaky test failures.
-	// Timing out can still occur, but is less likely than the simply being
-	// behind a few rounds.
+	// Wait for follower to catch up. This rarely is needed, but can happen
+	// and cause flakey test failures. Timing out can still occur, but is less 
+	// likely than the being caught behind a few rounds.
 	var status StatusReport
 	for stop := false; !stop; {
 		st, err := followNode.Status()
