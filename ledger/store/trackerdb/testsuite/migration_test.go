@@ -113,10 +113,7 @@ func CustomTestCheckMigrationWithAccounts(t *customT) {
 	}
 
 	// re-run migrations
-	err = t.db.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-		_, err := tx.RunMigrations(ctx, params, logging.TestingLog(t), trackerdb.AccountDBVersion)
-		return err
-	})
+	_, err = t.db.RunMigrations(context.Background(), params, logging.TestingLog(t), trackerdb.AccountDBVersion)
 	require.NoError(t, err)
 
 	// check account totals

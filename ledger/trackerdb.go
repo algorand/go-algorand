@@ -49,16 +49,7 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 	}
 
 	// run migrations
-	// TODO: move RunMigrations up to the db interface
-	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-		var err0 error
-		mgr, err0 = tx.RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
-		if err0 != nil {
-			return err0
-		}
-
-		return nil
-	})
+	mgr, err = dbs.RunMigrations(context.Background(), tp, log, trackerdb.AccountDBVersion)
 	if err != nil {
 		return
 	}

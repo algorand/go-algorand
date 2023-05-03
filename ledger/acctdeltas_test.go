@@ -1151,10 +1151,7 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 	// +---------------------------------------------------------------------+
 
 	trackerDBWrapper := sqlitedriver.MakeStore(dbs)
-	err = trackerDBWrapper.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err0 error) {
-		_, err0 = tx.RunMigrations(ctx, trackerdb.Params{}, log, targetVersion)
-		return
-	})
+	_, err = trackerDBWrapper.RunMigrations(context.Background(), trackerdb.Params{}, log, targetVersion)
 	require.NoError(t, err)
 
 	// +------------------------------------------------------------------------------------------------+
