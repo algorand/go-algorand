@@ -69,6 +69,7 @@ var (
 	requestOutFilename           string
 	simulateAllowEmptySignatures bool
 	simulateAllowMoreLogging     bool
+	simulateAllowExtraBudget     uint64
 )
 
 func init() {
@@ -155,6 +156,7 @@ func init() {
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
+	simulateCmd.Flags().Uint64Var(&simulateAllowExtraBudget, "allow-extra-budget", 0, "Apply extra budget during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1261,6 +1263,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
+				AllowExtraBudget:     &simulateAllowExtraBudget,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1283,6 +1286,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
+				AllowExtraBudget:     &simulateAllowExtraBudget,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {

@@ -616,6 +616,9 @@ type SimulateRequest struct {
 	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
 	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
 
+	// AllowExtraBudget Applies extra budget during simulation of app calls in the transaction group.
+	AllowExtraBudget *uint64 `json:"allow-extra-budget,omitempty"`
+
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
@@ -663,6 +666,9 @@ type SimulateTransactionResult struct {
 type SimulationEvalOverrides struct {
 	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
 	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
+	// ExtraBudget The extra budget added for app calls simulation in the transaction group
+	ExtraBudget *uint64 `json:"extra-budget,omitempty"`
 
 	// MaxLogCalls The maximum log calls one can make during simulation
 	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`

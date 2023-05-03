@@ -3293,6 +3293,10 @@
         "allow-more-logging": {
           "description": "Lifts limits on log opcode usage during simulation.",
           "type": "boolean"
+        },
+        "allow-extra-budget": {
+          "description": "Applies extra budget during simulation of app calls in the transaction group.",
+          "type": "integer"
         }
       }
     },
@@ -3664,6 +3668,11 @@
         },
         "max-log-size": {
           "description": "The maximum byte number to log during simulation",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "extra-budget": {
+          "description": "The extra budget added for app calls simulation in the transaction group",
           "type": "integer",
           "x-algorand-format": "uint64"
         }

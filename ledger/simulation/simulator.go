@@ -42,6 +42,7 @@ type Request struct {
 	TxnGroups            [][]transactions.SignedTxn
 	AllowEmptySignatures bool
 	AllowMoreLogging     bool
+	ExtraBudget          *uint64
 }
 
 // Latest is part of the LedgerForSimulator interface.

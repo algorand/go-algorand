@@ -419,6 +419,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		TxnGroups:            txnGroups,
 		AllowEmptySignatures: request.AllowEmptySignatures,
 		AllowMoreLogging:     request.AllowMoreLogging,
+		ExtraBudget:          request.AllowExtraBudget,
 	}
 }
 
