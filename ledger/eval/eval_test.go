@@ -335,11 +335,11 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 				Type:   protocol.ApplicationCallTx,
 				Sender: addrs[0],
 				ApprovalProgram: fmt.Sprintf(`#pragma version 6
-		byte "hello"
-		log
+byte "hello"
+log
 		%s`, basicAppCallReturn),
 				ClearStateProgram: `#pragma version 6
-		int 1`,
+int 1`,
 
 				FirstValid:  newBlock.Round(),
 				LastValid:   newBlock.Round() + 1000,
@@ -365,7 +365,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 				Type:   protocol.ApplicationCallTx,
 				Sender: addrs[4],
 				ClearStateProgram: `#pragma version 6
-		int 1`,
+int 1`,
 
 				FirstValid:  newBlock.Round(),
 				LastValid:   newBlock.Round() + 1000,

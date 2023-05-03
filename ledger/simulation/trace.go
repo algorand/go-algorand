@@ -40,8 +40,6 @@ type TxnResult struct {
 // TxnGroupResult contains the simulation result for a single transaction group
 type TxnGroupResult struct {
 	Txns []TxnResult
-	// Delta is the state delta for this group.
-	Delta ledgercore.StateDelta
 	// FailureMessage will be the error message for the first transaction in the group which errors.
 	// If the group succeeds, this will be empty.
 	FailureMessage string

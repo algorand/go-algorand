@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
 
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -173,12 +172,6 @@ func TestPayTxn(t *testing.T) {
 				Amount:   1_000_000,
 			}).Txn().Sign(sender.Sk)
 
-			expectedSenderAcctData := sender.AcctData
-			expectedSenderAcctData.MicroAlgos.Raw -= txn.Txn.Fee.Raw + txn.Txn.Amount.Raw
-
-			expectedReceiverAcctData := receiver.AcctData
-			expectedReceiverAcctData.MicroAlgos.Raw += txn.Txn.Amount.Raw
-
 			return simulationTestCase{
 				input: simulation.Request{
 					TxnGroups: [][]transactions.SignedTxn{{txn}},
@@ -189,24 +182,6 @@ func TestPayTxn(t *testing.T) {
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns: []simulation.TxnResult{{}},
-						},
-					},
-					Delta: ledgercore.StateDelta{
-						Accts: ledgercore.AccountDeltas{
-							Accts: []ledgercore.BalanceRecord{
-								{
-									Addr:        sender.Addr,
-									AccountData: ledgercore.ToAccountData(expectedSenderAcctData),
-								},
-								{
-									Addr: ledgertesting.SinkAddr(),
-									// AccountData: ledgercore.ToAccountData(ledgercore.AccountData{}),
-								},
-								{
-									Addr:        receiver.Addr,
-									AccountData: ledgercore.ToAccountData(expectedReceiverAcctData),
-								},
-							},
 						},
 					},
 				},
@@ -1463,12 +1438,12 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender := accounts[0]
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Ledger.Close()
+	s := simulation.MakeSimulator(env.Ledger)
+	sender := env.Accounts[0]
 
-	stxn := txnInfo.NewTxn(txntest.Txn{
+	stxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender.Addr,
 		Receiver: sender.Addr,
