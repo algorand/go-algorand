@@ -22,6 +22,11 @@ parameters:
   valid_nightly_branch:
     type: string
     default: /hotfix\/.*/
+  # The following is intentional - hardcoding a token for public repos
+  # is recommended here to allow fork access
+  codecov:
+    type: string
+    default: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"
 
 executors:
   amd64_medium:
@@ -239,6 +244,8 @@ jobs:
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 32
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
     steps:
       - generic_build
       - generic_test:
@@ -254,6 +261,8 @@ jobs:
     executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
     steps:
       - generic_build
       - generic_test:
