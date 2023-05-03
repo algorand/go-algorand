@@ -269,9 +269,12 @@ func generateTestVotes(onlyBadSigs bool, errChan chan<- error, count, eqCount in
 	return vg.ledger, votes, eqVotes, errsV, errsEqv
 }
 
-// TestServiceStop stops the agreement service while sending verification votes to the verifier
+// TestAsyncQuit stops the verifier while sending verification votes to it
 // No results should be dropped. If any is dropped, avv.wg.Wait() will get stuck.
-func TestServiceStop(t *testing.T) {
+func TestAsyncQuit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	errChan := make(chan error)
 	ledger, votes, eqVotes, _, _ := generateTestVotes(false, errChan, 1, 1, 0.0)
 	outChan := make(chan asyncVerifyVoteResponse, 4)
@@ -307,13 +310,19 @@ func TestServiceStop(t *testing.T) {
 	}
 }
 
-// TestServiceRestart tests to make sure the AsyncVoteVerifier operates across service Shutdown/Start cycles
-// This process is checked at the Service level because that is the layer that starts/stops the verifier.
-func TestServiceRestart(t *testing.T) {
+// TestAsyncQuitLong tests to make sure the AsyncVoteVerifier operates across service Shutdown/Start cycles
+// Votes are sent to the verifier, then the verifier stopped, and all votes submitted should be accounted for
+func TestAsyncQuitLong(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	errChan := make(chan error)
-	count := 2000
-	eqCount := 2000
+	count := 1000
+	eqCount := 1000
+	shutdownAt := (count + eqCount) / 10
 	errProb := float32(0.5)
+	sent := 0
+	received := 0
 
 	ledger, votes, eqVotes, errsV, errsEqv := generateTestVotes(false, errChan, count, eqCount, errProb)
 	mainPool := execpool.MakePool(t)
@@ -330,13 +339,12 @@ func TestServiceRestart(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		defer close(errChan)
-		c := 0
 		timeout := time.NewTicker(200 * time.Millisecond)
 		defer timeout.Stop()
 		for {
 			select {
 			case res := <-outChan:
-				c++
+				received++
 				var expectedError error
 				if res.req.uv != nil {
 					expectedError = errsV[int(res.index)]
@@ -344,25 +352,25 @@ func TestServiceRestart(t *testing.T) {
 					expectedError = errsEqv[int(res.index)]
 				}
 				if (expectedError == nil && res.err != nil) || (expectedError != nil && res.err == nil) {
-					if !(c > (count+eqCount)/4 && (res.err == context.Canceled || res.err == execpool.ErrShuttingDownError)) {
+					if !(received > shutdownAt &&
+						(res.err == context.Canceled || res.err == execpool.ErrShuttingDownError)) {
 						errChan <- fmt.Errorf("expected %v got %v", expectedError, res.err)
 					}
 				}
-				if c == count+eqCount {
-					return
-				}
-				if c == (count+eqCount)/4 {
+				if received == shutdownAt {
 					go voteVerifier.Quit()
 				}
-				timeout.Reset(200 * time.Millisecond)
+				timeout.Reset(100 * time.Millisecond)
 
 			case <-timeout.C:
 				select {
 				case <-noMore:
-					return
+					if sent-received <= 1 {
+						return
+					}
 				default:
-					timeout.Reset(200 * time.Millisecond)
 				}
+				timeout.Reset(100 * time.Millisecond)
 			}
 		}
 	}()
@@ -370,6 +378,7 @@ func TestServiceRestart(t *testing.T) {
 	// stream the votes to the verifier
 	go func() {
 		defer wg.Done()
+		defer close(noMore)
 		vi := 0
 		evi := 0
 		for c := 0; c < count+eqCount; c++ {
@@ -384,11 +393,13 @@ func TestServiceRestart(t *testing.T) {
 				evi++
 				voteVerifier.verifyEqVote(context.Background(), ledger, *uev.uev, uint64(uev.id), message{}, outChan)
 			}
+			// If the ctx is done, we cannot know for sure if the vote was accepted or ignored. But can be sure that all votes
+			// before this were accepted, and all votes afterwards will be ignored.
 			select {
 			case <-voteVerifier.ctx.Done():
-				close(noMore)
 				return
 			default:
+				sent++
 			}
 		}
 	}()
@@ -397,6 +408,8 @@ func TestServiceRestart(t *testing.T) {
 		require.NoError(t, err)
 	}
 	wg.Wait()
+	// Since cannot be sure about the last vote when the ctx was done, we allow a difference of 1
+	require.Less(t, sent-received, 1)
 
 }
 
