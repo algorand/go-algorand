@@ -59,7 +59,7 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 // This behavior is possible, since the ctx is canceled from a different go-routine.
 // bypassAsyncVoteVerifierCtxCheck is important to test what happens when the service shuts down, and a vote sneaks
 // through the ctx check.
-func bypassAsyncVoteVerifierCtxCheck(avv *AsyncVoteVerifier, verctx context.Context, l LedgerReader,
+func bypassAsyncVoteVerifierCtxCheck(verctx context.Context, avv *AsyncVoteVerifier, l LedgerReader,
 	uv unauthenticatedVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) {
 	avv.enqueueMu.RLock()
 	defer avv.enqueueMu.RUnlock()
@@ -108,7 +108,7 @@ func TestServiceStop(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for {
-				bypassAsyncVoteVerifierCtxCheck(voteVerifier, context.Background(), ledger, uv, 1, message{}, outChan)
+				bypassAsyncVoteVerifierCtxCheck(context.Background(), voteVerifier, ledger, uv, 1, message{}, outChan)
 				select {
 				case <-voteVerifier.workerWaitCh:
 					return
