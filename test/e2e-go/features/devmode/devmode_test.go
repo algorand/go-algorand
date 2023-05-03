@@ -32,7 +32,6 @@ import (
 
 func TestDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Skipf("Skipping flaky test. Re-enable with #3267")
 
 	if testing.Short() {
 		t.Skip()
@@ -50,18 +49,29 @@ func TestDevMode(t *testing.T) {
 	txn := fixture.SendMoneyAndWait(0, 100000, 1000, sender.Address, receiver.String(), "")
 	require.NotNil(t, txn.ConfirmedRound)
 	firstRound := *txn.ConfirmedRound + 1
-	start := time.Now()
+	blk, err := fixture.AlgodClient.Block(*txn.ConfirmedRound)
+	require.NoError(t, err)
+	seconds := int64(blk.Block["ts"].(float64))
+	prevTime := time.Unix(seconds, 0)
+	// Set Block timestamp offset to test that consecutive txns properly get their block time set
+	const blkOffset = uint64(1_000_000)
+	err = fixture.AlgodClient.SetBlockTimestampOffset(blkOffset)
+	require.NoError(t, err)
+	resp, err := fixture.AlgodClient.GetBlockTimestampOffset()
+	require.NoError(t, err)
+	require.Equal(t, blkOffset, resp.Offset)
 
 	// 2 transactions should be sent within one normal confirmation time.
 	for i := uint64(0); i < 2; i++ {
-		txn = fixture.SendMoneyAndWait(firstRound+i, 100000, 1000, sender.Address, receiver.String(), "")
-		require.Equal(t, firstRound+i, txn.Txn.Txn.FirstValid)
+		round := firstRound + i
+		txn = fixture.SendMoneyAndWait(round, 100001, 1000, sender.Address, receiver.String(), "")
+		// SendMoneyAndWait subtracts 1 from firstValid
+		require.Equal(t, round-1, uint64(txn.Txn.Txn.FirstValid))
+		newBlk, err := fixture.AlgodClient.Block(round)
+		require.NoError(t, err)
+		newBlkSeconds := int64(newBlk.Block["ts"].(float64))
+		currTime := time.Unix(newBlkSeconds, 0)
+		require.Equal(t, currTime, prevTime.Add(1_000_000*time.Second))
+		prevTime = currTime
 	}
-	require.True(t, time.Since(start) < 8*time.Second, "Transactions should be quickly confirmed faster than usual.")
-
-	// Without transactions there should be no rounds even after a normal confirmation time.
-	time.Sleep(10 * time.Second)
-	status, err := fixture.LibGoalClient.Status()
-	require.NoError(t, err)
-	require.Equal(t, txn.ConfirmedRound, status.LastRound, "There should be no rounds without a transaction.")
 }

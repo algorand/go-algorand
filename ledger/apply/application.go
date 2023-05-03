@@ -413,8 +413,8 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		if exists {
 			pass, evalDelta, err := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
 			if err != nil {
-				// Fail on non-logic eval errors and ignore LogicEvalError errors
-				if _, ok := err.(ledgercore.LogicEvalError); !ok {
+				// ClearStateProgram evaluation can't make the txn fail.
+				if _, ok := err.(logic.EvalError); !ok {
 					return err
 				}
 			}

@@ -971,7 +971,6 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		eval.Tracer.BeforeTxnGroup(evalParams)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			// TODO: need to check, is it ok to call .deltas() after .commitToParent()?
 			deltas := cow.deltas()
 			eval.Tracer.AfterTxnGroup(evalParams, &deltas, err)
 		}()
@@ -1584,7 +1583,7 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, tracer logic.EvalTracer) (ledgercore.StateDelta, error) {
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
 
@@ -1593,6 +1592,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 			PaysetHint: len(blk.Payset),
 			Validate:   validate,
 			Generate:   false,
+			Tracer:     tracer,
 		})
 	if err != nil {
 		return ledgercore.StateDelta{}, err

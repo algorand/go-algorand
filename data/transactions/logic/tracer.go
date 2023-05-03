@@ -130,7 +130,6 @@ type EvalTracer interface {
 	// AfterTxnGroup is called after a transaction group has been executed. This includes both
 	// top-level and inner transaction groups. The argument ep is the EvalParams object for the
 	// group; if the group is an inner group, this is the EvalParams object for the inner group.
-	//
 	// For top-level transaction groups, the deltas argument is the ledgercore.StateDelta changes
 	// that occurred because of this transaction group. For inner transaction groups, this argument
 	// is nil.
