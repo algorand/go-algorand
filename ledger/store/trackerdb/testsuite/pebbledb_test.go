@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,7 +31,7 @@ func TestPebbleDB(t *testing.T) {
 		// create a tmp dir for the db, the testing runtime will clean it up automatically
 		dir := fmt.Sprintf("%s/db", t.TempDir())
 
-		db, err := pebbledbdriver.Open(dir, false, proto)
+		db, err := pebbledbdriver.Open(dir, false, proto, logging.TestingLog(t))
 		require.NoError(t, err)
 
 		seedDb(t, db)

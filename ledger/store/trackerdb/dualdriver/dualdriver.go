@@ -45,11 +45,6 @@ func MakeStore(primary trackerdb.Store, secondary trackerdb.Store) trackerdb.Sto
 	return &trackerStore{primary, secondary, &reader{primary, secondary}, &writer{primary, secondary}, &catchpoint{primary, secondary}}
 }
 
-func (s *trackerStore) SetLogger(log logging.Logger) {
-	s.primary.SetLogger(log)
-	s.secondary.SetLogger(log)
-}
-
 func (s *trackerStore) SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error) {
 	errP := s.primary.SetSynchronousMode(ctx, mode, fullfsync)
 	errS := s.secondary.SetSynchronousMode(ctx, mode, fullfsync)

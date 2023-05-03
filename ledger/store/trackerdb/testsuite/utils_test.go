@@ -116,10 +116,6 @@ func makeMockDB(proto config.ConsensusParams) trackerdb.Store {
 	return db
 }
 
-func (db *mockDB) SetLogger(log logging.Logger) {
-	// TODO
-}
-
 func (db *mockDB) SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error) {
 	// TODO
 	return nil

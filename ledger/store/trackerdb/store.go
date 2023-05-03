@@ -28,7 +28,6 @@ import (
 type Store interface {
 	ReaderWriter
 	// settings
-	SetLogger(log logging.Logger)
 	SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error)
 	IsSharedCacheConnection() bool
 	// batch support
