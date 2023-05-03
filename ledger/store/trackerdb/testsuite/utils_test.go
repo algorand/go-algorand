@@ -117,7 +117,7 @@ func (db *mockDB) SetSynchronousMode(ctx context.Context, mode db.SynchronousMod
 }
 
 func (db *mockDB) IsSharedCacheConnection() bool {
-	// TODO
+	return false
 	return false
 }
 

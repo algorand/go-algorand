@@ -52,8 +52,8 @@ func (s *trackerStore) SetSynchronousMode(ctx context.Context, mode db.Synchrono
 }
 
 func (s *trackerStore) IsSharedCacheConnection() bool {
-	// TODO
-	return false
+	// Note: this is not something to check for being equal but rather keep the most conservative answer.
+	return s.primary.IsSharedCacheConnection() || s.secondary.IsSharedCacheConnection()
 }
 
 func (s *trackerStore) Batch(fn trackerdb.BatchFn) (err error) {
