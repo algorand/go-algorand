@@ -1859,3 +1859,132 @@ int 1`
 	}
 	a.Equal(expectedResult, resp)
 }
+
+func TestSimulateWithExtraBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	if senderAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	toAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
+	closeToAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
+
+	// Ensure these accounts don't exist
+	receiverBalance, err := testClient.GetBalance(toAddress)
+	a.NoError(err)
+	a.Zero(receiverBalance)
+	closeToBalance, err := testClient.GetBalance(closeToAddress)
+	a.NoError(err)
+	a.Zero(closeToBalance)
+
+	// construct program that uses a lot of budget
+	prog := `#pragma version 8
+txn ApplicationID
+bz end
+`
+	prog += strings.Repeat(`int 1; pop; `, 700)
+	prog += `end:
+int 1`
+
+	ops, err := logic.AssembleString(prog)
+	a.NoError(err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 8; int 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	// create app
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
+		0, nil, nil, nil,
+		nil, nil, transactions.NoOpOC,
+		approval, clearState, gl, lc, 0,
+	)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+	// sign and broadcast
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+
+	// get app ID
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
+	a.NoError(err)
+	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
+	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+	a.Greater(uint64(createdAppID), uint64(0))
+
+	// fund app account
+	appFundTxn, err := testClient.SendPaymentFromWallet(
+		wh, nil, senderAddress, createdAppID.Address().String(),
+		0, 10_000_000, nil, "", 0, 0,
+	)
+	a.NoError(err)
+	appFundTxID := appFundTxn.ID()
+	_, err = waitForTransaction(t, testClient, senderAddress, appFundTxID.String(), 30*time.Second)
+	a.NoError(err)
+
+	// construct app call
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(createdAppID), nil, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCallTxn)
+	a.NoError(err)
+	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
+	a.NoError(err)
+
+	extraBudget := uint64(704)
+	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{appCallTxnSigned},
+			},
+		},
+		AllowExtraBudget: &extraBudget,
+	})
+	a.NoError(err)
+
+	budgetAdded, budgetUsed := uint64(1404), uint64(1404)
+
+	expectedResult := v2.PreEncodedSimulateResponse{
+		Version:       2,
+		LastRound:     resp.LastRound,
+		EvalOverrides: &model.SimulationEvalOverrides{ExtraBudget: &extraBudget},
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn:               v2.PreEncodedTxInfo{Txn: appCallTxnSigned},
+						AppBudgetConsumed: &budgetUsed,
+					},
+				},
+				AppBudgetAdded:    &budgetAdded,
+				AppBudgetConsumed: &budgetUsed,
+			},
+		},
+	}
+	a.Equal(expectedResult, resp)
+}
