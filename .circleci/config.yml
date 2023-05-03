@@ -22,6 +22,8 @@ parameters:
   valid_nightly_branch:
     type: string
     default: /hotfix\/.*/
+  # The following is intentional - hardcoding a token for public repos
+  # is recommended here to allow fork access
   codecov:
     type: string
     default: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"
