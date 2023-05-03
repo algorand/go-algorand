@@ -5435,10 +5435,10 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			ep.Tracer.BeforeTxn(ep, i)
 		}
 
-		update, err := cx.Ledger.Perform(i, ep)
+		deltas, err := cx.Ledger.Perform(i, ep)
 
 		if ep.Tracer != nil {
-			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, update, err)
+			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, deltas, err)
 		}
 
 		if err != nil {

@@ -172,65 +172,139 @@ pushint 1`,
 	expectedFeeSinkData := info.FeeSinkData
 	expectedFeeSinkData.MicroAlgos.Raw += info.CallingTxn.Fee.Raw
 
-	expectedDeltaCallingTxn := ledgercore.MakeStateDelta(&info.BlockHeader, info.PrevTimestamp, 0, 0)
-	expectedDeltaCallingTxn.Accts.Upsert(info.CallingTxn.Sender, expectedSenderData)
-	expectedDeltaCallingTxn.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
-	expectedDeltaCallingTxn.Accts.UpsertAppResource(info.CallingTxn.Sender, info.CreatedAppID, ledgercore.AppParamsDelta{
-		Params: &basics.AppParams{
-			ApprovalProgram:   ops.Program,
-			ClearStateProgram: info.CallingTxn.ClearStateProgram,
-			StateSchemas: basics.StateSchemas{
-				LocalStateSchema:  info.CallingTxn.LocalStateSchema,
-				GlobalStateSchema: info.CallingTxn.GlobalStateSchema,
+	expectedDeltaCallingTxn := ledgercore.StateDelta{
+		Accts: ledgercore.AccountDeltas{
+			Accts: []ledgercore.BalanceRecord{
+				{
+					Addr:        info.CallingTxn.Sender,
+					AccountData: expectedSenderData,
+				},
+				{
+					Addr:        info.FeeSinkAddr,
+					AccountData: expectedFeeSinkData,
+				},
 			},
-			ExtraProgramPages: info.CallingTxn.ExtraProgramPages,
+			AppResources: []ledgercore.AppResourceRecord{
+				{
+					Aidx: info.CreatedAppID,
+					Addr: info.CallingTxn.Sender,
+					Params: ledgercore.AppParamsDelta{
+						Params: &basics.AppParams{
+							ApprovalProgram:   ops.Program,
+							ClearStateProgram: info.CallingTxn.ClearStateProgram,
+							StateSchemas: basics.StateSchemas{
+								LocalStateSchema:  info.CallingTxn.LocalStateSchema,
+								GlobalStateSchema: info.CallingTxn.GlobalStateSchema,
+							},
+							ExtraProgramPages: info.CallingTxn.ExtraProgramPages,
+						},
+					},
+				},
+			},
 		},
-	}, ledgercore.AppLocalStateDelta{})
-	expectedDeltaCallingTxn.AddCreatable(basics.CreatableIndex(info.CreatedAppID), ledgercore.ModifiedCreatable{
-		Ctype:   basics.AppCreatable,
-		Created: true,
-		Creator: info.CallingTxn.Sender,
-	})
-	// Cannot call info.CallingTxn.ID() yet, since the txn and its group are not yet final. Instead,
-	// use the Txid zero value as a placeholder. It's up to the caller to update this if they need it.
-	expectedDeltaCallingTxn.Txids[transactions.Txid{}] = ledgercore.IncludedTransactions{
-		LastValid: info.CallingTxn.LastValid,
-		Intra:     0,
+		Creatables: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
+			basics.CreatableIndex(info.CreatedAppID): {
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: info.CallingTxn.Sender,
+			},
+		},
+		Txids: map[transactions.Txid]ledgercore.IncludedTransactions{
+			// Cannot call info.CallingTxn.ID() yet, since the txn and its group are not yet final. Instead,
+			// use the Txid zero value as a placeholder. It's up to the caller to update this if they need it.
+			{}: {
+				LastValid: info.CallingTxn.LastValid,
+				Intra:     0,
+			},
+		},
+		Hdr:           &info.BlockHeader,
+		PrevTimestamp: info.PrevTimestamp,
 	}
+	expectedDeltaCallingTxn.Hydrate()
 
 	expectedAppAccountData := info.AppAccountData
 	expectedAppAccountData.TotalAppParams++
 	expectedAppAccountData.MicroAlgos.Raw -= info.MinFee.Raw
 	expectedFeeSinkData.MicroAlgos.Raw += info.MinFee.Raw
 
-	expectedDeltaInnerAppCall := ledgercore.MakeStateDelta(&info.BlockHeader, info.PrevTimestamp, 0, 0)
-	expectedDeltaInnerAppCall.Accts.Upsert(info.CreatedAppID.Address(), expectedAppAccountData)
-	expectedDeltaInnerAppCall.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
-	expectedDeltaInnerAppCall.Accts.UpsertAppResource(info.CreatedAppID.Address(), info.CreatedAppID+1, ledgercore.AppParamsDelta{
-		Params: &basics.AppParams{
-			ApprovalProgram:   innerProgramBytes,
-			ClearStateProgram: []byte{0x06, 0x81, 0x01}, // #pragma version 6; int 1;
+	expectedDeltaInnerAppCall := ledgercore.StateDelta{
+		Accts: ledgercore.AccountDeltas{
+			Accts: []ledgercore.BalanceRecord{
+				{
+					Addr:        info.CreatedAppID.Address(),
+					AccountData: expectedAppAccountData,
+				},
+				{
+					Addr:        info.FeeSinkAddr,
+					AccountData: expectedFeeSinkData,
+				},
+			},
+			AppResources: []ledgercore.AppResourceRecord{
+				{
+					Aidx: info.CreatedAppID + 1,
+					Addr: info.CreatedAppID.Address(),
+					Params: ledgercore.AppParamsDelta{
+						Params: &basics.AppParams{
+							ApprovalProgram:   innerProgramBytes,
+							ClearStateProgram: []byte{0x06, 0x81, 0x01}, // #pragma version 6; int 1;
+						},
+					},
+				},
+			},
 		},
-	}, ledgercore.AppLocalStateDelta{})
-	expectedDeltaInnerAppCall.AddCreatable(basics.CreatableIndex(info.CreatedAppID+1), ledgercore.ModifiedCreatable{
-		Ctype:   basics.AppCreatable,
-		Created: true,
-		Creator: info.CreatedAppID.Address(),
-	})
+		Creatables: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
+			basics.CreatableIndex(info.CreatedAppID + 1): {
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: info.CreatedAppID.Address(),
+			},
+		},
+		Hdr:           &info.BlockHeader,
+		PrevTimestamp: info.PrevTimestamp,
+	}
+	expectedDeltaInnerAppCall.Hydrate()
 
 	expectedAppAccountData.MicroAlgos.Raw -= info.MinFee.Raw
 	expectedFeeSinkData.MicroAlgos.Raw += info.MinFee.Raw
 
-	expectedDeltaInnerPay1 := ledgercore.MakeStateDelta(&info.BlockHeader, info.PrevTimestamp, 0, 0)
-	expectedDeltaInnerPay1.Accts.Upsert(info.CreatedAppID.Address(), expectedAppAccountData)
-	expectedDeltaInnerPay1.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
+	expectedDeltaInnerPay1 := ledgercore.StateDelta{
+		Accts: ledgercore.AccountDeltas{
+			Accts: []ledgercore.BalanceRecord{
+				{
+					Addr:        info.CreatedAppID.Address(),
+					AccountData: expectedAppAccountData,
+				},
+				{
+					Addr:        info.FeeSinkAddr,
+					AccountData: expectedFeeSinkData,
+				},
+			},
+		},
+		Hdr:           &info.BlockHeader,
+		PrevTimestamp: info.PrevTimestamp,
+	}
+	expectedDeltaInnerPay1.Hydrate()
 
 	expectedAppAccountData.MicroAlgos.Raw -= info.MinFee.Raw
 	expectedFeeSinkData.MicroAlgos.Raw += info.MinFee.Raw
 
-	expectedDeltaInnerPay2 := ledgercore.MakeStateDelta(&info.BlockHeader, info.PrevTimestamp, 0, 0)
-	expectedDeltaInnerPay2.Accts.Upsert(info.CreatedAppID.Address(), expectedAppAccountData)
-	expectedDeltaInnerPay2.Accts.Upsert(info.FeeSinkAddr, expectedFeeSinkData)
+	expectedDeltaInnerPay2 := ledgercore.StateDelta{
+		Accts: ledgercore.AccountDeltas{
+			Accts: []ledgercore.BalanceRecord{
+				{
+					Addr:        info.CreatedAppID.Address(),
+					AccountData: expectedAppAccountData,
+				},
+				{
+					Addr:        info.FeeSinkAddr,
+					AccountData: expectedFeeSinkData,
+				},
+			},
+		},
+		Hdr:           &info.BlockHeader,
+		PrevTimestamp: info.PrevTimestamp,
+	}
+	expectedDeltaInnerPay2.Hydrate()
 
 	return expectedAD, expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPay1, expectedDeltaInnerPay2
 }

@@ -32,7 +32,6 @@ import (
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -170,23 +169,49 @@ int 1`,
 	expectedBlockHeader.RewardsRate = evalBlock.RewardsRate
 	expectedBlockHeader.RewardsResidue = evalBlock.RewardsResidue
 
-	expectedDelta := ledgercore.MakeStateDelta(&expectedBlockHeader, env.TxnInfo.LatestHeader.TimeStamp, 0, 0)
-	expectedDelta.Accts.Upsert(sender.Addr, expectedSenderData)
-	expectedDelta.Accts.Upsert(env.FeeSinkAccount.Addr, expectedFeeSinkData)
-	expectedDelta.Accts.Upsert(lsigAddr, expectedLsigData)
-	expectedDelta.Accts.UpsertAppResource(lsigAddr, expectedAppID, expectedAppParams, ledgercore.AppLocalStateDelta{})
-	expectedDelta.AddCreatable(basics.CreatableIndex(expectedAppID), ledgercore.ModifiedCreatable{
-		Ctype:   basics.AppCreatable,
-		Created: true,
-		Creator: lsigAddr,
-	})
-	expectedDelta.Txids[signedPayTxn.Txn.ID()] = ledgercore.IncludedTransactions{
-		LastValid: signedPayTxn.Txn.LastValid,
-		Intra:     0,
-	}
-	expectedDelta.Txids[signedAppCallTxn.Txn.ID()] = ledgercore.IncludedTransactions{
-		LastValid: signedAppCallTxn.Txn.LastValid,
-		Intra:     1,
+	expectedDelta := ledgercore.StateDelta{
+		Accts: ledgercore.AccountDeltas{
+			Accts: []ledgercore.BalanceRecord{
+				{
+					Addr:        sender.Addr,
+					AccountData: expectedSenderData,
+				},
+				{
+					Addr:        env.FeeSinkAccount.Addr,
+					AccountData: expectedFeeSinkData,
+				},
+				{
+					Addr:        lsigAddr,
+					AccountData: expectedLsigData,
+				},
+			},
+			AppResources: []ledgercore.AppResourceRecord{
+				{
+					Aidx:   expectedAppID,
+					Addr:   lsigAddr,
+					Params: expectedAppParams,
+				},
+			},
+		},
+		Creatables: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
+			basics.CreatableIndex(expectedAppID): {
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: lsigAddr,
+			},
+		},
+		Txids: map[transactions.Txid]ledgercore.IncludedTransactions{
+			signedPayTxn.Txn.ID(): {
+				LastValid: signedPayTxn.Txn.LastValid,
+				Intra:     0,
+			},
+			signedAppCallTxn.Txn.ID(): {
+				LastValid: signedAppCallTxn.Txn.LastValid,
+				Intra:     1,
+			},
+		},
+		Hdr:           &expectedBlockHeader,
+		PrevTimestamp: env.TxnInfo.LatestHeader.TimeStamp,
 	}
 
 	expectedEvents := []mocktracer.Event{
@@ -210,28 +235,5 @@ int 1`,
 		//Block evaluation
 		mocktracer.AfterBlock(block.Block().Round()),
 	}
-	actualEvents := mockTracer.Events
-
-	// Dehydrate deltas for better comparison
-	for i := range expectedEvents {
-		if expectedEvents[i].Deltas != nil {
-			expectedEvents[i].Deltas.Dehydrate()
-		}
-	}
-	for i := range actualEvents {
-		if actualEvents[i].Deltas != nil {
-			actualEvents[i].Deltas.Dehydrate()
-		}
-	}
-
-	// These extra checks are not necessary for correctness, but they provide more targeted information on failure
-	if assert.Equal(t, len(expectedEvents), len(actualEvents)) {
-		for i := range expectedEvents {
-			jsonExpectedDelta := protocol.EncodeJSONStrict(expectedEvents[i].Deltas)
-			jsonActualDelta := protocol.EncodeJSONStrict(actualEvents[i].Deltas)
-			assert.Equal(t, expectedEvents[i].Deltas, actualEvents[i].Deltas, "StateDelta disagreement: i=%d, event type: (%v,%v)\n\nexpected: %s\n\nactual: %s", i, expectedEvents[i].Type, actualEvents[i].Type, jsonExpectedDelta, jsonActualDelta)
-		}
-	}
-
-	require.Equal(t, expectedEvents, actualEvents)
+	mocktracer.AssertEventsEqual(t, expectedEvents, mockTracer.Events)
 }

@@ -254,11 +254,22 @@ func MakeAccountDeltas(hint int) AccountDeltas {
 
 // Hydrate reverses the effects of Dehydrate, restoring internal data.
 func (ad *AccountDeltas) Hydrate() {
+	if ad.acctsCache == nil {
+		ad.acctsCache = make(map[basics.Address]int, len(ad.Accts))
+	}
 	for idx, acct := range ad.Accts {
 		ad.acctsCache[acct.Addr] = idx
 	}
+
+	if ad.appResourcesCache == nil {
+		ad.appResourcesCache = make(map[AccountApp]int, len(ad.AppResources))
+	}
 	for idx, app := range ad.AppResources {
 		ad.appResourcesCache[AccountApp{app.Addr, app.Aidx}] = idx
+	}
+
+	if ad.assetResourcesCache == nil {
+		ad.assetResourcesCache = make(map[AccountAsset]int, len(ad.AssetResources))
 	}
 	for idx, asset := range ad.AssetResources {
 		ad.assetResourcesCache[AccountAsset{asset.Addr, asset.Aidx}] = idx

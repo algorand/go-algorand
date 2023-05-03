@@ -243,21 +243,6 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 
 	scenarios := mocktracer.GetTestScenarios()
 
-	// TODO: remove this filter
-	// scenarios = map[string]mocktracer.TestScenarioGenerator{
-	// 	"none":                       scenarios["none"],
-	// 	"before inners,error=true":   scenarios["before inners,error=true"],
-	// 	"before inners,error=false":  scenarios["before inners,error=false"],
-	// 	"first inner,error=true":     scenarios["first inner,error=true"],
-	// 	"first inner,error=false":    scenarios["first inner,error=false"],
-	// 	"between inners,error=true":  scenarios["between inners,error=true"],
-	// 	"between inners,error=false": scenarios["between inners,error=false"],
-	// 	"second inner":               scenarios["second inner"],
-	// 	"third inner":                scenarios["third inner"],
-	// 	"after inners,error=true":    scenarios["after inners,error=true"],
-	// 	"after inners,error=false":   scenarios["after inners,error=false"],
-	// }
-
 	type tracerTestCase struct {
 		name                 string
 		firstTxnBehavior     string
@@ -337,7 +322,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 				ApprovalProgram: fmt.Sprintf(`#pragma version 6
 byte "hello"
 log
-		%s`, basicAppCallReturn),
+%s`, basicAppCallReturn),
 				ClearStateProgram: `#pragma version 6
 int 1`,
 
@@ -461,24 +446,48 @@ int 1`,
 			expectedAcct0Data.TotalAppParams = 1
 
 			expectedBlockHeader := eval.block.BlockHeader
-			expectedBasicAppCallDelta := ledgercore.MakeStateDelta(&expectedBlockHeader, blkHeader.TimeStamp, 0, 0)
-			expectedBasicAppCallDelta.Accts.Upsert(addrs[0], expectedAcct0Data)
-			expectedBasicAppCallDelta.Accts.Upsert(testSinkAddr, expectedFeeSinkData)
-			expectedBasicAppCallDelta.Accts.UpsertAppResource(addrs[0], 1, ledgercore.AppParamsDelta{
-				Params: &basics.AppParams{
-					ApprovalProgram:   txgroup[0].Txn.ApprovalProgram,
-					ClearStateProgram: txgroup[0].Txn.ClearStateProgram,
+			expectedBasicAppCallDelta := ledgercore.StateDelta{
+				Accts: ledgercore.AccountDeltas{
+					Accts: []ledgercore.BalanceRecord{
+						{
+							Addr:        addrs[0],
+							AccountData: expectedAcct0Data,
+						},
+						{
+							Addr:        testSinkAddr,
+							AccountData: expectedFeeSinkData,
+						},
+					},
+					AppResources: []ledgercore.AppResourceRecord{
+						{
+							Aidx: 1,
+							Addr: addrs[0],
+							Params: ledgercore.AppParamsDelta{
+								Params: &basics.AppParams{
+									ApprovalProgram:   txgroup[0].Txn.ApprovalProgram,
+									ClearStateProgram: txgroup[0].Txn.ClearStateProgram,
+								},
+							},
+						},
+					},
 				},
-			}, ledgercore.AppLocalStateDelta{})
-			expectedBasicAppCallDelta.AddCreatable(1, ledgercore.ModifiedCreatable{
-				Ctype:   basics.AppCreatable,
-				Created: true,
-				Creator: addrs[0],
-			})
-			expectedBasicAppCallDelta.Txids[txgroup[0].Txn.ID()] = ledgercore.IncludedTransactions{
-				LastValid: txgroup[0].Txn.LastValid,
-				Intra:     0,
+				Creatables: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
+					1: {
+						Ctype:   basics.AppCreatable,
+						Created: true,
+						Creator: addrs[0],
+					},
+				},
+				Txids: map[transactions.Txid]ledgercore.IncludedTransactions{
+					txgroup[0].Txn.ID(): {
+						LastValid: txgroup[0].Txn.LastValid,
+						Intra:     0,
+					},
+				},
+				Hdr:           &expectedBlockHeader,
+				PrevTimestamp: blkHeader.TimeStamp,
 			}
+			expectedBasicAppCallDelta.Hydrate()
 
 			expectedEvents := []mocktracer.Event{mocktracer.BeforeBlock(eval.block.Round())}
 			if testCase.firstTxnBehavior == "approve" {
@@ -492,15 +501,37 @@ int 1`,
 				expectedAcct3Data.MicroAlgos.Raw += expectedPayTxnAD.ClosingAmount.Raw
 				expectedFeeSinkData.MicroAlgos.Raw += txgroup[1].Txn.Fee.Raw
 
-				expectedPayTxnDelta := ledgercore.MakeStateDelta(&expectedBlockHeader, blkHeader.TimeStamp, 0, 0)
-				expectedPayTxnDelta.Accts.Upsert(addrs[1], expectedAcct1Data)
-				expectedPayTxnDelta.Accts.Upsert(testSinkAddr, expectedFeeSinkData)
-				expectedPayTxnDelta.Accts.Upsert(addrs[2], expectedAcct2Data)
-				expectedPayTxnDelta.Accts.Upsert(addrs[3], expectedAcct3Data)
-				expectedPayTxnDelta.Txids[txgroup[1].Txn.ID()] = ledgercore.IncludedTransactions{
-					LastValid: txgroup[1].Txn.LastValid,
-					Intra:     0, // will be incremented once merged
+				expectedPayTxnDelta := ledgercore.StateDelta{
+					Accts: ledgercore.AccountDeltas{
+						Accts: []ledgercore.BalanceRecord{
+							{
+								Addr:        addrs[1],
+								AccountData: expectedAcct1Data,
+							},
+							{
+								Addr:        testSinkAddr,
+								AccountData: expectedFeeSinkData,
+							},
+							{
+								Addr:        addrs[2],
+								AccountData: expectedAcct2Data,
+							},
+							{
+								Addr:        addrs[3],
+								AccountData: expectedAcct3Data,
+							},
+						},
+					},
+					Txids: map[transactions.Txid]ledgercore.IncludedTransactions{
+						txgroup[1].Txn.ID(): {
+							LastValid: txgroup[1].Txn.LastValid,
+							Intra:     0, // will be incremented once merged
+						},
+					},
+					Hdr:           &expectedBlockHeader,
+					PrevTimestamp: blkHeader.TimeStamp,
 				}
+				expectedPayTxnDelta.Hydrate()
 
 				expectedDelta := mocktracer.MergeStateDeltas(expectedBasicAppCallDelta, expectedPayTxnDelta, scenario.ExpectedStateDelta)
 
@@ -550,29 +581,7 @@ int 1`,
 				})...)
 			}
 			actualEvents := mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events)
-
-			// Dehydrate deltas for easier comparison
-			for i := range actualEvents {
-				if actualEvents[i].Deltas != nil {
-					actualEvents[i].Deltas.Dehydrate()
-				}
-			}
-			for i := range expectedEvents {
-				if expectedEvents[i].Deltas != nil {
-					expectedEvents[i].Deltas.Dehydrate()
-				}
-			}
-
-			// These extra checks are not necessary for correctness, but they provide more targeted information on failure
-			if assert.Equal(t, len(expectedEvents), len(actualEvents)) {
-				for i := range expectedEvents {
-					jsonExpectedDelta := protocol.EncodeJSONStrict(expectedEvents[i].Deltas)
-					jsonActualDelta := protocol.EncodeJSONStrict(actualEvents[i].Deltas)
-					assert.Equal(t, expectedEvents[i].Deltas, actualEvents[i].Deltas, "StateDelta disagreement: i=%d, event type: (%v,%v)\n\nexpected: %s\n\nactual: %s", i, expectedEvents[i].Type, actualEvents[i].Type, jsonExpectedDelta, jsonActualDelta)
-				}
-			}
-
-			require.Equal(t, expectedEvents, actualEvents)
+			mocktracer.AssertEventsEqual(t, expectedEvents, actualEvents)
 		})
 	}
 }

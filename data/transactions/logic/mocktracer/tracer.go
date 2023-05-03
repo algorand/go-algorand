@@ -17,12 +17,16 @@
 package mocktracer
 
 import (
+	"testing"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // EventType represents a type of logic.EvalTracer event
@@ -217,4 +221,33 @@ func copyDeltas(deltas *ledgercore.StateDelta) *ledgercore.StateDelta {
 		panic(err)
 	}
 	return &clone
+}
+
+// AssertEventsEqual asserts that two slices of Events are equal, taking into account complex
+// equality of StateDeltas. The arguments will be modified in-place to normalize any StateDeltas.
+func AssertEventsEqual(t *testing.T, expected, actual []Event) {
+	t.Helper()
+
+	// Dehydrate deltas for better comparison
+	for i := range expected {
+		if expected[i].Deltas != nil {
+			expected[i].Deltas.Dehydrate()
+		}
+	}
+	for i := range actual {
+		if actual[i].Deltas != nil {
+			actual[i].Deltas.Dehydrate()
+		}
+	}
+
+	// These extra checks are not necessary for correctness, but they provide more targeted information on failure
+	if assert.Equal(t, len(expected), len(actual)) {
+		for i := range expected {
+			jsonExpectedDelta := protocol.EncodeJSONStrict(expected[i].Deltas)
+			jsonActualDelta := protocol.EncodeJSONStrict(actual[i].Deltas)
+			assert.Equal(t, expected[i].Deltas, actual[i].Deltas, "StateDelta disagreement: i=%d, event type: (%v,%v)\n\nexpected: %s\n\nactual: %s", i, expected[i].Type, actual[i].Type, jsonExpectedDelta, jsonActualDelta)
+		}
+	}
+
+	require.Equal(t, expected, actual)
 }
