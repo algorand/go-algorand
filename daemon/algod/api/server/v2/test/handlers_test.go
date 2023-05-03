@@ -22,8 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/eval"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"io"
 	"math"
 	"net/http"
@@ -31,6 +29,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -2096,6 +2097,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 				tracer: tracer,
 			},
 		},
+		Log: logging.Base(),
 	}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -2119,10 +2121,21 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	var roundResponse model.TransactionGroupLedgerStateDeltaForRoundResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &roundResponse)
 	require.NoError(t, err)
+	require.Equal(t, 1, len(roundResponse))
 	require.Equal(t, []string{txn1.ID().String()}, roundResponse[0].Ids)
 	hdr, ok := roundResponse[0].Delta["Hdr"].(map[string]interface{})
 	require.True(t, ok)
 	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
+
+	// Test invalid round parameter
+	c, rec = newReq(t)
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(4),
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
 
 	// Test /v2/deltas/txn/group/{id}
 	jsonFormatForTxn := model.GetLedgerStateDeltaForTransactionGroupParamsFormatJson
@@ -2154,4 +2167,15 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	groupHdr, ok = groupResponse["Hdr"].(map[string]interface{})
 	require.True(t, ok)
 	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Test invalid ID
+	c, rec = newReq(t)
+	badID := crypto.Hash([]byte("invalidID")).String()
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		badID,
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
 }
