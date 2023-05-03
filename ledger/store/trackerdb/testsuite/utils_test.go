@@ -75,13 +75,8 @@ func runGenericTestsWithDB(t *testing.T, dbFactory func(config.ConsensusParams) 
 }
 
 func seedDb(t *testing.T, db dbForTests) {
-	err := db.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-		_, err := tx.RunMigrations(ctx, trackerdb.Params{InitProto: protocol.ConsensusCurrentVersion}, logging.TestingLog(t), trackerdb.AccountDBVersion)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
+	params := trackerdb.Params{InitProto: protocol.ConsensusCurrentVersion}
+	_, err := db.RunMigrations(context.Background(), params, logging.TestingLog(t), trackerdb.AccountDBVersion)
 	require.NoError(t, err)
 }
 
