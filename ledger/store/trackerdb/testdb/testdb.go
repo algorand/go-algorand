@@ -23,18 +23,12 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/dualdriver"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
-	"github.com/algorand/go-algorand/logging"
 )
 
 // OpenForTesting will create a testing store to be used on tests outside of the trackerdb package.
 func OpenForTesting(t *testing.T) trackerdb.Store {
-	logger := logging.TestingLog(t)
-
 	primaryDB, _ := sqlitedriver.OpenForTesting(t, true)
-	primaryDB.SetLogger(logger)
-
 	secondaryDB := pebbledbdriver.OpenForTesting(t, true)
-	secondaryDB.SetLogger(logger)
 
 	return dualdriver.MakeStore(primaryDB, secondaryDB)
 }

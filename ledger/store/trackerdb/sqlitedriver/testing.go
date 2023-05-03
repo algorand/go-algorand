@@ -26,19 +26,23 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
 )
 
 // OpenForTesting opens a sqlite db file for testing purposes.
+// It set the logging to the  test logger and uses a tmp directory associated to the test for the db.
+// The test tmp direction is automatically cleaned up by the golang test framework.
 func OpenForTesting(t testing.TB, inMemory bool) (trackerdb.Store, string) {
-	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
+	fn := fmt.Sprintf("%s/%s.%d", t.TempDir(), strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 
-	dbs, err := db.OpenPair(fn, inMemory)
+	store, err := Open(fn, inMemory)
 	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
+	store.SetLogger(logging.TestingLog(t))
 
-	return MakeStore(dbs), fn
+	return store, fn
 }
 
 // AccountsInitLightTest initializes an empty database for testing without the extra methods being called.

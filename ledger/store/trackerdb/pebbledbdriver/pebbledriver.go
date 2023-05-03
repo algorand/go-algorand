@@ -218,11 +218,6 @@ func (s *trackerStore) ResetToV6Test(ctx context.Context) error {
 	return nil
 }
 
-// CleanupTest implements trackerdb.Store
-func (s *trackerStore) CleanupTest(dbName string, inMemory bool) {
-	// TODO
-}
-
 // Close implements trackerdb.Store
 func (s *trackerStore) Close() {
 	s.kvs.Pdb.Close()

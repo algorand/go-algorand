@@ -46,7 +46,6 @@ type Store interface {
 	// maintenance
 	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)
 	// testing
-	CleanupTest(dbName string, inMemory bool)
 	ResetToV6Test(ctx context.Context) error
 	// cleanup
 	Close()

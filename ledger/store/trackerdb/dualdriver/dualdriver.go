@@ -174,11 +174,6 @@ func (s *trackerStore) Vacuum(ctx context.Context) (stats db.VacuumStats, err er
 	return
 }
 
-func (s *trackerStore) CleanupTest(dbName string, inMemory bool) {
-	s.primary.CleanupTest(dbName, inMemory)
-	s.secondary.CleanupTest(dbName, inMemory)
-}
-
 func (s *trackerStore) ResetToV6Test(ctx context.Context) error {
 	// TODO
 	return nil

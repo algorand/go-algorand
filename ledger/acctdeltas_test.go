@@ -150,7 +150,6 @@ func TestAccountDBInit(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs, _ := sqlitedriver.OpenForTesting(t, true)
-	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -211,7 +210,6 @@ func TestAccountDBRound(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs, _ := sqlitedriver.OpenForTesting(t, true)
-	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
 	dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
@@ -369,7 +367,6 @@ func TestAccountDBInMemoryAcct(t *testing.T) {
 	for i, test := range tests {
 
 		dbs, _ := sqlitedriver.OpenForTesting(t, true)
-		dbs.SetLogger(logging.TestingLog(t))
 		defer dbs.Close()
 
 		dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
@@ -440,7 +437,6 @@ func TestAccountStorageWithStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	dbs, _ := sqlitedriver.OpenForTesting(t, true)
-	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
 	dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -606,16 +602,8 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, tx trackerdb.Transacti
 	return
 }
 
-func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
-	dbs.Close()
-	if !inMemory {
-		os.Remove(dbName)
-	}
-}
-
 func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	dbs, _ := sqlitedriver.OpenForTesting(b, true)
-	dbs.SetLogger(logging.TestingLog(b))
 	defer dbs.Close()
 	bal := make(map[basics.Address]basics.AccountData)
 
@@ -650,9 +638,8 @@ func BenchmarkReadingAllBalancesDisk(b *testing.B) {
 }
 
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
-	dbs, fn := sqlitedriver.OpenForTesting(b, true)
-	dbs.SetLogger(logging.TestingLog(b))
-	defer dbs.CleanupTest(fn, inMemory)
+	dbs, _ := sqlitedriver.OpenForTesting(b, true)
+	defer dbs.Close()
 
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		accounts := benchmarkInitBalances(b, b.N, tx, protocol.ConsensusCurrentVersion)
@@ -687,30 +674,6 @@ func BenchmarkReadingRandomBalancesRAM(b *testing.B) {
 
 func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
 	benchmarkReadingRandomBalances(b, false)
-}
-
-// TestAccountsDbQueriesCreateClose tests to see that we can create the accountsDbQueries and close it.
-// it also verify that double-closing it doesn't create an issue.
-func TestAccountsDbQueriesCreateClose(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
-	defer dbs.Close()
-
-	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		sqlitedriver.AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
-		return nil
-	})
-	require.NoError(t, err)
-	qs, err := sqlitedriver.AccountsInitDbQueries(dbs.Rdb.Handle)
-	require.NoError(t, err)
-	// TODO[store-refactor]: internals are opaque, once we move the the remainder of accountdb we can mvoe this too
-	// require.NotNil(t, qs.listCreatablesStmt)
-	qs.Close()
-	// require.Nil(t, qs.listCreatablesStmt)
-	qs.Close()
-	// require.Nil(t, qs.listCreatablesStmt)
 }
 
 func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder bool) {
@@ -815,9 +778,8 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	dbs, fn := sqlitedriver.OpenForTesting(t, false)
-	dbs.SetLogger(logging.TestingLog(t))
-	defer dbs.CleanupTest(fn, false)
+	dbs, _ := sqlitedriver.OpenForTesting(t, false)
+	defer dbs.Close()
 
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		// return account data, initialize DB tables from AccountsInitTest
@@ -1002,9 +964,8 @@ func TestLookupKeysByPrefix(t *testing.T) {
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	// learn something from BenchmarkWritingRandomBalancesDisk
 
-	dbs, fn := sqlitedriver.OpenForTesting(b, false)
-	dbs.SetLogger(logging.TestingLog(b))
-	defer dbs.CleanupTest(fn, false)
+	dbs, _ := sqlitedriver.OpenForTesting(b, false)
+	defer dbs.Close()
 
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		// return account data, initialize DB tables from AccountsInitTest
@@ -1423,7 +1384,6 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	dbs, _ := sqlitedriver.OpenForTesting(t, true)
-	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
 	addrs := make([]basics.Address, 100)
@@ -2095,10 +2055,9 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 	}
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	dbs, fn := storetesting.DbOpenTest(b, false)
-	storetesting.SetDbLogging(b, dbs)
+	dbs, _ := storetesting.DbOpenTest(b, false)
 	cleanup := func() {
-		cleanupTestDb(dbs, fn, false)
+		dbs.Close()
 	}
 
 	tx, err := dbs.Wdb.Handle.Begin()
@@ -2235,7 +2194,6 @@ func TestAccountOnlineQueries(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbs, _ := sqlitedriver.OpenForTesting(t, true)
-	dbs.SetLogger(logging.TestingLog(t))
 	defer dbs.Close()
 
 	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {

@@ -19,7 +19,6 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
@@ -129,13 +128,6 @@ func (s trackerSQLStore) RunMigrations(ctx context.Context, params trackerdb.Par
 func (s *trackerSQLStore) Vacuum(ctx context.Context) (stats db.VacuumStats, err error) {
 	_, err = s.pair.Wdb.Vacuum(ctx)
 	return
-}
-
-func (s *trackerSQLStore) CleanupTest(dbName string, inMemory bool) {
-	s.pair.Close()
-	if !inMemory {
-		os.Remove(dbName)
-	}
 }
 
 func (s *trackerSQLStore) ResetToV6Test(ctx context.Context) error {

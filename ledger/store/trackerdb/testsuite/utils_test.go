@@ -253,10 +253,6 @@ func (db *mockDB) Vacuum(ctx context.Context) (stats db.VacuumStats, err error) 
 	return stats, nil
 }
 
-func (db *mockDB) CleanupTest(dbName string, inMemory bool) {
-	// TODO
-}
-
 func (db *mockDB) ResetToV6Test(ctx context.Context) error {
 	// TODO
 	return nil
