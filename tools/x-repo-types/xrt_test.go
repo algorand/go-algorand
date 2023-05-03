@@ -92,7 +92,6 @@ func TestCrossRepoTypes(t *testing.T) {
 		// These should be run in serial as they modify go.mod, go.sum and typeAnalyzer/main.go
 		// TODO: it probably is preferrable to setup and `go get` everything _before_ running the tests
 		// and tearDown after the tests are done.
-		// TODO: no need to `go get` go-algorand!!!!
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.skip {
 				t.Skip(tc.skipReason)
