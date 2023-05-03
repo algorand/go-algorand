@@ -204,8 +204,20 @@ func TestSyncRoundWithRemake(t *testing.T) {
 	}
 
 	followNode, _ = remakeableFollowNode(t, tempDir, maxAcctLookback)
-	status, err := followNode.Status()
-	require.NoError(t, err)
+
+	// wait for follower to catch up. This rarely is neeeded, but it can happen
+	// and cause flaky test failures.
+	// Timing out can still occur, but is less likely than the simply being
+	// behind a few rounds.
+	var status StatusReport
+	for stop := false; !stop; {
+		st, err := followNode.Status()
+		require.NoError(t, err)
+		if st.LastRound >= newRound {
+			stop = true
+			status = st
+		}
+	}
 	require.Equal(t, newRound, status.LastRound)
 
 	// syncRound should be at
