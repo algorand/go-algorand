@@ -18,7 +18,6 @@ package eval
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/algorand/go-deadlock"
 
