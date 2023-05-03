@@ -539,7 +539,7 @@ type KvDelta struct {
 // LedgerStateDelta Ledger StateDelta object
 type LedgerStateDelta = map[string]interface{}
 
-// LedgerStateDeltaForTransactionGroup Contains ledger deltas for a single transaction group
+// LedgerStateDeltaForTransactionGroup Contains a ledger delta for a single transaction group
 type LedgerStateDeltaForTransactionGroup struct {
 	// Delta Ledger StateDelta object
 	Delta LedgerStateDelta `json:"delta"`

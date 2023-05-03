@@ -1733,7 +1733,7 @@
         "x-algorand-format": "StateDelta"
       },
       "LedgerStateDeltaForTransactionGroup": {
-        "description": "Contains ledger deltas for a single transaction group",
+        "description": "Contains a ledger delta for a single transaction group",
         "properties": {
           "delta": {
             "$ref": "#/components/schemas/LedgerStateDelta"
@@ -3845,7 +3845,7 @@
     },
     "/v2/deltas/txn/group/{id}": {
       "get": {
-        "description": "Get ledger deltas for a given transaction group.",
+        "description": "Get a ledger delta for a given transaction group.",
         "operationId": "GetLedgerStateDeltaForTransactionGroup",
         "parameters": [
           {
@@ -3915,7 +3915,7 @@
                 }
               }
             },
-            "description": "Could not find a delta for Id"
+            "description": "Could not find a delta for transaction ID or group ID"
           },
           "408": {
             "content": {

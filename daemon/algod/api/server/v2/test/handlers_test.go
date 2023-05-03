@@ -2178,4 +2178,31 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Equal(t, 404, rec.Code)
+
+	// Test nil Tracer
+	nilTracerHandler := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: nil,
+			},
+		},
+		Log: logging.Base(),
+	}
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 503, rec.Code)
+
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		0,
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 503, rec.Code)
 }

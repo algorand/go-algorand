@@ -1606,7 +1606,7 @@
     },
     "/v2/deltas/txn/group/{id}": {
       "get": {
-        "description": "Get ledger deltas for a given transaction group.",
+        "description": "Get a ledger delta for a given transaction group.",
         "tags": [
           "public",
           "data",
@@ -1645,7 +1645,7 @@
             }
           },
           "404": {
-            "description": "Could not find a delta for Id",
+            "description": "Could not find a delta for transaction ID or group ID",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -2661,7 +2661,7 @@
       "x-algorand-format": "StateDelta"
     },
     "LedgerStateDeltaForTransactionGroup": {
-      "description": "Contains ledger deltas for a single transaction group",
+      "description": "Contains a ledger delta for a single transaction group",
       "type": "object",
       "required": [
         "delta",
