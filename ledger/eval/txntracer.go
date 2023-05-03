@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -59,7 +61,7 @@ func convertStateDelta(delta ledgercore.StateDelta) StateDeltaSubset {
 
 // TxnGroupDeltaTracer collects groups of StateDelta objects covering groups of txns
 type TxnGroupDeltaTracer struct {
-	deltasLock sync.RWMutex
+	deltasLock deadlock.RWMutex
 	// lookback is the number of rounds stored at any given time
 	lookback uint64
 	// no-op methods we don't care about
