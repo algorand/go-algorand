@@ -288,3 +288,58 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed %Y%m%d_%H%M%S'
     false
 fi
+
+############################################################
+# WE WANT TO FURTHER TEST EXTRA BUDGET IN SIMULATION WORKS #
+############################################################
+
+printf '#pragma version 8\nint 1' > "${TEMPDIR}/simple-v8.teal"
+
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/int-pop-400-cost-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v8.teal" --extra-pages 1 --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+EXPSUCCESS='Created app with app index'
+if [[ $RES != *"${EXPSUCCESS}"* ]]; then
+    date '+app-simulate-test FAIL the app creation for logs-a-lot.teal should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
+
+# SIMULATION! without extra budget should fail direct call
+${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/no-extra-budget.tx"
+${gcmd} clerk sign -i "${TEMPDIR}/no-extra-budget.tx" -o "${TEMPDIR}/no-extra-budget.stx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/no-extra-budget.stx")
+
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal without extra budget should fail %Y%m%d_%H%M%S'
+    false
+fi
+
+EXPECTED_FAILURE='dynamic cost budget exceeded'
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_FAILURE}"* ]]; then
+    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal should fail %Y%m%d_%H%M%S'
+    false
+fi
+
+# SIMULATION! with extra budget should pass direct call
+RES=$(${gcmd} clerk simulate --allow-extra-budget 200 -t "${TEMPDIR}/no-extra-budget.stx")
+
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal with extra budget should pass %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."eval-overrides"."extra-budget"') -ne 200 ]]; then
+    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal should have extra-budget 200 %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-added"') -ne 900 ]]; then
+    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal should have app-budget-added 900 %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; then
+    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal should be consuming 804 budget %Y%m%d_%H%M%S'
+    false
+fi
