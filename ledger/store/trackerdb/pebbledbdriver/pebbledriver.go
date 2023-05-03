@@ -39,8 +39,8 @@ type trackerStore struct {
 	trackerdb.Catchpoint
 }
 
-// OpenTrackerDB opens a Pebble db database
-func OpenTrackerDB(dbdir string, inMem bool, proto config.ConsensusParams) (trackerdb.Store, error) {
+// Open opens a Pebble db database
+func Open(dbdir string, inMem bool, proto config.ConsensusParams) (trackerdb.Store, error) {
 	// use default options for now
 	opts := &pebble.Options{}
 	if inMem {

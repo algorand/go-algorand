@@ -30,7 +30,7 @@ func TestPebbleDB(t *testing.T) {
 		// create a tmp dir for the db, the testing runtime will clean it up automatically
 		dir := fmt.Sprintf("%s/db", t.TempDir())
 
-		db, err := pebbledbdriver.OpenTrackerDB(dir, false, proto)
+		db, err := pebbledbdriver.Open(dir, false, proto)
 		require.NoError(t, err)
 
 		seedDb(t, db)

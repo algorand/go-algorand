@@ -29,7 +29,7 @@ func TestSqliteDB(t *testing.T) {
 	dbFactory := func(config.ConsensusParams) dbForTests {
 		// create a tmp dir for the db, the testing runtime will clean it up automatically
 		fn := fmt.Sprintf("%s/tracker-db.sqlite", t.TempDir())
-		db, err := sqlitedriver.OpenTrackerSQLStore(fn, false)
+		db, err := sqlitedriver.Open(fn, false)
 		require.NoError(t, err)
 
 		seedDb(t, db)

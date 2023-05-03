@@ -30,7 +30,7 @@ import (
 func OpenForTesting(t *testing.T) trackerdb.Store {
 	logger := logging.TestingLog(t)
 
-	primaryDB, _ := sqlitedriver.DbOpenTrackerTest(t, true)
+	primaryDB, _ := sqlitedriver.OpenForTesting(t, true)
 	primaryDB.SetLogger(logger)
 
 	secondaryDB := pebbledbdriver.OpenForTesting(t, true)
