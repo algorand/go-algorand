@@ -50,6 +50,7 @@ fi
 
 # Create several boxes
 BOX_NAMES=("str:box1" "str:with spaces" "b64:YmFzZTY0" "b64:AQIDBA==") # b64:YmFzZTY0 == str:base64, b64:AQIDBA== is not unicode
+BOX_VALUE="box value"
 B64_BOX_VALUE="b64:Ym94IHZhbHVlAAAAAAAAAAAAAAAAAAAA"
 
 for BOX_NAME in "${BOX_NAMES[@]}"
