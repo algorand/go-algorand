@@ -115,7 +115,6 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
 	dbs, fileName := sqlitedriver.OpenForTesting(t, inMemory)
-	dbs.SetLogger(l)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
 	deltas := make([]ledgercore.StateDelta, initialBlocksCount)
