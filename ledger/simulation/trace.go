@@ -88,6 +88,15 @@ func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 	return eo
 }
 
+// SetExtraBudget method sets ExtraBudget field in tracer.Result.
+// It omits nil or 0 in budget *uint64 pointer.
+func (eo ResultEvalOverrides) SetExtraBudget(budget *uint64) ResultEvalOverrides {
+	if budget != nil && *budget != 0 {
+		eo.ExtraBudget = budget
+	}
+	return eo
+}
+
 // LogicEvalConstants method infers the logic.EvalConstants from Result.EvalOverrides (*ResultEvalOverrides)
 // and generate appropriate parameters to override during simulation runtime.
 func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
@@ -123,8 +132,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 
 	resultEvalConstants := ResultEvalOverrides{
 		AllowEmptySignatures: request.AllowEmptySignatures,
-		ExtraBudget:          request.ExtraBudget,
-	}.AllowMoreLogging(request.AllowMoreLogging)
+	}.AllowMoreLogging(request.AllowMoreLogging).SetExtraBudget(request.ExtraBudget)
 
 	return Result{
 		Version:       version,
