@@ -210,16 +210,16 @@ func TestSyncRoundWithRemake(t *testing.T) {
 	// and cause flakey test failures. Timing out can still occur, but is less
 	// likely than the being caught behind a few rounds.
 	var status *StatusReport
-	for stop := false; !stop; {
+	require.Eventually(t, func() bool {
 		st, err := followNode.Status()
 		require.NoError(t, err)
 		if st.LastRound >= newRound {
-			stop = true
 			status = &st
-		} else {
-			time.Sleep(500 * time.Millisecond)
+			return true
 		}
-	}
+		return false
+	}, 10*time.Second, 500*time.Millisecond, "failed to reach newRound within the allowed time")
+
 	require.Equal(t, newRound, status.LastRound)
 
 	// syncRound should be at
