@@ -61,8 +61,8 @@ func TestVerificationAgainstFullExecutionPool(t *testing.T) {
 // through the ctx check.
 func bypassAsyncVoteVerifierCtxCheck(avv *AsyncVoteVerifier, verctx context.Context, l LedgerReader,
 	uv unauthenticatedVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) {
-	avv.mu.RLock()
-	defer avv.mu.RUnlock()
+	avv.enqueueMu.RLock()
+	defer avv.enqueueMu.RUnlock()
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
