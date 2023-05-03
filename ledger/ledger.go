@@ -145,14 +145,11 @@ func OpenLedger(
 		}
 	}()
 
-	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem, cfg)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem, cfg, log)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
 	}
-	l.trackerDBs.SetLogger(log)
-	l.blockDBs.Rdb.SetLogger(log)
-	l.blockDBs.Wdb.SetLogger(log)
 
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
 
@@ -285,7 +282,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
+func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
 	if !dbMem {
@@ -306,14 +303,14 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local) (trackerDBs
 		switch cfg.StorageEngine {
 		case "pebbledb":
 			dir := dbPathPrefix + "/tracker"
-			trackerDBs, lerr = pebbledbdriver.Open(dir, dbMem, config.Consensus[protocol.ConsensusCurrentVersion])
+			trackerDBs, lerr = pebbledbdriver.Open(dir, dbMem, config.Consensus[protocol.ConsensusCurrentVersion], log)
 		// pebbledb needs to be explicitly configured.
 		// anything else will initialize a sqlite engine.
 		case "sqlite":
 			fallthrough
 		default:
 			file := dbPathPrefix + ".tracker.sqlite"
-			trackerDBs, lerr = sqlitedriver.Open(file, dbMem)
+			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
 		}
 
 		outErr <- lerr
@@ -323,7 +320,13 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local) (trackerDBs
 		var lerr error
 		blockDBFilename := dbPathPrefix + ".block.sqlite"
 		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
-		outErr <- lerr
+		if lerr != nil {
+			outErr <- lerr
+			return
+		}
+		blockDBs.Rdb.SetLogger(log)
+		blockDBs.Wdb.SetLogger(log)
+		outErr <- nil
 	}()
 
 	err = <-outErr

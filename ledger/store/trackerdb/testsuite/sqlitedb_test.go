@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,7 +30,7 @@ func TestSqliteDB(t *testing.T) {
 	dbFactory := func(config.ConsensusParams) dbForTests {
 		// create a tmp dir for the db, the testing runtime will clean it up automatically
 		fn := fmt.Sprintf("%s/tracker-db.sqlite", t.TempDir())
-		db, err := sqlitedriver.Open(fn, false)
+		db, err := sqlitedriver.Open(fn, false, logging.TestingLog(t))
 		require.NoError(t, err)
 
 		seedDb(t, db)

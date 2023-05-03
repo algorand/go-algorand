@@ -38,23 +38,19 @@ type trackerSQLStore struct {
 }
 
 // Open opens the sqlite database store
-func Open(dbFilename string, dbMem bool) (store trackerdb.Store, err error) {
+func Open(dbFilename string, dbMem bool, log logging.Logger) (store trackerdb.Store, err error) {
 	pair, err := db.OpenPair(dbFilename, dbMem)
 	if err != nil {
 		return
 	}
+	pair.Rdb.SetLogger(log)
+	pair.Wdb.SetLogger(log)
 	return MakeStore(pair), nil
 }
 
 // MakeStore crates a tracker SQL db from sql db handle.
 func MakeStore(pair db.Pair) trackerdb.Store {
 	return &trackerSQLStore{pair, &sqlReader{pair.Rdb.Handle}, &sqlWriter{pair.Wdb.Handle}, &sqlCatchpoint{pair.Wdb.Handle}}
-}
-
-// SetLogger sets the Logger, mainly for unit test quietness
-func (s *trackerSQLStore) SetLogger(log logging.Logger) {
-	s.pair.Rdb.SetLogger(log)
-	s.pair.Wdb.SetLogger(log)
 }
 
 func (s *trackerSQLStore) SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error) {

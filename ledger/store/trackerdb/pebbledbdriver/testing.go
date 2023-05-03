@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +34,7 @@ func OpenForTesting(t testing.TB, inMemory bool) trackerdb.Store {
 	// create a tmp dir for the db, the testing runtime will clean it up automatically
 	dir := fmt.Sprintf("%s/db", t.TempDir())
 
-	db, err := Open(dir, inMemory, proto)
+	db, err := Open(dir, inMemory, proto, logging.TestingLog(t))
 	require.NoErrorf(t, err, "Dir : %s\nInMemory: %v", dir, inMemory)
 
 	return db

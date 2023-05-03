@@ -40,9 +40,11 @@ type trackerStore struct {
 }
 
 // Open opens a Pebble db database
-func Open(dbdir string, inMem bool, proto config.ConsensusParams) (trackerdb.Store, error) {
+func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Logger) (trackerdb.Store, error) {
 	// use default options for now
-	opts := &pebble.Options{}
+	opts := &pebble.Options{
+		Logger: log,
+	}
 	if inMem {
 		opts.FS = vfs.NewMem()
 	}
@@ -68,11 +70,6 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams) (trackerdb.Sto
 func (s *trackerStore) IsSharedCacheConnection() bool {
 	// TODO
 	return false
-}
-
-// SetLogger implements trackerdb.Store
-func (s *trackerStore) SetLogger(log logging.Logger) {
-	// TODO
 }
 
 // SetSynchronousMode implements trackerdb.Store

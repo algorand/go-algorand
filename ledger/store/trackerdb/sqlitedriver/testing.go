@@ -38,9 +38,8 @@ import (
 func OpenForTesting(t testing.TB, inMemory bool) (trackerdb.Store, string) {
 	fn := fmt.Sprintf("%s/%s.%d", t.TempDir(), strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
 
-	store, err := Open(fn, inMemory)
+	store, err := Open(fn, inMemory, logging.TestingLog(t))
 	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
-	store.SetLogger(logging.TestingLog(t))
 
 	return store, fn
 }
