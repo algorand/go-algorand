@@ -17,7 +17,7 @@
 /*
 						WARNING
    THIS FILE ONLY EXISTS FOR DEBUGGING AND TO MAKE THE BUILD HAPPY
-			!!!!! IT IS OVERWRITTEN BY AT RUNTIME !!!!!
+			!!!!! IT IS OVERWRITTEN AT RUNTIME !!!!!
 */
 
 package main
@@ -26,13 +26,13 @@ import (
 	"fmt"
 	"os"
 
-	ypkg "github.com/algorand/go-algorand/data/bookkeeping"
-	xpkg "github.com/algorand/go-algorand/ledger/ledgercore"
+	xpkg "net/http"
+	ypkg "time"
 )
 
 func main() {
-	xRoot := MakeType(xpkg.StateDelta{})
-	yRoot := MakeType(ypkg.Genesis{})
+	xRoot := MakeType(xpkg.Request{})
+	yRoot := MakeType(ypkg.Time{})
 
 	// ---- BUILD ---- //
 	x, y := xRoot.Type, yRoot.Type
@@ -71,7 +71,7 @@ func main() {
 	// ---- DIFF ---- //
 
 	fmt.Printf("\n\nCompare the Type Trees %q v %q\n", x, y)
-	xType, yType, diff, err := StructDiff(xpkg.StateDelta{}, ypkg.Genesis{}, diffExclusions)
+	xType, yType, diff, err := StructDiff(xpkg.Request{}, ypkg.Time{}, diffExclusions)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
