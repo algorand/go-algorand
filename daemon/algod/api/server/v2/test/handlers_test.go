@@ -2195,7 +2195,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
 	)
 	require.NoError(t, err)
-	require.Equal(t, 503, rec.Code)
+	require.Equal(t, 501, rec.Code)
 
 	c, rec = newReq(t)
 	err = nilTracerHandler.GetTransactionGroupLedgerStateDeltasForRound(
@@ -2204,5 +2204,5 @@ func TestDeltasForTxnGroup(t *testing.T) {
 		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
 	)
 	require.NoError(t, err)
-	require.Equal(t, 503, rec.Code)
+	require.Equal(t, 501, rec.Code)
 }

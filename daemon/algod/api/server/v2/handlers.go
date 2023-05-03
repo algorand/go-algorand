@@ -1718,7 +1718,7 @@ func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id 
 	}
 	tracer, ok := v2.Node.LedgerForAPI().GetTracer().(*eval.TxnGroupDeltaTracer)
 	if !ok {
-		return serviceUnavailable(ctx, err, errFailedRetrievingTracer, v2.Log)
+		return notImplemented(ctx, err, errFailedRetrievingTracer, v2.Log)
 	}
 	delta, err := tracer.GetDeltaForID(idDigest)
 	if err != nil {
@@ -1740,7 +1740,7 @@ func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Contex
 	}
 	tracer, ok := v2.Node.LedgerForAPI().GetTracer().(*eval.TxnGroupDeltaTracer)
 	if !ok {
-		return serviceUnavailable(ctx, err, errFailedRetrievingTracer, v2.Log)
+		return notImplemented(ctx, err, errFailedRetrievingTracer, v2.Log)
 	}
 	deltas, err := tracer.GetDeltasForRound(basics.Round(round))
 	if err != nil {
