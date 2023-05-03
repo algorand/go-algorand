@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -322,31 +323,48 @@ func TestServiceRestart(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
+
+	noMore := make(chan struct{})
+
 	// collect the verification results and check against the error expectation
 	go func() {
 		defer wg.Done()
+		defer close(errChan)
 		c := 0
-		for res := range outChan {
-			c++
-			var expectedError error
-			if res.req.uv != nil {
-				expectedError = errsV[int(res.index)]
-			} else {
-				expectedError = errsEqv[int(res.index)]
-			}
-			if (expectedError == nil && res.err != nil) || (expectedError != nil && res.err == nil) {
-				if !(c > (count+eqCount)/4 && (res.err == context.Canceled || res.err == execpool.ErrShuttingDownError)) {
-					errChan <- fmt.Errorf("expected %v got %v", expectedError, res.err)
+		timeout := time.NewTicker(200 * time.Millisecond)
+		defer timeout.Stop()
+		for {
+			select {
+			case res := <-outChan:
+				c++
+				var expectedError error
+				if res.req.uv != nil {
+					expectedError = errsV[int(res.index)]
+				} else {
+					expectedError = errsEqv[int(res.index)]
+				}
+				if (expectedError == nil && res.err != nil) || (expectedError != nil && res.err == nil) {
+					if !(c > (count+eqCount)/4 && (res.err == context.Canceled || res.err == execpool.ErrShuttingDownError)) {
+						errChan <- fmt.Errorf("expected %v got %v", expectedError, res.err)
+					}
+				}
+				if c == count+eqCount {
+					return
+				}
+				if c == (count+eqCount)/4 {
+					go voteVerifier.Quit()
+				}
+				timeout.Reset(200 * time.Millisecond)
+
+			case <-timeout.C:
+				select {
+				case <-noMore:
+					return
+				default:
+					timeout.Reset(200 * time.Millisecond)
 				}
 			}
-			if c == count+eqCount {
-				break
-			}
-			if c == (count+eqCount)/4 {
-				go voteVerifier.Quit()
-			}
 		}
-		close(errChan)
 	}()
 
 	// stream the votes to the verifier
@@ -365,6 +383,12 @@ func TestServiceRestart(t *testing.T) {
 				uev := eqVotes[evi%eqCount]
 				evi++
 				voteVerifier.verifyEqVote(context.Background(), ledger, *uev.uev, uint64(uev.id), message{}, outChan)
+			}
+			select {
+			case <-voteVerifier.ctx.Done():
+				close(noMore)
+				return
+			default:
 			}
 		}
 	}()
