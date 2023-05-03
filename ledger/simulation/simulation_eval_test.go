@@ -848,6 +848,79 @@ int 0
 	})
 }
 
+func TestAppCallWithExtraBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction group has a cost of 4 + 1404
+	expensiveAppSource := `#pragma version 6
+	txn ApplicationID      // [appId]
+	bz end                 // []
+` + strings.Repeat(`int 1; pop;`, 700) + `end:
+	int 1`
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+		receiver := accounts[1]
+
+		futureAppID := basics.AppIndex(1)
+		// App create with cost 4
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   expensiveAppSource,
+			ClearStateProgram: `#pragma version 6; int 0`,
+		})
+		// Expensive 700 repetition of int 1 and pop total cost 1404
+		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			Accounts:      []basics.Address{receiver.Addr},
+		})
+
+		txntest.Group(&createTxn, &expensiveTxn)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+		extraBudget := uint64(100)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedExpensiveTxn},
+				},
+				ExtraBudget: &extraBudget,
+			},
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: txnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+							},
+							{
+								AppBudgetConsumed: 1404,
+							},
+						},
+						AppBudgetAdded:    1500,
+						AppBudgetConsumed: 1408,
+					},
+				},
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraBudget: &extraBudget},
+			},
+		}
+	})
+}
+
 func TestLogicSigOverBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1532,8 +1605,9 @@ func TestPartialMissingSignatures(t *testing.T) {
 // TestPooledFeesAcrossSignedAndUnsigned tests that the simulator's transaction group checks
 // allow for pooled fees across a mix of signed and unsigned transactions when AllowEmptySignatures is
 // enabled.
-//  Transaction 1 is a signed transaction with not enough fees paid on its own.
-//  Transaction 2 is an unsigned transaction with enough fees paid to cover transaction 1.
+//
+//	Transaction 1 is a signed transaction with not enough fees paid on its own.
+//	Transaction 2 is an unsigned transaction with enough fees paid to cover transaction 1.
 func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
