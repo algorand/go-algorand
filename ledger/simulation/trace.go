@@ -35,6 +35,7 @@ type TxnResult struct {
 	Txn                    transactions.SignedTxnWithAD
 	AppBudgetConsumed      uint64
 	LogicSigBudgetConsumed uint64
+	Trace                  *TransactionTrace
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group
@@ -139,4 +140,61 @@ func makeSimulationResult(lastRound basics.Round, request Request) Result {
 		panic(err)
 	}
 	return result
+}
+
+// OpcodeTraceUnit contains the trace effects of a single opcode evaluation
+type OpcodeTraceUnit struct {
+	// The PC of the opcode being evaluated
+	PC uint64
+
+	// TODO: additional effects, like stack and scratch space changes
+	// 		Ideally these effects contain only the "delta" information, unlike the
+	// 		current dryrun trace, which returns the _entire_ stack and scratch space
+	// 		for _every_ opcode.
+	//
+	// For stack, an interface that returns the first index that's changed and the rest of the stack
+	// seems like a good idea. E.g. if the stack changes from [A, B, C] to [A, X, Y], the delta effect
+	// could be something like { index: 1, elements: [X, Y] }. You can also think of it in terms of
+	// pushes and pops if you want, so { pops: 2, pushes: [X, Y] }; the only difference is that index
+	// is the absolute stack index while pops is a relative index from the end.
+	//
+	// * Note, this is not very efficient for opcodes like frame_bury and cover, which insert a single
+	//   value potentially very deep into the stack, so perhaps an additional special case could be
+	//   created to address that, maybe like { bury: X, depth: Y }? (I view this as nice to have but
+	//   not critical for our first implementation).
+	//
+	// For scratch space, the good news is we don't have any opcodes which mutate more than 1 slot
+	// at a time, and you can't ever delete a scratch value. So I think a more basic scheme is appropriate;
+	// something that includes the index being set and the value should be sufficient.
+	//
+	// A note about types: stack and scratch space is "untyped", meaning either uint64s or byteslices
+	// can be anywhere. Since JSON and msgpack arrays can also be untyped, I think it's a good idea
+	// to embrace this and encode either a number or a byte string for each value.
+}
+
+// TransactionTraceType is an enum type that indicates what kind of source (e.g., app/logicsig) the TransactionTrace generates from
+type TransactionTraceType int
+
+const (
+	// AppCallApprovalTransaction stands for TransactionTrace is generated from simulating an app call to App's approval program
+	AppCallApprovalTransaction TransactionTraceType = iota
+	// AppCallClearStateTransaction stands for TransactionTrace is generated from simulating an app call to App's clear state program
+	AppCallClearStateTransaction
+	// LogicSigTransaction stands for TransactionTrace is generated from simulating a logicsig transaction approval
+	LogicSigTransaction
+	// Unknown you should not be here
+	Unknown
+)
+
+// TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
+type TransactionTrace struct {
+	// TraceType is an enum that indicates which kind of TransactionTrace this instance is standing for.
+	TraceType TransactionTraceType
+	// Trace contains the trace for an app/logicsig evaluation,
+	// if this is an app call transaction, or LogicSig signed this transaction.
+	Trace []OpcodeTraceUnit
+	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
+	// object only contains traces for inners that are immediate children of this transaction.
+	// Grandchild traces will be present inside the TransactionTrace of their parent.
+	InnerTraces []TransactionTrace
 }

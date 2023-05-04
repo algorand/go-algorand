@@ -183,6 +183,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		// app creation
 		appIDToSave = cx.AppID()
 	}
+	// TODO note: we want to append PC info and store in tracer somehow
 	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
 }
 
