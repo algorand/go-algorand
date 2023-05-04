@@ -91,6 +91,19 @@ func divCeil(numerator int, denominator int) int {
 	return (numerator + denominator - 1) / denominator
 }
 
+func (lc linearCost) check() linearCost {
+	if lc.baseCost < 1 || lc.chunkCost < 0 || lc.chunkSize < 0 || lc.chunkSize > maxStringSize || lc.depth < 0 {
+		panic(fmt.Sprintf("bad cost configuration %+v", lc))
+	}
+	if lc.chunkCost > 0 && lc.chunkSize == 0 {
+		panic(fmt.Sprintf("chunk cost when chunk size is zero %+v", lc))
+	}
+	if lc.chunkCost == 0 && lc.chunkSize > 0 {
+		panic(fmt.Sprintf("no chunk cost with positive chunk size %+v", lc))
+	}
+	return lc
+}
+
 func (lc *linearCost) compute(stack []stackValue) int {
 	cost := lc.baseCost
 	if lc.chunkCost != 0 && lc.chunkSize != 0 {
@@ -152,8 +165,9 @@ func (d *OpDetails) docCost(argLen int) string {
 				if !ok {
 					continue
 				}
-				cost += fmt.Sprintf(" %s=%d", name, imm.fieldCosts[fs.Field()])
+				cost += fmt.Sprintf(" %s=%s;", name, imm.fieldCosts[fs.Field()].docCost(argLen))
 			}
+			cost = strings.TrimSuffix(cost, ";")
 		}
 	}
 	return cost
@@ -171,7 +185,8 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	}
 	for i := range d.Immediates {
 		if d.Immediates[i].fieldCosts != nil {
-			cost += d.Immediates[i].fieldCosts[program[pc+1+i]]
+			lc := d.Immediates[i].fieldCosts[program[pc+1+i]]
+			cost += lc.compute(stack)
 		}
 	}
 	return cost
@@ -215,13 +230,11 @@ func (d OpDetails) assembler(asm asmFunc) OpDetails {
 }
 
 func costly(cost int) OpDetails {
-	d := detDefault()
-	d.FullCost.baseCost = cost
-	return d
+	return detDefault().costs(cost)
 }
 
 func (d OpDetails) costs(cost int) OpDetails {
-	d.FullCost = linearCost{baseCost: cost}
+	d.FullCost = linearCost{baseCost: cost}.check()
 	return d
 }
 
@@ -290,20 +303,36 @@ func (d OpDetails) field(name string, group *FieldGroup) OpDetails {
 }
 
 func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
-	opd := immediates(immediate).costs(0)
+	if len(costs) != len(group.Names) {
+		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs %d != %d names",
+			immediate, group.Name, len(costs), costs, len(group.Names)))
+	}
+	fieldCosts := make([]linearCost, len(costs))
+	for i, cost := range costs {
+		fieldCosts[i] = linearCost{baseCost: cost}
+	}
+	return costByFieldAndLength(immediate, group, fieldCosts)
+}
+
+func costByFieldAndLength(immediate string, group *FieldGroup, costs []linearCost) OpDetails {
+	if len(costs) != len(group.Names) {
+		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs %d != %d names",
+			immediate, group.Name, len(costs), costs, len(group.Names)))
+	}
+	opd := immediates(immediate)
+	opd.FullCost = linearCost{} // zero FullCost is what causes eval to look deeper
 	opd.Immediates[0].Group = group
-	fieldCosts := make([]int, 256)
-	copy(fieldCosts, costs)
-	opd.Immediates[0].fieldCosts = fieldCosts
+	full := make([]linearCost, 256) // ensure we have 256 entries for easy lookup
+	for i := range costs {
+		full[i] = costs[i].check()
+	}
+	opd.Immediates[0].fieldCosts = full
 	return opd
 }
 
 func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
-	if initial < 1 || perChunk <= 0 || chunkSize < 1 || chunkSize > maxStringSize {
-		panic("bad cost configuration")
-	}
 	d := detDefault()
-	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}
+	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}.check()
 	return d
 }
 
@@ -349,7 +378,7 @@ type immediate struct {
 	Group *FieldGroup
 
 	// If non-nil, always 256 long, so cost can be checked before eval
-	fieldCosts []int
+	fieldCosts []linearCost
 }
 
 func imm(name string, kind immKind) immediate {
@@ -807,30 +836,66 @@ var OpSpecs = []OpSpec{
 			BN254g1: 2200, BN254g2: 4460,
 			BLS12_381g1: 3640, BLS12_381g2: 8530})}, // eip: 12000, 45000
 
-	// BN cost is 18k per elt, BLS is 45k + 40k per elt.  Not putting those
-	// costs in yet because 1) that is bigger than allowed in logicsigs, so
-	// tests would fail. 2) We don't yet have support for field specific costs
-	// that _also_ depend on input sizes.
+	// Needs more benchmarking, but roughly:
+	// BN cost is 18k per elt, BLS is 45k + 40k per elt.
+	// The number below are all reduced by a factor of 100 to allow testing
+	// before we decide how to allow such large costs.
 	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:i"), pairingVersion,
-		costByField("g", &EcGroups, []int{
-			BN254g1: 18_000, BN254g2: 18_000,
-			BLS12_381g1: 15_000, BLS12_381g2: 15_000})}, // eip: 43000*k + 65000
+		costByFieldAndLength("g", &EcGroups, []linearCost{
+			BN254g1: {
+				baseCost:  1,
+				chunkCost: 18_0,
+				chunkSize: bn254g1Size,
+			},
+			BN254g2: {
+				baseCost:  1,
+				chunkCost: 18_0,
+				chunkSize: bn254g2Size,
+			},
+			BLS12_381g1: {
+				baseCost:  45_0,
+				chunkCost: 40_0,
+				chunkSize: bls12381g1Size,
+			},
+			BLS12_381g2: {
+				baseCost:  45_0,
+				chunkCost: 40_0,
+				chunkSize: bls12381g2Size,
+			}})},
 
-	// This cost must be based on number of points. EIP proposes a complicated
-	// "discount" scheme.  At any rate, as noted above, we don't yet have
-	// support for input variable costs that vary based on fields.
+	// This cost must be based on the number of points. EIP proposes a
+	// complicated "discount" scheme.
 	// bnG1 seems to be 8000 + 300 /elt
 	// bnG2 seems to be 18000 + 900 /elt (VERY ERRATIC TIMINGS)
 	// blsG1 seems to be 14000 + 400 /elt
-	// blsG2 seems to be  35000 +  1800 /elt
+	// blsG2 seems to be 35000 + 1800 /elt
+	// All currently reduced by a factor of 100.
 	{0xe3, "ec_multi_exp", opEcMultiExp, proto("bb:b"), pairingVersion,
-		costByField("g", &EcGroups, []int{
-			BN254g1: 800, BN254g2: 1800, // LIES
-			BLS12_381g1: 1400, BLS12_381g2: 3500})}, // LIES
+		costByFieldAndLength("g", &EcGroups, []linearCost{
+			BN254g1: {
+				baseCost:  8_0,
+				chunkCost: 3,
+				chunkSize: scalarSize,
+			},
+			BN254g2: {
+				baseCost:  18_0,
+				chunkCost: 9,
+				chunkSize: scalarSize,
+			},
+			BLS12_381g1: {
+				baseCost:  14_0,
+				chunkCost: 4,
+				chunkSize: scalarSize,
+			},
+			BLS12_381g2: {
+				baseCost:  35_0,
+				chunkCost: 18,
+				chunkSize: scalarSize,
+			}})},
 
 	{0xe4, "ec_subgroup_check", opEcSubgroupCheck, proto("b:i"), pairingVersion,
 		costByField("g", &EcGroups, []int{
-			BN254g1: 50, BN254g2: 11500, // How is the g1 subgroup check so much faster?
+			BN254g1: 50, BN254g2: 11500, // g1 subgroup is pretty much a no-op
 			BLS12_381g1: 5600, BLS12_381g2: 7100})},
 	{0xe5, "ec_map_to", opEcMapTo, proto("b:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{

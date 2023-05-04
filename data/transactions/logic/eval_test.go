@@ -1239,16 +1239,17 @@ func TestGlobal(t *testing.T) {
 	}
 	// Associate the highest allowed global constant with each version's test program
 	tests := map[uint64]desc{
-		0:  {GroupSize, globalV1TestProgram},
-		1:  {GroupSize, globalV1TestProgram},
-		2:  {CurrentApplicationID, globalV2TestProgram},
-		3:  {CreatorAddress, globalV3TestProgram},
-		4:  {CreatorAddress, globalV4TestProgram},
-		5:  {GroupID, globalV5TestProgram},
-		6:  {CallerApplicationAddress, globalV6TestProgram},
-		7:  {CallerApplicationAddress, globalV7TestProgram},
-		8:  {CallerApplicationAddress, globalV8TestProgram},
-		9:  {CallerApplicationAddress, globalV9TestProgram},
+		0: {GroupSize, globalV1TestProgram},
+		1: {GroupSize, globalV1TestProgram},
+		2: {CurrentApplicationID, globalV2TestProgram},
+		3: {CreatorAddress, globalV3TestProgram},
+		4: {CreatorAddress, globalV4TestProgram},
+		5: {GroupID, globalV5TestProgram},
+		6: {CallerApplicationAddress, globalV6TestProgram},
+		7: {CallerApplicationAddress, globalV7TestProgram},
+		8: {CallerApplicationAddress, globalV8TestProgram},
+		9: {CallerApplicationAddress, globalV9TestProgram},
+
 		10: {CallerApplicationAddress, globalV10TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
@@ -1752,7 +1753,6 @@ const testTxnProgramTextV9 = testTxnProgramTextV8 + `
 assert
 int 1
 `
-
 const testTxnProgramTextV10 = testTxnProgramTextV9 + `
 assert
 int 1
@@ -1861,15 +1861,16 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	tests := map[uint64]string{
-		1:  testTxnProgramTextV1,
-		2:  testTxnProgramTextV2,
-		3:  testTxnProgramTextV3,
-		4:  testTxnProgramTextV4,
-		5:  testTxnProgramTextV5,
-		6:  testTxnProgramTextV6,
-		7:  testTxnProgramTextV7,
-		8:  testTxnProgramTextV8,
-		9:  testTxnProgramTextV9,
+		1: testTxnProgramTextV1,
+		2: testTxnProgramTextV2,
+		3: testTxnProgramTextV3,
+		4: testTxnProgramTextV4,
+		5: testTxnProgramTextV5,
+		6: testTxnProgramTextV6,
+		7: testTxnProgramTextV7,
+		8: testTxnProgramTextV8,
+		9: testTxnProgramTextV9,
+
 		10: testTxnProgramTextV10,
 	}
 
@@ -3214,11 +3215,36 @@ func TestShortBytecblock2(t *testing.T) {
 
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
 
-func opPanic(cx *EvalContext) error {
-	panic(panicString)
-}
-func checkPanic(cx *EvalContext) error {
-	panic(panicString)
+// withOpcode temporarily modifies the opsByOpcode array to include an
+// additional opcode, specieid by op.
+//
+// WARNING: do not call this in a parallel test, since it's not safe for concurrent use.
+func withOpcode(t *testing.T, version uint64, op OpSpec, f func(opcode byte)) {
+	t.Helper()
+
+	var foundEmptySpace bool
+	var hackedOpcode byte
+	var oldSpec OpSpec
+	// Find an unused opcode to temporarily convert to op
+	for opcode, spec := range opsByOpcode[version] {
+		if spec.op == nil {
+			foundEmptySpace = true
+			require.LessOrEqual(t, opcode, math.MaxUint8)
+			hackedOpcode = byte(opcode)
+			oldSpec = spec
+			copy := op
+			copy.Opcode = hackedOpcode
+			opsByOpcode[version][opcode] = copy
+			OpsByName[version][op.Name] = copy
+			break
+		}
+	}
+	require.True(t, foundEmptySpace, "could not find an empty space for the opcode")
+	defer func() {
+		opsByOpcode[version][hackedOpcode] = oldSpec
+		delete(OpsByName[version], op.Name)
+	}()
+	f(hackedOpcode)
 }
 
 // withPanicOpcode temporarily modifies the opsByOpcode array to include an additional panic opcode.
@@ -3227,42 +3253,22 @@ func checkPanic(cx *EvalContext) error {
 // WARNING: do not call this in a parallel test, since it's not safe for concurrent use.
 func withPanicOpcode(t *testing.T, version uint64, panicDuringCheck bool, f func(opcode byte)) {
 	t.Helper()
-	const name = "panic"
 
-	var foundEmptySpace bool
-	var hackedOpcode byte
-	var oldSpec OpSpec
-	// Find an unused opcode to temporarily convert to a panicing opcode,
-	// and append it to program.
-	for opcode, spec := range opsByOpcode[version] {
-		if spec.op == nil {
-			foundEmptySpace = true
-			require.LessOrEqual(t, opcode, math.MaxUint8)
-			hackedOpcode = byte(opcode)
-			oldSpec = spec
-
-			details := detDefault()
-			if panicDuringCheck {
-				details.check = checkPanic
-			}
-			panicSpec := OpSpec{
-				Opcode:    hackedOpcode,
-				Name:      name,
-				op:        opPanic,
-				OpDetails: details,
-			}
-
-			opsByOpcode[version][opcode] = panicSpec
-			OpsByName[version][name] = panicSpec
-			break
-		}
+	opPanic := func(cx *EvalContext) error {
+		panic(panicString)
 	}
-	require.True(t, foundEmptySpace, "could not find an empty space for the panic opcode")
-	defer func() {
-		opsByOpcode[version][hackedOpcode] = oldSpec
-		delete(OpsByName[version], name)
-	}()
-	f(hackedOpcode)
+	details := detDefault()
+	if panicDuringCheck {
+		details.check = opPanic
+	}
+
+	panicSpec := OpSpec{
+		Name:      "panic",
+		op:        opPanic,
+		OpDetails: details,
+	}
+
+	withOpcode(t, version, panicSpec, f)
 }
 
 func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode

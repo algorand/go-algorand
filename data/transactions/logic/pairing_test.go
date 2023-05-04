@@ -623,3 +623,80 @@ func init() {
 	blsG1Gen.FromJacobian(&g1GenJac)
 	blsG2Gen.FromJacobian(&g2GenJac)
 }
+
+// TestFieldCosts ensures that costs are calculated right for an opcodes
+// whose costs depends on the immediate
+func TestFieldCosts(t *testing.T) { //nolint:paralleltest // manipulates opcode table
+	partitiontest.PartitionTest(t)
+
+	// make an opcode "xxx" that just performs a pop. But it takes an immediate
+	// - any of the "EC" constants. The first three fields have different
+	// costs.
+
+	xxx := OpSpec{
+		Opcode:    106,
+		Name:      "xxx",
+		op:        opPop,
+		Proto:     proto("a:"),
+		OpDetails: costByField("f", &EcGroups, []int{10, 20, 30, 33}),
+	}
+
+	withOpcode(t, LogicVersion, xxx, func(opcode byte) {
+		testApp(t, "int 32; bzero; xxx BN254g1; global OpcodeBudget; int 687; ==", nil)
+		testApp(t, "int 32; bzero; xxx BN254g2; global OpcodeBudget; int 677; ==", nil)
+		testApp(t, "int 32; bzero; xxx BLS12_381g1; global OpcodeBudget; int 667; ==", nil)
+		testApp(t, "int 32; bzero; xxx BLS12_381g2; global OpcodeBudget; int 664; ==", nil)
+	})
+}
+
+// TestLinearFieldCost ensures that costs are calculated right for an opcodes
+// that have field AND arg length costs
+func TestLinearFieldCost(t *testing.T) { //nolint:paralleltest // manipulates opcode table
+	partitiontest.PartitionTest(t)
+
+	// make an opcode "xxx" that just performs a pop. But it takes an immediate
+	// - any of the "EC" constants. The first three fields have different
+	// costs, that depend on the length of the input
+
+	fmt.Println("ECGroups", EcGroups)
+	xxx := OpSpec{
+		Opcode: 106,
+		Name:   "xxx",
+		op:     opPop,
+		Proto:  proto("a:"),
+		OpDetails: costByFieldAndLength("f", &EcGroups, []linearCost{{
+			baseCost:  1,
+			chunkCost: 2,
+			chunkSize: 2,
+		}, {
+			baseCost:  5,
+			chunkCost: 2,
+			chunkSize: 10,
+		}, {
+			baseCost:  1,
+			chunkCost: 1,
+			chunkSize: 1,
+		}, {
+			baseCost:  1,
+			chunkCost: 1,
+			chunkSize: 1,
+		}}),
+	}
+
+	withOpcode(t, LogicVersion, xxx, func(opcode byte) {
+		// starts at 1, goes up by two for each PAIR of bytes
+		testApp(t, "int 0; bzero; xxx BN254g1; global OpcodeBudget; int 696; ==", nil)
+		testApp(t, "int 1; bzero; xxx BN254g1; global OpcodeBudget; int 694; ==", nil)
+		testApp(t, "int 2; bzero; xxx BN254g1; global OpcodeBudget; int 694; ==", nil)
+		testApp(t, "int 3; bzero; xxx BN254g1; global OpcodeBudget; int 692; ==", nil)
+		testApp(t, "int 4; bzero; xxx BN254g1; global OpcodeBudget; int 692; ==", nil)
+
+		// starts at 5, goes up by two for each 10 bytes
+		testApp(t, "int 0; bzero; xxx BN254g2; global OpcodeBudget; int 692; ==", nil)
+		testApp(t, "int 1; bzero; xxx BN254g2; global OpcodeBudget; int 690; ==", nil)
+		testApp(t, "int 2; bzero; xxx BN254g2; global OpcodeBudget; int 690; ==", nil)
+		testApp(t, "int 9; bzero; xxx BN254g2; global OpcodeBudget; int 690; ==", nil)
+		testApp(t, "int 10; bzero; xxx BN254g2; global OpcodeBudget; int 690; ==", nil)
+		testApp(t, "int 11; bzero; xxx BN254g2; global OpcodeBudget; int 688; ==", nil)
+	})
+}
