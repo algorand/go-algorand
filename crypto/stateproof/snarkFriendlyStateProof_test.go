@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-func TestCertToJSON(t *testing.T) {
+func TestStateProofToInterpreterInput(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -58,7 +58,7 @@ func TestCertToJSON(t *testing.T) {
 	partcom, err := merklearray.BuildVectorCommitmentTree(basics.ParticipantsArray(parts), crypto.HashFactory{HashType: HashType})
 	a.NoError(err)
 
-	b, err := MakeBuilder(message, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, targetForSampleCert)
+	b, err := MakeProver(message, stateProofIntervalForTests, uint64(totalWeight/2), parts, partcom, targetForSampleCert)
 	a.NoError(err)
 
 	for i := 0; i < npart; i++ {
@@ -67,16 +67,16 @@ func TestCertToJSON(t *testing.T) {
 		b.Add(uint64(i), sigs[i])
 	}
 
-	cert, err := b.Build()
+	sp, err := b.CreateProof()
 	a.NoError(err)
 
 	verif, err := MkVerifier(partcom.Root(), provenWt, targetForSampleCert)
 	a.NoError(err)
 
-	err = verif.Verify(stateProofIntervalForTests, message, cert)
-	a.NoError(err, "failed to verify the compact cert")
+	err = verif.Verify(stateProofIntervalForTests, message, sp)
+	a.NoError(err, "failed to verify the compact sp")
 
-	certenc, err := cert.createSnarkFriendlyCert(message[:])
+	certenc, err := sp.createSnarkFriendlyCert(message[:])
 	a.NoError(err)
 
 	fmt.Printf(toZokCode(certenc, verif, testMessage("hello world").IntoStateProofMessageHash(), stateProofIntervalForTests))
