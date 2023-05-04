@@ -139,7 +139,7 @@ fi
 printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple-v2.teal"
 
 # Real Create
-RES=$(${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --extra-pages 0 --from $ACCOUNT 2>&1 || true)
+RES=$(${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --local-byteslices 1 --from $ACCOUNT 2>&1 || true)
 EXPECTED="method create(uint64)uint64 succeeded with output: 2468"
 if [[ $RES != *"${EXPECTED}"* ]]; then
     date '+app-simulate-test FAIL the method call to create(uint64)uint64 should not fail %Y%m%d_%H%M%S'
@@ -198,7 +198,7 @@ printf '#pragma version 6\nint 1' > "${TEMPDIR}/simple-v6.teal"
 # NOTE: logs-a-lot.teal contains a method that logs 1.4kb info, which is well over 1kb limit in binary
 #       we test it here to see if the simulate unlimit log works under goal clerk simulate
 
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/logs-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v6.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/logs-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v6.teal" 2>&1 || true)
 EXPSUCCESS='Created app with app index'
 if [[ $RES != *"${EXPSUCCESS}"* ]]; then
     date '+app-simulate-test FAIL the app creation for logs-a-lot.teal should succeed %Y%m%d_%H%M%S'
