@@ -959,7 +959,7 @@ type PreEncodedSimulateRequest struct {
 	TxnGroups            []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
 	AllowEmptySignatures bool                                        `codec:"allow-empty-signatures,omitempty"`
 	AllowMoreLogging     bool                                        `codec:"allow-more-logging,omitempty"`
-	ExtraAppBudget       *uint64                                     `codec:"extra-app-budget,omitempty"`
+	ExtraAppBudget       uint64                                      `codec:"extra-app-budget"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.

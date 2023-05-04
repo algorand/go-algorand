@@ -1963,7 +1963,7 @@ int 1`
 				Txns: []transactions.SignedTxn{appCallTxnSigned},
 			},
 		},
-		ExtraAppBudget: &extraBudget,
+		ExtraAppBudget: extraBudget,
 	})
 	a.NoError(err)
 

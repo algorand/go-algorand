@@ -90,9 +90,9 @@ func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 
 // SetExtraBudget method sets ExtraAppBudget field in tracer.Result.
 // It omits nil or 0 in budget *uint64 pointer.
-func (eo ResultEvalOverrides) SetExtraBudget(budget *uint64) ResultEvalOverrides {
-	if budget != nil && *budget != 0 {
-		eo.ExtraAppBudget = budget
+func (eo ResultEvalOverrides) SetExtraBudget(budget uint64) ResultEvalOverrides {
+	if budget != 0 {
+		eo.ExtraAppBudget = &budget
 	}
 	return eo
 }
