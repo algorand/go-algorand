@@ -225,7 +225,9 @@ func (sd *StateDelta) Hydrate() {
 }
 
 // Dehydrate normalized the fields of this StateDelta, and clears any redundant internal caching.
-// This is useful for comparing StateDelta objects during testing.
+// This is useful for comparing StateDelta objects for equality.
+//
+// NOTE: initialHint is lost in dehydration. All other fields can be restored by calling Hydrate()
 func (sd *StateDelta) Dehydrate() {
 	sd.Accts.Dehydrate()
 	sd.initialHint = 0
@@ -277,7 +279,7 @@ func (ad *AccountDeltas) Hydrate() {
 }
 
 // Dehydrate normalized the fields of this AccountDeltas, and clears any redundant internal caching.
-// This is useful for comparing AccountDeltas objects during testing.
+// This is useful for comparing AccountDeltas objects for equality.
 func (ad *AccountDeltas) Dehydrate() {
 	if ad.Accts == nil {
 		ad.Accts = []BalanceRecord{}
