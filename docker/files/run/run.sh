@@ -78,14 +78,14 @@ function configure_data_dir() {
   algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
 
   # check for token overrides
-  if [ "$TOKEN" != "" ]; then
-    for dir in ${ALGORAND_DATA}/../*/; do
-      echo "$TOKEN" > "$dir/algod.token"
-    done
-  fi
-  if [ "$ADMIN_TOKEN" != "" ]; then
-    echo "$ADMIN_TOKEN" >algod.admin.token
-  fi
+  for dir in ${ALGORAND_DATA}/../*/; do
+    if [ "$TOKEN" != "" ]; then
+        echo "$TOKEN" > "$dir/algod.token"
+    fi
+    if [ "$ADMIN_TOKEN" != "" ]; then
+      echo "$ADMIN_TOKEN" > "$dir/algod.admin.token"
+    fi
+  done
 
   # configure telemetry
   if [ "$TELEMETRY_NAME" != "" ]; then
