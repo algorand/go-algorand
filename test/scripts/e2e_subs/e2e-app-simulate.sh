@@ -313,7 +313,7 @@ generate_teal "$BIG_TEAL_FILE" 8 400
 
 printf '#pragma version 8\nint 1' > "${TEMPDIR}/simple-v8.teal"
 
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${TEMPDIR}/simple-v8.teal" --extra-pages 1 --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${TEMPDIR}/simple-v8.teal" --extra-pages 1 2>&1 || true)
 EXPSUCCESS='Created app with app index'
 if [[ $RES != *"${EXPSUCCESS}"* ]]; then
     date '+app-simulate-test FAIL the app creation for generated large TEAL should succeed %Y%m%d_%H%M%S'
@@ -323,9 +323,9 @@ fi
 APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
 
 # SIMULATION! without extra budget should fail direct call
-${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/no-extra-budget.tx"
-${gcmd} clerk sign -i "${TEMPDIR}/no-extra-budget.tx" -o "${TEMPDIR}/no-extra-budget.stx"
-RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/no-extra-budget.stx")
+${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/no-extra-app-budget.tx"
+${gcmd} clerk sign -i "${TEMPDIR}/no-extra-app-budget.tx" -o "${TEMPDIR}/no-extra-app-budget.stx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/no-extra-app-budget.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the app call to generated large TEAL without extra budget should fail %Y%m%d_%H%M%S'
@@ -340,15 +340,15 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_F
 fi
 
 # SIMULATION! with extra budget should pass direct call
-RES=$(${gcmd} clerk simulate --allow-extra-budget 200 -t "${TEMPDIR}/no-extra-budget.stx")
+RES=$(${gcmd} clerk simulate --extra-app-budget 200 -t "${TEMPDIR}/no-extra-app-budget.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the app call to generated large TEAL with extra budget should pass %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-overrides"."extra-budget"') -ne 200 ]]; then
-    date '+app-simulate-test FAIL the app call to generated large TEAL should have extra-budget 200 %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."eval-overrides"."extra-app-budget"') -ne 200 ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL should have extra-app-budget 200 %Y%m%d_%H%M%S'
     false
 fi
 

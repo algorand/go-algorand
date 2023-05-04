@@ -3294,7 +3294,7 @@
           "description": "Lifts limits on log opcode usage during simulation.",
           "type": "boolean"
         },
-        "allow-extra-budget": {
+        "extra-app-budget": {
           "description": "Applies extra budget during simulation of app calls in the transaction group.",
           "type": "integer"
         }
@@ -3671,8 +3671,8 @@
           "type": "integer",
           "x-algorand-format": "uint64"
         },
-        "extra-budget": {
-          "description": "The extra budget added for app calls simulation in the transaction group",
+        "extra-app-budget": {
+          "description": "The extra budget added for each app call during each transaction group simulation",
           "type": "integer",
           "x-algorand-format": "uint64"
         }

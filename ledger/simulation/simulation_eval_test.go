@@ -891,7 +891,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedCreateTxn, signedExpensiveTxn},
 				},
-				ExtraBudget: &extraBudget,
+				ExtraAppBudget: &extraBudget,
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
@@ -915,7 +915,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 						AppBudgetConsumed: 1408,
 					},
 				},
-				EvalOverrides: simulation.ResultEvalOverrides{ExtraBudget: &extraBudget},
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraAppBudget: &extraBudget},
 			},
 		}
 	})

@@ -70,7 +70,7 @@ type ResultEvalOverrides struct {
 	AllowEmptySignatures bool
 	MaxLogCalls          *uint64
 	MaxLogSize           *uint64
-	ExtraBudget          *uint64
+	ExtraAppBudget       *uint64
 }
 
 // SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
@@ -88,11 +88,11 @@ func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 	return eo
 }
 
-// SetExtraBudget method sets ExtraBudget field in tracer.Result.
+// SetExtraBudget method sets ExtraAppBudget field in tracer.Result.
 // It omits nil or 0 in budget *uint64 pointer.
 func (eo ResultEvalOverrides) SetExtraBudget(budget *uint64) ResultEvalOverrides {
 	if budget != nil && *budget != 0 {
-		eo.ExtraBudget = budget
+		eo.ExtraAppBudget = budget
 	}
 	return eo
 }
@@ -132,7 +132,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 
 	resultEvalConstants := ResultEvalOverrides{
 		AllowEmptySignatures: request.AllowEmptySignatures,
-	}.AllowMoreLogging(request.AllowMoreLogging).SetExtraBudget(request.ExtraBudget)
+	}.AllowMoreLogging(request.AllowMoreLogging).SetExtraBudget(request.ExtraAppBudget)
 
 	return Result{
 		Version:       version,

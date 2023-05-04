@@ -1963,7 +1963,7 @@ int 1`
 				Txns: []transactions.SignedTxn{appCallTxnSigned},
 			},
 		},
-		AllowExtraBudget: &extraBudget,
+		ExtraAppBudget: &extraBudget,
 	})
 	a.NoError(err)
 
@@ -1972,7 +1972,7 @@ int 1`
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:       2,
 		LastRound:     resp.LastRound,
-		EvalOverrides: &model.SimulationEvalOverrides{ExtraBudget: &extraBudget},
+		EvalOverrides: &model.SimulationEvalOverrides{ExtraAppBudget: &extraBudget},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
 				Txns: []v2.PreEncodedSimulateTxnResult{
