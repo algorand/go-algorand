@@ -498,6 +498,9 @@ type ConsensusParams struct {
 	// EnableCatchpointsWithSPContexts specifies when to re-enable version 7 catchpoints.
 	// Version 7 includes state proof verification contexts
 	EnableCatchpointsWithSPContexts bool
+
+	// EnableBoxRefNameError specifies that box ref names should be validated early
+	EnableBoxRefNameError bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1266,6 +1269,7 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnablePrecheckECDSACurve = true
 	vFuture.EnableBareBudgetError = true
+	vFuture.EnableBoxRefNameError = true
 
 	vFuture.StateProofUseTrackerVerification = true
 	vFuture.EnableCatchpointsWithSPContexts = true

@@ -157,6 +157,10 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 	applyDataOfCurrentTxn.EvalDelta = evalDelta
 }
 
+func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
+	// TODO note: need to pass info here to create optional object Trace in TxnResult under TxnGroupResult
+}
+
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
 	tracer.saveApplyData(ad)
