@@ -159,6 +159,7 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	// TODO note: need to pass info here to create optional object Trace in TxnResult under TxnGroupResult
+	tracer.cursorEvalTracer.BeforeTxn(ep, groupIndex)
 }
 
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
