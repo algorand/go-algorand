@@ -293,12 +293,30 @@ fi
 # WE WANT TO FURTHER TEST EXTRA BUDGET IN SIMULATION WORKS #
 ############################################################
 
+function generate_teal() {
+    FILE=$1
+    VERSION=$2
+    REPETITION=$3
+
+    printf '#pragma version %d\n txn ApplicationID\n bz end\n' $VERSION > "${FILE}"
+
+    # iterating in interval [0, REPETITION - 1]
+    for i in $(seq 0 1 $(expr $REPETITION - 1)); do
+        printf "int 1\npop\n" >> "${FILE}"
+    done
+
+    printf "end:\n int 1\n" >> "${FILE}"
+}
+
+BIG_TEAL_FILE="$TEMPDIR/int-pop-400-cost-a-lot.teal"
+generate_teal "$BIG_TEAL_FILE" 8 400
+
 printf '#pragma version 8\nint 1' > "${TEMPDIR}/simple-v8.teal"
 
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/int-pop-400-cost-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v8.teal" --extra-pages 1 --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${TEMPDIR}/simple-v8.teal" --extra-pages 1 --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPSUCCESS='Created app with app index'
 if [[ $RES != *"${EXPSUCCESS}"* ]]; then
-    date '+app-simulate-test FAIL the app creation for int-pop-400-cost-a-lot.teal should succeed %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app creation for generated large TEAL should succeed %Y%m%d_%H%M%S'
     false
 fi
 
@@ -310,14 +328,14 @@ ${gcmd} clerk sign -i "${TEMPDIR}/no-extra-budget.tx" -o "${TEMPDIR}/no-extra-bu
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/no-extra-budget.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal without extra budget should fail %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to generated large TEAL without extra budget should fail %Y%m%d_%H%M%S'
     false
 fi
 
 EXPECTED_FAILURE='dynamic cost budget exceeded'
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_FAILURE}"* ]]; then
-    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal should fail %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to generated large TEAL should fail %Y%m%d_%H%M%S'
     false
 fi
 
@@ -325,21 +343,21 @@ fi
 RES=$(${gcmd} clerk simulate --allow-extra-budget 200 -t "${TEMPDIR}/no-extra-budget.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
-    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal with extra budget should pass %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to generated large TEAL with extra budget should pass %Y%m%d_%H%M%S'
     false
 fi
 
 if [[ $(echo "$RES" | jq '."eval-overrides"."extra-budget"') -ne 200 ]]; then
-    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal should have extra-budget 200 %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to generated large TEAL should have extra-budget 200 %Y%m%d_%H%M%S'
     false
 fi
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-added"') -ne 900 ]]; then
-    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal should have app-budget-added 900 %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to generated large TEAL should have app-budget-added 900 %Y%m%d_%H%M%S'
     false
 fi
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; then
-    date '+app-simulate-test FAIL the app call to int-pop-400-cost-a-lot.teal should be consuming 804 budget %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to generated large TEAL should be consuming 804 budget %Y%m%d_%H%M%S'
     false
 fi
