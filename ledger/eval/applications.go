@@ -299,7 +299,9 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (deltas *ledgerco
 		// In theory we could reuse this child cow allocation for all of the transactions in this
 		// group; that's what BlockEvaluator.TransactionGroup does. However, achieving the same
 		// thing here would require interface changes.
-		cowForTxn = cs.child(1)
+
+		cowForTxn = &roundCowState{} // Specifically not calling cs.child(1), see comment below.
+		cs.reuseChild(cowForTxn, 1)
 		defer func() {
 			d := cowForTxn.deltas()
 			deltas = &d
@@ -307,7 +309,11 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) (deltas *ledgerco
 			// cowForTxn.recycle() // DO NOT RECYCLE!
 			// We cannot recycle here since we are returning the underlying StateDelta for this cow.
 			// If we did recycle, there would be a race between the caller looking at the StateDelta
-			// and the next user of the recycled cow.
+			// and the next user of the recycled cow. For this reason, we allocate a new
+			// roundCowState above instead of using cs.child(); otherwise, we would be draining the
+			// underlying sync.Pool and causing other routines to do more allocation. The other
+			// routines are likely more important, since if GranularEval is enabled, that's a good
+			// indicator that evaluation is for debugging purposes.
 		}()
 	}
 
