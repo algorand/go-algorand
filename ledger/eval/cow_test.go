@@ -209,6 +209,7 @@ func TestCowDeltasAfterCommit(t *testing.T) {
 
 	acctUpdates, _, _ := ledgertesting.RandomDeltas(10, accts0, 0)
 	applyUpdates(c1, acctUpdates)
+	acctUpdates.Dehydrate() // Prep for comparison
 
 	c1.kvPut("key", []byte("value"))
 	expectedKvMods := map[string]ledgercore.KvValueDelta{
@@ -218,17 +219,20 @@ func TestCowDeltasAfterCommit(t *testing.T) {
 	}
 
 	actualDeltas := c1.deltas()
+	actualDeltas.Dehydrate() // Prep for comparison
 	require.Equal(t, acctUpdates, actualDeltas.Accts)
 	require.Equal(t, expectedKvMods, actualDeltas.KvMods)
 
 	// Parent should now have deltas
 	c1.commitToParent()
 	actualDeltas = c0.deltas()
+	actualDeltas.Dehydrate() // Prep for comparison
 	require.Equal(t, acctUpdates, actualDeltas.Accts)
 	require.Equal(t, expectedKvMods, actualDeltas.KvMods)
 
 	// Deltas remain valid in child after commit
 	actualDeltas = c0.deltas()
+	actualDeltas.Dehydrate() // Prep for comparison
 	require.Equal(t, acctUpdates, actualDeltas.Accts)
 	require.Equal(t, expectedKvMods, actualDeltas.KvMods)
 }
