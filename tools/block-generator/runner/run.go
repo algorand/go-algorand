@@ -341,6 +341,11 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 		return fmt.Errorf("problem collecting final metrics (%d / %s): %w", count, time.Since(start), err)
 	}
 
+	// write scenario to report
+	scenario := path.Base(r.Path)
+	if _, err := report.WriteString(fmt.Sprintf("scenario:%s\n", scenario)); err != nil {
+		return fmt.Errorf("unable to write scenario to report: %w", err)
+	}
 	// Collect results.
 	durationStr := fmt.Sprintf("test_duration_seconds:%d\ntest_duration_actual_seconds:%f\n",
 		uint64(r.RunDuration.Seconds()),
