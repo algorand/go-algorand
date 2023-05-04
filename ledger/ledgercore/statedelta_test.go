@@ -99,6 +99,92 @@ func TestAccountDeltas(t *testing.T) {
 	a.Equal(sample1, data)
 }
 
+func TestAccountDeltasMergeAccountsOrder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	addr1 := randomAddress()
+	data1 := AccountData{AccountBaseData: AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 111}}}
+	addr2 := randomAddress()
+	data2 := AccountData{AccountBaseData: AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 222}}}
+	addr3 := randomAddress()
+	data3 := AccountData{AccountBaseData: AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 333}}}
+	addr4 := randomAddress()
+	data4 := AccountData{AccountBaseData: AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 444}}}
+
+	asset1 := basics.AssetIndex(100)
+	asset1Params := AssetParamsDelta{
+		Params: &basics.AssetParams{Total: 1},
+	}
+	asset2 := basics.AssetIndex(200)
+	asset2Params := AssetParamsDelta{
+		Params: &basics.AssetParams{Total: 2},
+	}
+	asset3 := basics.AssetIndex(300)
+	asset3Params := AssetParamsDelta{
+		Params: &basics.AssetParams{Total: 3},
+	}
+	asset4 := basics.AssetIndex(400)
+	asset4Params := AssetParamsDelta{
+		Params: &basics.AssetParams{Total: 4},
+	}
+
+	app1 := basics.AppIndex(101)
+	app1Params := AppParamsDelta{
+		Params: &basics.AppParams{ApprovalProgram: []byte("app1")},
+	}
+	app2 := basics.AppIndex(201)
+	app2Params := AppParamsDelta{
+		Params: &basics.AppParams{ApprovalProgram: []byte("app2")},
+	}
+	app3 := basics.AppIndex(301)
+	app3Params := AppParamsDelta{
+		Params: &basics.AppParams{ApprovalProgram: []byte("app3")},
+	}
+	app4 := basics.AppIndex(401)
+	app4Params := AppParamsDelta{
+		Params: &basics.AppParams{ApprovalProgram: []byte("app4")},
+	}
+
+	var ad1 AccountDeltas
+	ad1.Upsert(addr1, data1)
+	ad1.Upsert(addr2, data2)
+	ad1.UpsertAssetResource(addr1, asset1, asset1Params, AssetHoldingDelta{})
+	ad1.UpsertAssetResource(addr2, asset2, asset2Params, AssetHoldingDelta{})
+	ad1.UpsertAppResource(addr1, app1, app1Params, AppLocalStateDelta{})
+	ad1.UpsertAppResource(addr2, app2, app2Params, AppLocalStateDelta{})
+
+	var ad2 AccountDeltas
+	ad2.Upsert(addr3, data3)
+	ad2.Upsert(addr4, data4)
+	ad2.UpsertAssetResource(addr3, asset3, asset3Params, AssetHoldingDelta{})
+	ad2.UpsertAssetResource(addr4, asset4, asset4Params, AssetHoldingDelta{})
+	ad2.UpsertAppResource(addr3, app3, app3Params, AppLocalStateDelta{})
+	ad2.UpsertAppResource(addr4, app4, app4Params, AppLocalStateDelta{})
+
+	// Iterate to ensure deterministic order
+	for i := 0; i < 10; i++ {
+		var merged AccountDeltas
+		merged.MergeAccounts(ad1)
+		merged.MergeAccounts(ad2)
+
+		var expectedAccounts []BalanceRecord
+		expectedAccounts = append(expectedAccounts, ad1.Accts...)
+		expectedAccounts = append(expectedAccounts, ad2.Accts...)
+		require.Equal(t, expectedAccounts, merged.Accts)
+
+		var expectedAppResources []AppResourceRecord
+		expectedAppResources = append(expectedAppResources, ad1.AppResources...)
+		expectedAppResources = append(expectedAppResources, ad2.AppResources...)
+		require.Equal(t, expectedAppResources, merged.AppResources)
+
+		var expectedAssetResources []AssetResourceRecord
+		expectedAssetResources = append(expectedAssetResources, ad1.AssetResources...)
+		expectedAssetResources = append(expectedAssetResources, ad2.AssetResources...)
+		require.Equal(t, expectedAssetResources, merged.AssetResources)
+	}
+}
+
 func TestMakeStateDeltaMaps(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
