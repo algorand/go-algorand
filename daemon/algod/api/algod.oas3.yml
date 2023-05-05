@@ -1968,18 +1968,15 @@
           },
           "extra-opcode-budget": {
             "description": "The extra opcode budget added to each transaction group during simulation",
-            "type": "integer",
-            "x-algorand-format": "uint64"
+            "type": "integer"
           },
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
-            "type": "integer",
-            "x-algorand-format": "uint64"
+            "type": "integer"
           },
           "max-log-size": {
             "description": "The maximum byte number to log during simulation",
-            "type": "integer",
-            "x-algorand-format": "uint64"
+            "type": "integer"
           }
         },
         "type": "object"
