@@ -619,8 +619,8 @@ type SimulateRequest struct {
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
-	// ExtraAppBudget Applies extra budget during simulation of app calls in the transaction group.
-	ExtraAppBudget *uint64 `json:"extra-app-budget,omitempty"`
+	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
+	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
@@ -667,8 +667,8 @@ type SimulationEvalOverrides struct {
 	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
 	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
 
-	// ExtraAppBudget The extra budget added for each app call during each transaction group simulation
-	ExtraAppBudget *uint64 `json:"extra-app-budget,omitempty"`
+	// ExtraOpcodeBudget The extra opcode budget added to each transaction group during simulation
+	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
 
 	// MaxLogCalls The maximum log calls one can make during simulation
 	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`

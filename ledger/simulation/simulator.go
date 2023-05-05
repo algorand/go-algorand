@@ -42,7 +42,7 @@ type Request struct {
 	TxnGroups            [][]transactions.SignedTxn
 	AllowEmptySignatures bool
 	AllowMoreLogging     bool
-	ExtraAppBudget       uint64
+	ExtraOpcodeBudget    uint64
 }
 
 // Latest is part of the LedgerForSimulator interface.
@@ -191,13 +191,13 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 	}
 
 	// check that the extra budget is not exceeding simulation extra budget limit
-	if overrides.ExtraAppBudget != nil && *overrides.ExtraAppBudget > MaxExtraOpcodeBudget {
+	if overrides.ExtraOpcodeBudget > MaxExtraOpcodeBudget {
 		return nil,
 			InvalidRequestError{
 				SimulatorError{
 					fmt.Errorf(
 						"extra budget %d > simulation extra budget limit %d",
-						*overrides.ExtraAppBudget, MaxExtraOpcodeBudget),
+						overrides.ExtraOpcodeBudget, MaxExtraOpcodeBudget),
 				},
 			}
 	}

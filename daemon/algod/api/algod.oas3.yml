@@ -1868,8 +1868,8 @@
             "description": "Lifts limits on log opcode usage during simulation.",
             "type": "boolean"
           },
-          "extra-app-budget": {
-            "description": "Applies extra budget during simulation of app calls in the transaction group.",
+          "extra-opcode-budget": {
+            "description": "Applies extra opcode budget during simulation for each transaction group.",
             "type": "integer"
           },
           "txn-groups": {
@@ -1966,8 +1966,8 @@
             "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
             "type": "boolean"
           },
-          "extra-app-budget": {
-            "description": "The extra budget added for each app call during each transaction group simulation",
+          "extra-opcode-budget": {
+            "description": "The extra opcode budget added to each transaction group during simulation",
             "type": "integer",
             "x-algorand-format": "uint64"
           },

@@ -884,14 +884,14 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
-		extraBudget := uint64(100)
+		extraOpcodeBudget := uint64(100)
 
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedCreateTxn, signedExpensiveTxn},
 				},
-				ExtraAppBudget: extraBudget,
+				ExtraOpcodeBudget: extraOpcodeBudget,
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
@@ -915,7 +915,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 						AppBudgetConsumed: 1408,
 					},
 				},
-				EvalOverrides: simulation.ResultEvalOverrides{ExtraAppBudget: &extraBudget},
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
 			},
 		}
 	})
@@ -965,7 +965,7 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedCreateTxn, signedExpensiveTxn},
 				},
-				ExtraAppBudget: extraBudget,
+				ExtraOpcodeBudget: extraBudget,
 			},
 			expectedError: "dynamic cost budget exceeded",
 			expected: simulation.Result{
@@ -991,7 +991,7 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 						AppBudgetConsumed: 1405,
 					},
 				},
-				EvalOverrides: simulation.ResultEvalOverrides{ExtraAppBudget: &extraBudget},
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraBudget},
 			},
 		}
 	})
@@ -1042,8 +1042,8 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 	// should error on too high extra budgets
 	_, err := s.Simulate(
 		simulation.Request{
-			TxnGroups:      [][]transactions.SignedTxn{{signedCreateTxn, signedExpensiveTxn}},
-			ExtraAppBudget: extraBudget,
+			TxnGroups:         [][]transactions.SignedTxn{{signedCreateTxn, signedExpensiveTxn}},
+			ExtraOpcodeBudget: extraBudget,
 		})
 	require.ErrorContains(t, err, "extra budget 320001 > simulation extra budget limit 320000")
 }

@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/simulation"
 	"io"
 	"os"
 	"path/filepath"
@@ -38,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 
@@ -69,10 +69,10 @@ var (
 	requestFilename    string
 	requestOutFilename string
 
-	simulateAllowEmptySignatures bool
-	simulateAllowMoreLogging     bool
-	simulateAllowExtraBudget     bool
-	simulateExtraOpcodeBudget    uint64
+	simulateAllowEmptySignatures   bool
+	simulateAllowMoreLogging       bool
+	simulateAllowExtraOpcodeBudget bool
+	simulateExtraOpcodeBudget      uint64
 )
 
 func init() {
@@ -159,8 +159,8 @@ func init() {
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
-	simulateCmd.Flags().BoolVar(&simulateAllowExtraBudget, "allow-extra-app-budget", false, "Apply max extra budget for apps during simulation")
-	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-app-budget", 0, "Apply extra budget during simulation")
+	simulateCmd.Flags().BoolVar(&simulateAllowExtraOpcodeBudget, "allow-extra-opcode-budget", false, "Apply max extra budget for apps during simulation")
+	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra budget during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1246,10 +1246,10 @@ var simulateCmd = &cobra.Command{
 			reportErrorf("exactly one of --txfile or --request must be provided")
 		}
 
-		allowExtraBudgetProvided := cmd.Flags().Changed("allow-extra-app-budget")
-		extraBudgetProvided := cmd.Flags().Changed("extra-app-budget")
+		allowExtraBudgetProvided := cmd.Flags().Changed("allow-extra-opcode-budget")
+		extraBudgetProvided := cmd.Flags().Changed("extra-opcode-budget")
 		if allowExtraBudgetProvided && extraBudgetProvided {
-			reportErrorf("--allow-extra-app-budget and --extra-app-budget are mutually exclusive")
+			reportErrorf("--allow-extra-opcode-budget and --extra-opcode-budget are mutually exclusive")
 		}
 		if allowExtraBudgetProvided {
 			simulateExtraOpcodeBudget = simulation.MaxExtraOpcodeBudget
@@ -1276,7 +1276,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraAppBudget:       simulateExtraOpcodeBudget,
+				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1299,7 +1299,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraAppBudget:       simulateExtraOpcodeBudget,
+				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {

@@ -323,9 +323,9 @@ fi
 APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
 
 # SIMULATION! without extra budget should fail direct call
-${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/no-extra-app-budget.tx"
-${gcmd} clerk sign -i "${TEMPDIR}/no-extra-app-budget.tx" -o "${TEMPDIR}/no-extra-app-budget.stx"
-RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/no-extra-app-budget.stx")
+${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/no-extra-opcode-budget.tx"
+${gcmd} clerk sign -i "${TEMPDIR}/no-extra-opcode-budget.tx" -o "${TEMPDIR}/no-extra-opcode-budget.stx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/no-extra-opcode-budget.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
     date '+app-simulate-test FAIL the app call to generated large TEAL without extra budget should fail %Y%m%d_%H%M%S'
@@ -340,15 +340,15 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_F
 fi
 
 # SIMULATION! with extra budget should pass direct call
-RES=$(${gcmd} clerk simulate --extra-app-budget 200 -t "${TEMPDIR}/no-extra-app-budget.stx")
+RES=$(${gcmd} clerk simulate --extra-opcode-budget 200 -t "${TEMPDIR}/no-extra-opcode-budget.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the app call to generated large TEAL with extra budget should pass %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-overrides"."extra-app-budget"') -ne 200 ]]; then
-    date '+app-simulate-test FAIL the app call to generated large TEAL should have extra-app-budget 200 %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."eval-overrides"."extra-opcode-budget"') -ne 200 ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL should have extra-opcode-budget 200 %Y%m%d_%H%M%S'
     false
 fi
 
