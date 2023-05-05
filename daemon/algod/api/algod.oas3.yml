@@ -3947,7 +3947,7 @@
             },
             "description": "Internal Error"
           },
-          "503": {
+          "501": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3960,7 +3960,7 @@
                 }
               }
             },
-            "description": "Service Temporarily Unavailable"
+            "description": "Not Implemented"
           },
           "default": {
             "content": {},
@@ -4217,7 +4217,7 @@
             },
             "description": "Internal Error"
           },
-          "503": {
+          "501": {
             "content": {
               "application/json": {
                 "schema": {
@@ -4230,7 +4230,7 @@
                 }
               }
             },
-            "description": "Service Temporarily Unavailable"
+            "description": "Not Implemented"
           },
           "default": {
             "content": {},
