@@ -72,7 +72,7 @@ var (
 	simulateAllowEmptySignatures bool
 	simulateAllowMoreLogging     bool
 	simulateAllowExtraBudget     bool
-	simulateExtraBudget          uint64
+	simulateExtraOpcodeBudget    uint64
 )
 
 func init() {
@@ -160,7 +160,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowExtraBudget, "allow-extra-app-budget", false, "Apply max extra budget for apps during simulation")
-	simulateCmd.Flags().Uint64Var(&simulateExtraBudget, "extra-app-budget", 0, "Apply extra budget during simulation")
+	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-app-budget", 0, "Apply extra budget during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1252,7 +1252,7 @@ var simulateCmd = &cobra.Command{
 			reportErrorf("--allow-extra-app-budget and --extra-app-budget are mutually exclusive")
 		}
 		if allowExtraBudgetProvided {
-			simulateExtraBudget = simulation.MaxExtraBudget
+			simulateExtraOpcodeBudget = simulation.MaxExtraOpcodeBudget
 		}
 
 		requestOutProvided := cmd.Flags().Changed("request-only-out")
@@ -1276,7 +1276,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraAppBudget:       simulateExtraBudget,
+				ExtraAppBudget:       simulateExtraOpcodeBudget,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1299,7 +1299,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraAppBudget:       simulateExtraBudget,
+				ExtraAppBudget:       simulateExtraOpcodeBudget,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {

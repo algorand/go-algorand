@@ -1008,50 +1008,44 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 ` + strings.Repeat(`int 1; pop;`, 700) + `end:
 	int 1`
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
-		receiver := accounts[1]
+	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
 
-		futureAppID := basics.AppIndex(1)
-		// App create with cost 4
-		createTxn := txnInfo.NewTxn(txntest.Txn{
-			Type:              protocol.ApplicationCallTx,
-			Sender:            sender.Addr,
-			ApplicationID:     0,
-			ApprovalProgram:   expensiveAppSource,
-			ClearStateProgram: `#pragma version 6; int 0`,
-		})
-		// Expensive 700 repetition of int 1 and pop total cost 1404
-		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
-			Type:          protocol.ApplicationCallTx,
-			Sender:        sender.Addr,
-			ApplicationID: futureAppID,
-			Accounts:      []basics.Address{receiver.Addr},
-		})
+	sender := accounts[0]
+	receiver := accounts[1]
 
-		txntest.Group(&createTxn, &expensiveTxn)
-
-		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
-		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
-		// Add a small bit of extra budget, but not enough
-		extraBudget := simulation.MaxExtraBudget + 1
-
-		return simulationTestCase{
-			input: simulation.Request{
-				TxnGroups: [][]transactions.SignedTxn{
-					{signedCreateTxn, signedExpensiveTxn},
-				},
-				ExtraAppBudget: extraBudget,
-			},
-			expectedError: "extra budget 320001 > simulation extra budget limit 320000",
-			expected: simulation.Result{
-				Version:       simulation.ResultLatestVersion,
-				LastRound:     txnInfo.LatestRound(),
-				TxnGroups:     []simulation.TxnGroupResult{{Txns: []simulation.TxnResult{{}, {}}}},
-				EvalOverrides: simulation.ResultEvalOverrides{ExtraAppBudget: &extraBudget},
-			},
-		}
+	futureAppID := basics.AppIndex(1)
+	// App create with cost 4
+	createTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            sender.Addr,
+		ApplicationID:     0,
+		ApprovalProgram:   expensiveAppSource,
+		ClearStateProgram: `#pragma version 6; int 0`,
 	})
+	// Expensive 700 repetition of int 1 and pop total cost 1404
+	expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: futureAppID,
+		Accounts:      []basics.Address{receiver.Addr},
+	})
+
+	txntest.Group(&createTxn, &expensiveTxn)
+
+	signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+	signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+	// Add a small bit of extra budget, but not enough
+	extraBudget := simulation.MaxExtraOpcodeBudget + 1
+
+	// should error on too high extra budgets
+	_, err := s.Simulate(
+		simulation.Request{
+			TxnGroups:      [][]transactions.SignedTxn{{signedCreateTxn, signedExpensiveTxn}},
+			ExtraAppBudget: extraBudget,
+		})
+	require.ErrorContains(t, err, "extra budget 320001 > simulation extra budget limit 320000")
 }
 
 func TestLogicSigOverBudget(t *testing.T) {
@@ -1255,7 +1249,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 	// should error with invalid signature
 	stxn.Sig[0] += byte(1) // will wrap if > 255
 	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
-	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 	require.ErrorContains(t, err, "one signature didn't pass")
 }
 
@@ -1659,7 +1653,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 	// should error with invalid signature
 	stxn.Sig[0] += byte(1) // will wrap if > 255
 	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
-	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 	require.ErrorContains(t, err, "one signature didn't pass")
 }
 

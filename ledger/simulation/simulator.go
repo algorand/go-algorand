@@ -73,8 +73,8 @@ func (s SimulatorError) Unwrap() error {
 	return s.err
 }
 
-// InvalidTxGroupError occurs when an invalid transaction group was submitted to the simulator.
-type InvalidTxGroupError struct {
+// InvalidRequestError occurs when an invalid transaction group was submitted to the simulator.
+type InvalidRequestError struct {
 	SimulatorError
 }
 
@@ -147,7 +147,7 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	// Verify the signed transactions are well-formed and have valid signatures
 	_, err = verify.TxnGroupWithTracer(txnsToVerify, &hdr, nil, s.ledger, tracer)
 	if err != nil {
-		err = InvalidTxGroupError{SimulatorError{err}}
+		err = InvalidRequestError{SimulatorError{err}}
 	}
 	return err
 }
@@ -191,13 +191,13 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 	}
 
 	// check that the extra budget is not exceeding simulation extra budget limit
-	if overrides.ExtraAppBudget != nil && *overrides.ExtraAppBudget > MaxExtraBudget {
+	if overrides.ExtraAppBudget != nil && *overrides.ExtraAppBudget > MaxExtraOpcodeBudget {
 		return nil,
-			EvalFailureError{
+			InvalidRequestError{
 				SimulatorError{
 					fmt.Errorf(
 						"extra budget %d > simulation extra budget limit %d",
-						*overrides.ExtraAppBudget, MaxExtraBudget),
+						*overrides.ExtraAppBudget, MaxExtraOpcodeBudget),
 				},
 			}
 	}
@@ -211,7 +211,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	simulatorTracer := makeEvalTracer(s.ledger.start, simulateRequest)
 
 	if len(simulateRequest.TxnGroups) != 1 {
-		return Result{}, InvalidTxGroupError{
+		return Result{}, InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups)),
 			},
@@ -225,7 +225,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		case errors.As(err, &verifyError):
 			if verifyError.GroupIndex < 0 {
 				// This group failed verification, but the problem can't be blamed on a single transaction.
-				return Result{}, InvalidTxGroupError{SimulatorError{err}}
+				return Result{}, InvalidRequestError{SimulatorError{err}}
 			}
 			simulatorTracer.result.TxnGroups[0].FailureMessage = verifyError.Error()
 			simulatorTracer.result.TxnGroups[0].FailedAt = TxnPath{uint64(verifyError.GroupIndex)}
