@@ -504,6 +504,9 @@ type ConsensusParams struct {
 	// opcodes that accept IDs or slot indexes. Simultaneously, the first ID
 	// allocated in new chains is raised to 1001.
 	AppForbidLowResources bool
+
+	// EnableBoxRefNameError specifies that box ref names should be validated early
+	EnableBoxRefNameError bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1273,6 +1276,7 @@ func initConsensusProtocols() {
 	vFuture.EnablePrecheckECDSACurve = true
 	vFuture.AppForbidLowResources = true
 	vFuture.EnableBareBudgetError = true
+	vFuture.EnableBoxRefNameError = true
 
 	vFuture.StateProofUseTrackerVerification = true
 	vFuture.EnableCatchpointsWithSPContexts = true

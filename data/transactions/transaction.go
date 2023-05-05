@@ -477,6 +477,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			if br.Index > uint64(len(tx.ForeignApps)) {
 				return fmt.Errorf("tx.Boxes[%d].Index is %d. Exceeds len(tx.ForeignApps)", i, br.Index)
 			}
+			if proto.EnableBoxRefNameError && len(br.Name) > proto.MaxAppKeyLen {
+				return fmt.Errorf("tx.Boxes[%d].Name too long, max len %d bytes", i, proto.MaxAppKeyLen)
+			}
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {

@@ -5,7 +5,7 @@
 
 set -e +o pipefail
 
-VERSION="1.0.3"
+VERSION="1.0.6"
 
 codecov_flags=( )
 url="https://codecov.io"
@@ -865,14 +865,17 @@ then
   if [  "$GITHUB_HEAD_REF" != "" ];
   then
     # PR refs are in the format: refs/pull/7/merge
-    pr="${GITHUB_REF#refs/pull/}"
-    pr="${pr%/merge}"
+    if [[ "$GITHUB_REF" =~ ^refs\/pull\/[0-9]+\/merge$ ]];
+    then
+      pr="${GITHUB_REF#refs/pull/}"
+      pr="${pr%/merge}"
+    fi
     branch="${GITHUB_HEAD_REF}"
   fi
   commit="${GITHUB_SHA}"
   slug="${GITHUB_REPOSITORY}"
   build="${GITHUB_RUN_ID}"
-  build_url=$(urlencode "http://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
+  build_url=$(urlencode "${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")
   job="$(urlencode "${GITHUB_WORKFLOW}")"
 
   # actions/checkout runs in detached HEAD
@@ -987,6 +990,7 @@ else
 
 fi
 
+say "    ${e}current dir: ${x} $PWD"
 say "    ${e}project root:${x} $git_root"
 
 # find branch, commit, repo from git command
@@ -1618,7 +1622,7 @@ then
   # [ or ]
   syntax_list='^[[:space:]]*[][][[:space:]]*(//.*)?$'
   # func ... {
-  syntax_go_func='^[[:space:]]*[func].*[\{][[:space:]]*$'
+  syntax_go_func='^[[:space:]]*func[[:space:]]*[\{][[:space:]]*$'
 
   # shellcheck disable=SC2089
   skip_dirs="-not -path '*/$bower_components/*' \
@@ -1783,7 +1787,7 @@ if [ "$dump" != "0" ];
 then
   # trim whitespace from query
   say "    ${e}->${x} Dumping upload file (no upload)"
-  echo "$url/upload/v4?$(echo "package=$package-$VERSION&token=$token&$query" | tr -d ' ')"
+  echo "$url/upload/v4?$(echo "package=$package-$VERSION&$query" | tr -d ' ')"
   cat "$upload_file"
 else
   if [ "$save_to" != "" ];
@@ -1802,10 +1806,9 @@ else
   say "    ${e}url:${x} $url"
   say "    ${e}query:${x} $query"
 
-  # Full query without token (to display on terminal output)
-  queryNoToken=$(echo "package=$package-$VERSION&token=secret&$query" | tr -d ' ')
-  # now add token to query
+  # Full query (to display on terminal output)
   query=$(echo "package=$package-$VERSION&token=$token&$query" | tr -d ' ')
+  queryNoToken=$(echo "package=$package-$VERSION&token=<hidden>&$query" | tr -d ' ')
 
   if [ "$ft_s3" = "1" ];
   then
@@ -1817,6 +1820,7 @@ else
           -H 'X-Reduced-Redundancy: false' \
           -H 'X-Content-Type: application/x-gzip' \
           -H 'Content-Length: 0' \
+          -H "X-Upload-Token: ${token}" \
           --write-out "\n%{response_code}\n" \
           $curlargs \
           "$url/upload/v4?$query" || true)
@@ -1863,6 +1867,7 @@ else
         -H 'Content-Type: text/plain' \
         -H 'Content-Encoding: gzip' \
         -H 'X-Content-Encoding: gzip' \
+        -H "X-Upload-Token: ${token}" \
         -H 'Accept: text/plain' \
         $curlargs \
         "$url/upload/v2?$query&attempt=$i" || echo 'HTTP 500')
