@@ -92,5 +92,5 @@ func generateKeysForRange(ctx context.Context, startIdx uint64, endIdx uint64, k
 		}
 		keys[k] = *sigAlgo
 	}
-	return nil
+	return nil //nolint:nilerr // OK to not return ctx.Err()
 }
