@@ -69,10 +69,10 @@ var (
 	requestFilename    string
 	requestOutFilename string
 
-	simulateAllowEmptySignatures   bool
-	simulateAllowMoreLogging       bool
-	simulateAllowExtraOpcodeBudget bool
-	simulateExtraOpcodeBudget      uint64
+	simulateAllowEmptySignatures bool
+	simulateAllowMoreLogging     bool
+	simulateAllowExtraBudget     bool
+	simulateExtraBudget          uint64
 )
 
 func init() {
@@ -159,8 +159,8 @@ func init() {
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
-	simulateCmd.Flags().BoolVar(&simulateAllowExtraOpcodeBudget, "allow-extra-opcode-budget", false, "Apply max extra budget for apps during simulation")
-	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra budget during simulation")
+	simulateCmd.Flags().BoolVar(&simulateAllowExtraBudget, "allow-extra-opcode-budget", false, "Apply max extra budget for apps during simulation")
+	simulateCmd.Flags().Uint64Var(&simulateExtraBudget, "extra-opcode-budget", 0, "Apply extra budget during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1252,7 +1252,7 @@ var simulateCmd = &cobra.Command{
 			reportErrorf("--allow-extra-opcode-budget and --extra-opcode-budget are mutually exclusive")
 		}
 		if allowExtraBudgetProvided {
-			simulateExtraOpcodeBudget = simulation.MaxExtraOpcodeBudget
+			simulateExtraBudget = simulation.MaxExtraOpcodeBudget
 		}
 
 		requestOutProvided := cmd.Flags().Changed("request-only-out")
@@ -1276,7 +1276,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				ExtraOpcodeBudget:    simulateExtraBudget,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1299,7 +1299,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				ExtraOpcodeBudget:    simulateExtraBudget,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {

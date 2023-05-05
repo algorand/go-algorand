@@ -786,7 +786,6 @@ func TestAppCallOverBudget(t *testing.T) {
 
 	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 		sender := accounts[0]
-		receiver := accounts[1]
 
 		futureAppID := basics.AppIndex(1)
 		// App create with cost 4
@@ -805,7 +804,6 @@ int 0
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
-			Accounts:      []basics.Address{receiver.Addr},
 		})
 
 		txntest.Group(&createTxn, &expensiveTxn)
@@ -861,7 +859,6 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 
 	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 		sender := accounts[0]
-		receiver := accounts[1]
 
 		futureAppID := basics.AppIndex(1)
 		// App create with cost 4
@@ -877,7 +874,6 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
-			Accounts:      []basics.Address{receiver.Addr},
 		})
 
 		txntest.Group(&createTxn, &expensiveTxn)
@@ -934,7 +930,6 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 
 	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 		sender := accounts[0]
-		receiver := accounts[1]
 
 		futureAppID := basics.AppIndex(1)
 		// App create with cost 4
@@ -950,7 +945,6 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
-			Accounts:      []basics.Address{receiver.Addr},
 		})
 
 		txntest.Group(&createTxn, &expensiveTxn)
@@ -1013,7 +1007,6 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 	s := simulation.MakeSimulator(l)
 
 	sender := accounts[0]
-	receiver := accounts[1]
 
 	futureAppID := basics.AppIndex(1)
 	// App create with cost 4
@@ -1029,14 +1022,14 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 		Type:          protocol.ApplicationCallTx,
 		Sender:        sender.Addr,
 		ApplicationID: futureAppID,
-		Accounts:      []basics.Address{receiver.Addr},
 	})
 
 	txntest.Group(&createTxn, &expensiveTxn)
 
 	signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 	signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
-	// Add a small bit of extra budget, but not enough
+
+	// Add an extra budget that is exceeding simulation.MaxExtraOpcodeBudget
 	extraBudget := simulation.MaxExtraOpcodeBudget + 1
 
 	// should error on too high extra budgets
@@ -1045,6 +1038,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 			TxnGroups:         [][]transactions.SignedTxn{{signedCreateTxn, signedExpensiveTxn}},
 			ExtraOpcodeBudget: extraBudget,
 		})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 	require.ErrorContains(t, err, "extra budget 320001 > simulation extra budget limit 320000")
 }
 
