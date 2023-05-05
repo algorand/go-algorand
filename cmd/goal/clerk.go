@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"io"
 	"os"
 	"path/filepath"
@@ -44,31 +45,33 @@ import (
 )
 
 var (
-	toAddress                    string
-	account                      string
-	amount                       uint64
-	txFilename                   string
-	rejectsFilename              string
-	closeToAddress               string
-	noProgramOutput              bool
-	writeSourceMap               bool
-	signProgram                  bool
-	programSource                string
-	argB64Strings                []string
-	disassemble                  bool
-	verbose                      bool
-	progByteFile                 string
-	msigParams                   string
-	logicSigFile                 string
-	timeStamp                    int64
-	protoVersion                 string
-	rekeyToAddress               string
-	signerAddress                string
-	rawOutput                    bool
-	requestFilename              string
-	requestOutFilename           string
+	toAddress          string
+	account            string
+	amount             uint64
+	txFilename         string
+	rejectsFilename    string
+	closeToAddress     string
+	noProgramOutput    bool
+	writeSourceMap     bool
+	signProgram        bool
+	programSource      string
+	argB64Strings      []string
+	disassemble        bool
+	verbose            bool
+	progByteFile       string
+	msigParams         string
+	logicSigFile       string
+	timeStamp          int64
+	protoVersion       string
+	rekeyToAddress     string
+	signerAddress      string
+	rawOutput          bool
+	requestFilename    string
+	requestOutFilename string
+
 	simulateAllowEmptySignatures bool
 	simulateAllowMoreLogging     bool
+	simulateAllowExtraBudget     bool
 	simulateExtraBudget          uint64
 )
 
@@ -156,6 +159,7 @@ func init() {
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
+	simulateCmd.Flags().BoolVar(&simulateAllowExtraBudget, "allow-extra-app-budget", false, "Apply max extra budget for apps during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraBudget, "extra-app-budget", 0, "Apply extra budget during simulation")
 }
 
@@ -1240,6 +1244,15 @@ var simulateCmd = &cobra.Command{
 		requestProvided := cmd.Flags().Changed("request")
 		if txProvided == requestProvided {
 			reportErrorf("exactly one of --txfile or --request must be provided")
+		}
+
+		allowExtraBudgetProvided := cmd.Flags().Changed("allow-extra-app-budget")
+		extraBudgetProvided := cmd.Flags().Changed("extra-app-budget")
+		if allowExtraBudgetProvided && extraBudgetProvided {
+			reportErrorf("--allow-extra-app-budget and --extra-app-budget are mutually exclusive")
+		}
+		if allowExtraBudgetProvided {
+			simulateExtraBudget = simulation.MaxExtraBudget
 		}
 
 		requestOutProvided := cmd.Flags().Changed("request-only-out")

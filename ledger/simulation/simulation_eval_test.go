@@ -1034,7 +1034,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
 		// Add a small bit of extra budget, but not enough
-		extraBudget := uint64(16 * 200000)
+		extraBudget := simulation.MaxExtraBudget + 1
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -1043,7 +1043,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 				},
 				ExtraAppBudget: extraBudget,
 			},
-			expectedError: "extra budget 3200000 >= simulation extra budget limit 320000",
+			expectedError: "extra budget 320001 > simulation extra budget limit 320000",
 			expected: simulation.Result{
 				Version:       simulation.ResultLatestVersion,
 				LastRound:     txnInfo.LatestRound(),

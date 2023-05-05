@@ -191,13 +191,13 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 	}
 
 	// check that the extra budget is not exceeding simulation extra budget limit
-	if overrides.ExtraAppBudget != nil && *overrides.ExtraAppBudget >= SimulateMaxExtraBudget {
+	if overrides.ExtraAppBudget != nil && *overrides.ExtraAppBudget > MaxExtraBudget {
 		return nil,
 			EvalFailureError{
 				SimulatorError{
 					fmt.Errorf(
-						"extra budget %d >= simulation extra budget limit %d",
-						*overrides.ExtraAppBudget, SimulateMaxExtraBudget),
+						"extra budget %d > simulation extra budget limit %d",
+						*overrides.ExtraAppBudget, MaxExtraBudget),
 				},
 			}
 	}

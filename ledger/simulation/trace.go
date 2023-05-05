@@ -73,27 +73,27 @@ type ResultEvalOverrides struct {
 	ExtraAppBudget       *uint64
 }
 
-// SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
-const SimulateLogBytesLimit = uint64(65536)
+// LogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
+const LogBytesLimit = uint64(65536)
 
-// SimulateMaxExtraBudget hardcode limit of how much extra budget one can add to one transaction group (which is group-size * logic-sig-budget)
-const SimulateMaxExtraBudget = uint64(20000 * 16)
+// MaxExtraBudget hardcode limit of how much extra budget one can add to one transaction group (which is group-size * logic-sig-budget)
+const MaxExtraBudget = uint64(20000 * 16)
 
 // AllowMoreLogging method modify the log limits from lift option:
 // - if lift log limits, then overload result from local Config
 // - otherwise, set `LogLimits` field to be nil
 func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 	if allow {
-		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), SimulateLogBytesLimit
+		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), LogBytesLimit
 		eo.MaxLogCalls = &maxLogCalls
 		eo.MaxLogSize = &maxLogSize
 	}
 	return eo
 }
 
-// SetExtraBudget method sets ExtraAppBudget field in tracer.Result.
+// WithExtraBudget method sets ExtraAppBudget field in tracer.Result.
 // It omits nil or 0 in budget *uint64 pointer.
-func (eo ResultEvalOverrides) SetExtraBudget(budget uint64) ResultEvalOverrides {
+func (eo ResultEvalOverrides) WithExtraBudget(budget uint64) ResultEvalOverrides {
 	if budget != 0 {
 		eo.ExtraAppBudget = &budget
 	}
@@ -135,7 +135,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 
 	resultEvalConstants := ResultEvalOverrides{
 		AllowEmptySignatures: request.AllowEmptySignatures,
-	}.AllowMoreLogging(request.AllowMoreLogging).SetExtraBudget(request.ExtraAppBudget)
+	}.AllowMoreLogging(request.AllowMoreLogging).WithExtraBudget(request.ExtraAppBudget)
 
 	return Result{
 		Version:       version,
