@@ -17,11 +17,13 @@
 package node
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -226,4 +228,23 @@ func TestSyncRoundWithRemake(t *testing.T) {
 	// newRound - maxAcctLookback + 1 = maxAcctLookback + 1
 	syncRound := followNode.GetSyncRound()
 	require.Equal(t, uint64(maxAcctLookback+1), syncRound)
+}
+
+func TestFastCatchupResume(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	node := setupFollowNode(t)
+	node.ctx = context.Background()
+
+	// Initialize sync round to a future round.
+	syncRound := uint64(10000)
+	node.SetSyncRound(syncRound)
+	require.Equal(t, syncRound, node.GetSyncRound())
+
+	// Force catchpoint catchup mode to end, this should set the sync round to the current ledger round (0).
+	out := node.SetCatchpointCatchupMode(false)
+	<-out
+
+	// Verify the sync was reset.
+	assert.Equal(t, uint64(0), node.GetSyncRound())
 }

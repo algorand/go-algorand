@@ -157,6 +157,16 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 	return
 }
 
+// triggerSync attempts to wake up the sync loop.
+func (s *Service) triggerSync() {
+	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
+		select {
+		case s.syncNow <- struct{}{}:
+		default:
+		}
+	}
+}
+
 // SetDisableSyncRound attempts to set the first round we _do_not_ want to fetch from the network
 // Blocks from disableSyncRound or any round after disableSyncRound will not be fetched while this is set
 func (s *Service) SetDisableSyncRound(rnd uint64) error {
@@ -164,18 +174,14 @@ func (s *Service) SetDisableSyncRound(rnd uint64) error {
 		return ErrSyncRoundInvalid
 	}
 	atomic.StoreUint64(&s.disableSyncRound, rnd)
-	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
-		s.syncNow <- struct{}{}
-	}
+	s.triggerSync()
 	return nil
 }
 
 // UnsetDisableSyncRound removes any previously set disabled sync round
 func (s *Service) UnsetDisableSyncRound() {
 	atomic.StoreUint64(&s.disableSyncRound, 0)
-	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
-		s.syncNow <- struct{}{}
-	}
+	s.triggerSync()
 }
 
 // GetDisableSyncRound returns the disabled sync round
