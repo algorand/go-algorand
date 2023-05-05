@@ -20,7 +20,7 @@ printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple-v2.teal"
 printf '#pragma version 3\nint 1' > "${TEMPDIR}/simple-v3.teal"
 
 # Create
-RES=$(${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --extra-pages 0 --from $ACCOUNT 2>&1 || true)
+RES=$(${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --local-byteslices 1 --from $ACCOUNT 2>&1 || true)
 EXPECTED="method create(uint64)uint64 succeeded with output: 2468"
 if [[ $RES != *"${EXPECTED}"* ]]; then
     date '+app-abi-method-test FAIL the method call to create(uint64)uint64 should not fail %Y%m%d_%H%M%S'
@@ -112,7 +112,7 @@ if [[ $RES != *"${EXPECTED}"* ]]; then
 fi
 
 # Foreign reference test during creation
-RES=$(${gcmd} app method --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --extra-pages 0 --on-completion deleteapplication --method "referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9]" --arg KGTOR3F3Q74JP4LB5M3SOCSJ4BOPOKZ2GPSLMLLGCWYWRXZJNN4LYQJXXU --arg 0 --arg $ACCOUNT --arg 10 --arg KGTOR3F3Q74JP4LB5M3SOCSJ4BOPOKZ2GPSLMLLGCWYWRXZJNN4LYQJXXU --arg 11 --arg 10 --arg 20 --arg 21 --app-account 2R5LMPTYLVMWYEG4RPI26PJAM7ARTGUB7LZSONQPGLUWTPOP6LQCJTQZVE --foreign-app 21 --foreign-asset 10 --from $ACCOUNT 2>&1 || true)
+RES=$(${gcmd} app method --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --local-byteslices 1 --on-completion deleteapplication --method "referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9]" --arg KGTOR3F3Q74JP4LB5M3SOCSJ4BOPOKZ2GPSLMLLGCWYWRXZJNN4LYQJXXU --arg 0 --arg $ACCOUNT --arg 10 --arg KGTOR3F3Q74JP4LB5M3SOCSJ4BOPOKZ2GPSLMLLGCWYWRXZJNN4LYQJXXU --arg 11 --arg 10 --arg 20 --arg 21 --app-account 2R5LMPTYLVMWYEG4RPI26PJAM7ARTGUB7LZSONQPGLUWTPOP6LQCJTQZVE --foreign-app 21 --foreign-asset 10 --from $ACCOUNT 2>&1 || true)
 EXPECTED="method referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9] succeeded with output: [2,0,2,0,2,1,0,1,0]"
 if [[ $RES != *"${EXPECTED}"* ]]; then
     date '+app-abi-method-test FAIL the creation method call to referenceTest(account,application,account,asset,account,asset,asset,application,application)uint8[9] should not fail %Y%m%d_%H%M%S'
