@@ -62,24 +62,3 @@ func (e *CatchpointUnableToStartError) Error() string {
 		e.catchpointRequested,
 		e.catchpointRunning)
 }
-
-// CatchpointSyncRoundFailure indicates that the requested catchpoint is beyond the currently set sync round
-type CatchpointSyncRoundFailure struct {
-	catchpoint string
-	syncRound  uint64
-}
-
-// MakeCatchpointSyncRoundFailure creates the error type
-func MakeCatchpointSyncRoundFailure(catchpoint string, syncRound uint64) *CatchpointSyncRoundFailure {
-	return &CatchpointSyncRoundFailure{
-		catchpoint: catchpoint,
-		syncRound:  syncRound,
-	}
-}
-
-// Error satisfies the builtin `error` interface
-func (e *CatchpointSyncRoundFailure) Error() string {
-	return fmt.Sprintf(
-		"unable to start catchpoint catchup for '%s' - resulting round is beyond current sync round '%v'",
-		e.catchpoint, e.syncRound)
-}

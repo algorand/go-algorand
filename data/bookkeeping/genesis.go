@@ -223,6 +223,12 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 		},
 	}
 
+	// If a new network is being created in which AVM can't access low numbered
+	// resources, bump the TxnCounter so there won't be any such resources.
+	if params.AppForbidLowResources {
+		blk.TxnCounter = 1000
+	}
+
 	if params.SupportGenesisHash {
 		blk.BlockHeader.GenesisHash = genesisHash
 	}
