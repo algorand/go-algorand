@@ -76,6 +76,9 @@ type ResultEvalOverrides struct {
 // SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
 const SimulateLogBytesLimit = uint64(65536)
 
+// SimulateMaxExtraBudget hardcode limit of how much extra budget one can add to one transaction group (which is group-size * logic-sig-budget)
+const SimulateMaxExtraBudget = uint64(20000 * 16)
+
 // AllowMoreLogging method modify the log limits from lift option:
 // - if lift log limits, then overload result from local Config
 // - otherwise, set `LogLimits` field to be nil

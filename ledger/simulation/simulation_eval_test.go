@@ -997,6 +997,63 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 	})
 }
 
+func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction group has a cost of 4 + 1404
+	expensiveAppSource := `#pragma version 6
+	txn ApplicationID      // [appId]
+	bz end                 // []
+` + strings.Repeat(`int 1; pop;`, 700) + `end:
+	int 1`
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+		receiver := accounts[1]
+
+		futureAppID := basics.AppIndex(1)
+		// App create with cost 4
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   expensiveAppSource,
+			ClearStateProgram: `#pragma version 6; int 0`,
+		})
+		// Expensive 700 repetition of int 1 and pop total cost 1404
+		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			Accounts:      []basics.Address{receiver.Addr},
+		})
+
+		txntest.Group(&createTxn, &expensiveTxn)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+		// Add a small bit of extra budget, but not enough
+		extraBudget := uint64(16 * 200000)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedExpensiveTxn},
+				},
+				ExtraAppBudget: extraBudget,
+			},
+			expectedError: "extra budget 3200000 >= simulation extra budget limit 320000",
+			expected: simulation.Result{
+				Version:       simulation.ResultLatestVersion,
+				LastRound:     txnInfo.LatestRound(),
+				TxnGroups:     []simulation.TxnGroupResult{{Txns: []simulation.TxnResult{{}, {}}}},
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraAppBudget: &extraBudget},
+			},
+		}
+	})
+}
+
 func TestLogicSigOverBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
