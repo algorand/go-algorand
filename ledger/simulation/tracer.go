@@ -140,6 +140,12 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 		tracer.result.TxnGroups[0].AppBudgetAdded = uint64(*ep.PooledApplicationBudget)
 	}
 
+	// Override transaction group budget if specified in request, retrieve from tracer.result
+	if ep.PooledApplicationBudget != nil {
+		tracer.result.TxnGroups[0].AppBudgetAdded += tracer.result.EvalOverrides.ExtraOpcodeBudget
+		*ep.PooledApplicationBudget += int(tracer.result.EvalOverrides.ExtraOpcodeBudget)
+	}
+
 	// Override runtime related constraints against ep, before entering txn group
 	ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
 }

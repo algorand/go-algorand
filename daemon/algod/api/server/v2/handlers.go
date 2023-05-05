@@ -959,6 +959,7 @@ type PreEncodedSimulateRequest struct {
 	TxnGroups            []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
 	AllowEmptySignatures bool                                        `codec:"allow-empty-signatures,omitempty"`
 	AllowMoreLogging     bool                                        `codec:"allow-more-logging,omitempty"`
+	ExtraOpcodeBudget    uint64                                      `codec:"extra-opcode-budget,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
@@ -1005,7 +1006,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
 	if err != nil {
-		var invalidTxErr simulation.InvalidTxGroupError
+		var invalidTxErr simulation.InvalidRequestError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
