@@ -376,7 +376,7 @@ if [[ $(echo "$RES" | jq '."eval-overrides"."extra-opcode-budget"') -ne 320000 ]
 fi
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-added"') -ne 320700 ]]; then
-    date '+app-simulate-test FAIL the app call to generated large TEAL should have app-budget-added 900 %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call to generated large TEAL should have app-budget-added 320700 %Y%m%d_%H%M%S'
     false
 fi
 
