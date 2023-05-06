@@ -163,6 +163,8 @@ const (
 	PeersConnectedIn PeerOption = iota
 	// PeersPhonebookRelays specifies all relays in the phonebook
 	PeersPhonebookRelays PeerOption = iota
+	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
+	PeersPhonebookArchivalNodes PeerOption = iota
 	// PeersPhonebookArchivers specifies all archivers in the phonebook
 	PeersPhonebookArchivers PeerOption = iota
 )
