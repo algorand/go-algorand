@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // cursorEvalTracer is responsible for maintaining a TxnPath that points to the currently executing
@@ -164,7 +165,23 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 }
 
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
-	// TODO note: need to pass info here to create optional object Trace in TxnResult under TxnGroupResult
+	currentTxn := ep.TxnGroup[groupIndex]
+	if currentTxn.Txn.Type == protocol.ApplicationCallTx || !currentTxn.Lsig.Blank() {
+		transactionTrace := makeTransactionTrace(Unknown)
+		tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
+	}
+
+	if !currentTxn.Lsig.Blank() {
+		tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = LogicSigTransaction
+	} else if currentTxn.Txn.Type == protocol.ApplicationCallTx {
+		switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
+		case transactions.ClearStateOC:
+			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = AppCallClearStateTransaction
+		default:
+			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = AppCallApprovalTransaction
+		}
+	}
+
 	tracer.cursorEvalTracer.BeforeTxn(ep, groupIndex)
 }
 
@@ -207,7 +224,8 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 }
 
 func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
-
+	// Should be able to tell run mode
+	cx.RunMode()
 }
 
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {

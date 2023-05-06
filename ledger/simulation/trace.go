@@ -203,3 +203,10 @@ type TransactionTrace struct {
 	// Grandchild traces will be present inside the TransactionTrace of their parent.
 	InnerTraces []TransactionTrace
 }
+
+func makeTransactionTrace(traceType TransactionTraceType) TransactionTrace {
+	return TransactionTrace{
+		TraceType: traceType,
+		Trace:     []OpcodeTraceUnit{},
+	}
+}
