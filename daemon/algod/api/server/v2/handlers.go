@@ -960,6 +960,7 @@ type PreEncodedSimulateRequest struct {
 	AllowEmptySignatures bool                                        `codec:"allow-empty-signatures,omitempty"`
 	AllowMoreLogging     bool                                        `codec:"allow-more-logging,omitempty"`
 	ExtraOpcodeBudget    uint64                                      `codec:"extra-opcode-budget,omitempty"`
+	ExecTrace            string                                      `json:"exec-trace,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.

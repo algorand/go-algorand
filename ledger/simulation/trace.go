@@ -112,6 +112,7 @@ type Result struct {
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	EvalOverrides ResultEvalOverrides
 	Block         *ledgercore.ValidatedBlock
+	ExecTraceConfig
 }
 
 func makeSimulationResultWithVersion(lastRound basics.Round, request Request, version uint64) (Result, error) {
@@ -131,10 +132,11 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
 	return Result{
-		Version:       version,
-		LastRound:     lastRound,
-		TxnGroups:     groups,
-		EvalOverrides: resultEvalConstants,
+		Version:         version,
+		LastRound:       lastRound,
+		TxnGroups:       groups,
+		EvalOverrides:   resultEvalConstants,
+		ExecTraceConfig: request.ExecTraceConfig,
 	}, nil
 }
 

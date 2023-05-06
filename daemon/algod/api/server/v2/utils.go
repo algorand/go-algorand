@@ -411,6 +411,19 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	return encodedSimulationResult
 }
 
+func convertSimulationExecTrace(execTrace string) simulation.ExecTraceConfig {
+	switch execTrace {
+	case "pc":
+		return simulation.ReturnPC
+	case "stack":
+		return simulation.ReturnStackChange
+	case "scratch-slot":
+		return simulation.ReturnScratchSlotChange
+	default:
+		return simulation.NoExecTrace
+	}
+}
+
 func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {
 	txnGroups := make([][]transactions.SignedTxn, len(request.TxnGroups))
 	for i, txnGroup := range request.TxnGroups {
@@ -421,6 +434,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowEmptySignatures: request.AllowEmptySignatures,
 		AllowMoreLogging:     request.AllowMoreLogging,
 		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
+		ExecTraceConfig:      convertSimulationExecTrace(request.ExecTrace),
 	}
 }
 

@@ -1868,6 +1868,15 @@
             "description": "Lifts limits on log opcode usage during simulation.",
             "type": "boolean"
           },
+          "exec-trace": {
+            "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
+            "enum": [
+              "pc",
+              "stack",
+              "scratch-slot"
+            ],
+            "type": "string"
+          },
           "extra-opcode-budget": {
             "description": "Applies extra opcode budget during simulation for each transaction group.",
             "type": "integer"

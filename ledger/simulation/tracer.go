@@ -166,19 +166,22 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	currentTxn := ep.TxnGroup[groupIndex]
-	if currentTxn.Txn.Type == protocol.ApplicationCallTx || !currentTxn.Lsig.Blank() {
-		transactionTrace := makeTransactionTrace(Unknown)
-		tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
-	}
 
-	if !currentTxn.Lsig.Blank() {
-		tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = LogicSigTransaction
-	} else if currentTxn.Txn.Type == protocol.ApplicationCallTx {
-		switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
-		case transactions.ClearStateOC:
-			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = AppCallClearStateTransaction
-		default:
-			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = AppCallApprovalTransaction
+	if tracer.result.ExecTraceConfig != NoExecTrace {
+		if currentTxn.Txn.Type == protocol.ApplicationCallTx || !currentTxn.Lsig.Blank() {
+			transactionTrace := makeTransactionTrace(Unknown)
+			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
+		}
+
+		if !currentTxn.Lsig.Blank() {
+			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = LogicSigTransaction
+		} else if currentTxn.Txn.Type == protocol.ApplicationCallTx {
+			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
+			case transactions.ClearStateOC:
+				tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = AppCallClearStateTransaction
+			default:
+				tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = AppCallApprovalTransaction
+			}
 		}
 	}
 

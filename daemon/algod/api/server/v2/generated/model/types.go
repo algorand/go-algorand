@@ -21,6 +21,13 @@ const (
 	AccountSigTypeSig  AccountSigType = "sig"
 )
 
+// Defines values for SimulateRequestExecTrace.
+const (
+	SimulateRequestExecTracePc          SimulateRequestExecTrace = "pc"
+	SimulateRequestExecTraceScratchSlot SimulateRequestExecTrace = "scratch-slot"
+	SimulateRequestExecTraceStack       SimulateRequestExecTrace = "stack"
+)
+
 // Defines values for AddressRole.
 const (
 	AddressRoleFreezeTarget AddressRole = "freeze-target"
@@ -619,12 +626,18 @@ type SimulateRequest struct {
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
+	// ExecTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
+	ExecTrace *SimulateRequestExecTrace `json:"exec-trace,omitempty"`
+
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
 }
+
+// SimulateRequestExecTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
+type SimulateRequestExecTrace string
 
 // SimulateRequestTransactionGroup A transaction group to simulate.
 type SimulateRequestTransactionGroup struct {

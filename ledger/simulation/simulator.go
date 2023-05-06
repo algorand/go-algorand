@@ -37,12 +37,27 @@ type simulatorLedger struct {
 	start basics.Round
 }
 
+// ExecTraceConfig is a type-alias to uint64, which is an enumeration over configs for returning trace in evaluation
+type ExecTraceConfig uint64
+
+const (
+	// NoExecTrace stands for no exec trace returning in simulation
+	NoExecTrace ExecTraceConfig = iota
+	// ReturnPC stands for simulation will return only application's PC traversal
+	ReturnPC
+	// ReturnStackChange stands for simulation will return app's PC traversal and corresponding stack changes
+	ReturnStackChange
+	// ReturnScratchSlotChange stands for simulation will return app's PC traversal, corresponding stack changes and scratch slot changes
+	ReturnScratchSlotChange
+)
+
 // Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
 type Request struct {
 	TxnGroups            [][]transactions.SignedTxn
 	AllowEmptySignatures bool
 	AllowMoreLogging     bool
 	ExtraOpcodeBudget    uint64
+	ExecTraceConfig
 }
 
 // Latest is part of the LedgerForSimulator interface.
