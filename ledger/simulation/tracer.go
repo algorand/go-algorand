@@ -167,7 +167,7 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	currentTxn := ep.TxnGroup[groupIndex]
 
-	if tracer.result.ExecTraceConfig != NoExecTrace {
+	if tracer.result.ExecTraceConfig > NoExecTrace {
 		if currentTxn.Txn.Type == protocol.ApplicationCallTx || !currentTxn.Lsig.Blank() {
 			transactionTrace := makeTransactionTrace(Unknown)
 			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
