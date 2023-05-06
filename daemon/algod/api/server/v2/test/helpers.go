@@ -266,7 +266,7 @@ var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
 var genesisID = "testingid"
 var retOneProgram = []byte{2, 0x20, 1, 1, 0x22}
 
-var proto = config.Consensus[protocol.ConsensusCurrentVersion]
+var proto = config.Consensus[protocol.ConsensusFuture]
 
 func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
 	minMoneyAtStart := 100000  // min money start
@@ -313,7 +313,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 		}
 		accessors = append(accessors, access)
 
-		part, err := account.FillDBWithParticipationKeys(access, root.Address(), 0, lastValid, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		part, err := account.FillDBWithParticipationKeys(access, root.Address(), 0, lastValid, proto.DefaultKeyDilution)
 		if err != nil {
 			panic(err)
 		}
@@ -351,7 +351,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, cfg)
+	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusFuture, bootstrap, genesisID, genesisHash, nil, cfg)
 	if err != nil {
 		panic(err)
 	}
