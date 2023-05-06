@@ -19,6 +19,7 @@ package node
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
@@ -206,8 +207,21 @@ func TestSyncRoundWithRemake(t *testing.T) {
 	}
 
 	followNode, _ = remakeableFollowNode(t, tempDir, maxAcctLookback)
-	status, err := followNode.Status()
-	require.NoError(t, err)
+
+	// Wait for follower to catch up. This rarely is needed, but can happen
+	// and cause flakey test failures. Timing out can still occur, but is less
+	// likely than the being caught behind a few rounds.
+	var status *StatusReport
+	require.Eventually(t, func() bool {
+		st, err := followNode.Status()
+		require.NoError(t, err)
+		if st.LastRound >= newRound {
+			status = &st
+			return true
+		}
+		return false
+	}, 10*time.Second, 500*time.Millisecond, "failed to reach newRound within the allowed time")
+
 	require.Equal(t, newRound, status.LastRound)
 
 	// syncRound should be at
