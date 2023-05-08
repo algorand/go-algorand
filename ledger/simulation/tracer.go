@@ -128,6 +128,9 @@ func (tracer *evalTracer) populateInnerTransactions(txgroup []transactions.Signe
 	applyDataOfCallingTxn.EvalDelta.InnerTxns = append(applyDataOfCallingTxn.EvalDelta.InnerTxns, txgroup...)
 }
 
+// execTraceStack keeps track of the call stack from top level transaction to the current inner txn that contains latest TransactionTrace
+var execTraceStack []*TransactionTrace
+
 func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.GetCaller() != nil {
 		// If this is an inner txn group, save the txns
@@ -164,19 +167,24 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 	applyDataOfCurrentTxn.EvalDelta = evalDelta
 }
 
-func (tracer *evalTracer) makeExecTrace(ep *logic.EvalParams, groupIndex int) {
+func (tracer *evalTracer) wouldMakeExecTrace(ep *logic.EvalParams, groupIndex int) bool {
 	// If there is no need of exec trace, leave
 	if tracer.result.ExecTraceConfig == NoExecTrace {
-		return
+		return false
 	}
 
 	// if there is the current txn is not logic sig eval or application call, leave
 	currentTxn := ep.TxnGroup[groupIndex]
-	if currentTxn.Txn.Type != protocol.ApplicationCallTx && currentTxn.Lsig.Blank() {
-		return
+	return currentTxn.Txn.Type == protocol.ApplicationCallTx || !currentTxn.Lsig.Blank()
+}
+
+func (tracer *evalTracer) makeExecTrace(ep *logic.EvalParams, groupIndex int) *TransactionTrace {
+	if !tracer.wouldMakeExecTrace(ep, groupIndex) {
+		return nil
 	}
 
 	// make transaction trace in following section
+	currentTxn := ep.TxnGroup[groupIndex]
 	traceType := Unknown
 
 	if !currentTxn.Lsig.Blank() {
@@ -191,17 +199,29 @@ func (tracer *evalTracer) makeExecTrace(ep *logic.EvalParams, groupIndex int) {
 	}
 
 	transactionTrace := makeTransactionTrace(traceType)
-	tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
+	if len(execTraceStack) == 0 {
+		tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
+	} else {
+		lastExecTrace := execTraceStack[len(execTraceStack)-1]
+		lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, transactionTrace)
+	}
+	return &transactionTrace
 }
 
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
-	tracer.makeExecTrace(ep, groupIndex)
+	if tracer.wouldMakeExecTrace(ep, groupIndex) {
+		txnTrace := tracer.makeExecTrace(ep, groupIndex)
+		execTraceStack = append(execTraceStack, txnTrace)
+	}
 	tracer.cursorEvalTracer.BeforeTxn(ep, groupIndex)
 }
 
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
 	tracer.saveApplyData(ad)
+	if tracer.wouldMakeExecTrace(ep, groupIndex) {
+		execTraceStack = execTraceStack[:len(execTraceStack)-1]
+	}
 	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, evalError)
 }
 
