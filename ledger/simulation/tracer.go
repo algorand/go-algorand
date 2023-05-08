@@ -178,40 +178,36 @@ func (tracer *evalTracer) wouldMakeExecTrace(ep *logic.EvalParams, groupIndex in
 	return currentTxn.Txn.Type == protocol.ApplicationCallTx || !currentTxn.Lsig.Blank()
 }
 
-func (tracer *evalTracer) makeExecTrace(ep *logic.EvalParams, groupIndex int) *TransactionTrace {
-	if !tracer.wouldMakeExecTrace(ep, groupIndex) {
-		return nil
-	}
-
-	// make transaction trace in following section
-	currentTxn := ep.TxnGroup[groupIndex]
-	traceType := Unknown
-
-	if !currentTxn.Lsig.Blank() {
-		traceType = LogicSigTransaction
-	} else if currentTxn.Txn.Type == protocol.ApplicationCallTx {
-		switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
-		case transactions.ClearStateOC:
-			traceType = AppCallClearStateTransaction
-		default:
-			traceType = AppCallApprovalTransaction
-		}
-	}
-
-	transactionTrace := makeTransactionTrace(traceType)
-	if len(execTraceStack) == 0 {
-		tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
-	} else {
-		lastExecTrace := execTraceStack[len(execTraceStack)-1]
-		lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, transactionTrace)
-	}
-	return &transactionTrace
-}
-
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	if tracer.wouldMakeExecTrace(ep, groupIndex) {
-		txnTrace := tracer.makeExecTrace(ep, groupIndex)
-		execTraceStack = append(execTraceStack, txnTrace)
+		// make transaction trace in following section
+		currentTxn := ep.TxnGroup[groupIndex]
+		traceType := Unknown
+
+		if !currentTxn.Lsig.Blank() {
+			traceType = LogicSigTransaction
+		} else if currentTxn.Txn.Type == protocol.ApplicationCallTx {
+			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
+			case transactions.ClearStateOC:
+				traceType = AppCallClearStateTransaction
+			default:
+				traceType = AppCallApprovalTransaction
+			}
+		}
+		transactionTrace := makeTransactionTrace(traceType)
+
+		// The last question is, where should this transaction trace attach to:
+		// - if it is a top level transaction, then attach to TxnResult level
+		// - if it is an inner transaction, then refer to the stack for latest exec trace, and attach to inner array
+		if len(execTraceStack) == 0 {
+			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
+		} else {
+			lastExecTrace := execTraceStack[len(execTraceStack)-1]
+			lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, transactionTrace)
+		}
+
+		// In both case, we need to add to transaction trace to the stack
+		execTraceStack = append(execTraceStack, &transactionTrace)
 	}
 	tracer.cursorEvalTracer.BeforeTxn(ep, groupIndex)
 }
@@ -219,6 +215,8 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
 	tracer.saveApplyData(ad)
+	// if the current transaction + simulation condition would lead to exec trace making
+	// we should clean them up from execTraceStack.
 	if tracer.wouldMakeExecTrace(ep, groupIndex) {
 		execTraceStack = execTraceStack[:len(execTraceStack)-1]
 	}
