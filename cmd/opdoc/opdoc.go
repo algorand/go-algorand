@@ -261,7 +261,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 	for i := range op.OpDetails.Immediates {
 		group := op.OpDetails.Immediates[i].Group
 		if group != nil && group.Doc != "" && !groupDocWritten[group.Name] {
-			fmt.Fprintf(out, "\n### Field Group %s\n\n%s\n\n", group.Name, group.Doc)
+			fmt.Fprintf(out, "\n### %s\n\n%s\n\n", group.Name, group.Doc)
 			fieldGroupMarkdown(out, group)
 			groupDocWritten[group.Name] = true
 		}

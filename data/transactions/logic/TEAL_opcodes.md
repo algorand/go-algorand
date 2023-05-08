@@ -54,7 +54,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - **Cost**:  Secp256k1=1700 Secp256r1=2500
 - Availability: v5
 
-### Field Group ECDSA
+### ECDSA
 
 Curves
 
@@ -368,7 +368,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 - Stack: ... &rarr; ..., any
 - field F of current transaction
 
-### Field Group txn
+### txn
 
 Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))
 
@@ -444,7 +444,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 - Stack: ... &rarr; ..., any
 - global field F
 
-### Field Group global
+### global
 
 Fields
 
@@ -498,7 +498,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates.
 - Availability: v2
 
-### Field Group txna
+### txna
 
 Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))
 
@@ -838,7 +838,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - **Cost**: 1 + 1 per 16 bytes of A
 - Availability: v7
 
-### Field Group base64
+### base64
 
 Encodings
 
@@ -861,7 +861,7 @@ Encodings
 - **Cost**: 25 + 2 per 7 bytes of A
 - Availability: v7
 
-### Field Group json_ref
+### json_ref
 
 Types
 
@@ -987,7 +987,7 @@ Deleting a key which is already absent has no effect on the application global s
 - Availability: v2
 - Mode: Application
 
-### Field Group asset_holding
+### asset_holding
 
 Fields
 
@@ -1008,7 +1008,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 - Availability: v2
 - Mode: Application
 
-### Field Group asset_params
+### asset_params
 
 Fields
 
@@ -1039,7 +1039,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 - Availability: v5
 - Mode: Application
 
-### Field Group app_params
+### app_params
 
 Fields
 
@@ -1067,7 +1067,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 - Availability: v6
 - Mode: Application
 
-### Field Group acct_params
+### acct_params
 
 Fields
 
@@ -1616,7 +1616,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - **Cost**: 5700
 - Availability: v7
 
-### Field Group vrf_verify
+### vrf_verify
 
 Standards
 
@@ -1635,7 +1635,7 @@ Standards
 - field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
 - Availability: v7
 
-### Field Group block
+### block
 
 Fields
 
