@@ -157,7 +157,7 @@ func TestSyncRoundWithRemake(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	maxAcctLookback := uint64(100)
+	maxAcctLookback := uint64(10)
 
 	followNode, tempDir := remakeableFollowNode(t, "", maxAcctLookback)
 	addBlock := func(round basics.Round) {
