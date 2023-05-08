@@ -248,6 +248,18 @@ _available_.
    indicates the application ID of the app called by that
    transaction. No box is ever _available_ to a ClearStateProgram.
 
+Regardless of _availability_, any attempt to access an Asset or
+Application with an ID less than 256 from within a Contract will fail
+immediately. This avoids any ambiguity in opcodes that interpret their
+integer arguments as resource IDs _or_ indexes into the
+`txn.ForeignAssets` or `txn.ForeignApplications` arrays.
+
+It is recommended that contract authors avoid supplying array indexes
+to these opcodes, and always use explicit resource IDs. By using
+explicit IDs, contracts will better take advantage of group resource
+sharing.  The array indexing interpretation may be deprecated in a
+future version.
+
 ## Constants
 
 Constants can be pushed onto the stack in two different ways:

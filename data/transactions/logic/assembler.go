@@ -1438,8 +1438,7 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	// If the index of the scratch slot is a const
 	// we can modify only that scratch slots type
 	if top >= 1 {
-		idx, isConst := pgm.stack[top-1].constant()
-		if isConst {
+		if idx, isConst := pgm.stack[top-1].constant(); isConst {
 			pgm.scratchSpace[idx] = pgm.stack[top]
 			return nil, nil, nil
 		}
@@ -1447,7 +1446,7 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 
 	for i := range pgm.scratchSpace {
 		// We can't know what slot stacktop is being stored in
-		// so we union it into all scratch slots
+		// so we adjust the bounds and type of each slot as if the stacktop type were stored there. 
 		pgm.scratchSpace[i] = pgm.scratchSpace[i].union(pgm.stack[top])
 	}
 	return nil, nil, nil
@@ -1633,14 +1632,36 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 	}
 	spec, ok := OpsByName[ops.Version][name]
 	if !ok {
-		spec, ok = OpsByName[AssemblerMaxVersion][name]
-		if ok {
-			ops.errorf("%s opcode was introduced in v%d", name, spec.Version)
-		} else {
-			ops.errorf("unknown opcode: %s", name)
-		}
+		var err error
+		spec, err = unknownOpcodeComplaint(name, ops.Version)
+		// unknownOpcodeComplaint's job is to return a nice error, so err != nil
+		ops.error(err)
 	}
 	return spec, spec.Name, ok
+}
+
+// unknownOpcodeComplaint returns the best error it can for a missing opcode,
+// plus a "standin" OpSpec, if possible.
+func unknownOpcodeComplaint(name string, v uint64) (OpSpec, error) {
+	first, last := -1, -1
+	var standin OpSpec
+	for i := 1; i < len(OpsByName); i++ {
+		spec, ok := OpsByName[i][name]
+		if ok {
+			standin = spec
+			if first == -1 {
+				first = i
+			}
+			last = i
+		}
+	}
+	if first > int(v) {
+		return standin, fmt.Errorf("%s opcode was introduced in v%d", name, first)
+	}
+	if last != -1 && last < int(v) {
+		return standin, fmt.Errorf("%s opcode was removed in v%d", name, last+1)
+	}
+	return OpSpec{}, fmt.Errorf("unknown opcode: %s", name)
 }
 
 // pseudoOps allows us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.

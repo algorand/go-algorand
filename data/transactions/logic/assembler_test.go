@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -1622,15 +1623,11 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	t.Parallel()
 
 	// Test that disassembly re-assembles to the same program bytes.
-	// Disassembly won't necessarily perfectly recreate the source text, but assembling the result of Disassemble() should be the same program bytes.
-	// This confirms that each program compiles to the same bytes
-	// (except the leading version indicator), when compiled under
-	// original version, unspecified version (so it should pick up
-	// the pragma) and current version with pragma removed. That
-	// doesn't *have* to be true, as we can introduce
-	// optimizations in later versions that change the bytecode
-	// emitted. But currently it is, so we test it for now to
-	// catch any suprises.
+	// Disassembly won't necessarily perfectly recreate the source text, but
+	// assembling the result of Disassemble() should be the same program bytes.
+	// To confirm that, the disassembly output must be re-assembled. Since it
+	// has a #pragma version, we re-assemble with assemblerNoVersion to let the
+	// assembler pick it up.
 	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v, source := range nonsense {
 		v, source := v, source
@@ -1642,11 +1639,9 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 			ops := testProg(t, source, v)
 			t2, err := Disassemble(ops.Program)
 			require.NoError(t, err)
-			none := testProg(t, notrack(t2), assemblerNoVersion)
-			require.Equal(t, ops.Program[1:], none.Program[1:])
-			t3 := "// " + t2 // This comments out the #pragma version
-			current := testProg(t, notrack(t3), AssemblerMaxVersion)
-			require.Equal(t, ops.Program[1:], current.Program[1:])
+			// we use pragma notrack in nonsense to avoid tracking types, that is lost in disassembly
+			reassembled := testProg(t, notrack(t2), assemblerNoVersion)
+			require.Equal(t, ops.Program, reassembled.Program)
 		})
 	}
 }
@@ -1727,117 +1722,101 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	source := `txn Sender`
-	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	ops.Program[2] = 0x50 // txn field
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for txn")
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			source := `txn Sender`
+			ops := testProg(t, source, v)
+			ops.Program[len(ops.Program)-1] = 0x50 // txn field
+			dis, err := Disassemble(ops.Program)
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "invalid immediate f for txn")
 
-	source = `txna Accounts 0`
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	ops.Program[2] = 0x50 // txn field
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for txna")
+			source = `txna Accounts 0`
+			ops = testProg(t, source, v)
+			ops.Program[len(ops.Program)-2] = 0x50 // txn field
+			dis, err = Disassemble(ops.Program)
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "invalid immediate f for txna")
 
-	source = `gtxn 0 Sender`
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	ops.Program[3] = 0x50 // txn field
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for gtxn")
+			source = `gtxn 0 Sender`
+			ops = testProg(t, source, v)
+			ops.Program[len(ops.Program)-1] = 0x50 // txn field
+			dis, err = Disassemble(ops.Program)
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "invalid immediate f for gtxn")
 
-	source = `gtxna 0 Accounts 0`
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	ops.Program[3] = 0x50 // txn field
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for gtxna")
+			source = `gtxna 0 Accounts 0`
+			ops = testProg(t, source, v)
+			ops.Program[len(ops.Program)-2] = 0x50 // txn field
+			dis, err = Disassemble(ops.Program)
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "invalid immediate f for gtxna")
 
-	source = `global MinTxnFee`
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	ops.Program[2] = 0x50 // txn field
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for global")
+			source = `global MinTxnFee`
+			ops = testProg(t, source, v)
+			ops.Program[len(ops.Program)-1] = 0x50 // txn field
+			_, err = Disassemble(ops.Program)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "invalid immediate f for global")
 
-	ops.Program[0] = 0x11 // version
-	out, err := Disassemble(ops.Program)
-	require.NoError(t, err)
-	require.Contains(t, out, "unsupported version")
+			ops.Program[0] = 0x11 // version
+			out, err := Disassemble(ops.Program)
+			require.NoError(t, err)
+			require.Contains(t, out, "unsupported version")
 
-	ops.Program[0] = 0x01 // version
-	ops.Program[1] = 0xFF // first opcode
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid opcode")
+			ops.Program[0] = 0x01 // version
+			ops.Program[1] = 0xFF // first opcode
+			dis, err = Disassemble(ops.Program)
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "invalid opcode")
 
-	source = "int 0\nint 0\nasset_holding_get AssetFrozen"
-	ops, err = AssembleStringWithVersion(source, sharedResourcesVersion-1)
-	require.NoError(t, err)
-	ops.Program[7] = 0x50 // holding field
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for asset_holding_get")
+			source = "int 0; int 0\nasset_holding_get AssetFrozen"
+			ops = testProg(t, source, v)
+			ops.Program[len(ops.Program)-1] = 0x50 // holding field
+			dis, err = Disassemble(ops.Program)
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "invalid immediate f for")
 
-	source = "int 0\nasset_params_get AssetTotal"
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	ops.Program[4] = 0x50 // params field
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid immediate f for asset_params_get")
+			source = "int 0\nasset_params_get AssetTotal"
+			ops = testProg(t, source, v)
+			ops.Program[len(ops.Program)-1] = 0x50 // params field
+			dis, err = Disassemble(ops.Program)
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "invalid immediate f for")
 
-	source = "int 0\nasset_params_get AssetTotal"
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	_, err = Disassemble(ops.Program)
-	require.NoError(t, err)
-	ops.Program = ops.Program[0 : len(ops.Program)-1]
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate f for asset_params_get")
+			source = "int 0\nasset_params_get AssetTotal"
+			ops = testProg(t, source, v)
+			ops.Program = ops.Program[0 : len(ops.Program)-1]
+			dis, err = Disassemble(ops.Program)
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "program end while reading immediate f for")
 
-	source = "gtxna 0 Accounts 0"
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	_, err = Disassemble(ops.Program)
-	require.NoError(t, err)
-	_, err = Disassemble(ops.Program[0 : len(ops.Program)-1])
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate i for gtxna")
-	_, err = Disassemble(ops.Program[0 : len(ops.Program)-2])
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate f for gtxna")
-	_, err = Disassemble(ops.Program[0 : len(ops.Program)-3])
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate t for gtxna")
+			source = "gtxna 0 Accounts 0"
+			ops = testProg(t, source, v)
+			dis, err = Disassemble(ops.Program[0 : len(ops.Program)-1])
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "program end while reading immediate i for gtxna")
+			dis, err = Disassemble(ops.Program[0 : len(ops.Program)-2])
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "program end while reading immediate f for gtxna")
+			dis, err = Disassemble(ops.Program[0 : len(ops.Program)-3])
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "program end while reading immediate t for gtxna")
 
-	source = "txna Accounts 0"
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	_, err = Disassemble(ops.Program)
-	require.NoError(t, err)
-	ops.Program = ops.Program[0 : len(ops.Program)-1]
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate i for txna")
+			source = "txna Accounts 0"
+			ops = testProg(t, source, v)
+			ops.Program = ops.Program[0 : len(ops.Program)-1]
+			dis, err = Disassemble(ops.Program)
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "program end while reading immediate i for txna")
 
-	source = "byte 0x4141\nsubstring 0 1"
-	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
-	require.NoError(t, err)
-	_, err = Disassemble(ops.Program)
-	require.NoError(t, err)
-	ops.Program = ops.Program[0 : len(ops.Program)-1]
-	_, err = Disassemble(ops.Program)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "program end while reading immediate e for substring")
+			source = "byte 0x4141\nsubstring 0 1"
+			ops = testProg(t, source, v)
+			dis, err = Disassemble(ops.Program[0 : len(ops.Program)-1])
+			require.Error(t, err, dis)
+			require.Contains(t, err.Error(), "program end while reading immediate e for substring")
+		})
+	}
 }
 
 func TestAssembleVersions(t *testing.T) {
@@ -1886,38 +1865,31 @@ func TestAssembleAsset(t *testing.T) {
 	t.Parallel()
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
-		testProg(t, "asset_holding_get ABC 1", v,
-			Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
-		testProg(t, "int 1; asset_holding_get ABC 1", v,
-			Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
+		t.Run(strconv.Itoa(int(v)), func(t *testing.T) {
+			testProg(t, "asset_holding_get ABC 1", v,
+				Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
+			testProg(t, "int 1; asset_holding_get ABC 1", v,
+				Expect{1, "asset_holding_get ABC 1 expects 2 stack arguments..."})
 
-		if v < sharedResourcesVersion {
 			testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
 				Expect{1, "asset_holding_get expects 1 immediate argument"})
 			testProg(t, "int 1; int 1; asset_holding_get ABC", v,
 				Expect{1, "asset_holding_get unknown field: \"ABC\""})
-		} else {
-			testProg(t, "int 1; int 1; asset_holding_get ABC 1", v,
-				Expect{1, "asset_holding_get ABC 1 arg 0 wanted type..."})
-			testProg(t, "txn Sender; int 1; asset_holding_get ABC 1", v,
-				Expect{1, "asset_holding_get expects 1 immediate argument"})
-			testProg(t, "txn Sender; int 1; asset_holding_get ABC", v,
-				Expect{1, "asset_holding_get unknown field: \"ABC\""})
-		}
 
-		testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
-			Expect{1, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
+			testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
+				Expect{1, "asset_params_get ABC 1 arg 0 wanted type uint64..."})
 
-		// Test that AssetUnitName is known to return bytes
-		testProg(t, "int 1; asset_params_get AssetUnitName; pop; int 1; +", v,
-			Expect{1, "+ arg 0 wanted type uint64..."})
+			// Test that AssetUnitName is known to return bytes
+			testProg(t, "int 1; asset_params_get AssetUnitName; pop; int 1; +", v,
+				Expect{1, "+ arg 0 wanted type uint64..."})
 
-		// Test that AssetTotal is known to return uint64
-		testProg(t, "int 1; asset_params_get AssetTotal; pop; byte 0x12; concat", v,
-			Expect{1, "concat arg 0 wanted type []byte..."})
+			// Test that AssetTotal is known to return uint64
+			testProg(t, "int 1; asset_params_get AssetTotal; pop; byte 0x12; concat", v,
+				Expect{1, "concat arg 0 wanted type []byte..."})
 
-		testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects 1 immediate argument")
-		testLine(t, "asset_params_get ABC", v, "asset_params_get unknown field: \"ABC\"")
+			testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects 1 immediate argument")
+			testLine(t, "asset_params_get ABC", v, "asset_params_get unknown field: \"ABC\"")
+		})
 	}
 }
 
@@ -2168,23 +2140,27 @@ func TestHasStatefulOps(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	source := "int 1"
-	ops := testProg(t, source, AssemblerMaxVersion)
-	has, err := HasStatefulOps(ops.Program)
-	require.NoError(t, err)
-	require.False(t, has)
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			source := "int 1"
+			ops := testProg(t, source, v)
+			has, err := HasStatefulOps(ops.Program)
+			require.NoError(t, err)
+			require.False(t, has)
 
-	source = `txn Sender; int 1; app_opted_in; err`
-	ops = testProg(t, source, AssemblerMaxVersion)
-	has, err = HasStatefulOps(ops.Program)
-	require.NoError(t, err)
-	require.True(t, has)
+			source = `int 0; int 1; app_opted_in; err`
+			ops = testProg(t, source, v)
+			has, err = HasStatefulOps(ops.Program)
+			require.NoError(t, err)
+			require.True(t, has)
 
-	source = `int 1; int 1; app_opted_in; err`
-	ops = testProg(t, source, sharedResourcesVersion-1)
-	has, err = HasStatefulOps(ops.Program)
-	require.NoError(t, err)
-	require.True(t, has)
+			source = `int 1; asset_params_get AssetURL; err`
+			ops = testProg(t, source, v)
+			has, err = HasStatefulOps(ops.Program)
+			require.NoError(t, err)
+			require.True(t, has)
+		})
+	}
 }
 
 func TestStringLiteralParsing(t *testing.T) {
@@ -2477,7 +2453,9 @@ func TestBranchAssemblyTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	text := `
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			text := `
 	int 0             // current app id  [0]
 	int 1             // key  [1, 0]
 	itob              // ["\x01", 0]
@@ -2485,13 +2463,9 @@ func TestBranchAssemblyTypeCheck(t *testing.T) {
 	pop               // [x]
 	btoi              // [n]
 `
+			testProg(t, text, v)
 
-	ops := newOpStream(AssemblerMaxVersion)
-	err := ops.assemble(text)
-	require.NoError(t, err)
-	require.Empty(t, ops.Warnings)
-
-	text = `
+			text = `
 	int 0             // current app id  [0]
 	int 1             // key  [1, 0]
 	itob              // ["\x01", 0]
@@ -2500,11 +2474,9 @@ func TestBranchAssemblyTypeCheck(t *testing.T) {
 flip:                 // [x]
 	btoi              // [n]
 `
-
-	ops = newOpStream(AssemblerMaxVersion)
-	err = ops.assemble(text)
-	require.NoError(t, err)
-	require.Empty(t, ops.Warnings)
+			testProg(t, text, v)
+		})
+	}
 }
 
 func TestSwapTypeCheck(t *testing.T) {
@@ -2713,8 +2685,8 @@ func TestTxTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{1, "itxn_field Sender expects 1 stack argument..."})
-	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type addr got 1"})
-	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5, Expect{1, "...wanted type addr got [4]byte"})
+	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type address got 1"})
+	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5, Expect{1, "...wanted type address got [4]byte"})
 	testProg(t, "itxn_begin; global ZeroAddress; itxn_field Sender", 5)
 
 	testProg(t, "itxn_begin; itxn_field Amount", 5, Expect{1, "itxn_field Amount expects 1 stack argument..."})

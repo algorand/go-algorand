@@ -393,6 +393,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 			AllowEmptySignatures: trueOrNil(result.EvalOverrides.AllowEmptySignatures),
 			MaxLogSize:           result.EvalOverrides.MaxLogSize,
 			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
+			ExtraOpcodeBudget:    numOrNil(result.EvalOverrides.ExtraOpcodeBudget),
 		}
 	}
 
@@ -419,6 +420,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		TxnGroups:            txnGroups,
 		AllowEmptySignatures: request.AllowEmptySignatures,
 		AllowMoreLogging:     request.AllowMoreLogging,
+		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
 	}
 }
 

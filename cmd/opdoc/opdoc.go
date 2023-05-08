@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var docVersion = 8
+var docVersion = 9
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
 func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails) string {
@@ -84,13 +84,12 @@ func markdownTableEscape(x string) string {
 }
 
 func namedStackTypesMarkdown(out io.Writer, stackTypes []namedType) {
-	fmt.Fprintf(out, "#### StackType Definitions\n\n")
+	fmt.Fprintf(out, "#### Definitions\n\n")
 	fmt.Fprintf(out, "| Name | Bound | AVM Type |\n")
 	fmt.Fprintf(out, "| ---- | ---- | -------- |\n")
 
 	for _, st := range stackTypes {
-		bound := fmt.Sprintf("%d - %d", st.Bound[0], st.Bound[1])
-		fmt.Fprintf(out, "| %s | %s | %s |\n", st.Name, bound, st.AVMType)
+		fmt.Fprintf(out, "| %s | %s | %s |\n", st.Name, st.boundString(), st.AVMType)
 	}
 	out.Write([]byte("\n"))
 }
@@ -312,6 +311,35 @@ type namedType struct {
 	AVMType      string
 }
 
+func (nt namedType) boundString() string {
+	if nt.Bound[0] == 0 && nt.Bound[1] == 0 {
+		return ""
+	}
+
+	val := "x"
+	// if its bytes, the length is bounded
+	if nt.AVMType == "[]byte" {
+		val = "len(x)"
+	}
+
+	// If they're equal, the val should match exactly
+	if nt.Bound[0] > 0 && nt.Bound[0] == nt.Bound[1] {
+		return fmt.Sprintf("%s == %d", val, nt.Bound[0])
+	}
+
+	// otherwise, provide min/max bounds as lte expression
+	minBound, maxBound := "", ""
+	if nt.Bound[0] > 0 {
+		minBound = fmt.Sprintf("%d <= ", nt.Bound[0])
+	}
+	if nt.Bound[1] > 0 {
+		maxBound = fmt.Sprintf(" <= %d", nt.Bound[1])
+	}
+
+	return fmt.Sprintf("%s%s%s", minBound, val, maxBound)
+
+}
+
 // LanguageSpec records the ops of the language at some version
 type LanguageSpec struct {
 	EvalMaxVersion  int
@@ -321,10 +349,8 @@ type LanguageSpec struct {
 }
 
 func typeStrings(types logic.StackTypes) []string {
-	var (
-		out      = make([]string, len(types))
-		allNones = true
-	)
+	out := make([]string, len(types))
+	allNones := true
 	for idx, t := range types {
 		out[idx] = t.String()
 		if out[idx] != "none" {
@@ -337,7 +363,7 @@ func typeStrings(types logic.StackTypes) []string {
 	// in so we don't break the indices by omitting
 	// a valid none in a fields array
 	if allNones {
-		return []string{}
+		return nil
 	}
 
 	return out
@@ -447,7 +473,7 @@ func main() {
 	integerConstantsTableMarkdown(constants)
 	constants.Close()
 
-	named := []namedType{}
+	named := make([]namedType, 0, len(logic.AllStackTypes))
 	for abbr, t := range logic.AllStackTypes {
 		named = append(named, namedType{
 			Name:         t.String(),
