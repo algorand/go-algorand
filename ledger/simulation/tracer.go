@@ -214,6 +214,10 @@ func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDT
 	applyDataOfCurrentTxn.EvalDelta.InnerTxns = inners
 }
 
+func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTraceUnit {
+	return OpcodeTraceUnit{PC: uint64(cx.PC())}
+}
+
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig ops
@@ -225,7 +229,13 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		// app creation
 		appIDToSave = cx.AppID()
 	}
-	// TODO note: we want to append PC info and store in tracer somehow
+	defer func() {
+		if tracer.result.ExecTraceConfig == NoExecTrace {
+			return
+		}
+		currentTrace := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+		currentTrace.Trace = append(currentTrace.Trace, tracer.makeOpcodeTraceUnit(cx))
+	}()
 	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
 }
 
