@@ -2201,7 +2201,7 @@
         "uint64"
       ],
       "Returns": [
-        "bool"
+        "uint64"
       ],
       "Size": 1,
       "Doc": "1 if account A is opted in to application B, else 0",
@@ -2216,7 +2216,7 @@
       "Name": "app_local_get",
       "Args": [
         "any",
-        "key"
+        "[]byte"
       ],
       "Returns": [
         "any"
@@ -2235,11 +2235,11 @@
       "Args": [
         "any",
         "uint64",
-        "key"
+        "[]byte"
       ],
       "Returns": [
         "any",
-        "bool"
+        "uint64"
       ],
       "Size": 1,
       "Doc": "X is the local state of application B, key C in account A. Y is 1 if key existed, else 0",
@@ -2253,7 +2253,7 @@
       "Opcode": 100,
       "Name": "app_global_get",
       "Args": [
-        "key"
+        "[]byte"
       ],
       "Returns": [
         "any"
@@ -2271,11 +2271,11 @@
       "Name": "app_global_get_ex",
       "Args": [
         "uint64",
-        "key"
+        "[]byte"
       ],
       "Returns": [
         "any",
-        "bool"
+        "uint64"
       ],
       "Size": 1,
       "Doc": "X is the global state of application A, key B. Y is 1 if key existed, else 0",
@@ -2290,7 +2290,7 @@
       "Name": "app_local_put",
       "Args": [
         "any",
-        "key",
+        "[]byte",
         "any"
       ],
       "Size": 1,
@@ -2305,7 +2305,7 @@
       "Opcode": 103,
       "Name": "app_global_put",
       "Args": [
-        "key",
+        "[]byte",
         "any"
       ],
       "Size": 1,
@@ -2320,7 +2320,7 @@
       "Name": "app_local_del",
       "Args": [
         "any",
-        "key"
+        "[]byte"
       ],
       "Size": 1,
       "Doc": "delete key B from account A's local state of the current application",
@@ -2334,7 +2334,7 @@
       "Opcode": 105,
       "Name": "app_global_del",
       "Args": [
-        "key"
+        "[]byte"
       ],
       "Size": 1,
       "Doc": "delete key A from the global state of the current application",
@@ -2353,7 +2353,7 @@
       ],
       "Returns": [
         "any",
-        "bool"
+        "uint64"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -2380,7 +2380,7 @@
       ],
       "Returns": [
         "any",
-        "bool"
+        "uint64"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -2427,7 +2427,7 @@
       ],
       "Returns": [
         "any",
-        "bool"
+        "uint64"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -2468,7 +2468,7 @@
       ],
       "Returns": [
         "any",
-        "bool"
+        "uint64"
       ],
       "Size": 2,
       "ArgEnum": [

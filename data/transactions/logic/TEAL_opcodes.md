@@ -843,7 +843,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address). Retu
 ## app_opted_in
 
 - Opcode: 0x61
-- Stack: ..., A, B: uint64 &rarr; ..., bool
+- Stack: ..., A, B: uint64 &rarr; ..., uint64
 - 1 if account A is opted in to application B, else 0
 - Availability: v2
 - Mode: Application
@@ -853,7 +853,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_local_get
 
 - Opcode: 0x62
-- Stack: ..., A, B: key &rarr; ..., any
+- Stack: ..., A, B: []byte &rarr; ..., any
 - local state of the key B in the current application in account A
 - Availability: v2
 - Mode: Application
@@ -863,7 +863,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_get_ex
 
 - Opcode: 0x63
-- Stack: ..., A, B: uint64, C: key &rarr; ..., X: any, Y: bool
+- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: uint64
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -873,7 +873,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_global_get
 
 - Opcode: 0x64
-- Stack: ..., A: key &rarr; ..., any
+- Stack: ..., A: []byte &rarr; ..., any
 - global state of the key A in the current application
 - Availability: v2
 - Mode: Application
@@ -883,7 +883,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 ## app_global_get_ex
 
 - Opcode: 0x65
-- Stack: ..., A: uint64, B: key &rarr; ..., X: any, Y: bool
+- Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: uint64
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -893,7 +893,7 @@ params: Txn.ForeignApps offset (or, since v4, an _available_ application id), st
 ## app_local_put
 
 - Opcode: 0x66
-- Stack: ..., A, B: key, C &rarr; ...
+- Stack: ..., A, B: []byte, C &rarr; ...
 - write C to key B in account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -903,7 +903,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_global_put
 
 - Opcode: 0x67
-- Stack: ..., A: key, B &rarr; ...
+- Stack: ..., A: []byte, B &rarr; ...
 - write B to key A in the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -911,7 +911,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_del
 
 - Opcode: 0x68
-- Stack: ..., A, B: key &rarr; ...
+- Stack: ..., A, B: []byte &rarr; ...
 - delete key B from account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -923,7 +923,7 @@ Deleting a key which is already absent has no effect on the application local st
 ## app_global_del
 
 - Opcode: 0x69
-- Stack: ..., A: key &rarr; ...
+- Stack: ..., A: []byte &rarr; ...
 - delete key A from the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -935,7 +935,7 @@ Deleting a key which is already absent has no effect on the application global s
 ## asset_holding_get f
 
 - Opcode: 0x70 {uint8 asset holding field index}
-- Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: bool
+- Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0
 - Availability: v2
 - Mode: Application
@@ -953,7 +953,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 ## asset_params_get f
 
 - Opcode: 0x71 {uint8 asset params field index}
-- Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
+- Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from asset A. Y is 1 if A exists, else 0
 - Availability: v2
 - Mode: Application
@@ -981,7 +981,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 ## app_params_get f
 
 - Opcode: 0x72 {uint8 app params field index}
-- Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
+- Stack: ..., A: uint64 &rarr; ..., X: any, Y: uint64
 - X is field F from app A. Y is 1 if A exists, else 0
 - Availability: v5
 - Mode: Application
@@ -1006,7 +1006,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 ## acct_params_get f
 
 - Opcode: 0x73 {uint8 account params field index}
-- Stack: ..., A &rarr; ..., X: any, Y: bool
+- Stack: ..., A &rarr; ..., X: any, Y: uint64
 - X is field F from account A. Y is 1 if A owns positive algos, else 0
 - Availability: v6
 - Mode: Application
