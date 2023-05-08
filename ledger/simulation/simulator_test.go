@@ -107,7 +107,7 @@ func TestSimulateWithTrace(t *testing.T) {
 	t.Parallel()
 
 	env := simulationtesting.PrepareSimulatorTest(t)
-	defer env.Ledger.Close()
+	defer env.Close()
 	s := MakeSimulator(env.Ledger)
 	sender := env.Accounts[0]
 
@@ -224,13 +224,13 @@ int 1`,
 		mocktracer.BeforeBlock(block.Block().Round()),
 		mocktracer.BeforeTxnGroup(2),
 		mocktracer.BeforeTxn(protocol.PaymentTx),
-		mocktracer.AfterTxn(protocol.PaymentTx, evalBlock.Payset[0].ApplyData, nil, false),
+		mocktracer.AfterTxn(protocol.PaymentTx, evalBlock.Payset[0].ApplyData, false),
 		mocktracer.BeforeTxn(protocol.ApplicationCallTx),
 		mocktracer.BeforeProgram(logic.ModeApp),
 		mocktracer.BeforeOpcode(),
 		mocktracer.AfterOpcode(false),
 		mocktracer.AfterProgram(logic.ModeApp, false),
-		mocktracer.AfterTxn(protocol.ApplicationCallTx, evalBlock.Payset[1].ApplyData, nil, false),
+		mocktracer.AfterTxn(protocol.ApplicationCallTx, evalBlock.Payset[1].ApplyData, false),
 		mocktracer.AfterTxnGroup(2, &expectedDelta, false),
 		//Block evaluation
 		mocktracer.AfterBlock(block.Block().Round()),

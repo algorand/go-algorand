@@ -246,17 +246,6 @@ func BenchmarkCowChild(b *testing.B) {
 	}
 }
 
-func BenchmarkCowReuseChild(b *testing.B) {
-	b.ReportAllocs()
-	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 16)
-	calf := cow.child(1)
-	calf.reset()
-	for i := 0; i < b.N; i++ {
-		cow.reuseChild(calf, 16)
-		calf.reset()
-	}
-}
-
 // Ideally we'd be able to randomize the roundCowState but can't do it via reflection
 // since it' can't set unexported fields. This test just makes sure that all of the existing
 // fields are correctly reset but won't be able to catch any new fields added.

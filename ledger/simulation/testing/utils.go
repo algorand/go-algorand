@@ -86,7 +86,13 @@ type Environment struct {
 	TxnInfo            TxnInfo
 }
 
-// PrepareSimulatorTest creates an environment to test transaction simulations
+// Close reclaims resources used by the testing environment
+func (env *Environment) Close() {
+	env.Ledger.Close()
+}
+
+// PrepareSimulatorTest creates an environment to test transaction simulations. The caller is
+// responsible for calling Close() on the returned environment.
 func PrepareSimulatorTest(t *testing.T) Environment {
 	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 

@@ -600,11 +600,6 @@ type BlockEvaluator struct {
 
 	maxTxnBytesPerBlock int
 
-	// GranularEval controls whether the evaluator should create a child cow for each transaction.
-	// This is purely for debugging/tracing purposes, since this should have no effect on the actual
-	// result.
-	GranularEval bool
-
 	Tracer logic.EvalTracer
 }
 
@@ -964,7 +959,6 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	defer cow.recycle()
 
 	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
-	evalParams.GranularEval = eval.GranularEval
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
@@ -978,39 +972,17 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 
 	// Evaluate each transaction in the group
 	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
-	cowForTxn := cow
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
-
-		if eval.GranularEval {
-			if gi == 0 {
-				cowForTxn = cow.child(1)
-				defer cowForTxn.recycle()
-			} else {
-				// Reuse the same cow allocation for all transactions in this group
-				cowForTxn.reset()
-				cow.reuseChild(cowForTxn, 1)
-			}
-		}
 
 		if eval.Tracer != nil {
 			eval.Tracer.BeforeTxn(evalParams, gi)
 		}
 
-		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cowForTxn, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
 
 		if eval.Tracer != nil {
-			var deltas *ledgercore.StateDelta
-			if eval.GranularEval {
-				// Only include if we're sure the cowForTxn contains ONLY the deltas from this txn
-				d := cowForTxn.deltas()
-				deltas = &d
-			}
-			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, deltas, err)
-		}
-
-		if eval.GranularEval {
-			cowForTxn.commitToParent()
+			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)
 		}
 
 		if err != nil {

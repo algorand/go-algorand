@@ -247,29 +247,25 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 		name                 string
 		firstTxnBehavior     string
 		innerAppCallScenario mocktracer.TestScenarioGenerator
-		granularEval         bool
 	}
 	var testCases []tracerTestCase
 
-	for _, granularEval := range []bool{false, true} {
-		firstIteration := true
-		for scenarioName, scenario := range scenarios {
-			firstTxnBehaviors := []string{"approve"}
-			if firstIteration {
-				// When the first transaction rejects or errors, the behavior of the later transactions
-				// don't matter, so we only want to test these cases with any one mocktracer scenario.
-				firstTxnBehaviors = append(firstTxnBehaviors, "reject", "error")
-				firstIteration = false
-			}
+	firstIteration := true
+	for scenarioName, scenario := range scenarios {
+		firstTxnBehaviors := []string{"approve"}
+		if firstIteration {
+			// When the first transaction rejects or errors, the behavior of the later transactions
+			// don't matter, so we only want to test these cases with any one mocktracer scenario.
+			firstTxnBehaviors = append(firstTxnBehaviors, "reject", "error")
+			firstIteration = false
+		}
 
-			for _, firstTxnTxnBehavior := range firstTxnBehaviors {
-				testCases = append(testCases, tracerTestCase{
-					name:                 fmt.Sprintf("firstTxnBehavior=%s,scenario=%s,granularEval=%t", firstTxnTxnBehavior, scenarioName, granularEval),
-					firstTxnBehavior:     firstTxnTxnBehavior,
-					innerAppCallScenario: scenario,
-					granularEval:         granularEval,
-				})
-			}
+		for _, firstTxnTxnBehavior := range firstTxnBehaviors {
+			testCases = append(testCases, tracerTestCase{
+				name:                 fmt.Sprintf("firstTxnBehavior=%s,scenario=%s", firstTxnTxnBehavior, scenarioName),
+				firstTxnBehavior:     firstTxnTxnBehavior,
+				innerAppCallScenario: scenario,
+			})
 		}
 	}
 
@@ -279,6 +275,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			t.Parallel()
 			genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
+			basicAppID := basics.AppIndex(1001)
 			innerAppID := basics.AppIndex(1003)
 			innerAppAddress := innerAppID.Address()
 			balances := genesisInitState.Accounts
@@ -300,7 +297,6 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			require.NoError(t, err)
 			eval.validate = true
 			eval.generate = true
-			eval.GranularEval = testCase.granularEval
 
 			genHash := l.GenesisHash()
 
@@ -372,7 +368,6 @@ int 1`,
 				FeeSinkAddr:    testSinkAddr,
 				MinFee:         minFee,
 				CreatedAppID:   innerAppID,
-				GranularEval:   testCase.granularEval,
 				BlockHeader:    eval.block.BlockHeader,
 				PrevTimestamp:  blkHeader.TimeStamp,
 			})
@@ -425,7 +420,7 @@ int 1`,
 			}
 
 			expectedBasicAppCallAD := transactions.ApplyData{
-				ApplicationID: 1001,
+				ApplicationID: basicAppID,
 				EvalDelta: transactions.EvalDelta{
 					GlobalDelta: basics.StateDelta{},
 					LocalDeltas: map[uint64]basics.StateDelta{},
@@ -460,7 +455,7 @@ int 1`,
 					},
 					AppResources: []ledgercore.AppResourceRecord{
 						{
-							Aidx: 1,
+							Aidx: basicAppID,
 							Addr: addrs[0],
 							Params: ledgercore.AppParamsDelta{
 								Params: &basics.AppParams{
@@ -472,7 +467,7 @@ int 1`,
 					},
 				},
 				Creatables: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
-					1: {
+					basics.CreatableIndex(basicAppID): {
 						Ctype:   basics.AppCreatable,
 						Created: true,
 						Creator: addrs[0],
@@ -549,9 +544,9 @@ int 1`,
 					mocktracer.OpcodeEvents(3, false),
 					{
 						mocktracer.AfterProgram(logic.ModeApp, false),
-						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, mocktracer.StateDeltaIfTrue(expectedBasicAppCallDelta, testCase.granularEval), false), // end basicAppCallTxn
-						mocktracer.BeforeTxn(protocol.PaymentTx), // start payTxn
-						mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, mocktracer.StateDeltaIfTrue(expectedPayTxnDelta, testCase.granularEval), false), // end payTxn
+						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, false), // end basicAppCallTxn
+						mocktracer.BeforeTxn(protocol.PaymentTx),                                       // start payTxn
+						mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, false),               // end payTxn
 					},
 					scenario.ExpectedEvents,
 					{
@@ -575,7 +570,7 @@ int 1`,
 					mocktracer.OpcodeEvents(3, hasError),
 					{
 						mocktracer.AfterProgram(logic.ModeApp, hasError),
-						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, mocktracer.StateDeltaIfTrue(expectedBasicAppCallDelta, testCase.granularEval), true), // end basicAppCallTxn
+						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, true), // end basicAppCallTxn
 						mocktracer.AfterTxnGroup(3, &expectedBasicAppCallDelta, true),
 					},
 				})...)

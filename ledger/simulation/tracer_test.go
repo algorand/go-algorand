@@ -17,7 +17,6 @@
 package simulation
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/transactions"
@@ -219,7 +218,7 @@ func TestCursorEvalTracer(t *testing.T) {
 
 	for _, tc := range testCases {
 		tc := tc
-		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var tracer cursorEvalTracer
 
@@ -232,7 +231,7 @@ func TestCursorEvalTracer(t *testing.T) {
 				case mocktracer.BeforeTxnEvent:
 					tracer.BeforeTxn(&ep, groupIndex)
 				case mocktracer.AfterTxnEvent:
-					tracer.AfterTxn(&ep, groupIndex, transactions.ApplyData{}, nil, nil)
+					tracer.AfterTxn(&ep, groupIndex, transactions.ApplyData{}, nil)
 				case mocktracer.BeforeTxnGroupEvent:
 					tracer.BeforeTxnGroup(&ep)
 				case mocktracer.AfterTxnGroupEvent:

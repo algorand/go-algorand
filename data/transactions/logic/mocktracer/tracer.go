@@ -107,8 +107,8 @@ func BeforeTxn(txnType protocol.TxType) Event {
 }
 
 // AfterTxn creates a new Event with the type AfterTxnEvent
-func AfterTxn(txnType protocol.TxType, ad transactions.ApplyData, deltas *ledgercore.StateDelta, hasError bool) Event {
-	return Event{Type: AfterTxnEvent, TxnType: txnType, TxnApplyData: ad, Deltas: copyDeltas(deltas), HasError: hasError}
+func AfterTxn(txnType protocol.TxType, ad transactions.ApplyData, hasError bool) Event {
+	return Event{Type: AfterTxnEvent, TxnType: txnType, TxnApplyData: ad, HasError: hasError}
 }
 
 // AfterProgram creates a new Event with the type AfterProgramEvent
@@ -179,8 +179,8 @@ func (d *Tracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 }
 
 // AfterTxn mocks the logic.EvalTracer.AfterTxn method
-func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error) {
-	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad, deltas, evalError != nil))
+func (d *Tracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
+	d.Events = append(d.Events, AfterTxn(ep.TxnGroup[groupIndex].Txn.Type, ad, evalError != nil))
 }
 
 // BeforeProgram mocks the logic.EvalTracer.BeforeProgram method

@@ -121,7 +121,7 @@ func validateSimulationResult(t *testing.T, result simulation.Result) {
 func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase) {
 	t.Helper()
 	env := simulationtesting.PrepareSimulatorTest(t)
-	defer env.Ledger.Close()
+	defer env.Close()
 	s := simulation.MakeSimulator(env.Ledger)
 
 	testcase := f(env.Accounts, env.TxnInfo)
@@ -368,7 +368,7 @@ func TestStateProofTxn(t *testing.T) {
 	t.Parallel()
 
 	env := simulationtesting.PrepareSimulatorTest(t)
-	defer env.Ledger.Close()
+	defer env.Close()
 	s := simulation.MakeSimulator(env.Ledger)
 
 	txgroup := []transactions.SignedTxn{
@@ -387,7 +387,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 	t.Parallel()
 
 	env := simulationtesting.PrepareSimulatorTest(t)
-	defer env.Ledger.Close()
+	defer env.Close()
 	s := simulation.MakeSimulator(env.Ledger)
 	sender1 := env.Accounts[0]
 	sender1Balance := env.Accounts[0].AcctData.MicroAlgos
@@ -1002,15 +1002,15 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 ` + strings.Repeat(`int 1; pop;`, 700) + `end:
 	int 1`
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger)
 
-	sender := accounts[0]
+	sender := env.Accounts[0]
 
 	futureAppID := basics.AppIndex(1)
 	// App create with cost 4
-	createTxn := txnInfo.NewTxn(txntest.Txn{
+	createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:              protocol.ApplicationCallTx,
 		Sender:            sender.Addr,
 		ApplicationID:     0,
@@ -1018,7 +1018,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 		ClearStateProgram: `#pragma version 6; int 0`,
 	})
 	// Expensive 700 repetition of int 1 and pop total cost 1404
-	expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+	expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:          protocol.ApplicationCallTx,
 		Sender:        sender.Addr,
 		ApplicationID: futureAppID,
@@ -1211,7 +1211,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 	t.Parallel()
 
 	env := simulationtesting.PrepareSimulatorTest(t)
-	defer env.Ledger.Close()
+	defer env.Close()
 	s := simulation.MakeSimulator(env.Ledger)
 	sender := env.Accounts[0]
 
@@ -1633,7 +1633,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 	t.Parallel()
 
 	env := simulationtesting.PrepareSimulatorTest(t)
-	defer env.Ledger.Close()
+	defer env.Close()
 	s := simulation.MakeSimulator(env.Ledger)
 	sender := env.Accounts[0]
 

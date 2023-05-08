@@ -145,11 +145,7 @@ type EvalTracer interface {
 	// groupIndex refers to the index of the transaction in the transaction group that was just executed.
 	// ad is the ApplyData result of the transaction; prefer using this instead of
 	// ep.TxnGroup[groupIndex].ApplyData, since it may not be populated at this point.
-	//
-	// If GranularEval is enabled by the evaluator (specified either in logic.EvalParams or ledger's
-	// BlockEvaluator), deltas is the ledgercore.StateDelta changes that occurred because of this
-	// transaction. Otherwise, this argument is nil.
-	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error)
+	AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, evalError error)
 
 	// BeforeProgram is called before an app or LogicSig program is evaluated.
 	BeforeProgram(cx *EvalContext)
@@ -185,7 +181,7 @@ func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDe
 func (n NullEvalTracer) BeforeTxn(ep *EvalParams, groupIndex int) {}
 
 // AfterTxn does nothing
-func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, deltas *ledgercore.StateDelta, evalError error) {
+func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 }
 
 // BeforeProgram does nothing
