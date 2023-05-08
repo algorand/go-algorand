@@ -546,7 +546,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 	// so it will think the app doesn't exist
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "applications that do not exist")
+	a.Contains(err.Error(), "only ClearState is supported")
 	a.Equal(1, b.put)
 	a.Equal(1, b.putAppParams)
 

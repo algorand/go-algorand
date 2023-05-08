@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 
@@ -44,31 +45,34 @@ import (
 )
 
 var (
-	toAddress                    string
-	account                      string
-	amount                       uint64
-	txFilename                   string
-	rejectsFilename              string
-	closeToAddress               string
-	noProgramOutput              bool
-	writeSourceMap               bool
-	signProgram                  bool
-	programSource                string
-	argB64Strings                []string
-	disassemble                  bool
-	verbose                      bool
-	progByteFile                 string
-	msigParams                   string
-	logicSigFile                 string
-	timeStamp                    int64
-	protoVersion                 string
-	rekeyToAddress               string
-	signerAddress                string
-	rawOutput                    bool
-	requestFilename              string
-	requestOutFilename           string
-	simulateAllowEmptySignatures bool
-	simulateAllowMoreLogging     bool
+	toAddress          string
+	account            string
+	amount             uint64
+	txFilename         string
+	rejectsFilename    string
+	closeToAddress     string
+	noProgramOutput    bool
+	writeSourceMap     bool
+	signProgram        bool
+	programSource      string
+	argB64Strings      []string
+	disassemble        bool
+	verbose            bool
+	progByteFile       string
+	msigParams         string
+	logicSigFile       string
+	timeStamp          int64
+	protoVersion       string
+	rekeyToAddress     string
+	signerAddress      string
+	rawOutput          bool
+	requestFilename    string
+	requestOutFilename string
+
+	simulateAllowEmptySignatures   bool
+	simulateAllowMoreLogging       bool
+	simulateAllowExtraOpcodeBudget bool
+	simulateExtraOpcodeBudget      uint64
 )
 
 func init() {
@@ -155,6 +159,8 @@ func init() {
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
+	simulateCmd.Flags().BoolVar(&simulateAllowExtraOpcodeBudget, "allow-extra-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
+	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1240,6 +1246,15 @@ var simulateCmd = &cobra.Command{
 			reportErrorf("exactly one of --txfile or --request must be provided")
 		}
 
+		allowExtraBudgetProvided := cmd.Flags().Changed("allow-extra-opcode-budget")
+		extraBudgetProvided := cmd.Flags().Changed("extra-opcode-budget")
+		if allowExtraBudgetProvided && extraBudgetProvided {
+			reportErrorf("--allow-extra-opcode-budget and --extra-opcode-budget are mutually exclusive")
+		}
+		if allowExtraBudgetProvided {
+			simulateExtraOpcodeBudget = simulation.MaxExtraOpcodeBudget
+		}
+
 		requestOutProvided := cmd.Flags().Changed("request-only-out")
 		resultOutProvided := cmd.Flags().Changed("result-out")
 		if requestOutProvided && resultOutProvided {
@@ -1261,6 +1276,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
+				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1283,6 +1299,7 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
+				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
