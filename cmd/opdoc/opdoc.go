@@ -281,10 +281,8 @@ type LanguageSpec struct {
 }
 
 func typeStrings(types logic.StackTypes) []string {
-	var (
-		out      = make([]string, len(types))
-		allNones = true
-	)
+	out := make([]string, len(types))
+	allNones := true
 	for idx, t := range types {
 		out[idx] = t.String()
 		if out[idx] != "none" {
