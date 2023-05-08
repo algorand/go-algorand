@@ -288,15 +288,15 @@ func (nt namedType) boundString() string {
 	}
 
 	// otherwise, provide min/max bounds as lte expression
-	minLen, maxLen := "", ""
+	minBound, maxBound := "", ""
 	if nt.Bound[0] > 0 {
-		minLen = fmt.Sprintf("%d <= ", nt.Bound[0])
+		minBound = fmt.Sprintf("%d <= ", nt.Bound[0])
 	}
 	if nt.Bound[1] > 0 {
-		maxLen = fmt.Sprintf(" <= %d", nt.Bound[1])
+		maxBound = fmt.Sprintf(" <= %d", nt.Bound[1])
 	}
 
-	return fmt.Sprintf("%s%s%s", minLen, val, maxLen)
+	return fmt.Sprintf("%s%s%s", minBound, val, maxBound)
 
 }
 
