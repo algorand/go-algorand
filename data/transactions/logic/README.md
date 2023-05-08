@@ -48,21 +48,21 @@ named to provide more semantic information in the documentation. They're also us
 assembly time to do type checking and to provide more informative error messages.
 
 
-#### StackType Definitions
+#### Definitions
 
 | Name | Bound | AVM Type |
 | ---- | ---- | -------- |
-| uint64 | 0 - 18446744073709551615 | uint64 |
-| none | 0 - 0 | none |
-| name | 1 - 64 | []byte |
-| method | 4 - 4 | []byte |
-| key | 0 - 64 | []byte |
-| bool | 0 - 1 | uint64 |
-| bigint | 0 - 64 | []byte |
-| any | 0 - 0 | any |
-| addr | 32 - 32 | []byte |
-| []byte | 0 - 4096 | []byte |
-| [32]byte | 32 - 32 | []byte |
+| uint64 | x <= 18446744073709551615 | uint64 |
+| none |  | none |
+| name | 1 <= len(x) <= 64 | []byte |
+| method | len(x) == 4 | []byte |
+| key | len(x) <= 64 | []byte |
+| bool | x <= 1 | uint64 |
+| bigint | len(x) <= 64 | []byte |
+| any |  | any |
+| address | len(x) == 32 | []byte |
+| []byte | len(x) <= 4096 | []byte |
+| [32]byte | len(x) == 32 | []byte |
 
 
 
@@ -517,16 +517,16 @@ Some of these have immediate data in the byte or bytes after the opcode.
 ##### Scalar Fields
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
-| 0 | Sender | addr |      | 32 byte address |
+| 0 | Sender | address |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
 | 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | [32]byte |      | 32 byte lease value |
-| 7 | Receiver | addr |      | 32 byte address |
+| 7 | Receiver | address |      | 32 byte address |
 | 8 | Amount | uint64 |      | microalgos |
-| 9 | CloseRemainderTo | addr |      | 32 byte address |
+| 9 | CloseRemainderTo | address |      | 32 byte address |
 | 10 | VotePK | [32]byte |      | 32 byte address |
 | 11 | SelectionPK | [32]byte |      | 32 byte address |
 | 12 | VoteFirst | uint64 |      | The first round that the participation key is valid. |
@@ -536,9 +536,9 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 16 | TypeEnum | uint64 |      | Transaction type as integer |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
-| 19 | AssetSender | addr |      | 32 byte address. Source of assets if Sender is the Asset's Clawback address. |
-| 20 | AssetReceiver | addr |      | 32 byte address |
-| 21 | AssetCloseTo | addr |      | 32 byte address |
+| 19 | AssetSender | address |      | 32 byte address. Source of assets if Sender is the Asset's Clawback address. |
+| 20 | AssetReceiver | address |      | 32 byte address |
+| 21 | AssetCloseTo | address |      | 32 byte address |
 | 22 | GroupIndex | uint64 |      | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
 | 23 | TxID | [32]byte |      | The computed ID for this transaction. 32 bytes. |
 | 24 | ApplicationID | uint64 | v2  | ApplicationID from ApplicationCall transaction |
@@ -547,7 +547,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 29 | NumAccounts | uint64 | v2  | Number of Accounts |
 | 30 | ApprovalProgram | []byte | v2  | Approval program |
 | 31 | ClearStateProgram | []byte | v2  | Clear state program |
-| 32 | RekeyTo | addr | v2  | 32 byte Sender's new AuthAddr |
+| 32 | RekeyTo | address | v2  | 32 byte Sender's new AuthAddr |
 | 33 | ConfigAsset | uint64 | v2  | Asset ID in asset config transaction |
 | 34 | ConfigAssetTotal | uint64 | v2  | Total number of units of this asset created |
 | 35 | ConfigAssetDecimals | uint64 | v2  | Number of digits to display after the decimal place when displaying the asset |
@@ -556,12 +556,12 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 38 | ConfigAssetName | []byte | v2  | The asset name |
 | 39 | ConfigAssetURL | []byte | v2  | URL |
 | 40 | ConfigAssetMetadataHash | [32]byte | v2  | 32 byte commitment to unspecified asset metadata |
-| 41 | ConfigAssetManager | addr | v2  | 32 byte address |
-| 42 | ConfigAssetReserve | addr | v2  | 32 byte address |
-| 43 | ConfigAssetFreeze | addr | v2  | 32 byte address |
-| 44 | ConfigAssetClawback | addr | v2  | 32 byte address |
+| 41 | ConfigAssetManager | address | v2  | 32 byte address |
+| 42 | ConfigAssetReserve | address | v2  | 32 byte address |
+| 43 | ConfigAssetFreeze | address | v2  | 32 byte address |
+| 44 | ConfigAssetClawback | address | v2  | 32 byte address |
 | 45 | FreezeAsset | uint64 | v2  | Asset ID being frozen or un-frozen |
-| 46 | FreezeAssetAccount | addr | v2  | 32 byte address of the account whose asset slot is being frozen or un-frozen |
+| 46 | FreezeAssetAccount | address | v2  | 32 byte address of the account whose asset slot is being frozen or un-frozen |
 | 47 | FreezeAssetFrozen | bool | v2  | The new frozen value, 0 or 1 |
 | 49 | NumAssets | uint64 | v3  | Number of Assets |
 | 51 | NumApplications | uint64 | v3  | Number of Applications |
@@ -583,7 +583,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
-| 28 | Accounts | addr | v2  | Accounts listed in the ApplicationCall transaction |
+| 28 | Accounts | address | v2  | Accounts listed in the ApplicationCall transaction |
 | 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
 | 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
 | 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
@@ -602,18 +602,18 @@ Global fields are fields that are common to all the transactions in the group. I
 | 0 | MinTxnFee | uint64 |      | microalgos |
 | 1 | MinBalance | uint64 |      | microalgos |
 | 2 | MaxTxnLife | uint64 |      | rounds |
-| 3 | ZeroAddress | addr |      | 32 byte address of all zero bytes |
+| 3 | ZeroAddress | address |      | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 |      | Number of transactions in this atomic transaction group. At least 1 |
 | 5 | LogicSigVersion | uint64 | v2  | Maximum supported version |
 | 6 | Round | uint64 | v2  | Current round number. Application mode only. |
 | 7 | LatestTimestamp | uint64 | v2  | Last confirmed block UNIX timestamp. Fails if negative. Application mode only. |
 | 8 | CurrentApplicationID | uint64 | v2  | ID of current application executing. Application mode only. |
-| 9 | CreatorAddress | addr | v3  | Address of the creator of the current application. Application mode only. |
-| 10 | CurrentApplicationAddress | addr | v5  | Address that the current application controls. Application mode only. |
+| 9 | CreatorAddress | address | v3  | Address of the creator of the current application. Application mode only. |
+| 10 | CurrentApplicationAddress | address | v5  | Address that the current application controls. Application mode only. |
 | 11 | GroupID | [32]byte | v5  | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. |
 | 12 | OpcodeBudget | uint64 | v6  | The remaining cost that can be spent by opcodes in this program. |
 | 13 | CallerApplicationID | uint64 | v6  | The application ID of the application that called this application. 0 if this application is at the top-level. Application mode only. |
-| 14 | CallerApplicationAddress | addr | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
+| 14 | CallerApplicationAddress | address | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
 
 
 **Asset Fields**
@@ -635,11 +635,11 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in the
 | 4 | AssetName | []byte |      | Asset name |
 | 5 | AssetURL | []byte |      | URL with additional info about the asset |
 | 6 | AssetMetadataHash | [32]byte |      | Arbitrary commitment |
-| 7 | AssetManager | addr |      | Manager address |
-| 8 | AssetReserve | addr |      | Reserve address |
-| 9 | AssetFreeze | addr |      | Freeze address |
-| 10 | AssetClawback | addr |      | Clawback address |
-| 11 | AssetCreator | addr | v5  | Creator address |
+| 7 | AssetManager | address |      | Manager address |
+| 8 | AssetReserve | address |      | Reserve address |
+| 9 | AssetFreeze | address |      | Freeze address |
+| 10 | AssetClawback | address |      | Clawback address |
+| 11 | AssetCreator | address | v5  | Creator address |
 
 
 **App Fields**
@@ -655,8 +655,8 @@ App fields used in the `app_params_get` opcode.
 | 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
 | 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
 | 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
-| 7 | AppCreator | addr | Creator address |
-| 8 | AppAddress | addr | Address for which this application has authority |
+| 7 | AppCreator | address | Creator address |
+| 8 | AppAddress | address | Address for which this application has authority |
 
 
 **Account Fields**
@@ -667,7 +667,7 @@ Account fields used in the `acct_params_get` opcode.
 | - | ------ | -- | - | --------- |
 | 0 | AcctBalance | uint64 |      | Account balance in microalgos |
 | 1 | AcctMinBalance | uint64 |      | Minimum required balance for account, in microalgos |
-| 2 | AcctAuthAddr | addr |      | Address the account is rekeyed to. |
+| 2 | AcctAuthAddr | address |      | Address the account is rekeyed to. |
 | 3 | AcctTotalNumUint | uint64 | v8  | The total number of uint64 values allocated by this account in Global and Local States. |
 | 4 | AcctTotalNumByteSlice | uint64 | v8  | The total number of byte array values allocated by this account in Global and Local States. |
 | 5 | AcctTotalExtraAppPages | uint64 | v8  | The number of extra app code pages used by this account. |

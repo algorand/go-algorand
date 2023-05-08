@@ -689,7 +689,7 @@ var (
 	// StackBoolean constrains the int to 1 or 0, representing True or False
 	StackBoolean = NewStackType(avmUint64, bound(0, 1), "bool")
 	// StackAddress represents an address
-	StackAddress = NewStackType(avmBytes, static(32), "addr")
+	StackAddress = NewStackType(avmBytes, static(32), "address")
 	// StackBytes32 represents a bytestring that should have exactly 32 bytes
 	StackBytes32 = NewStackType(avmBytes, static(32), "[32]byte")
 	// StackBigInt represents a bytestring that should be treated like an int

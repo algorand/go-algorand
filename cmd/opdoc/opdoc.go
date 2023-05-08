@@ -52,13 +52,12 @@ func markdownTableEscape(x string) string {
 }
 
 func namedStackTypesMarkdown(out io.Writer, stackTypes []namedType) {
-	fmt.Fprintf(out, "#### StackType Definitions\n\n")
+	fmt.Fprintf(out, "#### Definitions\n\n")
 	fmt.Fprintf(out, "| Name | Bound | AVM Type |\n")
 	fmt.Fprintf(out, "| ---- | ---- | -------- |\n")
 
 	for _, st := range stackTypes {
-		bound := fmt.Sprintf("%d - %d", st.Bound[0], st.Bound[1])
-		fmt.Fprintf(out, "| %s | %s | %s |\n", st.Name, bound, st.AVMType)
+		fmt.Fprintf(out, "| %s | %s | %s |\n", st.Name, st.boundString(), st.AVMType)
 	}
 	out.Write([]byte("\n"))
 }
@@ -270,6 +269,35 @@ type namedType struct {
 	Abbreviation string
 	Bound        []uint64
 	AVMType      string
+}
+
+func (nt namedType) boundString() string {
+	if nt.Bound[0] == 0 && nt.Bound[1] == 0 {
+		return ""
+	}
+
+	val := "x"
+	// if its bytes, the length is bounded
+	if nt.AVMType == "[]byte" {
+		val = "len(x)"
+	}
+
+	// If they're equal, the val should match exactly
+	if nt.Bound[0] > 0 && nt.Bound[0] == nt.Bound[1] {
+		return fmt.Sprintf("%s == %d", val, nt.Bound[0])
+	}
+
+	// otherwise, provide min/max bounds as lte expression
+	minLen, maxLen := "", ""
+	if nt.Bound[0] > 0 {
+		minLen = fmt.Sprintf("%d <= ", nt.Bound[0])
+	}
+	if nt.Bound[1] > 0 {
+		maxLen = fmt.Sprintf(" <= %d", nt.Bound[1])
+	}
+
+	return fmt.Sprintf("%s%s%s", minLen, val, maxLen)
+
 }
 
 // LanguageSpec records the ops of the language at some version
