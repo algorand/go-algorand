@@ -747,9 +747,9 @@ func union(a, b [2]uint64) [2]uint64 {
 
 // StackType describes the type of a value on the operand stack
 type StackType struct {
-	Name    string
+	Name    string // alias (address, boolean, ...) or derived name [5]byte
 	AVMType avmType
-	Bound   [2]uint64
+	Bound   [2]uint64 // represents max/min value for uint64 or max/min length for byte[]
 }
 
 // NewStackType Initializes a new StackType with fields passed
