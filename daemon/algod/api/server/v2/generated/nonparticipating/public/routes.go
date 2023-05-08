@@ -8,22 +8,549 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"net/url"
 	"path"
 	"strings"
 
 	. "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+	"github.com/algorand/oapi-codegen/pkg/runtime"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
 )
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get account information.
+	// (GET /v2/accounts/{address})
+	AccountInformation(ctx echo.Context, address string, params AccountInformationParams) error
+	// Get account information about a given app.
+	// (GET /v2/accounts/{address}/applications/{application-id})
+	AccountApplicationInformation(ctx echo.Context, address string, applicationId uint64, params AccountApplicationInformationParams) error
+	// Get account information about a given asset.
+	// (GET /v2/accounts/{address}/assets/{asset-id})
+	AccountAssetInformation(ctx echo.Context, address string, assetId uint64, params AccountAssetInformationParams) error
+	// Get application information.
+	// (GET /v2/applications/{application-id})
+	GetApplicationByID(ctx echo.Context, applicationId uint64) error
+	// Get box information for a given application.
+	// (GET /v2/applications/{application-id}/box)
+	GetApplicationBoxByName(ctx echo.Context, applicationId uint64, params GetApplicationBoxByNameParams) error
+	// Get all box names for a given application.
+	// (GET /v2/applications/{application-id}/boxes)
+	GetApplicationBoxes(ctx echo.Context, applicationId uint64, params GetApplicationBoxesParams) error
+	// Get asset information.
+	// (GET /v2/assets/{asset-id})
+	GetAssetByID(ctx echo.Context, assetId uint64) error
+	// Get the block for the given round.
+	// (GET /v2/blocks/{round})
+	GetBlock(ctx echo.Context, round uint64, params GetBlockParams) error
+	// Get the block hash for the block on the given round.
+	// (GET /v2/blocks/{round}/hash)
+	GetBlockHash(ctx echo.Context, round uint64) error
+	// Gets a proof for a given light block header inside a state proof commitment
+	// (GET /v2/blocks/{round}/lightheader/proof)
+	GetLightBlockHeaderProof(ctx echo.Context, round uint64) error
+	// Get a proof for a transaction in a block.
+	// (GET /v2/blocks/{round}/transactions/{txid}/proof)
+	GetTransactionProof(ctx echo.Context, round uint64, txid string, params GetTransactionProofParams) error
+	// Returns the timestamp offset. Timestamp offsets can only be set in dev mode.
+	// (GET /v2/devmode/blocks/offset)
+	GetBlockTimeStampOffset(ctx echo.Context) error
+	// Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.
+	// (POST /v2/devmode/blocks/offset/{offset})
+	SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error
+	// Get the current supply reported by the ledger.
+	// (GET /v2/ledger/supply)
+	GetSupply(ctx echo.Context) error
+	// Get a state proof that covers a given round
+	// (GET /v2/stateproofs/{round})
+	GetStateProof(ctx echo.Context, round uint64) error
+	// Gets the current node status.
+	// (GET /v2/status)
+	GetStatus(ctx echo.Context) error
+	// Gets the node status after waiting for a round after the given round.
+	// (GET /v2/status/wait-for-block-after/{round})
+	WaitForBlock(ctx echo.Context, round uint64) error
+	// Compile TEAL source code to binary, produce its hash
+	// (POST /v2/teal/compile)
+	TealCompile(ctx echo.Context, params TealCompileParams) error
+	// Disassemble program bytes into the TEAL source code.
+	// (POST /v2/teal/disassemble)
+	TealDisassemble(ctx echo.Context) error
+	// Provide debugging information for a transaction (or group).
+	// (POST /v2/teal/dryrun)
+	TealDryrun(ctx echo.Context) error
+	// Get parameters for constructing a new transaction
+	// (GET /v2/transactions/params)
+	TransactionParams(ctx echo.Context) error
+	// Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.
+	// (POST /v2/transactions/simulate)
+	SimulateTransaction(ctx echo.Context, params SimulateTransactionParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// AccountInformation converts echo context to params.
+func (w *ServerInterfaceWrapper) AccountInformation(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "address" -------------
+	var address string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "address", runtime.ParamLocationPath, ctx.Param("address"), &address)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter address: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AccountInformationParams
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "format", ctx.QueryParams(), &params.Format)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter format: %s", err))
+	}
+
+	// ------------- Optional query parameter "exclude" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "exclude", ctx.QueryParams(), &params.Exclude)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter exclude: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.AccountInformation(ctx, address, params)
+	return err
+}
+
+// AccountApplicationInformation converts echo context to params.
+func (w *ServerInterfaceWrapper) AccountApplicationInformation(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "address" -------------
+	var address string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "address", runtime.ParamLocationPath, ctx.Param("address"), &address)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter address: %s", err))
+	}
+
+	// ------------- Path parameter "application-id" -------------
+	var applicationId uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "application-id", runtime.ParamLocationPath, ctx.Param("application-id"), &applicationId)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter application-id: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AccountApplicationInformationParams
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "format", ctx.QueryParams(), &params.Format)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter format: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.AccountApplicationInformation(ctx, address, applicationId, params)
+	return err
+}
+
+// AccountAssetInformation converts echo context to params.
+func (w *ServerInterfaceWrapper) AccountAssetInformation(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "address" -------------
+	var address string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "address", runtime.ParamLocationPath, ctx.Param("address"), &address)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter address: %s", err))
+	}
+
+	// ------------- Path parameter "asset-id" -------------
+	var assetId uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "asset-id", runtime.ParamLocationPath, ctx.Param("asset-id"), &assetId)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter asset-id: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AccountAssetInformationParams
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "format", ctx.QueryParams(), &params.Format)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter format: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.AccountAssetInformation(ctx, address, assetId, params)
+	return err
+}
+
+// GetApplicationByID converts echo context to params.
+func (w *ServerInterfaceWrapper) GetApplicationByID(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "application-id" -------------
+	var applicationId uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "application-id", runtime.ParamLocationPath, ctx.Param("application-id"), &applicationId)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter application-id: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetApplicationByID(ctx, applicationId)
+	return err
+}
+
+// GetApplicationBoxByName converts echo context to params.
+func (w *ServerInterfaceWrapper) GetApplicationBoxByName(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "application-id" -------------
+	var applicationId uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "application-id", runtime.ParamLocationPath, ctx.Param("application-id"), &applicationId)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter application-id: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetApplicationBoxByNameParams
+	// ------------- Required query parameter "name" -------------
+
+	err = runtime.BindQueryParameter("form", true, true, "name", ctx.QueryParams(), &params.Name)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetApplicationBoxByName(ctx, applicationId, params)
+	return err
+}
+
+// GetApplicationBoxes converts echo context to params.
+func (w *ServerInterfaceWrapper) GetApplicationBoxes(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "application-id" -------------
+	var applicationId uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "application-id", runtime.ParamLocationPath, ctx.Param("application-id"), &applicationId)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter application-id: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetApplicationBoxesParams
+	// ------------- Optional query parameter "max" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "max", ctx.QueryParams(), &params.Max)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter max: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetApplicationBoxes(ctx, applicationId, params)
+	return err
+}
+
+// GetAssetByID converts echo context to params.
+func (w *ServerInterfaceWrapper) GetAssetByID(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "asset-id" -------------
+	var assetId uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "asset-id", runtime.ParamLocationPath, ctx.Param("asset-id"), &assetId)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter asset-id: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetAssetByID(ctx, assetId)
+	return err
+}
+
+// GetBlock converts echo context to params.
+func (w *ServerInterfaceWrapper) GetBlock(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "round" -------------
+	var round uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "round", runtime.ParamLocationPath, ctx.Param("round"), &round)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter round: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBlockParams
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "format", ctx.QueryParams(), &params.Format)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter format: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetBlock(ctx, round, params)
+	return err
+}
+
+// GetBlockHash converts echo context to params.
+func (w *ServerInterfaceWrapper) GetBlockHash(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "round" -------------
+	var round uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "round", runtime.ParamLocationPath, ctx.Param("round"), &round)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter round: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetBlockHash(ctx, round)
+	return err
+}
+
+// GetLightBlockHeaderProof converts echo context to params.
+func (w *ServerInterfaceWrapper) GetLightBlockHeaderProof(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "round" -------------
+	var round uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "round", runtime.ParamLocationPath, ctx.Param("round"), &round)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter round: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetLightBlockHeaderProof(ctx, round)
+	return err
+}
+
+// GetTransactionProof converts echo context to params.
+func (w *ServerInterfaceWrapper) GetTransactionProof(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "round" -------------
+	var round uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "round", runtime.ParamLocationPath, ctx.Param("round"), &round)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter round: %s", err))
+	}
+
+	// ------------- Path parameter "txid" -------------
+	var txid string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "txid", runtime.ParamLocationPath, ctx.Param("txid"), &txid)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter txid: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetTransactionProofParams
+	// ------------- Optional query parameter "hashtype" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "hashtype", ctx.QueryParams(), &params.Hashtype)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter hashtype: %s", err))
+	}
+
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "format", ctx.QueryParams(), &params.Format)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter format: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetTransactionProof(ctx, round, txid, params)
+	return err
+}
+
+// GetBlockTimeStampOffset converts echo context to params.
+func (w *ServerInterfaceWrapper) GetBlockTimeStampOffset(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetBlockTimeStampOffset(ctx)
+	return err
+}
+
+// SetBlockTimeStampOffset converts echo context to params.
+func (w *ServerInterfaceWrapper) SetBlockTimeStampOffset(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "offset" -------------
+	var offset uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "offset", runtime.ParamLocationPath, ctx.Param("offset"), &offset)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter offset: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.SetBlockTimeStampOffset(ctx, offset)
+	return err
+}
+
+// GetSupply converts echo context to params.
+func (w *ServerInterfaceWrapper) GetSupply(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetSupply(ctx)
+	return err
+}
+
+// GetStateProof converts echo context to params.
+func (w *ServerInterfaceWrapper) GetStateProof(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "round" -------------
+	var round uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "round", runtime.ParamLocationPath, ctx.Param("round"), &round)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter round: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetStateProof(ctx, round)
+	return err
+}
+
+// GetStatus converts echo context to params.
+func (w *ServerInterfaceWrapper) GetStatus(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetStatus(ctx)
+	return err
+}
+
+// WaitForBlock converts echo context to params.
+func (w *ServerInterfaceWrapper) WaitForBlock(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "round" -------------
+	var round uint64
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "round", runtime.ParamLocationPath, ctx.Param("round"), &round)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter round: %s", err))
+	}
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.WaitForBlock(ctx, round)
+	return err
+}
+
+// TealCompile converts echo context to params.
+func (w *ServerInterfaceWrapper) TealCompile(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TealCompileParams
+	// ------------- Optional query parameter "sourcemap" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "sourcemap", ctx.QueryParams(), &params.Sourcemap)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter sourcemap: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.TealCompile(ctx, params)
+	return err
+}
+
+// TealDisassemble converts echo context to params.
+func (w *ServerInterfaceWrapper) TealDisassemble(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.TealDisassemble(ctx)
+	return err
+}
+
+// TealDryrun converts echo context to params.
+func (w *ServerInterfaceWrapper) TealDryrun(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.TealDryrun(ctx)
+	return err
+}
+
+// TransactionParams converts echo context to params.
+func (w *ServerInterfaceWrapper) TransactionParams(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.TransactionParams(ctx)
+	return err
+}
+
+// SimulateTransaction converts echo context to params.
+func (w *ServerInterfaceWrapper) SimulateTransaction(ctx echo.Context) error {
+	var err error
+
+	ctx.Set(Api_keyScopes, []string{""})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SimulateTransactionParams
+	// ------------- Optional query parameter "format" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "format", ctx.QueryParams(), &params.Format)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter format: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.SimulateTransaction(ctx, params)
+	return err
 }
 
 // This is a simple interface which specifies echo.Route addition functions which
@@ -50,14 +577,279 @@ func RegisterHandlers(router EchoRouter, si ServerInterface, m ...echo.Middlewar
 // can be served under a prefix.
 func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL string, m ...echo.MiddlewareFunc) {
 
+	wrapper := ServerInterfaceWrapper{
+		Handler: si,
+	}
+
+	router.GET(baseURL+"/v2/accounts/:address", wrapper.AccountInformation, m...)
+	router.GET(baseURL+"/v2/accounts/:address/applications/:application-id", wrapper.AccountApplicationInformation, m...)
+	router.GET(baseURL+"/v2/accounts/:address/assets/:asset-id", wrapper.AccountAssetInformation, m...)
+	router.GET(baseURL+"/v2/applications/:application-id", wrapper.GetApplicationByID, m...)
+	router.GET(baseURL+"/v2/applications/:application-id/box", wrapper.GetApplicationBoxByName, m...)
+	router.GET(baseURL+"/v2/applications/:application-id/boxes", wrapper.GetApplicationBoxes, m...)
+	router.GET(baseURL+"/v2/assets/:asset-id", wrapper.GetAssetByID, m...)
+	router.GET(baseURL+"/v2/blocks/:round", wrapper.GetBlock, m...)
+	router.GET(baseURL+"/v2/blocks/:round/hash", wrapper.GetBlockHash, m...)
+	router.GET(baseURL+"/v2/blocks/:round/lightheader/proof", wrapper.GetLightBlockHeaderProof, m...)
+	router.GET(baseURL+"/v2/blocks/:round/transactions/:txid/proof", wrapper.GetTransactionProof, m...)
+	router.GET(baseURL+"/v2/devmode/blocks/offset", wrapper.GetBlockTimeStampOffset, m...)
+	router.POST(baseURL+"/v2/devmode/blocks/offset/:offset", wrapper.SetBlockTimeStampOffset, m...)
+	router.GET(baseURL+"/v2/ledger/supply", wrapper.GetSupply, m...)
+	router.GET(baseURL+"/v2/stateproofs/:round", wrapper.GetStateProof, m...)
+	router.GET(baseURL+"/v2/status", wrapper.GetStatus, m...)
+	router.GET(baseURL+"/v2/status/wait-for-block-after/:round", wrapper.WaitForBlock, m...)
+	router.POST(baseURL+"/v2/teal/compile", wrapper.TealCompile, m...)
+	router.POST(baseURL+"/v2/teal/disassemble", wrapper.TealDisassemble, m...)
+	router.POST(baseURL+"/v2/teal/dryrun", wrapper.TealDryrun, m...)
+	router.GET(baseURL+"/v2/transactions/params", wrapper.TransactionParams, m...)
+	router.POST(baseURL+"/v2/transactions/simulate", wrapper.SimulateTransaction, m...)
+
 }
 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/yTNMY7CMBBG4atYf21ZKbbyDZaCO0ycCRjsGcueIKQod0eE9r3i25F0YcS/afJIWpsK",
-	"iw3E/fDIsiqibKV4VB6DboyIf2mbOe5de3Sb0FzYmbqk8uJuLp/7DDWsNIz7u5bwoPQcKmEhoznLEi5D",
-	"5fq1PbSxUMuIgEcju4+fenwCAAD//zUNUoGeAAAA",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
