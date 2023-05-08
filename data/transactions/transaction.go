@@ -118,7 +118,7 @@ type ApplyData struct {
 
 	// If asa or app is being created, the id used. Else 0.
 	// Names chosen to match naming the corresponding txn.
-	// These are populated on when MaxInnerTransactions > 0 (TEAL 5)
+	// These are populated only when MaxInnerTransactions > 0 (TEAL 5)
 	ConfigAsset   basics.AssetIndex `codec:"caid"`
 	ApplicationID basics.AppIndex   `codec:"apid"`
 }
@@ -476,6 +476,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			// recall 0 is the current app so indexes are shifted, thus test is for greater than, not gte.
 			if br.Index > uint64(len(tx.ForeignApps)) {
 				return fmt.Errorf("tx.Boxes[%d].Index is %d. Exceeds len(tx.ForeignApps)", i, br.Index)
+			}
+			if proto.EnableBoxRefNameError && len(br.Name) > proto.MaxAppKeyLen {
+				return fmt.Errorf("tx.Boxes[%d].Name too long, max len %d bytes", i, proto.MaxAppKeyLen)
 			}
 		}
 

@@ -270,18 +270,18 @@ func TestAcctParamsFieldsVersions(t *testing.T) {
 	t.Parallel()
 
 	for _, field := range acctParamsFieldSpecs {
-		text := fmt.Sprintf("txn Sender; acct_params_get %s; assert;", field.field.String())
+		text := fmt.Sprintf("txn Sender; acct_params_get %s; assert;", field.field)
 		if field.ftype == StackBytes {
 			text += "global ZeroAddress; concat; len" // use concat to prove we have bytes
 		} else {
 			text += "global ZeroAddress; len; +" // use + to prove we have an int
 		}
-		// check assembler fails if version before introduction
-		for v := uint64(2); v <= AssemblerMaxVersion; v++ {
-			ep, txn, ledger := makeSampleEnv()
+
+		testLogicRange(t, 4, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+			v := ep.Proto.LogicSigVersion
 			ledger.NewAccount(txn.Sender, 200_000)
-			ep.Proto.LogicSigVersion = v
 			if field.version > v {
+				// check assembler fails if version before introduction
 				testProg(t, text, v, Expect{1, "...was introduced in..."})
 				ops := testProg(t, text, field.version) // assemble in the future
 				ops.Program[0] = byte(v)                // but set version back to before intro
@@ -294,7 +294,7 @@ func TestAcctParamsFieldsVersions(t *testing.T) {
 				testProg(t, text, v)
 				testApp(t, text, ep)
 			}
-		}
+		})
 
 	}
 }
