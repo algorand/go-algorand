@@ -136,7 +136,7 @@ ok:
 		Type:   protocol.ApplicationCallTx,
 		Header: header,
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			ApplicationID: 1,
+			ApplicationID: 1001,
 		},
 	}
 
@@ -154,7 +154,7 @@ ok:
 				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
 					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
 				},
-				ApplicationID: 1,
+				ApplicationID: 1001,
 			},
 		},
 		{
@@ -195,7 +195,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.NoError(t, err)
 	deltas := eval.state.deltas()
 	ad, _ := deltas.Accts.GetBasicsAccountData(addr)
-	state := ad.AppParams[1].GlobalState
+	state := ad.AppParams[1001].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
@@ -279,7 +279,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			t.Parallel()
 			genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-			innerAppID := basics.AppIndex(3)
+			innerAppID := basics.AppIndex(1003)
 			innerAppAddress := innerAppID.Address()
 			balances := genesisInitState.Accounts
 			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
@@ -425,7 +425,7 @@ int 1`,
 			}
 
 			expectedBasicAppCallAD := transactions.ApplyData{
-				ApplicationID: 1,
+				ApplicationID: 1001,
 				EvalDelta: transactions.EvalDelta{
 					GlobalDelta: basics.StateDelta{},
 					LocalDeltas: map[uint64]basics.StateDelta{},
@@ -837,7 +837,7 @@ func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Ad
 	res := ledgercore.AppResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
-		return res, fmt.Errorf("no such account %s", addr.String())
+		return res, fmt.Errorf("no such account %s while looking up app", addr.String())
 	}
 	if params, ok := ad.AppParams[aidx]; ok {
 		res.AppParams = &params
@@ -852,7 +852,7 @@ func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address,
 	res := ledgercore.AssetResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
-		return res, fmt.Errorf("no such account %s", addr.String())
+		return res, fmt.Errorf("no such account %s while looking up asset", addr.String())
 	}
 	if params, ok := ad.AssetParams[aidx]; ok {
 		res.AssetParams = &params

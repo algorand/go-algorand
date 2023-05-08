@@ -499,6 +499,12 @@ type ConsensusParams struct {
 	// Version 7 includes state proof verification contexts
 	EnableCatchpointsWithSPContexts bool
 
+	// AppForbidLowResources enforces a rule that prevents apps from accessing
+	// asas and apps below 256, in an effort to decrease the ambiguity of
+	// opcodes that accept IDs or slot indexes. Simultaneously, the first ID
+	// allocated in new chains is raised to 1001.
+	AppForbidLowResources bool
+
 	// EnableBoxRefNameError specifies that box ref names should be validated early
 	EnableBoxRefNameError bool
 }
@@ -1268,6 +1274,7 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnablePrecheckECDSACurve = true
+	vFuture.AppForbidLowResources = true
 	vFuture.EnableBareBudgetError = true
 	vFuture.EnableBoxRefNameError = true
 

@@ -67,7 +67,7 @@ func (dl *DoubleLedger) beginBlock() *eval.BlockEvaluator {
 	return dl.eval
 }
 
-func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) {
+func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) (stib *transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
@@ -76,25 +76,31 @@ func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) {
 			if len(problem) > 0 {
 				dl.eval = nil
 			} else {
-				dl.endBlock()
+				vb := dl.endBlock()
+				stib = &vb.Block().Payset[0]
 			}
 		}()
 	}
 	txn(dl.t, dl.generator, dl.eval, tx, problem...)
+	return nil
 }
 
-func (dl *DoubleLedger) txns(txns ...*txntest.Txn) {
+func (dl *DoubleLedger) txns(txns ...*txntest.Txn) (payset []transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
-		defer dl.endBlock()
+		defer func() {
+			vb := dl.endBlock()
+			payset = vb.Block().Payset
+		}()
 	}
 	for _, tx := range txns {
 		dl.txn(tx)
 	}
+	return nil
 }
 
-func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
+func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) (payset []transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
@@ -103,7 +109,8 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
 			if problem != "" {
 				dl.eval = nil
 			} else {
-				dl.endBlock()
+				vb := dl.endBlock()
+				payset = vb.Block().Payset
 			}
 		}()
 	}
@@ -114,6 +121,7 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
 		require.Error(dl.t, err)
 		require.Contains(dl.t, err.Error(), problem)
 	}
+	return nil
 }
 
 func (dl *DoubleLedger) fullBlock(txs ...*txntest.Txn) *ledgercore.ValidatedBlock {

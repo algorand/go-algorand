@@ -118,7 +118,7 @@ type ApplyData struct {
 
 	// If asa or app is being created, the id used. Else 0.
 	// Names chosen to match naming the corresponding txn.
-	// These are populated on when MaxInnerTransactions > 0 (TEAL 5)
+	// These are populated only when MaxInnerTransactions > 0 (TEAL 5)
 	ConfigAsset   basics.AssetIndex `codec:"caid"`
 	ApplicationID basics.AppIndex   `codec:"apid"`
 }

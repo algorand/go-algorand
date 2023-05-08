@@ -69,17 +69,21 @@ type ResultEvalOverrides struct {
 	AllowEmptySignatures bool
 	MaxLogCalls          *uint64
 	MaxLogSize           *uint64
+	ExtraOpcodeBudget    uint64
 }
 
-// SimulateLogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
-const SimulateLogBytesLimit = uint64(65536)
+// LogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
+const LogBytesLimit = uint64(65536)
+
+// MaxExtraOpcodeBudget hardcode limit of how much extra budget one can add to one transaction group (which is group-size * logic-sig-budget)
+const MaxExtraOpcodeBudget = uint64(20000 * 16)
 
 // AllowMoreLogging method modify the log limits from lift option:
 // - if lift log limits, then overload result from local Config
 // - otherwise, set `LogLimits` field to be nil
 func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 	if allow {
-		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), SimulateLogBytesLimit
+		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), LogBytesLimit
 		eo.MaxLogCalls = &maxLogCalls
 		eo.MaxLogSize = &maxLogSize
 	}
@@ -121,6 +125,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 
 	resultEvalConstants := ResultEvalOverrides{
 		AllowEmptySignatures: request.AllowEmptySignatures,
+		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
 	return Result{
