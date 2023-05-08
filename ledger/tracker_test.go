@@ -19,6 +19,7 @@ package ledger
 import (
 	"bytes"
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -142,33 +143,99 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	a.Equal(expectedOffset, dc.offset)
 }
 
+type emptyTracker struct{}
+
+func (bt *emptyTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
+	return nil
+}
+
+func (bt *emptyTracker) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	return nil
+}
+
+func (bt *emptyTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+}
+
+func (bt *emptyTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
+	return 0, basics.Round(0)
+}
+
+func (bt *emptyTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return nil
+}
+
+func (bt *emptyTracker) prepareCommit(*deferredCommitContext) error {
+	return nil
+}
+
+func (bt *emptyTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
+	return nil
+}
+
+func (bt *emptyTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+func (bt *emptyTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+func (bt *emptyTracker) handleUnorderedCommit(*deferredCommitContext) {
+}
+
+func (bt *emptyTracker) close() {
+}
+
+type errTracker struct {
+	emptyTracker
+}
+
+var errTrackerErr = errors.New("checkBlock error")
+
+func (bt *errTracker) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	return errTrackerErr
+}
+
+func TestTracker_CheckBlockFail(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1)
+	const inMem = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
+	cfg := config.GetDefaultLocal()
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	a.NoError(err, "could not open ledger")
+	defer ledger.Close()
+
+	errTracker := &errTracker{}
+	ledger.trackerMu.Lock()
+	ledger.trackers.mu.Lock()
+	ledger.trackers.trackers = append([]ledgerTracker{errTracker}, ledger.trackers.trackers...)
+	ledger.trackers.mu.Unlock()
+	ledger.trackerMu.Unlock()
+
+	blk := genesisInitState.Block
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+	err = ledger.AddBlock(blk, agreement.Certificate{})
+	a.Error(err)
+	a.ErrorIs(err, errTrackerErr)
+
+	err = ledger.trackers.newBlock(blk, ledgercore.StateDelta{})
+	a.Error(err)
+	a.ErrorIs(err, errTrackerErr)
+}
+
 type producePrepareBlockingTracker struct {
+	emptyTracker
 	produceReleaseLock       chan struct{}
 	prepareCommitEntryLock   chan struct{}
 	prepareCommitReleaseLock chan struct{}
 	cancelTasks              bool
 }
 
-// loadFromDisk is not implemented in the blockingTracker.
-func (bt *producePrepareBlockingTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
-	return nil
-}
-
-// checkBlock is not implemented in the blockingTracker.
-func (bt *producePrepareBlockingTracker) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
-	return nil
-}
-
-// newBlock is not implemented in the blockingTracker.
-func (bt *producePrepareBlockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-}
-
-// committedUpTo in the blockingTracker just stores the committed round.
-func (bt *producePrepareBlockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
-	return 0, basics.Round(0)
-}
-
-func (bt *producePrepareBlockingTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+func (bt *producePrepareBlockingTracker) producePrepareBlockingTracker(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	if bt.cancelTasks {
 		return nil
 	}
@@ -177,31 +244,10 @@ func (bt *producePrepareBlockingTracker) produceCommittingTask(committedRound ba
 	return dcr
 }
 
-// prepareCommit, is not used by the blockingTracker
 func (bt *producePrepareBlockingTracker) prepareCommit(*deferredCommitContext) error {
 	bt.prepareCommitEntryLock <- struct{}{}
 	<-bt.prepareCommitReleaseLock
 	return nil
-}
-
-// commitRound is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
-	return nil
-}
-
-func (bt *producePrepareBlockingTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-// postCommitUnlocked implements entry/exit blockers, designed for testing.
-func (bt *producePrepareBlockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-// handleUnorderedCommit is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) handleUnorderedCommit(*deferredCommitContext) {
-}
-
-// close is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) close() {
 }
 
 func (bt *producePrepareBlockingTracker) reset() {
@@ -211,7 +257,7 @@ func (bt *producePrepareBlockingTracker) reset() {
 	bt.cancelTasks = false
 }
 
-// TestTrackerDbRoundDataRace checks for dbRound data race
+// TestTracker_DbRoundDataRace checks for dbRound data race
 // when commit scheduling relies on dbRound from the tracker registry but tracker's deltas
 // are used in calculations
 // 1. Add say 128 + MaxAcctLookback (MaxLookback) blocks and commit
@@ -219,8 +265,8 @@ func (bt *producePrepareBlockingTracker) reset() {
 // 3. Set a block in prepareCommit, and initiate the commit
 // 4. Set a block in produceCommittingTask, add a new block and resume the commit
 // 5. Resume produceCommittingTask
-// 6. The data race and panic happens in block queue syncher thread
-func TestTrackerDbRoundDataRace(t *testing.T) {
+// 6. The data race and panic happens in block queue syncer thread
+func TestTracker_DbRoundDataRace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Skip("For manual run when touching ledger locking")

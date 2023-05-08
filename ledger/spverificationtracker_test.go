@@ -450,7 +450,7 @@ func TestStateProofVerificationTracker_LookupVerificationContext(t *testing.T) {
 	a.ErrorContains(err, "memory lookup failed")
 }
 
-func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) {
+func TestStateProofVerificationTracker_ErrorInvalidBlockInsertion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
