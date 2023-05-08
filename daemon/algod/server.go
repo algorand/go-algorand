@@ -83,7 +83,6 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
-	fmt.Println("Logging to: ", liveLog)
 	var maxLogAge time.Duration
 	var err error
 	if cfg.LogArchiveMaxAge != "" {
@@ -96,8 +95,10 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	var logWriter io.Writer
 	if cfg.LogSizeLimit > 0 {
+		fmt.Println("Logging to: ", liveLog)
 		logWriter = logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
 	} else {
+		fmt.Println("Logging to: stdout")
 		logWriter = os.Stdout
 	}
 	s.log.SetOutput(logWriter)

@@ -342,14 +342,7 @@ func (node *AlgorandFollowerNode) StartCatchup(catchpoint string) error {
 		}
 		return MakeCatchpointUnableToStartError(stats.CatchpointLabel, catchpoint)
 	}
-	cpRound, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
-	if err != nil {
-		return err
-	}
-	sRound := node.GetSyncRound()
-	if sRound > 0 && uint64(cpRound) > sRound {
-		return MakeCatchpointSyncRoundFailure(catchpoint, sRound)
-	}
+	var err error
 	accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
 	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, accessor, node.config)
 	if err != nil {
@@ -414,7 +407,15 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 			prevNodeCancelFunc()
 			return
 		}
+
+		// Catchup finished, resume.
 		defer node.mu.Unlock()
+
+		// update sync round before starting services
+		if err := node.SetSyncRound(uint64(node.ledger.LastRound())); err != nil {
+			node.log.Warnf("unable to set sync round while resuming fast catchup: %v", err)
+		}
+
 		// start
 		node.catchupService.Start()
 		node.blockService.Start()

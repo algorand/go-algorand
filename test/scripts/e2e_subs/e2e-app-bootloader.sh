@@ -33,7 +33,7 @@ sed -i"" -e "s/TMPL_CLEARSTATE_HASH/${TARGET_HASH}/g" ${TEMPDIR}/bootloader.teal
 
 # Create an app using filled-in bootloader template
 printf '#pragma version 2\nint 1' > "${TEMPDIR}/int1.teal"
-APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${TEMPDIR}/bootloader.teal --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog "${TEMPDIR}/int1.teal" | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${TEMPDIR}/bootloader.teal --global-byteslices 1 --clear-prog "${TEMPDIR}/int1.teal" | grep Created | awk '{ print $6 }')
 
 # Calling app without args and wrong OnCompletion should fail
 EXPERROR='rejected by ApprovalProgram'

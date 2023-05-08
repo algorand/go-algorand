@@ -786,7 +786,6 @@ func TestAppCallOverBudget(t *testing.T) {
 
 	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 		sender := accounts[0]
-		receiver := accounts[1]
 
 		futureAppID := basics.AppIndex(1)
 		// App create with cost 4
@@ -805,7 +804,6 @@ int 0
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
-			Accounts:      []basics.Address{receiver.Addr},
 		})
 
 		txntest.Group(&createTxn, &expensiveTxn)
@@ -846,6 +844,202 @@ int 0
 			},
 		}
 	})
+}
+
+func TestAppCallWithExtraBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction group has a cost of 4 + 1404
+	expensiveAppSource := `#pragma version 6
+	txn ApplicationID      // [appId]
+	bz end                 // []
+` + strings.Repeat(`int 1; pop;`, 700) + `end:
+	int 1`
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+
+		futureAppID := basics.AppIndex(1)
+		// App create with cost 4
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   expensiveAppSource,
+			ClearStateProgram: `#pragma version 6; int 0`,
+		})
+		// Expensive 700 repetition of int 1 and pop total cost 1404
+		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &expensiveTxn)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+		extraOpcodeBudget := uint64(100)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedExpensiveTxn},
+				},
+				ExtraOpcodeBudget: extraOpcodeBudget,
+			},
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: txnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+							},
+							{
+								AppBudgetConsumed: 1404,
+							},
+						},
+						AppBudgetAdded:    1500,
+						AppBudgetConsumed: 1408,
+					},
+				},
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
+			},
+		}
+	})
+}
+
+func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction group has a cost of 4 + 1404
+	expensiveAppSource := `#pragma version 6
+	txn ApplicationID      // [appId]
+	bz end                 // []
+` + strings.Repeat(`int 1; pop;`, 700) + `end:
+	int 1`
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+
+		futureAppID := basics.AppIndex(1)
+		// App create with cost 4
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   expensiveAppSource,
+			ClearStateProgram: `#pragma version 6; int 0`,
+		})
+		// Expensive 700 repetition of int 1 and pop total cost 1404
+		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &expensiveTxn)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+		// Add a small bit of extra budget, but not enough
+		extraBudget := uint64(5)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedExpensiveTxn},
+				},
+				ExtraOpcodeBudget: extraBudget,
+			},
+			expectedError: "dynamic cost budget exceeded",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: txnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+							},
+							{
+								AppBudgetConsumed: 1401,
+							},
+						},
+						FailedAt:          simulation.TxnPath{1},
+						AppBudgetAdded:    1405,
+						AppBudgetConsumed: 1405,
+					},
+				},
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraBudget},
+			},
+		}
+	})
+}
+
+func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction group has a cost of 4 + 1404
+	expensiveAppSource := `#pragma version 6
+	txn ApplicationID      // [appId]
+	bz end                 // []
+` + strings.Repeat(`int 1; pop;`, 700) + `end:
+	int 1`
+
+	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
+	defer l.Close()
+	s := simulation.MakeSimulator(l)
+
+	sender := accounts[0]
+
+	futureAppID := basics.AppIndex(1)
+	// App create with cost 4
+	createTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            sender.Addr,
+		ApplicationID:     0,
+		ApprovalProgram:   expensiveAppSource,
+		ClearStateProgram: `#pragma version 6; int 0`,
+	})
+	// Expensive 700 repetition of int 1 and pop total cost 1404
+	expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: futureAppID,
+	})
+
+	txntest.Group(&createTxn, &expensiveTxn)
+
+	signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+	signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+
+	// Add an extra budget that is exceeding simulation.MaxExtraOpcodeBudget
+	extraBudget := simulation.MaxExtraOpcodeBudget + 1
+
+	// should error on too high extra budgets
+	_, err := s.Simulate(
+		simulation.Request{
+			TxnGroups:         [][]transactions.SignedTxn{{signedCreateTxn, signedExpensiveTxn}},
+			ExtraOpcodeBudget: extraBudget,
+		})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+	require.ErrorContains(t, err, "extra budget 320001 > simulation extra budget limit 320000")
 }
 
 func TestLogicSigOverBudget(t *testing.T) {
@@ -1049,7 +1243,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 	// should error with invalid signature
 	stxn.Sig[0] += byte(1) // will wrap if > 255
 	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
-	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 	require.ErrorContains(t, err, "one signature didn't pass")
 }
 
@@ -1453,7 +1647,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 	// should error with invalid signature
 	stxn.Sig[0] += byte(1) // will wrap if > 255
 	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
-	require.ErrorAs(t, err, &simulation.InvalidTxGroupError{})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 	require.ErrorContains(t, err, "one signature didn't pass")
 }
 
@@ -1532,8 +1726,9 @@ func TestPartialMissingSignatures(t *testing.T) {
 // TestPooledFeesAcrossSignedAndUnsigned tests that the simulator's transaction group checks
 // allow for pooled fees across a mix of signed and unsigned transactions when AllowEmptySignatures is
 // enabled.
-//  Transaction 1 is a signed transaction with not enough fees paid on its own.
-//  Transaction 2 is an unsigned transaction with enough fees paid to cover transaction 1.
+//
+//	Transaction 1 is a signed transaction with not enough fees paid on its own.
+//	Transaction 2 is an unsigned transaction with enough fees paid to cover transaction 1.
 func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var docVersion = 8
+var docVersion = 9
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |

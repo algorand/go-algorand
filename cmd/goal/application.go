@@ -163,10 +163,6 @@ func init() {
 	readStateAppCmd.Flags().BoolVar(&guessFormat, "guess-format", false, "Format application state using heuristics to guess data encoding.")
 
 	createAppCmd.MarkFlagRequired("creator")
-	createAppCmd.MarkFlagRequired("global-ints")
-	createAppCmd.MarkFlagRequired("global-byteslices")
-	createAppCmd.MarkFlagRequired("local-ints")
-	createAppCmd.MarkFlagRequired("local-byteslices")
 
 	optInAppCmd.MarkFlagRequired("app-id")
 	optInAppCmd.MarkFlagRequired("from")
