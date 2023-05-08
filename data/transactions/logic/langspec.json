@@ -2201,7 +2201,7 @@
         "uint64"
       ],
       "Returns": [
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "1 if account A is opted in to application B, else 0",
@@ -2239,7 +2239,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "X is the local state of application B, key C in account A. Y is 1 if key existed, else 0",
@@ -2275,7 +2275,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 1,
       "Doc": "X is the global state of application A, key B. Y is 1 if key existed, else 0",
@@ -2353,7 +2353,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -2380,7 +2380,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -2427,7 +2427,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -2468,7 +2468,7 @@
       ],
       "Returns": [
         "any",
-        "uint64"
+        "bool"
       ],
       "Size": 2,
       "ArgEnum": [
