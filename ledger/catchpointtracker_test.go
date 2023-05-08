@@ -654,6 +654,11 @@ func (bt *blockingTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
 	return nil
 }
 
+// checkBlock is not implemented in the blockingTracker.
+func (bt *blockingTracker) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	return nil
+}
+
 // newBlock is not implemented in the blockingTracker.
 func (bt *blockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }

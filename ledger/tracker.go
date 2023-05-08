@@ -68,6 +68,12 @@ type ledgerTracker interface {
 	// current accounts storage round number.
 	loadFromDisk(ledgerForTracker, basics.Round) error
 
+	// checkBlock checks if the tracker can accept a new block and return an error if it can't.
+	// A purpose of this method is to operations that can potentially fail in newBlock flow
+	// but do not require to rollback all the trackers if say 5th fail. So check first and apply after.
+	// This method must be called under the same lock as newBlock.
+	checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error
+
 	// newBlock informs the tracker of a new block along with
 	// a given ledgercore.StateDelta as produced by BlockEvaluator.
 	newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta)
@@ -84,7 +90,7 @@ type ledgerTracker interface {
 	// save space, and the tracker is expected to still function
 	// after a restart and a call to loadFromDisk().
 	// For example, returning 0 means that no blocks can be deleted.
-	// Separetly, the method returns the lookback that is being
+	// Separately, the method returns the lookback that is being
 	// maintained by the tracker.
 	committedUpTo(basics.Round) (minRound, lookback basics.Round)
 
@@ -94,7 +100,7 @@ type ledgerTracker interface {
 	// nil. If nil is returned, the commit would be skipped.
 	// The contract:
 	// offset must not be greater than the received dcr.offset value of non zero
-	// oldBase must not be modifed if non zero
+	// oldBase must not be modified if non zero
 	produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange
 
 	// prepareCommit, commitRound and postCommit are called when it is time to commit tracker's data.
@@ -192,7 +198,7 @@ type trackerRegistry struct {
 }
 
 // deferredCommitRange is used during the calls to produceCommittingTask, and used as a data structure
-// to syncronize the various trackers and create a uniformity around which rounds need to be persisted
+// to synchronize the various trackers and create a uniformity around which rounds need to be persisted
 // next.
 type deferredCommitRange struct {
 	offset   uint64
@@ -350,10 +356,16 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	return err
 }
 
-func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	for _, lt := range tr.trackers {
+		if err := lt.checkBlock(blk, delta); err != nil {
+			return err
+		}
+	}
 	for _, lt := range tr.trackers {
 		lt.newBlock(blk, delta)
 	}
+	return nil
 }
 
 func (tr *trackerRegistry) committedUpTo(rnd basics.Round) basics.Round {
@@ -524,7 +536,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	offset -= uint64(tr.dbRound - dbRound)
 
 	// if this iteration need to flush out zero rounds, just return right away.
-	// this usecase can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
+	// this use case can happen when two subsequent calls to committedUpTo concludes that the same rounds range need to be
 	// flush, without the commitRound have a chance of committing these rounds.
 	if offset == 0 {
 		tr.mu.RUnlock()
@@ -588,10 +600,10 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 }
 
 // replay fills up the accountUpdates cache with the most recent ~320 blocks ( on normal execution ).
-// the method also support balances recovery in cases where the difference between the lastBalancesRound and the lastestBlockRound
+// the method also support balances recovery in cases where the difference between the lastBalancesRound and the latestBlockRound
 // is far greater than 320; in these cases, it would flush to disk periodically in order to avoid high memory consumption.
 func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
-	lastestBlockRound := l.Latest()
+	latestBlockRound := l.Latest()
 	lastBalancesRound := tr.dbRound
 
 	var blk bookkeeping.Block
@@ -607,7 +619,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 		tail: tr.tail,
 	}
 
-	if lastBalancesRound < lastestBlockRound {
+	if lastBalancesRound < latestBlockRound {
 		accLedgerEval.prevHeader, err = l.BlockHdr(lastBalancesRound)
 		if err != nil {
 			return fmt.Errorf("trackerRegistry.replay: unable to load block header %d : %w", lastBalancesRound, err)
@@ -652,7 +664,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 	var blockRetrievalError error
 	go func() {
 		defer close(blocksStream)
-		for roundNumber := lastBalancesRound + 1; roundNumber <= lastestBlockRound; roundNumber++ {
+		for roundNumber := lastBalancesRound + 1; roundNumber <= latestBlockRound; roundNumber++ {
 			blk, blockRetrievalError = l.Block(roundNumber)
 			if blockRetrievalError != nil {
 				return
@@ -699,7 +711,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
 		// 2. if we completed the loading and we loaded up more than 320 rounds.
 		flushIntervalExceed := blk.Round()-lastFlushedRound > initializeCachesRoundFlushInterval
-		loadCompleted := (lastestBlockRound == blk.Round() && lastBalancesRound+basics.Round(maxAcctLookback) < lastestBlockRound)
+		loadCompleted := (latestBlockRound == blk.Round() && lastBalancesRound+basics.Round(maxAcctLookback) < latestBlockRound)
 		if flushIntervalExceed || loadCompleted {
 			// adjust the last flush time, so that we would not hold off the flushing due to "working too fast"
 			tr.lastFlushTime = time.Now().Add(-balancesFlushInterval)
@@ -750,7 +762,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 				close(writeAccountCacheMessageCompleted)
 			default:
 			}
-			tr.log.Infof("trackerRegistry.replay is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, lastestBlockRound-lastBalancesRound)
+			tr.log.Infof("trackerRegistry.replay is still initializing account data caches, %d rounds loaded out of %d rounds", blk.Round()-lastBalancesRound, latestBlockRound-lastBalancesRound)
 			lastProgressMessage = time.Now()
 		}
 

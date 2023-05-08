@@ -767,6 +767,17 @@ func (au *accountUpdates) consecutiveVersion(offset uint64) uint64 {
 	return offset
 }
 
+// checkBlock is the onlineAccounts implementation of the ledgerTracker interface.
+func (au *accountUpdates) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	rnd := blk.Round()
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
+	if rnd != au.latest()+1 {
+		return fmt.Errorf("accountUpdates: checkBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.cachedDBRound, len(au.deltas))
+	}
+	return nil
+}
+
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
 // which invokes the internal implementation after taking the lock.
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
@@ -996,9 +1007,6 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		return
 	}
 
-	if rnd != au.latest()+1 {
-		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.cachedDBRound, len(au.deltas))
-	}
 	au.deltas = append(au.deltas, delta)
 	au.versions = append(au.versions, blk.CurrentProtocol)
 	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])

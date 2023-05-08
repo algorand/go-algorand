@@ -365,6 +365,11 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 	return ct.recoverFromCrash(dbRound)
 }
 
+// checkBlock is the onlineAccounts implementation of the ledgerTracker interface.
+func (ct *catchpointTracker) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	return nil
+}
+
 // newBlock informs the tracker of a new block from round
 // rnd and a given ledgercore.StateDelta as produced by BlockEvaluator.
 func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {

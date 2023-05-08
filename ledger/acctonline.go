@@ -203,7 +203,7 @@ func (ao *onlineAccounts) latest() basics.Round {
 	return ao.cachedDBRoundOnline + basics.Round(len(ao.deltas))
 }
 
-// close closes the accountUpdates, waiting for all the child go-routine to complete
+// close closes the onlineAccounts, waiting for all the child go-routine to complete
 func (ao *onlineAccounts) close() {
 	if ao.accountsq != nil {
 		ao.accountsq.Close()
@@ -215,7 +215,18 @@ func (ao *onlineAccounts) close() {
 	ao.baseOnlineAccounts.prune(0)
 }
 
-// newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
+// checkBlock is the onlineAccounts implementation of the ledgerTracker interface.
+func (ao *onlineAccounts) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	rnd := blk.Round()
+	ao.accountsMu.Lock()
+	defer ao.accountsMu.Unlock()
+	if rnd != ao.latest()+1 {
+		return fmt.Errorf("onlineAccounts: checkBlock %d too far in the future, dbRound %d, deltas %d", rnd, ao.cachedDBRoundOnline, len(ao.deltas))
+	}
+	return nil
+}
+
+// newBlock is the onlineAccounts implementation of the ledgerTracker interface. This is the "external" facing function
 // which invokes the internal implementation after taking the lock.
 func (ao *onlineAccounts) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	ao.accountsMu.Lock()
@@ -224,7 +235,7 @@ func (ao *onlineAccounts) newBlock(blk bookkeeping.Block, delta ledgercore.State
 	ao.accountsReadCond.Broadcast()
 }
 
-// newBlockImpl is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
+// newBlockImpl is the onlineAccounts implementation of the ledgerTracker interface. This is the "internal" facing function
 // which assumes that no lock need to be taken.
 func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
@@ -234,9 +245,6 @@ func (ao *onlineAccounts) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 		return
 	}
 
-	if rnd != ao.latest()+1 {
-		ao.log.Panicf("onlineAccounts: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, ao.cachedDBRoundOnline, len(ao.deltas))
-	}
 	ao.deltas = append(ao.deltas, delta.Accts)
 	ao.deltasAccum = append(ao.deltasAccum, delta.Accts.Len()+ao.deltasAccum[len(ao.deltasAccum)-1])
 

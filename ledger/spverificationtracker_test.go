@@ -463,7 +463,8 @@ func TestStateProofVerificationTracker_PanicInvalidBlockInsertion(t *testing.T) 
 		defaultStateProofInterval, true)
 
 	pastBlock := randomBlock(0)
-	a.Panics(func() { spt.appendCommitContext(&pastBlock.block) })
+	pastBlock.block.CurrentProtocol = protocol.ConsensusFuture
+	a.Error(spt.checkBlock(pastBlock.block, ledgercore.StateDelta{}))
 }
 
 func TestStateProofVerificationTracker_lastLookupContextUpdatedAfterLookup(t *testing.T) {

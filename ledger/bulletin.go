@@ -89,6 +89,10 @@ func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 func (b *bulletin) close() {
 }
 
+func (b *bulletin) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	return nil
+}
+
 func (b *bulletin) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 

@@ -719,7 +719,10 @@ func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.
 		return err
 	}
 	l.headerCache.put(blk.BlockHeader)
-	l.trackers.newBlock(blk, vb.Delta())
+	err = l.trackers.newBlock(blk, vb.Delta())
+	if err != nil {
+		return err
+	}
 	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil
 }

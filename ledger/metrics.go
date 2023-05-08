@@ -54,6 +54,10 @@ func (mt *metricsTracker) close() {
 	}
 }
 
+func (mt *metricsTracker) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	return nil
+}
+
 func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 	mt.ledgerRound.Set(uint64(rnd))

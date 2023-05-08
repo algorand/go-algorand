@@ -85,6 +85,36 @@ func (spt *spVerificationTracker) loadFromDisk(l ledgerForTracker, _ basics.Roun
 	return nil
 }
 
+func (spt *spVerificationTracker) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	currentStateProofInterval := basics.Round(blk.ConsensusProtocol().StateProofInterval)
+	if currentStateProofInterval == 0 {
+		return nil
+	}
+
+	spt.mu.Lock()
+	defer spt.mu.Unlock()
+
+	// pre appendCommitContext check
+	if blk.Round()%currentStateProofInterval == 0 && len(spt.pendingCommitContexts) > 0 {
+		lastCommitConfirmedRound := spt.pendingCommitContexts[len(spt.pendingCommitContexts)-1].confirmedRound
+		if blk.Round() <= lastCommitConfirmedRound {
+			return fmt.Errorf("state proof verification: attempted to append commit context confirmed earlier than latest"+
+				"commit context, round: %d, last confirmed commit context round: %d", blk.Round(), lastCommitConfirmedRound)
+		}
+	}
+
+	// pre appendDeleteContext check
+	if delta.StateProofNext != 0 && len(spt.pendingDeleteContexts) > 0 {
+		lastDeleteConfirmedRound := spt.pendingDeleteContexts[len(spt.pendingDeleteContexts)-1].confirmedRound
+		if blk.Round() <= lastDeleteConfirmedRound {
+			spt.log.Panicf("state proof verification: attempted to append delete context confirmed earlier than latest"+
+				"delete context, round: %d, last confirmed delete context round: %d", blk.Round(), lastDeleteConfirmedRound)
+		}
+	}
+
+	return nil
+}
+
 func (spt *spVerificationTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	currentStateProofInterval := basics.Round(blk.ConsensusProtocol().StateProofInterval)
 
@@ -276,13 +306,6 @@ func (spt *spVerificationTracker) appendCommitContext(blk *bookkeeping.Block) {
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
 
-	if len(spt.pendingCommitContexts) > 0 {
-		lastCommitConfirmedRound := spt.pendingCommitContexts[len(spt.pendingCommitContexts)-1].confirmedRound
-		if blk.Round() <= lastCommitConfirmedRound {
-			spt.log.Panicf("state proof verification: attempted to append commit context confirmed earlier than latest"+
-				"commit context, round: %d, last confirmed commit context round: %d", blk.Round(), lastCommitConfirmedRound)
-		}
-	}
 	latestRound := blk.Round() + basics.Round(blk.ConsensusProtocol().StateProofInterval)
 	commitContext := verificationCommitContext{
 		confirmedRound:      blk.Round(),
@@ -295,14 +318,6 @@ func (spt *spVerificationTracker) appendCommitContext(blk *bookkeeping.Block) {
 func (spt *spVerificationTracker) appendDeleteContext(blk *bookkeeping.Block, delta *ledgercore.StateDelta) {
 	spt.mu.Lock()
 	defer spt.mu.Unlock()
-
-	if len(spt.pendingDeleteContexts) > 0 {
-		lastDeleteConfirmedRound := spt.pendingDeleteContexts[len(spt.pendingDeleteContexts)-1].confirmedRound
-		if blk.Round() <= lastDeleteConfirmedRound {
-			spt.log.Panicf("state proof verification: attempted to append delete context confirmed earlier than latest"+
-				"delete context, round: %d, last confirmed delete context round: %d", blk.Round(), lastDeleteConfirmedRound)
-		}
-	}
 
 	deletionContext := verificationDeleteContext{
 		confirmedRound:      blk.Round(),

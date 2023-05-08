@@ -188,6 +188,10 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 func (t *txTail) close() {
 }
 
+func (t *txTail) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
+	return nil
+}
+
 func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
