@@ -267,11 +267,6 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	tracer.handleError(evalError)
 }
 
-func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
-	// Should be able to tell run mode
-	cx.RunMode()
-}
-
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	if cx.RunMode() != logic.ModeApp {
 		// Report cost for LogicSig program and exit

@@ -614,9 +614,7 @@ func (cx *EvalContext) RunMode() RunMode {
 }
 
 // PC returns the program counter of the current application being evaluated
-func (cx *EvalContext) PC() int {
-	return cx.pc
-}
+func (cx *EvalContext) PC() int { return cx.pc }
 
 // StackType describes the type of a value on the operand stack
 type StackType byte
