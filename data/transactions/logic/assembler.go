@@ -1446,7 +1446,7 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 
 	for i := range pgm.scratchSpace {
 		// We can't know what slot stacktop is being stored in
-		// so we adjust the bounds and type of each slot as if the stacktop type were stored there. 
+		// so we adjust the bounds and type of each slot as if the stacktop type were stored there.
 		pgm.scratchSpace[i] = pgm.scratchSpace[i].union(pgm.stack[top])
 	}
 	return nil, nil, nil
