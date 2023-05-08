@@ -31,6 +31,38 @@ import (
 
 var docVersion = 9
 
+// OpImmediateNote returns a short string about immediate data which follows the op byte
+func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails) string {
+	if len(oids) == 0 {
+		return ""
+	}
+
+	argNames := make([]string, len(oids))
+	argDocs := make([]string, len(oids))
+	for idx, oid := range oids {
+		argNote := oid.Comment
+		if oid.Reference != "" {
+			argNote = fmt.Sprintf("[%s](#field-group-%s)", oid.Reference, strings.ToLower(oid.Reference))
+		}
+		argNames[idx] = oid.Name
+		argDocs[idx] = fmt.Sprintf("%s: %s", oid.Name, argNote)
+	}
+
+	return fmt.Sprintf("`%s %s` ∋ %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
+}
+
+func opImmediateNoteEncoding(opcode byte, oids []logic.OpImmediateDetails) string {
+	if len(oids) == 0 {
+		return fmt.Sprintf("0x%02x", opcode)
+	}
+
+	notes := make([]string, len(oids))
+	for idx, oid := range oids {
+		notes[idx] = oid.Encoding
+	}
+	return fmt.Sprintf("0x%02x {%s}", opcode, strings.Join(notes, "}, {"))
+}
+
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |
 | - | -- |
@@ -181,14 +213,22 @@ func stackMarkdown(op *logic.OpSpec) string {
 }
 
 func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bool) (err error) {
-	ws := ""
-	opextra := logic.OpImmediateNote(op.Name)
-	if opextra != "" {
-		ws = " "
+
+	deets := logic.OpImmediateDetailsFromSpec(*op)
+
+	// Only need syntax line if there are immediates
+	// so it carries its own newline
+	syntax := ""
+	if opSyntax := opImmediateNoteSyntaxMarkdown(op.Name, deets); opSyntax != "" {
+		syntax = fmt.Sprintf("- Syntax: %s\n", opSyntax)
 	}
+
+	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op.Opcode, deets))
+
 	stackEffects := stackMarkdown(op)
-	fmt.Fprintf(out, "\n## %s%s\n\n- Opcode: 0x%02x%s%s\n%s",
-		op.Name, immediateMarkdown(op), op.Opcode, ws, opextra, stackEffects)
+
+	fmt.Fprintf(out, "\n## %s\n\n%s%s\n%s", op.Name, syntax, encoding, stackEffects)
+
 	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
 	// if cost changed with versions print all of them
 	costs := logic.OpAllCosts(op.Name)
@@ -221,7 +261,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 	for i := range op.OpDetails.Immediates {
 		group := op.OpDetails.Immediates[i].Group
 		if group != nil && group.Doc != "" && !groupDocWritten[group.Name] {
-			fmt.Fprintf(out, "\n`%s` %s:\n\n", group.Name, group.Doc)
+			fmt.Fprintf(out, "\n### %s\n\n%s\n\n", group.Name, group.Doc)
 			fieldGroupMarkdown(out, group)
 			groupDocWritten[group.Name] = true
 		}
@@ -258,8 +298,8 @@ type OpRecord struct {
 	ArgEnumTypes []string `json:",omitempty"`
 
 	Doc               string
-	DocExtra          string `json:",omitempty"`
-	ImmediateNote     string `json:",omitempty"`
+	DocExtra          string                     `json:",omitempty"`
+	ImmediateNote     []logic.OpImmediateDetails `json:",omitempty"`
 	IntroducedVersion uint64
 	Groups            []string
 }
@@ -392,7 +432,7 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType) *La
 		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name)
 		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
-		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
+		records[i].ImmediateNote = logic.OpImmediateDetailsFromSpec(spec)
 		records[i].Groups = opGroups[spec.Name]
 		records[i].IntroducedVersion = spec.Version
 	}

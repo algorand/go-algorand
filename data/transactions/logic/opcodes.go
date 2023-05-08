@@ -319,6 +319,28 @@ const (
 	immLabels
 )
 
+func (ik immKind) String() string {
+	switch ik {
+	case immByte:
+		return "uint8"
+	case immInt8:
+		return "int8"
+	case immLabel:
+		return "int16 (big-endian)"
+	case immInt:
+		return "varuint"
+	case immBytes:
+		return "varuint length, bytes"
+	case immInts:
+		return fmt.Sprintf("varuint count, [%s ...]", immInt.String())
+	case immBytess: // "ss" not a typo.  Multiple "bytes"
+		return fmt.Sprintf("varuint count, [%s ...]", immBytes.String())
+	case immLabels:
+		return fmt.Sprintf("varuint count, [%s ...]", immLabel.String())
+	}
+	return "unknown"
+}
+
 type immediate struct {
 	Name  string
 	kind  immKind
