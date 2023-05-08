@@ -705,7 +705,10 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 			err = fmt.Errorf("trackerRegistry.replay: trackerEvalVerified failed : %w", err)
 			return
 		}
-		tr.newBlock(blk, delta)
+		err = tr.newBlock(blk, delta)
+		if err != nil {
+			return
+		}
 
 		// flush to disk if any of the following applies:
 		// 1. if we have loaded up more than initializeCachesRoundFlushInterval rounds since the last time we flushed the data to disk
