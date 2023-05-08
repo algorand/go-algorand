@@ -226,8 +226,8 @@ var opcodeImmediateNotes = map[string][]string{
 	"intc":       {"an index in the intcblock"},
 	"pushint":    {"an int constant"},
 	"pushints":   {"a list of int constants"},
-	"bytecblock": {"a block of byte const values"},
-	"bytec":      {"an index in the bytec block"},
+	"bytecblock": {"a block of byte constant values"},
+	"bytec":      {"an index in the bytecblock"},
 	"pushbytes":  {"a byte constant"},
 	"pushbytess": {"a list of byte constants"},
 

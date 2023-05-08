@@ -287,7 +287,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytecblock
 
-- Syntax: `bytecblock BYTES ...` ∋ BYTES ...: a block of byte const values
+- Syntax: `bytecblock BYTES ...` ∋ BYTES ...: a block of byte constant values
 - Bytecode: 0x26 {varuint count, [varuint length, bytes ...]}
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
@@ -296,7 +296,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytec
 
-- Syntax: `bytec I` ∋ I: an index in the bytec block
+- Syntax: `bytec I` ∋ I: an index in the bytecblock
 - Bytecode: 0x27 {uint8}
 - Stack: ... &rarr; ..., []byte
 - Ith constant from bytecblock

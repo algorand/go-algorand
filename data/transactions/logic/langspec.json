@@ -789,7 +789,7 @@
       "DocExtra": "`bytecblock` loads the following program bytes into an array of byte-array constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script.",
       "ImmediateNote": [
         {
-          "Comment": "a block of byte const values",
+          "Comment": "a block of byte constant values",
           "Encoding": "varuint count, [varuint length, bytes ...]",
           "Name": "BYTES ..."
         }
@@ -809,7 +809,7 @@
       "Doc": "Ith constant from bytecblock",
       "ImmediateNote": [
         {
-          "Comment": "an index in the bytec block",
+          "Comment": "an index in the bytecblock",
           "Encoding": "uint8",
           "Name": "I"
         }
