@@ -621,6 +621,7 @@ func (cx *EvalContext) RunMode() RunMode {
 }
 
 // avmType describes the type of a value on the operand stack
+// avmTypes are a subset of StackTypes
 type avmType byte
 
 const (
