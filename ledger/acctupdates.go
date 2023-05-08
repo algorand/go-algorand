@@ -767,7 +767,7 @@ func (au *accountUpdates) consecutiveVersion(offset uint64) uint64 {
 	return offset
 }
 
-// checkBlock is the onlineAccounts implementation of the ledgerTracker interface.
+// checkBlock is the accountUpdates implementation of the ledgerTracker interface.
 func (au *accountUpdates) checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error {
 	rnd := blk.Round()
 	au.accountsMu.Lock()
