@@ -772,7 +772,7 @@ func (au *accountUpdates) checkBlock(blk bookkeeping.Block, delta ledgercore.Sta
 	rnd := blk.Round()
 	au.accountsMu.Lock()
 	defer au.accountsMu.Unlock()
-	if rnd != au.latest()+1 {
+	if rnd > au.latest() && rnd != au.latest()+1 {
 		return fmt.Errorf("accountUpdates: checkBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.cachedDBRound, len(au.deltas))
 	}
 	return nil

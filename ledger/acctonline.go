@@ -220,7 +220,7 @@ func (ao *onlineAccounts) checkBlock(blk bookkeeping.Block, delta ledgercore.Sta
 	rnd := blk.Round()
 	ao.accountsMu.Lock()
 	defer ao.accountsMu.Unlock()
-	if rnd != ao.latest()+1 {
+	if rnd > ao.latest() && rnd != ao.latest()+1 {
 		return fmt.Errorf("onlineAccounts: checkBlock %d too far in the future, dbRound %d, deltas %d", rnd, ao.cachedDBRoundOnline, len(ao.deltas))
 	}
 	return nil

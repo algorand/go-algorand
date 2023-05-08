@@ -68,9 +68,10 @@ type ledgerTracker interface {
 	// current accounts storage round number.
 	loadFromDisk(ledgerForTracker, basics.Round) error
 
-	// checkBlock checks if the tracker can accept a new block and return an error if it can't.
-	// A purpose of this method is to operations that can potentially fail in newBlock flow
-	// but do not require to rollback all the trackers if say 5th fail. So check first and apply after.
+	// checkBlock checks if the tracker can accept a new block and returns an error if it can't.
+	// The purpose of checkBlock is to ask all the trackers if they already know they are going to fail newBlock
+	// based on the provided deltas and block.  This allows us to entirely skip the newBlock call to all of the trackers
+	// and thus not have to worry about rolling back any of the earlier tracker state.
 	// This method must be called under the same lock as newBlock.
 	checkBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) error
 
