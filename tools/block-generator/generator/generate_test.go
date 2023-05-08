@@ -38,7 +38,7 @@ func makePrivateGenerator(t *testing.T) *generator {
 		PaymentTransactionFraction:   1.0,
 		PaymentNewAccountFraction:    1.0,
 		AssetCreateFraction:          1.0,
-	})
+	}, "")
 	require.NoError(t, err)
 	return publicGenerator.(*generator)
 }

@@ -45,7 +45,7 @@ func MakeServer(configFile string, addr string) (*http.Server, Generator) {
 	noOp := func(next http.Handler) http.Handler {
 		return next
 	}
-	return MakeServerWithMiddleware(configFile, addr, noOp)
+	return MakeServerWithMiddleware(0, "", configFile, addr, noOp)
 }
 
 // BlocksMiddleware is a middleware for the blocks endpoint.
@@ -54,11 +54,11 @@ type BlocksMiddleware func(next http.Handler) http.Handler
 // MakeServerWithMiddleware allows injecting a middleware for the blocks handler.
 // This is needed to simplify tests by stopping block production while validation
 // is done on the data.
-func MakeServerWithMiddleware(configFile string, addr string, blocksMiddleware BlocksMiddleware) (*http.Server, Generator) {
+func MakeServerWithMiddleware(dbround uint64, genesisFile string, configFile string, addr string, blocksMiddleware BlocksMiddleware) (*http.Server, Generator) {
 	config, err := initializeConfigFile(configFile)
 	util.MaybeFail(err, "problem loading config file. Use '--config' or create a config file.")
 
-	gen, err := MakeGenerator(config)
+	gen, err := MakeGenerator(dbround, genesisFile, config)
 	util.MaybeFail(err, "Failed to make generator with config file '%s'", configFile)
 
 	mux := http.NewServeMux()

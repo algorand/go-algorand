@@ -99,7 +99,7 @@ func sumIsCloseToOne(numbers ...float32) bool {
 }
 
 // MakeGenerator initializes the Generator object.
-func MakeGenerator(config GenerationConfig) (Generator, error) {
+func MakeGenerator(dbround uint64, genesisFile string, config GenerationConfig) (Generator, error) {
 	if !sumIsCloseToOne(config.PaymentTransactionFraction, config.AssetTransactionFraction) {
 		return nil, fmt.Errorf("transaction distribution ratios should equal 1")
 	}
@@ -117,6 +117,7 @@ func MakeGenerator(config GenerationConfig) (Generator, error) {
 		config:                    config,
 		protocol:                  proto,
 		params:                    cconfig.Consensus[proto],
+		genesisFilePath:           genesisFile,
 		genesisHash:               [32]byte{},
 		genesisID:                 "blockgen-test",
 		prevBlockHash:             "",
@@ -128,6 +129,7 @@ func MakeGenerator(config GenerationConfig) (Generator, error) {
 		rewardsRate:               0,
 		rewardsRecalculationRound: 0,
 		reportData:                make(map[TxTypeID]TxData),
+		dbround:                   dbround,
 	}
 
 	gen.feeSink[31] = 1
@@ -136,7 +138,10 @@ func MakeGenerator(config GenerationConfig) (Generator, error) {
 
 	gen.initializeAccounting()
 	gen.initializeLedger()
-
+	// TODO: initialize the generator with the genesis file
+	if genesisFile != "" {
+		gen.initializeGenesis()
+	}
 	for _, val := range getTransactionOptions() {
 		switch val {
 		case paymentTx:
@@ -195,14 +200,15 @@ type generator struct {
 	numAccounts uint64
 
 	// Block stuff
-	round         uint64
-	txnCounter    uint64
-	prevBlockHash string
-	timestamp     int64
-	protocol      protocol.ConsensusVersion
-	params        cconfig.ConsensusParams
-	genesisID     string
-	genesisHash   crypto.Digest
+	round           uint64
+	txnCounter      uint64
+	prevBlockHash   string
+	timestamp       int64
+	protocol        protocol.ConsensusVersion
+	params          cconfig.ConsensusParams
+	genesisFilePath string
+	genesisID       string
+	genesisHash     crypto.Digest
 
 	// Rewards stuff
 	feeSink                   basics.Address
@@ -232,6 +238,8 @@ type generator struct {
 
 	// ledger
 	ledger *ledger.Ledger
+
+	dbround uint64
 }
 
 type assetData struct {
@@ -274,7 +282,7 @@ func (g *generator) WriteReport(output io.Writer) error {
 
 func (g *generator) WriteStatus(output io.Writer) error {
 	response := model.NodeStatusResponse{
-		LastRound: g.round,
+		LastRound: g.dbround,
 	}
 	return json.NewEncoder(output).Encode(response)
 }
@@ -360,20 +368,24 @@ func (g *generator) finishRound(txnCount uint64) {
 // WriteBlock generates a block full of new transactions and writes it to the writer.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
-	if round != g.round {
-		fmt.Printf("Generator only supports sequential block access. Expected %d but received request for %d.\n", g.round, round)
-	}
-
 	numTxnForBlock := g.txnForRound(round)
 
 	// return genesis block
-	if round == 0 {
+	offset := g.dbround
+	if round-offset == 0 {
 		// write the msgpack bytes for a block
-		block, err := rpcs.RawBlockBytes(g.ledger, basics.Round(round))
+		block, cert, _ := g.ledger.BlockCert(basics.Round(round - offset))
+		block.BlockHeader.Round = basics.Round(round)
+		encodedblock := rpcs.EncodedBlockCert{
+			Block:       block,
+			Certificate: cert,
+		}
+		blk := protocol.EncodeMsgp(&encodedblock)
+		var err error
 		if err != nil {
 			return err
 		}
-		_, err = output.Write(block)
+		_, err = output.Write(blk)
 		if err != nil {
 			return err
 		}
@@ -437,7 +449,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		return err
 	}
 	// write the msgpack bytes for a block
-	block, err := rpcs.RawBlockBytes(g.ledger, basics.Round(round))
+	cert.Block.BlockHeader.Round = basics.Round(round)
+	block := protocol.EncodeMsgp(&cert)
 	if err != nil {
 		return err
 	}
@@ -451,9 +464,14 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 // WriteDeltas generates returns the deltas for payset.
 func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
-	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round))
+	if round-g.dbround == 0 {
+		data, _ := encode(protocol.CodecHandle, ledgercore.StateDelta{})
+		output.Write(data)
+		return nil
+	}
+	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round - g.dbround))
 	if err != nil {
-		return fmt.Errorf("err getting state delta for round %d: %w", round, err)
+		return fmt.Errorf("err getting state delta for round %d, %v", round, err)
 	}
 	// msgp encode deltas
 	data, err := encode(protocol.CodecHandle, delta)
@@ -566,7 +584,6 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 
 	numAssets := uint64(len(g.assets))
 	var senderIndex uint64
-
 	if actual == assetCreate {
 		numAssets = uint64(len(g.assets)) + uint64(len(g.pendingAssets))
 		senderIndex = numAssets % g.config.NumGenesisAccounts
@@ -574,9 +591,9 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 
 		total := assetTotal
 		assetID := g.txnCounter + intra + 1
+		//assetID := g.txnCounter //assetID := uint64(1)
 		assetName := fmt.Sprintf("asset #%d", assetID)
 		txn = g.makeAssetCreateTxn(g.makeTxnHeader(senderAcct, round, intra), total, false, assetName)
-
 		// Compute asset ID and initialize holdings
 		holding := assetHolding{
 			acctIndex: senderIndex,
@@ -650,8 +667,13 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 			sender := indexToAccount(senderIndex)
 
 			receiverArrayIndex := (rand.Uint64() % (uint64(len(asset.holdings)) - uint64(1))) + uint64(1)
+			//receiverArrayIndex := rand.Uint64() % (uint64(len(asset.holdings)))
+			fmt.Printf("receiverArrayIndex: %d\n", receiverArrayIndex)
+			fmt.Printf("assetID: %d\n", asset.assetID)
+			for _, holding := range asset.holdings {
+				fmt.Printf("asset holdings: %+v\n", *holding)
+			}
 			receiver := indexToAccount(asset.holdings[receiverArrayIndex].acctIndex)
-
 			amount := uint64(10)
 
 			txn = g.makeAssetTransferTxn(g.makeTxnHeader(sender, round, intra), receiver, amount, basics.Address{}, asset.assetID)
