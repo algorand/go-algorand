@@ -164,27 +164,38 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 	applyDataOfCurrentTxn.EvalDelta = evalDelta
 }
 
-func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
+func (tracer *evalTracer) makeExecTrace(ep *logic.EvalParams, groupIndex int) {
+	// If there is no need of exec trace, leave
+	if tracer.result.ExecTraceConfig == NoExecTrace {
+		return
+	}
+
+	// if there is the current txn is not logic sig eval or application call, leave
 	currentTxn := ep.TxnGroup[groupIndex]
+	if currentTxn.Txn.Type != protocol.ApplicationCallTx && currentTxn.Lsig.Blank() {
+		return
+	}
 
-	if tracer.result.ExecTraceConfig > NoExecTrace {
-		if currentTxn.Txn.Type == protocol.ApplicationCallTx || !currentTxn.Lsig.Blank() {
-			transactionTrace := makeTransactionTrace(Unknown)
-			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
-		}
+	// make transaction trace in following section
+	traceType := Unknown
 
-		if !currentTxn.Lsig.Blank() {
-			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = LogicSigTransaction
-		} else if currentTxn.Txn.Type == protocol.ApplicationCallTx {
-			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
-			case transactions.ClearStateOC:
-				tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = AppCallClearStateTransaction
-			default:
-				tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = AppCallApprovalTransaction
-			}
+	if !currentTxn.Lsig.Blank() {
+		traceType = LogicSigTransaction
+	} else if currentTxn.Txn.Type == protocol.ApplicationCallTx {
+		switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
+		case transactions.ClearStateOC:
+			traceType = AppCallClearStateTransaction
+		default:
+			traceType = AppCallApprovalTransaction
 		}
 	}
 
+	transactionTrace := makeTransactionTrace(traceType)
+	tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
+}
+
+func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
+	tracer.makeExecTrace(ep, groupIndex)
 	tracer.cursorEvalTracer.BeforeTxn(ep, groupIndex)
 }
 

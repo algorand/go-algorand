@@ -434,7 +434,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowEmptySignatures: request.AllowEmptySignatures,
 		AllowMoreLogging:     request.AllowMoreLogging,
 		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
-		ExecTraceConfig:      convertSimulationExecTrace(request.ExecTrace),
+		ExecTraceConfig:      convertSimulationExecTrace(request.ExecTraceOption),
 	}
 }
 
