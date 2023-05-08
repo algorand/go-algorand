@@ -3297,6 +3297,10 @@
         "extra-opcode-budget": {
           "description": "Applies extra opcode budget during simulation for each transaction group.",
           "type": "integer"
+        },
+        "allow-unlimited-resource-access": {
+          "description": "Allow unlimited resource access during simulation.",
+          "type": "boolean"
         }
       }
     },
@@ -3672,6 +3676,10 @@
         "extra-opcode-budget": {
           "description": "The extra opcode budget added to each transaction group during simulation",
           "type": "integer"
+        },
+        "allow-unlimited-resource-access": {
+          "description": "If true, allows unlimited resource access during simulation.",
+          "type": "boolean"
         }
       }
     }

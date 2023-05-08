@@ -619,6 +619,9 @@ type SimulateRequest struct {
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
+	// AllowUnlimitedResourceAccess Allow unlimited resource access during simulation.
+	AllowUnlimitedResourceAccess *bool `json:"allow-unlimited-resource-access,omitempty"`
+
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
 
@@ -666,6 +669,9 @@ type SimulateTransactionResult struct {
 type SimulationEvalOverrides struct {
 	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
 	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
+	// AllowUnlimitedResourceAccess If true, allows unlimited resource access during simulation.
+	AllowUnlimitedResourceAccess *bool `json:"allow-unlimited-resource-access,omitempty"`
 
 	// ExtraOpcodeBudget The extra opcode budget added to each transaction group during simulation
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`

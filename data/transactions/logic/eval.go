@@ -255,6 +255,8 @@ type EvalConstants struct {
 
 	// MaxLogCalls is the limit of total log calls during a program execution
 	MaxLogCalls uint64
+
+	UnlimitedResourceAccess bool
 }
 
 // RuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
@@ -4140,6 +4142,10 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 		return true
 	}
 
+	if cx.UnlimitedResourceAccess {
+		return true
+	}
+
 	return false
 }
 
@@ -4558,6 +4564,11 @@ func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 	if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
 		return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
 	}
+
+	if cx.UnlimitedResourceAccess {
+		return aid, nil
+	}
+
 	return 0, fmt.Errorf("unavailable App %d", ref)
 }
 
@@ -4663,6 +4674,11 @@ func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err erro
 	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
 	}
+
+	if cx.UnlimitedResourceAccess {
+		return aid, nil
+	}
+
 	return 0, fmt.Errorf("unavailable Asset %d", ref)
 }
 
@@ -5045,6 +5061,10 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 		if _, ok := cx.available.sharedApps[aid]; ok {
 			return true
 		}
+	}
+
+	if cx.UnlimitedResourceAccess {
+		return true
 	}
 
 	return false

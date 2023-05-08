@@ -2182,3 +2182,57 @@ func TestMockTracerScenarios(t *testing.T) {
 		})
 	}
 }
+
+func TestUnlimitedResourceAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	for v := 2; v <= logic.LogicVersion-1; v++ { // TODO: need -1 now because we use current consensus version instead of future
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+				sender := accounts[0]
+
+				futureAppID := basics.AppIndex(1)
+				txn := txnInfo.NewTxn(txntest.Txn{
+					Type:   protocol.ApplicationCallTx,
+					Sender: sender.Addr,
+					// TODO: actually test resource access
+					ApprovalProgram:   fmt.Sprintf("#pragma version %d\n intcblock 1; intc_0", v),
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n intcblock 1; intc_0", v),
+				})
+				stxn := txn.Txn().Sign(sender.Sk)
+
+				return simulationTestCase{
+					input: simulation.Request{
+						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
+						AllowUnlimitedResourceAccess: true,
+					},
+					expected: simulation.Result{
+						Version:   simulation.ResultLatestVersion,
+						LastRound: txnInfo.LatestRound(),
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ApplicationID: futureAppID,
+											},
+										},
+										AppBudgetConsumed: 2,
+									},
+								},
+								AppBudgetAdded:    700,
+								AppBudgetConsumed: 2,
+							},
+						},
+						EvalOverrides: simulation.ResultEvalOverrides{
+							AllowUnlimitedResourceAccess: true,
+						},
+					},
+				}
+			})
+		})
+	}
+}

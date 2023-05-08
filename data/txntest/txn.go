@@ -183,7 +183,7 @@ func assemble(source interface{}) []byte {
 		ops, err := logic.AssembleString(program)
 		if err != nil {
 			fmt.Printf("Bad program %v", ops.Errors)
-			panic(ops.Errors)
+			panic(fmt.Sprintf("%v", ops.Errors))
 		}
 		return ops.Program
 	case []byte:
