@@ -90,10 +90,10 @@ func TestBoxNewBad(t *testing.T) {
 
 	long := strings.Repeat("x", 65)
 	txn.Boxes = []transactions.BoxRef{{Name: []byte(long)}}
-	TestApp(t, fmt.Sprintf(`byte "%s"; int 1000; box_create`, long), ep, "name too long")
+	TestApp(t, NoTrack(fmt.Sprintf(`byte "%s"; int 1000; box_create`, long)), ep, "name too long")
 
 	txn.Boxes = []transactions.BoxRef{{Name: []byte("")}} // irrelevant, zero check comes first anyway
-	TestApp(t, `byte ""; int 1000; box_create`, ep, "zero length")
+	TestApp(t, NoTrack(`byte ""; int 1000; box_create`), ep, "zero length")
 }
 
 func TestBoxReadWrite(t *testing.T) {
@@ -531,7 +531,7 @@ func TestEarlyPanics(t *testing.T) {
 			t.Parallel()
 			ep, _, l := MakeSampleEnv()
 			l.NewApp(basics.Address{}, 888, basics.AppParams{})
-			TestApp(t, fmt.Sprintf(program, ""), ep, "zero length")
+			TestApp(t, NoTrack(fmt.Sprintf(program, "")), ep, "zero length")
 		})
 	}
 
@@ -542,7 +542,7 @@ func TestEarlyPanics(t *testing.T) {
 			t.Parallel()
 			ep, _, l := MakeSampleEnv()
 			l.NewApp(basics.Address{}, 888, basics.AppParams{})
-			TestApp(t, fmt.Sprintf(program, big), ep, "name too long")
+			TestApp(t, NoTrack(fmt.Sprintf(program, big)), ep, "name too long")
 		})
 	}
 

@@ -281,10 +281,8 @@ type LanguageSpec struct {
 }
 
 func typeStrings(types logic.StackTypes) []string {
-	var (
-		out      = make([]string, len(types))
-		allNones = true
-	)
+	out := make([]string, len(types))
+	allNones := true
 	for idx, t := range types {
 		out[idx] = t.String()
 		if out[idx] != "none" {
@@ -297,7 +295,7 @@ func typeStrings(types logic.StackTypes) []string {
 	// in so we don't break the indices by omitting
 	// a valid none in a fields array
 	if allNones {
-		return []string{}
+		return nil
 	}
 
 	return out
@@ -407,7 +405,7 @@ func main() {
 	integerConstantsTableMarkdown(constants)
 	constants.Close()
 
-	named := []namedType{}
+	named := make([]namedType, 0, len(logic.AllStackTypes))
 	for abbr, t := range logic.AllStackTypes {
 		named = append(named, namedType{
 			Name:         t.String(),

@@ -1438,8 +1438,7 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	// If the index of the scratch slot is a const
 	// we can modify only that scratch slots type
 	if top >= 1 {
-		idx, isConst := pgm.stack[top-1].constant()
-		if isConst {
+		if idx, isConst := pgm.stack[top-1].constant(); isConst {
 			pgm.scratchSpace[idx] = pgm.stack[top]
 			return nil, nil, nil
 		}
