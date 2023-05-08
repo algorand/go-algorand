@@ -204,6 +204,9 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 		} else {
 			lastExecTrace := execTraceStack[len(execTraceStack)-1]
 			lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, transactionTrace)
+			innerIndex := uint8(len(lastExecTrace.InnerTraces)) - 1
+			stepIndex := uint64(len(lastExecTrace.Trace)) - 1
+			lastExecTrace.StepToInnerMap[stepIndex] = innerIndex
 		}
 
 		// In both case, we need to add to transaction trace to the stack

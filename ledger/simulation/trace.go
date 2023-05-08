@@ -204,6 +204,9 @@ type TransactionTrace struct {
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.
 	InnerTraces []TransactionTrace
+	// StepToInnerMap maps execution step that branches into an inner trace,
+	// to the index into the InnerTraces that runs after the execution step.
+	StepToInnerMap map[uint64]uint8
 }
 
 func makeTransactionTrace(traceType TransactionTraceType) TransactionTrace {
