@@ -2675,7 +2675,6 @@
           "type": "array",
           "items": {
             "type": "string",
-            "x-algorand-format": "Address"
           }
         }
       }
