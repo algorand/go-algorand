@@ -162,7 +162,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowExtraOpcodeBudget, "allow-extra-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
-	simulateCmd.Flags().BoolVar(&simulateReturnPCTrace, "pc", false, "Return PC trace of app calls during simulation")
+	simulateCmd.Flags().BoolVar(&simulateReturnPCTrace, "with-program-counter", false, "Return PC trace of app calls during simulation")
 }
 
 var clerkCmd = &cobra.Command{
