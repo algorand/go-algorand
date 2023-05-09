@@ -94,7 +94,7 @@ func (env *Environment) Close() {
 // PrepareSimulatorTest creates an environment to test transaction simulations. The caller is
 // responsible for calling Close() on the returned environment.
 func PrepareSimulatorTest(t *testing.T) Environment {
-	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 100)
 
 	// Prepare ledger
 	const inMem = true
@@ -140,6 +140,7 @@ func PrepareSimulatorTest(t *testing.T) Environment {
 	numBlocks := rand.Intn(4)
 	for i := 0; i < numBlocks; i++ {
 		nextBlock := bookkeeping.MakeBlock(latestHeader)
+		nextBlock.TxnCounter = latestHeader.TxnCounter
 		err = ledger.AddBlock(nextBlock, agreement.Certificate{})
 		require.NoError(t, err)
 

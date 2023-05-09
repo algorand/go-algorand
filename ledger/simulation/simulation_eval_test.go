@@ -535,7 +535,7 @@ int 1`,
 				var AppBudgetConsumed, AppBudgetAdded uint64
 				if expectedSuccess {
 					expectedAppCallAD = transactions.ApplyData{
-						ApplicationID: 2,
+						ApplicationID: 1002,
 						EvalDelta: transactions.EvalDelta{
 							Logs: []string{"hello"},
 						},
@@ -586,7 +586,7 @@ func TestSimpleAppCall(t *testing.T) {
 		sender := env.Accounts[0]
 
 		// Create program and call it
-		futureAppID := basics.AppIndex(1)
+		futureAppID := basics.AppIndex(1001)
 		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
@@ -667,7 +667,7 @@ func TestRejectAppCall(t *testing.T) {
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
 
-		futureAppID := basics.AppIndex(1)
+		futureAppID := basics.AppIndex(1001)
 		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
@@ -722,7 +722,7 @@ func TestErrorAppCall(t *testing.T) {
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
 
-		futureAppID := basics.AppIndex(1)
+		futureAppID := basics.AppIndex(1001)
 		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
@@ -787,7 +787,7 @@ func TestAppCallOverBudget(t *testing.T) {
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
 
-		futureAppID := basics.AppIndex(1)
+		futureAppID := basics.AppIndex(1001)
 		// App create with cost 4
 		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
@@ -860,7 +860,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
 
-		futureAppID := basics.AppIndex(1)
+		futureAppID := basics.AppIndex(1001)
 		// App create with cost 4
 		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
@@ -931,7 +931,7 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
 
-		futureAppID := basics.AppIndex(1)
+		futureAppID := basics.AppIndex(1001)
 		// App create with cost 4
 		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
@@ -1008,7 +1008,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 
 	sender := env.Accounts[0]
 
-	futureAppID := basics.AppIndex(1)
+	futureAppID := basics.AppIndex(1001)
 	// App create with cost 4
 	createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:              protocol.ApplicationCallTx,
@@ -1143,7 +1143,7 @@ pop
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
 
-		futureAppID := basics.AppIndex(2)
+		futureAppID := basics.AppIndex(1002)
 		// fund outer app
 		fund := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
@@ -1305,7 +1305,7 @@ int 1`
 		sender := env.Accounts[0]
 		receiver := env.Accounts[1]
 
-		futureAppID := basics.AppIndex(1)
+		futureAppID := basics.AppIndex(1001)
 
 		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
@@ -1399,7 +1399,7 @@ int 1`
 		sender := env.Accounts[0]
 		receiver := env.Accounts[1]
 
-		futureAppID := basics.AppIndex(1)
+		futureAppID := basics.AppIndex(1001)
 
 		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
@@ -1487,7 +1487,7 @@ func TestBalanceChangesWithApp(t *testing.T) {
 		receiver := env.Accounts[1]
 		receiverBalance := receiver.AcctData.MicroAlgos.Raw
 
-		futureAppID := basics.AppIndex(1)
+		futureAppID := basics.AppIndex(1001)
 		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:   protocol.ApplicationCallTx,
 			Sender: sender.Addr,
@@ -1702,13 +1702,13 @@ func TestPartialMissingSignatures(t *testing.T) {
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
-										ConfigAsset: 1,
+										ConfigAsset: 1001,
 									},
 								},
 							}, {
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
-										ConfigAsset: 2,
+										ConfigAsset: 1002,
 									},
 								},
 							},
@@ -1836,18 +1836,21 @@ func TestAppCallInnerTxnApplyDataOnFail(t *testing.T) {
 		singleInnerLogAndFail := makeProgramToCallInner(t, logAndFail)
 		nestedInnerLogAndFail := makeProgramToCallInner(t, singleInnerLogAndFail)
 
+		futureOuterAppID := basics.AppIndex(1003)
+		futureInnerAppID := futureOuterAppID + 1
+
 		// fund outer app
 		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
-			Receiver: basics.AppIndex(3).Address(),
+			Receiver: futureOuterAppID.Address(),
 			Amount:   401_000, // 400_000 min balance plus 1_000 for 1 txn
 		})
 		// fund inner app
 		pay2 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
-			Receiver: basics.AppIndex(4).Address(),
+			Receiver: futureInnerAppID.Address(),
 			Amount:   401_000, // 400_000 min balance plus 1_000 for 1 txn
 		})
 		// create app
@@ -1882,19 +1885,19 @@ int 1`,
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
-										ApplicationID: 3,
+										ApplicationID: futureOuterAppID,
 										EvalDelta: transactions.EvalDelta{
 											Logs: []string{"starting inner txn"},
 											InnerTxns: []transactions.SignedTxnWithAD{
 												{
 													ApplyData: transactions.ApplyData{
-														ApplicationID: 4,
+														ApplicationID: futureInnerAppID,
 														EvalDelta: transactions.EvalDelta{
 															Logs: []string{"starting inner txn"},
 															InnerTxns: []transactions.SignedTxnWithAD{
 																{
 																	ApplyData: transactions.ApplyData{
-																		ApplicationID: 5,
+																		ApplicationID: futureInnerAppID + 1,
 																		EvalDelta: transactions.EvalDelta{
 																			Logs: []string{"message"},
 																		},
@@ -1943,11 +1946,13 @@ func TestNonAppCallInnerTxnApplyDataOnFail(t *testing.T) {
 		logAndFailItxnCode := makeItxnSubmitToCallInner(t, logAndFail)
 		approvalProgram := wrapCodeWithVersionAndReturn(createAssetCode + logAndFailItxnCode)
 
+		futureAppID := basics.AppIndex(1002)
+
 		// fund outer app
 		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
-			Receiver: basics.AppIndex(2).Address(),
+			Receiver: futureAppID.Address(),
 			Amount:   401_000, // 400_000 min balance plus 1_000 for 1 txn
 		})
 		// create app
@@ -1981,18 +1986,18 @@ int 1`,
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
-										ApplicationID: 2,
+										ApplicationID: futureAppID,
 										EvalDelta: transactions.EvalDelta{
 											Logs: []string{"starting asset create", "finished asset create", "starting inner txn"},
 											InnerTxns: []transactions.SignedTxnWithAD{
 												{
 													ApplyData: transactions.ApplyData{
-														ConfigAsset: 3,
+														ConfigAsset: basics.AssetIndex(futureAppID) + 1,
 													},
 												},
 												{
 													ApplyData: transactions.ApplyData{
-														ApplicationID: 4,
+														ApplicationID: futureAppID + 2,
 														EvalDelta: transactions.EvalDelta{
 															Logs: []string{"message"},
 														},
@@ -2035,14 +2040,17 @@ func TestInnerTxnNonAppCallFailure(t *testing.T) {
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
 
+		futureAppID := basics.AppIndex(1002)
+		futureAssetID := basics.AssetIndex(1003)
+
 		// configAssetCode should fail because createAssetCode does not set an asset manager
-		approvalProgram := wrapCodeWithVersionAndReturn(createAssetCode + fmt.Sprintf(configAssetCode, 3))
+		approvalProgram := wrapCodeWithVersionAndReturn(createAssetCode + fmt.Sprintf(configAssetCode, futureAssetID))
 
 		// fund outer app
 		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
-			Receiver: basics.AppIndex(2).Address(),
+			Receiver: futureAppID.Address(),
 			Amount:   402_000, // 400_000 min balance plus 2_000 for 2 inners
 		})
 		// create app
@@ -2076,13 +2084,13 @@ int 1`,
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
-										ApplicationID: 2,
+										ApplicationID: futureAppID,
 										EvalDelta: transactions.EvalDelta{
 											Logs: []string{"starting asset create", "finished asset create", "starting asset config"},
 											InnerTxns: []transactions.SignedTxnWithAD{
 												{
 													ApplyData: transactions.ApplyData{
-														ConfigAsset: 3,
+														ConfigAsset: futureAssetID,
 													},
 												},
 												{},
@@ -2116,7 +2124,7 @@ func TestMockTracerScenarios(t *testing.T) {
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 				sender := env.Accounts[0]
 
-				futureAppID := basics.AppIndex(2)
+				futureAppID := basics.AppIndex(1002)
 				payTxn := env.TxnInfo.NewTxn(txntest.Txn{
 					Type:     protocol.PaymentTx,
 					Sender:   sender.Addr,
