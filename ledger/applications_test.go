@@ -1331,8 +1331,8 @@ return
 	a.Greater(len(ops.Program), 1)
 	program := ops.Program
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1000000)
+	proto := config.Consensus[protocol.ConsensusFuture]
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 1000000)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
@@ -1357,7 +1357,7 @@ return
 		GenesisHash: genesisInitState.GenesisHash,
 	}
 
-	appIdx := basics.AppIndex(2) // second tnx => idx = 2
+	appIdx := basics.AppIndex(1002) // second tnx => idx = 1002
 
 	// fund app account
 	fundingPayment := transactions.Transaction{
@@ -1386,7 +1386,7 @@ return
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l1.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 2})
+	err = l1.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
 
 	// few empty blocks to reset deltas and flush
