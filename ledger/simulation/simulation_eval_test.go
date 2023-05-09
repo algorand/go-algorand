@@ -122,11 +122,10 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 	t.Helper()
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
 
 	testcase := f(env)
 
-	actual, err := s.Simulate(testcase.input)
+	actual, err := simulation.MakeSimulator(env.Ledger).Simulate(testcase.input)
 	require.NoError(t, err)
 
 	validateSimulationResult(t, actual)
@@ -2201,10 +2200,10 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 				sender := env.Accounts[0]
 
-				// assetCreator := env.Accounts[1].Addr
-				// assetID := env.CreateAsset(assetCreator, basics.AssetParams{Total: 123})
+				assetCreator := env.Accounts[1].Addr
+				assetID := env.CreateAsset(assetCreator, basics.AssetParams{Total: 123})
 
-				futureAppID := basics.AppIndex(1001)
+				futureAppID := basics.AppIndex(assetID) + 1
 				txn := env.TxnInfo.NewTxn(txntest.Txn{
 					Type:   protocol.ApplicationCallTx,
 					Sender: sender.Addr,

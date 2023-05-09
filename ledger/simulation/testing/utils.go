@@ -30,6 +30,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -92,43 +94,58 @@ func (env *Environment) Close() {
 	env.Ledger.Close()
 }
 
-func (env *Environment) CreateAsset(creator basics.Address, params basics.AssetParams) basics.AssetIndex {
+// nextBlock begins evaluation of a new block, after ledger creation or endBlock()
+func (env *Environment) nextBlock() *eval.BlockEvaluator {
+	env.t.Helper()
+	rnd := env.Ledger.Latest()
+	hdr, err := env.Ledger.BlockHdr(rnd)
+	require.NoError(env.t, err)
+
+	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
+	evaluator, err := env.Ledger.StartEvaluator(nextHdr, 0, 0, nil)
+	require.NoError(env.t, err)
+	return evaluator
+}
+
+// endBlock completes the block being created, returns the ValidatedBlock for inspection
+func (env *Environment) endBlock(evaluator *eval.BlockEvaluator) *ledgercore.ValidatedBlock {
+	env.t.Helper()
+	validatedBlock, err := evaluator.GenerateBlock()
+	require.NoError(env.t, err)
+	err = env.Ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	require.NoError(env.t, err)
+	return validatedBlock
+}
+
+func (env *Environment) Txn(txn transactions.SignedTxn) transactions.ApplyData {
 	env.t.Helper()
 
-	txn := txntest.Txn{
-		Type:        protocol.AssetConfigTx,
-		Sender:      creator,
-		AssetParams: params,
-	}
-
-	latestBlockHdr, err := env.Ledger.BlockHdr(env.Ledger.Latest())
+	evaluator := env.nextBlock()
+	err := evaluator.Transaction(txn, transactions.ApplyData{})
 	require.NoError(env.t, err)
-
-	newBlock := bookkeeping.MakeBlock(latestBlockHdr)
-	newBlock.Payset = transactions.Payset{
-		{SignedTxnWithAD: txn.SignedTxnWithAD()},
-	}
-
-	err = env.Ledger.AddBlock(newBlock, agreement.Certificate{})
-	require.NoError(env.t, err)
-
-	newBlock, err = env.Ledger.Block(newBlock.Round())
-	require.NoError(env.t, err)
+	newBlock := env.endBlock(evaluator).Block()
 
 	require.Len(env.t, newBlock.Payset, 1)
-	assetID := newBlock.Payset[0].ApplyData.ConfigAsset
-	require.NotZero(env.t, assetID)
 
 	env.TxnInfo.LatestHeader = newBlock.BlockHeader
 
-	// tmp
-	assetResource, err := env.Ledger.LookupAsset(newBlock.Round(), creator, assetID)
-	require.NoError(env.t, err)
+	return newBlock.Payset[0].ApplyData
+}
 
-	require.Equal(env.t, params, *assetResource.AssetParams)
-	// end tmp
+// CreateAsset creates an asset with the given parameters and returns its ID
+func (env *Environment) CreateAsset(creator basics.Address, params basics.AssetParams) basics.AssetIndex {
+	env.t.Helper()
 
-	return assetID
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:        protocol.AssetConfigTx,
+		Sender:      creator,
+		AssetParams: params,
+	})
+
+	ad := env.Txn(txn.SignedTxn())
+	require.NotZero(env.t, ad.ConfigAsset)
+
+	return ad.ConfigAsset
 }
 
 // PrepareSimulatorTest creates an environment to test transaction simulations. The caller is
