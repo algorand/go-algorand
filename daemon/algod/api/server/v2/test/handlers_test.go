@@ -30,6 +30,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -2065,4 +2068,137 @@ func TestTimestampOffsetInDevMode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
 	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: block timestamp offset cannot be larger than max int64 value\"}\n", rec.Body.String())
+}
+
+func TestDeltasForTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	blk1 := bookkeeping.BlockHeader{Round: 1}
+	blk2 := bookkeeping.BlockHeader{Round: 2}
+	delta1 := ledgercore.StateDelta{Hdr: &blk1}
+	delta2 := ledgercore.StateDelta{Hdr: &blk2}
+	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+	groupID1, err := crypto.DigestFromString(crypto.Hash([]byte("hello")).String())
+	require.NoError(t, err)
+	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{
+		Type:   protocol.AssetTransferTx,
+		Header: transactions.Header{Group: groupID1}},
+	}}
+
+	tracer := eval.MakeTxnGroupDeltaTracer(2)
+	handlers := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: tracer,
+			},
+		},
+		Log: logging.Base(),
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	// Add blocks to tracer
+	tracer.BeforeBlock(&blk1)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil)
+	tracer.BeforeBlock(&blk2)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil)
+
+	// Test /v2/deltas/{round}/txn/group
+	jsonFormatForRound := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(1),
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+
+	var roundResponse model.TransactionGroupLedgerStateDeltaForRoundResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &roundResponse)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(roundResponse))
+	require.Equal(t, []string{txn1.ID().String()}, roundResponse[0].Ids)
+	hdr, ok := roundResponse[0].Delta["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
+
+	// Test invalid round parameter
+	c, rec = newReq(t)
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(4),
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	// Test /v2/deltas/txn/group/{id}
+	jsonFormatForTxn := model.GetLedgerStateDeltaForTransactionGroupParamsFormatJson
+	c, rec = newReq(t)
+	// Use TxID
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		txn2.Txn.ID().String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	var groupResponse model.LedgerStateDeltaForTransactionGroupResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	groupHdr, ok := groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Use Group ID
+	c, rec = newReq(t)
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	groupHdr, ok = groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Test invalid ID
+	c, rec = newReq(t)
+	badID := crypto.Hash([]byte("invalidID")).String()
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		badID,
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	// Test nil Tracer
+	nilTracerHandler := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: nil,
+			},
+		},
+		Log: logging.Base(),
+	}
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 501, rec.Code)
+
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		0,
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 501, rec.Code)
 }

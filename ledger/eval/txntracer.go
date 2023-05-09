@@ -19,15 +19,48 @@ package eval
 import (
 	"fmt"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
+// TxnGroupDeltaWithIds associates all the Ids (group and Txn) with a single state delta object
+type TxnGroupDeltaWithIds struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Ids     []string
+	Delta   StateDeltaSubset
+}
+
+// StateDeltaSubset exports a subset of ledgercore.StateDelta fields for a sparse encoding
+type StateDeltaSubset struct {
+	_struct    struct{} `codec:",omitempty,omitemptyarray"`
+	Accts      ledgercore.AccountDeltas
+	KvMods     map[string]ledgercore.KvValueDelta
+	Txids      map[transactions.Txid]ledgercore.IncludedTransactions
+	Txleases   map[ledgercore.Txlease]basics.Round
+	Creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable
+	Hdr        *bookkeeping.BlockHeader
+}
+
+func convertStateDelta(delta ledgercore.StateDelta) StateDeltaSubset {
+	return StateDeltaSubset{
+		Accts:      delta.Accts,
+		KvMods:     delta.KvMods,
+		Txids:      delta.Txids,
+		Txleases:   delta.Txleases,
+		Creatables: delta.Creatables,
+		Hdr:        delta.Hdr,
+	}
+}
+
 // TxnGroupDeltaTracer collects groups of StateDelta objects covering groups of txns
 type TxnGroupDeltaTracer struct {
+	deltasLock deadlock.RWMutex
 	// lookback is the number of rounds stored at any given time
 	lookback uint64
 	// no-op methods we don't care about
@@ -48,6 +81,8 @@ func MakeTxnGroupDeltaTracer(lookback uint64) *TxnGroupDeltaTracer {
 
 // BeforeBlock implements the EvalTracer interface for pre-block evaluation
 func (tracer *TxnGroupDeltaTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
+	tracer.deltasLock.Lock()
+	defer tracer.deltasLock.Unlock()
 	// Drop older rounds based on the lookback parameter
 	delete(tracer.txnGroupDeltas, hdr.Round-basics.Round(tracer.lookback))
 	tracer.latestRound = hdr.Round
@@ -60,6 +95,8 @@ func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *l
 	if deltas == nil {
 		return
 	}
+	tracer.deltasLock.Lock()
+	defer tracer.deltasLock.Unlock()
 	txnDeltaMap := tracer.txnGroupDeltas[tracer.latestRound]
 	for _, txn := range ep.TxnGroup {
 		// Add Group ID
@@ -72,29 +109,38 @@ func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *l
 }
 
 // GetDeltasForRound supplies all StateDelta objects for txn groups in a given rnd
-func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]ledgercore.StateDelta, error) {
+func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]TxnGroupDeltaWithIds, error) {
+	tracer.deltasLock.RLock()
+	defer tracer.deltasLock.RUnlock()
 	rndEntries, exists := tracer.txnGroupDeltas[rnd]
 	if !exists {
 		return nil, fmt.Errorf("round %d not found in txnGroupDeltaTracer", rnd)
 	}
-	// Dedupe entries in our map
-	var deltas = map[*ledgercore.StateDelta]bool{}
-	var entries []ledgercore.StateDelta
-	for _, delta := range rndEntries {
+	// Dedupe entries in our map and collect Ids
+	var deltas = map[*ledgercore.StateDelta][]string{}
+	for id, delta := range rndEntries {
 		if _, present := deltas[delta]; !present {
-			deltas[delta] = true
-			entries = append(entries, *delta)
+			deltas[delta] = append(deltas[delta], id.String())
 		}
 	}
-	return entries, nil
+	var deltasForRound []TxnGroupDeltaWithIds
+	for delta, ids := range deltas {
+		deltasForRound = append(deltasForRound, TxnGroupDeltaWithIds{
+			Ids:   ids,
+			Delta: convertStateDelta(*delta),
+		})
+	}
+	return deltasForRound, nil
 }
 
 // GetDeltaForID retruns the StateDelta associated with the group of transaction executed for the supplied ID (txn or group)
-func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (ledgercore.StateDelta, error) {
+func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (StateDeltaSubset, error) {
+	tracer.deltasLock.RLock()
+	defer tracer.deltasLock.RUnlock()
 	for _, deltasForRound := range tracer.txnGroupDeltas {
 		if delta, exists := deltasForRound[id]; exists {
-			return *delta, nil
+			return convertStateDelta(*delta), nil
 		}
 	}
-	return ledgercore.StateDelta{}, fmt.Errorf("unable to find delta for id: %s", id)
+	return StateDeltaSubset{}, fmt.Errorf("unable to find delta for id: %s", id)
 }
