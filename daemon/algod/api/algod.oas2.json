@@ -1534,6 +1534,146 @@
         }
       }
     },
+    "/v2/deltas/{round}/txn/group": {
+      "get": {
+        "description": "Get ledger deltas for transaction groups in a given round.",
+        "tags": [
+          "public",
+          "data",
+          "experimental"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get LedgerStateDelta objects for all transaction groups in a given round",
+        "operationId": "GetTransactionGroupLedgerStateDeltasForRound",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionGroupLedgerStateDeltaForRoundResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find deltas for round",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/deltas/txn/group/{id}": {
+      "get": {
+        "description": "Get a ledger delta for a given transaction group.",
+        "tags": [
+          "public",
+          "data",
+          "experimental"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a LedgerStateDelta object for a given transaction group",
+        "operationId": "GetLedgerStateDeltaForTransactionGroup",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]+",
+            "type": "string",
+            "description": "A transaction ID, or transaction group ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/LedgerStateDeltaForTransactionGroupResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find a delta for transaction ID or group ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/stateproofs/{round}": {
       "get": {
         "tags": [
@@ -2519,6 +2659,25 @@
       "description": "Ledger StateDelta object",
       "type": "object",
       "x-algorand-format": "StateDelta"
+    },
+    "LedgerStateDeltaForTransactionGroup": {
+      "description": "Contains a ledger delta for a single transaction group",
+      "type": "object",
+      "required": [
+        "delta",
+        "ids"
+      ],
+      "properties": {
+        "delta": {
+          "$ref": "#/definitions/LedgerStateDelta"
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "Account": {
       "description": "Account information at a given round.\n\nDefinition:\ndata/basics/userBalance.go : AccountData\n",
@@ -3951,6 +4110,21 @@
             "description": "The minimum sync round for the ledger.",
             "type": "integer"
           }
+        }
+      }
+    },
+    "LedgerStateDeltaForTransactionGroupResponse": {
+      "description": "Response containing a ledger state delta for a single transaction group.",
+      "schema": {
+        "$ref": "#/definitions/LedgerStateDelta"
+      }
+    },
+    "TransactionGroupLedgerStateDeltaForRoundResponse": {
+      "description": "Response containing all ledger state deltas for transaction groups, with their associated Ids, in a single round.",
+      "schema": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/LedgerStateDeltaForTransactionGroup"
         }
       }
     },

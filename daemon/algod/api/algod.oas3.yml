@@ -535,6 +535,16 @@
         },
         "description": "Response containing the ledger's minimum sync round"
       },
+      "LedgerStateDeltaForTransactionGroupResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/LedgerStateDelta"
+            }
+          }
+        },
+        "description": "Response containing a ledger state delta for a single transaction group."
+      },
       "LedgerStateDeltaResponse": {
         "content": {
           "application/json": {
@@ -846,6 +856,19 @@
           }
         },
         "description": "Supply represents the current supply of MicroAlgos in the system."
+      },
+      "TransactionGroupLedgerStateDeltaForRoundResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "items": {
+                "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+              },
+              "type": "array"
+            }
+          }
+        },
+        "description": "Response containing all ledger state deltas for transaction groups, with their associated Ids, in a single round."
       },
       "TransactionParametersResponse": {
         "content": {
@@ -1708,6 +1731,25 @@
         "description": "Ledger StateDelta object",
         "type": "object",
         "x-algorand-format": "StateDelta"
+      },
+      "LedgerStateDeltaForTransactionGroup": {
+        "description": "Contains a ledger delta for a single transaction group",
+        "properties": {
+          "delta": {
+            "$ref": "#/components/schemas/LedgerStateDelta"
+          },
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "delta",
+          "ids"
+        ],
+        "type": "object"
       },
       "LightBlockHeaderProof": {
         "description": "Proof of membership and position of a light block header.",
@@ -3882,6 +3924,138 @@
         ]
       }
     },
+    "/v2/deltas/txn/group/{id}": {
+      "get": {
+        "description": "Get a ledger delta for a given transaction group.",
+        "operationId": "GetLedgerStateDeltaForTransactionGroup",
+        "parameters": [
+          {
+            "description": "A transaction ID, or transaction group ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]+",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerStateDelta"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerStateDelta"
+                }
+              }
+            },
+            "description": "Response containing a ledger state delta for a single transaction group."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not find a delta for transaction ID or group ID"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Implemented"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get a LedgerStateDelta object for a given transaction group",
+        "tags": [
+          "public",
+          "data",
+          "experimental"
+        ]
+      }
+    },
     "/v2/deltas/{round}": {
       "get": {
         "description": "Get ledger deltas for a round.",
@@ -4007,6 +4181,144 @@
           }
         },
         "summary": "Get a LedgerStateDelta object for a given round",
+        "tags": [
+          "public",
+          "data",
+          "experimental"
+        ]
+      }
+    },
+    "/v2/deltas/{round}/txn/group": {
+      "get": {
+        "description": "Get ledger deltas for transaction groups in a given round.",
+        "operationId": "GetTransactionGroupLedgerStateDeltasForRound",
+        "parameters": [
+          {
+            "description": "The round for which the deltas are desired.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  },
+                  "type": "array"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Response containing all ledger state deltas for transaction groups, with their associated Ids, in a single round."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not find deltas for round"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Implemented"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get LedgerStateDelta objects for all transaction groups in a given round",
         "tags": [
           "public",
           "data",

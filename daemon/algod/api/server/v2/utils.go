@@ -62,6 +62,10 @@ func notFound(ctx echo.Context, internal error, external string, log logging.Log
 	return returnError(ctx, http.StatusNotFound, internal, external, log)
 }
 
+func notImplemented(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusNotImplemented, internal, external, log)
+}
+
 func addrOrNil(addr basics.Address) *string {
 	if addr.IsZero() {
 		return nil
