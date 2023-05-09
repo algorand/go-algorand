@@ -38,9 +38,7 @@ func addBlockToAccountsUpdate(t *testing.T, blk bookkeeping.Block, ml *mockLedge
 	_, totals, err := ml.trackers.accts.LatestTotals()
 	require.NoError(t, err)
 	delta.Totals = totals
-	err = ml.addMockBlock(blockEntry{block: blk}, delta)
-	require.NoError(t, err)
-	ml.trackers.newBlock(blk, delta)
+	ml.addBlock(blockEntry{block: blk}, delta)
 }
 
 func addRandomBlock(t *testing.T, ml *mockLedgerForTracker) {
