@@ -166,8 +166,10 @@ int 1`,
 	// Cannot use evalBlock directly because the tracer is called before many block details are finalized
 	expectedBlockHeader := bookkeeping.MakeBlock(env.TxnInfo.LatestHeader).BlockHeader
 	expectedBlockHeader.TimeStamp = evalBlock.TimeStamp
-	expectedBlockHeader.RewardsRate = evalBlock.RewardsRate
+	expectedBlockHeader.RewardsLevel = evalBlock.RewardsLevel
 	expectedBlockHeader.RewardsResidue = evalBlock.RewardsResidue
+	expectedBlockHeader.RewardsRate = evalBlock.RewardsRate
+	expectedBlockHeader.RewardsRecalculationRound = evalBlock.RewardsRecalculationRound
 
 	expectedDelta := ledgercore.StateDelta{
 		Accts: ledgercore.AccountDeltas{
