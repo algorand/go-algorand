@@ -3877,6 +3877,10 @@
     "SimulationTransactionExecTrace": {
       "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
       "type": "object",
+      "required": [
+        "trace-type",
+        "trace"
+      ],
       "properties": {
         "trace-type": {
           "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",

@@ -743,10 +743,10 @@ type SimulationTransactionExecTrace struct {
 	StepToInnerMap *[]SimulationPcToInnerIndex `json:"step-to-inner-map,omitempty"`
 
 	// Trace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-	Trace *[]SimulationOpcodeTraceUnit `json:"trace,omitempty"`
+	Trace []SimulationOpcodeTraceUnit `json:"trace"`
 
 	// TraceType Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-	TraceType *SimulationTransactionExecTraceTraceType `json:"trace-type,omitempty"`
+	TraceType SimulationTransactionExecTraceTraceType `json:"trace-type"`
 }
 
 // SimulationTransactionExecTraceTraceType Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.

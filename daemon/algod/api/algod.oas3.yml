@@ -2097,6 +2097,10 @@
             "type": "string"
           }
         },
+        "required": [
+          "trace",
+          "trace-type"
+        ],
         "type": "object"
       },
       "StateDelta": {
