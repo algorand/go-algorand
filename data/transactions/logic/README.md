@@ -53,10 +53,10 @@ assembly time to do type checking and to provide more informative error messages
 | Name | Bound | AVM Type |
 | ---- | ---- | -------- |
 | uint64 | x <= 18446744073709551615 | uint64 |
+| stateKey | len(x) <= 64 | []byte |
 | none |  | none |
-| name | 1 <= len(x) <= 64 | []byte |
 | method | len(x) == 4 | []byte |
-| key | len(x) <= 64 | []byte |
+| boxName | 1 <= len(x) <= 64 | []byte |
 | bool | x <= 1 | uint64 |
 | bigint | len(x) <= 64 | []byte |
 | any |  | any |

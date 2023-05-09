@@ -697,10 +697,10 @@ var (
 	StackBigInt = NewStackType(avmBytes, bound(0, maxByteMathSize), "bigint")
 	// StackMethodSelector represents a bytestring that should be treated like a method selector
 	StackMethodSelector = NewStackType(avmBytes, static(4), "method")
-	// StackStorageKey represents a bytestring that can be used as a key to some storage (global/local/box)
-	StackStorageKey = NewStackType(avmBytes, bound(0, 64), "key")
+	// StackStateKey represents a bytestring that can be used as a key to some storage (global/local/box)
+	StackStateKey = NewStackType(avmBytes, bound(0, 64), "stateKey")
 	// StackBoxName represents a bytestring that can be used as a key to a box
-	StackBoxName = NewStackType(avmBytes, bound(1, 64), "name")
+	StackBoxName = NewStackType(avmBytes, bound(1, 64), "boxName")
 
 	// StackZeroUint64 is a StackUint64 with a minimum value of 0 and a maximum value of 0
 	StackZeroUint64 = NewStackType(avmUint64, bound(0, 0), "0")
@@ -720,7 +720,7 @@ var (
 		'T': StackBoolean,
 		'H': StackBytes32,
 		'M': StackMethodSelector,
-		'K': StackStorageKey,
+		'K': StackStateKey,
 		'N': StackBoxName,
 	}
 )

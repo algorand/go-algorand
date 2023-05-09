@@ -12,6 +12,15 @@
       "AVMType": "uint64"
     },
     {
+      "Name": "stateKey",
+      "Abbreviation": "K",
+      "Bound": [
+        0,
+        64
+      ],
+      "AVMType": "[]byte"
+    },
+    {
       "Name": "none",
       "Abbreviation": "x",
       "Bound": [
@@ -19,15 +28,6 @@
         0
       ],
       "AVMType": "none"
-    },
-    {
-      "Name": "name",
-      "Abbreviation": "N",
-      "Bound": [
-        1,
-        64
-      ],
-      "AVMType": "[]byte"
     },
     {
       "Name": "method",
@@ -39,10 +39,10 @@
       "AVMType": "[]byte"
     },
     {
-      "Name": "key",
-      "Abbreviation": "K",
+      "Name": "boxName",
+      "Abbreviation": "N",
       "Bound": [
-        0,
+        1,
         64
       ],
       "AVMType": "[]byte"
@@ -4055,7 +4055,7 @@
       "Opcode": 185,
       "Name": "box_create",
       "Args": [
-        "name",
+        "boxName",
         "uint64"
       ],
       "Returns": [
@@ -4073,7 +4073,7 @@
       "Opcode": 186,
       "Name": "box_extract",
       "Args": [
-        "name",
+        "boxName",
         "uint64",
         "uint64"
       ],
@@ -4091,7 +4091,7 @@
       "Opcode": 187,
       "Name": "box_replace",
       "Args": [
-        "name",
+        "boxName",
         "uint64",
         "[]byte"
       ],
@@ -4106,7 +4106,7 @@
       "Opcode": 188,
       "Name": "box_del",
       "Args": [
-        "name"
+        "boxName"
       ],
       "Returns": [
         "bool"
@@ -4122,7 +4122,7 @@
       "Opcode": 189,
       "Name": "box_len",
       "Args": [
-        "name"
+        "boxName"
       ],
       "Returns": [
         "uint64",
@@ -4139,7 +4139,7 @@
       "Opcode": 190,
       "Name": "box_get",
       "Args": [
-        "name"
+        "boxName"
       ],
       "Returns": [
         "[]byte",
@@ -4157,7 +4157,7 @@
       "Opcode": 191,
       "Name": "box_put",
       "Args": [
-        "name",
+        "boxName",
         "[]byte"
       ],
       "Size": 1,
