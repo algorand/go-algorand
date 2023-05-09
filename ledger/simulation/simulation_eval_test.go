@@ -917,6 +917,96 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 	})
 }
 
+func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction group has a cost of 4 + 1404
+	expensiveAppSource := `#pragma version 6
+	txn ApplicationID      // [appId]
+	bz end                 // []
+` + strings.Repeat(`int 1; pop;`, 700) + `end:
+	int 1`
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+		// App create with cost 4
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   expensiveAppSource,
+			ClearStateProgram: `#pragma version 6; int 1`,
+		})
+		// Expensive 700 repetition of int 1 and pop total cost 1404
+		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &expensiveTxn)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+		extraOpcodeBudget := uint64(100)
+
+		commonLeadingSteps := []simulation.OpcodeTraceUnit{
+			{PC: 1}, {PC: 4}, {PC: 6},
+		}
+		firstTrace := append(commonLeadingSteps, simulation.OpcodeTraceUnit{PC: 1409})
+		secondTrace := commonLeadingSteps
+		for i := 9; i <= 1409; i++ {
+			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: uint64(i)})
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedExpensiveTxn},
+				},
+				ExtraOpcodeBudget: extraOpcodeBudget,
+				ExecTraceConfig:   simulation.ReturnPC,
+			},
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: txnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									TraceType: simulation.AppCallApprovalTransaction,
+									Trace:     firstTrace,
+								},
+							},
+							{
+								AppBudgetConsumed: 1404,
+								Trace: &simulation.TransactionTrace{
+									TraceType: simulation.AppCallApprovalTransaction,
+									Trace:     secondTrace,
+								},
+							},
+						},
+						AppBudgetAdded:    1500,
+						AppBudgetConsumed: 1408,
+					},
+				},
+				EvalOverrides:   simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
+				ExecTraceConfig: simulation.ReturnPC,
+			},
+		}
+	})
+}
+
 func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
