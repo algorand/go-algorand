@@ -38,6 +38,10 @@ const (
 	// noPeersAvailableSleepInterval is the sleep interval that the node would wait if no peers are available to download the next block from.
 	// this delay is intended to ensure to give the network package some time to download the list of relays.
 	noPeersAvailableSleepInterval = 50 * time.Millisecond
+
+	// checkLedgerDownloadRetries is the number of times the catchpoint service will attempt to HEAD request the
+	// ledger from peers when `Start`ing catchpoint catchup
+	checkLedgerDownloadRetries = 2
 )
 
 // CatchpointCatchupNodeServices defines the external node support needed
@@ -156,11 +160,16 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 }
 
 // Start starts the catchpoint catchup service ( continue in the process )
-func (cs *CatchpointCatchupService) Start(ctx context.Context) {
+func (cs *CatchpointCatchupService) Start(ctx context.Context) error {
+	err := cs.checkLedgerDownload()
+	if err != nil {
+		return err
+	}
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(ctx)
 	cs.abortCtx, cs.abortCtxFunc = context.WithCancel(context.Background())
 	cs.running.Add(1)
 	go cs.run()
+	return nil
 }
 
 // Abort aborts the catchpoint catchup process
@@ -802,4 +811,26 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
 			})
 	}
+}
+
+// checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
+// before actually starting the catchup process.
+// The error returned is either from an unsuccessful request or a successful request that did not return a 200.
+func (cs *CatchpointCatchupService) checkLedgerDownload() error {
+	round, _, err := ledgercore.ParseCatchpointLabel(cs.stats.CatchpointLabel)
+	if err != nil {
+		return cs.abort(fmt.Errorf("failed to parse catchpoint label : %v", err))
+	}
+	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
+	for i := 0; i < checkLedgerDownloadRetries; i++ {
+		psp, err := cs.blocksDownloadPeerSelector.getNextPeer()
+		if err != nil {
+			return err
+		}
+		err = ledgerFetcher.headLedger(cs.ctx, psp, round)
+		if err == nil {
+			return err
+		}
+	}
+	return err
 }
