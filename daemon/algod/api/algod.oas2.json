@@ -3849,6 +3849,9 @@
     "SimulationOpcodeTraceUnit": {
       "description": "The set of trace information and effect from evaluating a single opcode.",
       "type": "object",
+      "required": [
+        "pc"
+      ],
       "properties": {
         "pc": {
           "description": "The program counter of the current opcode being evaluated.",

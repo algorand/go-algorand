@@ -360,11 +360,59 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
+func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTransactionExecTrace {
+	if txnTrace == nil {
+		return nil
+	}
+
+	var innerTraces []model.SimulationTransactionExecTrace
+	for i := range txnTrace.InnerTraces {
+		innerTrace := *convertTxnTrace(&txnTrace.InnerTraces[i])
+		innerTraces = append(innerTraces, innerTrace)
+	}
+	var innerTracesPtr *[]model.SimulationTransactionExecTrace
+	if len(innerTraces) > 0 {
+		innerTracesPtr = &innerTraces
+	}
+
+	var opcodeTrace []model.SimulationOpcodeTraceUnit
+	for i := range txnTrace.Trace {
+		opcodeTrace = append(opcodeTrace, model.SimulationOpcodeTraceUnit{Pc: txnTrace.Trace[i].PC})
+	}
+
+	var pcToInner []model.SimulationPcToInnerIndex
+	for k, v := range txnTrace.StepToInnerMap {
+		pcToInner = append(pcToInner, model.SimulationPcToInnerIndex{Pc: k, InnerIndex: uint64(v)})
+	}
+	var pcToInnerPtr *[]model.SimulationPcToInnerIndex
+	if len(pcToInner) > 0 {
+		pcToInnerPtr = &pcToInner
+	}
+
+	var traceType model.SimulationTransactionExecTraceTraceType
+	switch txnTrace.TraceType {
+	case simulation.AppCallApprovalTransaction:
+		traceType = model.SimulationTransactionExecTraceTraceTypeApprovalProgram
+	case simulation.AppCallClearStateTransaction:
+		traceType = model.SimulationTransactionExecTraceTraceTypeClearStateProgram
+	case simulation.LogicSigTransaction:
+		traceType = model.SimulationTransactionExecTraceTraceTypeLogicSignature
+	}
+
+	return &model.SimulationTransactionExecTrace{
+		TraceType:      traceType,
+		Trace:          opcodeTrace,
+		InnerTrace:     innerTracesPtr,
+		StepToInnerMap: pcToInnerPtr,
+	}
+}
+
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
 		Txn:                    ConvertInnerTxn(&txnResult.Txn),
 		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed: numOrNil(txnResult.LogicSigBudgetConsumed),
+		TransactionTrace:       convertTxnTrace(txnResult.Trace),
 	}
 }
 

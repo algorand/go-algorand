@@ -2043,6 +2043,9 @@
             "type": "integer"
           }
         },
+        "required": [
+          "pc"
+        ],
         "type": "object"
       },
       "SimulationPcToInnerIndex": {

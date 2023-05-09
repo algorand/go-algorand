@@ -722,7 +722,7 @@ type SimulationEvalOverrides struct {
 // SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
 type SimulationOpcodeTraceUnit struct {
 	// Pc The program counter of the current opcode being evaluated.
-	Pc *uint64 `json:"pc,omitempty"`
+	Pc uint64 `json:"pc"`
 }
 
 // SimulationPcToInnerIndex The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn.
