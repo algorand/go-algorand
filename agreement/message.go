@@ -23,7 +23,6 @@ import (
 
 // A message represents an internal message which is passed between components
 // of the agreement service.
-//msgp:maxsize ignore message
 type message struct {
 	_struct struct{} `codec:","`
 

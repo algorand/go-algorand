@@ -221,19 +221,11 @@ func (z *AccountApplicationModel) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *AccountApplicationModel) MaxSize() (s int) {
+func AccountApplicationModelMaxSize() (s int) {
 	s = 1 + 16
-	if (*z).AppLocalState == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).AppLocalState.MaxSize()
-	}
+	s += basics.AppLocalStateMaxSize()
 	s += 11
-	if (*z).AppParams == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).AppParams.MaxSize()
-	}
+	s += basics.AppParamsMaxSize()
 	return
 }
 
@@ -430,18 +422,10 @@ func (z *AccountAssetModel) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *AccountAssetModel) MaxSize() (s int) {
+func AccountAssetModelMaxSize() (s int) {
 	s = 1 + 13
-	if (*z).AssetParams == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).AssetParams.MaxSize()
-	}
+	s += basics.AssetParamsMaxSize()
 	s += 14
-	if (*z).AssetHolding == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).AssetHolding.MaxSize()
-	}
+	s += basics.AssetHoldingMaxSize()
 	return
 }

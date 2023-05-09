@@ -258,7 +258,7 @@ func (z *Message) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Message) MaxSize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).BlockHeadersCommitment) + 2 + msgp.BytesPrefixSize + len((*z).VotersCommitment) + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+func MessageMaxSize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + crypto.Sha256Size + 2 + msgp.BytesPrefixSize + crypto.SumhashDigestSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
 	return
 }

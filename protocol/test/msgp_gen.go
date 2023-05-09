@@ -88,7 +88,7 @@ func (z testSlice) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z testSlice) MaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + (16 * (msgp.Uint64Size))
+func TestSliceMaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + ((16) * (msgp.Uint64Size))
 	return
 }

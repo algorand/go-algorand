@@ -4,6 +4,9 @@ package committee
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -243,8 +246,8 @@ func (z *Credential) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Credential) MaxSize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 2 + (*z).VrfOut.MaxSize() + 3 + msgp.BoolSize + 3 + (*z).Hashable.MaxSize() + 3 + (*z).UnauthenticatedCredential.Proof.MaxSize()
+func CredentialMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 2 + crypto.DigestMaxSize() + 3 + msgp.BoolSize + 3 + HashableCredentialMaxSize() + 3 + crypto.VrfProofMaxSize()
 	return
 }
 
@@ -288,8 +291,8 @@ func (z *Seed) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Seed) MaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+func SeedMaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
 	return
 }
 
@@ -400,8 +403,8 @@ func (z *UnauthenticatedCredential) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *UnauthenticatedCredential) MaxSize() (s int) {
-	s = 1 + 3 + (*z).Proof.MaxSize()
+func UnauthenticatedCredentialMaxSize() (s int) {
+	s = 1 + 3 + crypto.VrfProofMaxSize()
 	return
 }
 
@@ -558,7 +561,7 @@ func (z *hashableCredential) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *hashableCredential) MaxSize() (s int) {
-	s = 1 + 2 + (*z).RawOut.MaxSize() + 2 + (*z).Member.MaxSize() + 2 + msgp.Uint64Size
+func HashableCredentialMaxSize() (s int) {
+	s = 1 + 2 + crypto.VrfOutputMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size
 	return
 }

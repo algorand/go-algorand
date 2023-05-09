@@ -4,6 +4,8 @@ package network
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
 )
 
 // The following msgp objects are implemented in this file:
@@ -127,8 +129,8 @@ func (z disconnectReason) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z disconnectReason) MaxSize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
+func DisconnectReasonMaxSize() (s int) {
+	panic("Unable to determine max size: String type string(z) is unbounded")
 	return
 }
 
@@ -305,8 +307,8 @@ func (z *identityChallenge) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *identityChallenge) MaxSize() (s int) {
-	s = 1 + 3 + (*z).Key.MaxSize() + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + msgp.BytesPrefixSize + len((*z).PublicAddress)
+func IdentityChallengeMaxSize() (s int) {
+	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 2 + msgp.BytesPrefixSize + maxAddressLen
 	return
 }
 
@@ -463,8 +465,8 @@ func (z *identityChallengeResponse) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *identityChallengeResponse) MaxSize() (s int) {
-	s = 1 + 3 + (*z).Key.MaxSize() + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+func IdentityChallengeResponseMaxSize() (s int) {
+	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
 	return
 }
 
@@ -598,8 +600,8 @@ func (z *identityChallengeResponseSigned) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *identityChallengeResponseSigned) MaxSize() (s int) {
-	s = 1 + 4 + (*z).Msg.MaxSize() + 4 + (*z).Signature.MaxSize()
+func IdentityChallengeResponseSignedMaxSize() (s int) {
+	s = 1 + 4 + IdentityChallengeResponseMaxSize() + 4 + crypto.SignatureMaxSize()
 	return
 }
 
@@ -733,8 +735,8 @@ func (z *identityChallengeSigned) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *identityChallengeSigned) MaxSize() (s int) {
-	s = 1 + 3 + (*z).Msg.MaxSize() + 4 + (*z).Signature.MaxSize()
+func IdentityChallengeSignedMaxSize() (s int) {
+	s = 1 + 3 + IdentityChallengeMaxSize() + 4 + crypto.SignatureMaxSize()
 	return
 }
 
@@ -778,8 +780,8 @@ func (z *identityChallengeValue) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *identityChallengeValue) MaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+func IdentityChallengeValueMaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
 	return
 }
 
@@ -890,8 +892,8 @@ func (z *identityVerificationMessage) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *identityVerificationMessage) MaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+func IdentityVerificationMessageMaxSize() (s int) {
+	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
 	return
 }
 
@@ -1138,7 +1140,7 @@ func (z *identityVerificationMessageSigned) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *identityVerificationMessageSigned) MaxSize() (s int) {
-	s = 1 + 4 + 1 + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 4 + (*z).Signature.MaxSize()
+func IdentityVerificationMessageSignedMaxSize() (s int) {
+	s = 1 + 4 + 1 + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 4 + crypto.SignatureMaxSize()
 	return
 }

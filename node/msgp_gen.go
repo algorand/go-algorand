@@ -4,6 +4,9 @@ package node
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -133,8 +136,9 @@ func (z *netPrioResponse) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *netPrioResponse) MaxSize() (s int) {
-	s = 1 + 6 + msgp.StringPrefixSize + len((*z).Nonce)
+func NetPrioResponseMaxSize() (s int) {
+	s = 1 + 6
+	panic("Unable to determine max size: String type (*z).Nonce is unbounded")
 	return
 }
 
@@ -427,7 +431,9 @@ func (z *netPrioResponseSigned) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *netPrioResponseSigned) MaxSize() (s int) {
-	s = 1 + 9 + 1 + 6 + msgp.StringPrefixSize + len((*z).Response.Nonce) + 6 + (*z).Round.MaxSize() + 7 + (*z).Sender.MaxSize() + 4 + (*z).Sig.MaxSize()
+func NetPrioResponseSignedMaxSize() (s int) {
+	s = 1 + 9 + 1 + 6
+	panic("Unable to determine max size: String type (*z).Response.Nonce is unbounded")
+	s += 6 + basics.RoundMaxSize() + 7 + basics.AddressMaxSize() + 4 + crypto.OneTimeSignatureMaxSize()
 	return
 }

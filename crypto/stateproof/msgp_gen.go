@@ -7,7 +7,9 @@ import (
 
 	"github.com/algorand/msgp/msgp"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -107,8 +109,8 @@ func (z *MessageHash) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *MessageHash) MaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + (32 * (msgp.ByteSize))
+func MessageHashMaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
 	return
 }
 
@@ -442,17 +444,9 @@ func (z *Prover) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Prover) MaxSize() (s int) {
-	s = 1 + 5 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize
-	for zb0002 := range (*z).ProverPersistedFields.Participants {
-		s += (*z).ProverPersistedFields.Participants[zb0002].MaxSize()
-	}
-	s += 9
-	if (*z).ProverPersistedFields.Parttree == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).ProverPersistedFields.Parttree.MaxSize()
-	}
+func ProverMaxSize() (s int) {
+	s = 1 + 5 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize + ((VotersAllocBound) * (basics.ParticipantMaxSize())) + 9
+	s += merklearray.TreeMaxSize()
 	s += 6 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
 }
@@ -787,17 +781,9 @@ func (z *ProverPersistedFields) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *ProverPersistedFields) MaxSize() (s int) {
-	s = 1 + 5 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize
-	for zb0002 := range (*z).Participants {
-		s += (*z).Participants[zb0002].MaxSize()
-	}
-	s += 9
-	if (*z).Parttree == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).Parttree.MaxSize()
-	}
+func ProverPersistedFieldsMaxSize() (s int) {
+	s = 1 + 5 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize + ((VotersAllocBound) * (basics.ParticipantMaxSize())) + 9
+	s += merklearray.TreeMaxSize()
 	s += 6 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
 }
@@ -1082,8 +1068,8 @@ func (z *Reveal) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Reveal) MaxSize() (s int) {
-	s = 1 + 2 + 1 + 2 + (*z).SigSlot.Sig.MaxSize() + 2 + msgp.Uint64Size + 2 + (*z).Part.MaxSize()
+func RevealMaxSize() (s int) {
+	s = 1 + 2 + 1 + 2 + merklesignature.SignatureMaxSize() + 2 + msgp.Uint64Size + 2 + basics.ParticipantMaxSize()
 	return
 }
 
@@ -1460,16 +1446,16 @@ func (z *StateProof) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *StateProof) MaxSize() (s int) {
-	s = 1 + 2 + (*z).SigCommit.MaxSize() + 2 + msgp.Uint64Size + 2 + (*z).SigProofs.MaxSize() + 2 + (*z).PartProofs.MaxSize() + 2 + msgp.ByteSize + 2 + msgp.MapHeaderSize
+func StateProofMaxSize() (s int) {
+	s = 1 + 2 + crypto.GenericDigestMaxSize() + 2 + msgp.Uint64Size + 2 + merklearray.ProofMaxSize() + 2 + merklearray.ProofMaxSize() + 2 + msgp.ByteSize + 2 + msgp.MapHeaderSize
 	if (*z).Reveals != nil {
 		for zb0001, zb0002 := range (*z).Reveals {
 			_ = zb0001
 			_ = zb0002
-			s += 0 + msgp.Uint64Size + zb0002.MaxSize()
+			s += 0 + msgp.Uint64Size + RevealMaxSize()
 		}
 	}
-	s += 3 + msgp.ArrayHeaderSize + (MaxReveals * (msgp.Uint64Size))
+	s += 3 + msgp.ArrayHeaderSize + ((MaxReveals) * (msgp.Uint64Size))
 	return
 }
 
@@ -1603,7 +1589,7 @@ func (z *sigslotCommit) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *sigslotCommit) MaxSize() (s int) {
-	s = 1 + 2 + (*z).Sig.MaxSize() + 2 + msgp.Uint64Size
+func SigslotCommitMaxSize() (s int) {
+	s = 1 + 2 + merklesignature.SignatureMaxSize() + 2 + msgp.Uint64Size
 	return
 }

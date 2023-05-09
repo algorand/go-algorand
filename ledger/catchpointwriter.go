@@ -81,13 +81,11 @@ type accountsBatchIter interface {
 	Close()
 }
 
-//msgp:maxsize ignore catchpointFileBalancesChunkV5
 type catchpointFileBalancesChunkV5 struct {
 	_struct  struct{}                  `codec:",omitempty,omitemptyarray"`
 	Balances []encoded.BalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-//msgp:maxsize ignore catchpointFileChunkV6
 type catchpointFileChunkV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 

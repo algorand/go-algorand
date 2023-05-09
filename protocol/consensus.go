@@ -22,6 +22,7 @@ import (
 
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
+//msgp:allocbound ConsensusVersion 100
 type ConsensusVersion string
 
 // DEPRECATEDConsensusV0 is a baseline version of the Algorand consensus protocol.

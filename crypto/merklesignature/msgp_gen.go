@@ -6,6 +6,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 )
 
 // The following msgp objects are implemented in this file:
@@ -104,8 +105,8 @@ func (z *Commitment) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Commitment) MaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + (MerkleSignatureSchemeRootSize * (msgp.ByteSize))
+func CommitmentMaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (MerkleSignatureSchemeRootSize * (msgp.ByteSize)))
 	return
 }
 
@@ -270,13 +271,9 @@ func (z *KeyRoundPair) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *KeyRoundPair) MaxSize() (s int) {
+func KeyRoundPairMaxSize() (s int) {
 	s = 1 + 4 + msgp.Uint64Size + 4
-	if (*z).Key == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).Key.MaxSize()
-	}
+	s += crypto.FalconSignerMaxSize()
 	return
 }
 
@@ -433,8 +430,8 @@ func (z *Secrets) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Secrets) MaxSize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + (*z).SignerContext.Tree.MaxSize()
+func SecretsMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + merklearray.TreeMaxSize()
 	return
 }
 
@@ -614,8 +611,8 @@ func (z *Signature) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Signature) MaxSize() (s int) {
-	s = 1 + 4 + (*z).Signature.MaxSize() + 4 + msgp.Uint64Size + 4 + (*z).Proof.MaxSize() + 5 + (*z).VerifyingKey.MaxSize()
+func SignatureMaxSize() (s int) {
+	s = 1 + 4 + crypto.FalconSignatureMaxSize() + 4 + msgp.Uint64Size + 4 + merklearray.SingleLeafProofMaxSize() + 5 + crypto.FalconVerifierMaxSize()
 	return
 }
 
@@ -772,8 +769,8 @@ func (z *SignerContext) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *SignerContext) MaxSize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + (*z).Tree.MaxSize()
+func SignerContextMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + merklearray.TreeMaxSize()
 	return
 }
 
@@ -907,7 +904,7 @@ func (z *Verifier) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Verifier) MaxSize() (s int) {
-	s = 1 + 4 + msgp.ArrayHeaderSize + (MerkleSignatureSchemeRootSize * (msgp.ByteSize)) + 3 + msgp.Uint64Size
+func VerifierMaxSize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (MerkleSignatureSchemeRootSize * (msgp.ByteSize))) + 3 + msgp.Uint64Size
 	return
 }

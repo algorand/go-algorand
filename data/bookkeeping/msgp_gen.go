@@ -10,6 +10,8 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -928,20 +930,18 @@ func (z *Block) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Block) MaxSize() (s int) {
-	s = 3 + 4 + (*z).BlockHeader.Round.MaxSize() + 5 + (*z).BlockHeader.Branch.MaxSize() + 5 + (*z).BlockHeader.Seed.MaxSize() + 4 + (*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.MaxSize() + 7 + (*z).BlockHeader.TxnCommitments.Sha256Commitment.MaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).BlockHeader.GenesisID) + 3 + (*z).BlockHeader.GenesisHash.MaxSize() + 5 + (*z).BlockHeader.RewardsState.FeeSink.MaxSize() + 4 + (*z).BlockHeader.RewardsState.RewardsPool.MaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).BlockHeader.RewardsState.RewardsRecalculationRound.MaxSize() + 6 + (*z).BlockHeader.UpgradeState.CurrentProtocol.MaxSize() + 10 + (*z).BlockHeader.UpgradeState.NextProtocol.MaxSize() + 8 + msgp.Uint64Size + 11 + (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MaxSize() + 11 + (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MaxSize() + 12 + (*z).BlockHeader.UpgradeVote.UpgradePropose.MaxSize() + 13 + (*z).BlockHeader.UpgradeVote.UpgradeDelay.MaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
+func BlockMaxSize() (s int) {
+	s = 3 + 4 + basics.RoundMaxSize() + 5 + BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4
+	panic("Unable to determine max size: String type (*z).BlockHeader.GenesisID is unbounded")
+	s += 3 + crypto.DigestMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
 	if (*z).BlockHeader.StateProofTracking != nil {
 		for zb0001, zb0002 := range (*z).BlockHeader.StateProofTracking {
 			_ = zb0001
 			_ = zb0002
-			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+			s += 0 + protocol.StateProofTypeMaxSize() + StateProofTrackingDataMaxSize()
 		}
 	}
-	s += 11 + msgp.ArrayHeaderSize
-	for zb0003 := range (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
-		s += (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].MaxSize()
-	}
-	s += 5 + (*z).Payset.MaxSize()
+	s += 11 + msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize())) + 5 + transactions.PaysetMaxSize()
 	return
 }
 
@@ -974,7 +974,7 @@ func (z *BlockHash) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *BlockHash) MaxSize() int {
+func BlockHashMaxSize() int {
 	return ((*(crypto.Digest))(z)).MaxSize()
 }
 
@@ -1768,19 +1768,18 @@ func (z *BlockHeader) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *BlockHeader) MaxSize() (s int) {
-	s = 3 + 4 + (*z).Round.MaxSize() + 5 + (*z).Branch.MaxSize() + 5 + (*z).Seed.MaxSize() + 4 + (*z).TxnCommitments.NativeSha512_256Commitment.MaxSize() + 7 + (*z).TxnCommitments.Sha256Commitment.MaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len((*z).GenesisID) + 3 + (*z).GenesisHash.MaxSize() + 5 + (*z).RewardsState.FeeSink.MaxSize() + 4 + (*z).RewardsState.RewardsPool.MaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).RewardsState.RewardsRecalculationRound.MaxSize() + 6 + (*z).UpgradeState.CurrentProtocol.MaxSize() + 10 + (*z).UpgradeState.NextProtocol.MaxSize() + 8 + msgp.Uint64Size + 11 + (*z).UpgradeState.NextProtocolVoteBefore.MaxSize() + 11 + (*z).UpgradeState.NextProtocolSwitchOn.MaxSize() + 12 + (*z).UpgradeVote.UpgradePropose.MaxSize() + 13 + (*z).UpgradeVote.UpgradeDelay.MaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
+func BlockHeaderMaxSize() (s int) {
+	s = 3 + 4 + basics.RoundMaxSize() + 5 + BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4
+	panic("Unable to determine max size: String type (*z).GenesisID is unbounded")
+	s += 3 + crypto.DigestMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
 	if (*z).StateProofTracking != nil {
 		for zb0001, zb0002 := range (*z).StateProofTracking {
 			_ = zb0001
 			_ = zb0002
-			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+			s += 0 + protocol.StateProofTypeMaxSize() + StateProofTrackingDataMaxSize()
 		}
 	}
-	s += 11 + msgp.ArrayHeaderSize
-	for zb0003 := range (*z).ParticipationUpdates.ExpiredParticipationAccounts {
-		s += (*z).ParticipationUpdates.ExpiredParticipationAccounts[zb0003].MaxSize()
-	}
+	s += 11 + msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	return
 }
 
@@ -2128,12 +2127,16 @@ func (z *Genesis) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Genesis) MaxSize() (s int) {
-	s = 1 + 3 + msgp.StringPrefixSize + len((*z).SchemaID) + 8 + (*z).Network.MaxSize() + 6 + (*z).Proto.MaxSize() + 6 + msgp.ArrayHeaderSize
-	for zb0001 := range (*z).Allocation {
-		s += (*z).Allocation[zb0001].MaxSize()
-	}
-	s += 4 + msgp.StringPrefixSize + len((*z).RewardsPool) + 5 + msgp.StringPrefixSize + len((*z).FeeSink) + 10 + msgp.Int64Size + 8 + msgp.StringPrefixSize + len((*z).Comment) + 8 + msgp.BoolSize
+func GenesisMaxSize() (s int) {
+	s = 1 + 3
+	panic("Unable to determine max size: String type (*z).SchemaID is unbounded")
+	s += 8 + protocol.NetworkIDMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 6 + msgp.ArrayHeaderSize + ((MaxInitialGenesisAllocationSize) * (GenesisAllocationMaxSize())) + 4
+	panic("Unable to determine max size: String type (*z).RewardsPool is unbounded")
+	s += 5
+	panic("Unable to determine max size: String type (*z).FeeSink is unbounded")
+	s += 10 + msgp.Int64Size + 8
+	panic("Unable to determine max size: String type (*z).Comment is unbounded")
+	s += 8 + msgp.BoolSize
 	return
 }
 
@@ -2266,8 +2269,12 @@ func (z *GenesisAllocation) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *GenesisAllocation) MaxSize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len((*z).Address) + 8 + msgp.StringPrefixSize + len((*z).Comment) + 6 + (*z).State.MaxSize()
+func GenesisAllocationMaxSize() (s int) {
+	s = 1 + 5
+	panic("Unable to determine max size: String type (*z).Address is unbounded")
+	s += 8
+	panic("Unable to determine max size: String type (*z).Comment is unbounded")
+	s += 6 + basics.AccountDataMaxSize()
 	return
 }
 
@@ -2447,8 +2454,8 @@ func (z *LightBlockHeader) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *LightBlockHeader) MaxSize() (s int) {
-	s = 1 + 2 + (*z).Seed.MaxSize() + 2 + (*z).Round.MaxSize() + 3 + (*z).GenesisHash.MaxSize() + 3 + (*z).Sha256TxnCommitment.MaxSize()
+func LightBlockHeaderMaxSize() (s int) {
+	s = 1 + 2 + committee.SeedMaxSize() + 2 + basics.RoundMaxSize() + 3 + crypto.DigestMaxSize() + 3 + crypto.GenericDigestMaxSize()
 	return
 }
 
@@ -2611,11 +2618,8 @@ func (z *ParticipationUpdates) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *ParticipationUpdates) MaxSize() (s int) {
-	s = 1 + 11 + msgp.ArrayHeaderSize
-	for zb0001 := range (*z).ExpiredParticipationAccounts {
-		s += (*z).ExpiredParticipationAccounts[zb0001].MaxSize()
-	}
+func ParticipationUpdatesMaxSize() (s int) {
+	s = 1 + 11 + msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	return
 }
 
@@ -2841,8 +2845,8 @@ func (z *RewardsState) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *RewardsState) MaxSize() (s int) {
-	s = 1 + 5 + (*z).FeeSink.MaxSize() + 4 + (*z).RewardsPool.MaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + (*z).RewardsRecalculationRound.MaxSize()
+func RewardsStateMaxSize() (s int) {
+	s = 1 + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize()
 	return
 }
 
@@ -2999,8 +3003,8 @@ func (z *StateProofTrackingData) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *StateProofTrackingData) MaxSize() (s int) {
-	s = 1 + 2 + (*z).StateProofVotersCommitment.MaxSize() + 2 + (*z).StateProofOnlineTotalWeight.MaxSize() + 2 + (*z).StateProofNextRound.MaxSize()
+func StateProofTrackingDataMaxSize() (s int) {
+	s = 1 + 2 + crypto.GenericDigestMaxSize() + 2 + basics.MicroAlgosMaxSize() + 2 + basics.RoundMaxSize()
 	return
 }
 
@@ -3134,8 +3138,8 @@ func (z *TxnCommitments) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *TxnCommitments) MaxSize() (s int) {
-	s = 1 + 4 + (*z).NativeSha512_256Commitment.MaxSize() + 7 + (*z).Sha256Commitment.MaxSize()
+func TxnCommitmentsMaxSize() (s int) {
+	s = 1 + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize()
 	return
 }
 
@@ -3292,7 +3296,7 @@ func (z *UpgradeVote) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *UpgradeVote) MaxSize() (s int) {
-	s = 1 + 12 + (*z).UpgradePropose.MaxSize() + 13 + (*z).UpgradeDelay.MaxSize() + 11 + msgp.BoolSize
+func UpgradeVoteMaxSize() (s int) {
+	s = 1 + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize
 	return
 }

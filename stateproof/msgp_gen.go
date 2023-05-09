@@ -7,7 +7,11 @@ import (
 
 	"github.com/algorand/msgp/msgp"
 
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 )
 
 // The following msgp objects are implemented in this file:
@@ -183,8 +187,8 @@ func (z *sigFromAddr) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *sigFromAddr) MaxSize() (s int) {
-	s = 1 + 2 + (*z).SignerAddress.MaxSize() + 2 + (*z).Round.MaxSize() + 2 + (*z).Sig.MaxSize()
+func SigFromAddrMaxSize() (s int) {
+	s = 1 + 2 + basics.AddressMaxSize() + 2 + basics.RoundMaxSize() + 2 + merklesignature.SignatureMaxSize()
 	return
 }
 
@@ -475,21 +479,17 @@ func (z *spProver) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *spProver) MaxSize() (s int) {
+func SpProverMaxSize() (s int) {
 	s = 1 + 4
-	if (*z).Prover == nil {
-		s += msgp.NilSize
-	} else {
-		s += (*z).Prover.MaxSize()
-	}
+	s += stateproof.ProverMaxSize()
 	s += 5 + msgp.MapHeaderSize
 	if (*z).AddrToPos != nil {
 		for zb0001, zb0002 := range (*z).AddrToPos {
 			_ = zb0001
 			_ = zb0002
-			s += 0 + zb0001.MaxSize() + msgp.Uint64Size
+			s += 0 + AddressMaxSize() + msgp.Uint64Size
 		}
 	}
-	s += 4 + (*z).VotersHdr.MaxSize() + 4 + (*z).Message.MaxSize()
+	s += 4 + bookkeeping.BlockHeaderMaxSize() + 4 + stateproofmsg.MessageMaxSize()
 	return
 }

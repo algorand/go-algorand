@@ -18,6 +18,7 @@ package protocol
 
 // Tag represents a message type identifier.  Messages have a Tag field. Handlers can register to a given Tag.
 // e.g., the agreement service can register to handle agreements with the Agreement tag.
+//msgp:allocbound Tag 2
 type Tag string
 
 // Tags, in lexicographic sort order of tag values to avoid duplicates.

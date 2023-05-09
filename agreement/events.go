@@ -255,7 +255,6 @@ func (e emptyEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent
 	return e
 }
 
-//msgp:maxsize ignore messageEvent
 type messageEvent struct {
 	_struct struct{} `codec:","`
 	// {vote,bundle,payload}{Present,Verified}

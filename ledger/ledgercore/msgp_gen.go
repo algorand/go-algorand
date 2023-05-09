@@ -4,6 +4,10 @@ package ledgercore
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // The following msgp objects are implemented in this file:
@@ -670,8 +674,8 @@ func (z *AccountTotals) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *AccountTotals) MaxSize() (s int) {
-	s = 1 + 7 + 1 + 4 + (*z).Online.Money.MaxSize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + (*z).Offline.Money.MaxSize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + (*z).NotParticipating.Money.MaxSize() + 4 + msgp.Uint64Size + 7 + msgp.Uint64Size
+func AccountTotalsMaxSize() (s int) {
+	s = 1 + 7 + 1 + 4 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 8 + 1 + 4 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 7 + msgp.Uint64Size
 	return
 }
 
@@ -805,8 +809,8 @@ func (z *AlgoCount) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *AlgoCount) MaxSize() (s int) {
-	s = 1 + 4 + (*z).Money.MaxSize() + 4 + msgp.Uint64Size
+func AlgoCountMaxSize() (s int) {
+	s = 1 + 4 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size
 	return
 }
 
@@ -963,8 +967,8 @@ func (z *OnlineRoundParamsData) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *OnlineRoundParamsData) MaxSize() (s int) {
-	s = 1 + 7 + msgp.Uint64Size + 7 + msgp.Uint64Size + 6 + (*z).CurrentProtocol.MaxSize()
+func OnlineRoundParamsDataMaxSize() (s int) {
+	s = 1 + 7 + msgp.Uint64Size + 7 + msgp.Uint64Size + 6 + protocol.ConsensusVersionMaxSize()
 	return
 }
 
@@ -1144,7 +1148,7 @@ func (z *StateProofVerificationContext) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *StateProofVerificationContext) MaxSize() (s int) {
-	s = 1 + 8 + (*z).LastAttestedRound.MaxSize() + 3 + (*z).VotersCommitment.MaxSize() + 3 + (*z).OnlineTotalWeight.MaxSize() + 2 + (*z).Version.MaxSize()
+func StateProofVerificationContextMaxSize() (s int) {
+	s = 1 + 8 + basics.RoundMaxSize() + 3 + crypto.GenericDigestMaxSize() + 3 + basics.MicroAlgosMaxSize() + 2 + protocol.ConsensusVersionMaxSize()
 	return
 }

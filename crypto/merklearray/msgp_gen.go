@@ -120,11 +120,8 @@ func (z Layer) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z Layer) MaxSize() (s int) {
-	s = msgp.ArrayHeaderSize
-	for za0001 := range z {
-		s += z[za0001].MaxSize()
-	}
+func LayerMaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree) * (crypto.GenericDigestMaxSize()))
 	return
 }
 
@@ -334,12 +331,8 @@ func (z *Proof) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Proof) MaxSize() (s int) {
-	s = 1 + 4 + msgp.ArrayHeaderSize
-	for zb0001 := range (*z).Path {
-		s += (*z).Path[zb0001].MaxSize()
-	}
-	s += 4 + (*z).HashFactory.MaxSize() + 3 + msgp.Uint8Size
+func ProofMaxSize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree / 2) * (crypto.GenericDigestMaxSize())) + 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
 	return
 }
 
@@ -549,12 +542,8 @@ func (z *SingleLeafProof) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *SingleLeafProof) MaxSize() (s int) {
-	s = 1 + 4 + msgp.ArrayHeaderSize
-	for zb0001 := range (*z).Proof.Path {
-		s += (*z).Proof.Path[zb0001].MaxSize()
-	}
-	s += 4 + (*z).Proof.HashFactory.MaxSize() + 3 + msgp.Uint8Size
+func SingleLeafProofMaxSize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree / 2) * (crypto.GenericDigestMaxSize())) + 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
 	return
 }
 
@@ -839,14 +828,7 @@ func (z *Tree) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Tree) MaxSize() (s int) {
-	s = 1 + 5 + msgp.ArrayHeaderSize
-	for zb0001 := range (*z).Levels {
-		s += msgp.ArrayHeaderSize
-		for zb0002 := range (*z).Levels[zb0001] {
-			s += (*z).Levels[zb0001][zb0002].MaxSize()
-		}
-	}
-	s += 3 + msgp.Uint64Size + 4 + (*z).Hash.MaxSize() + 3 + msgp.BoolSize
+func TreeMaxSize() (s int) {
+	s = 1 + 5 + msgp.ArrayHeaderSize + ((MaxEncodedTreeDepth + 1) * (MaxNumLeavesOnEncodedTree * (crypto.GenericDigestMaxSize()))) + 3 + msgp.Uint64Size + 4 + crypto.HashFactoryMaxSize() + 3 + msgp.BoolSize
 	return
 }

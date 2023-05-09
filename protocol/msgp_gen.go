@@ -25,15 +25,6 @@ import (
 //   |-----> MsgIsZero
 //   |-----> MaxSize
 //
-// HashID
-//    |-----> MarshalMsg
-//    |-----> CanMarshalMsg
-//    |-----> (*) UnmarshalMsg
-//    |-----> (*) CanUnmarshalMsg
-//    |-----> Msgsize
-//    |-----> MsgIsZero
-//    |-----> MaxSize
-//
 // NetworkID
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
@@ -90,6 +81,16 @@ func (_ ConsensusVersion) CanMarshalMsg(z interface{}) bool {
 func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
 		var zb0001 string
+		var zb0002 int
+		zb0002, err = msgp.ReadStringBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 100 {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(100))
+			return
+		}
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -118,8 +119,8 @@ func (z ConsensusVersion) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z ConsensusVersion) MaxSize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
+func ConsensusVersionMaxSize() (s int) {
+	s = msgp.StringPrefixSize + 100
 	return
 }
 
@@ -170,60 +171,8 @@ func (z Error) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z Error) MaxSize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z HashID) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendString(o, string(z))
-	return
-}
-
-func (_ HashID) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(HashID)
-	if !ok {
-		_, ok = (z).(*HashID)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 string
-		zb0001, bts, err = msgp.ReadStringBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = HashID(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *HashID) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*HashID)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z HashID) Msgsize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z HashID) MsgIsZero() bool {
-	return z == ""
-}
-
-// MaxSize returns a maximum valid message size for this message type
-func (z HashID) MaxSize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
+func ErrorMaxSize() (s int) {
+	panic("Unable to determine max size: String type string(z) is unbounded")
 	return
 }
 
@@ -274,8 +223,8 @@ func (z NetworkID) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z NetworkID) MaxSize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
+func NetworkIDMaxSize() (s int) {
+	panic("Unable to determine max size: String type string(z) is unbounded")
 	return
 }
 
@@ -326,7 +275,7 @@ func (z StateProofType) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z StateProofType) MaxSize() (s int) {
+func StateProofTypeMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
@@ -350,6 +299,16 @@ func (_ Tag) CanMarshalMsg(z interface{}) bool {
 func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
 		var zb0001 string
+		var zb0002 int
+		zb0002, err = msgp.ReadStringBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 2 {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(2))
+			return
+		}
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -378,8 +337,8 @@ func (z Tag) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z Tag) MaxSize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
+func TagMaxSize() (s int) {
+	s = msgp.StringPrefixSize + 2
 	return
 }
 
@@ -430,7 +389,7 @@ func (z TxType) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z TxType) MaxSize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
+func TxTypeMaxSize() (s int) {
+	panic("Unable to determine max size: String type string(z) is unbounded")
 	return
 }

@@ -6,6 +6,8 @@ import (
 	"sort"
 
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -24,6 +26,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> (*) MaxSize
 //
 // KVRecordV6
 //      |-----> (*) MarshalMsg
@@ -418,6 +421,23 @@ func (z *BalanceRecordV6) MsgIsZero() bool {
 	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero()) && (len((*z).Resources) == 0) && ((*z).ExpectingMoreEntries == false)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func BalanceRecordV6MaxSize() (s int) {
+	s = 1 + 2 + basics.AddressMaxSize() + 2
+	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
+	s += 2 + msgp.MapHeaderSize
+	if (*z).Resources != nil {
+		for zb0001, zb0002 := range (*z).Resources {
+			_ = zb0001
+			_ = zb0002
+			s += 0 + msgp.Uint64Size
+			panic("Unable to determine max size: MaxSize() not implemented for Raw type")
+		}
+	}
+	s += 2 + msgp.BoolSize
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *KVRecordV6) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -588,7 +608,7 @@ func (z *KVRecordV6) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *KVRecordV6) MaxSize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Key) + 2 + msgp.BytesPrefixSize + len((*z).Value)
+func KVRecordV6MaxSize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + KVRecordV6MaxKeyLength + 2 + msgp.BytesPrefixSize + KVRecordV6MaxValueLength
 	return
 }

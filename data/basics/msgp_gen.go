@@ -9,6 +9,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 )
 
 // The following msgp objects are implemented in this file:
@@ -1383,13 +1384,13 @@ func (z *AccountData) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *AccountData) MaxSize() (s int) {
-	s = 3 + 4 + msgp.ByteSize + 5 + (*z).MicroAlgos.MaxSize() + 6 + msgp.Uint64Size + 4 + (*z).RewardedMicroAlgos.MaxSize() + 5 + (*z).VoteID.MaxSize() + 4 + (*z).SelectionID.MaxSize() + 6 + (*z).StateProofID.MaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+func AccountDataMaxSize() (s int) {
+	s = 3 + 4 + msgp.ByteSize + 5 + MicroAlgosMaxSize() + 6 + msgp.Uint64Size + 4 + MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
 	if (*z).AssetParams != nil {
 		for zb0001, zb0002 := range (*z).AssetParams {
 			_ = zb0001
 			_ = zb0002
-			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+			s += 0 + AssetIndexMaxSize() + AssetParamsMaxSize()
 		}
 	}
 	s += 6 + msgp.MapHeaderSize
@@ -1397,15 +1398,15 @@ func (z *AccountData) MaxSize() (s int) {
 		for zb0003, zb0004 := range (*z).Assets {
 			_ = zb0003
 			_ = zb0004
-			s += 0 + zb0003.MaxSize() + 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
+			s += 0 + AssetIndexMaxSize() + 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
 		}
 	}
-	s += 6 + (*z).AuthAddr.MaxSize() + 5 + msgp.MapHeaderSize
+	s += 6 + AddressMaxSize() + 5 + msgp.MapHeaderSize
 	if (*z).AppLocalStates != nil {
 		for zb0005, zb0006 := range (*z).AppLocalStates {
 			_ = zb0005
 			_ = zb0006
-			s += 0 + zb0005.MaxSize() + zb0006.MaxSize()
+			s += 0 + AppIndexMaxSize() + AppLocalStateMaxSize()
 		}
 	}
 	s += 5 + msgp.MapHeaderSize
@@ -1413,7 +1414,7 @@ func (z *AccountData) MaxSize() (s int) {
 		for zb0007, zb0008 := range (*z).AppParams {
 			_ = zb0007
 			_ = zb0008
-			s += 0 + zb0007.MaxSize() + zb0008.MaxSize()
+			s += 0 + AppIndexMaxSize() + AppParamsMaxSize()
 		}
 	}
 	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size
@@ -1449,7 +1450,7 @@ func (z *Address) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Address) MaxSize() int {
+func AddressMaxSize() int {
 	return ((*(crypto.Digest))(z)).MaxSize()
 }
 
@@ -1500,7 +1501,7 @@ func (z AppIndex) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z AppIndex) MaxSize() (s int) {
+func AppIndexMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
@@ -1863,13 +1864,15 @@ func (z *AppLocalState) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *AppLocalState) MaxSize() (s int) {
+func AppLocalStateMaxSize() (s int) {
 	s = 1 + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
 	if (*z).KeyValue != nil {
 		for zb0001, zb0002 := range (*z).KeyValue {
 			_ = zb0001
 			_ = zb0002
-			s += 0 + msgp.StringPrefixSize + len(zb0001) + zb0002.MaxSize()
+			s += 0
+			panic("Unable to determine max size: String type zb0001 is unbounded")
+			s += TealValueMaxSize()
 		}
 	}
 	return
@@ -2516,13 +2519,15 @@ func (z *AppParams) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *AppParams) MaxSize() (s int) {
-	s = 1 + 7 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 7 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 3 + msgp.MapHeaderSize
+func AppParamsMaxSize() (s int) {
+	s = 1 + 7 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 7 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 3 + msgp.MapHeaderSize
 	if (*z).GlobalState != nil {
 		for zb0001, zb0002 := range (*z).GlobalState {
 			_ = zb0001
 			_ = zb0002
-			s += 0 + msgp.StringPrefixSize + len(zb0001) + zb0002.MaxSize()
+			s += 0
+			panic("Unable to determine max size: String type zb0001 is unbounded")
+			s += TealValueMaxSize()
 		}
 	}
 	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size
@@ -2659,7 +2664,7 @@ func (z *AssetHolding) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *AssetHolding) MaxSize() (s int) {
+func AssetHoldingMaxSize() (s int) {
 	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
 	return
 }
@@ -2711,7 +2716,7 @@ func (z AssetIndex) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z AssetIndex) MaxSize() (s int) {
+func AssetIndexMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
@@ -3053,8 +3058,14 @@ func (z *AssetParams) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *AssetParams) MaxSize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + len((*z).UnitName) + 3 + msgp.StringPrefixSize + len((*z).AssetName) + 3 + msgp.StringPrefixSize + len((*z).URL) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.MaxSize() + 2 + (*z).Reserve.MaxSize() + 2 + (*z).Freeze.MaxSize() + 2 + (*z).Clawback.MaxSize()
+func AssetParamsMaxSize() (s int) {
+	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3
+	panic("Unable to determine max size: String type (*z).UnitName is unbounded")
+	s += 3
+	panic("Unable to determine max size: String type (*z).AssetName is unbounded")
+	s += 3
+	panic("Unable to determine max size: String type (*z).URL is unbounded")
+	s += 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize()
 	return
 }
 
@@ -4244,13 +4255,13 @@ func (z *BalanceRecord) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *BalanceRecord) MaxSize() (s int) {
-	s = 3 + 5 + (*z).Addr.MaxSize() + 4 + msgp.ByteSize + 5 + (*z).AccountData.MicroAlgos.MaxSize() + 6 + msgp.Uint64Size + 4 + (*z).AccountData.RewardedMicroAlgos.MaxSize() + 5 + (*z).AccountData.VoteID.MaxSize() + 4 + (*z).AccountData.SelectionID.MaxSize() + 6 + (*z).AccountData.StateProofID.MaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+func BalanceRecordMaxSize() (s int) {
+	s = 3 + 5 + AddressMaxSize() + 4 + msgp.ByteSize + 5 + MicroAlgosMaxSize() + 6 + msgp.Uint64Size + 4 + MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
 	if (*z).AccountData.AssetParams != nil {
 		for zb0001, zb0002 := range (*z).AccountData.AssetParams {
 			_ = zb0001
 			_ = zb0002
-			s += 0 + zb0001.MaxSize() + zb0002.MaxSize()
+			s += 0 + AssetIndexMaxSize() + AssetParamsMaxSize()
 		}
 	}
 	s += 6 + msgp.MapHeaderSize
@@ -4258,15 +4269,15 @@ func (z *BalanceRecord) MaxSize() (s int) {
 		for zb0003, zb0004 := range (*z).AccountData.Assets {
 			_ = zb0003
 			_ = zb0004
-			s += 0 + zb0003.MaxSize() + 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
+			s += 0 + AssetIndexMaxSize() + 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
 		}
 	}
-	s += 6 + (*z).AccountData.AuthAddr.MaxSize() + 5 + msgp.MapHeaderSize
+	s += 6 + AddressMaxSize() + 5 + msgp.MapHeaderSize
 	if (*z).AccountData.AppLocalStates != nil {
 		for zb0005, zb0006 := range (*z).AccountData.AppLocalStates {
 			_ = zb0005
 			_ = zb0006
-			s += 0 + zb0005.MaxSize() + zb0006.MaxSize()
+			s += 0 + AppIndexMaxSize() + AppLocalStateMaxSize()
 		}
 	}
 	s += 5 + msgp.MapHeaderSize
@@ -4274,7 +4285,7 @@ func (z *BalanceRecord) MaxSize() (s int) {
 		for zb0007, zb0008 := range (*z).AccountData.AppParams {
 			_ = zb0007
 			_ = zb0008
-			s += 0 + zb0007.MaxSize() + zb0008.MaxSize()
+			s += 0 + AppIndexMaxSize() + AppParamsMaxSize()
 		}
 	}
 	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size
@@ -4328,7 +4339,7 @@ func (z CreatableIndex) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z CreatableIndex) MaxSize() (s int) {
+func CreatableIndexMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
@@ -4380,7 +4391,7 @@ func (z CreatableType) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z CreatableType) MaxSize() (s int) {
+func CreatableTypeMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
@@ -4432,7 +4443,7 @@ func (z DeltaAction) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z DeltaAction) MaxSize() (s int) {
+func DeltaActionMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
@@ -4567,8 +4578,8 @@ func (z *Participant) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Participant) MaxSize() (s int) {
-	s = 1 + 2 + (*z).PK.MaxSize() + 2 + msgp.Uint64Size
+func ParticipantMaxSize() (s int) {
+	s = 1 + 2 + merklesignature.VerifierMaxSize() + 2 + msgp.Uint64Size
 	return
 }
 
@@ -4619,7 +4630,7 @@ func (z Round) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z Round) MaxSize() (s int) {
+func RoundMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
@@ -4671,7 +4682,7 @@ func (z RoundInterval) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z RoundInterval) MaxSize() (s int) {
+func RoundIntervalMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
@@ -4769,13 +4780,15 @@ func (z StateDelta) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z StateDelta) MaxSize() (s int) {
+func StateDeltaMaxSize() (s int) {
 	s = msgp.MapHeaderSize
 	if z != nil {
 		for za0001, za0002 := range z {
 			_ = za0001
 			_ = za0002
-			s += 0 + msgp.StringPrefixSize + len(za0001) + za0002.MaxSize()
+			s += 0
+			panic("Unable to determine max size: String type za0001 is unbounded")
+			s += ValueDeltaMaxSize()
 		}
 	}
 	return
@@ -4911,7 +4924,7 @@ func (z *StateSchema) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *StateSchema) MaxSize() (s int) {
+func StateSchemaMaxSize() (s int) {
 	s = 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
 }
@@ -5346,7 +5359,7 @@ func (z *StateSchemas) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *StateSchemas) MaxSize() (s int) {
+func StateSchemasMaxSize() (s int) {
 	s = 1 + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
 }
@@ -5398,7 +5411,7 @@ func (z Status) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z Status) MaxSize() (s int) {
+func StatusMaxSize() (s int) {
 	s = msgp.ByteSize
 	return
 }
@@ -5496,13 +5509,15 @@ func (z TealKeyValue) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z TealKeyValue) MaxSize() (s int) {
+func TealKeyValueMaxSize() (s int) {
 	s = msgp.MapHeaderSize
 	if z != nil {
 		for za0001, za0002 := range z {
 			_ = za0001
 			_ = za0002
-			s += 0 + msgp.StringPrefixSize + len(za0001) + za0002.MaxSize()
+			s += 0
+			panic("Unable to determine max size: String type za0001 is unbounded")
+			s += TealValueMaxSize()
 		}
 	}
 	return
@@ -5555,7 +5570,7 @@ func (z TealType) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z TealType) MaxSize() (s int) {
+func TealTypeMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return
 }
@@ -5721,8 +5736,10 @@ func (z *TealValue) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *TealValue) MaxSize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.StringPrefixSize + len((*z).Bytes) + 3 + msgp.Uint64Size
+func TealValueMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3
+	panic("Unable to determine max size: String type (*z).Bytes is unbounded")
+	s += 3 + msgp.Uint64Size
 	return
 }
 
@@ -5887,7 +5904,9 @@ func (z *ValueDelta) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *ValueDelta) MaxSize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.StringPrefixSize + len((*z).Bytes) + 3 + msgp.Uint64Size
+func ValueDeltaMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3
+	panic("Unable to determine max size: String type (*z).Bytes is unbounded")
+	s += 3 + msgp.Uint64Size
 	return
 }

@@ -4,6 +4,10 @@ package account
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -248,8 +252,8 @@ func (z *ParticipationKeyIdentity) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *ParticipationKeyIdentity) MaxSize() (s int) {
-	s = 1 + 5 + (*z).Parent.MaxSize() + 6 + (*z).VRFSK.MaxSize() + 8 + (*z).VoteID.MaxSize() + 3 + (*z).FirstValid.MaxSize() + 3 + (*z).LastValid.MaxSize() + 3 + msgp.Uint64Size
+func ParticipationKeyIdentityMaxSize() (s int) {
+	s = 1 + 5 + basics.AddressMaxSize() + 6 + crypto.VrfPrivkeyMaxSize() + 8 + crypto.OneTimeSignatureVerifierMaxSize() + 3 + basics.RoundMaxSize() + 3 + basics.RoundMaxSize() + 3 + msgp.Uint64Size
 	return
 }
 
@@ -327,10 +331,7 @@ func (z StateProofKeys) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z StateProofKeys) MaxSize() (s int) {
-	s = msgp.ArrayHeaderSize
-	for za0001 := range z {
-		s += z[za0001].MaxSize()
-	}
+func StateProofKeysMaxSize() (s int) {
+	s = msgp.ArrayHeaderSize + ((1000) * (merklesignature.KeyRoundPairMaxSize()))
 	return
 }

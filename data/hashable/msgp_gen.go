@@ -124,7 +124,8 @@ func (z *Message) MsgIsZero() bool {
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func (z *Message) MaxSize() (s int) {
-	s = 1 + 4 + msgp.StringPrefixSize + len((*z).Message)
+func MessageMaxSize() (s int) {
+	s = 1 + 4
+	panic("Unable to determine max size: String type (*z).Message is unbounded")
 	return
 }
