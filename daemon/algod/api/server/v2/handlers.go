@@ -930,6 +930,7 @@ type PreEncodedSimulateTxnResult struct {
 	Txn                    PreEncodedTxInfo `codec:"txn-result"`
 	AppBudgetConsumed      *uint64          `codec:"app-budget-consumed,omitempty"`
 	LogicSigBudgetConsumed *uint64          `codec:"logic-sig-budget-consumed,omitempty"`
+	// TODO add here
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult

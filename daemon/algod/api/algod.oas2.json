@@ -3579,6 +3579,9 @@
         "logic-sig-budget-consumed": {
           "description": "Budget used during execution of a logic sig transaction.",
           "type": "integer"
+        },
+        "exec-trace": {
+          "$ref": "#/definitions/SimulationTransactionExecTrace"
         }
       }
     },
@@ -3681,6 +3684,70 @@
         "extra-opcode-budget": {
           "description": "The extra opcode budget added to each transaction group during simulation",
           "type": "integer"
+        }
+      }
+    },
+    "SimulationOpcodeTraceUnit": {
+      "description": "The set of trace information and effect from evaluating a single opcode.",
+      "type": "object",
+      "properties": {
+        "pc": {
+          "description": "The program counter of the current opcode being evaluated.",
+          "type": "integer"
+        }
+      }
+    },
+    "SimulationPcToInnerIndex": {
+      "description": "The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn.",
+      "type": "object",
+      "required": [
+        "pc",
+        "inner-index"
+      ],
+      "properties": {
+        "pc": {
+          "description": "The program counter of the current opcode being evaluated.",
+          "type": "integer"
+        },
+        "inner-index": {
+          "description": "The index into inner trace array, to which inner transaction get branched off from program execution.",
+          "type": "integer"
+        }
+      }
+    },
+    "SimulationTransactionExecTrace": {
+      "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
+      "type": "object",
+      "properties": {
+        "trace-type": {
+          "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
+          "enum": [
+            "approval-program",
+            "clear-state-program",
+            "logic-signature"
+          ],
+          "type": "string"
+        },
+        "trace": {
+          "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "inner-trace": {
+          "description": "An array of SimulationTransactionExecTrace representing calling inner transactions to apps.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationTransactionExecTrace"
+          }
+        },
+        "step-to-inner-map": {
+          "description": "The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationPcToInnerIndex"
+          }
         }
       }
     }

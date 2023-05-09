@@ -28,6 +28,13 @@ const (
 	SimulateRequestExecTraceStack       SimulateRequestExecTrace = "stack"
 )
 
+// Defines values for SimulationTransactionExecTraceTraceType.
+const (
+	SimulationTransactionExecTraceTraceTypeApprovalProgram   SimulationTransactionExecTraceTraceType = "approval-program"
+	SimulationTransactionExecTraceTraceTypeClearStateProgram SimulationTransactionExecTraceTraceType = "clear-state-program"
+	SimulationTransactionExecTraceTraceTypeLogicSignature    SimulationTransactionExecTraceTraceType = "logic-signature"
+)
+
 // Defines values for AddressRole.
 const (
 	AddressRoleFreezeTarget AddressRole = "freeze-target"
@@ -668,6 +675,9 @@ type SimulateTransactionResult struct {
 	// AppBudgetConsumed Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.
 	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
 
+	// ExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
+	ExecTrace *SimulationTransactionExecTrace `json:"exec-trace,omitempty"`
+
 	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
 	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
 
@@ -689,6 +699,39 @@ type SimulationEvalOverrides struct {
 	// MaxLogSize The maximum byte number to log during simulation
 	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
 }
+
+// SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
+type SimulationOpcodeTraceUnit struct {
+	// Pc The program counter of the current opcode being evaluated.
+	Pc *uint64 `json:"pc,omitempty"`
+}
+
+// SimulationPcToInnerIndex The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn.
+type SimulationPcToInnerIndex struct {
+	// InnerIndex The index into inner trace array, to which inner transaction get branched off from program execution.
+	InnerIndex uint64 `json:"inner-index"`
+
+	// Pc The program counter of the current opcode being evaluated.
+	Pc uint64 `json:"pc"`
+}
+
+// SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
+type SimulationTransactionExecTrace struct {
+	// InnerTrace An array of SimulationTransactionExecTrace representing calling inner transactions to apps.
+	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
+
+	// StepToInnerMap The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn.
+	StepToInnerMap *[]SimulationPcToInnerIndex `json:"step-to-inner-map,omitempty"`
+
+	// Trace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
+	Trace *[]SimulationOpcodeTraceUnit `json:"trace,omitempty"`
+
+	// TraceType Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
+	TraceType *SimulationTransactionExecTraceTraceType `json:"trace-type,omitempty"`
+}
+
+// SimulationTransactionExecTraceTraceType Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
+type SimulationTransactionExecTraceTraceType string
 
 // StateDelta Application state delta.
 type StateDelta = []EvalDeltaKeyValue
