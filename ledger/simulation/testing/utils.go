@@ -78,6 +78,7 @@ func (info TxnInfo) InnerTxn(parent transactions.SignedTxn, inner txntest.Txn) t
 
 // Environment contains the ledger and testing environment for transaction simulations
 type Environment struct {
+	t      *testing.T
 	Ledger *data.Ledger
 	// Accounts is a list of all accounts in the ledger, excluding the fee sink and rewards pool
 	Accounts           []Account
@@ -89,6 +90,45 @@ type Environment struct {
 // Close reclaims resources used by the testing environment
 func (env *Environment) Close() {
 	env.Ledger.Close()
+}
+
+func (env *Environment) CreateAsset(creator basics.Address, params basics.AssetParams) basics.AssetIndex {
+	env.t.Helper()
+
+	txn := txntest.Txn{
+		Type:        protocol.AssetConfigTx,
+		Sender:      creator,
+		AssetParams: params,
+	}
+
+	latestBlockHdr, err := env.Ledger.BlockHdr(env.Ledger.Latest())
+	require.NoError(env.t, err)
+
+	newBlock := bookkeeping.MakeBlock(latestBlockHdr)
+	newBlock.Payset = transactions.Payset{
+		{SignedTxnWithAD: txn.SignedTxnWithAD()},
+	}
+
+	err = env.Ledger.AddBlock(newBlock, agreement.Certificate{})
+	require.NoError(env.t, err)
+
+	newBlock, err = env.Ledger.Block(newBlock.Round())
+	require.NoError(env.t, err)
+
+	require.Len(env.t, newBlock.Payset, 1)
+	assetID := newBlock.Payset[0].ApplyData.ConfigAsset
+	require.NotZero(env.t, assetID)
+
+	env.TxnInfo.LatestHeader = newBlock.BlockHeader
+
+	// tmp
+	assetResource, err := env.Ledger.LookupAsset(newBlock.Round(), creator, assetID)
+	require.NoError(env.t, err)
+
+	require.Equal(env.t, params, *assetResource.AssetParams)
+	// end tmp
+
+	return assetID
 }
 
 // PrepareSimulatorTest creates an environment to test transaction simulations. The caller is
@@ -151,6 +191,7 @@ func PrepareSimulatorTest(t *testing.T) Environment {
 	}
 
 	return Environment{
+		t:                  t,
 		Ledger:             ledger,
 		Accounts:           accounts,
 		FeeSinkAccount:     feeSinkAccount,

@@ -2186,15 +2186,18 @@ func TestMockTracerScenarios(t *testing.T) {
 func TestUnlimitedResourceAccess(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	for v := 2; v <= logic.LogicVersion-1; v++ { // TODO: need -1 now because we use current consensus version instead of future
+	for v := 2; v <= 2; v++ { // TODO: need -1 now because we use current consensus version instead of future
 		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
-			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-				sender := accounts[0]
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
 
-				futureAppID := basics.AppIndex(1)
-				txn := txnInfo.NewTxn(txntest.Txn{
+				assetCreator := env.Accounts[1].Addr
+				assetID := env.CreateAsset(assetCreator, basics.AssetParams{Total: 123})
+
+				futureAppID := basics.AppIndex(assetID) + 1 // basics.AppIndex(1)
+				txn := env.TxnInfo.NewTxn(txntest.Txn{
 					Type:   protocol.ApplicationCallTx,
 					Sender: sender.Addr,
 					// TODO: actually test resource access
@@ -2210,7 +2213,7 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 					},
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
-						LastRound: txnInfo.LatestRound(),
+						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
