@@ -99,7 +99,7 @@ func sumIsCloseToOne(numbers ...float32) bool {
 }
 
 // MakeGenerator initializes the Generator object.
-func MakeGenerator(dbround uint64, genesisFile string, config GenerationConfig) (Generator, error) {
+func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig) (Generator, error) {
 	if !sumIsCloseToOne(config.PaymentTransactionFraction, config.AssetTransactionFraction) {
 		return nil, fmt.Errorf("transaction distribution ratios should equal 1")
 	}
@@ -117,7 +117,6 @@ func MakeGenerator(dbround uint64, genesisFile string, config GenerationConfig) 
 		config:                    config,
 		protocol:                  proto,
 		params:                    cconfig.Consensus[proto],
-		genesisFilePath:           genesisFile,
 		genesisHash:               [32]byte{},
 		genesisID:                 "blockgen-test",
 		prevBlockHash:             "",
@@ -130,18 +129,21 @@ func MakeGenerator(dbround uint64, genesisFile string, config GenerationConfig) 
 		rewardsRecalculationRound: 0,
 		reportData:                make(map[TxTypeID]TxData),
 		dbround:                   dbround,
+		genesis:                   bkGenesis,
 	}
 
 	gen.feeSink[31] = 1
 	gen.rewardsPool[31] = 2
 	gen.genesisHash[31] = 3
 
+	// if genesis is provided
+	if bkGenesis.Network != "" {
+		gen.genesisID = string(bkGenesis.Network)
+		gen.genesisHash = bkGenesis.Hash()
+	}
+
 	gen.initializeAccounting()
 	gen.initializeLedger()
-	// TODO: initialize the generator with the genesis file
-	if genesisFile != "" {
-		gen.initializeGenesis()
-	}
 	for _, val := range getTransactionOptions() {
 		switch val {
 		case paymentTx:
@@ -200,15 +202,15 @@ type generator struct {
 	numAccounts uint64
 
 	// Block stuff
-	round           uint64
-	txnCounter      uint64
-	prevBlockHash   string
-	timestamp       int64
-	protocol        protocol.ConsensusVersion
-	params          cconfig.ConsensusParams
-	genesisFilePath string
-	genesisID       string
-	genesisHash     crypto.Digest
+	round         uint64
+	txnCounter    uint64
+	prevBlockHash string
+	timestamp     int64
+	protocol      protocol.ConsensusVersion
+	params        cconfig.ConsensusParams
+	genesis       bookkeeping.Genesis
+	genesisID     string
+	genesisHash   crypto.Digest
 
 	// Rewards stuff
 	feeSink                   basics.Address
@@ -289,6 +291,10 @@ func (g *generator) WriteStatus(output io.Writer) error {
 
 func (g *generator) WriteGenesis(output io.Writer) error {
 	defer g.recordData(track(genesis))
+	if g.genesis.Network != "" {
+		_, err := output.Write(protocol.EncodeJSON(g.genesis))
+		return err
+	}
 	var allocations []bookkeeping.GenesisAllocation
 
 	for i := uint64(0); i < g.config.NumGenesisAccounts; i++ {

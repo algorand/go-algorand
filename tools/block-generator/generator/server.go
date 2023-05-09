@@ -58,7 +58,9 @@ func MakeServerWithMiddleware(dbround uint64, genesisFile string, configFile str
 	config, err := initializeConfigFile(configFile)
 	util.MaybeFail(err, "problem loading config file. Use '--config' or create a config file.")
 
-	gen, err := MakeGenerator(dbround, genesisFile, config)
+	bkGenesis, err := readGenesis(genesisFile)
+	util.MaybeFail(err, "Failed to parse genesis file '%s'", genesisFile)
+	gen, err := MakeGenerator(dbround, bkGenesis, config)
 	util.MaybeFail(err, "Failed to make generator with config file '%s'", configFile)
 
 	mux := http.NewServeMux()

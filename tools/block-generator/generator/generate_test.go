@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -32,13 +33,13 @@ import (
 
 func makePrivateGenerator(t *testing.T) *generator {
 	partitiontest.PartitionTest(t)
-	publicGenerator, err := MakeGenerator(GenerationConfig{
+	publicGenerator, err := MakeGenerator(0, bookkeeping.Genesis{}, GenerationConfig{
 		NumGenesisAccounts:           10,
 		GenesisAccountInitialBalance: 1000000000000,
 		PaymentTransactionFraction:   1.0,
 		PaymentNewAccountFraction:    1.0,
 		AssetCreateFraction:          1.0,
-	}, "")
+	})
 	require.NoError(t, err)
 	return publicGenerator.(*generator)
 }
