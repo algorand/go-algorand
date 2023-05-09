@@ -76,8 +76,24 @@ func (info TxnInfo) InnerTxn(parent transactions.SignedTxn, inner txntest.Txn) t
 	return inner
 }
 
-// PrepareSimulatorTest creates an environment to test transaction simulations
-func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txnInfo TxnInfo) {
+// Environment contains the ledger and testing environment for transaction simulations
+type Environment struct {
+	Ledger *data.Ledger
+	// Accounts is a list of all accounts in the ledger, excluding the fee sink and rewards pool
+	Accounts           []Account
+	FeeSinkAccount     Account
+	RewardsPoolAccount Account
+	TxnInfo            TxnInfo
+}
+
+// Close reclaims resources used by the testing environment
+func (env *Environment) Close() {
+	env.Ledger.Close()
+}
+
+// PrepareSimulatorTest creates an environment to test transaction simulations. The caller is
+// responsible for calling Close() on the returned environment.
+func PrepareSimulatorTest(t *testing.T) Environment {
 	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 
 	// Prepare ledger
@@ -89,28 +105,33 @@ func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txn
 	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 
-	l = &data.Ledger{Ledger: realLedger}
-	require.NotNil(t, l)
+	ledger := &data.Ledger{Ledger: realLedger}
 
 	// Reformat accounts
-	accounts = make([]Account, len(keys)-2) // -2 for pool and sink accounts
-	i := 0
+	accounts := make([]Account, 0, len(keys)-2) // -2 for pool and sink accounts
+	var feeSinkAccount Account
+	var rewardsPoolAccount Account
 	for addr, key := range keys {
-		if addr == ledgertesting.PoolAddr() || addr == ledgertesting.SinkAddr() {
+		account := Account{
+			Addr:     addr,
+			Sk:       key,
+			AcctData: genesisInitState.Accounts[addr],
+		}
+
+		if addr == ledgertesting.SinkAddr() {
+			feeSinkAccount = account
+			continue
+		}
+		if addr == ledgertesting.PoolAddr() {
+			rewardsPoolAccount = account
 			continue
 		}
 
-		acctData := genesisInitState.Accounts[addr]
-		accounts[i] = Account{
-			Addr:     addr,
-			Sk:       key,
-			AcctData: acctData,
-		}
-		i++
+		accounts = append(accounts, account)
 	}
 
-	latest := l.Latest()
-	latestHeader, err := l.BlockHdr(latest)
+	latest := ledger.Latest()
+	latestHeader, err := ledger.BlockHdr(latest)
 	require.NoError(t, err)
 
 	rand.Seed(time.Now().UnixNano())
@@ -119,17 +140,21 @@ func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txn
 	numBlocks := rand.Intn(4)
 	for i := 0; i < numBlocks; i++ {
 		nextBlock := bookkeeping.MakeBlock(latestHeader)
-		err = l.AddBlock(nextBlock, agreement.Certificate{})
+		err = ledger.AddBlock(nextBlock, agreement.Certificate{})
 		require.NoError(t, err)
 
 		// round has advanced by 1
-		require.Equal(t, latest+1, l.Latest())
+		require.Equal(t, latest+1, ledger.Latest())
 		latest++
 
 		latestHeader = nextBlock.BlockHeader
 	}
 
-	txnInfo = TxnInfo{latestHeader}
-
-	return
+	return Environment{
+		Ledger:             ledger,
+		Accounts:           accounts,
+		FeeSinkAccount:     feeSinkAccount,
+		RewardsPoolAccount: rewardsPoolAccount,
+		TxnInfo:            TxnInfo{latestHeader},
+	}
 }

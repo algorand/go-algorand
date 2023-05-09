@@ -17,12 +17,16 @@
 package mocktracer
 
 import (
+	"testing"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // EventType represents a type of logic.EvalTracer event
@@ -64,6 +68,9 @@ type Event struct {
 	// only for AfterTxn
 	TxnApplyData transactions.ApplyData
 
+	// only for AfterTxnGroup and AfterTxn
+	Deltas *ledgercore.StateDelta
+
 	// only for BeforeTxnGroup and AfterTxnGroup
 	GroupSize int
 
@@ -85,8 +92,8 @@ func BeforeTxnGroup(groupSize int) Event {
 }
 
 // AfterTxnGroup creates a new Event with the type AfterTxnGroupEvent
-func AfterTxnGroup(groupSize int, hasError bool) Event {
-	return Event{Type: AfterTxnGroupEvent, GroupSize: groupSize, HasError: hasError}
+func AfterTxnGroup(groupSize int, deltas *ledgercore.StateDelta, hasError bool) Event {
+	return Event{Type: AfterTxnGroupEvent, GroupSize: groupSize, Deltas: copyDeltas(deltas), HasError: hasError}
 }
 
 // BeforeProgram creates a new Event with the type BeforeProgramEvent
@@ -163,7 +170,7 @@ func (d *Tracer) BeforeTxnGroup(ep *logic.EvalParams) {
 
 // AfterTxnGroup mocks the logic.EvalTracer.AfterTxnGroup method
 func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
-	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), evalError != nil))
+	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), deltas, evalError != nil))
 }
 
 // BeforeTxn mocks the logic.EvalTracer.BeforeTxn method
@@ -199,4 +206,48 @@ func (d *Tracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 // AfterBlock mocks the logic.EvalTracer.BeforeBlock method
 func (d *Tracer) AfterBlock(hdr *bookkeeping.BlockHeader) {
 	d.Events = append(d.Events, AfterBlock(hdr.Round))
+}
+
+// copyDeltas makes a deep copy of the given ledgercore.StateDelta pointer, if it's not nil.
+// This is inefficient, but it should only be used for testing.
+func copyDeltas(deltas *ledgercore.StateDelta) *ledgercore.StateDelta {
+	if deltas == nil {
+		return nil
+	}
+	encoded := protocol.EncodeReflect(deltas)
+	var clone ledgercore.StateDelta
+	err := protocol.DecodeReflect(encoded, &clone)
+	if err != nil {
+		panic(err)
+	}
+	return &clone
+}
+
+// AssertEventsEqual asserts that two slices of Events are equal, taking into account complex
+// equality of StateDeltas. The arguments will be modified in-place to normalize any StateDeltas.
+func AssertEventsEqual(t *testing.T, expected, actual []Event) {
+	t.Helper()
+
+	// Dehydrate deltas for better comparison
+	for i := range expected {
+		if expected[i].Deltas != nil {
+			expected[i].Deltas.Dehydrate()
+		}
+	}
+	for i := range actual {
+		if actual[i].Deltas != nil {
+			actual[i].Deltas.Dehydrate()
+		}
+	}
+
+	// These extra checks are not necessary for correctness, but they provide more targeted information on failure
+	if assert.Equal(t, len(expected), len(actual)) {
+		for i := range expected {
+			jsonExpectedDelta := protocol.EncodeJSONStrict(expected[i].Deltas)
+			jsonActualDelta := protocol.EncodeJSONStrict(actual[i].Deltas)
+			assert.Equal(t, expected[i].Deltas, actual[i].Deltas, "StateDelta disagreement: i=%d, event type: (%v,%v)\n\nexpected: %s\n\nactual: %s", i, expected[i].Type, actual[i].Type, jsonExpectedDelta, jsonActualDelta)
+		}
+	}
+
+	require.Equal(t, expected, actual)
 }
