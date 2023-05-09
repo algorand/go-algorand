@@ -937,7 +937,7 @@ func TestSimulateTransaction(t *testing.T) {
 	for name, scenarioFn := range scenarios {
 		t.Run(name, func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
 			sender := roots[0]
-			futureAppID := basics.AppIndex(2)
+			futureAppID := basics.AppIndex(1002)
 
 			payTxn := txnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -1517,7 +1517,7 @@ func TestTealDryrun(t *testing.T) {
 	gdr.ProtocolVersion = ""
 
 	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
-	require.Equal(t, string(protocol.ConsensusCurrentVersion), ddr.ProtocolVersion)
+	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
 	gdr.ProtocolVersion = string(protocol.ConsensusFuture)
 	ddr = tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
 	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
