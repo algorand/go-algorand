@@ -211,6 +211,9 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 			lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, transactionTrace)
 			innerIndex := uint8(len(lastExecTrace.InnerTraces)) - 1
 			stepIndex := uint64(len(lastExecTrace.Trace)) - 1
+			if lastExecTrace.StepToInnerMap == nil {
+				lastExecTrace.StepToInnerMap = make(map[uint64]uint8)
+			}
 			lastExecTrace.StepToInnerMap[stepIndex] = innerIndex
 		}
 
@@ -263,7 +266,13 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		if tracer.result.ExecTraceConfig == NoExecTrace {
 			return
 		}
-		currentTrace := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+
+		var currentTrace *TransactionTrace
+		if len(execTraceStack) == 0 {
+			currentTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+		} else {
+			currentTrace = execTraceStack[len(execTraceStack)-1]
+		}
 		currentTrace.Trace = append(currentTrace.Trace, tracer.makeOpcodeTraceUnit(cx))
 	}()
 	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
