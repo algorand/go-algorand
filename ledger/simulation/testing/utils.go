@@ -217,6 +217,7 @@ func (env *Environment) OptIntoAsset(address basics.Address, assetID basics.Asse
 	env.Txn(txn.SignedTxn())
 }
 
+// OptIntoApp opts the given account into the given application
 func (env *Environment) OptIntoApp(address basics.Address, appID basics.AppIndex) {
 	env.t.Helper()
 	txn := env.TxnInfo.NewTxn(txntest.Txn{

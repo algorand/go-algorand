@@ -394,10 +394,11 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
-			AllowEmptySignatures: trueOrNil(result.EvalOverrides.AllowEmptySignatures),
-			MaxLogSize:           result.EvalOverrides.MaxLogSize,
-			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
-			ExtraOpcodeBudget:    numOrNil(result.EvalOverrides.ExtraOpcodeBudget),
+			AllowEmptySignatures:         trueOrNil(result.EvalOverrides.AllowEmptySignatures),
+			MaxLogSize:                   result.EvalOverrides.MaxLogSize,
+			MaxLogCalls:                  result.EvalOverrides.MaxLogCalls,
+			ExtraOpcodeBudget:            numOrNil(result.EvalOverrides.ExtraOpcodeBudget),
+			AllowUnlimitedResourceAccess: trueOrNil(result.EvalOverrides.AllowUnlimitedResourceAccess),
 		}
 	}
 

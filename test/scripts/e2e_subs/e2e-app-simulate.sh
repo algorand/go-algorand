@@ -384,3 +384,9 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; t
     date '+app-simulate-test FAIL the app call to generated large TEAL should be consuming 804 budget %Y%m%d_%H%M%S'
     false
 fi
+
+############################################################
+# TEST ALLOW UNLIMITED RESOURCE ACCESS IN SIMULATION WORKS #
+############################################################
+
+# TODO

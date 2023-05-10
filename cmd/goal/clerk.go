@@ -69,10 +69,11 @@ var (
 	requestFilename    string
 	requestOutFilename string
 
-	simulateAllowEmptySignatures   bool
-	simulateAllowMoreLogging       bool
-	simulateAllowExtraOpcodeBudget bool
-	simulateExtraOpcodeBudget      uint64
+	simulateAllowEmptySignatures         bool
+	simulateAllowMoreLogging             bool
+	simulateAllowExtraOpcodeBudget       bool
+	simulateExtraOpcodeBudget            uint64
+	simulateAllowUnlimitedResourceAccess bool
 )
 
 func init() {
@@ -161,6 +162,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowExtraOpcodeBudget, "allow-extra-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
+	simulateCmd.Flags().BoolVar(&simulateAllowUnlimitedResourceAccess, "allow-unlimited-resource-access", false, "Allow unlimited resource access during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1274,9 +1276,10 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				AllowEmptySignatures: simulateAllowEmptySignatures,
-				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				AllowEmptySignatures:         simulateAllowEmptySignatures,
+				AllowMoreLogging:             simulateAllowMoreLogging,
+				ExtraOpcodeBudget:            simulateExtraOpcodeBudget,
+				AllowUnlimitedResourceAccess: simulateAllowUnlimitedResourceAccess,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1297,9 +1300,10 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				AllowEmptySignatures: simulateAllowEmptySignatures,
-				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				AllowEmptySignatures:         simulateAllowEmptySignatures,
+				AllowMoreLogging:             simulateAllowMoreLogging,
+				ExtraOpcodeBudget:            simulateExtraOpcodeBudget,
+				AllowUnlimitedResourceAccess: simulateAllowUnlimitedResourceAccess,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
