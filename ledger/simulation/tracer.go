@@ -18,7 +18,7 @@ package simulation
 
 import (
 	"fmt"
-
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -168,6 +168,11 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 }
 
 func (tracer *evalTracer) wouldMakeExecTrace(ep *logic.EvalParams, groupIndex int) bool {
+	// If local config is closed for simulation exec trace feature, leave
+	if config.GetDefaultLocal().DisableSimulationTraceReturn {
+		return false
+	}
+
 	// If there is no need of exec trace, leave
 	if tracer.result.ExecTraceConfig == NoExecTrace {
 		return false
@@ -251,6 +256,10 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		appIDToSave = cx.AppID()
 	}
 	defer func() {
+		// If local config is closed for simulation exec trace feature, leave
+		if config.GetDefaultLocal().DisableSimulationTraceReturn {
+			return
+		}
 		if tracer.result.ExecTraceConfig == NoExecTrace {
 			return
 		}

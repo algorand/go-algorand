@@ -1487,7 +1487,6 @@ int 1`
 
 	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
 		sender := accounts[0]
-		receiver := accounts[1]
 
 		futureAppID := basics.AppIndex(1001)
 
@@ -1503,7 +1502,6 @@ int 1`
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
-			Accounts:        []basics.Address{receiver.Addr},
 			ApplicationArgs: [][]byte{[]byte("first-arg")},
 		})
 
