@@ -48,6 +48,9 @@ type StateDeltaSubset struct {
 }
 
 func convertStateDelta(delta ledgercore.StateDelta) StateDeltaSubset {
+	// The StateDelta object returned through the EvalTracer has its values deleted between txn groups to avoid
+	// reallocation during evaluation.
+	// This means the map values need to be copied (to avoid deletion) since they are all passed by reference.
 	kvmods := make(map[string]ledgercore.KvValueDelta)
 	for k1, v1 := range delta.KvMods {
 		kvmods[k1] = v1
@@ -81,7 +84,7 @@ type TxnGroupDeltaTracer struct {
 	lookback uint64
 	// no-op methods we don't care about
 	logic.NullEvalTracer
-	// txnGroupDeltas stores the StateDelta objects for each round, indexed by all the IDs within the group
+	// txnGroupDeltas stores the StateDeltaSubset objects for each round, indexed by all the IDs within the group
 	txnGroupDeltas map[basics.Round]map[crypto.Digest]*StateDeltaSubset
 	// latestRound is the most recent round seen via the BeforeBlock hdr
 	latestRound basics.Round
@@ -150,7 +153,7 @@ func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]TxnGro
 	return deltasForRound, nil
 }
 
-// GetDeltaForID retruns the StateDelta associated with the group of transaction executed for the supplied ID (txn or group)
+// GetDeltaForID returns the StateDelta associated with the group of transaction executed for the supplied ID (txn or group)
 func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (StateDeltaSubset, error) {
 	tracer.deltasLock.RLock()
 	defer tracer.deltasLock.RUnlock()

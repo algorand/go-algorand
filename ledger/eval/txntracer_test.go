@@ -122,6 +122,8 @@ int 1`,
 			}
 
 			// a non-app call txn
+			var txnLease [32]byte
+			copy(txnLease[:], "txnLeaseTest")
 			payTxn := txntest.Txn{
 				Type:             protocol.PaymentTx,
 				Sender:           addrs[1],
@@ -133,6 +135,7 @@ int 1`,
 				Fee:              minFee,
 				GenesisHash:      genHash,
 				Note:             []byte("two"),
+				Lease:            txnLease,
 			}
 			// an app call with inner txn
 			innerAppCallTxn := txntest.Txn{
@@ -269,6 +272,9 @@ int 1`,
 					Data:    []uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 				},
 			}
+			expectedLeases := map[ledgercore.Txlease]basics.Round{
+				{Sender: payTxn.Sender, Lease: payTxn.Lease}: payTxn.LastValid,
+			}
 
 			actualDelta, err := tracer.GetDeltaForID(crypto.Digest(txgroup[0].ID()))
 			require.NoError(t, err)
@@ -284,6 +290,7 @@ int 1`,
 			require.Equal(t, expectedAccts.AppResources, actualDelta.Accts.AppResources)
 			require.Equal(t, expectedAccts.AssetResources, actualDelta.Accts.AssetResources)
 			require.Equal(t, expectedKvMods, actualDelta.KvMods)
+			require.Equal(t, expectedLeases, actualDelta.Txleases)
 		})
 	}
 }
