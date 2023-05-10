@@ -2623,10 +2623,10 @@ func TestReturnTypes(t *testing.T) {
 	t.Parallel()
 
 	// Ensure all opcodes return values they are supposed to according to the OpSpecs table
-	typeToArg := map[StackType]string{
-		StackUint64: "int 1\n",
-		StackAny:    "int 1\n",
-		StackBytes:  "byte 0x33343536\n", // Which is the string "3456"
+	typeToArg := map[avmType]string{
+		avmUint64: "int 1\n",
+		avmAny:    "int 1\n",
+		avmBytes:  "byte 0x33343536\n", // Which is the string "3456"
 	}
 
 	// We try to form a snippet that will test every opcode, by sandwiching it
@@ -2784,7 +2784,7 @@ func TestReturnTypes(t *testing.T) {
 				var sb strings.Builder
 				if provideStackInput {
 					for _, t := range spec.Arg.Types {
-						sb.WriteString(typeToArg[t])
+						sb.WriteString(typeToArg[t.AVMType])
 					}
 				}
 				sb.WriteString(cmd + "\n")
@@ -2867,10 +2867,10 @@ func TestReturnTypes(t *testing.T) {
 				}
 				require.Len(t, cx.stack, len(spec.Return.Types), "%s", ep.Trace)
 				for i := 0; i < len(spec.Return.Types); i++ {
-					stackType := cx.stack[i].argType()
+					stackType := cx.stack[i].stackType()
 					retType := spec.Return.Types[i]
 					require.True(
-						t, typecheck(retType, stackType),
+						t, stackType.overlaps(retType),
 						"%s expected to return %s but actual is %s", spec.Name, retType, stackType,
 					)
 				}
