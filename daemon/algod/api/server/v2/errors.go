@@ -26,7 +26,7 @@ var (
 	errFailedLookingUpTransactionPool          = "failed to retrieve information from the transaction pool"
 	errFailedRetrievingStateDelta              = "failed retrieving State Delta: %v"
 	errFailedRetrievingNodeStatus              = "failed retrieving node status"
-	errFailedRetrievingLatestBlockHeaderStatus = "failed retrieving latests block header"
+	errFailedRetrievingLatestBlockHeaderStatus = "failed retrieving latest block header"
 	errFailedRetrievingTimeStampOffset         = "failed retrieving timestamp offset from node: %v"
 	errFailedSettingTimeStampOffset            = "failed to set timestamp offset on the node: %v"
 	errFailedRetrievingSyncRound               = "failed retrieving sync round from ledger"
@@ -47,4 +47,5 @@ var (
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
 	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"
+	errFailedRetrievingTracer                  = "failed retrieving the expected tracer from ledger"
 )

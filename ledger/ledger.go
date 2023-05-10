@@ -474,6 +474,11 @@ func (l *Ledger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta,
 	return l.accts.lookupStateDelta(rnd)
 }
 
+// GetTracer returns the logic.EvalTracer attached to the ledger--can be nil.
+func (l *Ledger) GetTracer() logic.EvalTracer {
+	return l.tracer
+}
+
 // VotersForStateProof returns the top online accounts at round rnd.
 // The result might be nil, even with err=nil, if there are no voters
 // for that round because state proofs were not enabled.
