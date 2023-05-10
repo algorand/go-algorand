@@ -1312,16 +1312,19 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	fileSize := int64(0)
 	start := time.Now()
 	ledgerGetcatchpointCount.Inc(nil)
+	ct.catchpointsMu.RLock()
+	defer ct.catchpointsMu.RUnlock()
+
 	// TODO: we need to generalize this, check @cce PoC PR, he has something
 	//       somewhat broken for some KVs..
-	err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		cr, err := tx.MakeCatchpointReader()
-		if err != nil {
-			return err
+	err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err1 error) {
+		cr, err1 := tx.MakeCatchpointReader()
+		if err1 != nil {
+			return err1
 		}
 
-		dbFileName, _, fileSize, err = cr.GetCatchpoint(ctx, round)
-		return
+		dbFileName, _, fileSize, err1 = cr.GetCatchpoint(ctx, round)
+		return err1
 	})
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil && err != sql.ErrNoRows {

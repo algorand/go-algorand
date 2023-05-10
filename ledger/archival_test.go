@@ -768,8 +768,8 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	var minSave basics.Round
 	var cleanTracker ledgerTracker
 	var trackerType reflect.Type
-	wl.l.trackerMu.RLock()
-	defer wl.l.trackerMu.RUnlock()
+	// wl.l.trackers.mu.RLock()
+	// defer wl.l.trackers.mu.RUnlock()
 	for _, trk := range wl.l.trackers.trackers {
 		if _, ok := trk.(*accountUpdates); ok {
 			wl.l.trackers.waitAccountsWriting()
