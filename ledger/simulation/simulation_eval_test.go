@@ -128,6 +128,8 @@ func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, t
 
 	actual, err := s.Simulate(testcase.input)
 	require.NoError(t, err)
+	fmt.Println(actual)
+	fmt.Println(testcase.expected)
 
 	validateSimulationResult(t, actual)
 
@@ -1657,8 +1659,236 @@ return`
 
 func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Skip("TEST NOT FINISHED YET")
 	t.Parallel()
 
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   maxDepthTealApproval,
+			ClearStateProgram: "#pragma version 8\nint 1",
+		})
+
+		MaxDepth := 2
+		MinFee := uint64(1e5)
+
+		paymentTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   MinFee * uint64(MaxDepth+1),
+		})
+
+		callsMaxDepth := txnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{{byte(MaxDepth)}},
+			Fee:             MinFee * uint64(MaxDepth*3+2),
+		})
+
+		txntest.Group(&createTxn, &paymentTxn, &callsMaxDepth)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedPaymentTxn := paymentTxn.Txn().Sign(sender.Sk)
+		signedCallsMaxDepth := callsMaxDepth.Txn().Sign(sender.Sk)
+
+		uint64ItoB := func(v uint64) []byte {
+			bytes := make([]byte, 8)
+			binary.BigEndian.PutUint64(bytes, v)
+			return bytes
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedPaymentTxn, signedCallsMaxDepth},
+				},
+				ExecTraceConfig: simulation.ReturnPC,
+			},
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: txnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{ApplicationID: futureAppID},
+								},
+								AppBudgetConsumed: 7,
+								Trace: &simulation.TransactionTrace{
+									TraceType: simulation.AppCallApprovalTransaction,
+									Trace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 6},
+										{PC: 8},
+										{PC: 9},
+										{PC: 10},
+										{PC: 149},
+										{PC: 150},
+									},
+								},
+							},
+							{},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: 0,
+										EvalDelta: transactions.EvalDelta{
+											Logs: []string{string(uint64ItoB(1 << MaxDepth))},
+											InnerTxns: []transactions.SignedTxnWithAD{
+												{
+													ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 3},
+												},
+												{},
+												{
+													ApplyData: transactions.ApplyData{
+														ApplicationID: futureAppID + 1,
+														EvalDelta: transactions.EvalDelta{
+															Logs: []string{string(uint64ItoB(1 << (MaxDepth - 1)))},
+															InnerTxns: []transactions.SignedTxnWithAD{
+																{
+																	ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 6},
+																},
+																{},
+																{
+																	ApplyData: transactions.ApplyData{
+																		EvalDelta: transactions.EvalDelta{
+																			Logs: []string{string(uint64ItoB(1 << (MaxDepth - 2)))},
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 306,
+								Trace: &simulation.TransactionTrace{
+									TraceType: simulation.AppCallApprovalTransaction,
+									Trace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 6},
+										{PC: 8},
+										{PC: 9},
+										{PC: 10},
+										{PC: 13},
+										{PC: 15},
+										{PC: 16},
+										{PC: 17},
+										{PC: 21},
+										{PC: 23},
+										{PC: 25},
+										{PC: 27},
+										{PC: 29},
+										{PC: 31},
+										{PC: 33},
+										{PC: 35},
+										{PC: 37},
+										{PC: 39},
+										{PC: 41},
+										{PC: 43},
+										{PC: 45},
+										{PC: 47},
+										{PC: 48},
+										{PC: 50},
+										{PC: 51},
+										{PC: 53},
+										{PC: 54},
+										{PC: 56},
+										{PC: 59},
+										{PC: 60},
+										{PC: 61},
+										{PC: 62},
+										{PC: 63},
+										{PC: 66},
+										{PC: 67},
+										{PC: 68},
+										{PC: 69},
+										{PC: 74},
+										{PC: 75},
+										{PC: 76},
+										{PC: 78},
+										{PC: 79},
+										{PC: 81},
+										{PC: 83},
+										{PC: 85},
+										{PC: 87},
+										{PC: 89},
+										{PC: 90},
+										{PC: 91},
+										{PC: 92},
+										{PC: 94},
+										{PC: 95},
+										{PC: 97},
+										{PC: 99},
+										{PC: 103},
+										{PC: 104},
+										{PC: 106},
+										{PC: 113},
+										{PC: 116},
+										{PC: 117},
+										{PC: 118},
+										{PC: 119},
+										{PC: 121},
+										{PC: 122},
+										{PC: 123},
+										{PC: 125},
+										{PC: 128},
+										{PC: 129},
+										{PC: 130},
+										{PC: 131},
+										{PC: 132},
+										{PC: 134},
+										{PC: 136},
+										{PC: 138},
+										{PC: 139},
+										{PC: 141},
+										{PC: 143},
+										{PC: 145},
+										{PC: 146},
+										{PC: 72},
+										{PC: 73},
+									},
+									InnerTraces: []simulation.TransactionTrace{
+										{
+											TraceType: simulation.AppCallApprovalTransaction,
+											Trace: []simulation.OpcodeTraceUnit{
+												{PC: 1},
+												{PC: 6},
+												{PC: 8},
+												{PC: 9},
+												{PC: 10},
+												{PC: 149},
+												{PC: 150},
+											},
+										},
+										{
+											TraceType: simulation.AppCallApprovalTransaction,
+											Trace:     []simulation.OpcodeTraceUnit{},
+										},
+									},
+									StepToInnerMap: map[uint64]uint8{47: 0, 78: 1},
+								},
+							},
+						},
+						AppBudgetAdded:    4200,
+						AppBudgetConsumed: 313,
+					},
+				},
+				ExecTraceConfig: simulation.ReturnPC,
+			},
+		}
+	})
 }
 
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
