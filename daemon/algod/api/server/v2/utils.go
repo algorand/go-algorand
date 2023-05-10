@@ -365,6 +365,24 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 		return nil
 	}
 
+	// Decide which trace type
+	var traceType model.SimulationTransactionExecTraceTraceType
+	switch txnTrace.TraceType {
+	case simulation.AppCallApprovalTransaction:
+		traceType = model.SimulationTransactionExecTraceTraceTypeApprovalProgram
+	case simulation.AppCallClearStateTransaction:
+		traceType = model.SimulationTransactionExecTraceTraceTypeClearStateProgram
+	case simulation.LogicSigTransaction:
+		traceType = model.SimulationTransactionExecTraceTraceTypeLogicSignature
+	}
+
+	// Convert opcode trace to response model
+	var opcodeTrace []model.SimulationOpcodeTraceUnit
+	for i := range txnTrace.Trace {
+		opcodeTrace = append(opcodeTrace, model.SimulationOpcodeTraceUnit{Pc: txnTrace.Trace[i].PC})
+	}
+
+	// Convert inner traces
 	var innerTraces []model.SimulationTransactionExecTrace
 	for i := range txnTrace.InnerTraces {
 		innerTrace := *convertTxnTrace(&txnTrace.InnerTraces[i])
@@ -375,11 +393,7 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 		innerTracesPtr = &innerTraces
 	}
 
-	var opcodeTrace []model.SimulationOpcodeTraceUnit
-	for i := range txnTrace.Trace {
-		opcodeTrace = append(opcodeTrace, model.SimulationOpcodeTraceUnit{Pc: txnTrace.Trace[i].PC})
-	}
-
+	// Decide PC that branches into inner app call
 	var pcToInner []model.SimulationPcToInnerIndex
 	for k, v := range txnTrace.StepToInnerMap {
 		pcToInner = append(pcToInner, model.SimulationPcToInnerIndex{Pc: k, InnerIndex: uint64(v)})
@@ -387,16 +401,6 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 	var pcToInnerPtr *[]model.SimulationPcToInnerIndex
 	if len(pcToInner) > 0 {
 		pcToInnerPtr = &pcToInner
-	}
-
-	var traceType model.SimulationTransactionExecTraceTraceType
-	switch txnTrace.TraceType {
-	case simulation.AppCallApprovalTransaction:
-		traceType = model.SimulationTransactionExecTraceTraceTypeApprovalProgram
-	case simulation.AppCallClearStateTransaction:
-		traceType = model.SimulationTransactionExecTraceTraceTypeClearStateProgram
-	case simulation.LogicSigTransaction:
-		traceType = model.SimulationTransactionExecTraceTraceTypeLogicSignature
 	}
 
 	return &model.SimulationTransactionExecTrace{

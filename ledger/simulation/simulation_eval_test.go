@@ -128,8 +128,6 @@ func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, t
 
 	actual, err := s.Simulate(testcase.input)
 	require.NoError(t, err)
-	fmt.Println(actual)
-	fmt.Println(testcase.expected)
 
 	validateSimulationResult(t, actual)
 
