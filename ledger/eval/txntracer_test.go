@@ -75,8 +75,8 @@ func TestTransactionGroupWithDeltaTracer(t *testing.T) {
 
 			innerAppID := basics.AppIndex(3) + offset
 			innerAppAddress := innerAppID.Address()
-			appId := basics.AppIndex(1) + offset
-			appAddress := appId.Address()
+			appID := basics.AppIndex(1) + offset
+			appAddress := appID.Address()
 			balances := genesisInitState.Accounts
 			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
 			balances[appAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
@@ -115,7 +115,7 @@ int 1`,
 				Fee:         minFee,
 				GenesisHash: genHash,
 				Note:        []byte("one"),
-				Boxes: []transactions.BoxRef{transactions.BoxRef{
+				Boxes: []transactions.BoxRef{{
 					Index: 0,
 					Name:  []byte("hellobox"),
 				}},
