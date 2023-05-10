@@ -201,16 +201,19 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 		}
 		transactionTrace := makeTransactionTrace(traceType)
 
+		var txnTraceStackElem *TransactionTrace
+
 		// The last question is, where should this transaction trace attach to:
 		// - if it is a top level transaction, then attach to TxnResult level
 		// - if it is an inner transaction, then refer to the stack for latest exec trace, and attach to inner array
 		if len(execTraceStack) == 0 {
 			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
-			execTraceStack = append(execTraceStack, tracer.result.TxnGroups[0].Txns[groupIndex].Trace)
+			txnTraceStackElem = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 		} else {
 			lastExecTrace := execTraceStack[len(execTraceStack)-1]
 			lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, transactionTrace)
-			execTraceStack = append(execTraceStack, &lastExecTrace.InnerTraces[len(lastExecTrace.InnerTraces)-1])
+			txnTraceStackElem = &lastExecTrace.InnerTraces[len(lastExecTrace.InnerTraces)-1]
+
 			innerIndex := uint8(len(lastExecTrace.InnerTraces)) - 1
 			stepIndex := uint64(len(lastExecTrace.Trace)) - 1
 			if lastExecTrace.StepToInnerMap == nil {
@@ -220,7 +223,7 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 		}
 
 		// In both case, we need to add to transaction trace to the stack
-		//execTraceStack = append(execTraceStack, &transactionTrace)
+		execTraceStack = append(execTraceStack, txnTraceStackElem)
 	}
 	tracer.cursorEvalTracer.BeforeTxn(ep, groupIndex)
 }
