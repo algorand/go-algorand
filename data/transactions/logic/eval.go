@@ -4098,7 +4098,7 @@ func (cx *EvalContext) resolveAccount(account stackValue) (basics.Address, int, 
 	if err != nil {
 		// we don't want to convey `err`, because the supplied `account` does
 		// seem to be an address, but we can't give a valid index.
-		return addr, -1, nil //nolint:nilerr // provide -1 with nil err
+		return addr, -1, nil //nolint:nilerr // see above comment
 	}
 	return addr, int(idx), nil
 }
