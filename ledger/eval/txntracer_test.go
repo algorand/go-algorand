@@ -75,8 +75,11 @@ func TestTransactionGroupWithDeltaTracer(t *testing.T) {
 
 			innerAppID := basics.AppIndex(3) + offset
 			innerAppAddress := innerAppID.Address()
+			appId := basics.AppIndex(1) + offset
+			appAddress := appId.Address()
 			balances := genesisInitState.Accounts
 			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
+			balances[appAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
 
 			genesisBalances := bookkeeping.GenesisBalances{
 				Balances:    genesisInitState.Accounts,
@@ -99,17 +102,23 @@ func TestTransactionGroupWithDeltaTracer(t *testing.T) {
 			basicAppCallTxn := txntest.Txn{
 				Type:   protocol.ApplicationCallTx,
 				Sender: addrs[0],
-				ApprovalProgram: `#pragma version 6
-byte "hello"
-log
+				ApprovalProgram: `#pragma version 8
+byte "hellobox"
+int 10
+box_create
+pop
 int 1`,
-				ClearStateProgram: `#pragma version 6
+				ClearStateProgram: `#pragma version 8
 int 1`,
 				FirstValid:  newBlock.Round(),
 				LastValid:   newBlock.Round() + 1000,
 				Fee:         minFee,
 				GenesisHash: genHash,
 				Note:        []byte("one"),
+				Boxes: []transactions.BoxRef{transactions.BoxRef{
+					Index: 0,
+					Name:  []byte("hellobox"),
+				}},
 			}
 
 			// a non-app call txn
@@ -179,6 +188,16 @@ int 1`,
 						},
 					},
 					{
+						Addr: appAddress,
+						AccountData: ledgercore.AccountData{
+							AccountBaseData: ledgercore.AccountBaseData{
+								MicroAlgos:    basics.MicroAlgos{Raw: 1000000},
+								TotalBoxes:    1,
+								TotalBoxBytes: 18,
+							},
+						},
+					},
+					{
 						Addr: addrs[1],
 					},
 					{
@@ -213,8 +232,8 @@ int 1`,
 						Addr: addrs[0],
 						Params: ledgercore.AppParamsDelta{
 							Params: &basics.AppParams{
-								ApprovalProgram:   []byte{0x06, 0x80, 0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0xb0, 0x81, 0x01},
-								ClearStateProgram: []byte{0x06, 0x81, 0x01},
+								ApprovalProgram:   []byte{0x08, 0x80, 0x08, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x62, 0x6f, 0x78, 0x81, 0x0a, 0xb9, 0x48, 0x81, 0x01},
+								ClearStateProgram: []byte{0x08, 0x81, 0x01},
 							},
 						},
 					},
@@ -244,6 +263,12 @@ int 1`,
 					},
 				},
 			}
+			expectedKvMods := map[string]ledgercore.KvValueDelta{
+				"bx:\x00\x00\x00\x00\x00\x00\x03\xe9hellobox": {
+					OldData: []uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+					Data:    []uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				},
+			}
 
 			actualDelta, err := tracer.GetDeltaForID(crypto.Digest(txgroup[0].ID()))
 			require.NoError(t, err)
@@ -258,6 +283,7 @@ int 1`,
 			require.Equal(t, expectedAccts.Accts, actualDelta.Accts.Accts)
 			require.Equal(t, expectedAccts.AppResources, actualDelta.Accts.AppResources)
 			require.Equal(t, expectedAccts.AssetResources, actualDelta.Accts.AssetResources)
+			require.Equal(t, expectedKvMods, actualDelta.KvMods)
 		})
 	}
 }
