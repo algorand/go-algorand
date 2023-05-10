@@ -42,6 +42,10 @@ func init() {
 // VRFVerifier is a deprecated name for VrfPubkey
 type VRFVerifier = VrfPubkey
 
+func VRFVerifierMaxSize() int {
+	return VrfPubkeyMaxSize()
+}
+
 // VRFProof is a deprecated name for VrfProof
 type VRFProof = VrfProof
 

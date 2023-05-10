@@ -139,6 +139,10 @@ func (s *Signature) Blank() bool {
 // and verify the authenticity of Signatures.
 type SignatureVerifier = PublicKey
 
+func SignatureVerifierMaxSize() int {
+	return PublicKeyMaxSize()
+}
+
 // SignatureSecrets are used by an entity to produce unforgeable signatures over
 // a message.
 type SignatureSecrets struct {

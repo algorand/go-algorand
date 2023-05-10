@@ -41,11 +41,6 @@ type netPrioResponseSigned struct {
 	Sig      crypto.OneTimeSignature
 }
 
-// NetPrioMaxSize returns the max encoded size of the message to be used by network for limiting reads
-func NetPrioMaxSize() int {
-	return (&netPrioResponseSigned{}).MaxSize()
-}
-
 func (npr netPrioResponse) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.NetPrioResponse, protocol.Encode(&npr)
 }

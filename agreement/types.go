@@ -54,6 +54,10 @@ type (
 	period uint64
 )
 
+func RoundMaxSize() int {
+	return basics.RoundMaxSize()
+}
+
 // Algorand 2.0 steps
 const (
 	propose step = iota

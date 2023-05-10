@@ -88,10 +88,6 @@ type (
 	UnauthenticatedVote = unauthenticatedVote
 )
 
-func MaxUnauthenticatedVoteSize() int {
-	return (&unauthenticatedVote{}).MaxSize()
-}
-
 // verify verifies that a vote that was received from the network is valid.
 func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	rv := uv.R

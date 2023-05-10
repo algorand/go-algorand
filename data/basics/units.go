@@ -112,6 +112,10 @@ func (a MicroAlgos) MaxSize() (s int) {
 	return msgp.Uint64Size
 }
 
+func MicroAlgosMaxSize() (s int) {
+	return msgp.Uint64Size
+}
+
 // Round represents a protocol round index
 type Round uint64
 

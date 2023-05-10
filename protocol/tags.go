@@ -16,6 +16,11 @@
 
 package protocol
 
+import (
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/transactions"
+)
+
 // Tag represents a message type identifier.  Messages have a Tag field. Handlers can register to a given Tag.
 // e.g., the agreement service can register to handle agreements with the Agreement tag.
 //msgp:allocbound Tag 2
@@ -67,6 +72,7 @@ func (t Tag) MaxMessageSize() int {
 	case TopicMsgRespTag:
 		return 1024
 	case TxnTag:
+		return config.MaxTxGroupSize * transactions.SignedTxnMaxSize()
 	case UniEnsBlockReqTag:
 		return 1024
 	case VoteBundleTag:
