@@ -16,7 +16,7 @@ Algorand maintains a Docker image with recent snapshot builds from our `master` 
 
 Algorand also publishes experimental versions of Algod.
 
-- `algorand/algod:{LONGSHA}` is the version containing the latest commit to `master`
+- `algorand/algod:{LONGSHA}` is a version containing a specific commit to `master`
 - `algorand/algod:master` is the version running on our `master` branch
 - `algorand/algod:feature-{branch}` is the latest version of Algod on any of the go-algorand feature branches
 
