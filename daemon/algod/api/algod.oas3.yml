@@ -2070,7 +2070,7 @@
         "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
         "properties": {
           "inner-trace": {
-            "description": "An array of SimulationTransactionExecTrace representing calling inner transactions to apps.",
+            "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
             "items": {
               "$ref": "#/components/schemas/SimulationTransactionExecTrace"
             },

@@ -3902,7 +3902,7 @@
           }
         },
         "inner-trace": {
-          "description": "An array of SimulationTransactionExecTrace representing calling inner transactions to apps.",
+          "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/SimulationTransactionExecTrace"

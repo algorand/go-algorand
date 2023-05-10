@@ -736,7 +736,7 @@ type SimulationPcToInnerIndex struct {
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 type SimulationTransactionExecTrace struct {
-	// InnerTrace An array of SimulationTransactionExecTrace representing calling inner transactions to apps.
+	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
 	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
 
 	// StepToInnerMap The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn.
