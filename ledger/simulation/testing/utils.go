@@ -117,6 +117,7 @@ func (env *Environment) endBlock(evaluator *eval.BlockEvaluator) *ledgercore.Val
 	return validatedBlock
 }
 
+// Txn creates and executes a new block with the given transaction and returns its ApplyData
 func (env *Environment) Txn(txn transactions.SignedTxn) transactions.ApplyData {
 	env.t.Helper()
 
@@ -146,6 +147,96 @@ func (env *Environment) CreateAsset(creator basics.Address, params basics.AssetP
 	require.NotZero(env.t, ad.ConfigAsset)
 
 	return ad.ConfigAsset
+}
+
+// AppParams mirrors basics.AppParams, but allows the approval and clear state programs to have the
+// same values that txntest.Txn accepts
+type AppParams struct {
+	ApprovalProgram   interface{}
+	ClearStateProgram interface{}
+	GlobalState       basics.TealKeyValue
+	LocalStateSchema  basics.StateSchema
+	GlobalStateSchema basics.StateSchema
+	ExtraProgramPages uint32
+}
+
+// CreateApp creates an application with the given parameters and returns its ID
+func (env *Environment) CreateApp(creator basics.Address, params AppParams) basics.AppIndex {
+	env.t.Helper()
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            creator,
+		ApprovalProgram:   params.ApprovalProgram,
+		ClearStateProgram: params.ClearStateProgram,
+		GlobalStateSchema: params.GlobalStateSchema,
+		LocalStateSchema:  params.LocalStateSchema,
+		ExtraProgramPages: params.ExtraProgramPages,
+	})
+
+	ad := env.Txn(txn.SignedTxn())
+	require.NotZero(env.t, ad.ApplicationID)
+
+	return ad.ApplicationID
+}
+
+// TransferAlgos transfers the given amount of Algos from one account to another
+func (env *Environment) TransferAlgos(from, to basics.Address, amount uint64) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   from,
+		Receiver: to,
+		Amount:   amount,
+	})
+	env.Txn(txn.SignedTxn())
+}
+
+// TransferAsset transfers the given amount of an asset from one account to another
+func (env *Environment) TransferAsset(from, to basics.Address, assetID basics.AssetIndex, amount uint64) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.AssetTransferTx,
+		Sender:        from,
+		AssetReceiver: to,
+		XferAsset:     assetID,
+		AssetAmount:   amount,
+	})
+	env.Txn(txn.SignedTxn())
+}
+
+// OptIntoAsset opts the given account into the given asset
+func (env *Environment) OptIntoAsset(address basics.Address, assetID basics.AssetIndex) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.AssetTransferTx,
+		Sender:        address,
+		AssetReceiver: address,
+		XferAsset:     assetID,
+	})
+	env.Txn(txn.SignedTxn())
+}
+
+func (env *Environment) OptIntoApp(address basics.Address, appID basics.AppIndex) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        address,
+		ApplicationID: appID,
+		OnCompletion:  transactions.OptInOC,
+	})
+	env.Txn(txn.SignedTxn())
+}
+
+// Rekey rekeys the given account to the given authorizer
+func (env *Environment) Rekey(account, rekeyTo basics.Address) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:    protocol.KeyRegistrationTx,
+		Sender:  account,
+		RekeyTo: rekeyTo,
+	})
+	env.Txn(txn.SignedTxn())
 }
 
 // PrepareSimulatorTest creates an environment to test transaction simulations. The caller is

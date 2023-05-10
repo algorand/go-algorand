@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -60,6 +61,15 @@ func normalizeEvalDeltas(t *testing.T, actual, expected *transactions.EvalDelta)
 		}
 		if len(evalDelta.LocalDeltas) == 0 {
 			evalDelta.LocalDeltas = nil
+		}
+		if len(evalDelta.SharedAccts) == 0 {
+			evalDelta.SharedAccts = nil
+		}
+		if len(evalDelta.Logs) == 0 {
+			evalDelta.Logs = nil
+		}
+		if len(evalDelta.InnerTxns) == 0 {
+			evalDelta.InnerTxns = nil
 		}
 	}
 	// Use assert instead of require here so that we get a more useful error message later
@@ -118,6 +128,8 @@ func validateSimulationResult(t *testing.T, result simulation.Result) {
 	}
 }
 
+const ignoreAppBudgetConsumed = math.MaxUint64
+
 func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simulationTestCase) {
 	t.Helper()
 	env := simulationtesting.PrepareSimulatorTest(t)
@@ -140,6 +152,22 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 				testcase.expected.TxnGroups[i].Txns[j].Txn.SignedTxn = testcase.input.TxnGroups[i][j]
 			}
 			normalizeEvalDeltas(t, &actual.TxnGroups[i].Txns[j].Txn.EvalDelta, &testcase.expected.TxnGroups[i].Txns[j].Txn.EvalDelta)
+
+			if testcase.expected.TxnGroups[i].Txns[j].AppBudgetConsumed == ignoreAppBudgetConsumed {
+				// This test does not care about the app budget consumed. Replace it with the actual value.
+				testcase.expected.TxnGroups[i].Txns[j].AppBudgetConsumed = actual.TxnGroups[i].Txns[j].AppBudgetConsumed
+			}
+		}
+
+		if testcase.expected.TxnGroups[i].AppBudgetConsumed == ignoreAppBudgetConsumed {
+			// This test does not care about the app budget consumed. Replace it with the actual value.
+			// But let's still ensure it's the sum of budgets consumed in this group.
+			var sum uint64
+			for _, txn := range actual.TxnGroups[i].Txns {
+				sum += txn.AppBudgetConsumed
+			}
+			assert.Equal(t, sum, actual.TxnGroups[i].AppBudgetConsumed)
+			testcase.expected.TxnGroups[i].AppBudgetConsumed = actual.TxnGroups[i].AppBudgetConsumed
 		}
 	}
 
@@ -2190,26 +2218,96 @@ func TestMockTracerScenarios(t *testing.T) {
 	}
 }
 
-func TestUnlimitedResourceAccess(t *testing.T) {
+func TestUnlimitedResourceAccessRead(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	for v := 2; v <= logic.LogicVersion; v++ {
+	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
+	// be indexes into the foreign arrays, meaning we can't test the "unlimited" case.
+	for v := 4; v <= logic.LogicVersion; v++ {
 		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 				sender := env.Accounts[0]
 
-				assetCreator := env.Accounts[1].Addr
-				assetID := env.CreateAsset(assetCreator, basics.AssetParams{Total: 123})
+				otherAccount := env.Accounts[1]
+				otherAccountAuthAddr := env.Accounts[2].Addr
+				env.Rekey(otherAccount.Addr, otherAccountAuthAddr)
 
-				futureAppID := basics.AppIndex(assetID) + 1
+				assetCreator := env.Accounts[2].Addr
+				assetID := env.CreateAsset(assetCreator, basics.AssetParams{Total: 100})
+
+				assetHolder := env.Accounts[3].Addr
+				env.OptIntoAsset(assetHolder, assetID)
+				env.TransferAsset(assetCreator, assetHolder, assetID, 1)
+
+				otherAppCreator := env.Accounts[4].Addr
+				otherAppID := env.CreateApp(otherAppCreator, simulationtesting.AppParams{})
+
+				otherAppUser := env.Accounts[5].Addr
+				env.OptIntoApp(otherAppUser, otherAppID)
+
+				var innerCount int
+
+				program := fmt.Sprintf("#pragma version %d\n", v)
+
+				// Do nothing during create
+				program += "txn ApplicationID; bz end;"
+
+				// Account access
+				program += fmt.Sprintf("addr %s; balance; int %d; <; assert;", otherAccount.Addr, otherAccount.AcctData.MicroAlgos.Raw)
+				if v >= 6 { // acct_params_get introduced
+					program += fmt.Sprintf("addr %s; acct_params_get AcctAuthAddr; assert; addr %s; ==; assert;", otherAccount.Addr, otherAccountAuthAddr)
+				}
+				if v >= 5 { // inner txns introduced
+					program += fmt.Sprintf("itxn_begin; int pay; itxn_field TypeEnum; addr %s; itxn_field Receiver; itxn_submit;", otherAccount.Addr)
+					innerCount++
+				}
+
+				// Asset params access
+				program += fmt.Sprintf("int %d; asset_params_get AssetTotal; assert; int 100; ==; assert;", assetID)
+				if v >= 5 { // AssetCreator field introduced
+					program += fmt.Sprintf("int %d; asset_params_get AssetCreator; assert; addr %s; ==; assert;", assetID, assetCreator)
+				}
+
+				// Asset holding access
+				program += fmt.Sprintf("txn Sender; int %d; asset_holding_get AssetBalance; !; assert; !; assert;", assetID)
+				program += fmt.Sprintf("addr %s; int %d; asset_holding_get AssetBalance; assert; int 99; ==; assert;", assetCreator, assetID)
+				program += fmt.Sprintf("addr %s; int %d; asset_holding_get AssetBalance; assert; int 1; ==; assert;", assetHolder, assetID)
+				if v >= 5 { // inner txns introduced
+					program += fmt.Sprintf("itxn_begin; int axfer; itxn_field TypeEnum; int %d; itxn_field XferAsset; itxn_submit;", assetID)
+					innerCount++
+				}
+
+				// App params access
+				program += fmt.Sprintf("int %d; byte 0x01; app_global_get_ex; !; assert; !; assert;", otherAppID)
+				if v >= 5 { // app_params_get introduced
+					program += fmt.Sprintf("int %d; app_params_get AppCreator; assert; addr %s; ==; assert;", otherAppID, otherAppCreator)
+				}
+
+				// App local access
+				program += fmt.Sprintf("txn Sender; int %d; app_opted_in; !; assert;", otherAppID)
+				program += fmt.Sprintf("addr %s; int %d; app_opted_in; assert;", otherAppUser, otherAppID)
+				program += fmt.Sprintf("addr %s; int %d; byte 0x01; app_local_get_ex; !; assert; !; assert;", otherAppUser, otherAppID)
+				if v >= 6 { // contract to contract itxn calls introduced
+					program += fmt.Sprintf("itxn_begin; int appl; itxn_field TypeEnum; int %d; itxn_field ApplicationID; itxn_submit;", otherAppID)
+					innerCount++
+				}
+
+				program += "end: int 1"
+
+				testAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					ApprovalProgram:   program,
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+				})
+
+				// Fund the app to cover inner txn fees and min balance increases
+				env.TransferAlgos(sender.Addr, testAppID.Address(), 1_000_000)
+
 				txn := env.TxnInfo.NewTxn(txntest.Txn{
-					Type:   protocol.ApplicationCallTx,
-					Sender: sender.Addr,
-					// TODO: actually test resource access
-					ApprovalProgram:   fmt.Sprintf("#pragma version %d\n intcblock 1; intc_0", v),
-					ClearStateProgram: fmt.Sprintf("#pragma version %d\n intcblock 1; intc_0", v),
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: testAppID,
 				})
 				stxn := txn.Txn().Sign(sender.Sk)
 
@@ -2227,14 +2325,122 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 									{
 										Txn: transactions.SignedTxnWithAD{
 											ApplyData: transactions.ApplyData{
-												ApplicationID: futureAppID,
+												EvalDelta: transactions.EvalDelta{
+													InnerTxns: make([]transactions.SignedTxnWithAD, innerCount),
+												},
 											},
 										},
-										AppBudgetConsumed: 2,
+										AppBudgetConsumed: ignoreAppBudgetConsumed,
 									},
 								},
+								AppBudgetAdded:    700 + 700*uint64(innerCount),
+								AppBudgetConsumed: ignoreAppBudgetConsumed,
+							},
+						},
+						EvalOverrides: simulation.ResultEvalOverrides{
+							AllowUnlimitedResourceAccess: true,
+						},
+					},
+				}
+			})
+		})
+	}
+}
+
+func TestUnlimitedResourceAccessWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
+	// be indexes into the foreign arrays, meaning we can't test the "unlimited" case.
+	for v := 4; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
+				testAppUser := env.Accounts[6].Addr
+
+				program := fmt.Sprintf(`#pragma version %d
+txn ApplicationID
+!
+txn OnCompletion
+int OptIn
+==
+||
+bnz end // Do nothing during create or opt in
+
+// App local write to an account we shouldn't be able to
+addr %s
+byte "key"
+byte "value"
+app_local_put
+
+end:
+int 1
+`, v, testAppUser)
+
+				testAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					ApprovalProgram:   program,
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+					LocalStateSchema: basics.StateSchema{
+						NumByteSlice: 1,
+					},
+				})
+
+				env.OptIntoApp(testAppUser, testAppID)
+
+				txn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: testAppID,
+				})
+				stxn := txn.Txn().Sign(sender.Sk)
+
+				var expectedEvalDelta transactions.EvalDelta
+				var expectedError string
+				var expectedFailedAt simulation.TxnPath
+				// Can write to accounts outside of foreign array in sharedResourcesVersion (9), but not before then
+				if v >= 9 {
+					expectedEvalDelta = transactions.EvalDelta{
+						SharedAccts: []basics.Address{testAppUser},
+						LocalDeltas: map[uint64]basics.StateDelta{
+							1: {
+								"key": basics.ValueDelta{
+									Action: basics.SetBytesAction,
+									Bytes:  "value",
+								},
+							},
+						},
+					}
+				} else {
+					expectedError = fmt.Sprintf("logic eval error: invalid Account reference for mutation %s", testAppUser)
+					expectedFailedAt = simulation.TxnPath{0}
+				}
+
+				return simulationTestCase{
+					input: simulation.Request{
+						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
+						AllowUnlimitedResourceAccess: true,
+					},
+					expectedError: expectedError,
+					expected: simulation.Result{
+						Version:   simulation.ResultLatestVersion,
+						LastRound: env.TxnInfo.LatestRound(),
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												EvalDelta: expectedEvalDelta,
+											},
+										},
+										AppBudgetConsumed: ignoreAppBudgetConsumed,
+									},
+								},
+								FailedAt:          expectedFailedAt,
 								AppBudgetAdded:    700,
-								AppBudgetConsumed: 2,
+								AppBudgetConsumed: ignoreAppBudgetConsumed,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{

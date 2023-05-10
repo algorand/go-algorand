@@ -153,6 +153,9 @@ func (r *resources) fillAssetTransfer(hdr *transactions.Header, tx *transactions
 
 // allowsHolding checks if a holding is available under the txgroup sharing rules
 func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) bool {
+	if cx.UnlimitedResourceAccess {
+		return true
+	}
 	r := cx.available
 	if _, ok := r.sharedHoldings[ledgercore.AccountAsset{Address: addr, Asset: ai}]; ok {
 		return true
@@ -174,14 +177,14 @@ func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) 
 	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
 		return cx.availableAsset(ai)
 	}
-	if cx.UnlimitedResourceAccess {
-		return true
-	}
 	return false
 }
 
 // allowsLocals checks if a local state is available under the txgroup sharing rules
 func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) bool {
+	if cx.UnlimitedResourceAccess {
+		return true
+	}
 	r := cx.available
 	if _, ok := r.sharedLocals[ledgercore.AccountApp{Address: addr, App: ai}]; ok {
 		return true
@@ -204,9 +207,6 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 	}
 	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
 		return cx.availableApp(ai)
-	}
-	if cx.UnlimitedResourceAccess {
-		return true
 	}
 	return false
 }

@@ -256,6 +256,7 @@ type EvalConstants struct {
 	// MaxLogCalls is the limit of total log calls during a program execution
 	MaxLogCalls uint64
 
+	// UnlimitedResourceAccess removes resource access limitations
 	UnlimitedResourceAccess bool
 }
 
@@ -4984,6 +4985,10 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
+	if cx.UnlimitedResourceAccess {
+		return aid, nil
+	}
+
 	return 0, fmt.Errorf("unavailable Asset %d", aid)
 }
 
@@ -5033,6 +5038,10 @@ func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 		return aid, nil
 	}
 
+	if cx.UnlimitedResourceAccess {
+		return aid, nil
+	}
+
 	return 0, fmt.Errorf("unavailable App %d", aid)
 }
 
@@ -5061,10 +5070,6 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 		if _, ok := cx.available.sharedApps[aid]; ok {
 			return true
 		}
-	}
-
-	if cx.UnlimitedResourceAccess {
-		return true
 	}
 
 	return false
