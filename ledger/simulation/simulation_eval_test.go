@@ -2218,7 +2218,10 @@ func TestMockTracerScenarios(t *testing.T) {
 	}
 }
 
-func TestUnlimitedResourceAccessRead(t *testing.T) {
+// TestUnlimitedResourceAccess tests that app calls can access resources that they otherwise
+// should not be able to if AllowUnlimitedResourceAccess is enabled. Additional tests follow for
+// special cases.
+func TestUnlimitedResourceAccess(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
@@ -2294,6 +2297,12 @@ func TestUnlimitedResourceAccessRead(t *testing.T) {
 					innerCount++
 				}
 
+				// Box access
+				if v >= 8 { // boxes introduced
+					program += `byte "A"; int 64; box_create; assert;`
+					program += `byte "B"; box_len; !; assert; !; assert;`
+				}
+
 				program += "end: int 1"
 
 				testAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
@@ -2347,7 +2356,9 @@ func TestUnlimitedResourceAccessRead(t *testing.T) {
 	}
 }
 
-func TestUnlimitedResourceAccessWrite(t *testing.T) {
+// TestUnlimitedResourceAccessAccountLocalWrite tests app call behavior when writing to an account's
+// local state they otherwise shouldn't have access to if AllowUnlimitedResourceAccess is enabled.
+func TestUnlimitedResourceAccessAccountLocalWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
@@ -2441,6 +2452,107 @@ int 1
 								FailedAt:          expectedFailedAt,
 								AppBudgetAdded:    700,
 								AppBudgetConsumed: ignoreAppBudgetConsumed,
+							},
+						},
+						EvalOverrides: simulation.ResultEvalOverrides{
+							AllowUnlimitedResourceAccess: true,
+						},
+					},
+				}
+			})
+		})
+	}
+}
+
+// TestUnlimitedResourceAccessBoxReadBudget tests app call behavior when exceeding box read budget
+// if AllowUnlimitedResourceAccess is enabled.
+func TestUnlimitedResourceAccessBoxReadBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with 8, since that's when boxes were introduced
+	for v := 8; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
+
+				program := fmt.Sprintf(`#pragma version %d
+txn ApplicationID
+bz end // Do nothing during create
+
+txn ApplicationArgs 0
+byte "create" // Create a box
+==
+bz end
+txn ApplicationArgs 1
+txn ApplicationArgs 2
+btoi
+box_create
+pop
+
+end:
+int 1
+`, v)
+
+				testAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					ApprovalProgram:   program,
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+					LocalStateSchema: basics.StateSchema{
+						NumByteSlice: 1,
+					},
+				})
+
+				// Fund the app to cover min balance increase
+				env.TransferAlgos(sender.Addr, testAppID.Address(), 1_000_000)
+
+				bytesPerBoxReference := env.TxnInfo.CurrentProtocolParams().BytesPerBoxReference
+
+				// Create a box which exceeds the BytesPerBoxReference. This is ok because we supply
+				// another box ref during the call.
+				env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: testAppID,
+					ApplicationArgs: [][]byte{
+						[]byte("create"), []byte("A"), uint64ToBytes(2 * bytesPerBoxReference),
+					},
+					Boxes: []transactions.BoxRef{
+						{Name: []byte("A")},
+						{},
+					},
+				}).SignedTxn())
+
+				// Call the program with only the box reference whose size exceed
+				// BytesPerBoxReference. This would normally not be allowed.
+				txn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:            protocol.ApplicationCallTx,
+					Sender:          sender.Addr,
+					ApplicationID:   testAppID,
+					ApplicationArgs: [][]byte{{}},
+					Boxes: []transactions.BoxRef{
+						{Name: []byte("A")},
+					},
+				})
+				stxn := txn.Txn().Sign(sender.Sk)
+
+				return simulationTestCase{
+					input: simulation.Request{
+						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
+						AllowUnlimitedResourceAccess: true,
+					},
+					expected: simulation.Result{
+						Version:   simulation.ResultLatestVersion,
+						LastRound: env.TxnInfo.LatestRound(),
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										AppBudgetConsumed: 7,
+									},
+								},
+								AppBudgetAdded:    700,
+								AppBudgetConsumed: 7,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{

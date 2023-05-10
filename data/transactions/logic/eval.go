@@ -781,7 +781,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			cx.available.boxes[br] = false
 
 			used = basics.AddSaturate(used, size)
-			if used > cx.ioBudget {
+			if used > cx.ioBudget && !cx.UnlimitedResourceAccess {
 				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
 				if !cx.Proto.EnableBareBudgetError {
 					err = EvalError{err, "", gi, false}

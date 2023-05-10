@@ -36,7 +36,7 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 	}
 
 	dirty, ok := cx.available.boxes[boxRef{cx.appID, name}]
-	if !ok {
+	if !ok && !cx.UnlimitedResourceAccess {
 		return nil, false, fmt.Errorf("invalid Box reference %#x", name)
 	}
 
@@ -81,7 +81,7 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 	}
 	cx.available.boxes[boxRef{cx.appID, name}] = dirty
 
-	if cx.available.dirtyBytes > cx.ioBudget {
+	if cx.available.dirtyBytes > cx.ioBudget && !cx.UnlimitedResourceAccess {
 		return nil, false, fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)
 	}
 	return content, exists, nil
