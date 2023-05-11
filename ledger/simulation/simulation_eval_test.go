@@ -1937,6 +1937,94 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	})
 }
 
+func TestLogicSigPCExposure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 6
+` + strings.Repeat(`byte "a"; keccak256; pop
+`, 2) + `int 1`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
+		sender := accounts[0]
+
+		payTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := txnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
+byte "hello"; log; int 1`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		txntest.Group(&payTxn, &appCallTxn)
+
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedPayTxn, signedAppCallTxn},
+				},
+				ExecTraceConfig: simulation.ReturnPC,
+			},
+			expected: simulation.Result{
+				Version:         simulation.ResultLatestVersion,
+				LastRound:       txnInfo.LatestRound(),
+				ExecTraceConfig: simulation.ReturnPC,
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: 1002,
+										EvalDelta:     transactions.EvalDelta{Logs: []string{"hello"}},
+									},
+								},
+								AppBudgetConsumed:      3,
+								LogicSigBudgetConsumed: 266,
+								Trace: &simulation.TransactionTrace{
+									TraceType: simulation.LogicSigTransaction,
+									Trace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 8},
+										{PC: 9},
+									},
+									LogicSigTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 5},
+										{PC: 6},
+										{PC: 7},
+										{PC: 8},
+										{PC: 9},
+										{PC: 10},
+										{PC: 11},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    700,
+						AppBudgetConsumed: 3,
+					},
+				},
+			},
+		}
+	})
+}
+
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
 // within a subsequent app call
 func TestBalanceChangesWithApp(t *testing.T) {

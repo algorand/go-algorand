@@ -382,6 +382,16 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 		opcodeTrace = append(opcodeTrace, model.SimulationOpcodeTraceUnit{Pc: txnTrace.Trace[i].PC})
 	}
 
+	// Convert logic trace to response model
+	var logicSigTrace []model.SimulationOpcodeTraceUnit
+	for i := range txnTrace.LogicSigTrace {
+		logicSigTrace = append(logicSigTrace, model.SimulationOpcodeTraceUnit{Pc: txnTrace.LogicSigTrace[i].PC})
+	}
+	var logicSigTracePtr *[]model.SimulationOpcodeTraceUnit
+	if len(logicSigTrace) > 0 {
+		logicSigTracePtr = &logicSigTrace
+	}
+
 	// Convert inner traces
 	var innerTraces []model.SimulationTransactionExecTrace
 	for i := range txnTrace.InnerTraces {
@@ -406,6 +416,7 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 	return &model.SimulationTransactionExecTrace{
 		TraceType:      traceType,
 		Trace:          opcodeTrace,
+		LogicSigTrace:  logicSigTracePtr,
 		InnerTrace:     innerTracesPtr,
 		StepToInnerMap: pcToInnerPtr,
 	}

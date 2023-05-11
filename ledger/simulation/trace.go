@@ -197,9 +197,10 @@ const (
 type TransactionTrace struct {
 	// TraceType is an enum that indicates which kind of TransactionTrace this instance is standing for.
 	TraceType TransactionTraceType
-	// Trace contains the trace for an app/logicsig evaluation,
-	// if this is an app call transaction, or LogicSig signed this transaction.
+	// Trace contains the trace for an app evaluation, if this is an app call transaction.
 	Trace []OpcodeTraceUnit
+	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
+	LogicSigTrace []OpcodeTraceUnit
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.

@@ -3901,6 +3901,13 @@
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
         },
+        "logic-sig-trace": {
+          "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
         "inner-trace": {
           "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
           "type": "array",

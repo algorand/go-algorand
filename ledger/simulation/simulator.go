@@ -19,8 +19,8 @@ package simulation
 import (
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/config"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"

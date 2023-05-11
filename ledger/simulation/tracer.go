@@ -87,11 +87,19 @@ type evalTracer struct {
 	// execTraceStack keeps track of the call stack from top level transaction to the current inner txn that contains latest TransactionTrace
 	// this is used only for PC/Stack/Storage exposure
 	execTraceStack []*TransactionTrace
+
+	// txnIndexToLogicSigTrace keeps track of logic sig exec trace and their corresponding txn group id.
+	// by the end of transaction group, we should assign logic sig trace to each txn result by group id.
+	txnIndexToLogicSigTrace map[int][]OpcodeTraceUnit
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request) *evalTracer {
 	result := makeSimulationResult(lastRound, request)
-	return &evalTracer{result: &result}
+	evalTracerInstance := evalTracer{result: &result, txnIndexToLogicSigTrace: make(map[int][]OpcodeTraceUnit)}
+	if request.ExecTraceConfig > NoExecTrace {
+		evalTracerInstance.txnIndexToLogicSigTrace = make(map[int][]OpcodeTraceUnit)
+	}
+	return &evalTracerInstance
 }
 
 func (tracer *evalTracer) handleError(evalError error) {
@@ -156,6 +164,11 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 }
 
 func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
+	for i := range tracer.result.TxnGroups[0].Txns {
+		if logicSigTrace, ok := tracer.txnIndexToLogicSigTrace[i]; ok {
+			tracer.result.TxnGroups[0].Txns[i].Trace.LogicSigTrace = logicSigTrace
+		}
+	}
 	tracer.handleError(evalError)
 	tracer.cursorEvalTracer.AfterTxnGroup(ep, deltas, evalError)
 }
@@ -249,6 +262,24 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
+	defer func() {
+		if tracer.result.ExecTraceConfig == NoExecTrace {
+			return
+		}
+
+		currentOpcodeUnit := tracer.makeOpcodeTraceUnit(cx)
+
+		if cx.RunMode() == logic.ModeSig {
+			groupIndex := cx.GroupIndex()
+
+			tracer.txnIndexToLogicSigTrace[groupIndex] = append(tracer.txnIndexToLogicSigTrace[groupIndex], currentOpcodeUnit)
+			return
+		}
+
+		currentTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+		currentTrace.Trace = append(currentTrace.Trace, currentOpcodeUnit)
+	}()
+
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig ops
 		return
@@ -259,14 +290,6 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		// app creation
 		appIDToSave = cx.AppID()
 	}
-	defer func() {
-		if tracer.result.ExecTraceConfig == NoExecTrace {
-			return
-		}
-
-		currentTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
-		currentTrace.Trace = append(currentTrace.Trace, tracer.makeOpcodeTraceUnit(cx))
-	}()
 	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
 }
 

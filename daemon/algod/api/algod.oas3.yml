@@ -2076,6 +2076,13 @@
             },
             "type": "array"
           },
+          "logic-sig-trace": {
+            "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          },
           "step-to-inner-map": {
             "description": "The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn.",
             "items": {
