@@ -344,7 +344,7 @@ func setupTestDBAtVer2(partDB db.Accessor, part Participation) error {
 		keyDilution INTEGER NOT NULL DEFAULT 0
 	);`)
 		if err != nil {
-			return nil
+			return err
 		}
 
 		if err := setupSchemaForTest(tx, 2); err != nil {
@@ -362,12 +362,12 @@ func setupTestDBAtVer2(partDB db.Accessor, part Participation) error {
 func setupSchemaForTest(tx *sql.Tx, version int) error {
 	_, err := tx.Exec(`CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER);`)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", PartTableSchemaName, version)
 	if err != nil {
-		return nil
+		return err
 	}
 	return err
 }

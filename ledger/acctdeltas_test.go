@@ -1451,7 +1451,7 @@ func TestLookupAccountAddressFromAddressID(t *testing.T) {
 	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
-			return nil
+			return err
 		}
 
 		for addr, addrid := range addrsids {
