@@ -216,6 +216,22 @@ int 1`
 			require.NoError(t, err)
 			require.Len(t, eval.block.Payset, 4)
 
+			secondPayTxn := txntest.Txn{
+				Type:        protocol.PaymentTx,
+				Sender:      addrs[2],
+				Receiver:    addrs[1],
+				Amount:      100_000,
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round() + 1000,
+				Fee:         minFee,
+				GenesisHash: genHash,
+			}
+			secondTxGroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
+				secondPayTxn.Txn().Sign(keys[2]),
+			})
+			err = eval.TransactionGroup(secondTxGroup)
+			require.NoError(t, err)
+
 			expectedAccts := ledgercore.AccountDeltas{
 				Accts: []ledgercore.BalanceRecord{
 					{
@@ -344,7 +360,7 @@ int 1`
 			require.NoError(t, err)
 			allDeltas, err := tracer.GetDeltasForRound(basics.Round(1))
 			require.NoError(t, err)
-			require.Len(t, allDeltas, 1)
+			require.Len(t, allDeltas, 2)
 
 			require.Equal(t, expectedAccts.Accts, actualDelta.Accts.Accts)
 			require.Equal(t, expectedAccts.AppResources, actualDelta.Accts.AppResources)
