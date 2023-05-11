@@ -84,7 +84,7 @@ func calculateRanges(numberOfKeys uint64) (numOfKeysPerRoutine uint64, numOfRout
 func generateKeysForRange(ctx context.Context, startIdx uint64, endIdx uint64, keys []crypto.FalconSigner) error {
 	for k := startIdx; k < endIdx; k++ {
 		if ctx.Err() != nil {
-			break
+			return nil //nolint:nilerr // we don't need to return the ctx error, since the other goroutine will report it.
 		}
 		sigAlgo, err := crypto.NewFalconSigner()
 		if err != nil {
