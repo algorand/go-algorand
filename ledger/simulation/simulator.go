@@ -19,6 +19,7 @@ package simulation
 import (
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/config"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -207,14 +208,13 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 
 	// check that the extra budget is not exceeding simulation extra budget limit
 	if overrides.ExtraOpcodeBudget > MaxExtraOpcodeBudget {
-		return nil,
-			InvalidRequestError{
-				SimulatorError{
-					fmt.Errorf(
-						"extra budget %d > simulation extra budget limit %d",
-						overrides.ExtraOpcodeBudget, MaxExtraOpcodeBudget),
-				},
-			}
+		return nil, InvalidRequestError{
+			SimulatorError{
+				fmt.Errorf(
+					"extra budget %d > simulation extra budget limit %d",
+					overrides.ExtraOpcodeBudget, MaxExtraOpcodeBudget),
+			},
+		}
 	}
 
 	vb, err := s.evaluate(hdr, txgroup, tracer)
@@ -229,6 +229,14 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		return Result{}, InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups)),
+			},
+		}
+	}
+
+	if config.GetDefaultLocal().DisableSimulationTraceReturn && simulateRequest.ExecTraceConfig > NoExecTrace {
+		return Result{}, InvalidRequestError{
+			SimulatorError{
+				err: fmt.Errorf("the local configuration of the node has `DisableSimulationTraceReturn` turned on, while requesting for execution trace"),
 			},
 		}
 	}
