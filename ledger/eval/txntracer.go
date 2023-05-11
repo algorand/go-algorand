@@ -67,8 +67,27 @@ func convertStateDelta(delta ledgercore.StateDelta) StateDeltaSubset {
 	for k4, v4 := range delta.Creatables {
 		creatables[k4] = v4
 	}
+	var accR []ledgercore.BalanceRecord
+	var appR []ledgercore.AppResourceRecord
+	var assetR []ledgercore.AssetResourceRecord
+	if len(delta.Accts.Accts) > 0 {
+		accR = make([]ledgercore.BalanceRecord, len(delta.Accts.Accts))
+		copy(accR, delta.Accts.Accts)
+	}
+	if len(delta.Accts.AppResources) > 0 {
+		appR = make([]ledgercore.AppResourceRecord, len(delta.Accts.AppResources))
+		copy(appR, delta.Accts.AppResources)
+	}
+	if len(delta.Accts.AssetResources) > 0 {
+		assetR = make([]ledgercore.AssetResourceRecord, len(delta.Accts.AssetResources))
+		copy(assetR, delta.Accts.AssetResources)
+	}
 	return StateDeltaSubset{
-		Accts:      delta.Accts,
+		Accts: ledgercore.AccountDeltas{
+			Accts:          accR,
+			AppResources:   appR,
+			AssetResources: assetR,
+		},
 		KvMods:     kvmods,
 		Txids:      txids,
 		Txleases:   txleases,
