@@ -4311,9 +4311,9 @@ func (cx *EvalContext) resolveAccount(account stackValue) (basics.Address, int, 
 
 	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
 	if err != nil {
-		// we don't want to convery `err`, because the supplied `account` does
+		// we don't want to convey `err`, because the supplied `account` does
 		// seem to be an address, but we can't give a valid index.
-		return addr, -1, nil
+		return addr, -1, nil //nolint:nilerr // see above comment
 	}
 	return addr, int(idx), nil
 }
