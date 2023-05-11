@@ -27,6 +27,7 @@ import (
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -100,23 +101,29 @@ func TestTransactionGroupWithDeltaTracer(t *testing.T) {
 			eval.generate = true
 			genHash := l.GenesisHash()
 
-			// a basic app call
-			basicAppCallTxn := txntest.Txn{
-				Type:   protocol.ApplicationCallTx,
-				Sender: addrs[0],
-				ApprovalProgram: `#pragma version 8
+			basicAppCallApproval := `#pragma version 8
 byte "hellobox"
 int 10
 box_create
 pop
-int 1`,
-				ClearStateProgram: `#pragma version 8
-int 1`,
-				FirstValid:  newBlock.Round(),
-				LastValid:   newBlock.Round() + 1000,
-				Fee:         minFee,
-				GenesisHash: genHash,
-				Note:        []byte("one"),
+int 1`
+			basicAppCallClear := `#pragma version 8
+int 1`
+			basicAppCallClearOps, err := logic.AssembleString(basicAppCallClear)
+			require.NoError(t, err)
+			basicAppCallApprovalOps, err := logic.AssembleString(basicAppCallApproval)
+			require.NoError(t, err)
+			// a basic app call
+			basicAppCallTxn := txntest.Txn{
+				Type:              protocol.ApplicationCallTx,
+				Sender:            addrs[0],
+				ApprovalProgram:   basicAppCallApproval,
+				ClearStateProgram: basicAppCallClear,
+				FirstValid:        newBlock.Round(),
+				LastValid:         newBlock.Round() + 1000,
+				Fee:               minFee,
+				GenesisHash:       genHash,
+				Note:              []byte("one"),
 				Boxes: []transactions.BoxRef{{
 					Index: 0,
 					Name:  []byte("hellobox"),
@@ -140,16 +147,19 @@ int 1`,
 				Lease:            txnLease,
 			}
 			// an app call with inner txn
+			v6Clear := `#pragma version 6
+int 1`
+			v6ClearOps, err := logic.AssembleString(v6Clear)
+			require.NoError(t, err)
 			innerAppCallTxn := txntest.Txn{
-				Type:   protocol.ApplicationCallTx,
-				Sender: addrs[0],
-				ClearStateProgram: `#pragma version 6
-int 1`,
-				FirstValid:  newBlock.Round(),
-				LastValid:   newBlock.Round() + 1000,
-				Fee:         minFee,
-				GenesisHash: genHash,
-				Note:        []byte("three"),
+				Type:              protocol.ApplicationCallTx,
+				Sender:            addrs[0],
+				ClearStateProgram: v6Clear,
+				FirstValid:        newBlock.Round(),
+				LastValid:         newBlock.Round() + 1000,
+				Fee:               minFee,
+				GenesisHash:       genHash,
+				Note:              []byte("three"),
 			}
 			scenario := testCase.innerAppCallScenario(mocktracer.TestScenarioInfo{
 				CallingTxn:   innerAppCallTxn.Txn(),
@@ -157,12 +167,11 @@ int 1`,
 				CreatedAppID: innerAppID,
 			})
 			innerAppCallTxn.ApprovalProgram = scenario.Program
+			innerAppCallApprovalOps, err := logic.AssembleString(scenario.Program)
+			require.NoError(t, err)
 
 			// inner txn with more box mods
-			innerAppCallBoxTxn := txntest.Txn{
-				Type:   protocol.ApplicationCallTx,
-				Sender: addrs[0],
-				ApprovalProgram: `#pragma version 8
+			innerAppCallBoxApproval := `#pragma version 8
 byte "goodbyebox"
 int 10
 box_create
@@ -174,13 +183,18 @@ box_replace
 byte "goodbyebox"
 box_del
 pop
-int 1`,
-				ClearStateProgram: `#pragma version 8
-int 1`,
-				FirstValid:  newBlock.Round(),
-				LastValid:   newBlock.Round() + 1000,
-				Fee:         minFee,
-				GenesisHash: genHash,
+int 1`
+			innerAppCallBoxApprovalOps, err := logic.AssembleString(innerAppCallBoxApproval)
+			require.NoError(t, err)
+			innerAppCallBoxTxn := txntest.Txn{
+				Type:              protocol.ApplicationCallTx,
+				Sender:            addrs[0],
+				ApprovalProgram:   innerAppCallBoxApproval,
+				ClearStateProgram: basicAppCallClear,
+				FirstValid:        newBlock.Round(),
+				LastValid:         newBlock.Round() + 1000,
+				Fee:               minFee,
+				GenesisHash:       genHash,
 				Boxes: []transactions.BoxRef{{
 					Index: 0,
 					Name:  []byte("goodbyebox"),
@@ -271,8 +285,8 @@ int 1`,
 						Addr: addrs[0],
 						Params: ledgercore.AppParamsDelta{
 							Params: &basics.AppParams{
-								ApprovalProgram:   []byte{0x08, 0x80, 0x08, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x62, 0x6f, 0x78, 0x81, 0x0a, 0xb9, 0x48, 0x81, 0x01},
-								ClearStateProgram: []byte{0x08, 0x81, 0x01},
+								ApprovalProgram:   basicAppCallApprovalOps.Program,
+								ClearStateProgram: basicAppCallClearOps.Program,
 							},
 						},
 					},
@@ -281,12 +295,8 @@ int 1`,
 						Addr: addrs[0],
 						Params: ledgercore.AppParamsDelta{
 							Params: &basics.AppParams{
-								ApprovalProgram: []byte{0x06, 0x80, 0x01, 0x61, 0xb0, 0xb1, 0x81, 0x06, 0xb2, 0x10, 0x81, 0x00, 0xb2, 0x19, 0x80, 0x07,
-									0x06, 0x80, 0x01, 0x78, 0xb0, 0x81, 0x01, 0xb2, 0x1e, 0x80, 0x03, 0x06, 0x81, 0x01, 0xb2, 0x1f,
-									0xb3, 0x80, 0x01, 0x62, 0xb0, 0xb1, 0x81, 0x01, 0xb2, 0x10, 0x81, 0x01, 0xb2, 0x08, 0x32, 0x0a,
-									0xb2, 0x07, 0xb6, 0x81, 0x01, 0xb2, 0x10, 0x81, 0x02, 0xb2, 0x08, 0x32, 0x0a, 0xb2, 0x07, 0xb3,
-									0x80, 0x01, 0x63, 0xb0, 0x81, 0x01},
-								ClearStateProgram: []byte{0x06, 0x81, 0x01},
+								ApprovalProgram:   innerAppCallApprovalOps.Program,
+								ClearStateProgram: v6ClearOps.Program,
 							},
 						},
 					},
@@ -295,8 +305,8 @@ int 1`,
 						Addr: innerAppAddress,
 						Params: ledgercore.AppParamsDelta{
 							Params: &basics.AppParams{
-								ApprovalProgram:   []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x81, 0x01},
-								ClearStateProgram: []byte{0x06, 0x81, 0x01},
+								ApprovalProgram:   []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x81, 0x01}, // #pragma version 6; pushbytes "x"; log; pushint 1
+								ClearStateProgram: v6ClearOps.Program,
 							},
 						},
 					},
@@ -305,9 +315,8 @@ int 1`,
 						Addr: addrs[0],
 						Params: ledgercore.AppParamsDelta{
 							Params: &basics.AppParams{
-								ApprovalProgram: []byte{0x08, 0x26, 0x01, 0x0a, 0x67, 0x6f, 0x6f, 0x64, 0x62, 0x79, 0x65, 0x62, 0x6f, 0x78, 0x28, 0x81,
-									0x0a, 0xb9, 0x48, 0x28, 0x81, 0x00, 0x80, 0x01, 0x32, 0xbb, 0x28, 0xbc, 0x48, 0x81, 0x01},
-								ClearStateProgram: []byte{0x08, 0x81, 0x01},
+								ApprovalProgram:   innerAppCallBoxApprovalOps.Program,
+								ClearStateProgram: basicAppCallClearOps.Program,
 							},
 						},
 					},
