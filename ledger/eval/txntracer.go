@@ -51,19 +51,19 @@ func convertStateDelta(delta ledgercore.StateDelta) StateDeltaSubset {
 	// The StateDelta object returned through the EvalTracer has its values deleted between txn groups to avoid
 	// reallocation during evaluation.
 	// This means the map values need to be copied (to avoid deletion) since they are all passed by reference.
-	kvmods := make(map[string]ledgercore.KvValueDelta)
+	kvmods := make(map[string]ledgercore.KvValueDelta, len(delta.KvMods))
 	for k1, v1 := range delta.KvMods {
 		kvmods[k1] = v1
 	}
-	txids := make(map[transactions.Txid]ledgercore.IncludedTransactions)
+	txids := make(map[transactions.Txid]ledgercore.IncludedTransactions, len(delta.Txids))
 	for k2, v2 := range delta.Txids {
 		txids[k2] = v2
 	}
-	txleases := make(map[ledgercore.Txlease]basics.Round)
+	txleases := make(map[ledgercore.Txlease]basics.Round, len(delta.Txleases))
 	for k3, v3 := range delta.Txleases {
 		txleases[k3] = v3
 	}
-	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, len(delta.Creatables))
 	for k4, v4 := range delta.Creatables {
 		creatables[k4] = v4
 	}
