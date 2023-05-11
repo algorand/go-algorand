@@ -1761,6 +1761,11 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	}
 
 	triggerTrackerFlush(t, l, genesisInitState)
+	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
+	l.WaitForCommit(l.Latest())
+	// At this point the block queue go-routine will start removing block . However, it might not complete the task
+	// for that reason, we wait for the next block to be committed.
+	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	l.WaitForCommit(l.Latest())
 
 	// we make sure that the voters header does not exist and that the voters tracker
