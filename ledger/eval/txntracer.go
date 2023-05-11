@@ -48,12 +48,50 @@ type StateDeltaSubset struct {
 }
 
 func convertStateDelta(delta ledgercore.StateDelta) StateDeltaSubset {
+	// The StateDelta object returned through the EvalTracer has its values deleted between txn groups to avoid
+	// reallocation during evaluation.
+	// This means the map values need to be copied (to avoid deletion) since they are all passed by reference.
+	kvmods := make(map[string]ledgercore.KvValueDelta, len(delta.KvMods))
+	for k1, v1 := range delta.KvMods {
+		kvmods[k1] = v1
+	}
+	txids := make(map[transactions.Txid]ledgercore.IncludedTransactions, len(delta.Txids))
+	for k2, v2 := range delta.Txids {
+		txids[k2] = v2
+	}
+	txleases := make(map[ledgercore.Txlease]basics.Round, len(delta.Txleases))
+	for k3, v3 := range delta.Txleases {
+		txleases[k3] = v3
+	}
+	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, len(delta.Creatables))
+	for k4, v4 := range delta.Creatables {
+		creatables[k4] = v4
+	}
+	var accR []ledgercore.BalanceRecord
+	var appR []ledgercore.AppResourceRecord
+	var assetR []ledgercore.AssetResourceRecord
+	if len(delta.Accts.Accts) > 0 {
+		accR = make([]ledgercore.BalanceRecord, len(delta.Accts.Accts))
+		copy(accR, delta.Accts.Accts)
+	}
+	if len(delta.Accts.AppResources) > 0 {
+		appR = make([]ledgercore.AppResourceRecord, len(delta.Accts.AppResources))
+		copy(appR, delta.Accts.AppResources)
+	}
+	if len(delta.Accts.AssetResources) > 0 {
+		assetR = make([]ledgercore.AssetResourceRecord, len(delta.Accts.AssetResources))
+		copy(assetR, delta.Accts.AssetResources)
+	}
 	return StateDeltaSubset{
-		Accts:      delta.Accts,
-		KvMods:     delta.KvMods,
-		Txids:      delta.Txids,
-		Txleases:   delta.Txleases,
-		Creatables: delta.Creatables,
+		Accts: ledgercore.AccountDeltas{
+			Accts:          accR,
+			AppResources:   appR,
+			AssetResources: assetR,
+		},
+		KvMods:     kvmods,
+		Txids:      txids,
+		Txleases:   txleases,
+		Creatables: creatables,
 		Hdr:        delta.Hdr,
 	}
 }
@@ -65,8 +103,8 @@ type TxnGroupDeltaTracer struct {
 	lookback uint64
 	// no-op methods we don't care about
 	logic.NullEvalTracer
-	// txnGroupDeltas stores the StateDelta objects for each round, indexed by all the IDs within the group
-	txnGroupDeltas map[basics.Round]map[crypto.Digest]*ledgercore.StateDelta
+	// txnGroupDeltas stores the StateDeltaSubset objects for each round, indexed by all the IDs within the group
+	txnGroupDeltas map[basics.Round]map[crypto.Digest]*StateDeltaSubset
 	// latestRound is the most recent round seen via the BeforeBlock hdr
 	latestRound basics.Round
 }
@@ -75,7 +113,7 @@ type TxnGroupDeltaTracer struct {
 func MakeTxnGroupDeltaTracer(lookback uint64) *TxnGroupDeltaTracer {
 	return &TxnGroupDeltaTracer{
 		lookback:       lookback,
-		txnGroupDeltas: make(map[basics.Round]map[crypto.Digest]*ledgercore.StateDelta),
+		txnGroupDeltas: make(map[basics.Round]map[crypto.Digest]*StateDeltaSubset),
 	}
 }
 
@@ -87,7 +125,7 @@ func (tracer *TxnGroupDeltaTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
 	delete(tracer.txnGroupDeltas, hdr.Round-basics.Round(tracer.lookback))
 	tracer.latestRound = hdr.Round
 	// Initialize the delta map for the round
-	tracer.txnGroupDeltas[tracer.latestRound] = make(map[crypto.Digest]*ledgercore.StateDelta)
+	tracer.txnGroupDeltas[tracer.latestRound] = make(map[crypto.Digest]*StateDeltaSubset)
 }
 
 // AfterTxnGroup implements the EvalTracer interface for txn group boundaries
@@ -95,16 +133,17 @@ func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *l
 	if deltas == nil {
 		return
 	}
+	deltaSub := convertStateDelta(*deltas)
 	tracer.deltasLock.Lock()
 	defer tracer.deltasLock.Unlock()
 	txnDeltaMap := tracer.txnGroupDeltas[tracer.latestRound]
 	for _, txn := range ep.TxnGroup {
 		// Add Group ID
 		if !txn.Txn.Group.IsZero() {
-			txnDeltaMap[txn.Txn.Group] = deltas
+			txnDeltaMap[txn.Txn.Group] = &deltaSub
 		}
 		// Add Txn ID
-		txnDeltaMap[crypto.Digest(txn.ID())] = deltas
+		txnDeltaMap[crypto.Digest(txn.ID())] = &deltaSub
 	}
 }
 
@@ -117,7 +156,7 @@ func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]TxnGro
 		return nil, fmt.Errorf("round %d not found in txnGroupDeltaTracer", rnd)
 	}
 	// Dedupe entries in our map and collect Ids
-	var deltas = map[*ledgercore.StateDelta][]string{}
+	var deltas = map[*StateDeltaSubset][]string{}
 	for id, delta := range rndEntries {
 		if _, present := deltas[delta]; !present {
 			deltas[delta] = append(deltas[delta], id.String())
@@ -127,19 +166,19 @@ func (tracer *TxnGroupDeltaTracer) GetDeltasForRound(rnd basics.Round) ([]TxnGro
 	for delta, ids := range deltas {
 		deltasForRound = append(deltasForRound, TxnGroupDeltaWithIds{
 			Ids:   ids,
-			Delta: convertStateDelta(*delta),
+			Delta: *delta,
 		})
 	}
 	return deltasForRound, nil
 }
 
-// GetDeltaForID retruns the StateDelta associated with the group of transaction executed for the supplied ID (txn or group)
+// GetDeltaForID returns the StateDelta associated with the group of transaction executed for the supplied ID (txn or group)
 func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (StateDeltaSubset, error) {
 	tracer.deltasLock.RLock()
 	defer tracer.deltasLock.RUnlock()
 	for _, deltasForRound := range tracer.txnGroupDeltas {
 		if delta, exists := deltasForRound[id]; exists {
-			return convertStateDelta(*delta), nil
+			return *delta, nil
 		}
 	}
 	return StateDeltaSubset{}, fmt.Errorf("unable to find delta for id: %s", id)
