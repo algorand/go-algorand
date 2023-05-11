@@ -3881,8 +3881,7 @@
       "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
       "type": "object",
       "required": [
-        "trace-type",
-        "trace"
+        "trace-type"
       ],
       "properties": {
         "trace-type": {
@@ -3890,7 +3889,7 @@
           "enum": [
             "approval-program",
             "clear-state-program",
-            "logic-signature"
+            "other-transaction"
           ],
           "type": "string"
         },

@@ -2102,13 +2102,12 @@
             "enum": [
               "approval-program",
               "clear-state-program",
-              "logic-signature"
+              "other-transaction"
             ],
             "type": "string"
           }
         },
         "required": [
-          "trace",
           "trace-type"
         ],
         "type": "object"

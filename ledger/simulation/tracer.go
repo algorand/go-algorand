@@ -198,15 +198,15 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 		currentTxn := ep.TxnGroup[groupIndex]
 		traceType := Unknown
 
-		if !currentTxn.Lsig.Blank() {
-			traceType = LogicSigTransaction
-		} else if currentTxn.Txn.Type == protocol.ApplicationCallTx {
+		if currentTxn.Txn.Type == protocol.ApplicationCallTx {
 			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
 			case transactions.ClearStateOC:
 				traceType = AppCallClearStateTransaction
 			default:
 				traceType = AppCallApprovalTransaction
 			}
+		} else if !currentTxn.Lsig.Blank() {
+			traceType = OtherTransaction
 		}
 		transactionTrace := makeTransactionTrace(traceType)
 

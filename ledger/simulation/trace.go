@@ -189,8 +189,8 @@ const (
 	AppCallApprovalTransaction
 	// AppCallClearStateTransaction stands for TransactionTrace is generated from simulating an app call to App's clear state program
 	AppCallClearStateTransaction
-	// LogicSigTransaction stands for TransactionTrace is generated from simulating a logicsig transaction approval
-	LogicSigTransaction
+	// OtherTransaction stands for TransactionTrace is generated from simulating a non-app-call transaction (with logic-sig approval)
+	OtherTransaction
 )
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

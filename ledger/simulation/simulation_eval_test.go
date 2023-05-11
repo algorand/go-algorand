@@ -1997,7 +1997,7 @@ int 1`,
 								AppBudgetConsumed:      3,
 								LogicSigBudgetConsumed: 266,
 								Trace: &simulation.TransactionTrace{
-									TraceType: simulation.LogicSigTransaction,
+									TraceType: simulation.AppCallApprovalTransaction,
 									Trace: []simulation.OpcodeTraceUnit{
 										{PC: 1},
 										{PC: 8},

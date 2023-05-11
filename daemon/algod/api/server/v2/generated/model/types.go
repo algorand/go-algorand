@@ -32,7 +32,7 @@ const (
 const (
 	SimulationTransactionExecTraceTraceTypeApprovalProgram   SimulationTransactionExecTraceTraceType = "approval-program"
 	SimulationTransactionExecTraceTraceTypeClearStateProgram SimulationTransactionExecTraceTraceType = "clear-state-program"
-	SimulationTransactionExecTraceTraceTypeLogicSignature    SimulationTransactionExecTraceTraceType = "logic-signature"
+	SimulationTransactionExecTraceTraceTypeOtherTransaction  SimulationTransactionExecTraceTraceType = "other-transaction"
 )
 
 // Defines values for AddressRole.
@@ -746,7 +746,7 @@ type SimulationTransactionExecTrace struct {
 	StepToInnerMap *[]SimulationPcToInnerIndex `json:"step-to-inner-map,omitempty"`
 
 	// Trace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-	Trace []SimulationOpcodeTraceUnit `json:"trace"`
+	Trace *[]SimulationOpcodeTraceUnit `json:"trace,omitempty"`
 
 	// TraceType Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
 	TraceType SimulationTransactionExecTraceTraceType `json:"trace-type"`
