@@ -77,6 +77,8 @@ func TestTransactionGroupWithDeltaTracer(t *testing.T) {
 			innerAppAddress := innerAppID.Address()
 			appID := basics.AppIndex(1) + offset
 			appAddress := appID.Address()
+			innerBoxAppID := basics.AppIndex(7) + offset
+			innerBoxAppAddress := innerBoxAppID.Address()
 			balances := genesisInitState.Accounts
 			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
 			balances[appAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
@@ -156,19 +158,49 @@ int 1`,
 			})
 			innerAppCallTxn.ApprovalProgram = scenario.Program
 
-			txntest.Group(&basicAppCallTxn, &payTxn, &innerAppCallTxn)
+			// inner txn with more box mods
+			innerAppCallBoxTxn := txntest.Txn{
+				Type:   protocol.ApplicationCallTx,
+				Sender: addrs[0],
+				ApprovalProgram: `#pragma version 8
+byte "goodbyebox"
+int 10
+box_create
+pop
+byte "goodbyebox"
+int 0
+byte "2"
+box_replace
+byte "goodbyebox"
+box_del
+pop
+int 1`,
+				ClearStateProgram: `#pragma version 8
+int 1`,
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round() + 1000,
+				Fee:         minFee,
+				GenesisHash: genHash,
+				Boxes: []transactions.BoxRef{{
+					Index: 0,
+					Name:  []byte("goodbyebox"),
+				}},
+			}
+
+			txntest.Group(&basicAppCallTxn, &payTxn, &innerAppCallTxn, &innerAppCallBoxTxn)
 
 			txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
 				basicAppCallTxn.Txn().Sign(keys[0]),
 				payTxn.Txn().Sign(keys[1]),
 				innerAppCallTxn.Txn().Sign(keys[0]),
+				innerAppCallBoxTxn.Txn().Sign(keys[0]),
 			})
 
 			require.Len(t, eval.block.Payset, 0)
 
 			err = eval.TransactionGroup(txgroup)
 			require.NoError(t, err)
-			require.Len(t, eval.block.Payset, 3)
+			require.Len(t, eval.block.Payset, 4)
 
 			expectedAccts := ledgercore.AccountDeltas{
 				Accts: []ledgercore.BalanceRecord{
@@ -176,8 +208,8 @@ int 1`,
 						Addr: addrs[0],
 						AccountData: ledgercore.AccountData{
 							AccountBaseData: ledgercore.AccountBaseData{
-								MicroAlgos:     basics.MicroAlgos{Raw: 1666666666664666},
-								TotalAppParams: 2,
+								MicroAlgos:     basics.MicroAlgos{Raw: 1666666666663666},
+								TotalAppParams: 3,
 							},
 						},
 					},
@@ -186,7 +218,7 @@ int 1`,
 						AccountData: ledgercore.AccountData{
 							AccountBaseData: ledgercore.AccountBaseData{
 								Status:     basics.Status(2),
-								MicroAlgos: basics.MicroAlgos{Raw: 1666666666672666},
+								MicroAlgos: basics.MicroAlgos{Raw: 1666666666673666},
 							},
 						},
 					},
@@ -228,6 +260,10 @@ int 1`,
 							},
 						},
 					},
+					{
+						Addr:        innerBoxAppAddress,
+						AccountData: ledgercore.AccountData{},
+					},
 				},
 				AppResources: []ledgercore.AppResourceRecord{
 					{
@@ -264,12 +300,27 @@ int 1`,
 							},
 						},
 					},
+					{
+						Aidx: innerBoxAppID,
+						Addr: addrs[0],
+						Params: ledgercore.AppParamsDelta{
+							Params: &basics.AppParams{
+								ApprovalProgram: []byte{0x08, 0x26, 0x01, 0x0a, 0x67, 0x6f, 0x6f, 0x64, 0x62, 0x79, 0x65, 0x62, 0x6f, 0x78, 0x28, 0x81,
+									0x0a, 0xb9, 0x48, 0x28, 0x81, 0x00, 0x80, 0x01, 0x32, 0xbb, 0x28, 0xbc, 0x48, 0x81, 0x01},
+								ClearStateProgram: []byte{0x08, 0x81, 0x01},
+							},
+						},
+					},
 				},
 			}
 			expectedKvMods := map[string]ledgercore.KvValueDelta{
 				"bx:\x00\x00\x00\x00\x00\x00\x03\xe9hellobox": {
 					OldData: []uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 					Data:    []uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				},
+				"bx:\x00\x00\x00\x00\x00\x00\x03\xefgoodbyebox": {
+					OldData: nil,
+					Data:    nil,
 				},
 			}
 			expectedLeases := map[ledgercore.Txlease]basics.Round{
