@@ -98,43 +98,23 @@ func TestOpDoc(t *testing.T) {
 	require.Empty(t, xd)
 }
 
-func TestOpImmediateNote(t *testing.T) {
+func TestOpImmediateDetails(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	xd := OpImmediateNote("txn")
-	require.NotEmpty(t, xd)
-	xd = OpImmediateNote("+")
-	require.Empty(t, xd)
-}
+	for _, os := range OpSpecs {
+		deets := OpImmediateDetailsFromSpec(os)
+		require.Equal(t, len(os.Immediates), len(deets))
 
-func TestAllImmediatesDocumented(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
+		for idx, d := range deets {
+			imm := os.Immediates[idx]
+			require.NotEmpty(t, d.Comment)
+			require.Equal(t, strings.ToLower(d.Name), imm.Name)
+			require.Equal(t, d.Encoding, imm.kind.String())
 
-	for _, op := range OpSpecs {
-		count := len(op.Immediates)
-		note := OpImmediateNote(op.Name)
-		if count == 1 && op.Immediates[0].kind >= immBytes {
-			// More elaborate than can be checked by easy count.
-			assert.NotEmpty(t, note)
-			continue
-		}
-		assert.Equal(t, count, strings.Count(note, "{"), "opcodeImmediateNotes for %s is wrong", op.Name)
-		assert.Equal(t, count, strings.Count(note, "}"), "opcodeImmediateNotes for %s is wrong", op.Name)
-		for _, imm := range op.Immediates {
-			switch imm.kind {
-			case immByte:
-				require.True(t, strings.HasPrefix(note, "{uint8 "), "%v %v", op.Name, note)
-			case immInt8:
-				require.True(t, strings.HasPrefix(note, "{int8 "), "%v %v", op.Name, note)
-			case immLabel:
-				require.True(t, strings.HasPrefix(note, "{int16 "), "%v %v", op.Name, note)
-			case immInt:
-				require.True(t, strings.HasPrefix(note, "{varuint "), "%v %v", op.Name, note)
+			if imm.Group != nil {
+				require.Equal(t, d.Reference, imm.Group.Name)
 			}
-			close := strings.Index(note, "}")
-			note = strings.TrimPrefix(note[close+1:], " ")
 		}
 	}
 }

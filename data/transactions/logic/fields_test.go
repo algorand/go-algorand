@@ -220,10 +220,10 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 		// Need to use intc so we can "backversion" the
 		// program and not have it fail because of pushint.
 		text := fmt.Sprintf("intcblock 55 1; intc_0; asset_params_get %s; bnz ok; err; ok: ", field.field.String())
-		switch field.ftype {
-		case StackUint64: // ensure the return type is uint64 by adding
+		switch field.ftype.AVMType {
+		case avmUint64: // ensure the return type is uint64 by adding
 			text += " intc_1; +"
-		case StackBytes: // ensure the return type is bytes by using len
+		case avmBytes: // ensure the return type is bytes by using len
 			text += " len" // also happens to ensure that we get non empty - the params fields are fixed width
 		}
 		// check assembler fails if version before introduction
@@ -270,8 +270,8 @@ func TestAcctParamsFieldsVersions(t *testing.T) {
 	t.Parallel()
 
 	for _, field := range acctParamsFieldSpecs {
-		text := fmt.Sprintf("txn Sender; acct_params_get %s; assert;", field.field)
-		if field.ftype == StackBytes {
+		text := fmt.Sprintf("txn Sender; acct_params_get %s; assert;", field.field.String())
+		if field.ftype.AVMType == avmBytes {
 			text += "global ZeroAddress; concat; len" // use concat to prove we have bytes
 		} else {
 			text += "global ZeroAddress; len; +" // use + to prove we have an int
