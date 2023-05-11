@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1968,13 +1969,21 @@ func TestSimulateWithUnlimitedResourceAccess(t *testing.T) {
 	t.Parallel()
 
 	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
-	defer localFixture.Shutdown()
 
-	testClient := localFixture.LibGoalClient
+	var fixture fixtures.RestClientFixture
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
 
-	_, err := testClient.WaitForRound(1)
+	// Get primary node
+	primaryNode, err := fixture.GetNodeController("Primary")
+	a.NoError(err)
+
+	fixture.Start()
+	defer primaryNode.FullStop()
+
+	// get lib goal client
+	testClient := fixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	_, err = testClient.WaitForRound(1)
 	a.NoError(err)
 
 	wh, err := testClient.GetUnencryptedWalletHandle()
@@ -2154,7 +2163,45 @@ int 1
 	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
 	a.NoError(err)
 
+	// Cannot access these resources with AllowUnlimitedResourceAccess=false
 	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+		AllowUnlimitedResourceAccess: false,
+	})
+	a.NoError(err)
+	a.Contains(*resp.TxnGroups[0].FailureMessage, "logic eval error: invalid Account reference "+otherAddress)
+	a.Equal([]uint64{0}, *resp.TxnGroups[0].FailedAt)
+
+	// By default AllowUnlimitedResourceAccess=true is not allowed by the node config
+	resp, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+		AllowUnlimitedResourceAccess: true,
+	})
+	var httpError client.HTTPError
+	a.ErrorAs(err, &httpError)
+	a.Equal(http.StatusBadRequest, httpError.StatusCode)
+	a.Contains(httpError.ErrorString, "unlimited resource access is not enabled in node configuration: EnableSimulationUnlimitedResourceAccess is false")
+
+	primaryNode.FullStop()
+
+	// update the configuration file to enable EnableSimulationUnlimitedResourceAccess
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	cfg.EnableSimulationUnlimitedResourceAccess = true
+	cfg.SaveToDisk(primaryNode.GetDataDir())
+
+	fixture.Start()
+
+	// Now it should work
+	resp, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{
 				Txns: []transactions.SignedTxn{stxn},

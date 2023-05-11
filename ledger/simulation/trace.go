@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -91,6 +92,13 @@ func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 	return eo
 }
 
+func (eo ResultEvalOverrides) ValidateAgainstConfig(allow bool, nodeConfig config.Local) error {
+	if eo.AllowUnlimitedResourceAccess && !nodeConfig.EnableSimulationUnlimitedResourceAccess {
+		return errors.New("unlimited resource access is not enabled in node configuration: EnableSimulationUnlimitedResourceAccess is false")
+	}
+	return nil
+}
+
 // LogicEvalConstants method infers the logic.EvalConstants from Result.EvalOverrides (*ResultEvalOverrides)
 // and generate appropriate parameters to override during simulation runtime.
 func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
@@ -114,7 +122,7 @@ type Result struct {
 	Block         *ledgercore.ValidatedBlock
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, request Request, version uint64) (Result, error) {
+func makeSimulationResultWithVersion(lastRound basics.Round, request Request, nodeConfig config.Local, version uint64) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
@@ -131,6 +139,11 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 		AllowUnlimitedResourceAccess: request.AllowUnlimitedResourceAccess,
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
+	err := resultEvalConstants.ValidateAgainstConfig(request.AllowUnlimitedResourceAccess, nodeConfig)
+	if err != nil {
+		return Result{}, InvalidRequestError{SimulatorError{err}}
+	}
+
 	return Result{
 		Version:       version,
 		LastRound:     lastRound,
@@ -139,11 +152,6 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 	}, nil
 }
 
-func makeSimulationResult(lastRound basics.Round, request Request) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, request, ResultLatestVersion)
-	if err != nil {
-		// this should never happen, since we pass in ResultLatestVersion
-		panic(err)
-	}
-	return result
+func makeSimulationResult(lastRound basics.Round, request Request, nodeConfig config.Local) (Result, error) {
+	return makeSimulationResultWithVersion(lastRound, request, nodeConfig, ResultLatestVersion)
 }

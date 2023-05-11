@@ -51,6 +51,7 @@
     "EnableProfiler": false,
     "EnableRequestLogger": false,
     "EnableRuntimeMetrics": false,
+    "EnableSimulationUnlimitedResourceAccess": false,
     "EnableTopAccountsReporting": false,
     "EnableTxBacklogRateLimiting": false,
     "EnableUsageLog": false,

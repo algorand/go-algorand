@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -108,7 +109,7 @@ func TestSimulateWithTrace(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := MakeSimulator(env.Ledger)
+	s := MakeSimulator(env.Ledger, config.GetDefaultLocal())
 	sender := env.Accounts[0]
 
 	op, err := logic.AssembleString(`#pragma version 8

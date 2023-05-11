@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -48,6 +49,7 @@ func uint64ToBytes(num uint64) []byte {
 
 type simulationTestCase struct {
 	input         simulation.Request
+	nodeConfig    *config.Local
 	expected      simulation.Result
 	expectedError string
 }
@@ -137,7 +139,14 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 
 	testcase := f(env)
 
-	actual, err := simulation.MakeSimulator(env.Ledger).Simulate(testcase.input)
+	var nodeConfig config.Local
+	if testcase.nodeConfig != nil {
+		nodeConfig = *testcase.nodeConfig
+	} else {
+		nodeConfig = config.GetDefaultLocal()
+	}
+
+	actual, err := simulation.MakeSimulator(env.Ledger, nodeConfig).Simulate(testcase.input)
 	require.NoError(t, err)
 
 	validateSimulationResult(t, actual)
@@ -396,7 +405,7 @@ func TestStateProofTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 
 	txgroup := []transactions.SignedTxn{
 		env.TxnInfo.NewTxn(txntest.Txn{
@@ -415,7 +424,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 	sender1 := env.Accounts[0]
 	sender1Balance := env.Accounts[0].AcctData.MicroAlgos
 	sender2 := env.Accounts[1]
@@ -1031,7 +1040,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 
 	sender := env.Accounts[0]
 
@@ -1239,7 +1248,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -1661,7 +1670,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -2218,6 +2227,35 @@ func TestMockTracerScenarios(t *testing.T) {
 	}
 }
 
+func TestUnlimitedResourceAccessDisabled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	nodeConfig := config.GetDefaultLocal()
+	require.False(t, nodeConfig.EnableSimulationUnlimitedResourceAccess)
+	s := simulation.MakeSimulator(env.Ledger, nodeConfig)
+
+	sender := env.Accounts[0]
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+	})
+	stxn := txn.Txn().Sign(sender.Sk)
+
+	// should error on too high extra budgets
+	_, err := s.Simulate(
+		simulation.Request{
+			TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
+			AllowUnlimitedResourceAccess: true,
+		})
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+	require.ErrorContains(t, err, "unlimited resource access is not enabled in node configuration: EnableSimulationUnlimitedResourceAccess is false")
+}
+
 // TestUnlimitedResourceAccess tests that app calls can access resources that they otherwise
 // should not be able to if AllowUnlimitedResourceAccess is enabled. Additional tests follow for
 // special cases.
@@ -2320,11 +2358,14 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 				})
 				stxn := txn.Txn().Sign(sender.Sk)
 
+				nodeConfig := config.GetDefaultLocal()
+				nodeConfig.EnableSimulationUnlimitedResourceAccess = true
 				return simulationTestCase{
 					input: simulation.Request{
 						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
 						AllowUnlimitedResourceAccess: true,
 					},
+					nodeConfig: &nodeConfig,
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
 						LastRound: env.TxnInfo.LatestRound(),
@@ -2428,11 +2469,14 @@ int 1
 					expectedFailedAt = simulation.TxnPath{0}
 				}
 
+				nodeConfig := config.GetDefaultLocal()
+				nodeConfig.EnableSimulationUnlimitedResourceAccess = true
 				return simulationTestCase{
 					input: simulation.Request{
 						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
 						AllowUnlimitedResourceAccess: true,
 					},
+					nodeConfig:    &nodeConfig,
 					expectedError: expectedError,
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
@@ -2536,11 +2580,14 @@ int 1
 				})
 				stxn := txn.Txn().Sign(sender.Sk)
 
+				nodeConfig := config.GetDefaultLocal()
+				nodeConfig.EnableSimulationUnlimitedResourceAccess = true
 				return simulationTestCase{
 					input: simulation.Request{
 						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
 						AllowUnlimitedResourceAccess: true,
 					},
+					nodeConfig: &nodeConfig,
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
 						LastRound: env.TxnInfo.LatestRound(),

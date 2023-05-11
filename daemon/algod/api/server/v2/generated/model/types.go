@@ -638,7 +638,7 @@ type SimulateRequest struct {
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
-	// AllowUnlimitedResourceAccess Allow unlimited resource access during simulation.
+	// AllowUnlimitedResourceAccess Allow unlimited resource access during simulation. The node must set the config value EnableSimulationUnlimitedResourceAccess to true in order to allow this option.
 	AllowUnlimitedResourceAccess *bool `json:"allow-unlimited-resource-access,omitempty"`
 
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.

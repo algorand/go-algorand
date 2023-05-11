@@ -1911,7 +1911,7 @@
             "type": "boolean"
           },
           "allow-unlimited-resource-access": {
-            "description": "Allow unlimited resource access during simulation.",
+            "description": "Allow unlimited resource access during simulation. The node must set the config value EnableSimulationUnlimitedResourceAccess to true in order to allow this option.",
             "type": "boolean"
           },
           "extra-opcode-budget": {
