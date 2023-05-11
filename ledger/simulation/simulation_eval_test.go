@@ -1657,7 +1657,6 @@ return`
 
 func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Skip("TEST NOT FINISHED YET")
 	t.Parallel()
 
 	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
@@ -1840,10 +1839,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{PC: 73},
 		}
 
-		// TODO Need to get Txn result right
-
-		// NOTE trace part is def correct
-
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -1881,7 +1876,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 												{},
 												{
 													ApplyData: transactions.ApplyData{
-														ApplicationID: futureAppID + 1,
 														EvalDelta: transactions.EvalDelta{
 															Logs: []string{string(uint64ItoB(1 << (MaxDepth - 1)))},
 															InnerTxns: []transactions.SignedTxnWithAD{
@@ -1906,8 +1900,9 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								},
 								AppBudgetConsumed: 306,
 								Trace: &simulation.TransactionTrace{
-									TraceType: simulation.AppCallApprovalTransaction,
-									Trace:     recursiveLongOpcodeTrace,
+									TraceType:      simulation.AppCallApprovalTransaction,
+									Trace:          recursiveLongOpcodeTrace,
+									StepToInnerMap: map[uint64]uint8{47: 0, 78: 1},
 									InnerTraces: []simulation.TransactionTrace{
 										{
 											TraceType: simulation.AppCallApprovalTransaction,
@@ -1929,7 +1924,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 											},
 										},
 									},
-									StepToInnerMap: map[uint64]uint8{47: 0, 78: 1},
 								},
 							},
 						},
