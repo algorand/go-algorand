@@ -92,6 +92,7 @@ func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 	return eo
 }
 
+// ValidateAgainstConfig validates the ResultEvalOverrides against the node configuration
 func (eo ResultEvalOverrides) ValidateAgainstConfig(allow bool, nodeConfig config.Local) error {
 	if eo.AllowUnlimitedResourceAccess && !nodeConfig.EnableSimulationUnlimitedResourceAccess {
 		return errors.New("unlimited resource access is not enabled in node configuration: EnableSimulationUnlimitedResourceAccess is false")
