@@ -6,7 +6,21 @@ General purpose algod container image.
 
 ## Image Configuration
 
-There are a number of special files and environment variables used to control how a container is started.
+Algorand maintains a Docker image with recent snapshot builds from our `master` branch on DockerHub to support users who prefer to run containerized processes. There are a couple of different images avaliable for running the latest stable or development versions of Algod.
+
+- `algorand/algod:latest` is the latest stable release version of Algod (default)
+- `algorand/algod:stable` is the latest stable version of Algod
+- `algorand/algod:{version}-stable` is the stable version of Algod at a specific version number
+- `algorand/algod:beta` is the version of Algod being considered for the next stable release
+- `algorand/algod:nightly` is the latest development version of Algod
+
+Algorand also publishes experimental versions of Algod.
+
+- `algorand/algod:{LONGSHA}` is a version containing a specific commit to `master`
+- `algorand/algod:master` is the version running on our `master` branch
+- `algorand/algod:feature-{branch}` is the latest version of Algod on any of the go-algorand feature branches
+
+Furthermore, There are a number of special files and environment variables used to control how a container is started. See below for more detail.
 
 ### Default Configuration
 

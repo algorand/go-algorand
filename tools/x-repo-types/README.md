@@ -3,17 +3,11 @@
 Given two types **X** and **Y** from separate repositories, compare the types and generate a report of any differences to the serialized shape of the types. In particular it ignores different embedding of structs, different field names if `codec` tags are used, and different types if they map to the same primitives.
 This tool is designed to be used in CI systems to alert us if a change is made to one repo without a corresponding change to another. For example the `Genesis` type in `go-algorand` and `go-algorand-sdk`. See the [Makefile](./Makefile) for additional examples.
 
-## Build the `xrt` binary
-
-```sh
-go build -o xrt
-```
-
 ## Example run
 
 ```sh
 goal-v-sdk-state-delta-xrt:
-    ./xrt --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
+    x-repo-types --x-package "github.com/algorand/go-algorand/ledger/ledgercore" \
     --x-type "StateDelta" \
     --y-branch "develop" \
     --y-package "github.com/algorand/go-algorand-sdk/v2/types" \
@@ -24,8 +18,8 @@ goal-v-sdk-state-delta-xrt:
 
 ### Cross Type Comparison Process
 
-1. Inside of `tools/x-repo-types` run the command `./xrt --x-package X_PACKAGE_NAME ...`
-2. `xrt` then does the following:
+1. Inside of `tools/x-repo-types` run the command `x-repo-types --x-package X_PACKAGE_NAME ...`
+2. `x-repo-types` then does the following:
    1. `go get`'s the package
    2. Populates the template `typeAnalyzer/main.tmpl` with comparison types
    3. Saves it in `typeAnalyzer/main.go`

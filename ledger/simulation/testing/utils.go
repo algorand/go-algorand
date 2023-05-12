@@ -78,7 +78,7 @@ func (info TxnInfo) InnerTxn(parent transactions.SignedTxn, inner txntest.Txn) t
 
 // PrepareSimulatorTest creates an environment to test transaction simulations
 func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txnInfo TxnInfo) {
-	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 100)
 
 	// Prepare ledger
 	const inMem = true
@@ -119,6 +119,7 @@ func PrepareSimulatorTest(t *testing.T) (l *data.Ledger, accounts []Account, txn
 	numBlocks := rand.Intn(4)
 	for i := 0; i < numBlocks; i++ {
 		nextBlock := bookkeeping.MakeBlock(latestHeader)
+		nextBlock.TxnCounter = latestHeader.TxnCounter
 		err = l.AddBlock(nextBlock, agreement.Certificate{})
 		require.NoError(t, err)
 

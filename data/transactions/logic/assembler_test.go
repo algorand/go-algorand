@@ -778,7 +778,7 @@ int 1
 +
 // comment
 `
-	testProg(t, source, AssemblerMaxVersion, Expect{3, "+ arg 0 wanted type uint64 got []byte"})
+	testProg(t, source, AssemblerMaxVersion, Expect{3, "+ arg 0 wanted type uint64 got [5]byte"})
 }
 
 // mutateProgVersion replaces version (first two symbols) in hex-encoded program
@@ -1837,7 +1837,7 @@ balance
 int 1
 ==`
 	for v := uint64(2); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, Expect{2, "balance arg 0 wanted type uint64 got []byte"})
+		testProg(t, source, v, Expect{2, "balance arg 0 wanted type uint64 got [1]byte"})
 	}
 	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, source, v)
@@ -1853,7 +1853,7 @@ min_balance
 int 1
 ==`
 	for v := uint64(3); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, Expect{2, "min_balance arg 0 wanted type uint64 got []byte"})
+		testProg(t, source, v, Expect{2, "min_balance arg 0 wanted type uint64 got [1]byte"})
 	}
 	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, source, v)
@@ -2581,8 +2581,10 @@ func TestScratchTypeCheck(t *testing.T) {
 	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, Expect{1, "+ arg 0..."})
 	// Loads should know the type it's loading if all the slots are the same type
 	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, Expect{1, "btoi arg 0..."})
-	// Loads doesn't know the type when slot types vary
-	testProg(t, "byte 0x01; store 0; int 1; loads; btoi", AssemblerMaxVersion)
+	// Loads only knows the type when slot is a const
+	testProg(t, "byte 0x01; store 0; int 1; loads; btoi", AssemblerMaxVersion, Expect{1, "btoi arg 0..."})
+	// Loads doesnt know the type if its the result of some other expression where we lose information
+	testProg(t, "byte 0x01; store 0; load 0; btoi; loads; btoi", AssemblerMaxVersion)
 	// Stores should only set slots to StackAny if they are not the same type as what is being stored
 	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, Expect{1, "+ arg 0..."})
 	// ScratchSpace should reset after hitting label in deadcode
@@ -2593,6 +2595,45 @@ func TestScratchTypeCheck(t *testing.T) {
 	testProg(t, "callsub A; load 0; btoi; return; A: byte 0x01; store 0; retsub", AssemblerMaxVersion)
 	// But the scratchspace should still be tracked after the callsub
 	testProg(t, "callsub A; int 1; store 0; load 0; btoi; return; A: retsub", AssemblerMaxVersion, Expect{1, "btoi arg 0..."})
+
+}
+
+func TestScratchBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	os := testProg(t, "int 5; store 1; load 1; return;", AssemblerMaxVersion)
+	sv := os.known.scratchSpace[1]
+	require.Equal(t, sv.AVMType, avmUint64)
+	require.ElementsMatch(t, sv.Bound, static(5))
+
+	os = testProg(t, "int 5; store 1; load 1; int 1; int 1; stores; return;", AssemblerMaxVersion)
+	sv = os.known.scratchSpace[1]
+	require.Equal(t, sv.AVMType, avmUint64)
+	require.ElementsMatch(t, sv.Bound, bound(1, 1))
+
+	// If the stack type for the slot index is a const, known at assembly time
+	// we can be sure of the slot we need to update
+	os = testProg(t, "int 5; store 1; load 1; int 1; byte 0xff; stores; return;", AssemblerMaxVersion)
+	sv = os.known.scratchSpace[1]
+	require.Equal(t, sv.AVMType, avmBytes)
+	require.ElementsMatch(t, sv.Bound, static(1))
+
+	osv := os.known.scratchSpace[0]
+	require.Equal(t, osv.AVMType, avmUint64)
+	require.ElementsMatch(t, osv.Bound, static(0))
+
+	// Otherwise, we just union all stack types with the incoming type
+	os = testProg(t, "int 5; store 1; load 1; byte 0xaa; btoi; byte 0xff; stores; return;", AssemblerMaxVersion)
+	sv = os.known.scratchSpace[1]
+	require.Equal(t, sv.AVMType, avmAny)
+	require.ElementsMatch(t, sv.Bound, static(0))
+
+	osv = os.known.scratchSpace[0]
+	require.Equal(t, osv.AVMType, avmAny)
+	require.ElementsMatch(t, osv.Bound, static(0))
+
+	testProg(t, "byte 0xff; store 1; load 1; return", AssemblerMaxVersion, Expect{1, "return arg 0 wanted type uint64 ..."})
 }
 
 // TestProtoAsm confirms that the assembler will yell at you if you are
@@ -2644,11 +2685,12 @@ func TestTxTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	testProg(t, "itxn_begin; itxn_field Sender", 5, Expect{1, "itxn_field Sender expects 1 stack argument..."})
-	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type []byte got uint64"})
-	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5)
+	testProg(t, "itxn_begin; int 1; itxn_field Sender", 5, Expect{1, "...wanted type address got 1"})
+	testProg(t, "itxn_begin; byte 0x56127823; itxn_field Sender", 5, Expect{1, "...wanted type address got [4]byte"})
+	testProg(t, "itxn_begin; global ZeroAddress; itxn_field Sender", 5)
 
 	testProg(t, "itxn_begin; itxn_field Amount", 5, Expect{1, "itxn_field Amount expects 1 stack argument..."})
-	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{1, "...wanted type uint64 got []byte"})
+	testProg(t, "itxn_begin; byte 0x87123376; itxn_field Amount", 5, Expect{1, "...wanted type uint64 got [4]byte"})
 	testProg(t, "itxn_begin; int 1; itxn_field Amount", 5)
 }
 
@@ -2660,14 +2702,14 @@ func TestBadInnerFields(t *testing.T) {
 	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 5, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 5, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 5, Expect{1, "...Note field was introduced in v6..."})
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 5, Expect{1, "...VotePK field was introduced in v6..."})
+	testProg(t, "itxn_begin; global ZeroAddress; itxn_field VotePK", 5, Expect{1, "...VotePK field was introduced in v6..."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 5, Expect{1, "...is not allowed."})
 
 	testProg(t, "itxn_begin; int 1000; itxn_field FirstValid", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; int 1000; itxn_field LastValid", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field Lease", 6, Expect{1, "...is not allowed."})
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
-	testProg(t, "itxn_begin; byte 0x7263; itxn_field VotePK", 6)
+	testProg(t, "itxn_begin; global ZeroAddress; itxn_field VotePK", 6)
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, Expect{1, "...is not allowed."})
 }
 
@@ -2821,7 +2863,7 @@ func TestReplacePseudo(t *testing.T) {
 		testProg(t, "byte 0x0000; byte 0x1234; replace 0", v)
 		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace", v)
 		testProg(t, "byte 0x0000; byte 0x1234; replace", v, Expect{1, "replace without immediates expects 3 stack arguments but stack height is 2"})
-		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{1, "replace 0 arg 0 wanted type []byte got uint64"})
+		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, Expect{1, "replace 0 arg 0 wanted type []byte got 0"})
 	}
 }
 
