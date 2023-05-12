@@ -30,7 +30,7 @@ func Domain() *rapid.Generator {
 }
 
 func DomainWithSuffix(suffix string, dontMatch []string) *rapid.Generator {
-	return DomainOf(255, 63, suffix, dontMatch)
+	return DomainOf(253, 63, suffix, dontMatch)
 }
 
 // DomainOf generates an RFC 1035 compliant domain name,
@@ -49,7 +49,7 @@ func DomainOf(maxLength, maxElementLength int, domainSuffix string, dontMatch []
 			if domainSuffix != "" {
 				domain = domainSuffix
 			} else {
-				domain = fmt.Sprint(tldGenerator.
+				domain = fmt.Sprint(TldGenerator.
 					Filter(func(s string) bool { return len(s)+2 <= maxLength }).
 					Draw(t, "domain"))
 			}
@@ -83,7 +83,7 @@ func DomainOf(maxLength, maxElementLength int, domainSuffix string, dontMatch []
 	}
 }
 
-var tldGenerator = rapid.SampledFrom(tlds) //nolint:golint,typecheck
+var TldGenerator = rapid.SampledFrom(tlds) //nolint:golint,typecheck
 
 func assertf(ok bool, format string, args ...interface{}) {
 	if !ok {

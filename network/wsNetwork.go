@@ -1745,19 +1745,17 @@ func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 	// If there is more than one entry in the DNS bootstrap array, we treat the first as 'primary',
 	// second as 'secondary' and attempt to merge/dedup the lists of relay records. Additional entries
 	// will be processed independently.
-	if len(dnsBootstrapArray) >= 2 {
-		primaryRelayAddrs, primaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrapArray[0])
-		secondaryRelayAddrs, secondaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrapArray[1])
-		dedupedRelayAddresses := wn.mergePrimarySecondaryRelayAddressSlices(wn.NetworkID, primaryRelayAddrs, secondaryRelayAddrs)
-
-		wn.updatePhonebookAddresses(dedupedRelayAddresses, append(primaryArchiveAddrs, secondaryArchiveAddrs...))
-		//TODO: Sanity check these work in unit tests
-		dnsBootstrapArray = dnsBootstrapArray[2:]
-	}
-
 	for _, dnsBootstrap := range dnsBootstrapArray {
-		relayAddrs, archiveAddrs := wn.getDNSAddrs(dnsBootstrap)
-		wn.updatePhonebookAddresses(relayAddrs, archiveAddrs)
+		primaryRelayAddrs, primaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrap.PrimarySRVBootstrap)
+
+		if dnsBootstrap.BackupSRVBootstrap != "" {
+			backupRelayAddrs, backupArchiveAddrs := wn.getDNSAddrs(dnsBootstrap.BackupSRVBootstrap)
+			dedupedRelayAddresses := wn.mergePrimarySecondaryRelayAddressSlices(wn.NetworkID, primaryRelayAddrs,
+				backupRelayAddrs, dnsBootstrap.DedupExp)
+			wn.updatePhonebookAddresses(dedupedRelayAddresses, append(primaryArchiveAddrs, backupArchiveAddrs...))
+		} else {
+			wn.updatePhonebookAddresses(primaryRelayAddrs, primaryArchiveAddrs)
+		}
 	}
 }
 
@@ -1987,48 +1985,31 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 	}
 }
 
-func primaryNetwork(network protocol.NetworkID) string {
-	return fmt.Sprintf(`algorand-%s.network`, network)
-}
-
-func secondaryNetwork(network protocol.NetworkID) string {
-	return fmt.Sprintf(`algorand-%s.net`, network)
-}
-
-var networkIDToPrimarySRVBaseURIRegex = map[protocol.NetworkID]*regexp.Regexp{
-	config.Mainnet: regexp.MustCompile(primaryNetwork(config.Mainnet)),
-	config.Testnet: regexp.MustCompile(primaryNetwork(config.Testnet)),
-}
-
-var networkIDToSecondarySRVBaseURIRegex = map[protocol.NetworkID]*regexp.Regexp{
-	config.Mainnet: regexp.MustCompile(secondaryNetwork(config.Mainnet)),
-	config.Testnet: regexp.MustCompile(secondaryNetwork(config.Testnet)),
-}
-
-// This logic assumes that the primary and secondary relay addresses suffixes
-// correspond to the primary/secondary network conventions. If this proves to be false, i.e. one network's
+// This logic assumes that the relay address suffixes
+// correspond to the primary/backup network conventions. If this proves to be false, i.e. one network's
 // suffix is a substring of another network's suffix, then duplicates can end up in the merged slice.
 func (wn *WebsocketNetwork) mergePrimarySecondaryRelayAddressSlices(network protocol.NetworkID,
-	primaryRelayAddresses []string, secondaryRelayAddresses []string) (dedupedRelayAddresses []string) {
-	// Initialize w/ worst case capacity
+	primaryRelayAddresses []string, secondaryRelayAddresses []string, dedupExp *regexp.Regexp) (dedupedRelayAddresses []string) {
+
+	if dedupExp == nil {
+		// No expression provided, so just append the slices without deduping
+		return append(primaryRelayAddresses, secondaryRelayAddresses...)
+	}
 
 	var relayAddressPrefixToValue = make(map[string]string, 2*len(primaryRelayAddresses))
-	var prgx = networkIDToPrimarySRVBaseURIRegex[network]
 
 	for _, pra := range primaryRelayAddresses {
 		var normalizedPra = strings.ToLower(pra)
-		var pfxKey = prgx.ReplaceAllString(normalizedPra, "")
 
+		var pfxKey = dedupExp.ReplaceAllString(normalizedPra, "")
 		if _, exists := relayAddressPrefixToValue[pfxKey]; !exists {
 			relayAddressPrefixToValue[pfxKey] = normalizedPra
 		}
 	}
 
-	var srgx = networkIDToSecondarySRVBaseURIRegex[network]
-
 	for _, sra := range secondaryRelayAddresses {
 		var normalizedSra = strings.ToLower(sra)
-		var pfxKey = srgx.ReplaceAllString(normalizedSra, "")
+		var pfxKey = dedupExp.ReplaceAllString(normalizedSra, "")
 
 		if _, exists := relayAddressPrefixToValue[pfxKey]; !exists {
 			relayAddressPrefixToValue[pfxKey] = normalizedSra

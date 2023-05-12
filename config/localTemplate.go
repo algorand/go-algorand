@@ -527,33 +527,24 @@ type Local struct {
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
-func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
-	dnsBootstrapString := cfg.DNSBootstrap(networkID)
-	bootstrapArray = strings.Split(dnsBootstrapString, ";")
-	// omit zero length entries from the result set.
-	for i := len(bootstrapArray) - 1; i >= 0; i-- {
-		if len(bootstrapArray[i]) == 0 {
-			bootstrapArray = append(bootstrapArray[:i], bootstrapArray[i+1:]...)
+func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []*DNSBootstrap) {
+	//dnsBootstrapString := cfg.DNSBootstrap(networkID)
+	bootstrapStringArray := strings.Split(cfg.DNSBootstrapID, ";")
+	for _, bootstrapString := range bootstrapStringArray {
+		if len(strings.TrimSpace(bootstrapString)) == 0 {
+			continue
 		}
-	}
-	return
-}
 
-// DNSBootstrap returns the network-specific DNSBootstrap identifier
-func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
-	// if user hasn't modified the default DNSBootstrapID in the configuration
-	// file and we're targeting a devnet ( via genesis file ), we the
-	// explicit devnet network bootstrap.
-	if defaultLocal.DNSBootstrapID == cfg.DNSBootstrapID {
-		if network == Devnet {
-			return "devnet.algodev.network"
-		} else if network == Betanet {
-			return "betanet.algodev.network"
-		} else if network == Alphanet {
-			return "alphanet.algodev.network"
+		bootstrapEntry, err := parseDNSBootstrap(bootstrapString, networkID, defaultLocal.DNSBootstrapID != cfg.DNSBootstrapID)
+		if err != nil {
+			// Full stop: our bootstrap id -must- be properly formatted to operate
+			panic(err)
 		}
+
+		bootstrapArray = append(bootstrapArray, bootstrapEntry)
 	}
-	return strings.Replace(cfg.DNSBootstrapID, "<network>", string(network), -1)
+
+	return
 }
 
 // SaveToDisk writes the non-default Local settings into a root/ConfigFilename file
