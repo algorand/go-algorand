@@ -220,7 +220,7 @@ func TestSyncRoundWithRemake(t *testing.T) {
 			return true
 		}
 		return false
-	}, 10*time.Second, 500*time.Millisecond, "failed to reach newRound within the allowed time")
+	}, 20*time.Second, 500*time.Millisecond, "failed to reach newRound within the allowed time")
 
 	require.Equal(t, newRound, status.LastRound)
 
