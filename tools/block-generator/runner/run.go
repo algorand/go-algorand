@@ -103,7 +103,7 @@ func (r *Args) run() error {
 	baseName := filepath.Base(r.Path)
 	baseNameNoExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
 	reportfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
-	logfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.indexer-log", baseNameNoExt))
+	logfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.conduit-log", baseNameNoExt))
 	dataDir := path.Join(r.ReportDirectory, fmt.Sprintf("%s_data", baseNameNoExt))
 	// create the data directory.
 	if err := os.Mkdir(dataDir, os.ModeDir|os.ModePerm); err != nil {
@@ -129,7 +129,7 @@ func (r *Args) run() error {
 	defer func() {
 		// Shutdown generator.
 		if err := generatorShutdownFunc(); err != nil {
-			fmt.Printf("Failed to shutdown generator: %s\n", err)
+			fmt.Printf("failed to shutdown generator: %s\n", err)
 		}
 	}()
 
@@ -142,7 +142,7 @@ func (r *Args) run() error {
 	// create config file in the right data directory
 	f, err := os.Create(path.Join(dataDir, "conduit.yml"))
 	if err != nil {
-		return fmt.Errorf("creating conduit.yml: %v", err)
+		return fmt.Errorf("problem creating conduit.yml: %w", err)
 	}
 	defer f.Close()
 
@@ -153,7 +153,7 @@ func (r *Args) run() error {
 
 	err = t.Execute(f, conduitConfig)
 	if err != nil {
-		return fmt.Errorf("execute template file: %v", err)
+		return fmt.Errorf("problem executing template file: %w", err)
 	}
 
 	// Start conduit
@@ -164,7 +164,7 @@ func (r *Args) run() error {
 	defer func() {
 		// Shutdown conduit
 		if err := conduitShutdownFunc(); err != nil {
-			fmt.Printf("Failed to shutdown Conduit: %s\n", err)
+			fmt.Printf("failed to shutdown Conduit: %s\n", err)
 		}
 	}()
 
@@ -415,7 +415,7 @@ func startGenerator(configFile string, dbround uint64, genesisFile string, addr 
 	}, generator
 }
 
-// startConduit starts the indexer.
+// startConduit starts the conduit binary
 func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
 	cmd := exec.Command(
 		conduitBinary,
@@ -435,9 +435,9 @@ func startConduit(dataDir string, conduitBinary string, round uint64) (func() er
 
 	return func() error {
 		if err := cmd.Process.Signal(os.Interrupt); err != nil {
-			fmt.Printf("failed to kill indexer process: %s\n", err)
+			fmt.Printf("failed to kill conduit process: %s\n", err)
 			if err := cmd.Process.Kill(); err != nil {
-				return fmt.Errorf("failed to kill indexer process: %w", err)
+				return fmt.Errorf("failed to kill conduit process: %w", err)
 			}
 		}
 		if err := cmd.Wait(); err != nil {

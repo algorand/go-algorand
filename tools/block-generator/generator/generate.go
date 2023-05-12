@@ -241,6 +241,7 @@ type generator struct {
 	// ledger
 	ledger *ledger.Ledger
 
+	// next_account_round in the preloaded database
 	dbround uint64
 }
 
@@ -284,7 +285,7 @@ func (g *generator) WriteReport(output io.Writer) error {
 
 func (g *generator) WriteStatus(output io.Writer) error {
 	response := model.NodeStatusResponse{
-		LastRound: g.dbround,
+		LastRound: g.round + g.dbround,
 	}
 	return json.NewEncoder(output).Encode(response)
 }
@@ -379,17 +380,18 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 	numTxnForBlock := g.txnForRound(g.round)
 
-	// return genesis block
-	offset := g.dbround
-	if round-offset == 0 {
+	// return genesis block. offset round for non-empty database
+	if round-g.dbround == 0 {
 		// write the msgpack bytes for a block
-		block, cert, _ := g.ledger.BlockCert(basics.Round(round - offset))
+		block, cert, _ := g.ledger.BlockCert(basics.Round(round - g.dbround))
+		// return the block with the requested round number
 		block.BlockHeader.Round = basics.Round(round)
 		encodedblock := rpcs.EncodedBlockCert{
 			Block:       block,
 			Certificate: cert,
 		}
 		blk := protocol.EncodeMsgp(&encodedblock)
+		// write the msgpack bytes for a block
 		_, err := output.Write(blk)
 		if err != nil {
 			return err
@@ -425,7 +427,6 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	// Generate the transactions
 	transactions := make([]transactions.SignedTxnInBlock, 0, numTxnForBlock)
 
-	//fmt.Printf("generator round %d\n", g.round)
 	for i := uint64(0); i < numTxnForBlock; i++ {
 		txn, ad, err := g.generateTransaction(g.round, i)
 		if err != nil {
@@ -454,12 +455,13 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-	// write the msgpack bytes for a block
+	// return the block with the requested round number
 	cert.Block.BlockHeader.Round = basics.Round(round)
 	block := protocol.EncodeMsgp(&cert)
 	if err != nil {
 		return err
 	}
+	// write the msgpack bytes for a block
 	_, err = output.Write(block)
 	if err != nil {
 		return err
@@ -470,6 +472,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 // WriteDeltas generates returns the deltas for payset.
 func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
+	// offset round for non-empty database
 	if round-g.dbround == 0 {
 		data, _ := encode(protocol.CodecHandle, ledgercore.StateDelta{})
 		output.Write(data)
@@ -477,7 +480,7 @@ func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
 	}
 	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round - g.dbround))
 	if err != nil {
-		return fmt.Errorf("err getting state delta for round %d, %v", round, err)
+		return fmt.Errorf("err getting state delta for round %d, %w", round, err)
 	}
 	// msgp encode deltas
 	data, err := encode(protocol.CodecHandle, delta)
@@ -672,12 +675,6 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 			sender := indexToAccount(senderIndex)
 
 			receiverArrayIndex := (rand.Uint64() % (uint64(len(asset.holdings)) - uint64(1))) + uint64(1)
-			//receiverArrayIndex := rand.Uint64() % (uint64(len(asset.holdings)))
-			//fmt.Printf("receiverArrayIndex: %d\n", receiverArrayIndex)
-			//fmt.Printf("assetID: %d\n", asset.assetID)
-			//for _, holding := range asset.holdings {
-			//	fmt.Printf("asset holdings: %+v\n", *holding)
-			//}
 			receiver := indexToAccount(asset.holdings[receiverArrayIndex].acctIndex)
 			amount := uint64(10)
 
