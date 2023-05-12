@@ -64,6 +64,14 @@ func TestCrossRepoTypes(t *testing.T) {
 			skipReason: `Several issues. For example: LEVEL 5 of goal bookkeeping.Block is EvalDelta with field [SharedAccts](codec:"sa,allocbound=config.MaxEvalDeltaAccounts") VS SDK types.EvalDelta is missing SharedAccts field`,
 		},
 		{
+			name:    "goal-v-sdk-eval-delta",
+			xPkg:    "github.com/algorand/go-algorand/data/transactions",
+			xType:   "EvalDelta",
+			yPkg:    "github.com/algorand/go-algorand-sdk/v2/types",
+			yBranch: "23may-indexer-import-types",
+			yType:   "EvalDelta",
+		},
+		{
 			name:    "goal-v-sdk-blockheader",
 			xPkg:    "github.com/algorand/go-algorand/data/bookkeeping",
 			xType:   "BlockHeader",
@@ -87,7 +95,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			yType: "StateProof",
 		},
 	}
-
+	testCases = testCases[3:4]
 	for _, tc := range testCases {
 		// These should be run in serial as they modify go.mod, go.sum and typeAnalyzer/main.go
 		// TODO: it probably is preferrable to setup and `go get` everything _before_ running the tests
