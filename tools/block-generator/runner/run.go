@@ -415,7 +415,7 @@ func startGenerator(configFile string, dbround uint64, genesisFile string, addr 
 	}, generator
 }
 
-// startConduit starts the conduit binary
+// startConduit starts the conduit binary.
 func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
 	cmd := exec.Command(
 		conduitBinary,

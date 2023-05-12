@@ -117,6 +117,7 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 		config:                    config,
 		protocol:                  proto,
 		params:                    cconfig.Consensus[proto],
+		genesis:                   bkGenesis,
 		genesisHash:               [32]byte{},
 		genesisID:                 "blockgen-test",
 		prevBlockHash:             "",
@@ -129,7 +130,6 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 		rewardsRecalculationRound: 0,
 		reportData:                make(map[TxTypeID]TxData),
 		dbround:                   dbround,
-		genesis:                   bkGenesis,
 	}
 
 	gen.feeSink[31] = 1
@@ -480,7 +480,7 @@ func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
 	}
 	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round - g.dbround))
 	if err != nil {
-		return fmt.Errorf("err getting state delta for round %d, %w", round, err)
+		return fmt.Errorf("err getting state delta for round %d: %w", round, err)
 	}
 	// msgp encode deltas
 	data, err := encode(protocol.CodecHandle, delta)
