@@ -66,6 +66,13 @@ const (
 	TxTypeStpf   TxType = "stpf"
 )
 
+// Defines values for SimulateResponseExecTrace.
+const (
+	SimulateResponseExecTracePc          SimulateResponseExecTrace = "pc"
+	SimulateResponseExecTraceScratchSlot SimulateResponseExecTrace = "scratch-slot"
+	SimulateResponseExecTraceStack       SimulateResponseExecTrace = "stack"
+)
+
 // Defines values for TransactionProofResponseHashtype.
 const (
 	TransactionProofResponseHashtypeSha256    TransactionProofResponseHashtype = "sha256"
@@ -1122,6 +1129,9 @@ type SimulateResponse struct {
 	// EvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
 	EvalOverrides *SimulationEvalOverrides `json:"eval-overrides,omitempty"`
 
+	// ExecTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
+	ExecTrace *SimulateResponseExecTrace `json:"exec-trace,omitempty"`
+
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
@@ -1131,6 +1141,9 @@ type SimulateResponse struct {
 	// Version The version of this response object.
 	Version uint64 `json:"version"`
 }
+
+// SimulateResponseExecTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
+type SimulateResponseExecTrace string
 
 // StateProofResponse Represents a state proof and its corresponding message
 type StateProofResponse = StateProof

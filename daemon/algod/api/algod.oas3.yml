@@ -790,6 +790,15 @@
                 "eval-overrides": {
                   "$ref": "#/components/schemas/SimulationEvalOverrides"
                 },
+                "exec-trace": {
+                  "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
+                  "enum": [
+                    "pc",
+                    "stack",
+                    "scratch-slot"
+                  ],
+                  "type": "string"
+                },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                   "type": "integer"
@@ -6357,6 +6366,15 @@
                     "eval-overrides": {
                       "$ref": "#/components/schemas/SimulationEvalOverrides"
                     },
+                    "exec-trace": {
+                      "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
+                      "enum": [
+                        "pc",
+                        "stack",
+                        "scratch-slot"
+                      ],
+                      "type": "string"
+                    },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
@@ -6386,6 +6404,15 @@
                   "properties": {
                     "eval-overrides": {
                       "$ref": "#/components/schemas/SimulationEvalOverrides"
+                    },
+                    "exec-trace": {
+                      "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
+                      "enum": [
+                        "pc",
+                        "stack",
+                        "scratch-slot"
+                      ],
+                      "type": "string"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",

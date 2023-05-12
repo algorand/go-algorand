@@ -4543,6 +4543,15 @@
           },
           "eval-overrides": {
             "$ref": "#/definitions/SimulationEvalOverrides"
+          },
+          "exec-trace": {
+            "enum": [
+              "pc",
+              "stack",
+              "scratch-slot"
+            ],
+            "type": "string",
+            "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options."
           }
         }
       }

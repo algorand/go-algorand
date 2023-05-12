@@ -950,6 +950,7 @@ type PreEncodedSimulateResponse struct {
 	LastRound     uint64                             `codec:"last-round"`
 	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
 	EvalOverrides *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
+	ExecTrace     *model.SimulateResponseExecTrace   `json:"exec-trace,omitempty"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
@@ -1019,7 +1020,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 	}
 
-	response := convertSimulationResult(simulationResult)
+	response := ConvertSimulationResult(simulationResult)
 
 	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {

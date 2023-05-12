@@ -461,7 +461,8 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	return encoded
 }
 
-func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
+// ConvertSimulationResult ...
+func ConvertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
@@ -477,6 +478,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 		LastRound:     uint64(result.LastRound),
 		TxnGroups:     make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
 		EvalOverrides: evalOverrides,
+		ExecTrace:     convertSimulationExecTraceResponse(result.ExecTraceConfig),
 	}
 
 	for i, txnGroup := range result.TxnGroups {
@@ -484,6 +486,22 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	}
 
 	return encodedSimulationResult
+}
+
+func convertSimulationExecTraceResponse(execTraceConfig simulation.ExecTraceConfig) *model.SimulateResponseExecTrace {
+	var res model.SimulateResponseExecTrace
+	switch execTraceConfig {
+	case simulation.ReturnPC:
+		res = model.SimulateResponseExecTracePc
+	case simulation.ReturnStackChange:
+		res = model.SimulateResponseExecTraceStack
+	case simulation.ReturnScratchSlotChange:
+		res = model.SimulateResponseExecTraceScratchSlot
+	}
+	if len(res) == 0 {
+		return nil
+	}
+	return &res
 }
 
 func convertSimulationExecTrace(execTrace string) simulation.ExecTraceConfig {
