@@ -819,8 +819,9 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				peerClasses = []peerClass{
 					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers},
-					{initialRank: peerRankInitialThirdPriority,  peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
 					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
+				}
 			}
 		} else {
 			if cfg.NetAddress != "" { // Relay node
@@ -837,7 +838,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
 					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookArchivers},
-
+				}
 			}
 		}
 	} else {
@@ -848,14 +849,14 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
 					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn},
-				}		      
+				}
 			} else {
 				peerClasses = []peerClass{
 					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedOut},
 					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-				}		      
-			}			      
+				}
+			}
 		} else {
 			if cfg.NetAddress != "" { // Relay node
 				peerClasses = []peerClass{
@@ -863,14 +864,14 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
 					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
-				}		      
+				}
 			} else {
 				peerClasses = []peerClass{
 					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-				}		      
-			}			      
+				}
+			}
 		}
 	}
 	return makePeerSelector(net, peerClasses)
