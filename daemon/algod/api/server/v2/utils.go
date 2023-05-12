@@ -409,8 +409,12 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 
 	// Decide PC that branches into inner app call
 	var pcToInner []model.SimulationPcToInnerIndex
-	for k, v := range txnTrace.StepToInnerMap {
-		pcToInner = append(pcToInner, model.SimulationPcToInnerIndex{Pc: k, InnerIndex: uint64(v)})
+	for i := range txnTrace.StepToInnerMap {
+		stepToInner := txnTrace.StepToInnerMap[i]
+		pcToInner = append(pcToInner, model.SimulationPcToInnerIndex{
+			Pc:         stepToInner.TraceStep,
+			InnerIndex: stepToInner.InnerIndex,
+		})
 	}
 	var pcToInnerPtr *[]model.SimulationPcToInnerIndex
 	if len(pcToInner) > 0 {

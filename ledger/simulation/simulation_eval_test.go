@@ -1839,6 +1839,12 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{PC: 73},
 		}
 
+		stepToInnerMap := []simulation.TraceStepInnerIndexPair{
+			{TraceStep: 47, InnerIndex: 0},
+			{TraceStep: 78, InnerIndex: 1},
+			{TraceStep: 78, InnerIndex: 2},
+		}
+
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -1904,7 +1910,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								Trace: &simulation.TransactionTrace{
 									TraceType:      simulation.AppCallApprovalTransaction,
 									Trace:          recursiveLongOpcodeTrace,
-									StepToInnerMap: map[uint64]uint8{47: 0, 78: 2},
+									StepToInnerMap: stepToInnerMap,
 									InnerTraces: []simulation.TransactionTrace{
 										{
 											TraceType: simulation.AppCallApprovalTransaction,
@@ -1914,7 +1920,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 										{
 											TraceType:      simulation.AppCallApprovalTransaction,
 											Trace:          recursiveLongOpcodeTrace,
-											StepToInnerMap: map[uint64]uint8{47: 0, 78: 2},
+											StepToInnerMap: stepToInnerMap,
 											InnerTraces: []simulation.TransactionTrace{
 												{
 													TraceType: simulation.AppCallApprovalTransaction,

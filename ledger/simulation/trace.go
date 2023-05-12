@@ -191,6 +191,12 @@ const (
 	AppCallClearStateTransaction
 )
 
+// TraceStepInnerIndexPair is the struct that contains execution step in trace and index into inner txn traces.
+type TraceStepInnerIndexPair struct {
+	TraceStep  uint64
+	InnerIndex uint64
+}
+
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
 type TransactionTrace struct {
 	// TraceType is an enum that indicates which kind of TransactionTrace this instance is standing for.
@@ -205,5 +211,5 @@ type TransactionTrace struct {
 	InnerTraces []TransactionTrace
 	// StepToInnerMap maps execution step that branches into an inner trace,
 	// to the index into the InnerTraces that runs after the execution step.
-	StepToInnerMap map[uint64]uint8
+	StepToInnerMap []TraceStepInnerIndexPair
 }

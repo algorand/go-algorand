@@ -2049,7 +2049,7 @@
         "type": "object"
       },
       "SimulationPcToInnerIndex": {
-        "description": "The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn.",
+        "description": "The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
         "properties": {
           "inner-index": {
             "description": "The index into inner trace array, to which inner transaction get branched off from program execution.",
@@ -2084,7 +2084,7 @@
             "type": "array"
           },
           "step-to-inner-map": {
-            "description": "The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn.",
+            "description": "The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
             "items": {
               "$ref": "#/components/schemas/SimulationPcToInnerIndex"
             },

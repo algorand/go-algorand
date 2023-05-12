@@ -725,7 +725,7 @@ type SimulationOpcodeTraceUnit struct {
 	Pc uint64 `json:"pc"`
 }
 
-// SimulationPcToInnerIndex The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn.
+// SimulationPcToInnerIndex The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.
 type SimulationPcToInnerIndex struct {
 	// InnerIndex The index into inner trace array, to which inner transaction get branched off from program execution.
 	InnerIndex uint64 `json:"inner-index"`
@@ -742,7 +742,7 @@ type SimulationTransactionExecTrace struct {
 	// LogicSigTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
 
-	// StepToInnerMap The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn.
+	// StepToInnerMap The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.
 	StepToInnerMap *[]SimulationPcToInnerIndex `json:"step-to-inner-map,omitempty"`
 
 	// Trace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
