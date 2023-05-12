@@ -243,9 +243,7 @@ func AssertEventsEqual(t *testing.T, expected, actual []Event) {
 	// These extra checks are not necessary for correctness, but they provide more targeted information on failure
 	if assert.Equal(t, len(expected), len(actual)) {
 		for i := range expected {
-			jsonExpectedDelta := protocol.EncodeJSONStrict(expected[i].Deltas)
-			jsonActualDelta := protocol.EncodeJSONStrict(actual[i].Deltas)
-			assert.Equal(t, expected[i].Deltas, actual[i].Deltas, "StateDelta disagreement: i=%d, event type: (%v,%v)\n\nexpected: %s\n\nactual: %s", i, expected[i].Type, actual[i].Type, jsonExpectedDelta, jsonActualDelta)
+			assert.Equal(t, expected[i].Deltas, actual[i].Deltas, "StateDelta disagreement: i=%d, expected event type: %v, actual event type: %v", i, expected[i].Type, actual[i].Type)
 		}
 	}
 
