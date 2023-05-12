@@ -54,7 +54,7 @@ const ProposalPayloadTagMaxSize = 1024
 const StateProofSigTagMaxSize = 2266266
 const TopicMsgRespTagMaxSize = 1024
 const TxnTagMaxSize = 23286391600 // Wrong
-const UniEnsBlockReqTagMaxSize = 1024
+const UniEnsBlockReqTagMaxSize = 67
 const VoteBundleTagMaxSize = 23754054
 
 func (tag Tag) MaxMessageSize() int {

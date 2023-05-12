@@ -927,7 +927,7 @@ func (wp *wsPeer) getRequestNonce() []byte {
 
 // MakeNonceTopic returns a topic with the nonce as the data
 // exported for testing purposes
-func (wp *wsPeer) MakeNonceTopic(nonce uint64) Topic {
+func MakeNonceTopic(nonce uint64) Topic {
 	buf := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(buf, nonce)
 	return Topic{key: "nonce", data: buf}
@@ -937,7 +937,7 @@ func (wp *wsPeer) MakeNonceTopic(nonce uint64) Topic {
 func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error) {
 
 	// Add nonce, stored on the wsPeer as the topic
-	nonceTopic := wp.MakeNonceTopic(atomic.AddUint64(&wp.requestNonce, 1))
+	nonceTopic := MakeNonceTopic(atomic.AddUint64(&wp.requestNonce, 1))
 	topics = append(topics, nonceTopic)
 
 	// serialize the topics

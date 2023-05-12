@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"testing"
 	"time"
@@ -311,4 +312,19 @@ func TestErrorTypes(t *testing.T) {
 
 	err6 := errHTTPResponseContentType{contentTypeCount: 1, contentType: "UNDEFINED"}
 	require.Equal(t, "HTTPFetcher.getBlockBytes: invalid content type: UNDEFINED", err6.Error())
+}
+
+// Block Request topics request is a handrolled msgpack message with deterministic size. This test ensures that it matches the defined
+// constant in protocol
+func TestMaxBlockRequestSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	round := rand.Uint64()
+	topics := MakeBlockRequestTopics(basics.Round(round))
+	nonce := rand.Uint64() - 1
+	nonceTopic := network.MakeNonceTopic(nonce)
+	topics = append(topics, nonceTopic)
+	serializedMsg := topics.MarshallTopics()
+	require.Equal(t, len(serializedMsg), protocol.UniEnsBlockReqTag.MaxMessageSize())
+
 }
