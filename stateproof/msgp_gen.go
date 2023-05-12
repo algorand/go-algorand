@@ -22,7 +22,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> SigFromAddrMaxSize()
 //
 // spProver
 //     |-----> (*) MarshalMsg
@@ -31,7 +31,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> (*) MaxSize
+//     |-----> SpProverMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -483,13 +483,10 @@ func SpProverMaxSize() (s int) {
 	s = 1 + 4
 	s += stateproof.ProverMaxSize()
 	s += 5 + msgp.MapHeaderSize
-	if (*z).AddrToPos != nil {
-		for zb0001, zb0002 := range (*z).AddrToPos {
-			_ = zb0001
-			_ = zb0002
-			s += 0 + AddressMaxSize() + msgp.Uint64Size
-		}
-	}
+	// Adding size of map keys for z.AddrToPos
+	s += stateproof.VotersAllocBound * (AddressMaxSize())
+	// Adding size of map values for z.AddrToPos
+	s += stateproof.VotersAllocBound * (msgp.Uint64Size)
 	s += 4 + bookkeeping.BlockHeaderMaxSize() + 4 + stateproofmsg.MessageMaxSize()
 	return
 }

@@ -18,7 +18,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
-//             |-----> (*) MaxSize
+//             |-----> ParticipationKeyIdentityMaxSize()
 //
 // StateProofKeys
 //        |-----> MarshalMsg
@@ -27,7 +27,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
-//        |-----> MaxSize
+//        |-----> StateProofKeysMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler

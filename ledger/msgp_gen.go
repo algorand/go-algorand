@@ -19,7 +19,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> Msgsize
 //            |-----> MsgIsZero
-//            |-----> MaxSize
+//            |-----> CatchpointCatchupStateMaxSize()
 //
 // CatchpointFileHeader
 //           |-----> (*) MarshalMsg
@@ -28,7 +28,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
-//           |-----> (*) MaxSize
+//           |-----> CatchpointFileHeaderMaxSize()
 //
 // catchpointFileBalancesChunkV5
 //               |-----> (*) MarshalMsg
@@ -37,7 +37,7 @@ import (
 //               |-----> (*) CanUnmarshalMsg
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
-//               |-----> (*) MaxSize
+//               |-----> CatchpointFileBalancesChunkV5MaxSize()
 //
 // catchpointFileChunkV6
 //           |-----> (*) MarshalMsg
@@ -46,7 +46,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
-//           |-----> (*) MaxSize
+//           |-----> CatchpointFileChunkV6MaxSize()
 //
 // catchpointStateProofVerificationContext
 //                    |-----> (*) MarshalMsg
@@ -55,7 +55,7 @@ import (
 //                    |-----> (*) CanUnmarshalMsg
 //                    |-----> (*) Msgsize
 //                    |-----> (*) MsgIsZero
-//                    |-----> (*) MaxSize
+//                    |-----> CatchpointStateProofVerificationContextMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -403,7 +403,7 @@ func (z *CatchpointFileHeader) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func CatchpointFileHeaderMaxSize() (s int) {
 	s = 1 + 8 + msgp.Uint64Size + 14 + basics.RoundMaxSize() + 12 + basics.RoundMaxSize() + 14 + ledgercore.AccountTotalsMaxSize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 9 + msgp.Uint64Size + 11
-	panic("Unable to determine max size: String type (*z).Catchpoint is unbounded")
+	panic("Unable to determine max size: String type z.Catchpoint is unbounded")
 	s += 18 + crypto.DigestMaxSize()
 	return
 }

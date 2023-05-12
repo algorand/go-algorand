@@ -18,7 +18,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
-//       |-----> (*) MaxSize
+//       |-----> AccountTotalsMaxSize()
 //
 // AlgoCount
 //     |-----> (*) MarshalMsg
@@ -27,7 +27,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> (*) MaxSize
+//     |-----> AlgoCountMaxSize()
 //
 // OnlineRoundParamsData
 //           |-----> (*) MarshalMsg
@@ -36,7 +36,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
-//           |-----> (*) MaxSize
+//           |-----> OnlineRoundParamsDataMaxSize()
 //
 // StateProofVerificationContext
 //               |-----> (*) MarshalMsg
@@ -45,7 +45,7 @@ import (
 //               |-----> (*) CanUnmarshalMsg
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
-//               |-----> (*) MaxSize
+//               |-----> StateProofVerificationContextMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler

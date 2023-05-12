@@ -16,7 +16,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
-//            |-----> (*) MaxSize
+//            |-----> AccountApplicationModelMaxSize()
 //
 // AccountAssetModel
 //         |-----> (*) MarshalMsg
@@ -25,7 +25,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> AccountAssetModelMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler

@@ -22,7 +22,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> (*) MaxSize
+//        |-----> BaseAccountDataMaxSize()
 //
 // BaseOnlineAccountData
 //           |-----> (*) MarshalMsg
@@ -31,7 +31,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
-//           |-----> (*) MaxSize
+//           |-----> BaseOnlineAccountDataMaxSize()
 //
 // BaseVotingData
 //        |-----> (*) MarshalMsg
@@ -40,7 +40,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> (*) MaxSize
+//        |-----> BaseVotingDataMaxSize()
 //
 // CatchpointFirstStageInfo
 //             |-----> (*) MarshalMsg
@@ -49,7 +49,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
-//             |-----> (*) MaxSize
+//             |-----> CatchpointFirstStageInfoMaxSize()
 //
 // ResourceFlags
 //       |-----> MarshalMsg
@@ -58,7 +58,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> Msgsize
 //       |-----> MsgIsZero
-//       |-----> MaxSize
+//       |-----> ResourceFlagsMaxSize()
 //
 // ResourcesData
 //       |-----> (*) MarshalMsg
@@ -67,7 +67,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
-//       |-----> (*) MaxSize
+//       |-----> ResourcesDataMaxSize()
 //
 // TxTailRound
 //      |-----> (*) MarshalMsg
@@ -76,7 +76,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> TxTailRoundMaxSize()
 //
 // TxTailRoundLease
 //         |-----> (*) MarshalMsg
@@ -85,7 +85,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> TxTailRoundLeaseMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -2194,12 +2194,12 @@ func (z *ResourcesData) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func ResourcesDataMaxSize() (s int) {
 	s = 3 + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.BoolSize + 2
-	panic("Unable to determine max size: String type (*z).UnitName is unbounded")
+	panic("Unable to determine max size: String type z.UnitName is unbounded")
 	s += 2
-	panic("Unable to determine max size: String type (*z).AssetName is unbounded")
+	panic("Unable to determine max size: String type z.AssetName is unbounded")
 	s += 2
-	panic("Unable to determine max size: String type (*z).URL is unbounded")
-	s += 2 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size
+	panic("Unable to determine max size: String type z.URL is unbounded")
+	s += 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size
 	return
 }
 
@@ -2510,11 +2510,11 @@ func (z *TxTailRound) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func TxTailRoundMaxSize() (s int) {
 	s = 1 + 2
-	panic("Slice (*z).TxnIDs is unbounded")
+	panic("Slice z.TxnIDs is unbounded")
 	s += 2
-	panic("Slice (*z).LastValid is unbounded")
+	panic("Slice z.LastValid is unbounded")
 	s += 2
-	panic("Slice (*z).Leases is unbounded")
+	panic("Slice z.Leases is unbounded")
 	s += 2 + bookkeeping.BlockHeaderMaxSize()
 	return
 }
@@ -2673,6 +2673,6 @@ func (z *TxTailRoundLease) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func TxTailRoundLeaseMaxSize() (s int) {
-	s = 1 + 2 + basics.AddressMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 7 + msgp.Uint64Size
+	s = 1 + 2 + basics.AddressMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 7 + msgp.Uint64Size
 	return
 }

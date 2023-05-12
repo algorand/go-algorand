@@ -16,14 +16,8 @@
 
 package protocol
 
-import (
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/transactions"
-)
-
 // Tag represents a message type identifier.  Messages have a Tag field. Handlers can register to a given Tag.
 // e.g., the agreement service can register to handle agreements with the Agreement tag.
-//msgp:allocbound Tag 2
 type Tag string
 
 // Tags, in lexicographic sort order of tag values to avoid duplicates.
@@ -49,77 +43,52 @@ const (
 	VoteBundleTag Tag = "VB"
 )
 
-func (t Tag) MaxMessageSize() int {
-	switch t {
+const AgreementVoteTagMaxSize = 1228
+const MsgOfInterestTagMaxSize = 45
+const MsgDigestSkipTagMaxSize = 69
+const NetPrioResponseTagMaxSize = 838
+const NetIDVerificationTagMaxSize = 215
+const PingTagMaxSize = 8
+const PingReplyTagMaxSize = 8
+const ProposalPayloadTagMaxSize = 1024
+const StateProofSigTagMaxSize = 2266266
+const TopicMsgRespTagMaxSize = 1024
+const TxnTagMaxSize = 23286391600 // Wrong
+const UniEnsBlockReqTagMaxSize = 1024
+const VoteBundleTagMaxSize = 23754054
+
+func (tag Tag) MaxMessageSize() int {
+	switch tag {
 	case AgreementVoteTag:
-		return 1024
+		return AgreementVoteTagMaxSize
 	case MsgOfInterestTag:
-		return 1024
+		return MsgOfInterestTagMaxSize
 	case MsgDigestSkipTag:
-		return 1024
+		return MsgDigestSkipTagMaxSize
 	case NetPrioResponseTag:
-		return 1024
+		return NetPrioResponseTagMaxSize
 	case NetIDVerificationTag:
-		return 1024
+		return NetIDVerificationTagMaxSize
 	case PingTag:
-		return 1024
+		return PingTagMaxSize
 	case PingReplyTag:
-		return 1024
+		return PingReplyTagMaxSize
 	case ProposalPayloadTag:
-		return 1024
+		return ProposalPayloadTagMaxSize
 	case StateProofSigTag:
-		return 1024
+		return StateProofSigTagMaxSize
 	case TopicMsgRespTag:
-		return 1024
+		return TopicMsgRespTagMaxSize
 	case TxnTag:
-		return config.MaxTxGroupSize * transactions.SignedTxnMaxSize()
+		return TxnTagMaxSize
 	case UniEnsBlockReqTag:
-		return 1024
+		return UniEnsBlockReqTagMaxSize
 	case VoteBundleTag:
-		return 1024
+		return VoteBundleTagMaxSize
 	default:
+		return -1
 	}
-	return 1024
 }
-
-// func (tag Tag) MaxMessageSizes() {
-// 	wn.maxMessageSizes = make(map[protocol.Tag]int, len(protocol.TagList))
-// 	for _, tag := range protocol.TagList {
-// 		switch tag {
-// 		case protocol.AgreementVoteTag:
-// 			wn.maxMessageSizes[tag] = 1024
-// 		case protocol.MsgOfInterestTag:
-// 			return 1024
-// 		case protocol.MsgDigestSkipTag:
-// 			wn.maxMessageSizes[tag] = crypto.DigestSize
-// 		case protocol.NetPrioResponseTag:
-// 			wn.maxMessageSizes[tag] = node.NetPrioMaxSize()
-// 		case protocol.NetIDVerificationTag:
-// 			wn.maxMessageSizes[tag] = (&identityChallengeSigned{}).MaxSize()
-// 		case protocol.PingTag:
-// 			wn.maxMessageSizes[tag] = pingMessageSize
-// 		case protocol.PingReplyTag:
-// 			wn.maxMessageSizes[tag] = 1024
-// 		case protocol.ProposalPayloadTag:
-// 			wn.maxMessageSizes[tag] = 1024
-// 		case protocol.StateProofSigTag:
-// 			wn.maxMessageSizes[tag] = 1024
-// 		case protocol.TopicMsgRespTag:
-// 			wn.maxMessageSizes[tag] = 1024
-// 		case protocol.TxnTag:
-// 			wn.maxMessageSizes[tag] = config.MaxTxGroupSize * (&transactions.SignedTxn{}).MaxSize()
-// 		case protocol.UniEnsBlockReqTag:
-// 			wn.maxMessageSizes[tag] = 1024
-// 		case protocol.VoteBundleTag:
-// 			wn.maxMessageSizes[tag] = 1024
-// 		default:
-// 			wn.maxMessageSizes[tag] = 0
-// 		}
-// 		switch tag {
-
-// 		}
-// 	}
-// }
 
 // TagList is a list of all currently used protocol tags.
 var TagList = []Tag{

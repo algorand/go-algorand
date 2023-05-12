@@ -43,7 +43,7 @@ type ValueDelta struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Action DeltaAction `codec:"at"`
-	Bytes  string      `codec:"bs"`
+	Bytes  string      `codec:"bs,allocbound=config.MaxAppBytesValueLen"`
 	Uint   uint64      `codec:"ui"`
 }
 
@@ -69,7 +69,7 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 
 // StateDelta is a map from key/value store keys to ValueDeltas, indicating
 // what should happen for that key
-//msgp:allocbound StateDelta config.MaxStateDeltaKeys
+//msgp:allocbound StateDelta config.MaxStateDeltaKeys,config.MaxAppBytesKeyLen
 type StateDelta map[string]ValueDelta
 
 // Equal checks whether two StateDeltas are equal. We don't check for nilness
@@ -226,7 +226,7 @@ func (tv *TealValue) String() string {
 
 // TealKeyValue represents a key/value store for use in an application's
 // LocalState or GlobalState
-//msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries
+//msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries,config.MaxAppBytesKeyLen
 type TealKeyValue map[string]TealValue
 
 // Clone returns a copy of a TealKeyValue that may be modified without

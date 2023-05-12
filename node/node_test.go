@@ -30,13 +30,18 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
@@ -538,4 +543,40 @@ func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 			require.Equal(t, test.expectedInt, getOfflineClosedStatus(test.acctData))
 		})
 	}
+}
+
+func TestMaxSizesAvailable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	require.NotPanics(t, func() { getMaxSize() })
+}
+
+func TestMaxSizesCorrect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// require.Zero(t, stateproof.StateProofMaxSize())
+	// require.Zero(t, transactions.TransactionMaxSize())
+	avSize := agreement.UnauthenticatedVoteMaxSize()
+	require.Equal(t, avSize, protocol.AgreementVoteTag.MaxMessageSize())
+	miSize := network.MessageOfInterestMaxSize()
+	require.Equal(t, miSize, protocol.MsgOfInterestTag.MaxMessageSize())
+	npSize := NetPrioResponseSignedMaxSize()
+	require.Equal(t, npSize, protocol.NetPrioResponseTag.MaxMessageSize())
+	nsSize := network.IdentityVerificationMessageSignedMaxSize()
+	require.Equal(t, nsSize, protocol.NetIDVerificationTag.MaxMessageSize())
+	piSize := network.PingLength
+	require.Equal(t, piSize, protocol.PingTag.MaxMessageSize())
+	pjSize := network.PingLength
+	require.Equal(t, pjSize, protocol.PingReplyTag.MaxMessageSize())
+	// ppSize := agreement.TransmittedPayloadMaxSize()
+	// require.Equal(t, ppSize, protocol.ProposalPayloadTag.MaxMessageSize())
+	spSize := stateproof.SigFromAddrMaxSize()
+	require.Equal(t, spSize, protocol.StateProofSigTag.MaxMessageSize())
+	txSize := config.MaxTxGroupSize * transactions.SignedTxnMaxSize()
+	require.Equal(t, txSize, protocol.TxnTag.MaxMessageSize())
+	msSize := crypto.DigestMaxSize()
+	require.Equal(t, msSize, protocol.MsgDigestSkipTag.MaxMessageSize())
+	vbSize := agreement.UnauthenticatedBundleMaxSize()
+	require.Equal(t, vbSize, protocol.VoteBundleTag.MaxMessageSize())
+
 }

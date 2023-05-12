@@ -17,7 +17,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> CommitmentMaxSize()
 //
 // KeyRoundPair
 //       |-----> (*) MarshalMsg
@@ -26,7 +26,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
-//       |-----> (*) MaxSize
+//       |-----> KeyRoundPairMaxSize()
 //
 // Secrets
 //    |-----> (*) MarshalMsg
@@ -35,7 +35,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
-//    |-----> (*) MaxSize
+//    |-----> SecretsMaxSize()
 //
 // Signature
 //     |-----> (*) MarshalMsg
@@ -44,7 +44,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> (*) MaxSize
+//     |-----> SignatureMaxSize()
 //
 // SignerContext
 //       |-----> (*) MarshalMsg
@@ -53,7 +53,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
-//       |-----> (*) MaxSize
+//       |-----> SignerContextMaxSize()
 //
 // Verifier
 //     |-----> (*) MarshalMsg
@@ -62,7 +62,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> (*) MaxSize
+//     |-----> VerifierMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -106,7 +106,7 @@ func (z *Commitment) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func CommitmentMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (MerkleSignatureSchemeRootSize * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize))
 	return
 }
 
@@ -905,6 +905,6 @@ func (z *Verifier) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VerifierMaxSize() (s int) {
-	s = 1 + 4 + msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (MerkleSignatureSchemeRootSize * (msgp.ByteSize))) + 3 + msgp.Uint64Size
+	s = 1 + 4 + msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize)) + 3 + msgp.Uint64Size
 	return
 }

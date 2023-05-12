@@ -18,6 +18,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> BalanceRecordV5MaxSize()
 //
 // BalanceRecordV6
 //        |-----> (*) MarshalMsg
@@ -26,7 +27,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> (*) MaxSize
+//        |-----> BalanceRecordV6MaxSize()
 //
 // KVRecordV6
 //      |-----> (*) MarshalMsg
@@ -35,7 +36,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> KVRecordV6MaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -165,6 +166,13 @@ func (z *BalanceRecordV5) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *BalanceRecordV5) MsgIsZero() bool {
 	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func BalanceRecordV5MaxSize() (s int) {
+	s = 1 + 3 + basics.AddressMaxSize() + 3
+	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -426,14 +434,11 @@ func BalanceRecordV6MaxSize() (s int) {
 	s = 1 + 2 + basics.AddressMaxSize() + 2
 	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
 	s += 2 + msgp.MapHeaderSize
-	if (*z).Resources != nil {
-		for zb0001, zb0002 := range (*z).Resources {
-			_ = zb0001
-			_ = zb0002
-			s += 0 + msgp.Uint64Size
-			panic("Unable to determine max size: MaxSize() not implemented for Raw type")
-		}
-	}
+	// Adding size of map keys for z.Resources
+	s += resourcesPerCatchpointFileChunkBackwardCompatible * (msgp.Uint64Size)
+	// Adding size of map values for z.Resources
+	s += resourcesPerCatchpointFileChunkBackwardCompatible
+	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
 	s += 2 + msgp.BoolSize
 	return
 }

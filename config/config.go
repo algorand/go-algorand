@@ -81,6 +81,11 @@ const ConfigurableConsensusProtocolsFilename = "consensus.json"
 // do not expose in normal config so it is not in code generated local_defaults.go
 const defaultRelayGossipFanout = 8
 
+// MaxGenesisIDLen is the maximum length of the genesis ID set for purpose of setting
+// allocbounds on structs containing GenesisID and for purposes of calculating MaxSize functions
+// on those types. Current value is larger than the existing network
+const MaxGenesisIDLen = 20
+
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
 // cannot be loaded, the default config is returned (with the error from loading the

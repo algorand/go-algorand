@@ -834,9 +834,8 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	return false
 }
 
-const pingLength = 8
+const PingLength = 8
 const maxPingWait = 60 * time.Second
-const pingMessageSize = len(protocol.PingTag) + pingLength
 
 // sendPing sends a ping block to the peer.
 // return true if either a ping request was enqueued or there is already ping request in flight in the past maxPingWait time.
@@ -849,7 +848,7 @@ func (wp *wsPeer) sendPing() bool {
 	}
 
 	tagBytes := []byte(protocol.PingTag)
-	mbytes := make([]byte, pingMessageSize)
+	mbytes := make([]byte, len(protocol.PingTag)+PingLength)
 	copy(mbytes, tagBytes)
 	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
@@ -926,12 +925,20 @@ func (wp *wsPeer) getRequestNonce() []byte {
 	return buf
 }
 
+// MakeNonceTopic returns a topic with the nonce as the data
+// exported for testing purposes
+func (wp *wsPeer) MakeNonceTopic(nonce uint64) Topic {
+	buf := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(buf, nonce)
+	return Topic{key: "nonce", data: buf}
+}
+
 // Request submits the request to the server, waits for a response
 func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error) {
 
-	// Add nonce as a topic
-	nonce := wp.getRequestNonce()
-	topics = append(topics, Topic{key: "nonce", data: nonce})
+	// Add nonce, stored on the wsPeer as the topic
+	nonceTopic := wp.MakeNonceTopic(atomic.AddUint64(&wp.requestNonce, 1))
+	topics = append(topics, nonceTopic)
 
 	// serialize the topics
 	serializedMsg := topics.MarshallTopics()

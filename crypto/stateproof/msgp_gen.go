@@ -21,7 +21,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> MessageHashMaxSize()
 //
 // Prover
 //    |-----> (*) MarshalMsg
@@ -30,7 +30,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
-//    |-----> (*) MaxSize
+//    |-----> ProverMaxSize()
 //
 // ProverPersistedFields
 //           |-----> (*) MarshalMsg
@@ -39,7 +39,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
-//           |-----> (*) MaxSize
+//           |-----> ProverPersistedFieldsMaxSize()
 //
 // Reveal
 //    |-----> (*) MarshalMsg
@@ -48,7 +48,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
-//    |-----> (*) MaxSize
+//    |-----> RevealMaxSize()
 //
 // StateProof
 //      |-----> (*) MarshalMsg
@@ -57,7 +57,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> StateProofMaxSize()
 //
 // sigslotCommit
 //       |-----> (*) MarshalMsg
@@ -66,7 +66,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
-//       |-----> (*) MaxSize
+//       |-----> SigslotCommitMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -110,7 +110,7 @@ func (z *MessageHash) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func MessageHashMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -445,7 +445,7 @@ func (z *Prover) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func ProverMaxSize() (s int) {
-	s = 1 + 5 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize + ((VotersAllocBound) * (basics.ParticipantMaxSize())) + 9
+	s = 1 + 5 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize + ((VotersAllocBound) * (basics.ParticipantMaxSize())) + 9
 	s += merklearray.TreeMaxSize()
 	s += 6 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
@@ -782,7 +782,7 @@ func (z *ProverPersistedFields) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func ProverPersistedFieldsMaxSize() (s int) {
-	s = 1 + 5 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize + ((VotersAllocBound) * (basics.ParticipantMaxSize())) + 9
+	s = 1 + 5 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 4 + msgp.Uint64Size + 6 + msgp.ArrayHeaderSize + ((VotersAllocBound) * (basics.ParticipantMaxSize())) + 9
 	s += merklearray.TreeMaxSize()
 	s += 6 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
@@ -1448,13 +1448,10 @@ func (z *StateProof) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func StateProofMaxSize() (s int) {
 	s = 1 + 2 + crypto.GenericDigestMaxSize() + 2 + msgp.Uint64Size + 2 + merklearray.ProofMaxSize() + 2 + merklearray.ProofMaxSize() + 2 + msgp.ByteSize + 2 + msgp.MapHeaderSize
-	if (*z).Reveals != nil {
-		for zb0001, zb0002 := range (*z).Reveals {
-			_ = zb0001
-			_ = zb0002
-			s += 0 + msgp.Uint64Size + RevealMaxSize()
-		}
-	}
+	// Adding size of map keys for z.Reveals
+	s += MaxReveals * (msgp.Uint64Size)
+	// Adding size of map values for z.Reveals
+	s += MaxReveals * (RevealMaxSize())
 	s += 3 + msgp.ArrayHeaderSize + ((MaxReveals) * (msgp.Uint64Size))
 	return
 }

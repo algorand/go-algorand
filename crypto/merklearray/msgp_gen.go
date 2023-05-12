@@ -16,7 +16,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
-//   |-----> MaxSize
+//   |-----> LayerMaxSize()
 //
 // Proof
 //   |-----> (*) MarshalMsg
@@ -25,7 +25,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
-//   |-----> (*) MaxSize
+//   |-----> ProofMaxSize()
 //
 // SingleLeafProof
 //        |-----> (*) MarshalMsg
@@ -34,7 +34,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> (*) MaxSize
+//        |-----> SingleLeafProofMaxSize()
 //
 // Tree
 //   |-----> (*) MarshalMsg
@@ -43,7 +43,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
-//   |-----> (*) MaxSize
+//   |-----> TreeMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler

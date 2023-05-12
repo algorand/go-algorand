@@ -17,7 +17,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> CredentialMaxSize()
 //
 // Seed
 //   |-----> (*) MarshalMsg
@@ -26,7 +26,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
-//   |-----> (*) MaxSize
+//   |-----> SeedMaxSize()
 //
 // UnauthenticatedCredential
 //             |-----> (*) MarshalMsg
@@ -35,7 +35,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
-//             |-----> (*) MaxSize
+//             |-----> UnauthenticatedCredentialMaxSize()
 //
 // hashableCredential
 //          |-----> (*) MarshalMsg
@@ -44,7 +44,7 @@ import (
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
-//          |-----> (*) MaxSize
+//          |-----> HashableCredentialMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -292,7 +292,7 @@ func (z *Seed) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func SeedMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 

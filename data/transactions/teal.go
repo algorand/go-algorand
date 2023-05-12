@@ -40,7 +40,7 @@ type EvalDelta struct {
 	// can refer to it.
 	SharedAccts []basics.Address `codec:"sa,allocbound=config.MaxEvalDeltaAccounts"`
 
-	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
+	Logs []string `codec:"lg,allocbound=config.MaxLogCalls,totalallocbound=1024"` // TODO: add maxlogsize
 
 	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactionsPerDelta"`
 }

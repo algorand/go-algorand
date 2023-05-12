@@ -6,8 +6,6 @@ import (
 	_ "runtime/cgo"
 	_ "unsafe"
 
-	"C"
-
 	cfalcon "github.com/algorand/falcon"
 	"github.com/algorand/msgp/msgp"
 )
@@ -20,7 +18,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
-//    |-----> (*) MaxSize
+//    |-----> DigestMaxSize()
 //
 // FalconPrivateKey
 //         |-----> (*) MarshalMsg
@@ -29,7 +27,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> FalconPrivateKeyMaxSize()
 //
 // FalconPublicKey
 //        |-----> (*) MarshalMsg
@@ -38,7 +36,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> (*) MaxSize
+//        |-----> FalconPublicKeyMaxSize()
 //
 // FalconSeed
 //      |-----> (*) MarshalMsg
@@ -47,7 +45,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> FalconSeedMaxSize()
 //
 // FalconSignature
 //        |-----> MarshalMsg
@@ -56,7 +54,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
-//        |-----> MaxSize
+//        |-----> FalconSignatureMaxSize()
 //
 // FalconSigner
 //       |-----> (*) MarshalMsg
@@ -65,7 +63,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
-//       |-----> (*) MaxSize
+//       |-----> FalconSignerMaxSize()
 //
 // FalconVerifier
 //        |-----> (*) MarshalMsg
@@ -74,7 +72,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> (*) MaxSize
+//        |-----> FalconVerifierMaxSize()
 //
 // GenericDigest
 //       |-----> MarshalMsg
@@ -83,7 +81,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> Msgsize
 //       |-----> MsgIsZero
-//       |-----> MaxSize
+//       |-----> GenericDigestMaxSize()
 //
 // HashFactory
 //      |-----> (*) MarshalMsg
@@ -92,7 +90,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> HashFactoryMaxSize()
 //
 // HashType
 //     |-----> MarshalMsg
@@ -101,7 +99,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
-//     |-----> MaxSize
+//     |-----> HashTypeMaxSize()
 //
 // MasterDerivationKey
 //          |-----> (*) MarshalMsg
@@ -110,7 +108,7 @@ import (
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
-//          |-----> (*) MaxSize
+//          |-----> MasterDerivationKeyMaxSize()
 //
 // MultisigSig
 //      |-----> (*) MarshalMsg
@@ -119,7 +117,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> MultisigSigMaxSize()
 //
 // MultisigSubsig
 //        |-----> (*) MarshalMsg
@@ -128,7 +126,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> (*) MaxSize
+//        |-----> MultisigSubsigMaxSize()
 //
 // OneTimeSignature
 //         |-----> (*) MarshalMsg
@@ -137,7 +135,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> OneTimeSignatureMaxSize()
 //
 // OneTimeSignatureSecrets
 //            |-----> (*) MarshalMsg
@@ -146,7 +144,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
-//            |-----> (*) MaxSize
+//            |-----> OneTimeSignatureSecretsMaxSize()
 //
 // OneTimeSignatureSecretsPersistent
 //                 |-----> (*) MarshalMsg
@@ -155,7 +153,7 @@ import (
 //                 |-----> (*) CanUnmarshalMsg
 //                 |-----> (*) Msgsize
 //                 |-----> (*) MsgIsZero
-//                 |-----> (*) MaxSize
+//                 |-----> OneTimeSignatureSecretsPersistentMaxSize()
 //
 // OneTimeSignatureSubkeyBatchID
 //               |-----> (*) MarshalMsg
@@ -164,7 +162,7 @@ import (
 //               |-----> (*) CanUnmarshalMsg
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
-//               |-----> (*) MaxSize
+//               |-----> OneTimeSignatureSubkeyBatchIDMaxSize()
 //
 // OneTimeSignatureSubkeyOffsetID
 //                |-----> (*) MarshalMsg
@@ -173,7 +171,7 @@ import (
 //                |-----> (*) CanUnmarshalMsg
 //                |-----> (*) Msgsize
 //                |-----> (*) MsgIsZero
-//                |-----> (*) MaxSize
+//                |-----> OneTimeSignatureSubkeyOffsetIDMaxSize()
 //
 // OneTimeSignatureVerifier
 //             |-----> (*) MarshalMsg
@@ -182,7 +180,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
-//             |-----> (*) MaxSize
+//             |-----> OneTimeSignatureVerifierMaxSize()
 //
 // PrivateKey
 //      |-----> (*) MarshalMsg
@@ -191,7 +189,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> PrivateKeyMaxSize()
 //
 // PublicKey
 //     |-----> (*) MarshalMsg
@@ -200,7 +198,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> (*) MaxSize
+//     |-----> PublicKeyMaxSize()
 //
 // Seed
 //   |-----> (*) MarshalMsg
@@ -209,7 +207,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
-//   |-----> (*) MaxSize
+//   |-----> SeedMaxSize()
 //
 // Signature
 //     |-----> (*) MarshalMsg
@@ -218,7 +216,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> (*) MaxSize
+//     |-----> SignatureMaxSize()
 //
 // SignatureSecrets
 //         |-----> (*) MarshalMsg
@@ -227,7 +225,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> SignatureSecretsMaxSize()
 //
 // VRFSecrets
 //      |-----> (*) MarshalMsg
@@ -236,7 +234,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> VRFSecretsMaxSize()
 //
 // VrfOutput
 //     |-----> (*) MarshalMsg
@@ -245,7 +243,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> (*) MaxSize
+//     |-----> VrfOutputMaxSize()
 //
 // VrfPrivkey
 //      |-----> (*) MarshalMsg
@@ -254,7 +252,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> VrfPrivkeyMaxSize()
 //
 // VrfProof
 //     |-----> (*) MarshalMsg
@@ -263,7 +261,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> (*) MaxSize
+//     |-----> VrfProofMaxSize()
 //
 // VrfPubkey
 //     |-----> (*) MarshalMsg
@@ -272,7 +270,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
-//     |-----> (*) MaxSize
+//     |-----> VrfPubkeyMaxSize()
 //
 // ed25519PrivateKey
 //         |-----> (*) MarshalMsg
@@ -281,7 +279,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> Ed25519PrivateKeyMaxSize()
 //
 // ed25519PublicKey
 //         |-----> (*) MarshalMsg
@@ -290,7 +288,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> Ed25519PublicKeyMaxSize()
 //
 // ed25519Seed
 //      |-----> (*) MarshalMsg
@@ -299,7 +297,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
-//      |-----> (*) MaxSize
+//      |-----> Ed25519SeedMaxSize()
 //
 // ed25519Signature
 //         |-----> (*) MarshalMsg
@@ -308,7 +306,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> Ed25519SignatureMaxSize()
 //
 // ephemeralSubkey
 //        |-----> (*) MarshalMsg
@@ -317,7 +315,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> (*) MaxSize
+//        |-----> EphemeralSubkeyMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -361,7 +359,7 @@ func (z *Digest) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func DigestMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((DigestSize) * (DigestSize * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((DigestSize) * (msgp.ByteSize))
 	return
 }
 
@@ -406,7 +404,7 @@ func (z *FalconPrivateKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconPrivateKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (cfalcon.PrivateKeySize * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -451,7 +449,7 @@ func (z *FalconPublicKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconPublicKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (cfalcon.PublicKeySize * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -496,7 +494,7 @@ func (z *FalconSeed) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconSeedMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((FalconSeedSize) * (FalconSeedSize * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((FalconSeedSize) * (msgp.ByteSize))
 	return
 }
 
@@ -693,7 +691,7 @@ func (z *FalconSigner) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconSignerMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (cfalcon.PublicKeySize * (msgp.ByteSize))) + 3 + msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (cfalcon.PrivateKeySize * (msgp.ByteSize)))
+	s = 1 + 3 + msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -805,7 +803,7 @@ func (z *FalconVerifier) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconVerifierMaxSize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (cfalcon.PublicKeySize * (msgp.ByteSize)))
+	s = 1 + 2 + msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -1087,7 +1085,7 @@ func (z *MasterDerivationKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func MasterDerivationKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((masterDerivationKeyLenBytes) * (masterDerivationKeyLenBytes * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((masterDerivationKeyLenBytes) * (msgp.ByteSize))
 	return
 }
 
@@ -1432,7 +1430,7 @@ func (z *MultisigSubsig) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func MultisigSubsigMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 2 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 2 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -1617,7 +1615,7 @@ func (z *OneTimeSignature) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureMaxSize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize))) + 2 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 3 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize))) + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 4 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize))) + 4 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = 1 + 2 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -1953,11 +1951,11 @@ func (z *OneTimeSignatureSecrets) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureSecretsMaxSize() (s int) {
-	s = 1 + 25 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 6 + msgp.Uint64Size + 4
-	panic("Slice (*z).OneTimeSignatureSecretsPersistent.Batches is unbounded")
+	s = 1 + 25 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4
+	panic("Slice z.OneTimeSignatureSecretsPersistent.Batches is unbounded")
 	s += 9 + msgp.Uint64Size + 8
-	panic("Slice (*z).OneTimeSignatureSecretsPersistent.Offsets is unbounded")
-	s += 7 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 10 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	panic("Slice z.OneTimeSignatureSecretsPersistent.Offsets is unbounded")
+	s += 7 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -2293,11 +2291,11 @@ func (z *OneTimeSignatureSecretsPersistent) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureSecretsPersistentMaxSize() (s int) {
-	s = 1 + 25 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 6 + msgp.Uint64Size + 4
-	panic("Slice (*z).Batches is unbounded")
+	s = 1 + 25 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4
+	panic("Slice z.Batches is unbounded")
 	s += 9 + msgp.Uint64Size + 8
-	panic("Slice (*z).Offsets is unbounded")
-	s += 7 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 10 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	panic("Slice z.Offsets is unbounded")
+	s += 7 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -2414,7 +2412,7 @@ func (z *OneTimeSignatureSubkeyBatchID) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureSubkeyBatchIDMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 6 + msgp.Uint64Size
+	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + msgp.Uint64Size
 	return
 }
 
@@ -2548,7 +2546,7 @@ func (z *OneTimeSignatureSubkeyOffsetID) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureSubkeyOffsetIDMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 6 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
 }
 
@@ -2593,7 +2591,7 @@ func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureVerifierMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -2638,7 +2636,7 @@ func (z *PrivateKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func PrivateKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -2683,7 +2681,7 @@ func (z *PublicKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func PublicKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -2728,7 +2726,7 @@ func (z *Seed) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func SeedMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -2773,7 +2771,7 @@ func (z *Signature) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func SignatureMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -2890,7 +2888,7 @@ func (z *SignatureSecrets) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func SignatureSecretsMaxSize() (s int) {
-	s = 1 + 18 + SignatureVerifierMaxSize() + 3 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = 1 + 18 + SignatureVerifierMaxSize() + 3 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3007,7 +3005,7 @@ func (z *VRFSecrets) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VRFSecretsMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 3 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3052,7 +3050,7 @@ func (z *VrfOutput) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VrfOutputMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3097,7 +3095,7 @@ func (z *VrfPrivkey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VrfPrivkeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3142,7 +3140,7 @@ func (z *VrfProof) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VrfProofMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((80) * (80 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((80) * (msgp.ByteSize))
 	return
 }
 
@@ -3187,7 +3185,7 @@ func (z *VrfPubkey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VrfPubkeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -3232,7 +3230,7 @@ func (z *ed25519PrivateKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519PrivateKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3277,7 +3275,7 @@ func (z *ed25519PublicKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519PublicKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -3322,7 +3320,7 @@ func (z *ed25519Seed) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519SeedMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -3367,7 +3365,7 @@ func (z *ed25519Signature) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519SignatureMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3518,6 +3516,6 @@ func (z *ephemeralSubkey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func EphemeralSubkeyMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 3 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize))) + 6 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize))) + 5 + msgp.ArrayHeaderSize + ((64) * (64 * (msgp.ByteSize)))
+	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 6 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 5 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }

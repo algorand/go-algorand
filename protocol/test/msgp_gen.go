@@ -14,7 +14,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
-//     |-----> MaxSize
+//     |-----> TestSliceMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler

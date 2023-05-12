@@ -17,7 +17,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> EncodedBlockCertMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler

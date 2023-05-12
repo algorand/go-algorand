@@ -16,7 +16,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> Msgsize
 //         |-----> MsgIsZero
-//         |-----> MaxSize
+//         |-----> DisconnectReasonMaxSize()
 //
 // identityChallenge
 //         |-----> (*) MarshalMsg
@@ -25,7 +25,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
-//         |-----> (*) MaxSize
+//         |-----> IdentityChallengeMaxSize()
 //
 // identityChallengeResponse
 //             |-----> (*) MarshalMsg
@@ -34,7 +34,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
-//             |-----> (*) MaxSize
+//             |-----> IdentityChallengeResponseMaxSize()
 //
 // identityChallengeResponseSigned
 //                |-----> (*) MarshalMsg
@@ -43,7 +43,7 @@ import (
 //                |-----> (*) CanUnmarshalMsg
 //                |-----> (*) Msgsize
 //                |-----> (*) MsgIsZero
-//                |-----> (*) MaxSize
+//                |-----> IdentityChallengeResponseSignedMaxSize()
 //
 // identityChallengeSigned
 //            |-----> (*) MarshalMsg
@@ -52,7 +52,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
-//            |-----> (*) MaxSize
+//            |-----> IdentityChallengeSignedMaxSize()
 //
 // identityChallengeValue
 //            |-----> (*) MarshalMsg
@@ -61,7 +61,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
-//            |-----> (*) MaxSize
+//            |-----> IdentityChallengeValueMaxSize()
 //
 // identityVerificationMessage
 //              |-----> (*) MarshalMsg
@@ -70,7 +70,7 @@ import (
 //              |-----> (*) CanUnmarshalMsg
 //              |-----> (*) Msgsize
 //              |-----> (*) MsgIsZero
-//              |-----> (*) MaxSize
+//              |-----> IdentityVerificationMessageMaxSize()
 //
 // identityVerificationMessageSigned
 //                 |-----> (*) MarshalMsg
@@ -79,7 +79,7 @@ import (
 //                 |-----> (*) CanUnmarshalMsg
 //                 |-----> (*) Msgsize
 //                 |-----> (*) MsgIsZero
-//                 |-----> (*) MaxSize
+//                 |-----> IdentityVerificationMessageSignedMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -308,7 +308,7 @@ func (z *identityChallenge) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityChallengeMaxSize() (s int) {
-	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 2 + msgp.BytesPrefixSize + maxAddressLen
+	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 2 + msgp.BytesPrefixSize + maxAddressLen
 	return
 }
 
@@ -466,7 +466,7 @@ func (z *identityChallengeResponse) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityChallengeResponseMaxSize() (s int) {
-	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -781,7 +781,7 @@ func (z *identityChallengeValue) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityChallengeValueMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -893,7 +893,7 @@ func (z *identityVerificationMessage) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityVerificationMessageMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize)))
+	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -1141,6 +1141,6 @@ func (z *identityVerificationMessageSigned) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityVerificationMessageSignedMaxSize() (s int) {
-	s = 1 + 4 + 1 + 3 + msgp.ArrayHeaderSize + ((32) * (32 * (msgp.ByteSize))) + 4 + crypto.SignatureMaxSize()
+	s = 1 + 4 + 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 4 + crypto.SignatureMaxSize()
 	return
 }
