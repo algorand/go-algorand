@@ -121,7 +121,7 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 		genesisID:                 "blockgen-test",
 		prevBlockHash:             "",
 		round:                     0,
-		txnCounter:                0,
+		txnCounter:                1000,
 		timestamp:                 0,
 		rewardsLevel:              0,
 		rewardsResidue:            0,
@@ -454,9 +454,6 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-	//print assets
-	assets, _ := g.ledger.ListAssets(10000, 10000)
-	fmt.Printf("assets: %+v\n", assets)
 	// write the msgpack bytes for a block
 	cert.Block.BlockHeader.Round = basics.Round(round)
 	block := protocol.EncodeMsgp(&cert)
@@ -599,7 +596,7 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 		senderAcct := indexToAccount(senderIndex)
 
 		total := assetTotal
-		assetID := 1000 + g.txnCounter + intra + 1
+		assetID := g.txnCounter + intra + 1
 		assetName := fmt.Sprintf("asset #%d", assetID)
 		txn = g.makeAssetCreateTxn(g.makeTxnHeader(senderAcct, round, intra), total, false, assetName)
 		// Compute asset ID and initialize holdings

@@ -45,14 +45,16 @@ echo "Building generator."
 pushd $(dirname "$0") > /dev/null
 go build
 popd
+echo "Starting postgres container."
+start_postgres
 echo "Starting test runner"
 $(dirname "$0")/block-generator runner \
 	--conduit-binary "$CONDUIT_BINARY" \
 	--report-directory OUTPUT_RUN_RUNNER_TEST \
 	--test-duration 30s \
 	--log-level trace \
-	--postgres-connection-string "host=localhost user=algorand password=algorand dbname=indexer_db port=45432 sslmode=disable" \
+	--postgres-connection-string "host=localhost user=algorand password=algorand dbname=generator_db port=15432 sslmode=disable" \
 	--scenario ${CONFIG} \
 	--db-round ${2:-0} \
-	--genesis-file ../../tmp/genesis.json \
-	-k
+  --genesis-file ../../tmp/genesis.json \
+  -k
