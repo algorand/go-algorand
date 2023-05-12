@@ -291,12 +291,15 @@ func (g *generator) WriteStatus(output io.Writer) error {
 
 func (g *generator) WriteGenesis(output io.Writer) error {
 	defer g.recordData(track(genesis))
+
+	// return user provided genesis
 	if g.genesis.Network != "" {
 		_, err := output.Write(protocol.EncodeJSON(g.genesis))
 		return err
 	}
-	var allocations []bookkeeping.GenesisAllocation
 
+	// return synthetic genesis
+	var allocations []bookkeeping.GenesisAllocation
 	for i := uint64(0); i < g.config.NumGenesisAccounts; i++ {
 		addr := indexToAccount(i)
 		allocations = append(allocations, bookkeeping.GenesisAllocation{
@@ -374,7 +377,7 @@ func (g *generator) finishRound(txnCount uint64) {
 // WriteBlock generates a block full of new transactions and writes it to the writer.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
-	numTxnForBlock := g.txnForRound(round)
+	numTxnForBlock := g.txnForRound(g.round)
 
 	// return genesis block
 	offset := g.dbround
@@ -387,11 +390,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 			Certificate: cert,
 		}
 		blk := protocol.EncodeMsgp(&encodedblock)
-		var err error
-		if err != nil {
-			return err
-		}
-		_, err = output.Write(blk)
+		_, err := output.Write(blk)
 		if err != nil {
 			return err
 		}
@@ -426,6 +425,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	// Generate the transactions
 	transactions := make([]transactions.SignedTxnInBlock, 0, numTxnForBlock)
 
+	//fmt.Printf("generator round %d\n", g.round)
 	for i := uint64(0); i < numTxnForBlock; i++ {
 		txn, ad, err := g.generateTransaction(g.round, i)
 		if err != nil {
@@ -454,6 +454,9 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
+	//print assets
+	assets, _ := g.ledger.ListAssets(10000, 10000)
+	fmt.Printf("assets: %+v\n", assets)
 	// write the msgpack bytes for a block
 	cert.Block.BlockHeader.Round = basics.Round(round)
 	block := protocol.EncodeMsgp(&cert)
@@ -596,8 +599,7 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 		senderAcct := indexToAccount(senderIndex)
 
 		total := assetTotal
-		assetID := g.txnCounter + intra + 1
-		//assetID := g.txnCounter //assetID := uint64(1)
+		assetID := 1000 + g.txnCounter + intra + 1
 		assetName := fmt.Sprintf("asset #%d", assetID)
 		txn = g.makeAssetCreateTxn(g.makeTxnHeader(senderAcct, round, intra), total, false, assetName)
 		// Compute asset ID and initialize holdings
@@ -674,11 +676,11 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 
 			receiverArrayIndex := (rand.Uint64() % (uint64(len(asset.holdings)) - uint64(1))) + uint64(1)
 			//receiverArrayIndex := rand.Uint64() % (uint64(len(asset.holdings)))
-			fmt.Printf("receiverArrayIndex: %d\n", receiverArrayIndex)
-			fmt.Printf("assetID: %d\n", asset.assetID)
-			for _, holding := range asset.holdings {
-				fmt.Printf("asset holdings: %+v\n", *holding)
-			}
+			//fmt.Printf("receiverArrayIndex: %d\n", receiverArrayIndex)
+			//fmt.Printf("assetID: %d\n", asset.assetID)
+			//for _, holding := range asset.holdings {
+			//	fmt.Printf("asset holdings: %+v\n", *holding)
+			//}
 			receiver := indexToAccount(asset.holdings[receiverArrayIndex].acctIndex)
 			amount := uint64(10)
 
