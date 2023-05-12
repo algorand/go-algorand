@@ -181,22 +181,11 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 	applyDataOfCurrentTxn.EvalDelta = evalDelta
 }
 
-func (tracer *evalTracer) wouldMakeExecTrace(ep *logic.EvalParams, groupIndex int) bool {
-	// If there is no need of exec trace, leave
-	if tracer.result.ExecTraceConfig == NoExecTrace {
-		return false
-	}
-
-	// if there is the current txn is not logic sig eval or application call, leave
-	currentTxn := ep.TxnGroup[groupIndex]
-	return currentTxn.Txn.Type == protocol.ApplicationCallTx || !currentTxn.Lsig.Blank()
-}
-
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
-	if tracer.wouldMakeExecTrace(ep, groupIndex) {
+	if tracer.result.ExecTraceConfig > NoExecTrace {
 		// make transaction trace in following section
 		currentTxn := ep.TxnGroup[groupIndex]
-		traceType := Unknown
+		traceType := OtherTransaction
 
 		if currentTxn.Txn.Type == protocol.ApplicationCallTx {
 			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
@@ -205,10 +194,8 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 			default:
 				traceType = AppCallApprovalTransaction
 			}
-		} else if !currentTxn.Lsig.Blank() {
-			traceType = OtherTransaction
 		}
-		transactionTrace := makeTransactionTrace(traceType)
+		transactionTrace := TransactionTrace{TraceType: traceType}
 
 		var txnTraceStackElem *TransactionTrace
 
@@ -242,7 +229,7 @@ func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad tran
 	tracer.saveApplyData(ad)
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
-	if tracer.wouldMakeExecTrace(ep, groupIndex) {
+	if tracer.result.ExecTraceConfig > NoExecTrace {
 		tracer.execTraceStack = tracer.execTraceStack[:len(tracer.execTraceStack)-1]
 	}
 	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, evalError)

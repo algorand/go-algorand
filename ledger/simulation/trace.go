@@ -183,14 +183,12 @@ type OpcodeTraceUnit struct {
 type TransactionTraceType int
 
 const (
-	// Unknown you should not be here
-	Unknown TransactionTraceType = iota
+	// OtherTransaction stands for TransactionTrace is generated from simulating a non-app-call transaction (with logic-sig approval)
+	OtherTransaction TransactionTraceType = iota
 	// AppCallApprovalTransaction stands for TransactionTrace is generated from simulating an app call to App's approval program
 	AppCallApprovalTransaction
 	// AppCallClearStateTransaction stands for TransactionTrace is generated from simulating an app call to App's clear state program
 	AppCallClearStateTransaction
-	// OtherTransaction stands for TransactionTrace is generated from simulating a non-app-call transaction (with logic-sig approval)
-	OtherTransaction
 )
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
@@ -208,11 +206,4 @@ type TransactionTrace struct {
 	// StepToInnerMap maps execution step that branches into an inner trace,
 	// to the index into the InnerTraces that runs after the execution step.
 	StepToInnerMap map[uint64]uint8
-}
-
-func makeTransactionTrace(traceType TransactionTraceType) TransactionTrace {
-	return TransactionTrace{
-		TraceType: traceType,
-		Trace:     []OpcodeTraceUnit{},
-	}
 }

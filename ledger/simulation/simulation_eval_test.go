@@ -1862,7 +1862,9 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 									Trace:     creationOpcodeTrace,
 								},
 							},
-							{},
+							{
+								Trace: &simulation.TransactionTrace{TraceType: simulation.OtherTransaction},
+							},
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
@@ -1902,21 +1904,23 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								Trace: &simulation.TransactionTrace{
 									TraceType:      simulation.AppCallApprovalTransaction,
 									Trace:          recursiveLongOpcodeTrace,
-									StepToInnerMap: map[uint64]uint8{47: 0, 78: 1},
+									StepToInnerMap: map[uint64]uint8{47: 0, 78: 2},
 									InnerTraces: []simulation.TransactionTrace{
 										{
 											TraceType: simulation.AppCallApprovalTransaction,
 											Trace:     creationOpcodeTrace,
 										},
+										{TraceType: simulation.OtherTransaction},
 										{
 											TraceType:      simulation.AppCallApprovalTransaction,
 											Trace:          recursiveLongOpcodeTrace,
-											StepToInnerMap: map[uint64]uint8{47: 0, 78: 1},
+											StepToInnerMap: map[uint64]uint8{47: 0, 78: 2},
 											InnerTraces: []simulation.TransactionTrace{
 												{
 													TraceType: simulation.AppCallApprovalTransaction,
 													Trace:     creationOpcodeTrace,
 												},
+												{TraceType: simulation.OtherTransaction},
 												{
 													TraceType: simulation.AppCallApprovalTransaction,
 													Trace:     finalDepthTrace,
@@ -1986,7 +1990,9 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
-							{},
+							{
+								Trace: &simulation.TransactionTrace{TraceType: simulation.OtherTransaction},
+							},
 							{
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{
