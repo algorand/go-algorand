@@ -64,7 +64,7 @@ func readFromSRV(service string, protocol string, name string, fallbackDNSResolv
 	return records, err
 }
 
-// ReadFromSRV is a helper to collect SRV addresses for a given name.
+// ReadFromSRV is a helper to collect SRV addresses for a given name
 func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (addrs []string, err error) {
 	records, err := readFromSRV(service, protocol, name, fallbackDNSResolverAddress, secure)
 	if err != nil {
@@ -86,7 +86,7 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 	return
 }
 
-// ReadFromSRV is a helper to collect SRV addresses for a given name.
+// ReadFromSRVPriority is a helper to collect SRV addresses with prioritiesfor a given name
 func ReadFromSRVPriority(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (prioAddrs map[uint16][]string, err error) {
 	records, err := readFromSRV(service, protocol, name, fallbackDNSResolverAddress, secure)
 	if err != nil {
