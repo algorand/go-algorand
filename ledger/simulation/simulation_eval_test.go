@@ -118,13 +118,13 @@ func validateSimulationResult(t *testing.T, result simulation.Result) {
 	}
 }
 
-func simulationTest(t *testing.T, f func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase) {
+func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simulationTestCase) {
 	t.Helper()
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger)
 
-	testcase := f(accounts, txnInfo)
+	testcase := f(env)
 
 	actual, err := s.Simulate(testcase.input)
 	require.NoError(t, err)
@@ -161,11 +161,11 @@ func TestPayTxn(t *testing.T) {
 
 	t.Run("simple", func(t *testing.T) {
 		t.Parallel()
-		simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-			sender := accounts[0]
-			receiver := accounts[1]
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			receiver := env.Accounts[1]
 
-			txn := txnInfo.NewTxn(txntest.Txn{
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
 				Sender:   sender.Addr,
 				Receiver: receiver.Addr,
@@ -178,7 +178,7 @@ func TestPayTxn(t *testing.T) {
 				},
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
-					LastRound: txnInfo.LatestRound(),
+					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns: []simulation.TxnResult{{}},
@@ -191,13 +191,13 @@ func TestPayTxn(t *testing.T) {
 
 	t.Run("close to", func(t *testing.T) {
 		t.Parallel()
-		simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-			sender := accounts[0]
-			receiver := accounts[1]
-			closeTo := accounts[2]
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			receiver := env.Accounts[1]
+			closeTo := env.Accounts[2]
 			amount := uint64(1_000_000)
 
-			txn := txnInfo.NewTxn(txntest.Txn{
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:             protocol.PaymentTx,
 				Sender:           sender.Addr,
 				Receiver:         receiver.Addr,
@@ -214,7 +214,7 @@ func TestPayTxn(t *testing.T) {
 				},
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
-					LastRound: txnInfo.LatestRound(),
+					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns: []simulation.TxnResult{
@@ -235,12 +235,12 @@ func TestPayTxn(t *testing.T) {
 
 	t.Run("overspend", func(t *testing.T) {
 		t.Parallel()
-		simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-			sender := accounts[0]
-			receiver := accounts[1]
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+			receiver := env.Accounts[1]
 			amount := sender.AcctData.MicroAlgos.Raw + 100
 
-			txn := txnInfo.NewTxn(txntest.Txn{
+			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
 				Sender:   sender.Addr,
 				Receiver: receiver.Addr,
@@ -254,7 +254,7 @@ func TestPayTxn(t *testing.T) {
 				expectedError: fmt.Sprintf("tried to spend {%d}", amount),
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
-					LastRound: txnInfo.LatestRound(),
+					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							Txns:     []simulation.TxnResult{{}},
@@ -274,11 +274,11 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 		optionalSigs := optionalSigs
 		t.Run(fmt.Sprintf("optionalSigs=%t", optionalSigs), func(t *testing.T) {
 			t.Parallel()
-			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-				sender := accounts[0]
-				authority := accounts[1]
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
+				authority := env.Accounts[1]
 
-				txn := txnInfo.NewTxn(txntest.Txn{
+				txn := env.TxnInfo.NewTxn(txntest.Txn{
 					Type:     protocol.PaymentTx,
 					Sender:   sender.Addr,
 					Receiver: sender.Addr,
@@ -298,7 +298,7 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 					expectedError: fmt.Sprintf("should have been authorized by %s but was actually authorized by %s", sender.Addr, authority.Addr),
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
-						LastRound: txnInfo.LatestRound(),
+						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns:     []simulation.TxnResult{{}},
@@ -318,18 +318,18 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 func TestRekey(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
-		authority := accounts[1]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+		authority := env.Accounts[1]
 
-		txn1 := txnInfo.NewTxn(txntest.Txn{
+		txn1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: sender.Addr,
 			Amount:   1,
 			RekeyTo:  authority.Addr,
 		})
-		txn2 := txnInfo.NewTxn(txntest.Txn{
+		txn2 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: sender.Addr,
@@ -349,7 +349,7 @@ func TestRekey(t *testing.T) {
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -367,12 +367,12 @@ func TestStateProofTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, _, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger)
 
 	txgroup := []transactions.SignedTxn{
-		txnInfo.NewTxn(txntest.Txn{
+		env.TxnInfo.NewTxn(txntest.Txn{
 			Type: protocol.StateProofTx,
 			// No need to fill out StateProofTxnFields, this should fail at signature verification
 		}).SignedTxn(),
@@ -386,22 +386,22 @@ func TestSimpleGroupTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender1 := accounts[0]
-	sender1Balance := accounts[0].AcctData.MicroAlgos
-	sender2 := accounts[1]
-	sender2Balance := accounts[1].AcctData.MicroAlgos
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger)
+	sender1 := env.Accounts[0]
+	sender1Balance := env.Accounts[0].AcctData.MicroAlgos
+	sender2 := env.Accounts[1]
+	sender2Balance := env.Accounts[1].AcctData.MicroAlgos
 
 	// Send money back and forth
-	txn1 := txnInfo.NewTxn(txntest.Txn{
+	txn1 := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender1.Addr,
 		Receiver: sender2.Addr,
 		Amount:   1_000_000,
 	})
-	txn2 := txnInfo.NewTxn(txntest.Txn{
+	txn2 := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender2.Addr,
 		Receiver: sender1.Addr,
@@ -434,11 +434,11 @@ func TestSimpleGroupTxn(t *testing.T) {
 	}
 
 	// Check balances before transaction
-	sender1Data, _, err := l.LookupWithoutRewards(l.Latest(), sender1.Addr)
+	sender1Data, _, err := env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), sender1.Addr)
 	require.NoError(t, err)
 	require.Equal(t, sender1Balance, sender1Data.MicroAlgos)
 
-	sender2Data, _, err := l.LookupWithoutRewards(l.Latest(), sender2.Addr)
+	sender2Data, _, err := env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), sender2.Addr)
 	require.NoError(t, err)
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
 
@@ -450,11 +450,11 @@ func TestSimpleGroupTxn(t *testing.T) {
 	require.Zero(t, result.TxnGroups[0].FailureMessage)
 
 	// Confirm balances have not changed
-	sender1Data, _, err = l.LookupWithoutRewards(l.Latest(), sender1.Addr)
+	sender1Data, _, err = env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), sender1.Addr)
 	require.NoError(t, err)
 	require.Equal(t, sender1Balance, sender1Data.MicroAlgos)
 
-	sender2Data, _, err = l.LookupWithoutRewards(l.Latest(), sender2.Addr)
+	sender2Data, _, err = env.Ledger.LookupWithoutRewards(env.Ledger.Latest(), sender2.Addr)
 	require.NoError(t, err)
 	require.Equal(t, sender2Balance, sender2Data.MicroAlgos)
 }
@@ -500,16 +500,16 @@ btoi`)
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-				sender := accounts[0]
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
 
-				payTxn := txnInfo.NewTxn(txntest.Txn{
+				payTxn := env.TxnInfo.NewTxn(txntest.Txn{
 					Type:     protocol.PaymentTx,
 					Sender:   sender.Addr,
 					Receiver: lsigAddr,
 					Amount:   1_000_000,
 				})
-				appCallTxn := txnInfo.NewTxn(txntest.Txn{
+				appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
 					Type:   protocol.ApplicationCallTx,
 					Sender: lsigAddr,
 					ApprovalProgram: `#pragma version 8
@@ -554,7 +554,7 @@ int 1`,
 					expectedError: testCase.expectedError,
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
-						LastRound: txnInfo.LatestRound(),
+						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{
@@ -582,12 +582,12 @@ int 1`,
 func TestSimpleAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		// Create program and call it
 		futureAppID := basics.AppIndex(1001)
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: 0,
@@ -607,7 +607,7 @@ int 1
 int 0
 `,
 		})
-		callTxn := txnInfo.NewTxn(txntest.Txn{
+		callTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
@@ -626,7 +626,7 @@ int 0
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -664,11 +664,11 @@ int 0
 func TestRejectAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		futureAppID := basics.AppIndex(1001)
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: 0,
@@ -690,7 +690,7 @@ int 0
 			expectedError: "transaction rejected by ApprovalProgram",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -719,11 +719,11 @@ int 0
 func TestErrorAppCall(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		futureAppID := basics.AppIndex(1001)
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: 0,
@@ -745,7 +745,7 @@ int 0
 			expectedError: "err opcode executed",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -784,12 +784,12 @@ func TestAppCallOverBudget(t *testing.T) {
 `, 697) + `end:
 	int 1`
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		futureAppID := basics.AppIndex(1001)
 		// App create with cost 4
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationID:   0,
@@ -800,7 +800,7 @@ int 0
 		})
 		// App call with cost 1398 - will cause a budget exceeded error,
 		// but will only report a cost up to 1396.
-		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
@@ -820,7 +820,7 @@ int 0
 			expectedError: "dynamic cost budget exceeded",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -857,12 +857,12 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 ` + strings.Repeat(`int 1; pop;`, 700) + `end:
 	int 1`
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		futureAppID := basics.AppIndex(1001)
 		// App create with cost 4
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
 			Sender:            sender.Addr,
 			ApplicationID:     0,
@@ -870,7 +870,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 			ClearStateProgram: `#pragma version 6; int 0`,
 		})
 		// Expensive 700 repetition of int 1 and pop total cost 1404
-		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
@@ -891,7 +891,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -928,12 +928,12 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 ` + strings.Repeat(`int 1; pop;`, 700) + `end:
 	int 1`
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		futureAppID := basics.AppIndex(1001)
 		// App create with cost 4
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
 			Sender:            sender.Addr,
 			ApplicationID:     0,
@@ -941,7 +941,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 			ClearStateProgram: `#pragma version 6; int 1`,
 		})
 		// Expensive 700 repetition of int 1 and pop total cost 1404
-		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
@@ -972,7 +972,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1018,12 +1018,12 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 ` + strings.Repeat(`int 1; pop;`, 700) + `end:
 	int 1`
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		futureAppID := basics.AppIndex(1001)
 		// App create with cost 4
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
 			Sender:            sender.Addr,
 			ApplicationID:     0,
@@ -1031,7 +1031,7 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 			ClearStateProgram: `#pragma version 6; int 0`,
 		})
 		// Expensive 700 repetition of int 1 and pop total cost 1404
-		expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
@@ -1054,7 +1054,7 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 			expectedError: "dynamic cost budget exceeded",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1092,15 +1092,15 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 ` + strings.Repeat(`int 1; pop;`, 700) + `end:
 	int 1`
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger)
 
-	sender := accounts[0]
+	sender := env.Accounts[0]
 
 	futureAppID := basics.AppIndex(1001)
 	// App create with cost 4
-	createTxn := txnInfo.NewTxn(txntest.Txn{
+	createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:              protocol.ApplicationCallTx,
 		Sender:            sender.Addr,
 		ApplicationID:     0,
@@ -1108,7 +1108,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 		ClearStateProgram: `#pragma version 6; int 0`,
 	})
 	// Expensive 700 repetition of int 1 and pop total cost 1404
-	expensiveTxn := txnInfo.NewTxn(txntest.Txn{
+	expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:          protocol.ApplicationCallTx,
 		Sender:        sender.Addr,
 		ApplicationID: futureAppID,
@@ -1145,16 +1145,16 @@ pop
 	program := logic.Program(op.Program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
-		payTxn := txnInfo.NewTxn(txntest.Txn{
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: lsigAddr,
 			Amount:   1_000_000,
 		})
-		appCallTxn := txnInfo.NewTxn(txntest.Txn{
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:   protocol.ApplicationCallTx,
 			Sender: lsigAddr,
 			ApprovalProgram: `#pragma version 8
@@ -1186,7 +1186,7 @@ int 1`,
 			expectedError: "dynamic cost budget exceeded",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1230,19 +1230,19 @@ itxn_submit
 pop
 `, 345))
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		futureAppID := basics.AppIndex(1002)
 		// fund outer app
-		fund := txnInfo.NewTxn(txntest.Txn{
+		fund := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: futureAppID.Address(),
 			Amount:   401_000,
 		})
 		// create app
-		appCall := txnInfo.NewTxn(txntest.Txn{
+		appCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApprovalProgram: exactly700AndCallInner,
@@ -1263,7 +1263,7 @@ int 1`,
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1300,12 +1300,12 @@ func TestDefaultSignatureCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender := accounts[0]
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger)
+	sender := env.Accounts[0]
 
-	stxn := txnInfo.NewTxn(txntest.Txn{
+	stxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender.Addr,
 		Receiver: sender.Addr,
@@ -1342,10 +1342,10 @@ func TestDefaultSignatureCheck(t *testing.T) {
 func TestInvalidTxGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		receiver := accounts[0].Addr
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		receiver := env.Accounts[0].Addr
 
-		txn := txnInfo.NewTxn(txntest.Txn{
+		txn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type: protocol.PaymentTx,
 			// should error with invalid transaction group error
 			Sender:   ledgertesting.PoolAddr(),
@@ -1360,7 +1360,7 @@ func TestInvalidTxGroup(t *testing.T) {
 			expectedError: "transaction from incentive pool is invalid",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						FailedAt: simulation.TxnPath{0},
@@ -1391,13 +1391,13 @@ log
 `, LogLongLine), LogTimes) + `final:
 int 1`
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
-		receiver := accounts[1]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+		receiver := env.Accounts[1]
 
 		futureAppID := basics.AppIndex(1001)
 
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
 			Sender:            sender.Addr,
 			ApplicationID:     0,
@@ -1405,7 +1405,7 @@ int 1`
 			ClearStateProgram: "#pragma version 8\nint 1",
 		})
 
-		callsABunchLogs := txnInfo.NewTxn(txntest.Txn{
+		callsABunchLogs := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
@@ -1432,7 +1432,7 @@ int 1`
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1485,12 +1485,12 @@ log
 `, LogLongLine), LogTimes) + `final:
 int 1`
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		futureAppID := basics.AppIndex(1001)
 
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
 			Sender:            sender.Addr,
 			ApplicationID:     0,
@@ -1498,7 +1498,7 @@ int 1`
 			ClearStateProgram: "#pragma version 8\nint 1",
 		})
 
-		callsABunchLogs := txnInfo.NewTxn(txntest.Txn{
+		callsABunchLogs := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
@@ -1525,7 +1525,7 @@ int 1`
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						FailedAt: simulation.TxnPath{1},
@@ -1659,11 +1659,11 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 		futureAppID := basics.AppIndex(1001)
 
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
 			Sender:            sender.Addr,
 			ApplicationID:     0,
@@ -1674,14 +1674,14 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 		MaxDepth := 2
 		MinFee := uint64(1e5)
 
-		paymentTxn := txnInfo.NewTxn(txntest.Txn{
+		paymentTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: futureAppID.Address(),
 			Amount:   MinFee * uint64(MaxDepth+1),
 		})
 
-		callsMaxDepth := txnInfo.NewTxn(txntest.Txn{
+		callsMaxDepth := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
@@ -1854,7 +1854,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -1958,16 +1958,16 @@ func TestLogicSigPCExposure(t *testing.T) {
 	program := logic.Program(op.Program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
-		payTxn := txnInfo.NewTxn(txntest.Txn{
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: lsigAddr,
 			Amount:   1_000_000,
 		})
-		appCallTxn := txnInfo.NewTxn(txntest.Txn{
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:   protocol.ApplicationCallTx,
 			Sender: lsigAddr,
 			ApprovalProgram: `#pragma version 8
@@ -1991,7 +1991,7 @@ int 1`,
 			},
 			expected: simulation.Result{
 				Version:         simulation.ResultLatestVersion,
-				LastRound:       txnInfo.LatestRound(),
+				LastRound:       env.TxnInfo.LatestRound(),
 				ExecTraceConfig: simulation.ReturnPC,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2042,15 +2042,15 @@ int 1`,
 func TestBalanceChangesWithApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 		senderBalance := sender.AcctData.MicroAlgos.Raw
 		sendAmount := senderBalance - 500_000 // Leave 0.5 Algos in the sender account
-		receiver := accounts[1]
+		receiver := env.Accounts[1]
 		receiverBalance := receiver.AcctData.MicroAlgos.Raw
 
 		futureAppID := basics.AppIndex(1001)
-		createTxn := txnInfo.NewTxn(txntest.Txn{
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:   protocol.ApplicationCallTx,
 			Sender: sender.Addr,
 			ApprovalProgram: `#pragma version 6
@@ -2068,20 +2068,20 @@ int 1                  // [1]
 			ClearStateProgram: `#pragma version 6
 int 1`,
 		})
-		checkStartingBalanceTxn := txnInfo.NewTxn(txntest.Txn{
+		checkStartingBalanceTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
 			Accounts:        []basics.Address{receiver.Addr},
 			ApplicationArgs: [][]byte{uint64ToBytes(receiverBalance)},
 		})
-		paymentTxn := txnInfo.NewTxn(txntest.Txn{
+		paymentTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: receiver.Addr,
 			Amount:   sendAmount,
 		})
-		checkEndingBalanceTxn := txnInfo.NewTxn(txntest.Txn{
+		checkEndingBalanceTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
@@ -2110,7 +2110,7 @@ int 1`,
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -2147,10 +2147,10 @@ func TestOptionalSignatures(t *testing.T) {
 	for _, signed := range []bool{true, false} {
 		signed := signed
 		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
-			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-				sender := accounts[0]
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
 
-				txn := txnInfo.NewTxn(txntest.Txn{
+				txn := env.TxnInfo.NewTxn(txntest.Txn{
 					Type:     protocol.PaymentTx,
 					Sender:   sender.Addr,
 					Receiver: sender.Addr,
@@ -2172,7 +2172,7 @@ func TestOptionalSignatures(t *testing.T) {
 					},
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
-						LastRound: txnInfo.LatestRound(),
+						LastRound: env.TxnInfo.LatestRound(),
 						TxnGroups: []simulation.TxnGroupResult{
 							{
 								Txns: []simulation.TxnResult{{}},
@@ -2194,12 +2194,12 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l, accounts, txnInfo := simulationtesting.PrepareSimulatorTest(t)
-	defer l.Close()
-	s := simulation.MakeSimulator(l)
-	sender := accounts[0]
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger)
+	sender := env.Accounts[0]
 
-	stxn := txnInfo.NewTxn(txntest.Txn{
+	stxn := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender.Addr,
 		Receiver: sender.Addr,
@@ -2218,10 +2218,10 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 func TestPartialMissingSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
-		txn1 := txnInfo.NewTxn(txntest.Txn{
+		txn1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:   protocol.AssetConfigTx,
 			Sender: sender.Addr,
 			AssetParams: basics.AssetParams{
@@ -2231,7 +2231,7 @@ func TestPartialMissingSignatures(t *testing.T) {
 				UnitName: "A",
 			},
 		})
-		txn2 := txnInfo.NewTxn(txntest.Txn{
+		txn2 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:   protocol.AssetConfigTx,
 			Sender: sender.Addr,
 			AssetParams: basics.AssetParams{
@@ -2257,7 +2257,7 @@ func TestPartialMissingSignatures(t *testing.T) {
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -2294,23 +2294,23 @@ func TestPartialMissingSignatures(t *testing.T) {
 func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender1 := accounts[0]
-		sender2 := accounts[1]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender1 := env.Accounts[0]
+		sender2 := env.Accounts[1]
 
-		pay1 := txnInfo.NewTxn(txntest.Txn{
+		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender1.Addr,
 			Receiver: sender2.Addr,
 			Amount:   1_000_000,
-			Fee:      txnInfo.CurrentProtocolParams().MinTxnFee - 100,
+			Fee:      env.TxnInfo.CurrentProtocolParams().MinTxnFee - 100,
 		})
-		pay2 := txnInfo.NewTxn(txntest.Txn{
+		pay2 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender2.Addr,
 			Receiver: sender1.Addr,
 			Amount:   0,
-			Fee:      txnInfo.CurrentProtocolParams().MinTxnFee + 100,
+			Fee:      env.TxnInfo.CurrentProtocolParams().MinTxnFee + 100,
 		})
 
 		txntest.Group(&pay1, &pay2)
@@ -2328,7 +2328,7 @@ func TestPooledFeesAcrossSignedAndUnsigned(t *testing.T) {
 			},
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -2392,8 +2392,8 @@ func TestAppCallInnerTxnApplyDataOnFail(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		singleInnerLogAndFail := makeProgramToCallInner(t, logAndFail)
 		nestedInnerLogAndFail := makeProgramToCallInner(t, singleInnerLogAndFail)
@@ -2402,21 +2402,21 @@ func TestAppCallInnerTxnApplyDataOnFail(t *testing.T) {
 		futureInnerAppID := futureOuterAppID + 1
 
 		// fund outer app
-		pay1 := txnInfo.NewTxn(txntest.Txn{
+		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: futureOuterAppID.Address(),
 			Amount:   401_000, // 400_000 min balance plus 1_000 for 1 txn
 		})
 		// fund inner app
-		pay2 := txnInfo.NewTxn(txntest.Txn{
+		pay2 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: futureInnerAppID.Address(),
 			Amount:   401_000, // 400_000 min balance plus 1_000 for 1 txn
 		})
 		// create app
-		appCall := txnInfo.NewTxn(txntest.Txn{
+		appCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationArgs: [][]byte{uint64ToBytes(uint64(1))},
@@ -2438,7 +2438,7 @@ int 1`,
 			expectedError: "rejected by ApprovalProgram",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -2502,8 +2502,8 @@ func TestNonAppCallInnerTxnApplyDataOnFail(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		logAndFailItxnCode := makeItxnSubmitToCallInner(t, logAndFail)
 		approvalProgram := wrapCodeWithVersionAndReturn(createAssetCode + logAndFailItxnCode)
@@ -2511,14 +2511,14 @@ func TestNonAppCallInnerTxnApplyDataOnFail(t *testing.T) {
 		futureAppID := basics.AppIndex(1002)
 
 		// fund outer app
-		pay1 := txnInfo.NewTxn(txntest.Txn{
+		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: futureAppID.Address(),
 			Amount:   401_000, // 400_000 min balance plus 1_000 for 1 txn
 		})
 		// create app
-		appCall := txnInfo.NewTxn(txntest.Txn{
+		appCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationArgs: [][]byte{uint64ToBytes(uint64(1))},
@@ -2540,7 +2540,7 @@ int 1`,
 			expectedError: "rejected by ApprovalProgram",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -2599,8 +2599,8 @@ log
 func TestInnerTxnNonAppCallFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-		sender := accounts[0]
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
 
 		futureAppID := basics.AppIndex(1002)
 		futureAssetID := basics.AssetIndex(1003)
@@ -2609,14 +2609,14 @@ func TestInnerTxnNonAppCallFailure(t *testing.T) {
 		approvalProgram := wrapCodeWithVersionAndReturn(createAssetCode + fmt.Sprintf(configAssetCode, futureAssetID))
 
 		// fund outer app
-		pay1 := txnInfo.NewTxn(txntest.Txn{
+		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: futureAppID.Address(),
 			Amount:   402_000, // 400_000 min balance plus 2_000 for 2 inners
 		})
 		// create app
-		appCall := txnInfo.NewTxn(txntest.Txn{
+		appCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationArgs: [][]byte{uint64ToBytes(uint64(1))},
@@ -2638,7 +2638,7 @@ int 1`,
 			expectedError: "logic eval error: this transaction should be issued by the manager",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
-				LastRound: txnInfo.LatestRound(),
+				LastRound: env.TxnInfo.LatestRound(),
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
@@ -2683,17 +2683,17 @@ func TestMockTracerScenarios(t *testing.T) {
 		scenarioFn := scenarioFn
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			simulationTest(t, func(accounts []simulationtesting.Account, txnInfo simulationtesting.TxnInfo) simulationTestCase {
-				sender := accounts[0]
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
 
 				futureAppID := basics.AppIndex(1002)
-				payTxn := txnInfo.NewTxn(txntest.Txn{
+				payTxn := env.TxnInfo.NewTxn(txntest.Txn{
 					Type:     protocol.PaymentTx,
 					Sender:   sender.Addr,
 					Receiver: futureAppID.Address(),
 					Amount:   2_000_000,
 				})
-				appCallTxn := txnInfo.NewTxn(txntest.Txn{
+				appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
 					Type:   protocol.ApplicationCallTx,
 					Sender: sender.Addr,
 					ClearStateProgram: `#pragma version 6
@@ -2701,7 +2701,7 @@ func TestMockTracerScenarios(t *testing.T) {
 				})
 				scenario := scenarioFn(mocktracer.TestScenarioInfo{
 					CallingTxn:   appCallTxn.Txn(),
-					MinFee:       basics.MicroAlgos{Raw: txnInfo.CurrentProtocolParams().MinTxnFee},
+					MinFee:       basics.MicroAlgos{Raw: env.TxnInfo.CurrentProtocolParams().MinTxnFee},
 					CreatedAppID: futureAppID,
 				})
 				appCallTxn.ApprovalProgram = scenario.Program
@@ -2718,7 +2718,7 @@ func TestMockTracerScenarios(t *testing.T) {
 				}
 				expected := simulation.Result{
 					Version:   simulation.ResultLatestVersion,
-					LastRound: txnInfo.LatestRound(),
+					LastRound: env.TxnInfo.LatestRound(),
 					TxnGroups: []simulation.TxnGroupResult{
 						{
 							AppBudgetAdded:    scenario.AppBudgetAdded,

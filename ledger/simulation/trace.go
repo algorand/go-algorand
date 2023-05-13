@@ -40,15 +40,14 @@ type TxnResult struct {
 
 // TxnGroupResult contains the simulation result for a single transaction group
 type TxnGroupResult struct {
-	Txns           []TxnResult
+	Txns []TxnResult
+	// FailureMessage will be the error message for the first transaction in the group which errors.
+	// If the group succeeds, this will be empty.
 	FailureMessage string
-
 	// FailedAt is the path to the txn that failed inside of this group
 	FailedAt TxnPath
-
 	// AppBudgetAdded is the total opcode budget for this group
 	AppBudgetAdded uint64
-
 	// AppBudgetConsumed is the total opcode cost used for this group
 	AppBudgetConsumed uint64
 }
