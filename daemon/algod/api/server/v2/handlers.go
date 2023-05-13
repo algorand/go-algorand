@@ -1020,7 +1020,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 	}
 
-	response := ConvertSimulationResult(simulationResult)
+	response := convertSimulationResult(simulationResult)
 
 	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {

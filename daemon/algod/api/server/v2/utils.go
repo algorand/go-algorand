@@ -461,8 +461,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	return encoded
 }
 
-// ConvertSimulationResult ...
-func ConvertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
+func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
