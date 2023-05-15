@@ -43,20 +43,46 @@ const (
 	VoteBundleTag Tag = "VB"
 )
 
+//AgreementVoteTagMaxSize is the maximum size of an AgreementVoteTag message
 const AgreementVoteTagMaxSize = 1228
+
+// MsgOfInterestTagMaxSize is the maximum size of a MsgOfInterestTag message
 const MsgOfInterestTagMaxSize = 45
+
+// MsgDigestSkipTagMaxSize is the maximum size of a MsgDigestSkipTag message
 const MsgDigestSkipTagMaxSize = 69
+
+// NetPrioResponseTagMaxSize is the maximum size of a NetPrioResponseTag message
 const NetPrioResponseTagMaxSize = 838
+
+// NetIDVerificationTagMaxSize is the maximum size of a NetIDVerificationTag message
 const NetIDVerificationTagMaxSize = 215
+
+// PingTagMaxSize is the maximum size of a PingTag message
 const PingTagMaxSize = 8
+
+//PingReplyTagMaxSize is the maximum size of a PingReplyTag message
 const PingReplyTagMaxSize = 8
+
+// ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
 const ProposalPayloadTagMaxSize = 62213064569904913 // Wrong because of oversized stateproof
-const StateProofSigTagMaxSize = 2266266             // Wrong because of oversized stateproof
+
+// StateProofSigTagMaxSize is the maximum size of a StateProofSigTag message
+const StateProofSigTagMaxSize = 2266266 // Wrong because of oversized stateproof
+
+// TopicMsgRespTagMaxSize is the maximum size of a TopicMsgRespTag message	:w
 const TopicMsgRespTagMaxSize = 1024
+
+// TxnTagMaxSize is the maximum size of a TxnTag message
 const TxnTagMaxSize = 23286391600 // Wrong because of oversized stateproof
+
+// UniEnsBlockReqTagMaxSize is the maximum size of a UniEnsBlockReqTag message
 const UniEnsBlockReqTagMaxSize = 67
+
+// VoteBundleTagMaxSize is the maximum size of a VoteBundleTag message:w
 const VoteBundleTagMaxSize = 23754054
 
+// MaxMessageSize returns the maximum size of a message for a given tag
 func (tag Tag) MaxMessageSize() int {
 	switch tag {
 	case AgreementVoteTag:
