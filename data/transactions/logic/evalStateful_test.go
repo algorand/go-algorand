@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -1197,72 +1198,82 @@ func TestAssetDisambiguation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// It would be nice to start at 2, when apps were added, but `assert` is
-	// very convenient for testing, and nothing important changed from 2 to
-	// 3. (Between directRefEnabledVersion=4, so that change is a big deal.)
-	testLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		ledger.NewAsset(tx.Sender, 1, basics.AssetParams{AssetName: "one", Total: 1})
-		ledger.NewAsset(tx.Sender, 255, basics.AssetParams{AssetName: "twenty", Total: 255})
-		ledger.NewAsset(tx.Sender, 256, basics.AssetParams{AssetName: "thirty", Total: 256})
-		tx.ForeignAssets = []basics.AssetIndex{255, 256}
-		// Since 1 is not available, 1 must mean the 1th asset slot = 256
-		testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
+	// Make sure we don't treat slot indexes as asset IDs when
+	// ep.UnlimitedResourceAccess is true.
+	for _, unlimitedResourceAccess := range []bool{false, true} {
+		unlimitedResourceAccess := unlimitedResourceAccess
+		t.Run(fmt.Sprintf("unlimitedResourceAccess=%v", unlimitedResourceAccess), func(t *testing.T) {
+			t.Parallel()
+			// It would be nice to start at 2, when apps were added, but `assert` is
+			// very convenient for testing, and nothing important changed from 2 to
+			// 3. (Between directRefEnabledVersion=4, so that change is a big deal.)
+			testLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+				ep.UnlimitedResourceAccess = unlimitedResourceAccess
+				ledger.NewAsset(tx.Sender, 1, basics.AssetParams{AssetName: "one", Total: 1})
+				ledger.NewAsset(tx.Sender, 255, basics.AssetParams{AssetName: "twenty", Total: 255})
+				ledger.NewAsset(tx.Sender, 256, basics.AssetParams{AssetName: "thirty", Total: 256})
+				ledger.NewAsset(tx.Sender, 999, basics.AssetParams{AssetName: "nine nine nine", Total: 999})
+				tx.ForeignAssets = []basics.AssetIndex{255, 256}
+				// Since 1 is not available, 1 must mean the 1th asset slot = 256
+				testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
 
-		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
-			// in v3, the asset argument is always treated as an ID, so this is asset 1
-			testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 1; ==`, ep)
-		} else {
-			testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 256; ==`, ep)
-		}
+				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
+					// in v3, the asset argument is always treated as an ID, so this is asset 1
+					testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 1; ==`, ep)
+				} else {
+					testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 256; ==`, ep)
+				}
 
-		tx.ForeignAssets = []basics.AssetIndex{1, 256}
-		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
-			// There's no direct use of assets IDs, so 1 is still the 1th slot (256)
-			testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
-		} else {
-			// Since 1 IS available, 1 means the assetid=1, not the 1th slot
-			testApp(t, `int 1; asset_params_get AssetName; assert; byte "one"; ==`, ep)
-		}
-		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 1; ==`, ep)
+				tx.ForeignAssets = []basics.AssetIndex{1, 256}
+				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
+					// There's no direct use of assets IDs, so 1 is still the 1th slot (256)
+					testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
+				} else {
+					// Since 1 IS available, 1 means the assetid=1, not the 1th slot
+					testApp(t, `int 1; asset_params_get AssetName; assert; byte "one"; ==`, ep)
+				}
+				testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 1; ==`, ep)
 
-		ep.Proto.AppForbidLowResources = true
-		tx.ForeignAssets = []basics.AssetIndex{255, 256}
-		// Since 1 is not available, 1 must mean the 1th asset slot = 256
-		testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
-		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
-			// in v3, the asset argument is always treated as an ID, so this is asset 1
-			testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 256; ==`, ep,
-				"low Asset lookup 1")
-		} else {
-			testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 256; ==`, ep)
-		}
+				ep.Proto.AppForbidLowResources = true
+				tx.ForeignAssets = []basics.AssetIndex{255, 256}
+				// Since 1 is not available, 1 must mean the 1th asset slot = 256
+				testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
+				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
+					// in v3, the asset argument is always treated as an ID, so this is asset 1
+					testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 256; ==`, ep,
+						"low Asset lookup 1")
+				} else {
+					testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 256; ==`, ep)
+				}
 
-		// but now if that resolution led to a number below 255, boom
-		tx.ForeignAssets = []basics.AssetIndex{256, 255}
-		testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep,
-			"low Asset lookup 255")
-		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
-			// in v3, the asset argument is always treated as an ID, so this is asset 1
-			testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 30; ==`, ep,
-				"low Asset lookup 1")
-		} else {
-			testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 30; ==`, ep,
-				"low Asset lookup 255")
-		}
+				// but now if that resolution led to a number below 255, boom
+				tx.ForeignAssets = []basics.AssetIndex{256, 255}
+				testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep,
+					"low Asset lookup 255")
+				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
+					// in v3, the asset argument is always treated as an ID, so this is asset 1
+					testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 30; ==`, ep,
+						"low Asset lookup 1")
+				} else {
+					testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 30; ==`, ep,
+						"low Asset lookup 255")
+				}
 
-		tx.ForeignAssets = []basics.AssetIndex{1, 256}
-		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
-			// in v3, the asset argument is always a slot, so this is asset 256
-			testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
-		} else {
-			// Since 1 IS available, 1 means the assetid=1, not the 1th slot
-			testApp(t, `int 1; asset_params_get AssetName; assert; byte "one"; ==`, ep,
-				"low Asset lookup 1")
-		}
-		// pre v4 and the availability rule come to the same conclusion: treat the 1 as an ID
-		testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 1; ==`, ep,
-			"low Asset lookup 1")
-	})
+				tx.ForeignAssets = []basics.AssetIndex{1, 256}
+				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
+					// in v3, the asset argument is always a slot, so this is asset 256
+					testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
+				} else {
+					// Since 1 IS available, 1 means the assetid=1, not the 1th slot
+					testApp(t, `int 1; asset_params_get AssetName; assert; byte "one"; ==`, ep,
+						"low Asset lookup 1")
+				}
+				// pre v4 and the availability rule come to the same conclusion: treat the 1 as an ID
+				testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 1; ==`, ep,
+					"low Asset lookup 1")
+			})
+		})
+	}
 }
 
 // TestAppDisambiguation ensures we have a consistent interpretation of low
@@ -1273,83 +1284,93 @@ func TestAppDisambiguation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// It would be nice to start at 2, when apps were added, but `assert` is
-	// very convenient for testing, and nothing important changed from 2 to
-	// 3. (But directRefEnabledVersion=4, so that change is a big deal.)
-	testLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		// make apps with identifiable properties, so we can tell what we get
-		makeIdentifiableApp := func(appID uint64) {
-			ledger.NewApp(tx.Sender, basics.AppIndex(appID), basics.AppParams{
-				GlobalState: map[string]basics.TealValue{"a": {
-					Type: basics.TealUintType,
-					Uint: appID,
-				}},
-				ExtraProgramPages: uint32(appID),
+	// Make sure we don't treat slot indexes as app IDs when
+	// ep.UnlimitedResourceAccess is true.
+	for _, unlimitedResourceAccess := range []bool{false, true} {
+		unlimitedResourceAccess := unlimitedResourceAccess
+		t.Run(fmt.Sprintf("unlimitedResourceAccess=%v", unlimitedResourceAccess), func(t *testing.T) {
+			t.Parallel()
+			// It would be nice to start at 2, when apps were added, but `assert` is
+			// very convenient for testing, and nothing important changed from 2 to
+			// 3. (But directRefEnabledVersion=4, so that change is a big deal.)
+			testLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+				ep.UnlimitedResourceAccess = unlimitedResourceAccess
+				// make apps with identifiable properties, so we can tell what we get
+				makeIdentifiableApp := func(appID uint64) {
+					ledger.NewApp(tx.Sender, basics.AppIndex(appID), basics.AppParams{
+						GlobalState: map[string]basics.TealValue{"a": {
+							Type: basics.TealUintType,
+							Uint: appID,
+						}},
+						ExtraProgramPages: uint32(appID),
+					})
+					ledger.NewLocals(tx.Sender, appID)
+					ledger.NewLocal(tx.Sender, appID, "x", basics.TealValue{Type: basics.TealUintType, Uint: appID * 10})
+				}
+				makeIdentifiableApp(1)
+				makeIdentifiableApp(20)
+				makeIdentifiableApp(256)
+				makeIdentifiableApp(999)
+
+				tx.ForeignApps = []basics.AppIndex{20, 256}
+				// Since 1 is not available, 1 must mean the first app slot = 20 (recall, 0 mean "this app")
+				if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
+					testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 20; ==`, ep)
+				}
+				testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 20; ==`, ep)
+				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
+					// in v3, the app argument is always treated as an ID.
+					testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 10; ==`, ep)
+				} else {
+					testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 200; ==`, ep)
+				}
+
+				// Make 1 available, so now 1 means the appid=1, not the 1th slot
+				tx.ForeignApps = []basics.AppIndex{1, 256}
+				if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
+					testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 1; ==`, ep)
+				}
+				testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 1; ==`, ep)
+				testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 10; ==`, ep)
+
+				// same tests, but as of AppForbidLowResources, using 1 is forbidden
+				ep.Proto.AppForbidLowResources = true
+
+				// repeat the first tests, they are using 20 and 256 directly, which are too low
+				tx.ForeignApps = []basics.AppIndex{20, 256}
+				if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
+					testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 20; ==`, ep,
+						"low App lookup 20")
+					testApp(t, `int 2; app_params_get AppExtraProgramPages; assert; int 256; ==`, ep)
+				}
+				testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 20; ==`, ep,
+					"low App lookup 20")
+				testApp(t, `int 2; byte "a"; app_global_get_ex; assert; int 256; ==`, ep)
+				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
+					// in v3, the app argument is always treated as an ID.
+					testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 200; ==`, ep,
+						"low App lookup 1")
+					testApp(t, `int 0; int 2; byte "x"; app_local_get_ex; assert; int 2560; ==`, ep,
+						"low App lookup 2")
+				} else {
+					testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 200; ==`, ep,
+						"low App lookup 20")
+					testApp(t, `int 0; int 2; byte "x"; app_local_get_ex; assert; int 2560; ==`, ep)
+				}
+
+				// repeat the second tests, which are using 1, which is too low
+				tx.ForeignApps = []basics.AppIndex{1, 256}
+				if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
+					testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 1; ==`, ep,
+						"low App lookup 1")
+				}
+				testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 1; ==`, ep,
+					"low App lookup 1")
+				testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 10; ==`, ep,
+					"low App lookup 1")
 			})
-			ledger.NewLocals(tx.Sender, appID)
-			ledger.NewLocal(tx.Sender, appID, "x", basics.TealValue{Type: basics.TealUintType, Uint: appID * 10})
-		}
-		makeIdentifiableApp(1)
-		makeIdentifiableApp(20)
-		makeIdentifiableApp(256)
-
-		tx.ForeignApps = []basics.AppIndex{20, 256}
-		// Since 1 is not available, 1 must mean the first app slot = 20 (recall, 0 mean "this app")
-		if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
-			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 20; ==`, ep)
-		}
-		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 20; ==`, ep)
-		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
-			// in v3, the app argument is always treated as an ID.
-			testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 10; ==`, ep)
-		} else {
-			testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 200; ==`, ep)
-		}
-
-		// Make 1 available, so now 1 means the appid=1, not the 1th slot
-		tx.ForeignApps = []basics.AppIndex{1, 256}
-		if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
-			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 1; ==`, ep)
-		}
-		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 1; ==`, ep)
-		testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 10; ==`, ep)
-
-		// same tests, but as of AppForbidLowResources, using 1 is forbidden
-		ep.Proto.AppForbidLowResources = true
-
-		// repeat the first tests, they are using 20 and 256 directly, which are too low
-		tx.ForeignApps = []basics.AppIndex{20, 256}
-		if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
-			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 20; ==`, ep,
-				"low App lookup 20")
-			testApp(t, `int 2; app_params_get AppExtraProgramPages; assert; int 256; ==`, ep)
-		}
-		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 20; ==`, ep,
-			"low App lookup 20")
-		testApp(t, `int 2; byte "a"; app_global_get_ex; assert; int 256; ==`, ep)
-		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
-			// in v3, the app argument is always treated as an ID.
-			testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 200; ==`, ep,
-				"low App lookup 1")
-			testApp(t, `int 0; int 2; byte "x"; app_local_get_ex; assert; int 2560; ==`, ep,
-				"low App lookup 2")
-		} else {
-			testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 200; ==`, ep,
-				"low App lookup 20")
-			testApp(t, `int 0; int 2; byte "x"; app_local_get_ex; assert; int 2560; ==`, ep)
-		}
-
-		// repeat the second tests, which are using 1, which is too low
-		tx.ForeignApps = []basics.AppIndex{1, 256}
-		if ep.Proto.LogicSigVersion >= 5 { // to get AppExtraProgramPages
-			testApp(t, `int 1; app_params_get AppExtraProgramPages; assert; int 1; ==`, ep,
-				"low App lookup 1")
-		}
-		testApp(t, `int 1; byte "a"; app_global_get_ex; assert; int 1; ==`, ep,
-			"low App lookup 1")
-		testApp(t, `int 0; int 1; byte "x"; app_local_get_ex; assert; int 10; ==`, ep,
-			"low App lookup 1")
-	})
+		})
+	}
 }
 
 func TestAppParams(t *testing.T) {
@@ -2542,6 +2563,129 @@ int 1
 		require.Equal(t, 1, len(delta.LocalDeltas))
 		require.Equal(t, 1, len(delta.LocalDeltas[0]))
 	})
+}
+
+func TestUnlimitedResourceAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	for _, unlimitedResourceAccess := range []bool{false, true} {
+		unlimitedResourceAccess := unlimitedResourceAccess
+		t.Run(fmt.Sprintf("unlimitedResourceAccess=%v", unlimitedResourceAccess), func(t *testing.T) {
+			// start at 4 for directRefEnabledVersion
+			testLogicRange(t, 4, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+				ep.UnlimitedResourceAccess = unlimitedResourceAccess
+
+				var otherAccount basics.Address
+				crypto.RandBytes(otherAccount[:])
+
+				ledger.NewAccount(otherAccount, 1)
+				ledger.NewApp(tx.Sender, 500, basics.AppParams{})
+				ledger.NewGlobal(500, "global key", basics.TealValue{
+					Type:  basics.TealBytesType,
+					Bytes: "global value",
+				})
+
+				ledger.NewLocals(otherAccount, 500)
+				ledger.NewLocal(otherAccount, 500, "local key", basics.TealValue{
+					Type:  basics.TealBytesType,
+					Bytes: "local value",
+				})
+
+				ledger.NewAsset(tx.Sender, 501, basics.AssetParams{Total: 501})
+				ledger.NewHolding(otherAccount, 501, 2, false)
+
+				ledger.NewApp(tx.Sender, tx.ApplicationID, basics.AppParams{})
+				err := ledger.NewBox(tx.ApplicationID, "box key", []byte("box value"), tx.ApplicationID.Address())
+				require.NoError(t, err)
+
+				// Unaccessible app
+				source := `int 500; byte "global key"; app_global_get_ex; assert; byte "global value"; ==`
+				if unlimitedResourceAccess {
+					testApp(t, source, ep)
+				} else {
+					testApp(t, source, ep, "unavailable App 500")
+				}
+				if ep.Proto.LogicSigVersion >= 5 {
+					// app_params_get introduced
+					source = "int 500; app_params_get AppCreator; assert; txn Sender; =="
+					if unlimitedResourceAccess {
+						testApp(t, source, ep)
+					} else {
+						testApp(t, source, ep, "unavailable App 500")
+					}
+				}
+				if ep.Proto.LogicSigVersion >= 6 {
+					// inner app calls introduced
+					source = "itxn_begin; int 500; itxn_field ApplicationID; int 1"
+					if unlimitedResourceAccess {
+						testApp(t, source, ep)
+					} else {
+						testApp(t, source, ep, "unavailable App 500")
+					}
+				}
+
+				// Unaccessible app local
+				source = fmt.Sprintf(`addr %s; int 500; byte "local key"; app_local_get_ex; assert; byte "local value"; ==`, otherAccount)
+				if unlimitedResourceAccess {
+					testApp(t, source, ep)
+				} else {
+					problem := "unavailable Account %s"
+					if ep.Proto.LogicSigVersion < 9 {
+						// Message is difference before sharedResourcesVersion
+						problem = "invalid Account reference %s"
+					}
+					testApp(t, source, ep, fmt.Sprintf(problem, otherAccount))
+				}
+
+				// Unaccessible asset
+				source = "int 501; asset_params_get AssetTotal; assert; int 501; =="
+				if unlimitedResourceAccess {
+					testApp(t, source, ep)
+				} else {
+					testApp(t, source, ep, "unavailable Asset 501")
+				}
+				if ep.Proto.LogicSigVersion >= 5 {
+					// inner calls introduced
+					source = "itxn_begin; int 501; itxn_field XferAsset; int 1"
+					if unlimitedResourceAccess {
+						testApp(t, source, ep)
+					} else {
+						testApp(t, source, ep, "unavailable Asset 501")
+					}
+				}
+
+				// Unaccessible asset holding
+				source = fmt.Sprintf(`addr %s; int 501; asset_holding_get AssetBalance; assert; int 2; ==`, otherAccount)
+				if unlimitedResourceAccess {
+					testApp(t, source, ep)
+				} else {
+					problem := "unavailable Account %s"
+					if ep.Proto.LogicSigVersion < 9 {
+						// Message is difference before sharedResourcesVersion
+						problem = "invalid Account reference %s"
+					}
+					testApp(t, source, ep, fmt.Sprintf(problem, otherAccount))
+				}
+
+				// Unaccessible box
+				if ep.Proto.LogicSigVersion >= 8 {
+					// Boxes introduced
+					source = `byte "box key"; box_get; assert; byte "box value"; ==`
+					if unlimitedResourceAccess {
+						testApp(t, source, ep)
+					} else {
+						testApp(t, source, ep, fmt.Sprintf("invalid Box reference %#x", "box key"))
+					}
+					source = `byte "new box"; int 1000; box_create`
+					if unlimitedResourceAccess {
+						testApp(t, source, ep)
+					} else {
+						testApp(t, source, ep, fmt.Sprintf("invalid Box reference %#x", "new box"))
+					}
+				}
+			})
+		})
+	}
 }
 
 func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates txnFieldSpecs

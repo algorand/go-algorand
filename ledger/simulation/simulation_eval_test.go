@@ -2246,7 +2246,6 @@ func TestUnlimitedResourceAccessDisabled(t *testing.T) {
 	})
 	stxn := txn.Txn().Sign(sender.Sk)
 
-	// should error on too high extra budgets
 	_, err := s.Simulate(
 		simulation.Request{
 			TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
