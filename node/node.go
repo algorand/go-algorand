@@ -1469,11 +1469,3 @@ func (node *AlgorandFullNode) GetBlockTimeStampOffset() (*int64, error) {
 	}
 	return nil, fmt.Errorf("cannot get block timestamp offset when not in dev mode")
 }
-
-func getMaxSize() {
-	transactions.TransactionMaxSize()
-	// NetPrioResponseSignedMaxSize()
-	// agreement.UnauthenticatedBundleMaxSize()
-	// agreement.UnauthenticatedVoteMaxSize()
-	// agreement.UnauthenticatedProposalMaxSize()
-}

@@ -504,7 +504,6 @@ func (wp *wsPeer) readLoop() {
 			wp.reportReadErr(err)
 			return
 		}
-		// should we check if this is invalid tag already?
 		msg.Tag = Tag(string(tag[:]))
 
 		slurper.Reset(uint64(msg.Tag.MaxMessageSize()))
@@ -848,7 +847,7 @@ func (wp *wsPeer) sendPing() bool {
 	}
 
 	tagBytes := []byte(protocol.PingTag)
-	mbytes := make([]byte, len(protocol.PingTag)+PingLength)
+	mbytes := make([]byte, len(tagBytes)+PingLength)
 	copy(mbytes, tagBytes)
 	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]

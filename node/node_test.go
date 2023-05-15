@@ -545,12 +545,6 @@ func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 	}
 }
 
-func TestMaxSizesAvailable(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	require.NotPanics(t, func() { getMaxSize() })
-}
-
 func TestMaxSizesCorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
