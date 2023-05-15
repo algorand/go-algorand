@@ -400,7 +400,7 @@ func Report(x, y TypeNode, d *Diff) string {
 
 	sb.WriteString(`
 ========================================================
-			REPORT
+			STRUCT DIFF REPORT
 comparing
 	<<<<<`)
 	sb.WriteString(x.String())
@@ -469,7 +469,7 @@ SOURCE: 		%s
 	}
 	sb.WriteString(`
 ========================================================
-===============        REPORT END        ===============
+===============  STRUCT DIFF REPORT END  ===============
 ========================================================`)
 
 	return sb.String()

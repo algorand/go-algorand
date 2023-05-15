@@ -17,10 +17,13 @@
 package node
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -204,12 +207,44 @@ func TestSyncRoundWithRemake(t *testing.T) {
 	}
 
 	followNode, _ = remakeableFollowNode(t, tempDir, maxAcctLookback)
-	status, err := followNode.Status()
-	require.NoError(t, err)
+
+	// Wait for follower to catch up. This rarely is needed, but can happen
+	// and cause flakey test failures. Timing out can still occur, but is less
+	// likely than the being caught behind a few rounds.
+	var status *StatusReport
+	require.Eventually(t, func() bool {
+		st, err := followNode.Status()
+		require.NoError(t, err)
+		if st.LastRound >= newRound {
+			status = &st
+			return true
+		}
+		return false
+	}, 20*time.Second, 500*time.Millisecond, "failed to reach newRound within the allowed time")
+
 	require.Equal(t, newRound, status.LastRound)
 
 	// syncRound should be at
 	// newRound - maxAcctLookback + 1 = maxAcctLookback + 1
 	syncRound := followNode.GetSyncRound()
 	require.Equal(t, uint64(maxAcctLookback+1), syncRound)
+}
+
+func TestFastCatchupResume(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	node := setupFollowNode(t)
+	node.ctx = context.Background()
+
+	// Initialize sync round to a future round.
+	syncRound := uint64(10000)
+	node.SetSyncRound(syncRound)
+	require.Equal(t, syncRound, node.GetSyncRound())
+
+	// Force catchpoint catchup mode to end, this should set the sync round to the current ledger round (0).
+	out := node.SetCatchpointCatchupMode(false)
+	<-out
+
+	// Verify the sync was reset.
+	assert.Equal(t, uint64(0), node.GetSyncRound())
 }

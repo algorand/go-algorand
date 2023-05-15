@@ -62,6 +62,10 @@ func notFound(ctx echo.Context, internal error, external string, log logging.Log
 	return returnError(ctx, http.StatusNotFound, internal, external, log)
 }
 
+func notImplemented(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusNotImplemented, internal, external, log)
+}
+
 func addrOrNil(addr basics.Address) *string {
 	if addr.IsZero() {
 		return nil
@@ -393,6 +397,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 			AllowEmptySignatures: trueOrNil(result.EvalOverrides.AllowEmptySignatures),
 			MaxLogSize:           result.EvalOverrides.MaxLogSize,
 			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
+			ExtraOpcodeBudget:    numOrNil(result.EvalOverrides.ExtraOpcodeBudget),
 		}
 	}
 
@@ -419,6 +424,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		TxnGroups:            txnGroups,
 		AllowEmptySignatures: request.AllowEmptySignatures,
 		AllowMoreLogging:     request.AllowMoreLogging,
+		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
 	}
 }
 

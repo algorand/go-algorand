@@ -17,7 +17,7 @@ gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
-APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/check_creatable_id.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0  --clear-prog=${TEAL}/approve-all.teal --app-arg=str:skipcreation | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/check_creatable_id.teal --clear-prog=${TEAL}/approve-all.teal --app-arg=str:skipcreation | grep Created | awk '{ print $6 }')
 
 # ==============================
 # > Asset and application test
@@ -30,7 +30,7 @@ ${gcmd} asset create --creator "${ACCOUNT}" --total 1000 --unitname "" --assetur
 ${gcmd} app call --app-id="$APPID" --from="$ACCOUNT" --app-arg=str:skipcreation --app-arg=int:0 --out "$TEMPDIR/unsigned_asset_check_app_call.txn"
 
 # Create app transaction
-${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/approve-all.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0  --clear-prog=${TEAL}/approve-all.teal --out "$TEMPDIR/unsigned_app_create.txn"
+${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/approve-all.teal --clear-prog=${TEAL}/approve-all.teal --out "$TEMPDIR/unsigned_app_create.txn"
 
 # App call transaction to check app creatable ID
 ${gcmd} app call --app-id="$APPID" --from="$ACCOUNT" --app-arg=str:skipcreation --app-arg=int:2 --out "$TEMPDIR/unsigned_app_check_app_call.txn"
