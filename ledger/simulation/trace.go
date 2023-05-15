@@ -93,7 +93,7 @@ func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 }
 
 // ValidateAgainstConfig validates the ResultEvalOverrides against the node configuration
-func (eo ResultEvalOverrides) ValidateAgainstConfig(allow bool, nodeConfig config.Local) error {
+func (eo ResultEvalOverrides) ValidateAgainstConfig(nodeConfig config.Local) error {
 	if eo.AllowUnlimitedResourceAccess && !nodeConfig.EnableSimulationUnlimitedResourceAccess {
 		return errors.New("unlimited resource access is not enabled in node configuration: EnableSimulationUnlimitedResourceAccess is false")
 	}
@@ -140,7 +140,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, no
 		AllowUnlimitedResourceAccess: request.AllowUnlimitedResourceAccess,
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
-	err := resultEvalConstants.ValidateAgainstConfig(request.AllowUnlimitedResourceAccess, nodeConfig)
+	err := resultEvalConstants.ValidateAgainstConfig(nodeConfig)
 	if err != nil {
 		return Result{}, InvalidRequestError{SimulatorError{err}}
 	}
