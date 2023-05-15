@@ -325,6 +325,6 @@ func TestMaxBlockRequestSize(t *testing.T) {
 	nonceTopic := network.MakeNonceTopic(nonce)
 	topics = append(topics, nonceTopic)
 	serializedMsg := topics.MarshallTopics()
-	require.Equal(t, len(serializedMsg), protocol.UniEnsBlockReqTag.MaxMessageSize())
+	require.Equal(t, uint64(len(serializedMsg)), protocol.UniEnsBlockReqTag.MaxMessageSize())
 
 }

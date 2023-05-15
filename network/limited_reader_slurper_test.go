@@ -114,7 +114,7 @@ func benchmarkLimitedReaderSlurper(b *testing.B, arraySize uint64) {
 		err := reader.Read(buffers[i])
 		require.NoError(b, err)
 		reader.Bytes()
-		reader.Reset()
+		reader.Reset(0)
 	}
 }
 func BenchmarkLimitedReaderSlurper(b *testing.B) {

@@ -507,7 +507,7 @@ func (wp *wsPeer) readLoop() {
 		// should we check if this is invalid tag already?
 		msg.Tag = Tag(string(tag[:]))
 
-		slurper.Reset()
+		slurper.Reset(uint64(msg.Tag.MaxMessageSize()))
 		err = slurper.Read(reader)
 		if err != nil {
 			wp.reportReadErr(err)

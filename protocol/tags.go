@@ -71,7 +71,7 @@ const ProposalPayloadTagMaxSize = 24964890771504913 // Wrong because of oversize
 const StateProofSigTagMaxSize = 2266266 // Wrong because of oversized stateproof
 
 // TopicMsgRespTagMaxSize is the maximum size of a TopicMsgRespTag message	:w
-const TopicMsgRespTagMaxSize = 1024
+const TopicMsgRespTagMaxSize = 6 * 1024 * 1024 // TODO: Actually calculate the size, for now set to maxAllocation
 
 // TxnTagMaxSize is the maximum size of a TxnTag message
 const TxnTagMaxSize = 23286391600 // Wrong because of oversized stateproof
@@ -83,7 +83,7 @@ const UniEnsBlockReqTagMaxSize = 67
 const VoteBundleTagMaxSize = 23754054
 
 // MaxMessageSize returns the maximum size of a message for a given tag
-func (tag Tag) MaxMessageSize() int {
+func (tag Tag) MaxMessageSize() uint64 {
 	switch tag {
 	case AgreementVoteTag:
 		return AgreementVoteTagMaxSize
@@ -112,7 +112,7 @@ func (tag Tag) MaxMessageSize() int {
 	case VoteBundleTag:
 		return VoteBundleTagMaxSize
 	default:
-		return -1
+		return 0 // Unknown tag
 	}
 }
 

@@ -649,6 +649,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppTotalArgLen, &MaxAppTotalArgLen)
 	checkSetMax(p.MaxAssetNameBytes, &MaxAssetNameBytes)
 	checkSetMax(p.MaxAssetUnitNameBytes, &MaxAssetUnitNameBytes)
+	checkSetMax(p.MaxAssetURLBytes, &MaxAssetURLBytes)
 	checkSetMax(p.MaxAppBytesValueLen, &MaxAppBytesValueLen)
 	checkSetMax(p.MaxAppKeyLen, &MaxAppBytesKeyLen)
 }

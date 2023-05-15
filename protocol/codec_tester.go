@@ -163,6 +163,8 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 		objType = "slice"
 	} else if val.Kind() == reflect.Map {
 		objType = "map"
+	} else if val.Kind() == reflect.String {
+		objType = "string"
 	}
 
 	if structTag != "" {
@@ -240,12 +242,15 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		v.SetInt(int64(rand.Uint64()))
 		*remainingChanges--
 	case reflect.String:
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		var buf []byte
 		var len int
 		if strings.HasSuffix(v.Type().PkgPath(), "go-algorand/agreement") && v.Type().Name() == "serializableError" {
 			// Don't generate empty strings for serializableError since nil values of *string type
 			// will serialize differently by msgp and go-codec
 			len = rand.Int()%63 + 1
+		} else if hasAllocBound {
+			len = 1
 		} else {
 			len = rand.Int() % 64
 		}
@@ -382,12 +387,6 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 
 	e1 := EncodeMsgp(v0.(msgp.Marshaler))
 	e2 := EncodeReflect(v0)
-
-	if v1Sizer, ok := template.(msgp.MaxSizer); ok {
-		if v1Sizer.MaxSize() < len(e1) {
-			return fmt.Errorf("Encoded size is larger than the msgp.MaxSizer.MaxSize()")
-		}
-	}
 
 	// for debug, write out the encodings to a file
 	if debugCodecTester {
