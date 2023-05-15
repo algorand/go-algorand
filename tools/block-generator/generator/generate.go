@@ -377,7 +377,12 @@ func (g *generator) finishRound(txnCount uint64) {
 
 // WriteBlock generates a block full of new transactions and writes it to the writer.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
-
+	if round < g.dbround {
+		return fmt.Errorf("cannot generate block for round %d, already in database", round)
+	}
+	if round-g.dbround != g.round {
+		return fmt.Errorf("Generator only supports sequential block access. Expected %d but received request for %d.\n", g.round+g.dbround, round)
+	}
 	numTxnForBlock := g.txnForRound(g.round)
 
 	// return genesis block. offset round for non-empty database
@@ -763,7 +768,13 @@ func (g *generator) initializeLedger() {
 		fmt.Printf("error making genesis: %v\n.", err)
 		os.Exit(1)
 	}
-	l, err := ledger.OpenLedger(logging.Base(), "block-generator", true, ledgercore.InitState{
+	var prefix string
+	if g.genesisID == "" {
+		prefix = "block-generator"
+	} else {
+		prefix = g.genesisID
+	}
+	l, err := ledger.OpenLedger(logging.Base(), prefix, true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    bal.Balances,
 		GenesisHash: g.genesisHash,
