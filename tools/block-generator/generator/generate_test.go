@@ -33,7 +33,6 @@ import (
 )
 
 func makePrivateGenerator(t *testing.T, round uint64, genesis bookkeeping.Genesis) *generator {
-	partitiontest.PartitionTest(t)
 	publicGenerator, err := MakeGenerator(round, genesis, GenerationConfig{
 		NumGenesisAccounts:           10,
 		GenesisAccountInitialBalance: 1000000000000,
