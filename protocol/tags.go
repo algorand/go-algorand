@@ -50,10 +50,10 @@ const NetPrioResponseTagMaxSize = 838
 const NetIDVerificationTagMaxSize = 215
 const PingTagMaxSize = 8
 const PingReplyTagMaxSize = 8
-const ProposalPayloadTagMaxSize = 1024
-const StateProofSigTagMaxSize = 2266266
+const ProposalPayloadTagMaxSize = 62213064569904913 // Wrong because of oversized stateproof
+const StateProofSigTagMaxSize = 2266266             // Wrong because of oversized stateproof
 const TopicMsgRespTagMaxSize = 1024
-const TxnTagMaxSize = 23286391600 // Wrong
+const TxnTagMaxSize = 23286391600 // Wrong because of oversized stateproof
 const UniEnsBlockReqTagMaxSize = 67
 const VoteBundleTagMaxSize = 23754054
 

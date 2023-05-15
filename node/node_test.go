@@ -554,8 +554,6 @@ func TestMaxSizesAvailable(t *testing.T) {
 func TestMaxSizesCorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// require.Zero(t, stateproof.StateProofMaxSize())
-	// require.Zero(t, transactions.TransactionMaxSize())
 	avSize := agreement.UnauthenticatedVoteMaxSize()
 	require.Equal(t, avSize, protocol.AgreementVoteTag.MaxMessageSize())
 	miSize := network.MessageOfInterestMaxSize()
@@ -568,8 +566,8 @@ func TestMaxSizesCorrect(t *testing.T) {
 	require.Equal(t, piSize, protocol.PingTag.MaxMessageSize())
 	pjSize := network.PingLength
 	require.Equal(t, pjSize, protocol.PingReplyTag.MaxMessageSize())
-	// ppSize := agreement.TransmittedPayloadMaxSize()
-	// require.Equal(t, ppSize, protocol.ProposalPayloadTag.MaxMessageSize())
+	ppSize := agreement.TransmittedPayloadMaxSize()
+	require.Equal(t, ppSize, protocol.ProposalPayloadTag.MaxMessageSize())
 	spSize := stateproof.SigFromAddrMaxSize()
 	require.Equal(t, spSize, protocol.StateProofSigTag.MaxMessageSize())
 	txSize := config.MaxTxGroupSize * transactions.SignedTxnMaxSize()

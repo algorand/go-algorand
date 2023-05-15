@@ -2435,7 +2435,7 @@ func EvalDeltaMaxSize() (s int) {
 	s += config.MaxEvalDeltaAccounts * (msgp.Uint64Size)
 	// Adding size of map values for z.LocalDeltas
 	s += config.MaxEvalDeltaAccounts * (basics.StateDeltaMaxSize())
-	s += 3 + msgp.ArrayHeaderSize + ((config.MaxEvalDeltaAccounts) * (basics.AddressMaxSize())) + 3 + msgp.ArrayHeaderSize + 1024 + 4 + msgp.ArrayHeaderSize + ((config.MaxInnerTransactionsPerDelta) * (SignedTxnWithADMaxSize()))
+	s += 3 + msgp.ArrayHeaderSize + ((config.MaxEvalDeltaAccounts) * (basics.AddressMaxSize())) + 3 + msgp.ArrayHeaderSize + (config.MaxLogCalls * msgp.StringPrefixSize) + config.MaxEvalDeltaTotalLogSize + 4 + msgp.ArrayHeaderSize + (config.MaxInnerTransactionsPerDelta * MaxInnerSignedTxnWithADSize)
 	return
 }
 
