@@ -232,7 +232,7 @@ func TestWriteRound(t *testing.T) {
 	// request a block that is several rounds ahead of the current round
 	err = g.WriteBlock(writer, 10)
 	require.NotNil(t, err)
-	require.Equal(t, err.Error(), "Generator only supports sequential block access. Expected 2 but received request for 10.\n")
+	require.Equal(t, err.Error(), "generator only supports sequential block access. Expected 2 but received request for 10")
 }
 
 func TestWriteRoundWithPreloadedDB(t *testing.T) {
@@ -246,7 +246,7 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 	}{
 		{"preloaded database starting at round 1", 1, 1, bookkeeping.Genesis{Network: "generator-test1"}, nil},
 		{"invalid request", 10, 1, bookkeeping.Genesis{Network: "generator-test"}, fmt.Errorf("cannot generate block for round 1, already in database")},
-		{"invalid request", 1, 10, bookkeeping.Genesis{Network: "generator-test"}, fmt.Errorf("Generator only supports sequential block access. Expected 2 but received request for 10.\n")},
+		{"invalid request", 1, 10, bookkeeping.Genesis{Network: "generator-test"}, fmt.Errorf("generator only supports sequential block access. Expected 2 but received request for 10")},
 		{"preloaded database starting at 10", 10, 11, bookkeeping.Genesis{Network: "generator-test2"}, nil},
 		{"preloaded database request round 20", 10, 20, bookkeeping.Genesis{Network: "generator-test3"}, nil},
 	}

@@ -381,7 +381,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		return fmt.Errorf("cannot generate block for round %d, already in database", round)
 	}
 	if round-g.dbround != g.round {
-		return fmt.Errorf("Generator only supports sequential block access. Expected %d but received request for %d.\n", g.round+g.dbround, round)
+		return fmt.Errorf("generator only supports sequential block access. Expected %d but received request for %d", g.round+g.dbround, round)
 	}
 	numTxnForBlock := g.txnForRound(g.round)
 
