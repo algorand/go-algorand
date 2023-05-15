@@ -73,7 +73,7 @@ var defaultLocal = Local{
 	EnableProfiler:                             false,
 	EnableRequestLogger:                        false,
 	EnableRuntimeMetrics:                       false,
-	EnableSimulationTraceReturn:                false,
+	EnableSimulationDeveloperAPI:               false,
 	EnableTopAccountsReporting:                 false,
 	EnableTxBacklogRateLimiting:                false,
 	EnableTxnEvalTracer:                        false,

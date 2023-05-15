@@ -971,7 +971,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 		}
 
 		nodeConfig := config.GetDefaultLocal()
-		nodeConfig.EnableSimulationTraceReturn = true
+		nodeConfig.EnableSimulationDeveloperAPI = true
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -1858,7 +1858,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 		}
 
 		nodeConfig := config.GetDefaultLocal()
-		nodeConfig.EnableSimulationTraceReturn = true
+		nodeConfig.EnableSimulationDeveloperAPI = true
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -1998,7 +1998,7 @@ byte "hello"; log; int 1`,
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
 		nodeConfig := config.GetDefaultLocal()
-		nodeConfig.EnableSimulationTraceReturn = true
+		nodeConfig.EnableSimulationDeveloperAPI = true
 
 		return simulationTestCase{
 			input: simulation.Request{

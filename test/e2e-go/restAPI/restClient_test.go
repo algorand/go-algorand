@@ -2098,7 +2098,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	MaxDepth := 2
 	MinFee := uint64(1e5)
 
-	// create app
+	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
 		0, nil, nil, nil,
 		nil, nil, transactions.NoOpOC,
@@ -2152,14 +2152,14 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	var httpError client.HTTPError
 	a.ErrorAs(err, &httpError)
 	a.Equal(http.StatusBadRequest, httpError.StatusCode)
-	a.Contains(httpError.ErrorString, "the local configuration of the node has `EnableSimulationTraceReturn` turned off, while requesting for execution trace")
+	a.Contains(httpError.ErrorString, "the local configuration of the node has `EnableSimulationDeveloperAPI` turned off, while requesting for execution trace")
 
-	// update the configuration file to enable EnableSimulationTraceReturn
+	// update the configuration file to enable EnableSimulationDeveloperAPI
 	err = primaryNode.FullStop()
 	a.NoError(err)
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
-	cfg.EnableSimulationTraceReturn = true
+	cfg.EnableSimulationDeveloperAPI = true
 	err = cfg.SaveToDisk(primaryNode.GetDataDir())
 	require.NoError(t, err)
 	fixture.Start()
