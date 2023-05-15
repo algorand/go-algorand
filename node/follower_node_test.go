@@ -184,7 +184,7 @@ func TestSyncRoundWithRemake(t *testing.T) {
 	// Part I. redo TestSyncRound
 	// main differences are:
 	// * cfg.DisableNetworking = true
-	// * cfg.MaxAcctLookback = 100 (instead of 4)
+	// * cfg.MaxAcctLookback = 10 (instead of 4)
 
 	addBlock(basics.Round(1))
 
