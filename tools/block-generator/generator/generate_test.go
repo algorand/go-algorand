@@ -191,6 +191,7 @@ func TestAssetDestroy(t *testing.T) {
 
 func TestWriteRoundZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	testcases := []struct {
 		name    string
 		dbround uint64
@@ -237,6 +238,7 @@ func TestWriteRound(t *testing.T) {
 
 func TestWriteRoundWithPreloadedDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	testcases := []struct {
 		name    string
 		dbround uint64
