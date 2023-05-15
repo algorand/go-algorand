@@ -731,6 +731,7 @@ type evalTestLedger struct {
 	rewardsPool         basics.Address
 	latestTotals        ledgercore.AccountTotals
 	tracer              logic.EvalTracer
+	boxes               map[string][]byte
 }
 
 // newTestLedger creates a in memory Ledger that is as realistic as
@@ -742,6 +743,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 		feeSink:       balances.FeeSink,
 		rewardsPool:   balances.RewardsPool,
 		tracer:        nil,
+		boxes:         make(map[string][]byte),
 	}
 
 	protoVersion := protocol.ConsensusFuture
@@ -859,7 +861,9 @@ func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address,
 }
 
 func (ledger *evalTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
-	panic("unimplemented")
+	// The test ledger only has one view of the value of a box--no rnd based retrieval is implemented currently
+	val, _ := ledger.boxes[key]
+	return val, nil
 }
 
 // GenesisHash returns the genesis hash for this ledger.

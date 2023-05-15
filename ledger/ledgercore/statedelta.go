@@ -442,13 +442,16 @@ func (ad AccountDeltas) ModifiedAccounts() []basics.Address {
 
 // MergeAccounts applies other accounts into this StateDelta accounts
 func (ad *AccountDeltas) MergeAccounts(other AccountDeltas) {
-	for _, balanceRecord := range other.Accts {
+	for i := range other.Accts {
+		balanceRecord := &other.Accts[i]
 		ad.Upsert(balanceRecord.Addr, balanceRecord.AccountData)
 	}
-	for _, appResource := range other.AppResources {
+	for i := range other.AppResources {
+		appResource := &other.AppResources[i]
 		ad.UpsertAppResource(appResource.Addr, appResource.Aidx, appResource.Params, appResource.State)
 	}
-	for _, assetResource := range other.AssetResources {
+	for i := range other.AssetResources {
+		assetResource := &other.AssetResources[i]
 		ad.UpsertAssetResource(assetResource.Addr, assetResource.Aidx, assetResource.Params, assetResource.Holding)
 	}
 }

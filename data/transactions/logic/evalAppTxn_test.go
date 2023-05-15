@@ -105,15 +105,16 @@ func TestFieldTypes(t *testing.T) {
 	t.Parallel()
 
 	ep, _, _ := MakeSampleEnv()
-	TestApp(t, "itxn_begin; byte \"pay\"; itxn_field Sender;", ep, "not an address")
+	// Use NoTrack to skip assembly errors
+	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Sender;"), ep, "not an address")
 	TestApp(t, NoTrack("itxn_begin; int 7; itxn_field Receiver;"), ep, "not an address")
-	TestApp(t, "itxn_begin; byte \"\"; itxn_field CloseRemainderTo;", ep, "not an address")
-	TestApp(t, "itxn_begin; byte \"\"; itxn_field AssetSender;", ep, "not an address")
+	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field CloseRemainderTo;"), ep, "not an address")
+	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field AssetSender;"), ep, "not an address")
 	// can't really tell if it's an addres, so 32 bytes gets further
 	TestApp(t, "itxn_begin; byte \"01234567890123456789012345678901\"; itxn_field AssetReceiver; int 1",
 		ep, "invalid Account reference")
 	// but a b32 string rep is not an account
-	TestApp(t, "itxn_begin; byte \"GAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYZIZD42E\"; itxn_field AssetCloseTo;",
+	TestApp(t, NoTrack("itxn_begin; byte \"GAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYZIZD42E\"; itxn_field AssetCloseTo;"),
 		ep, "not an address")
 
 	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Fee;"), ep, "not a uint64")
@@ -849,7 +850,7 @@ func TestFieldSetting(t *testing.T) {
 
 	TestApp(t, "itxn_begin; int 0; itxn_field Nonparticipation; int 1", ep)
 	TestApp(t, "itxn_begin; int 1; itxn_field Nonparticipation; int 1", ep)
-	TestApp(t, "itxn_begin; int 2; itxn_field Nonparticipation; int 1", ep,
+	TestApp(t, NoTrack("itxn_begin; int 2; itxn_field Nonparticipation; int 1"), ep,
 		"boolean is neither 1 nor 0")
 
 	TestApp(t, "itxn_begin; int 32; bzero; itxn_field RekeyTo; int 1", ep)

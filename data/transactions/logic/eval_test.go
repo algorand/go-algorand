@@ -3363,10 +3363,11 @@ intc_1
 import random
 
 def foo():
-    for i in range(64):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('+')
+
+	for i in range(64):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('+')
 */
 const addBenchmarkSource = `int 20472989571761113
 int 80135167795737348
@@ -3501,10 +3502,11 @@ int 28939890412103745
 import random
 
 def foo():
-    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-        print('+')
+
+	print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	    print('+')
 */
 const addBenchmark2Source = `int 8371863094338737
 int 29595196041051360
@@ -4157,13 +4159,13 @@ func TestArgType(t *testing.T) {
 	t.Parallel()
 
 	var sv stackValue
-	require.Equal(t, StackUint64, sv.argType())
+	require.Equal(t, avmUint64, sv.avmType())
 	sv.Bytes = []byte("")
-	require.Equal(t, StackBytes, sv.argType())
+	require.Equal(t, avmBytes, sv.avmType())
 	sv.Uint = 1
-	require.Equal(t, StackBytes, sv.argType())
+	require.Equal(t, avmBytes, sv.avmType())
 	sv.Bytes = nil
-	require.Equal(t, StackUint64, sv.argType())
+	require.Equal(t, avmUint64, sv.avmType())
 }
 
 func TestApplicationsDisallowOldTeal(t *testing.T) {
@@ -4904,7 +4906,7 @@ func TestBytesMath(t *testing.T) {
 	// 64 byte long inputs are accepted, even if they produce longer outputs
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 65; ==", effs), 4)
 	// 65 byte inputs are not ok.
-	testPanics(t, fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs), 4)
+	testPanics(t, NoTrack(fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)), 4)
 
 	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
@@ -5008,7 +5010,7 @@ func TestBytesBits(t *testing.T) {
 	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
 
 	testAccepts(t, "int 4096; bzero; len; int 4096; ==", 4)
-	testPanics(t, "int 4097; bzero; len; int 4097; ==", 4)
+	testPanics(t, NoTrack("int 4097; bzero; len; int 4097; =="), 4)
 }
 
 func TestBytesConversions(t *testing.T) {
