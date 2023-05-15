@@ -54,6 +54,7 @@ type (
 	period uint64
 )
 
+// RoundMaxSize is defined manually since it is expected by the msgp generated MaxSize methods.
 func RoundMaxSize() int {
 	return basics.RoundMaxSize()
 }
