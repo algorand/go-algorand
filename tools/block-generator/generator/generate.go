@@ -480,7 +480,10 @@ func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
 	// offset round for non-empty database
 	if round-g.dbround == 0 {
 		data, _ := encode(protocol.CodecHandle, ledgercore.StateDelta{})
-		output.Write(data)
+		_, err := output.Write(data)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round - g.dbround))
