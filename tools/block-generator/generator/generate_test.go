@@ -191,7 +191,6 @@ func TestAssetDestroy(t *testing.T) {
 
 func TestWriteRoundZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	testcases := []struct {
 		name    string
 		dbround uint64
@@ -202,7 +201,9 @@ func TestWriteRoundZero(t *testing.T) {
 		{"preloaded database", 1, 1, bookkeeping.Genesis{Network: "TestWriteRoundZero"}},
 	}
 	for _, tc := range testcases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
 			var data []byte
 			writer := bytes.NewBuffer(data)
@@ -238,7 +239,6 @@ func TestWriteRound(t *testing.T) {
 
 func TestWriteRoundWithPreloadedDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 	testcases := []struct {
 		name    string
 		dbround uint64
@@ -253,7 +253,9 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 		{"preloaded database request round 20", 10, 20, bookkeeping.Genesis{Network: "generator-test3"}, nil},
 	}
 	for _, tc := range testcases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
 			defer g.ledger.Close()
 			var data []byte
