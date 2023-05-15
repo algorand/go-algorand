@@ -2059,8 +2059,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	t.Skip("still changing test, TODO remove skip")
-
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
 	localFixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
@@ -2098,7 +2096,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 
 	MaxDepth := 2
 	MinFee := uint64(1e5)
-	futureAppID := basics.AppIndex(1001)
 
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
@@ -2114,12 +2111,12 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	a.NoError(err)
 	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
 	a.NoError(err)
-	futureAppID = submittedAppCreateTxn.Txn.Txn.ApplicationID
+	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(
 		wh, nil, senderAddress, futureAppID.Address().String(),
-		MinFee*uint64(3*MaxDepth+2), 0, nil, "", 0, 0,
+		0, MinFee*uint64(3*MaxDepth+2), nil, "", 0, 0,
 	)
 	a.NoError(err)
 
@@ -2142,7 +2139,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
 	a.NoError(err)
 
-	// The first simulation should not pass, for
+	// The first simulation should not pass, for simulation return PC in config has not been activated
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
@@ -2309,21 +2306,15 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	}
 
 	a.Len(resp.TxnGroups[0].Txns, 2)
-	a.Empty(resp.TxnGroups[0].FailureMessage, *resp.TxnGroups[0].FailureMessage)
-	a.Empty(resp.TxnGroups[0].FailedAt)
+	a.Nil(resp.TxnGroups[0].FailureMessage)
+	a.Nil(resp.TxnGroups[0].FailedAt)
 
 	expectedTraceFirstTxn := &model.SimulationTransactionExecTrace{
-		TraceType: model.SimulationTransactionExecTraceTraceTypeApprovalProgram,
-		Trace:     &creationOpcodeTrace,
+		TraceType: model.SimulationTransactionExecTraceTraceTypeOtherTransaction,
 	}
 	a.Equal(expectedTraceFirstTxn, resp.TxnGroups[0].Txns[0].TransactionTrace)
 
 	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
-		TraceType: model.SimulationTransactionExecTraceTraceTypeOtherTransaction,
-	}
-	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
-
-	expectedTraceThirdTxn := &model.SimulationTransactionExecTrace{
 		TraceType:      model.SimulationTransactionExecTraceTraceTypeApprovalProgram,
 		Trace:          &recursiveLongOpcodeTrace,
 		StepToInnerMap: &stepToInnerMap,
@@ -2355,8 +2346,8 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			},
 		},
 	}
-	a.Equal(expectedTraceThirdTxn, resp.TxnGroups[0].Txns[2].TransactionTrace)
+	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
 
-	a.NotEmpty(resp.ExecTrace)
+	a.NotNil(resp.ExecTrace)
 	a.Equal(model.SimulateResponseExecTracePc, *resp.ExecTrace)
 }
