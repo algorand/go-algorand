@@ -166,6 +166,7 @@ type SortAddress = basics.SortAddress
 // Address is required for the msgpack sort binding, since it looks for Address and not basics.Address
 type Address = basics.Address
 
+// AddressMaxSize forwards to the basics package to get MaxSize
 func AddressMaxSize() int {
 	return basics.AddressMaxSize()
 }

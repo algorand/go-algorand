@@ -96,3 +96,11 @@ func TestTagList(t *testing.T) {
 	}
 	require.Empty(t, tagListMap, "Unseen tags remain in TagList")
 }
+
+func TestMaxSizesDefined(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+	for _, tag := range TagList {
+		require.Greater(t, tag.MaxMessageSize(), uint64(0))
+	}
+}
