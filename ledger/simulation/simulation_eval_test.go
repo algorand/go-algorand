@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -47,6 +48,7 @@ func uint64ToBytes(num uint64) []byte {
 
 type simulationTestCase struct {
 	input         simulation.Request
+	nodeConfig    *config.Local
 	expected      simulation.Result
 	expectedError string
 }
@@ -122,11 +124,17 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 	t.Helper()
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
 
 	testcase := f(env)
 
-	actual, err := s.Simulate(testcase.input)
+	var nodeConfig config.Local
+	if testcase.nodeConfig != nil {
+		nodeConfig = *testcase.nodeConfig
+	} else {
+		nodeConfig = config.GetDefaultLocal()
+	}
+
+	actual, err := simulation.MakeSimulator(env.Ledger, nodeConfig).Simulate(testcase.input)
 	require.NoError(t, err)
 
 	validateSimulationResult(t, actual)
@@ -369,7 +377,7 @@ func TestStateProofTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 
 	txgroup := []transactions.SignedTxn{
 		env.TxnInfo.NewTxn(txntest.Txn{
@@ -388,7 +396,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 	sender1 := env.Accounts[0]
 	sender1Balance := env.Accounts[0].AcctData.MicroAlgos
 	sender2 := env.Accounts[1]
@@ -962,6 +970,9 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: uint64(i)})
 		}
 
+		nodeConfig := config.GetDefaultLocal()
+		nodeConfig.EnableSimulationTraceReturn = true
+
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -970,6 +981,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 				ExtraOpcodeBudget: extraOpcodeBudget,
 				ExecTraceConfig:   simulation.ReturnPC,
 			},
+			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
@@ -1094,7 +1106,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 
 	sender := env.Accounts[0]
 
@@ -1302,7 +1314,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -1845,6 +1857,9 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{TraceStep: 78, InnerIndex: 2},
 		}
 
+		nodeConfig := config.GetDefaultLocal()
+		nodeConfig.EnableSimulationTraceReturn = true
+
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -1852,6 +1867,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 				},
 				ExecTraceConfig: simulation.ReturnPC,
 			},
+			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
@@ -1951,7 +1967,7 @@ func TestLogicSigPCExposure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	op, err := logic.AssembleString(`#pragma version 6
+	op, err := logic.AssembleString(`#pragma version 8
 ` + strings.Repeat(`byte "a"; keccak256; pop
 `, 2) + `int 1`)
 	require.NoError(t, err)
@@ -1972,8 +1988,7 @@ func TestLogicSigPCExposure(t *testing.T) {
 			Sender: lsigAddr,
 			ApprovalProgram: `#pragma version 8
 byte "hello"; log; int 1`,
-			ClearStateProgram: `#pragma version 8
-int 1`,
+			ClearStateProgram: "#pragma version 8\n int 1",
 		})
 
 		txntest.Group(&payTxn, &appCallTxn)
@@ -1982,6 +1997,9 @@ int 1`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
+		nodeConfig := config.GetDefaultLocal()
+		nodeConfig.EnableSimulationTraceReturn = true
+
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -1989,6 +2007,7 @@ int 1`,
 				},
 				ExecTraceConfig: simulation.ReturnPC,
 			},
+			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
 				Version:         simulation.ResultLatestVersion,
 				LastRound:       env.TxnInfo.LatestRound(),
@@ -2196,7 +2215,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{

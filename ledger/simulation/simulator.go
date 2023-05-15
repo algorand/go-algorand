@@ -19,7 +19,6 @@ package simulation
 import (
 	"errors"
 	"fmt"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -101,13 +100,15 @@ type EvalFailureError struct {
 
 // Simulator is a transaction group simulator for the block evaluator.
 type Simulator struct {
-	ledger simulatorLedger
+	ledger     simulatorLedger
+	nodeConfig config.Local
 }
 
 // MakeSimulator creates a new simulator from a ledger.
-func MakeSimulator(ledger *data.Ledger) *Simulator {
+func MakeSimulator(ledger *data.Ledger, nodeConfig config.Local) *Simulator {
 	return &Simulator{
-		ledger: simulatorLedger{ledger, ledger.Latest()},
+		ledger:     simulatorLedger{ledger, ledger.Latest()},
+		nodeConfig: nodeConfig,
 	}
 }
 
@@ -223,20 +224,15 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
 func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
-	simulatorTracer := makeEvalTracer(s.ledger.start, simulateRequest)
+	simulatorTracer, err := makeEvalTracer(s.ledger.start, simulateRequest, s.nodeConfig)
+	if err != nil {
+		return Result{}, err
+	}
 
 	if len(simulateRequest.TxnGroups) != 1 {
 		return Result{}, InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("expected 1 transaction group, got %d", len(simulateRequest.TxnGroups)),
-			},
-		}
-	}
-
-	if config.GetDefaultLocal().DisableSimulationTraceReturn && simulateRequest.ExecTraceConfig > NoExecTrace {
-		return Result{}, InvalidRequestError{
-			SimulatorError{
-				err: fmt.Errorf("the local configuration of the node has `DisableSimulationTraceReturn` turned on, while requesting for execution trace"),
 			},
 		}
 	}

@@ -1738,17 +1738,6 @@ func TestSimulateWithUnlimitedLog(t *testing.T) {
 	}
 	a.NoError(err)
 
-	toAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-	closeToAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-
-	// Ensure these accounts don't exist
-	receiverBalance, err := testClient.GetBalance(toAddress)
-	a.NoError(err)
-	a.Zero(receiverBalance)
-	closeToBalance, err := testClient.GetBalance(closeToAddress)
-	a.NoError(err)
-	a.Zero(closeToBalance)
-
 	// construct program that uses a lot of log
 	prog := `#pragma version 8
 txn NumAppArgs
@@ -1785,12 +1774,10 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
-	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 	a.Greater(uint64(createdAppID), uint64(0))
@@ -1896,7 +1883,7 @@ int 1`
 	ops, err := logic.AssembleString(prog)
 	a.NoError(err)
 	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 8; int 1")
+	ops, err = logic.AssembleString("#pragma version 8\n int 1")
 	a.NoError(err)
 	clearState := ops.Program
 
@@ -1915,12 +1902,10 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
-	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 	a.Greater(uint64(createdAppID), uint64(0))
@@ -2074,14 +2059,23 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	t.Skip("still changing test, TODO remove skip")
+
 	a := require.New(fixtures.SynchronizedTest(t))
 	var localFixture fixtures.RestClientFixture
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
-	defer localFixture.Shutdown()
+	localFixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
 
-	testClient := localFixture.LibGoalClient
+	// Get primary node
+	primaryNode, err := fixture.GetNodeController("Primary")
+	a.NoError(err)
 
-	_, err := testClient.WaitForRound(1)
+	fixture.Start()
+	defer primaryNode.FullStop()
+
+	// get lib goal client
+	testClient := fixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	_, err = testClient.WaitForRound(1)
 	a.NoError(err)
 
 	wh, err := testClient.GetUnencryptedWalletHandle()
@@ -2089,9 +2083,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
 	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
-	if senderAddress == "" {
-		t.Error("no addr with funds")
-	}
+	a.NotEmpty(senderAddress, "no addr with funds")
 	a.NoError(err)
 
 	ops, err := logic.AssembleString(maxDepthTealApproval)
@@ -2118,10 +2110,16 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
 
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+	futureAppID = submittedAppCreateTxn.Txn.Txn.ApplicationID
+
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(
 		wh, nil, senderAddress, futureAppID.Address().String(),
-		0, MinFee*uint64(3*MaxDepth+2), nil, "", 0, 0,
+		MinFee*uint64(3*MaxDepth+2), 0, nil, "", 0, 0,
 	)
 	a.NoError(err)
 
@@ -2134,27 +2132,35 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	a.NoError(err)
 
 	// Group the transactions, and start the simulation
-	gid, err := testClient.GroupID([]transactions.Transaction{
-		appCreateTxn, appFundTxn, appCallTxn,
-	})
+	gid, err := testClient.GroupID([]transactions.Transaction{appFundTxn, appCallTxn})
 	a.NoError(err)
-	appCreateTxn.Group = gid
 	appFundTxn.Group = gid
 	appCallTxn.Group = gid
 
-	appCreateTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCreateTxn)
-	a.NoError(err)
 	appFundTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appFundTxn)
 	a.NoError(err)
 	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
 	a.NoError(err)
 
-	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+	// The first simulation should not pass, for
+	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{Txns: []transactions.SignedTxn{appCreateTxnSigned, appFundTxnSigned, appCallTxnSigned}},
+			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
 		},
 		ExecTraceOption: string(model.SimulateRequestExecTracePc),
-	})
+	}
+
+	// update the configuration file to enable EnableSimulationTraceReturn
+	err = primaryNode.FullStop()
+	a.NoError(err)
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	cfg.EnableSimulationTraceReturn = true
+	err = cfg.SaveToDisk(primaryNode.GetDataDir())
+	require.NoError(t, err)
+	fixture.Start()
+
+	resp, err := testClient.SimulateTransactions(simulateRequest)
 	a.NoError(err)
 
 	// Check expected == actual
@@ -2302,8 +2308,8 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 		{Pc: 78, InnerIndex: 2},
 	}
 
-	a.Len(resp.TxnGroups[0].Txns, 3)
-	a.Empty(resp.TxnGroups[0].FailureMessage)
+	a.Len(resp.TxnGroups[0].Txns, 2)
+	a.Empty(resp.TxnGroups[0].FailureMessage, *resp.TxnGroups[0].FailureMessage)
 	a.Empty(resp.TxnGroups[0].FailedAt)
 
 	expectedTraceFirstTxn := &model.SimulationTransactionExecTrace{

@@ -114,7 +114,7 @@ type Result struct {
 	ExecTraceConfig
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, request Request, version uint64) (Result, error) {
+func makeSimulationResultWithVersion(lastRound basics.Round, request Request, nodeConfig config.Local, version uint64) (Result, error) {
 	if version != ResultLatestVersion {
 		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
 	}
@@ -130,6 +130,14 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
+	if !nodeConfig.EnableSimulationTraceReturn && request.ExecTraceConfig > NoExecTrace {
+		return Result{}, InvalidRequestError{
+			SimulatorError{
+				err: fmt.Errorf("the local configuration of the node has `EnableSimulationTraceReturn` turned off, while requesting for execution trace"),
+			},
+		}
+	}
+
 	return Result{
 		Version:         version,
 		LastRound:       lastRound,
@@ -139,13 +147,8 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 	}, nil
 }
 
-func makeSimulationResult(lastRound basics.Round, request Request) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, request, ResultLatestVersion)
-	if err != nil {
-		// this should never happen, since we pass in ResultLatestVersion
-		panic(err)
-	}
-	return result
+func makeSimulationResult(lastRound basics.Round, request Request, nodeConfig config.Local) (Result, error) {
+	return makeSimulationResultWithVersion(lastRound, request, nodeConfig, ResultLatestVersion)
 }
 
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation

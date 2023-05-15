@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/config"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -93,13 +94,12 @@ type evalTracer struct {
 	txnIndexToLogicSigTrace map[int][]OpcodeTraceUnit
 }
 
-func makeEvalTracer(lastRound basics.Round, request Request) *evalTracer {
-	result := makeSimulationResult(lastRound, request)
-	evalTracerInstance := evalTracer{result: &result, txnIndexToLogicSigTrace: make(map[int][]OpcodeTraceUnit)}
-	if request.ExecTraceConfig > NoExecTrace {
-		evalTracerInstance.txnIndexToLogicSigTrace = make(map[int][]OpcodeTraceUnit)
+func makeEvalTracer(lastRound basics.Round, request Request, nodeConfig config.Local) (*evalTracer, error) {
+	result, err := makeSimulationResult(lastRound, request, nodeConfig)
+	if err != nil {
+		return nil, err
 	}
-	return &evalTracerInstance
+	return &evalTracer{result: &result}, nil
 }
 
 func (tracer *evalTracer) handleError(evalError error) {
@@ -259,6 +259,10 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 
 		if cx.RunMode() == logic.ModeSig {
 			groupIndex := cx.GroupIndex()
+
+			if tracer.txnIndexToLogicSigTrace == nil {
+				tracer.txnIndexToLogicSigTrace = make(map[int][]OpcodeTraceUnit)
+			}
 
 			tracer.txnIndexToLogicSigTrace[groupIndex] = append(tracer.txnIndexToLogicSigTrace[groupIndex], currentOpcodeUnit)
 			return
