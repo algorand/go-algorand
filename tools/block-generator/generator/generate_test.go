@@ -191,18 +191,28 @@ func TestAssetDestroy(t *testing.T) {
 
 func TestWriteRoundZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	testcases := []struct {
+	var testcases = []struct {
 		name    string
 		dbround uint64
 		round   uint64
 		genesis bookkeeping.Genesis
 	}{
-		{"empty database", 0, 0, bookkeeping.Genesis{}},
-		{"preloaded database", 1, 1, bookkeeping.Genesis{Network: "TestWriteRoundZero"}},
+		{
+			name:    "empty database",
+			dbround: 0,
+			round:   0,
+			genesis: bookkeeping.Genesis{},
+		},
+		{
+			name:    "preloaded database",
+			dbround: 1,
+			round:   1,
+			genesis: bookkeeping.Genesis{Network: "TestWriteRoundZero"},
+		},
 	}
 	for _, tc := range testcases {
 		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
 			t.Parallel()
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
 			var data []byte
@@ -239,22 +249,52 @@ func TestWriteRound(t *testing.T) {
 
 func TestWriteRoundWithPreloadedDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	testcases := []struct {
+	var testcases = []struct {
 		name    string
 		dbround uint64
 		round   uint64
 		genesis bookkeeping.Genesis
 		err     error
 	}{
-		{"preloaded database starting at round 1", 1, 1, bookkeeping.Genesis{Network: "generator-test1"}, nil},
-		{"invalid request", 10, 1, bookkeeping.Genesis{Network: "generator-test"}, fmt.Errorf("cannot generate block for round 1, already in database")},
-		{"invalid request", 1, 10, bookkeeping.Genesis{Network: "generator-test"}, fmt.Errorf("generator only supports sequential block access. Expected 2 but received request for 10")},
-		{"preloaded database starting at 10", 10, 11, bookkeeping.Genesis{Network: "generator-test2"}, nil},
-		{"preloaded database request round 20", 10, 20, bookkeeping.Genesis{Network: "generator-test3"}, nil},
+		{
+			name:    "preloaded database starting at round 1",
+			dbround: 1,
+			round:   1,
+			genesis: bookkeeping.Genesis{Network: "generator-test1"},
+			err:     nil,
+		},
+		{
+			name:    "invalid request",
+			dbround: 10,
+			round:   1,
+			genesis: bookkeeping.Genesis{Network: "generator-test"},
+			err:     fmt.Errorf("cannot generate block for round 1, already in database"),
+		},
+		{
+			name:    "invalid request 2",
+			dbround: 1,
+			round:   10,
+			genesis: bookkeeping.Genesis{Network: "generator-test"},
+			err:     fmt.Errorf("generator only supports sequential block access. Expected 2 but received request for 10"),
+		},
+		{
+			name:    "preloaded database starting at 10",
+			dbround: 10,
+			round:   11,
+			genesis: bookkeeping.Genesis{Network: "generator-test2"},
+			err:     nil,
+		},
+		{
+			name:    "preloaded database request round 20",
+			dbround: 10,
+			round:   20,
+			genesis: bookkeeping.Genesis{Network: "generator-test3"},
+			err:     nil,
+		},
 	}
 	for _, tc := range testcases {
 		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
 			t.Parallel()
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
 			defer g.ledger.Close()
