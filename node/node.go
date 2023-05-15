@@ -418,8 +418,8 @@ func (node *AlgorandFullNode) ListeningAddress() (string, bool) {
 func (node *AlgorandFullNode) Stop() {
 	node.mu.Lock()
 	defer func() {
-		node.mu.Unlock()
 		node.waitMonitoringRoutines()
+		node.mu.Unlock()
 	}()
 
 	node.net.ClearHandlers()
@@ -1225,8 +1225,8 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		if catchpointCatchupMode {
 			// stop..
 			defer func() {
-				node.mu.Unlock()
 				node.waitMonitoringRoutines()
+				node.mu.Unlock()
 			}()
 			node.net.ClearHandlers()
 			node.stateProofWorker.Stop()
