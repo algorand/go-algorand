@@ -68,7 +68,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			xPkg:    "github.com/algorand/go-algorand/data/transactions",
 			xType:   "EvalDelta",
 			yPkg:    "github.com/algorand/go-algorand-sdk/v2/types",
-			yBranch: "23may-indexer-import-types",
+			yBranch: "develop",
 			yType:   "EvalDelta",
 		},
 		{
