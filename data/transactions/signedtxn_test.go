@@ -95,7 +95,8 @@ func TestSignedTxnWithADMaxSizeConstant(t *testing.T) {
 
 	require.Equal(t, MaxInnerSignedTxnWithADSize, SignedTxnWithADNoInnersMaxSize())
 	maxInnerTransactionsSize := config.MaxInnerTransactionsPerDelta * MaxInnerSignedTxnWithADSize
-	require.Equal(t, SignedTxnWithADMaxSize(), msgp.ArrayHeaderSize+maxInnerTransactionsSize+SignedTxnWithADNoInnersMaxSize())
+	expectedOuterSize := SignedTxnWithADNoInnersMaxSize() + maxInnerTransactionsSize + msgp.ArrayHeaderSize + StateProofTxnFieldsMaxSize() - 1
+	require.Equal(t, SignedTxnWithADMaxSize(), expectedOuterSize)
 }
 
 //TODO: test multisig

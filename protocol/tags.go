@@ -65,7 +65,7 @@ const PingTagMaxSize = 8
 const PingReplyTagMaxSize = 8
 
 // ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
-const ProposalPayloadTagMaxSize = 62213064569904913 // Wrong because of oversized stateproof
+const ProposalPayloadTagMaxSize = 24964890771504913 // Wrong because of oversized stateproof
 
 // StateProofSigTagMaxSize is the maximum size of a StateProofSigTag message
 const StateProofSigTagMaxSize = 2266266 // Wrong because of oversized stateproof
