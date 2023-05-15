@@ -108,10 +108,8 @@ func (a MicroAlgos) MsgIsZero() bool {
 	return a.Raw == 0
 }
 
-func (a MicroAlgos) MaxSize() (s int) {
-	return msgp.Uint64Size
-}
-
+// MicroAlgosMaxSize returns maximum possible msgp encoded size of MicroAlgos in bytes.
+// It is expected by msgp generated MaxSize functions
 func MicroAlgosMaxSize() (s int) {
 	return msgp.Uint64Size
 }

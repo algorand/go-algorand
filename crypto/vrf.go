@@ -42,6 +42,7 @@ func init() {
 // VRFVerifier is a deprecated name for VrfPubkey
 type VRFVerifier = VrfPubkey
 
+// VRFVerifierMaxSize forwards to base implementation since it's expected by the msgp generated MaxSize functions
 func VRFVerifierMaxSize() int {
 	return VrfPubkeyMaxSize()
 }
