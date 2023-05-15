@@ -3967,10 +3967,13 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		domainGen := rapidgen.Domain()
 
 		// Generate between 0 and N examples - if no dups, should end up in phonebook
-		domainsGen := rapid.SliceOfN(domainGen, 0, 200)
+		relayDomainsGen := rapid.SliceOfN(domainGen, 0, 200)
 
-		relayDomains := domainsGen.Draw(t1, "relayDomains").([]string)
-		archiveDomains := domainsGen.Draw(t1, "archiveDomains").([]string)
+		relayDomains := relayDomainsGen.Draw(t1, "relayDomains").([]string)
+
+		// Dont overlap with relays, duplicates between them not stored in phonebook as of this writing
+		archiveDomainsGen := rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", relayDomains), 0, 200)
+		archiveDomains := archiveDomainsGen.Draw(t1, "archiveDomains").([]string)
 		netA.updatePhonebookAddresses(relayDomains, archiveDomains)
 
 		// Check that entries are in fact in phonebook less any duplicates
@@ -4001,7 +4004,7 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		// assert phonebook reflects fresh list / prior peers other than selected duplicate
 		// are not present
 		var priorRelayDomains = relayDomains
-		relayDomains = domainsGen.Draw(t1, "relayDomains").([]string)
+		relayDomains = relayDomainsGen.Draw(t1, "relayDomains").([]string)
 
 		// Randomly select a prior relay domain
 		if len(priorRelayDomains) > 0 {
