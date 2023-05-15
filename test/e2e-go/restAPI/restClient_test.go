@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -2146,6 +2147,12 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 		},
 		ExecTraceOption: string(model.SimulateRequestExecTracePc),
 	}
+
+	_, err = testClient.SimulateTransactions(simulateRequest)
+	var httpError client.HTTPError
+	a.ErrorAs(err, &httpError)
+	a.Equal(http.StatusBadRequest, httpError.StatusCode)
+	a.Contains(httpError.ErrorString, "the local configuration of the node has `EnableSimulationTraceReturn` turned off, while requesting for execution trace")
 
 	// update the configuration file to enable EnableSimulationTraceReturn
 	err = primaryNode.FullStop()
