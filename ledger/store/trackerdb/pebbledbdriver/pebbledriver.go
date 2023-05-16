@@ -69,7 +69,6 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 // IsSharedCacheConnection implements trackerdb.Store
 func (s *trackerStore) IsSharedCacheConnection() bool {
 	return false
-	return false
 }
 
 // SetSynchronousMode implements trackerdb.Store

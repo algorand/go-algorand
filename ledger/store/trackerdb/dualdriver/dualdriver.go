@@ -28,6 +28,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+// ErrInconsistentResult is returned when the two stores return different results.
 var ErrInconsistentResult = errors.New("inconsistent results between store engines")
 
 var allowAllUnexported = cmp.Exporter(func(f reflect.Type) bool { return true })
@@ -65,11 +66,13 @@ func (s *trackerStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (
 	if err != nil {
 		return err
 	}
+	defer handle.Close()
+
 	err = fn(ctx, handle)
 	if err != nil {
-		handle.Close()
 		return err
 	}
+
 	return handle.Commit()
 }
 
@@ -91,10 +94,11 @@ func (s *trackerStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 
 func (s *trackerStore) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
 	handle, err := s.BeginSnapshot(ctx)
-	defer handle.Close()
 	if err != nil {
 		return err
 	}
+	defer handle.Close()
+
 	err = fn(ctx, handle)
 	if err != nil {
 		return err
@@ -123,11 +127,13 @@ func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.Tran
 	if err != nil {
 		return err
 	}
+	defer handle.Close()
+
 	err = fn(ctx, handle)
 	if err != nil {
-		handle.Close()
 		return err
 	}
+
 	return handle.Commit()
 }
 
@@ -337,26 +343,26 @@ type batch struct {
 
 // ResetTransactionWarnDeadline implements trackerdb.Batch
 func (b *batch) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
-	b.primary.ResetTransactionWarnDeadline(ctx, deadline)
-	b.secondary.ResetTransactionWarnDeadline(ctx, deadline)
+	_, _ = b.primary.ResetTransactionWarnDeadline(ctx, deadline)
+	_, _ = b.secondary.ResetTransactionWarnDeadline(ctx, deadline)
 	// ignore results, this is very engine specific
 	return
 }
 
 // Commit implements trackerdb.Batch
 func (b *batch) Commit() error {
-	b.primary.Commit()
-	b.secondary.Commit()
+	errP := b.primary.Commit()
+	errS := b.secondary.Commit()
 	// errors are unlikely to match between engines
-	return nil
+	return coalesceErrors(errP, errS)
 }
 
 // Close implements trackerdb.Batch
 func (b *batch) Close() error {
-	b.primary.Close()
-	b.secondary.Close()
+	errP := b.primary.Close()
+	errS := b.secondary.Close()
 	// errors are unlikely to match between engines
-	return nil
+	return coalesceErrors(errP, errS)
 }
 
 type transaction struct {
@@ -369,8 +375,8 @@ type transaction struct {
 
 // ResetTransactionWarnDeadline implements trackerdb.Transaction
 func (tx *transaction) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
-	tx.primary.ResetTransactionWarnDeadline(ctx, deadline)
-	tx.secondary.ResetTransactionWarnDeadline(ctx, deadline)
+	_, _ = tx.primary.ResetTransactionWarnDeadline(ctx, deadline)
+	_, _ = tx.secondary.ResetTransactionWarnDeadline(ctx, deadline)
 	// ignore results, this is very engine specific
 	return
 }
@@ -394,18 +400,18 @@ func (tx *transaction) RunMigrations(ctx context.Context, params trackerdb.Param
 
 // Commit implements trackerdb.Transaction
 func (tx *transaction) Commit() error {
-	tx.primary.Commit()
-	tx.secondary.Commit()
+	errP := tx.primary.Commit()
+	errS := tx.secondary.Commit()
 	// errors are unlikely to match between engines
-	return nil
+	return coalesceErrors(errP, errS)
 }
 
 // Close implements trackerdb.Transaction
 func (tx *transaction) Close() error {
-	tx.primary.Close()
-	tx.secondary.Close()
+	errP := tx.primary.Close()
+	errS := tx.secondary.Close()
 	// errors are unlikely to match between engines
-	return nil
+	return coalesceErrors(errP, errS)
 }
 
 type snapshot struct {
@@ -416,10 +422,10 @@ type snapshot struct {
 
 // Close implements trackerdb.Snapshot
 func (s *snapshot) Close() error {
-	s.primary.Close()
-	s.secondary.Close()
+	errP := s.primary.Close()
+	errS := s.secondary.Close()
 	// errors are unlikely to match between engines
-	return nil
+	return coalesceErrors(errP, errS)
 }
 
 //

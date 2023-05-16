@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -28,7 +29,8 @@ type stateproofWriter struct {
 	kvw KvWrite
 }
 
-func MakeStateproofWriter(kvw KvWrite) *stateproofWriter {
+// MakeStateproofWriter returns a trackerdb.SpVerificationCtxWriter for a KV
+func MakeStateproofWriter(kvw KvWrite) trackerdb.SpVerificationCtxWriter {
 	return &stateproofWriter{kvw}
 }
 

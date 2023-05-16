@@ -118,7 +118,6 @@ func (db *mockDB) SetSynchronousMode(ctx context.Context, mode db.SynchronousMod
 
 func (db *mockDB) IsSharedCacheConnection() bool {
 	return false
-	return false
 }
 
 // RunMigrations implements trackerdb.Store

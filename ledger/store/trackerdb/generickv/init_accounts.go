@@ -33,6 +33,7 @@ type dbForInit interface {
 	KvWrite
 }
 
+// AccountsInitTest initializes the database for testing with the given accounts.
 func AccountsInitTest(tb testing.TB, db dbForInit, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
 	params := trackerdb.Params{
 		InitAccounts: initAccounts,
@@ -43,6 +44,10 @@ func AccountsInitTest(tb testing.TB, db dbForInit, initAccounts map[basics.Addre
 	return true
 }
 
+// AccountsInitLightTest initializes the database for testing with the given accounts.
+//
+// This is duplicate due to a specific legacy test in accdeltas_test.go.
+// TODO: remove the need for this.
 func AccountsInitLightTest(tb testing.TB, db dbForInit, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	params := trackerdb.Params{
 		InitAccounts: initAccounts,

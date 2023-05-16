@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -28,7 +29,8 @@ type stateproofReader struct {
 	kvr KvRead
 }
 
-func MakeStateproofReader(kvr KvRead) *stateproofReader {
+// MakeStateproofReader returns a trackerdb.SpVerificationCtxReader for a KV
+func MakeStateproofReader(kvr KvRead) trackerdb.SpVerificationCtxReader {
 	return &stateproofReader{kvr}
 }
 

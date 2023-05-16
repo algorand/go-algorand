@@ -26,6 +26,7 @@ type reader struct {
 	KvRead
 }
 
+// MakeReader returns a trackerdb.Reader for a KV
 func MakeReader(kvr KvRead, proto config.ConsensusParams) trackerdb.Reader {
 	return &reader{proto, kvr}
 }

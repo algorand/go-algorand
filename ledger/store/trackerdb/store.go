@@ -69,6 +69,8 @@ type Writer interface {
 	Testing() WriterTestExt
 }
 
+// Catchpoint is currently holding most of the methods related to catchpoint.
+//
 // TODO: we still need to do a refactoring pass on catchpoint
 //
 //	there are two distinct set of methods present:
