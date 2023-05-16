@@ -1387,23 +1387,27 @@ func (z *AccountData) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func AccountDataMaxSize() (s int) {
-	s = 3 + 4 + msgp.ByteSize + 5 + MicroAlgosMaxSize() + 6 + msgp.Uint64Size + 4 + MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+	s = 3 + 4 + msgp.ByteSize + 5 + MicroAlgosMaxSize() + 6 + msgp.Uint64Size + 4 + MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.AssetParams
 	s += encodedMaxAssetsPerAccount * (AssetIndexMaxSize())
 	// Adding size of map values for z.AssetParams
 	s += encodedMaxAssetsPerAccount * (AssetParamsMaxSize())
-	s += 6 + msgp.MapHeaderSize
+	s += 6
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.Assets
 	s += encodedMaxAssetsPerAccount * (AssetIndexMaxSize())
 	// Adding size of map values for z.Assets
 	s += encodedMaxAssetsPerAccount * (1)
 	s += 2 + msgp.Uint64Size + 2 + msgp.BoolSize
-	s += 6 + AddressMaxSize() + 5 + msgp.MapHeaderSize
+	s += 6 + AddressMaxSize() + 5
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.AppLocalStates
 	s += EncodedMaxAppLocalStates * (AppIndexMaxSize())
 	// Adding size of map values for z.AppLocalStates
 	s += EncodedMaxAppLocalStates * (AppLocalStateMaxSize())
-	s += 5 + msgp.MapHeaderSize
+	s += 5
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.AppParams
 	s += EncodedMaxAppParams * (AppIndexMaxSize())
 	// Adding size of map values for z.AppParams
@@ -1856,7 +1860,8 @@ func (z *AppLocalState) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func AppLocalStateMaxSize() (s int) {
-	s = 1 + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
+	s = 1 + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.KeyValue
 	s += EncodedMaxKeyValueEntries * (msgp.StringPrefixSize + config.MaxAppBytesKeyLen)
 	// Adding size of map values for z.KeyValue
@@ -2506,7 +2511,8 @@ func (z *AppParams) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func AppParamsMaxSize() (s int) {
-	s = 1 + 7 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 7 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 3 + msgp.MapHeaderSize
+	s = 1 + 7 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 7 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 3
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.GlobalState
 	s += EncodedMaxKeyValueEntries * (msgp.StringPrefixSize + config.MaxAppBytesKeyLen)
 	// Adding size of map values for z.GlobalState
@@ -3100,7 +3106,10 @@ func (z *AssetParams) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func AssetParamsMaxSize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + config.MaxAssetUnitNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetURLBytes + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize()
+	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + config.MaxAssetUnitNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetURLBytes + 3
+	// Calculating size of array: z.MetadataHash
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize()
 	return
 }
 
@@ -4291,23 +4300,27 @@ func (z *BalanceRecord) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func BalanceRecordMaxSize() (s int) {
-	s = 3 + 5 + AddressMaxSize() + 4 + msgp.ByteSize + 5 + MicroAlgosMaxSize() + 6 + msgp.Uint64Size + 4 + MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5 + msgp.MapHeaderSize
+	s = 3 + 5 + AddressMaxSize() + 4 + msgp.ByteSize + 5 + MicroAlgosMaxSize() + 6 + msgp.Uint64Size + 4 + MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.AccountData.AssetParams
 	s += encodedMaxAssetsPerAccount * (AssetIndexMaxSize())
 	// Adding size of map values for z.AccountData.AssetParams
 	s += encodedMaxAssetsPerAccount * (AssetParamsMaxSize())
-	s += 6 + msgp.MapHeaderSize
+	s += 6
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.AccountData.Assets
 	s += encodedMaxAssetsPerAccount * (AssetIndexMaxSize())
 	// Adding size of map values for z.AccountData.Assets
 	s += encodedMaxAssetsPerAccount * (1)
 	s += 2 + msgp.Uint64Size + 2 + msgp.BoolSize
-	s += 6 + AddressMaxSize() + 5 + msgp.MapHeaderSize
+	s += 6 + AddressMaxSize() + 5
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.AccountData.AppLocalStates
 	s += EncodedMaxAppLocalStates * (AppIndexMaxSize())
 	// Adding size of map values for z.AccountData.AppLocalStates
 	s += EncodedMaxAppLocalStates * (AppLocalStateMaxSize())
-	s += 5 + msgp.MapHeaderSize
+	s += 5
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.AccountData.AppParams
 	s += EncodedMaxAppParams * (AppIndexMaxSize())
 	// Adding size of map values for z.AccountData.AppParams
@@ -4805,7 +4818,7 @@ func (z StateDelta) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func StateDeltaMaxSize() (s int) {
-	s = msgp.MapHeaderSize
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z
 	s += config.MaxStateDeltaKeys * (msgp.StringPrefixSize + config.MaxAppBytesKeyLen)
 	// Adding size of map values for z
@@ -5529,7 +5542,7 @@ func (z TealKeyValue) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func TealKeyValueMaxSize() (s int) {
-	s = msgp.MapHeaderSize
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z
 	s += EncodedMaxKeyValueEntries * (msgp.StringPrefixSize + config.MaxAppBytesKeyLen)
 	// Adding size of map values for z

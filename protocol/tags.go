@@ -65,7 +65,7 @@ const PingTagMaxSize = 8
 const PingReplyTagMaxSize = 8
 
 // ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
-const ProposalPayloadTagMaxSize = 24964890771504913 // Wrong because of oversized stateproof
+const ProposalPayloadTagMaxSize = 24964890784104943 // Wrong because of oversized stateproof
 
 // StateProofSigTagMaxSize is the maximum size of a StateProofSigTag message
 const StateProofSigTagMaxSize = 2266266 // Wrong because of oversized stateproof
@@ -74,7 +74,7 @@ const StateProofSigTagMaxSize = 2266266 // Wrong because of oversized stateproof
 const TopicMsgRespTagMaxSize = 6 * 1024 * 1024 // TODO: Actually calculate the size, for now set to maxAllocation
 
 // TxnTagMaxSize is the maximum size of a TxnTag message
-const TxnTagMaxSize = 23286391600 // Wrong because of oversized stateproof
+const TxnTagMaxSize = 23286393616 // Wrong because of oversized stateproof
 
 // UniEnsBlockReqTagMaxSize is the maximum size of a UniEnsBlockReqTag message
 const UniEnsBlockReqTagMaxSize = 67

@@ -568,7 +568,9 @@ func (z *catchpointFileBalancesChunkV5) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func CatchpointFileBalancesChunkV5MaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.BalanceRecordV5MaxSize()))
+	s = 1 + 3
+	// Calculating size of slice: z.Balances
+	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.BalanceRecordV5MaxSize()))
 	return
 }
 
@@ -808,7 +810,12 @@ func (z *catchpointFileChunkV6) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func CatchpointFileChunkV6MaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.BalanceRecordV6MaxSize())) + 3 + msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.KVRecordV6MaxSize()))
+	s = 1 + 3
+	// Calculating size of slice: z.Balances
+	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.BalanceRecordV6MaxSize()))
+	s += 3
+	// Calculating size of slice: z.KVs
+	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.KVRecordV6MaxSize()))
 	return
 }
 
@@ -972,6 +979,8 @@ func (z *catchpointStateProofVerificationContext) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func CatchpointStateProofVerificationContextMaxSize() (s int) {
-	s = 1 + 4 + msgp.ArrayHeaderSize + ((SPContextPerCatchpointFile) * (ledgercore.StateProofVerificationContextMaxSize()))
+	s = 1 + 4
+	// Calculating size of slice: z.Data
+	s += msgp.ArrayHeaderSize + ((SPContextPerCatchpointFile) * (ledgercore.StateProofVerificationContextMaxSize()))
 	return
 }

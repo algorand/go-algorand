@@ -548,27 +548,27 @@ func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 func TestMaxSizesCorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	avSize := agreement.UnauthenticatedVoteMaxSize()
+	avSize := uint64(agreement.UnauthenticatedVoteMaxSize())
 	require.Equal(t, avSize, protocol.AgreementVoteTag.MaxMessageSize())
-	miSize := network.MessageOfInterestMaxSize()
+	miSize := uint64(network.MessageOfInterestMaxSize())
 	require.Equal(t, miSize, protocol.MsgOfInterestTag.MaxMessageSize())
-	npSize := NetPrioResponseSignedMaxSize()
+	npSize := uint64(NetPrioResponseSignedMaxSize())
 	require.Equal(t, npSize, protocol.NetPrioResponseTag.MaxMessageSize())
-	nsSize := network.IdentityVerificationMessageSignedMaxSize()
+	nsSize := uint64(network.IdentityVerificationMessageSignedMaxSize())
 	require.Equal(t, nsSize, protocol.NetIDVerificationTag.MaxMessageSize())
-	piSize := network.PingLength
+	piSize := uint64(network.PingLength)
 	require.Equal(t, piSize, protocol.PingTag.MaxMessageSize())
-	pjSize := network.PingLength
+	pjSize := uint64(network.PingLength)
 	require.Equal(t, pjSize, protocol.PingReplyTag.MaxMessageSize())
-	ppSize := agreement.TransmittedPayloadMaxSize()
+	ppSize := uint64(agreement.TransmittedPayloadMaxSize())
 	require.Equal(t, ppSize, protocol.ProposalPayloadTag.MaxMessageSize())
-	spSize := stateproof.SigFromAddrMaxSize()
+	spSize := uint64(stateproof.SigFromAddrMaxSize())
 	require.Equal(t, spSize, protocol.StateProofSigTag.MaxMessageSize())
-	txSize := config.MaxTxGroupSize * transactions.SignedTxnMaxSize()
+	txSize := uint64(config.MaxTxGroupSize * transactions.SignedTxnMaxSize())
 	require.Equal(t, txSize, protocol.TxnTag.MaxMessageSize())
-	msSize := crypto.DigestMaxSize()
+	msSize := uint64(crypto.DigestMaxSize())
 	require.Equal(t, msSize, protocol.MsgDigestSkipTag.MaxMessageSize())
-	vbSize := agreement.UnauthenticatedBundleMaxSize()
+	vbSize := uint64(agreement.UnauthenticatedBundleMaxSize())
 	require.Equal(t, vbSize, protocol.VoteBundleTag.MaxMessageSize())
 
 }

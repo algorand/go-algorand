@@ -121,7 +121,8 @@ func (z Layer) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func LayerMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree) * (crypto.GenericDigestMaxSize()))
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree) * (crypto.GenericDigestMaxSize()))
 	return
 }
 
@@ -332,7 +333,10 @@ func (z *Proof) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func ProofMaxSize() (s int) {
-	s = 1 + 4 + msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree / 2) * (crypto.GenericDigestMaxSize())) + 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
+	s = 1 + 4
+	// Calculating size of slice: z.Path
+	s += msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree / 2) * (crypto.GenericDigestMaxSize()))
+	s += 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
 	return
 }
 
@@ -543,7 +547,10 @@ func (z *SingleLeafProof) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func SingleLeafProofMaxSize() (s int) {
-	s = 1 + 4 + msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree / 2) * (crypto.GenericDigestMaxSize())) + 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
+	s = 1 + 4
+	// Calculating size of slice: z.Proof.Path
+	s += msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree / 2) * (crypto.GenericDigestMaxSize()))
+	s += 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
 	return
 }
 
@@ -829,6 +836,9 @@ func (z *Tree) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func TreeMaxSize() (s int) {
-	s = 1 + 5 + msgp.ArrayHeaderSize + ((MaxEncodedTreeDepth + 1) * (MaxNumLeavesOnEncodedTree * (crypto.GenericDigestMaxSize()))) + 3 + msgp.Uint64Size + 4 + crypto.HashFactoryMaxSize() + 3 + msgp.BoolSize
+	s = 1 + 5
+	// Calculating size of slice: z.Levels
+	s += msgp.ArrayHeaderSize + ((MaxEncodedTreeDepth + 1) * (MaxNumLeavesOnEncodedTree * (crypto.GenericDigestMaxSize())))
+	s += 3 + msgp.Uint64Size + 4 + crypto.HashFactoryMaxSize() + 3 + msgp.BoolSize
 	return
 }

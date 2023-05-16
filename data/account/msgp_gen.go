@@ -332,6 +332,7 @@ func (z StateProofKeys) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func StateProofKeysMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((1000) * (merklesignature.KeyRoundPairMaxSize()))
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((1000) * (merklesignature.KeyRoundPairMaxSize()))
 	return
 }

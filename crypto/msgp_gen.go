@@ -359,7 +359,8 @@ func (z *Digest) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func DigestMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((DigestSize) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((DigestSize) * (msgp.ByteSize))
 	return
 }
 
@@ -404,7 +405,8 @@ func (z *FalconPrivateKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconPrivateKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -449,7 +451,8 @@ func (z *FalconPublicKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconPublicKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -494,7 +497,8 @@ func (z *FalconSeed) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconSeedMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((FalconSeedSize) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((FalconSeedSize) * (msgp.ByteSize))
 	return
 }
 
@@ -691,7 +695,12 @@ func (z *FalconSigner) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconSignerMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
+	s = 1 + 3
+	// Calculating size of array: z.PublicKey
+	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.PrivateKey
+	s += msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -803,7 +812,9 @@ func (z *FalconVerifier) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FalconVerifierMaxSize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s = 1 + 2
+	// Calculating size of array: z.PublicKey
+	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -1085,7 +1096,8 @@ func (z *MasterDerivationKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func MasterDerivationKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((masterDerivationKeyLenBytes) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((masterDerivationKeyLenBytes) * (msgp.ByteSize))
 	return
 }
 
@@ -1295,7 +1307,9 @@ func (z *MultisigSig) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func MultisigSigMaxSize() (s int) {
-	s = 1 + 2 + msgp.Uint8Size + 4 + msgp.Uint8Size + 7 + msgp.ArrayHeaderSize + ((maxMultisig) * (MultisigSubsigMaxSize()))
+	s = 1 + 2 + msgp.Uint8Size + 4 + msgp.Uint8Size + 7
+	// Calculating size of slice: z.Subsigs
+	s += msgp.ArrayHeaderSize + ((maxMultisig) * (MultisigSubsigMaxSize()))
 	return
 }
 
@@ -1430,7 +1444,12 @@ func (z *MultisigSubsig) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func MultisigSubsigMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 2 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = 1 + 3
+	// Calculating size of array: z.Key
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 2
+	// Calculating size of array: z.Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -1615,7 +1634,24 @@ func (z *OneTimeSignature) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureMaxSize() (s int) {
-	s = 1 + 2 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = 1 + 2
+	// Calculating size of array: z.Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 2
+	// Calculating size of array: z.PK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.PKSigOld
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.PK2
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 4
+	// Calculating size of array: z.PK1Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 4
+	// Calculating size of array: z.PK2Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -1951,11 +1987,21 @@ func (z *OneTimeSignatureSecrets) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureSecretsMaxSize() (s int) {
-	s = 1 + 25 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4
+	s = 1 + 25
+	// Calculating size of array: z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + msgp.Uint64Size + 4
+	// Calculating size of slice: z.OneTimeSignatureSecretsPersistent.Batches
 	panic("Slice z.OneTimeSignatureSecretsPersistent.Batches is unbounded")
 	s += 9 + msgp.Uint64Size + 8
+	// Calculating size of slice: z.OneTimeSignatureSecretsPersistent.Offsets
 	panic("Slice z.OneTimeSignatureSecretsPersistent.Offsets is unbounded")
-	s += 7 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 7
+	// Calculating size of array: z.OneTimeSignatureSecretsPersistent.OffsetsPK2
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 10
+	// Calculating size of array: z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -2291,11 +2337,21 @@ func (z *OneTimeSignatureSecretsPersistent) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureSecretsPersistentMaxSize() (s int) {
-	s = 1 + 25 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4
+	s = 1 + 25
+	// Calculating size of array: z.OneTimeSignatureVerifier
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + msgp.Uint64Size + 4
+	// Calculating size of slice: z.Batches
 	panic("Slice z.Batches is unbounded")
 	s += 9 + msgp.Uint64Size + 8
+	// Calculating size of slice: z.Offsets
 	panic("Slice z.Offsets is unbounded")
-	s += 7 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 10 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 7
+	// Calculating size of array: z.OffsetsPK2
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 10
+	// Calculating size of array: z.OffsetsPK2Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -2412,7 +2468,10 @@ func (z *OneTimeSignatureSubkeyBatchID) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureSubkeyBatchIDMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + msgp.Uint64Size
+	s = 1 + 3
+	// Calculating size of array: z.SubKeyPK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + msgp.Uint64Size
 	return
 }
 
@@ -2546,7 +2605,10 @@ func (z *OneTimeSignatureSubkeyOffsetID) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureSubkeyOffsetIDMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	s = 1 + 3
+	// Calculating size of array: z.SubKeyPK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + msgp.Uint64Size + 4 + msgp.Uint64Size
 	return
 }
 
@@ -2591,7 +2653,8 @@ func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureVerifierMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -2636,7 +2699,8 @@ func (z *PrivateKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func PrivateKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -2681,7 +2745,8 @@ func (z *PublicKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func PublicKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -2726,7 +2791,8 @@ func (z *Seed) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func SeedMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -2771,7 +2837,8 @@ func (z *Signature) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func SignatureMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -2888,7 +2955,9 @@ func (z *SignatureSecrets) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func SignatureSecretsMaxSize() (s int) {
-	s = 1 + 18 + SignatureVerifierMaxSize() + 3 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = 1 + 18 + SignatureVerifierMaxSize() + 3
+	// Calculating size of array: z.SK
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3005,7 +3074,12 @@ func (z *VRFSecrets) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VRFSecretsMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = 1 + 3
+	// Calculating size of array: z.PK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.SK
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3050,7 +3124,8 @@ func (z *VrfOutput) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VrfOutputMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3095,7 +3170,8 @@ func (z *VrfPrivkey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VrfPrivkeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3140,7 +3216,8 @@ func (z *VrfProof) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VrfProofMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((80) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((80) * (msgp.ByteSize))
 	return
 }
 
@@ -3185,7 +3262,8 @@ func (z *VrfPubkey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VrfPubkeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -3230,7 +3308,8 @@ func (z *ed25519PrivateKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519PrivateKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3275,7 +3354,8 @@ func (z *ed25519PublicKey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519PublicKeyMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -3320,7 +3400,8 @@ func (z *ed25519Seed) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519SeedMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -3365,7 +3446,8 @@ func (z *ed25519Signature) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519SignatureMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3516,6 +3598,17 @@ func (z *ephemeralSubkey) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func EphemeralSubkeyMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 6 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize)) + 5 + msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = 1 + 3
+	// Calculating size of array: z.PK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.SK
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 6
+	// Calculating size of array: z.PKSigOld
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 5
+	// Calculating size of array: z.PKSigNew
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }

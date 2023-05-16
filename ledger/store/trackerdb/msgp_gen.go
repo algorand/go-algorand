@@ -2199,7 +2199,10 @@ func ResourcesDataMaxSize() (s int) {
 	panic("Unable to determine max size: String type z.AssetName is unbounded")
 	s += 2
 	panic("Unable to determine max size: String type z.URL is unbounded")
-	s += 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size
+	s += 2
+	// Calculating size of array: z.MetadataHash
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size
 	return
 }
 
@@ -2510,10 +2513,13 @@ func (z *TxTailRound) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func TxTailRoundMaxSize() (s int) {
 	s = 1 + 2
+	// Calculating size of slice: z.TxnIDs
 	panic("Slice z.TxnIDs is unbounded")
 	s += 2
+	// Calculating size of slice: z.LastValid
 	panic("Slice z.LastValid is unbounded")
 	s += 2
+	// Calculating size of slice: z.Leases
 	panic("Slice z.Leases is unbounded")
 	s += 2 + bookkeeping.BlockHeaderMaxSize()
 	return
@@ -2673,6 +2679,9 @@ func (z *TxTailRoundLease) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func TxTailRoundLeaseMaxSize() (s int) {
-	s = 1 + 2 + basics.AddressMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 7 + msgp.Uint64Size
+	s = 1 + 2 + basics.AddressMaxSize() + 2
+	// Calculating size of array: z.Lease
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 7 + msgp.Uint64Size
 	return
 }

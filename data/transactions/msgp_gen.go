@@ -1064,7 +1064,21 @@ func (z *ApplicationCallTxnFields) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func ApplicationCallTxnFieldsMaxSize() (s int) {
-	s = 1 + 5 + basics.AppIndexMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.ArrayHeaderSize + config.MaxAppTotalArgLen + 5 + msgp.ArrayHeaderSize + ((encodedMaxAccounts) * (basics.AddressMaxSize())) + 5 + msgp.ArrayHeaderSize + ((encodedMaxForeignApps) * (basics.AppIndexMaxSize())) + 5 + msgp.ArrayHeaderSize + ((encodedMaxBoxes) * (BoxRefMaxSize())) + 5 + msgp.ArrayHeaderSize + ((encodedMaxForeignAssets) * (basics.AssetIndexMaxSize())) + 5 + basics.StateSchemaMaxSize() + 5 + basics.StateSchemaMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.Uint32Size
+	s = 1 + 5 + basics.AppIndexMaxSize() + 5 + msgp.Uint64Size + 5
+	// Calculating size of slice: z.ApplicationArgs
+	s += msgp.ArrayHeaderSize + config.MaxAppTotalArgLen + 5
+	// Calculating size of slice: z.Accounts
+	s += msgp.ArrayHeaderSize + ((encodedMaxAccounts) * (basics.AddressMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ForeignApps
+	s += msgp.ArrayHeaderSize + ((encodedMaxForeignApps) * (basics.AppIndexMaxSize()))
+	s += 5
+	// Calculating size of slice: z.Boxes
+	s += msgp.ArrayHeaderSize + ((encodedMaxBoxes) * (BoxRefMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ForeignAssets
+	s += msgp.ArrayHeaderSize + ((encodedMaxForeignAssets) * (basics.AssetIndexMaxSize()))
+	s += 5 + basics.StateSchemaMaxSize() + 5 + basics.StateSchemaMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.Uint32Size
 	return
 }
 
@@ -2430,12 +2444,20 @@ func (z *EvalDelta) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func EvalDeltaMaxSize() (s int) {
-	s = 1 + 3 + basics.StateDeltaMaxSize() + 3 + msgp.MapHeaderSize
+	s = 1 + 3 + basics.StateDeltaMaxSize() + 3
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.LocalDeltas
 	s += config.MaxEvalDeltaAccounts * (msgp.Uint64Size)
 	// Adding size of map values for z.LocalDeltas
 	s += config.MaxEvalDeltaAccounts * (basics.StateDeltaMaxSize())
-	s += 3 + msgp.ArrayHeaderSize + ((config.MaxEvalDeltaAccounts) * (basics.AddressMaxSize())) + 3 + msgp.ArrayHeaderSize + (config.MaxLogCalls * msgp.StringPrefixSize) + config.MaxEvalDeltaTotalLogSize + 4 + msgp.ArrayHeaderSize + (config.MaxInnerTransactionsPerDelta * MaxInnerSignedTxnWithADSize)
+	s += 3
+	// Calculating size of slice: z.SharedAccts
+	s += msgp.ArrayHeaderSize + ((config.MaxEvalDeltaAccounts) * (basics.AddressMaxSize()))
+	s += 3
+	// Calculating size of slice: z.Logs
+	s += msgp.ArrayHeaderSize + (config.MaxLogCalls * msgp.StringPrefixSize) + config.MaxEvalDeltaTotalLogSize + 4
+	// Calculating size of slice: z.InnerTxns
+	s += msgp.ArrayHeaderSize + (config.MaxInnerTransactionsPerDelta * MaxInnerSignedTxnWithADSize)
 	return
 }
 
@@ -2794,7 +2816,10 @@ func (z *Header) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func HeaderMaxSize() (s int) {
-	s = 1 + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 3 + basics.RoundMaxSize() + 3 + basics.RoundMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxTxnNoteBytes + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + crypto.DigestMaxSize() + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + basics.AddressMaxSize()
+	s = 1 + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 3 + basics.RoundMaxSize() + 3 + basics.RoundMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxTxnNoteBytes + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + crypto.DigestMaxSize() + 3
+	// Calculating size of array: z.Lease
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + basics.AddressMaxSize()
 	return
 }
 
@@ -3317,7 +3342,9 @@ func (z *LogicSig) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func LogicSigMaxSize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + config.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 4 + msgp.ArrayHeaderSize + ((EvalMaxArgs) * (msgp.BytesPrefixSize + config.MaxLogicSigMaxSize))
+	s = 1 + 2 + msgp.BytesPrefixSize + config.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 4
+	// Calculating size of slice: z.Args
+	s += msgp.ArrayHeaderSize + ((EvalMaxArgs) * (msgp.BytesPrefixSize + config.MaxLogicSigMaxSize))
 	return
 }
 
@@ -3606,7 +3633,8 @@ func (z Payset) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func PaysetMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((100000) * (SignedTxnInBlockMaxSize()))
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((100000) * (SignedTxnInBlockMaxSize()))
 	return
 }
 
@@ -6480,7 +6508,24 @@ func (z *Transaction) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func TransactionMaxSize() (s int) {
-	s = 3 + 5 + protocol.TxTypeMaxSize() + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 3 + basics.RoundMaxSize() + 3 + basics.RoundMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxTxnNoteBytes + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + crypto.DigestMaxSize() + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 6 + basics.AddressMaxSize() + 8 + crypto.OneTimeSignatureVerifierMaxSize() + 7 + crypto.VRFVerifierMaxSize() + 8 + merklesignature.CommitmentMaxSize() + 8 + basics.RoundMaxSize() + 8 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 6 + basics.AddressMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AssetParamsMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + msgp.Uint64Size + 5 + basics.AddressMaxSize() + 5 + basics.AddressMaxSize() + 7 + basics.AddressMaxSize() + 5 + basics.AddressMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + msgp.BoolSize + 5 + basics.AppIndexMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.ArrayHeaderSize + config.MaxAppTotalArgLen + 5 + msgp.ArrayHeaderSize + ((encodedMaxAccounts) * (basics.AddressMaxSize())) + 5 + msgp.ArrayHeaderSize + ((encodedMaxForeignApps) * (basics.AppIndexMaxSize())) + 5 + msgp.ArrayHeaderSize + ((encodedMaxBoxes) * (BoxRefMaxSize())) + 5 + msgp.ArrayHeaderSize + ((encodedMaxForeignAssets) * (basics.AssetIndexMaxSize())) + 5 + basics.StateSchemaMaxSize() + 5 + basics.StateSchemaMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.Uint32Size + 7 + protocol.StateProofTypeMaxSize() + 3 + stateproof.StateProofMaxSize() + 6 + stateproofmsg.MessageMaxSize()
+	s = 3 + 5 + protocol.TxTypeMaxSize() + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 3 + basics.RoundMaxSize() + 3 + basics.RoundMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxTxnNoteBytes + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + crypto.DigestMaxSize() + 3
+	// Calculating size of array: z.Header.Lease
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + basics.AddressMaxSize() + 8 + crypto.OneTimeSignatureVerifierMaxSize() + 7 + crypto.VRFVerifierMaxSize() + 8 + merklesignature.CommitmentMaxSize() + 8 + basics.RoundMaxSize() + 8 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 6 + basics.AddressMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AssetParamsMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + msgp.Uint64Size + 5 + basics.AddressMaxSize() + 5 + basics.AddressMaxSize() + 7 + basics.AddressMaxSize() + 5 + basics.AddressMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + msgp.BoolSize + 5 + basics.AppIndexMaxSize() + 5 + msgp.Uint64Size + 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.ApplicationArgs
+	s += msgp.ArrayHeaderSize + config.MaxAppTotalArgLen + 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.Accounts
+	s += msgp.ArrayHeaderSize + ((encodedMaxAccounts) * (basics.AddressMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.ForeignApps
+	s += msgp.ArrayHeaderSize + ((encodedMaxForeignApps) * (basics.AppIndexMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.Boxes
+	s += msgp.ArrayHeaderSize + ((encodedMaxBoxes) * (BoxRefMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.ForeignAssets
+	s += msgp.ArrayHeaderSize + ((encodedMaxForeignAssets) * (basics.AssetIndexMaxSize()))
+	s += 5 + basics.StateSchemaMaxSize() + 5 + basics.StateSchemaMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.Uint32Size + 7 + protocol.StateProofTypeMaxSize() + 3 + stateproof.StateProofMaxSize() + 6 + stateproofmsg.MessageMaxSize()
 	return
 }
 
@@ -6644,7 +6689,9 @@ func (z *TxGroup) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func TxGroupMaxSize() (s int) {
-	s = 1 + 7 + msgp.ArrayHeaderSize + ((config.MaxTxGroupSize) * (crypto.DigestMaxSize()))
+	s = 1 + 7
+	// Calculating size of slice: z.TxGroupHashes
+	s += msgp.ArrayHeaderSize + ((config.MaxTxGroupSize) * (crypto.DigestMaxSize()))
 	return
 }
 

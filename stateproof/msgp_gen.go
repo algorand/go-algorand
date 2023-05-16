@@ -482,7 +482,8 @@ func (z *spProver) MsgIsZero() bool {
 func SpProverMaxSize() (s int) {
 	s = 1 + 4
 	s += stateproof.ProverMaxSize()
-	s += 5 + msgp.MapHeaderSize
+	s += 5
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.AddrToPos
 	s += stateproof.VotersAllocBound * (AddressMaxSize())
 	// Adding size of map values for z.AddrToPos

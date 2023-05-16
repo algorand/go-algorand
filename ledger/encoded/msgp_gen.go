@@ -433,7 +433,8 @@ func (z *BalanceRecordV6) MsgIsZero() bool {
 func BalanceRecordV6MaxSize() (s int) {
 	s = 1 + 2 + basics.AddressMaxSize() + 2
 	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
-	s += 2 + msgp.MapHeaderSize
+	s += 2
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.Resources
 	s += resourcesPerCatchpointFileChunkBackwardCompatible * (msgp.Uint64Size)
 	// Adding size of map values for z.Resources

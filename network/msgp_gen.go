@@ -308,7 +308,10 @@ func (z *identityChallenge) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityChallengeMaxSize() (s int) {
-	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 2 + msgp.BytesPrefixSize + maxAddressLen
+	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2
+	// Calculating size of array: z.Challenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 2 + msgp.BytesPrefixSize + maxAddressLen
 	return
 }
 
@@ -466,7 +469,12 @@ func (z *identityChallengeResponse) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityChallengeResponseMaxSize() (s int) {
-	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2
+	// Calculating size of array: z.Challenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.ResponseChallenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -781,7 +789,8 @@ func (z *identityChallengeValue) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityChallengeValueMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -893,7 +902,9 @@ func (z *identityVerificationMessage) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityVerificationMessageMaxSize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = 1 + 3
+	// Calculating size of array: z.ResponseChallenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -1141,6 +1152,9 @@ func (z *identityVerificationMessageSigned) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func IdentityVerificationMessageSignedMaxSize() (s int) {
-	s = 1 + 4 + 1 + 3 + msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize)) + 4 + crypto.SignatureMaxSize()
+	s = 1 + 4 + 1 + 3
+	// Calculating size of array: z.Msg.ResponseChallenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 4 + crypto.SignatureMaxSize()
 	return
 }

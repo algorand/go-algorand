@@ -106,7 +106,8 @@ func (z *Commitment) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func CommitmentMaxSize() (s int) {
-	s = msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize))
+	// Calculating size of array: z
+	s += msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize))
 	return
 }
 
@@ -905,6 +906,9 @@ func (z *Verifier) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func VerifierMaxSize() (s int) {
-	s = 1 + 4 + msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize)) + 3 + msgp.Uint64Size
+	s = 1 + 4
+	// Calculating size of array: z.Commitment
+	s += msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize))
+	s += 3 + msgp.Uint64Size
 	return
 }

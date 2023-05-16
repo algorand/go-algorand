@@ -953,12 +953,16 @@ func (z *Block) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func BlockMaxSize() (s int) {
-	s = 3 + 4 + basics.RoundMaxSize() + 5 + BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
+	s = 3 + 4 + basics.RoundMaxSize() + 5 + BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.BlockHeader.StateProofTracking
 	s += protocol.NumStateProofTypes * (protocol.StateProofTypeMaxSize())
 	// Adding size of map values for z.BlockHeader.StateProofTracking
 	s += protocol.NumStateProofTypes * (StateProofTrackingDataMaxSize())
-	s += 11 + msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize())) + 5 + transactions.PaysetMaxSize()
+	s += 11
+	// Calculating size of slice: z.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
+	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
+	s += 5 + transactions.PaysetMaxSize()
 	return
 }
 
@@ -1806,12 +1810,15 @@ func (z *BlockHeader) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func BlockHeaderMaxSize() (s int) {
-	s = 3 + 4 + basics.RoundMaxSize() + 5 + BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4 + msgp.MapHeaderSize
+	s = 3 + 4 + basics.RoundMaxSize() + 5 + BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
+	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.StateProofTracking
 	s += protocol.NumStateProofTypes * (protocol.StateProofTypeMaxSize())
 	// Adding size of map values for z.StateProofTracking
 	s += protocol.NumStateProofTypes * (StateProofTrackingDataMaxSize())
-	s += 11 + msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
+	s += 11
+	// Calculating size of slice: z.ParticipationUpdates.ExpiredParticipationAccounts
+	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	return
 }
 
@@ -2162,7 +2169,10 @@ func (z *Genesis) MsgIsZero() bool {
 func GenesisMaxSize() (s int) {
 	s = 1 + 3
 	panic("Unable to determine max size: String type z.SchemaID is unbounded")
-	s += 8 + protocol.NetworkIDMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 6 + msgp.ArrayHeaderSize + ((MaxInitialGenesisAllocationSize) * (GenesisAllocationMaxSize())) + 4
+	s += 8 + protocol.NetworkIDMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 6
+	// Calculating size of slice: z.Allocation
+	s += msgp.ArrayHeaderSize + ((MaxInitialGenesisAllocationSize) * (GenesisAllocationMaxSize()))
+	s += 4
 	panic("Unable to determine max size: String type z.RewardsPool is unbounded")
 	s += 5
 	panic("Unable to determine max size: String type z.FeeSink is unbounded")
@@ -2651,7 +2661,9 @@ func (z *ParticipationUpdates) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func ParticipationUpdatesMaxSize() (s int) {
-	s = 1 + 11 + msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
+	s = 1 + 11
+	// Calculating size of slice: z.ExpiredParticipationAccounts
+	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	return
 }
 
