@@ -2317,7 +2317,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	a.Nil(resp.TxnGroups[0].FailedAt)
 
 	expectedTraceFirstTxn := &model.SimulationTransactionExecTrace{
-		TraceType: model.SimulationTransactionExecTraceTraceTypeOtherTransaction,
+		TraceType: model.SimulationTransactionExecTraceTraceTypeNonAppCallTransaction,
 	}
 	a.Equal(expectedTraceFirstTxn, resp.TxnGroups[0].Txns[0].TransactionTrace)
 
@@ -2331,7 +2331,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 				Trace:     &creationOpcodeTrace,
 			},
 			{
-				TraceType: model.SimulationTransactionExecTraceTraceTypeOtherTransaction,
+				TraceType: model.SimulationTransactionExecTraceTraceTypeNonAppCallTransaction,
 			},
 			{
 				TraceType:      model.SimulationTransactionExecTraceTraceTypeApprovalProgram,
@@ -2343,7 +2343,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 						Trace:     &creationOpcodeTrace,
 					},
 					{
-						TraceType: model.SimulationTransactionExecTraceTraceTypeOtherTransaction,
+						TraceType: model.SimulationTransactionExecTraceTraceTypeNonAppCallTransaction,
 					},
 					{
 						TraceType: model.SimulationTransactionExecTraceTraceTypeApprovalProgram,

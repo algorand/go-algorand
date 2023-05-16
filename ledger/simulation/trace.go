@@ -196,8 +196,8 @@ type OpcodeTraceUnit struct {
 type TransactionTraceType int
 
 const (
-	// OtherTransaction stands for TransactionTrace is generated from simulating a non-app-call transaction (with logic-sig approval)
-	OtherTransaction TransactionTraceType = iota
+	// NonAppCallTransaction stands for TransactionTrace is generated from simulating a non-app-call transaction (with logic-sig approval)
+	NonAppCallTransaction TransactionTraceType = iota
 	// AppCallApprovalTransaction stands for TransactionTrace is generated from simulating an app call to App's approval program
 	AppCallApprovalTransaction
 	// AppCallClearStateTransaction stands for TransactionTrace is generated from simulating an app call to App's clear state program

@@ -185,7 +185,7 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	if tracer.result.ExecTraceConfig > NoExecTrace {
 		// make transaction trace in following section
 		currentTxn := ep.TxnGroup[groupIndex]
-		traceType := OtherTransaction
+		traceType := NonAppCallTransaction
 
 		if currentTxn.Txn.Type == protocol.ApplicationCallTx {
 			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {

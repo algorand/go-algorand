@@ -372,8 +372,8 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 		traceType = model.SimulationTransactionExecTraceTraceTypeApprovalProgram
 	case simulation.AppCallClearStateTransaction:
 		traceType = model.SimulationTransactionExecTraceTraceTypeClearStateProgram
-	case simulation.OtherTransaction:
-		traceType = model.SimulationTransactionExecTraceTraceTypeOtherTransaction
+	case simulation.NonAppCallTransaction:
+		traceType = model.SimulationTransactionExecTraceTraceTypeNonAppCallTransaction
 	}
 
 	// Convert opcode trace to response model

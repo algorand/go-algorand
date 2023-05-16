@@ -3889,7 +3889,7 @@
           "enum": [
             "approval-program",
             "clear-state-program",
-            "other-transaction"
+            "non-app-call-transaction"
           ],
           "type": "string"
         },

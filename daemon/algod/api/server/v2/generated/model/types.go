@@ -30,9 +30,9 @@ const (
 
 // Defines values for SimulationTransactionExecTraceTraceType.
 const (
-	SimulationTransactionExecTraceTraceTypeApprovalProgram   SimulationTransactionExecTraceTraceType = "approval-program"
-	SimulationTransactionExecTraceTraceTypeClearStateProgram SimulationTransactionExecTraceTraceType = "clear-state-program"
-	SimulationTransactionExecTraceTraceTypeOtherTransaction  SimulationTransactionExecTraceTraceType = "other-transaction"
+	SimulationTransactionExecTraceTraceTypeApprovalProgram       SimulationTransactionExecTraceTraceType = "approval-program"
+	SimulationTransactionExecTraceTraceTypeClearStateProgram     SimulationTransactionExecTraceTraceType = "clear-state-program"
+	SimulationTransactionExecTraceTraceTypeNonAppCallTransaction SimulationTransactionExecTraceTraceType = "non-app-call-transaction"
 )
 
 // Defines values for AddressRole.
