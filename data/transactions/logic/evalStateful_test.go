@@ -1212,7 +1212,6 @@ func TestAssetDisambiguation(t *testing.T) {
 				ledger.NewAsset(tx.Sender, 1, basics.AssetParams{AssetName: "one", Total: 1})
 				ledger.NewAsset(tx.Sender, 255, basics.AssetParams{AssetName: "twenty", Total: 255})
 				ledger.NewAsset(tx.Sender, 256, basics.AssetParams{AssetName: "thirty", Total: 256})
-				ledger.NewAsset(tx.Sender, 999, basics.AssetParams{AssetName: "nine nine nine", Total: 999})
 				tx.ForeignAssets = []basics.AssetIndex{255, 256}
 				// Since 1 is not available, 1 must mean the 1th asset slot = 256
 				testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
@@ -1310,7 +1309,6 @@ func TestAppDisambiguation(t *testing.T) {
 				makeIdentifiableApp(1)
 				makeIdentifiableApp(20)
 				makeIdentifiableApp(256)
-				makeIdentifiableApp(999)
 
 				tx.ForeignApps = []basics.AppIndex{20, 256}
 				// Since 1 is not available, 1 must mean the first app slot = 20 (recall, 0 mean "this app")
