@@ -175,20 +175,6 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	if tracer.result.ExecTraceConfig != NoExecTrace {
-		// make transaction trace in following section
-		currentTxn := ep.TxnGroup[groupIndex]
-		traceType := NonAppCallTransaction
-
-		if currentTxn.Txn.Type == protocol.ApplicationCallTx {
-			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
-			case transactions.ClearStateOC:
-				traceType = AppCallClearStateTransaction
-			default:
-				traceType = AppCallApprovalTransaction
-			}
-		}
-		transactionTrace := TransactionTrace{TraceType: traceType}
-
 		var txnTraceStackElem *TransactionTrace
 
 		// The last question is, where should this transaction trace attach to:
@@ -202,26 +188,34 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 			//   We should add the transaction type to the pre-existing execution trace.
 			// - otherwise, we take the simplest trace with transaction type.
 			if tracer.result.TxnGroups[0].Txns[groupIndex].Trace == nil {
-				tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
-			} else {
-				tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = traceType
+				tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &TransactionTrace{}
 			}
 			txnTraceStackElem = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 		} else {
 			// we are reaching inner txns, so we don't have to be concerned about logic sig trace here
 			lastExecTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
-			lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, transactionTrace)
+			lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, TransactionTrace{})
 			txnTraceStackElem = &lastExecTrace.InnerTraces[len(lastExecTrace.InnerTraces)-1]
 
 			innerIndex := uint64(len(lastExecTrace.InnerTraces)) - 1
-			stepIndex := uint64(len(lastExecTrace.Trace)) - 1
+			stepIndex := uint64(len(lastExecTrace.ProgramTraceRef.Trace)) - 1
 
-			lastExecTrace.StepToInnerMap = append(lastExecTrace.StepToInnerMap,
+			lastExecTrace.ProgramTraceRef.StepToInnerMap = append(lastExecTrace.ProgramTraceRef.StepToInnerMap,
 				TraceStepInnerIndexPair{
 					TraceStep:  stepIndex,
 					InnerIndex: innerIndex,
 				},
 			)
+		}
+
+		currentTxn := ep.TxnGroup[groupIndex]
+		if currentTxn.Txn.Type == protocol.ApplicationCallTx {
+			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
+			case transactions.ClearStateOC:
+				txnTraceStackElem.ProgramTraceRef = &txnTraceStackElem.ClearStateProgramTrace
+			default:
+				txnTraceStackElem.ProgramTraceRef = &txnTraceStackElem.ApprovalProgramTrace
+			}
 		}
 
 		// In both case, we need to add to transaction trace to the stack
@@ -236,6 +230,8 @@ func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad tran
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
 	if tracer.result.ExecTraceConfig != NoExecTrace {
+		lastOne := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+		lastOne.ProgramTraceRef = nil
 		tracer.execTraceStack = tracer.execTraceStack[:len(tracer.execTraceStack)-1]
 	}
 	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, evalError)
@@ -267,7 +263,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		// get cx.GroupIndex() and append to trace
 		indexIntoTxnGroup := cx.GroupIndex()
 		execTrace := tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace
-		execTrace.LogicSigTrace = append(execTrace.LogicSigTrace, currentOpcodeUnit)
+		execTrace.ProgramTraceRef.Trace = append(execTrace.ProgramTraceRef.Trace, currentOpcodeUnit)
 		return
 	}
 
@@ -283,7 +279,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		return
 	}
 	currentTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
-	currentTrace.Trace = append(currentTrace.Trace, currentOpcodeUnit)
+	currentTrace.ProgramTraceRef.Trace = append(currentTrace.ProgramTraceRef.Trace, currentOpcodeUnit)
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
@@ -301,6 +297,8 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 		if tracer.result.ExecTraceConfig != NoExecTrace {
 			indexIntoTxnGroup := cx.GroupIndex()
 			tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace = &TransactionTrace{}
+			traceRef := tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace
+			traceRef.ProgramTraceRef = &traceRef.LogicSigTrace
 		}
 	}
 }
@@ -309,6 +307,9 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	if cx.RunMode() != logic.ModeApp {
 		// Report cost for LogicSig program and exit
 		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigBudgetConsumed = uint64(cx.Cost())
+		if tracer.result.ExecTraceConfig != NoExecTrace {
+			tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].Trace.ProgramTraceRef = nil
+		}
 		return
 	}
 

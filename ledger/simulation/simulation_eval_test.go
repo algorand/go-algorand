@@ -996,15 +996,13 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 								},
 								AppBudgetConsumed: 4,
 								Trace: &simulation.TransactionTrace{
-									TraceType: simulation.AppCallApprovalTransaction,
-									Trace:     firstTrace,
+									ApprovalProgramTrace: simulation.ProgramTrace{Trace: firstTrace},
 								},
 							},
 							{
 								AppBudgetConsumed: 1404,
 								Trace: &simulation.TransactionTrace{
-									TraceType: simulation.AppCallApprovalTransaction,
-									Trace:     secondTrace,
+									ApprovalProgramTrace: simulation.ProgramTrace{Trace: secondTrace},
 								},
 							},
 						},
@@ -1880,12 +1878,11 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								},
 								AppBudgetConsumed: 7,
 								Trace: &simulation.TransactionTrace{
-									TraceType: simulation.AppCallApprovalTransaction,
-									Trace:     creationOpcodeTrace,
+									ApprovalProgramTrace: simulation.ProgramTrace{Trace: creationOpcodeTrace},
 								},
 							},
 							{
-								Trace: &simulation.TransactionTrace{TraceType: simulation.NonAppCallTransaction},
+								Trace: &simulation.TransactionTrace{},
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -1924,28 +1921,27 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								},
 								AppBudgetConsumed: 306,
 								Trace: &simulation.TransactionTrace{
-									TraceType:      simulation.AppCallApprovalTransaction,
-									Trace:          recursiveLongOpcodeTrace,
-									StepToInnerMap: stepToInnerMap,
+									ApprovalProgramTrace: simulation.ProgramTrace{
+										Trace:          recursiveLongOpcodeTrace,
+										StepToInnerMap: stepToInnerMap,
+									},
 									InnerTraces: []simulation.TransactionTrace{
 										{
-											TraceType: simulation.AppCallApprovalTransaction,
-											Trace:     creationOpcodeTrace,
+											ApprovalProgramTrace: simulation.ProgramTrace{Trace: creationOpcodeTrace},
 										},
-										{TraceType: simulation.NonAppCallTransaction},
+										{},
 										{
-											TraceType:      simulation.AppCallApprovalTransaction,
-											Trace:          recursiveLongOpcodeTrace,
-											StepToInnerMap: stepToInnerMap,
+											ApprovalProgramTrace: simulation.ProgramTrace{
+												Trace:          recursiveLongOpcodeTrace,
+												StepToInnerMap: stepToInnerMap,
+											},
 											InnerTraces: []simulation.TransactionTrace{
 												{
-													TraceType: simulation.AppCallApprovalTransaction,
-													Trace:     creationOpcodeTrace,
+													ApprovalProgramTrace: simulation.ProgramTrace{Trace: creationOpcodeTrace},
 												},
-												{TraceType: simulation.NonAppCallTransaction},
+												{},
 												{
-													TraceType: simulation.AppCallApprovalTransaction,
-													Trace:     finalDepthTrace,
+													ApprovalProgramTrace: simulation.ProgramTrace{Trace: finalDepthTrace},
 												},
 											},
 										},
@@ -2016,7 +2012,7 @@ byte "hello"; log; int 1`,
 					{
 						Txns: []simulation.TxnResult{
 							{
-								Trace: &simulation.TransactionTrace{TraceType: simulation.NonAppCallTransaction},
+								Trace: &simulation.TransactionTrace{},
 							},
 							{
 								Txn: transactions.SignedTxnWithAD{
@@ -2028,21 +2024,24 @@ byte "hello"; log; int 1`,
 								AppBudgetConsumed:      3,
 								LogicSigBudgetConsumed: 266,
 								Trace: &simulation.TransactionTrace{
-									TraceType: simulation.AppCallApprovalTransaction,
-									Trace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
-										{PC: 8},
-										{PC: 9},
+									ApprovalProgramTrace: simulation.ProgramTrace{
+										Trace: []simulation.OpcodeTraceUnit{
+											{PC: 1},
+											{PC: 8},
+											{PC: 9},
+										},
 									},
-									LogicSigTrace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
-										{PC: 5},
-										{PC: 6},
-										{PC: 7},
-										{PC: 8},
-										{PC: 9},
-										{PC: 10},
-										{PC: 11},
+									LogicSigTrace: simulation.ProgramTrace{
+										Trace: []simulation.OpcodeTraceUnit{
+											{PC: 1},
+											{PC: 5},
+											{PC: 6},
+											{PC: 7},
+											{PC: 8},
+											{PC: 9},
+											{PC: 10},
+											{PC: 11},
+										},
 									},
 								},
 							},

@@ -21,13 +21,6 @@ const (
 	AccountSigTypeSig  AccountSigType = "sig"
 )
 
-// Defines values for SimulationTransactionExecTraceTraceType.
-const (
-	SimulationTransactionExecTraceTraceTypeApprovalProgram       SimulationTransactionExecTraceTraceType = "approval-program"
-	SimulationTransactionExecTraceTraceTypeClearStateProgram     SimulationTransactionExecTraceTraceType = "clear-state-program"
-	SimulationTransactionExecTraceTraceTypeNonAppCallTransaction SimulationTransactionExecTraceTraceType = "non-app-call-transaction"
-)
-
 // Defines values for AddressRole.
 const (
 	AddressRoleFreezeTarget AddressRole = "freeze-target"
@@ -637,6 +630,15 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// SimulateProgramTrace Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.
+type SimulateProgramTrace struct {
+	// StepToInnerMap The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.
+	StepToInnerMap *[]SimulationPcToInnerIndex `json:"step-to-inner-map,omitempty"`
+
+	// Trace An array of opcodes and effects during simulation execution.
+	Trace []SimulationOpcodeTraceUnit `json:"trace"`
+}
+
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
 	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
@@ -723,39 +725,33 @@ type SimulationEvalOverrides struct {
 
 // SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
 type SimulationOpcodeTraceUnit struct {
-	// Pc The program counter of the current opcode being evaluated.
-	Pc uint64 `json:"pc"`
+	// PC The program counter of the current opcode being evaluated.
+	PC uint64 `json:"PC"`
 }
 
 // SimulationPcToInnerIndex The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.
 type SimulationPcToInnerIndex struct {
+	// PC The program counter of the current opcode being evaluated.
+	PC uint64 `json:"PC"`
+
 	// InnerIndex The index into inner trace array, to which inner transaction get branched off from program execution.
 	InnerIndex uint64 `json:"inner-index"`
-
-	// Pc The program counter of the current opcode being evaluated.
-	Pc uint64 `json:"pc"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 type SimulationTransactionExecTrace struct {
+	// ApprovalProgramTrace Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.
+	ApprovalProgramTrace *SimulateProgramTrace `json:"approval-program-trace,omitempty"`
+
+	// ClearStateProgramTrace Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.
+	ClearStateProgramTrace *SimulateProgramTrace `json:"clear-state-program-trace,omitempty"`
+
 	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
 	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
 
-	// LogicSigTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
-
-	// StepToInnerMap The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.
-	StepToInnerMap *[]SimulationPcToInnerIndex `json:"step-to-inner-map,omitempty"`
-
-	// Trace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-	Trace *[]SimulationOpcodeTraceUnit `json:"trace,omitempty"`
-
-	// TraceType Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-	TraceType SimulationTransactionExecTraceTraceType `json:"trace-type"`
+	// LogicSigTrace Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.
+	LogicSigTrace *SimulateProgramTrace `json:"logic-sig-trace,omitempty"`
 }
-
-// SimulationTransactionExecTraceTraceType Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-type SimulationTransactionExecTraceTraceType string
 
 // StateDelta Application state delta.
 type StateDelta = []EvalDeltaKeyValue

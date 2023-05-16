@@ -1902,6 +1902,29 @@
         ],
         "type": "object"
       },
+      "SimulateProgramTrace": {
+        "description": "Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.",
+        "properties": {
+          "step-to-inner-map": {
+            "description": "The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationPcToInnerIndex"
+            },
+            "type": "array"
+          },
+          "trace": {
+            "description": "An array of opcodes and effects during simulation execution.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "trace"
+        ],
+        "type": "object"
+      },
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
@@ -2053,37 +2076,43 @@
       "SimulationOpcodeTraceUnit": {
         "description": "The set of trace information and effect from evaluating a single opcode.",
         "properties": {
-          "pc": {
+          "PC": {
             "description": "The program counter of the current opcode being evaluated.",
             "type": "integer"
           }
         },
         "required": [
-          "pc"
+          "PC"
         ],
         "type": "object"
       },
       "SimulationPcToInnerIndex": {
         "description": "The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
         "properties": {
-          "inner-index": {
-            "description": "The index into inner trace array, to which inner transaction get branched off from program execution.",
+          "PC": {
+            "description": "The program counter of the current opcode being evaluated.",
             "type": "integer"
           },
-          "pc": {
-            "description": "The program counter of the current opcode being evaluated.",
+          "inner-index": {
+            "description": "The index into inner trace array, to which inner transaction get branched off from program execution.",
             "type": "integer"
           }
         },
         "required": [
-          "inner-index",
-          "pc"
+          "PC",
+          "inner-index"
         ],
         "type": "object"
       },
       "SimulationTransactionExecTrace": {
         "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
         "properties": {
+          "approval-program-trace": {
+            "$ref": "#/components/schemas/SimulateProgramTrace"
+          },
+          "clear-state-program-trace": {
+            "$ref": "#/components/schemas/SimulateProgramTrace"
+          },
           "inner-trace": {
             "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
             "items": {
@@ -2092,39 +2121,9 @@
             "type": "array"
           },
           "logic-sig-trace": {
-            "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
-            "items": {
-              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
-            },
-            "type": "array"
-          },
-          "step-to-inner-map": {
-            "description": "The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
-            "items": {
-              "$ref": "#/components/schemas/SimulationPcToInnerIndex"
-            },
-            "type": "array"
-          },
-          "trace": {
-            "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
-            "items": {
-              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
-            },
-            "type": "array"
-          },
-          "trace-type": {
-            "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
-            "enum": [
-              "approval-program",
-              "clear-state-program",
-              "non-app-call-transaction"
-            ],
-            "type": "string"
+            "$ref": "#/components/schemas/SimulateProgramTrace"
           }
         },
-        "required": [
-          "trace-type"
-        ],
         "type": "object"
       },
       "StateDelta": {

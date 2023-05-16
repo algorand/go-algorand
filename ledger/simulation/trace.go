@@ -201,37 +201,33 @@ type OpcodeTraceUnit struct {
 	// to embrace this and encode either a number or a byte string for each value.
 }
 
-// TransactionTraceType is an enum type that indicates what kind of source (e.g., app/logicsig) the TransactionTrace generates from
-type TransactionTraceType int
-
-const (
-	// NonAppCallTransaction stands for TransactionTrace is generated from simulating a non-app-call transaction (with logic-sig approval)
-	NonAppCallTransaction TransactionTraceType = iota
-	// AppCallApprovalTransaction stands for TransactionTrace is generated from simulating an app call to App's approval program
-	AppCallApprovalTransaction
-	// AppCallClearStateTransaction stands for TransactionTrace is generated from simulating an app call to App's clear state program
-	AppCallClearStateTransaction
-)
-
 // TraceStepInnerIndexPair is the struct that contains execution step in trace and index into inner txn traces.
 type TraceStepInnerIndexPair struct {
 	TraceStep  uint64
 	InnerIndex uint64
 }
 
-// TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
-type TransactionTrace struct {
-	// TraceType is an enum that indicates which kind of TransactionTrace this instance is standing for.
-	TraceType TransactionTraceType
+// ProgramTrace contains the simulation time opcode trace and the map from opcode trace index to inner transaction group index.
+type ProgramTrace struct {
 	// Trace contains the trace for an app evaluation, if this is an app call transaction.
 	Trace []OpcodeTraceUnit
+	// StepToInnerMap maps execution step that branches into an inner trace,
+	// to the index into the InnerTraces that runs after the execution step.
+	StepToInnerMap []TraceStepInnerIndexPair
+}
+
+// TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
+type TransactionTrace struct {
+	// ApprovalProgramTrace stands for ProgramTrace over application call on approval program
+	ApprovalProgramTrace ProgramTrace
+	// ClearStateProgramTrace stands for ProgramTrace over application call on clear-state program
+	ClearStateProgramTrace ProgramTrace
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
-	LogicSigTrace []OpcodeTraceUnit
+	LogicSigTrace ProgramTrace
+	// ProgramTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
+	ProgramTraceRef *ProgramTrace
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.
 	InnerTraces []TransactionTrace
-	// StepToInnerMap maps execution step that branches into an inner trace,
-	// to the index into the InnerTraces that runs after the execution step.
-	StepToInnerMap []TraceStepInnerIndexPair
 }
