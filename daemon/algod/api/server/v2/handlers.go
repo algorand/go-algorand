@@ -946,11 +946,11 @@ type PreEncodedSimulateTxnGroupResult struct {
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
 type PreEncodedSimulateResponse struct {
-	Version       uint64                             `codec:"version"`
-	LastRound     uint64                             `codec:"last-round"`
-	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
-	EvalOverrides *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
-	ExecTrace     *model.SimulateResponseExecTrace   `json:"exec-trace,omitempty"`
+	Version         uint64                             `codec:"version"`
+	LastRound       uint64                             `codec:"last-round"`
+	TxnGroups       []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	EvalOverrides   *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
+	ExecTraceConfig *model.SimulateTraceConfig         `json:"exec-trace-config,omitempty"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
@@ -964,7 +964,7 @@ type PreEncodedSimulateRequest struct {
 	AllowEmptySignatures bool                                        `codec:"allow-empty-signatures,omitempty"`
 	AllowMoreLogging     bool                                        `codec:"allow-more-logging,omitempty"`
 	ExtraOpcodeBudget    uint64                                      `codec:"extra-opcode-budget,omitempty"`
-	ExecTraceOption      string                                      `json:"exec-trace,omitempty"`
+	ExecTraceConfig      *model.SimulateTraceConfig                  `json:"exec-trace-config,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.

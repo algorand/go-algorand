@@ -21,13 +21,6 @@ const (
 	AccountSigTypeSig  AccountSigType = "sig"
 )
 
-// Defines values for SimulateRequestExecTrace.
-const (
-	SimulateRequestExecTracePc          SimulateRequestExecTrace = "pc"
-	SimulateRequestExecTraceScratchSlot SimulateRequestExecTrace = "scratch-slot"
-	SimulateRequestExecTraceStack       SimulateRequestExecTrace = "stack"
-)
-
 // Defines values for SimulationTransactionExecTraceTraceType.
 const (
 	SimulationTransactionExecTraceTraceTypeApprovalProgram       SimulationTransactionExecTraceTraceType = "approval-program"
@@ -64,13 +57,6 @@ const (
 	TxTypeKeyreg TxType = "keyreg"
 	TxTypePay    TxType = "pay"
 	TxTypeStpf   TxType = "stpf"
-)
-
-// Defines values for SimulateResponseExecTrace.
-const (
-	SimulateResponseExecTracePc          SimulateResponseExecTrace = "pc"
-	SimulateResponseExecTraceScratchSlot SimulateResponseExecTrace = "scratch-slot"
-	SimulateResponseExecTraceStack       SimulateResponseExecTrace = "stack"
 )
 
 // Defines values for TransactionProofResponseHashtype.
@@ -659,8 +645,8 @@ type SimulateRequest struct {
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
-	// ExecTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-	ExecTrace *SimulateRequestExecTrace `json:"exec-trace,omitempty"`
+	// ExecTraceConfig An object including that configures simulation execution trace.
+	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
 
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
@@ -669,13 +655,22 @@ type SimulateRequest struct {
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
 }
 
-// SimulateRequestExecTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-type SimulateRequestExecTrace string
-
 // SimulateRequestTransactionGroup A transaction group to simulate.
 type SimulateRequestTransactionGroup struct {
 	// Txns An atomic transaction group.
 	Txns []json.RawMessage `json:"txns"`
+}
+
+// SimulateTraceConfig An object including that configures simulation execution trace.
+type SimulateTraceConfig struct {
+	// IncludeScratch A boolean option for including scratch slot update in Execution Trace response.
+	IncludeScratch *bool `json:"include-scratch,omitempty"`
+
+	// IncludeStack A boolean option for including stack changes in Execution Trace response.
+	IncludeStack *bool `json:"include-stack,omitempty"`
+
+	// UseExecTrace A boolean option for opting in execution trace features simulation endpoint.
+	UseExecTrace *bool `json:"use-exec-trace,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -1129,8 +1124,8 @@ type SimulateResponse struct {
 	// EvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
 	EvalOverrides *SimulationEvalOverrides `json:"eval-overrides,omitempty"`
 
-	// ExecTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-	ExecTrace *SimulateResponseExecTrace `json:"exec-trace,omitempty"`
+	// ExecTraceConfig An object including that configures simulation execution trace.
+	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
 
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
@@ -1141,9 +1136,6 @@ type SimulateResponse struct {
 	// Version The version of this response object.
 	Version uint64 `json:"version"`
 }
-
-// SimulateResponseExecTrace Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.
-type SimulateResponseExecTrace string
 
 // StateProofResponse Represents a state proof and its corresponding message
 type StateProofResponse = StateProof

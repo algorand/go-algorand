@@ -43,13 +43,13 @@ type ExecTraceConfig uint64
 
 const (
 	// NoExecTrace stands for no exec trace returning in simulation
-	NoExecTrace ExecTraceConfig = iota
-	// ReturnPC stands for simulation will return only application's PC traversal
-	ReturnPC
-	// ReturnStackChange stands for simulation will return app's PC traversal and corresponding stack changes
-	ReturnStackChange
-	// ReturnScratchSlotChange stands for simulation will return app's PC traversal, corresponding stack changes and scratch slot changes
-	ReturnScratchSlotChange
+	NoExecTrace ExecTraceConfig = 0
+	// IncludePC stands for simulation will return only application's PC traversal
+	IncludePC = 1 << (iota - 1)
+	// IncludeStack stands for simulation will return app's PC traversal and corresponding stack changes
+	IncludeStack
+	// IncludeScratch stands for simulation will return app's PC traversal, corresponding stack changes and scratch slot changes
+	IncludeScratch
 )
 
 // Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.

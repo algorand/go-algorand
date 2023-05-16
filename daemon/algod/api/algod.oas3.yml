@@ -790,14 +790,8 @@
                 "eval-overrides": {
                   "$ref": "#/components/schemas/SimulationEvalOverrides"
                 },
-                "exec-trace": {
-                  "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
-                  "enum": [
-                    "pc",
-                    "stack",
-                    "scratch-slot"
-                  ],
-                  "type": "string"
+                "exec-trace-config": {
+                  "$ref": "#/components/schemas/SimulateTraceConfig"
                 },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
@@ -1919,14 +1913,8 @@
             "description": "Lifts limits on log opcode usage during simulation.",
             "type": "boolean"
           },
-          "exec-trace": {
-            "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
-            "enum": [
-              "pc",
-              "stack",
-              "scratch-slot"
-            ],
-            "type": "string"
+          "exec-trace-config": {
+            "$ref": "#/components/schemas/SimulateTraceConfig"
           },
           "extra-opcode-budget": {
             "description": "Applies extra opcode budget during simulation for each transaction group.",
@@ -1962,6 +1950,24 @@
         "required": [
           "txns"
         ],
+        "type": "object"
+      },
+      "SimulateTraceConfig": {
+        "description": "An object including that configures simulation execution trace.",
+        "properties": {
+          "include-scratch": {
+            "description": "A boolean option for including scratch slot update in Execution Trace response.",
+            "type": "boolean"
+          },
+          "include-stack": {
+            "description": "A boolean option for including stack changes in Execution Trace response.",
+            "type": "boolean"
+          },
+          "use-exec-trace": {
+            "description": "A boolean option for opting in execution trace features simulation endpoint.",
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "SimulateTransactionGroupResult": {
@@ -6366,14 +6372,8 @@
                     "eval-overrides": {
                       "$ref": "#/components/schemas/SimulationEvalOverrides"
                     },
-                    "exec-trace": {
-                      "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
-                      "enum": [
-                        "pc",
-                        "stack",
-                        "scratch-slot"
-                      ],
-                      "type": "string"
+                    "exec-trace-config": {
+                      "$ref": "#/components/schemas/SimulateTraceConfig"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
@@ -6405,14 +6405,8 @@
                     "eval-overrides": {
                       "$ref": "#/components/schemas/SimulationEvalOverrides"
                     },
-                    "exec-trace": {
-                      "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options.",
-                      "enum": [
-                        "pc",
-                        "stack",
-                        "scratch-slot"
-                      ],
-                      "type": "string"
+                    "exec-trace-config": {
+                      "$ref": "#/components/schemas/SimulateTraceConfig"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",

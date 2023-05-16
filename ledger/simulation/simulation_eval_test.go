@@ -979,7 +979,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 					{signedCreateTxn, signedExpensiveTxn},
 				},
 				ExtraOpcodeBudget: extraOpcodeBudget,
-				ExecTraceConfig:   simulation.ReturnPC,
+				ExecTraceConfig:   simulation.IncludePC,
 			},
 			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
@@ -1013,7 +1013,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 					},
 				},
 				EvalOverrides:   simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
-				ExecTraceConfig: simulation.ReturnPC,
+				ExecTraceConfig: simulation.IncludePC,
 			},
 		}
 	})
@@ -1865,7 +1865,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedCreateTxn, signedPaymentTxn, signedCallsMaxDepth},
 				},
-				ExecTraceConfig: simulation.ReturnPC,
+				ExecTraceConfig: simulation.IncludePC,
 			},
 			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
@@ -1957,7 +1957,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 						AppBudgetConsumed: 313,
 					},
 				},
-				ExecTraceConfig: simulation.ReturnPC,
+				ExecTraceConfig: simulation.IncludePC,
 			},
 		}
 	})
@@ -2005,13 +2005,13 @@ byte "hello"; log; int 1`,
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedPayTxn, signedAppCallTxn},
 				},
-				ExecTraceConfig: simulation.ReturnPC,
+				ExecTraceConfig: simulation.IncludePC,
 			},
 			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
 				Version:         simulation.ResultLatestVersion,
 				LastRound:       env.TxnInfo.LatestRound(),
-				ExecTraceConfig: simulation.ReturnPC,
+				ExecTraceConfig: simulation.IncludePC,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{

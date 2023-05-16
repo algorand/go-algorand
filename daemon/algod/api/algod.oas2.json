@@ -3457,14 +3457,8 @@
           "description": "Applies extra opcode budget during simulation for each transaction group.",
           "type": "integer"
         },
-        "exec-trace": {
-          "enum": [
-            "pc",
-            "stack",
-            "scratch-slot"
-          ],
-          "type": "string",
-          "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options."
+        "exec-trace-config": {
+          "$ref": "#/definitions/SimulateTraceConfig"
         }
       }
     },
@@ -3484,6 +3478,24 @@
             "format": "json",
             "x-algorand-format": "SignedTransaction"
           }
+        }
+      }
+    },
+    "SimulateTraceConfig": {
+      "description": "An object including that configures simulation execution trace.",
+      "type": "object",
+      "properties": {
+        "use-exec-trace": {
+          "description": "A boolean option for opting in execution trace features simulation endpoint.",
+          "type": "boolean"
+        },
+        "include-stack": {
+          "description": "A boolean option for including stack changes in Execution Trace response.",
+          "type": "boolean"
+        },
+        "include-scratch": {
+          "description": "A boolean option for including scratch slot update in Execution Trace response.",
+          "type": "boolean"
         }
       }
     },
@@ -4544,14 +4556,8 @@
           "eval-overrides": {
             "$ref": "#/definitions/SimulationEvalOverrides"
           },
-          "exec-trace": {
-            "enum": [
-              "pc",
-              "stack",
-              "scratch-slot"
-            ],
-            "type": "string",
-            "description": "Enumerations of exec trace during simulation for each transaction group, the latter options encapsulates the former options."
+          "exec-trace-config": {
+            "$ref": "#/definitions/SimulateTraceConfig"
           }
         }
       }

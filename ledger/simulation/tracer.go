@@ -174,7 +174,7 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 }
 
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
-	if tracer.result.ExecTraceConfig > NoExecTrace {
+	if tracer.result.ExecTraceConfig != NoExecTrace {
 		// make transaction trace in following section
 		currentTxn := ep.TxnGroup[groupIndex]
 		traceType := NonAppCallTransaction
@@ -235,7 +235,7 @@ func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad tran
 	tracer.saveApplyData(ad)
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
-	if tracer.result.ExecTraceConfig > NoExecTrace {
+	if tracer.result.ExecTraceConfig != NoExecTrace {
 		tracer.execTraceStack = tracer.execTraceStack[:len(tracer.execTraceStack)-1]
 	}
 	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, evalError)
@@ -298,7 +298,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 	// Before Program, activated for logic sig, happens before txn group execution
 	// we should create trace object for this txn result
 	if cx.RunMode() != logic.ModeApp {
-		if tracer.result.ExecTraceConfig > NoExecTrace {
+		if tracer.result.ExecTraceConfig != NoExecTrace {
 			indexIntoTxnGroup := cx.GroupIndex()
 			tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace = &TransactionTrace{}
 		}

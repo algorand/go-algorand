@@ -2141,11 +2141,13 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	a.NoError(err)
 
 	// The first simulation should not pass, for simulation return PC in config has not been activated
+	constTrue := true
+	execTraceConfig := model.SimulateTraceConfig{UseExecTrace: &constTrue}
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
 		},
-		ExecTraceOption: string(model.SimulateRequestExecTracePc),
+		ExecTraceConfig: &execTraceConfig,
 	}
 
 	_, err = testClient.SimulateTransactions(simulateRequest)
@@ -2355,6 +2357,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	}
 	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
 
-	a.NotNil(resp.ExecTrace)
-	a.Equal(model.SimulateResponseExecTracePc, *resp.ExecTrace)
+	a.NotNil(resp.ExecTraceConfig)
+	a.Equal(execTraceConfig, *resp.ExecTraceConfig)
 }

@@ -114,15 +114,24 @@ type Result struct {
 	ExecTraceConfig
 }
 
-// validateSimulateRequest checks relation between request and nodeConfig:
+// validateSimulateRequest first checks relation between request and nodeConfig:
 // if nodeConfig is running with `EnableDeveloperAPI` turned off, this method would:
 // - error on asking for exec trace
 // - (TODO) error on asking for unlimited resource access
+// then it checks the validity of request itself:
+// - if ExecTraceConfig is not NoExecTrace, but it does not contain IncludePC bit, then the method error
 func validateSimulateRequest(request Request, nodeConfig config.Local) error {
-	if !nodeConfig.EnableDeveloperAPI && request.ExecTraceConfig > NoExecTrace {
+	if !nodeConfig.EnableDeveloperAPI && request.ExecTraceConfig != NoExecTrace {
 		return InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace"),
+			},
+		}
+	}
+	if request.ExecTraceConfig != NoExecTrace && request.ExecTraceConfig&IncludePC != IncludePC {
+		return InvalidRequestError{
+			SimulatorError{
+				err: fmt.Errorf("the simulate request is not well formed: request.ExecTraceConfig is not NoExecTrace, but IncludePC is false"),
 			},
 		}
 	}

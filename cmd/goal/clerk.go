@@ -73,7 +73,7 @@ var (
 	simulateAllowMoreLogging       bool
 	simulateAllowExtraOpcodeBudget bool
 	simulateExtraOpcodeBudget      uint64
-	simulateReturnPCTrace          bool
+	simulateExecTraceOptIn         bool
 )
 
 func init() {
@@ -162,7 +162,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowExtraOpcodeBudget, "allow-extra-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
-	simulateCmd.Flags().BoolVar(&simulateReturnPCTrace, "return-pc-trace", false, "Return PC trace of app calls during simulation")
+	simulateCmd.Flags().BoolVar(&simulateExecTraceOptIn, "return-pc-trace", false, "Return PC trace of app calls during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1279,7 +1279,7 @@ var simulateCmd = &cobra.Command{
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
 				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
-				ExecTraceOption:      traceCmdOptionToRequestString(),
+				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1303,7 +1303,7 @@ var simulateCmd = &cobra.Command{
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
 				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
-				ExecTraceOption:      traceCmdOptionToRequestString(),
+				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
@@ -1364,10 +1364,16 @@ func decodeTxnsFromFile(file string) []transactions.SignedTxn {
 	return txgroup
 }
 
-func traceCmdOptionToRequestString() string {
-	var requestString string
-	if simulateReturnPCTrace {
-		requestString = "pc"
+func traceCmdOptionToSimulateTraceConfigModel() *model.SimulateTraceConfig {
+	simulateTraceConfig := model.SimulateTraceConfig{}
+	constTrue := true
+
+	if simulateExecTraceOptIn {
+		simulateTraceConfig.UseExecTrace = &constTrue
 	}
-	return requestString
+
+	if simulateTraceConfig == (model.SimulateTraceConfig{}) {
+		return nil
+	}
+	return &simulateTraceConfig
 }

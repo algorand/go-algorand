@@ -473,11 +473,11 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	}
 
 	encodedSimulationResult := PreEncodedSimulateResponse{
-		Version:       result.Version,
-		LastRound:     uint64(result.LastRound),
-		TxnGroups:     make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
-		EvalOverrides: evalOverrides,
-		ExecTrace:     convertSimulationExecTraceResponse(result.ExecTraceConfig),
+		Version:         result.Version,
+		LastRound:       uint64(result.LastRound),
+		TxnGroups:       make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		EvalOverrides:   evalOverrides,
+		ExecTraceConfig: convertSimulationExecTraceResponse(result.ExecTraceConfig),
 	}
 
 	for i, txnGroup := range result.TxnGroups {
@@ -487,33 +487,51 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	return encodedSimulationResult
 }
 
-func convertSimulationExecTraceResponse(execTraceConfig simulation.ExecTraceConfig) *model.SimulateResponseExecTrace {
-	var res model.SimulateResponseExecTrace
-	switch execTraceConfig {
-	case simulation.ReturnPC:
-		res = model.SimulateResponseExecTracePc
-	case simulation.ReturnStackChange:
-		res = model.SimulateResponseExecTraceStack
-	case simulation.ReturnScratchSlotChange:
-		res = model.SimulateResponseExecTraceScratchSlot
-	}
-	if len(res) == 0 {
+func convertSimulationExecTraceResponse(execTraceConfigEnum simulation.ExecTraceConfig) *model.SimulateTraceConfig {
+	if execTraceConfigEnum == simulation.NoExecTrace {
 		return nil
 	}
-	return &res
+
+	// since we are making response, we assume that the request into simulate endpoint is well-formed.
+	// namely, the request get through validateSimulateRequest validation.
+	// we just parse enum bit by bit, and fill in model object.
+
+	constTrue := true
+	execTraceConfig := model.SimulateTraceConfig{}
+
+	if execTraceConfigEnum&simulation.IncludePC == simulation.IncludePC {
+		execTraceConfig.UseExecTrace = &constTrue
+	}
+	if execTraceConfigEnum&simulation.IncludeStack == simulation.IncludeStack {
+		execTraceConfig.IncludeStack = &constTrue
+	}
+	if execTraceConfigEnum&simulation.IncludeScratch == simulation.IncludeScratch {
+		execTraceConfig.IncludeScratch = &constTrue
+	}
+
+	return &execTraceConfig
 }
 
-func convertSimulationExecTrace(execTrace string) simulation.ExecTraceConfig {
-	switch execTrace {
-	case "pc":
-		return simulation.ReturnPC
-	case "stack":
-		return simulation.ReturnStackChange
-	case "scratch-slot":
-		return simulation.ReturnScratchSlotChange
-	default:
+func convertSimulationExecTrace(execTraceConfig *model.SimulateTraceConfig) simulation.ExecTraceConfig {
+	if execTraceConfig == nil {
 		return simulation.NoExecTrace
 	}
+
+	var execTraceConfigEnum simulation.ExecTraceConfig
+
+	if execTraceConfig.UseExecTrace != nil && *execTraceConfig.UseExecTrace {
+		execTraceConfigEnum |= simulation.IncludePC
+	}
+	if execTraceConfig.IncludeStack != nil && *execTraceConfig.IncludeStack {
+		execTraceConfigEnum |= simulation.IncludeStack
+	}
+	if execTraceConfig.IncludeScratch != nil && *execTraceConfig.IncludeScratch {
+		execTraceConfigEnum |= simulation.IncludeScratch
+	}
+
+	// we don't error here, we will validate later about simulate.Request by validateSimulateRequest
+
+	return execTraceConfigEnum
 }
 
 func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {
@@ -526,7 +544,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowEmptySignatures: request.AllowEmptySignatures,
 		AllowMoreLogging:     request.AllowMoreLogging,
 		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
-		ExecTraceConfig:      convertSimulationExecTrace(request.ExecTraceOption),
+		ExecTraceConfig:      convertSimulationExecTrace(request.ExecTraceConfig),
 	}
 }
 
