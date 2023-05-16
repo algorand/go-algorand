@@ -34,6 +34,7 @@ type writer struct {
 	KvRead
 }
 
+// MakeWriter returns a trackerdb.Writer for a KV
 func MakeWriter(store trackerdb.Store, kvw KvWrite, kvr KvRead) trackerdb.Writer {
 	return &writer{store, kvw, kvr}
 }

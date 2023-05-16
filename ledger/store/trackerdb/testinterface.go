@@ -33,6 +33,7 @@ import (
 // these can also be inlined:
 // 		tx.Testing.AccountsInitTest(...)
 
+// WriterTestExt is an interface to extend Writer with test-only methods
 type WriterTestExt interface {
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
 	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)

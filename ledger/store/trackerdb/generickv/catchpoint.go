@@ -24,6 +24,7 @@ import (
 
 type catchpoint struct{}
 
+// MakeCatchpoint returns a trackerdb.Catchpoint for a KV
 func MakeCatchpoint() trackerdb.Catchpoint {
 	return &catchpoint{}
 }

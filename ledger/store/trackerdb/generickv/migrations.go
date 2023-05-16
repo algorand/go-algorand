@@ -30,8 +30,11 @@ import (
 func getSchemaVersion(ctx context.Context, kvr KvRead) (int32, error) {
 	// read version entry
 	value, closer, err := kvr.Get(schemaVersionKey())
-	if err != nil {
+	if err == trackerdb.ErrNotFound {
+		// ignore the error, return version 0
 		return 0, nil
+	} else if err != nil {
+		return 0, err
 	}
 	defer closer.Close()
 
