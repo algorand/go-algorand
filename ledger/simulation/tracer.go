@@ -18,8 +18,8 @@ package simulation
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/config"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -85,8 +85,9 @@ type evalTracer struct {
 	result   *Result
 	failedAt TxnPath
 
-	// execTraceStack keeps track of the call stack from top level transaction to the current inner txn that contains latest TransactionTrace
-	// this is used only for PC/Stack/Storage exposure
+	// execTraceStack keeps track of the call stack:
+	// from top level transaction to the current inner txn that contains latest TransactionTrace.
+	// NOTE: execTraceStack is used only for PC/Stack/Storage exposure.
 	execTraceStack []*TransactionTrace
 }
 
@@ -192,12 +193,14 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 
 		// The last question is, where should this transaction trace attach to:
 		// - if it is a top level transaction, then attach to TxnResult level
-		// - if it is an inner transaction, then refer to the stack for latest exec trace, and attach to inner array
+		// - if it is an inner transaction, then refer to the stack for latest exec trace,
+		//   and attach to inner array
 		if len(tracer.execTraceStack) == 0 {
 			// to adapt to logic sig trace here, we separate into 2 cases:
-			// - if we already executed `Before/After-Program`, then there should be a trace containing logic sig,
-			//   adapt to the current trace containing logic sig trace
-			// - otherwise,
+			// - if we already executed `Before/After-Program`,
+			//   then there should be a trace containing logic sig.
+			//   We should add the transaction type to the pre-existing execution trace.
+			// - otherwise, we take the simplest trace with transaction type.
 			if tracer.result.TxnGroups[0].Txns[groupIndex].Trace == nil {
 				tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
 			} else {
@@ -213,10 +216,12 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 			innerIndex := uint64(len(lastExecTrace.InnerTraces)) - 1
 			stepIndex := uint64(len(lastExecTrace.Trace)) - 1
 
-			lastExecTrace.StepToInnerMap = append(lastExecTrace.StepToInnerMap, TraceStepInnerIndexPair{
-				TraceStep:  stepIndex,
-				InnerIndex: innerIndex,
-			})
+			lastExecTrace.StepToInnerMap = append(lastExecTrace.StepToInnerMap,
+				TraceStepInnerIndexPair{
+					TraceStep:  stepIndex,
+					InnerIndex: innerIndex,
+				},
+			)
 		}
 
 		// In both case, we need to add to transaction trace to the stack
