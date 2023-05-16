@@ -115,14 +115,14 @@ type Result struct {
 }
 
 // validateSimulateRequest checks relation between request and nodeConfig:
-// if nodeConfig is running with `EnableSimulationDeveloperAPI` turned off, this method would:
+// if nodeConfig is running with `EnableDeveloperAPI` turned off, this method would:
 // - error on asking for exec trace
 // - (TODO) error on asking for unlimited resource access
 func validateSimulateRequest(request Request, nodeConfig config.Local) error {
-	if !nodeConfig.EnableSimulationDeveloperAPI && request.ExecTraceConfig > NoExecTrace {
+	if !nodeConfig.EnableDeveloperAPI && request.ExecTraceConfig > NoExecTrace {
 		return InvalidRequestError{
 			SimulatorError{
-				err: fmt.Errorf("the local configuration of the node has `EnableSimulationDeveloperAPI` turned off, while requesting for execution trace"),
+				err: fmt.Errorf("the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace"),
 			},
 		}
 	}
