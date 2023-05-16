@@ -88,10 +88,6 @@ type evalTracer struct {
 	// execTraceStack keeps track of the call stack from top level transaction to the current inner txn that contains latest TransactionTrace
 	// this is used only for PC/Stack/Storage exposure
 	execTraceStack []*TransactionTrace
-
-	// txnIndexToLogicSigTrace keeps track of logic sig exec trace and their corresponding txn group id.
-	// by the end of transaction group, we should assign logic sig trace to each txn result by group id.
-	txnIndexToLogicSigTrace map[int][]OpcodeTraceUnit
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request, nodeConfig config.Local) (*evalTracer, error) {
@@ -164,11 +160,6 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 }
 
 func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
-	for i := range tracer.result.TxnGroups[0].Txns {
-		if logicSigTrace, ok := tracer.txnIndexToLogicSigTrace[i]; ok {
-			tracer.result.TxnGroups[0].Txns[i].Trace.LogicSigTrace = logicSigTrace
-		}
-	}
 	tracer.handleError(evalError)
 	tracer.cursorEvalTracer.AfterTxnGroup(ep, deltas, evalError)
 }
@@ -203,9 +194,18 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 		// - if it is a top level transaction, then attach to TxnResult level
 		// - if it is an inner transaction, then refer to the stack for latest exec trace, and attach to inner array
 		if len(tracer.execTraceStack) == 0 {
-			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
+			// to adapt to logic sig trace here, we separate into 2 cases:
+			// - if we already executed `Before/After-Program`, then there should be a trace containing logic sig,
+			//   adapt to the current trace containing logic sig trace
+			// - otherwise,
+			if tracer.result.TxnGroups[0].Txns[groupIndex].Trace == nil {
+				tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &transactionTrace
+			} else {
+				tracer.result.TxnGroups[0].Txns[groupIndex].Trace.TraceType = traceType
+			}
 			txnTraceStackElem = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 		} else {
+			// we are reaching inner txns, so we don't have to be concerned about logic sig trace here
 			lastExecTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
 			lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, transactionTrace)
 			txnTraceStackElem = &lastExecTrace.InnerTraces[len(lastExecTrace.InnerTraces)-1]
@@ -258,13 +258,11 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		currentOpcodeUnit := tracer.makeOpcodeTraceUnit(cx)
 
 		if cx.RunMode() == logic.ModeSig {
-			groupIndex := cx.GroupIndex()
-
-			if tracer.txnIndexToLogicSigTrace == nil {
-				tracer.txnIndexToLogicSigTrace = make(map[int][]OpcodeTraceUnit)
-			}
-
-			tracer.txnIndexToLogicSigTrace[groupIndex] = append(tracer.txnIndexToLogicSigTrace[groupIndex], currentOpcodeUnit)
+			// BeforeOpcode runs for logic sig happens before txn group exec, including app calls
+			// get cx.GroupIndex() and append to trace
+			indexIntoTxnGroup := cx.GroupIndex()
+			execTrace := tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace
+			execTrace.LogicSigTrace = append(execTrace.LogicSigTrace, currentOpcodeUnit)
 			return
 		}
 
@@ -291,6 +289,17 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 		return
 	}
 	tracer.handleError(evalError)
+}
+
+func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
+	// Before Program, activated for logic sig, happens before txn group execution
+	// we should create trace object for this txn result
+	if cx.RunMode() != logic.ModeApp {
+		if tracer.result.ExecTraceConfig > NoExecTrace {
+			indexIntoTxnGroup := cx.GroupIndex()
+			tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace = &TransactionTrace{}
+		}
+	}
 }
 
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
