@@ -1,7 +1,15 @@
 # StateProof
 
-The stateproof package implements the orchestration logic for state proof. 
-While the crypto package implements the cryptography behind state proofs, this package is responsible for
+## Background
+
+A State Proof is a cryptographic proof of state changes that occur in a given set of blocks. State Proofs are created and signed by the network.
+The same participants that reach consensus on new blocks sign a message attesting to a summary of recent Algorand transactions. 
+These signatures are then compressed into a compact certificate of collective knowledge, also known as a State Proof.
+After a State Proof is created, a State Proof transaction, which includes the State Proof and the message it proves, is created and sent to the Algorand network for validation. 
+The transaction goes through consensus like any other pending Algorand transaction: it gets validated by participation nodes, included in a block proposal, and written to the blockchain.
+
+The crypto package implements the cryptography behind State Proofs. This package, stateproof, implements the orchestration logic for State Proofs. 
+Specifically, it is responsible for the following:
 - Producing signatures for State Proof messages for online accounts.
 - Collecting signatures in order to create a State Proof. 
 - Gathering block information and online account balances from the ledger.
