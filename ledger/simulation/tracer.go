@@ -255,30 +255,23 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
-	defer func() {
+	currentOpcodeUnit := tracer.makeOpcodeTraceUnit(cx)
+
+	// logic sig opcode part
+	if cx.RunMode() != logic.ModeApp {
+		// do nothing for LogicSig ops
 		if tracer.result.ExecTraceConfig == NoExecTrace {
 			return
 		}
-
-		currentOpcodeUnit := tracer.makeOpcodeTraceUnit(cx)
-
-		if cx.RunMode() == logic.ModeSig {
-			// BeforeOpcode runs for logic sig happens before txn group exec, including app calls
-			// get cx.GroupIndex() and append to trace
-			indexIntoTxnGroup := cx.GroupIndex()
-			execTrace := tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace
-			execTrace.LogicSigTrace = append(execTrace.LogicSigTrace, currentOpcodeUnit)
-			return
-		}
-
-		currentTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
-		currentTrace.Trace = append(currentTrace.Trace, currentOpcodeUnit)
-	}()
-
-	if cx.RunMode() != logic.ModeApp {
-		// do nothing for LogicSig ops
+		// BeforeOpcode runs for logic sig happens before txn group exec, including app calls
+		// get cx.GroupIndex() and append to trace
+		indexIntoTxnGroup := cx.GroupIndex()
+		execTrace := tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace
+		execTrace.LogicSigTrace = append(execTrace.LogicSigTrace, currentOpcodeUnit)
 		return
 	}
+
+	// app call opcode part
 	groupIndex := tracer.relativeGroupIndex()
 	var appIDToSave basics.AppIndex
 	if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
@@ -286,6 +279,11 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		appIDToSave = cx.AppID()
 	}
 	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
+	if tracer.result.ExecTraceConfig == NoExecTrace {
+		return
+	}
+	currentTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+	currentTrace.Trace = append(currentTrace.Trace, currentOpcodeUnit)
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
