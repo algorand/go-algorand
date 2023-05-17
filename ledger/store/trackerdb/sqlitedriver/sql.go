@@ -53,7 +53,7 @@ type accountsSQLWriter struct {
 }
 
 type onlineAccountsSQLWriter struct {
-	insertStmt, updateStmt *sql.Stmt
+	insertStmt *sql.Stmt
 }
 
 type sqlRowRef struct {
@@ -136,11 +136,6 @@ func MakeOnlineAccountsSQLWriter(e db.Executable, hasAccounts bool) (w *onlineAc
 
 	if hasAccounts {
 		w.insertStmt, err = e.Prepare("INSERT INTO onlineaccounts (address, normalizedonlinebalance, data, updround, votelastvalid) VALUES (?, ?, ?, ?, ?)")
-		if err != nil {
-			return
-		}
-
-		w.updateStmt, err = e.Prepare("UPDATE onlineaccounts SET normalizedonlinebalance = ?, data = ?, updround = ?, votelastvalid =? WHERE rowid = ?")
 		if err != nil {
 			return
 		}
