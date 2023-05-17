@@ -545,6 +545,9 @@ func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 	}
 }
 
+// TestMaxSizesCorrect tests that constants defined in the protocol package are correct
+// and match the MaxSize() values of associated msgp encodable structs.
+// the test is located here since it needs to import various other packages.
 func TestMaxSizesCorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

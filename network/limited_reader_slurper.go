@@ -100,7 +100,7 @@ func (s *LimitedReaderSlurper) Read(reader io.Reader) error {
 		// read the data into the unused area of the read buffer.
 		n, err := reader.Read(entireBuffer[len(readBuffer):])
 		s.currentMessageBytesRead += uint64(n)
-		if s.currentMessageBytesRead > s.currentMessageMaxSize {
+		if s.currentMessageMaxSize > 0 && s.currentMessageBytesRead > s.currentMessageMaxSize {
 			return ErrIncomingMsgTooLarge
 		}
 		if err != nil {
@@ -130,8 +130,6 @@ func (s *LimitedReaderSlurper) Reset(n uint64) {
 	}
 	if n > 0 {
 		s.currentMessageMaxSize = n
-	} else {
-		s.currentMessageMaxSize = s.remainedUnallocatedSpace + uint64(cap(s.buffers[0]))
 	}
 	s.currentMessageBytesRead = 0
 	s.buffers[0] = s.buffers[0][:0]

@@ -45,6 +45,7 @@ const (
 
 // The following constants are overestimates in some cases but are reasonable upper bounds
 // for the purposes of limiting the number of bytes read from the network.
+// The calculations to obtain them are defined in network/TestMaxSizesCorrect()
 
 //AgreementVoteTagMaxSize is the maximum size of an AgreementVoteTag message
 const AgreementVoteTagMaxSize = 1228
