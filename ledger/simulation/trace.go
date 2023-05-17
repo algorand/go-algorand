@@ -153,11 +153,7 @@ func validateSimulateRequest(request Request, nodeConfig config.Local) error {
 	return nil
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, request Request, nodeConfig config.Local, version uint64) (Result, error) {
-	if version != ResultLatestVersion {
-		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
-	}
-
+func makeSimulationResult(lastRound basics.Round, request Request, nodeConfig config.Local) (Result, error) {
 	groups := make([]TxnGroupResult, len(request.TxnGroups))
 
 	for i, txgroup := range request.TxnGroups {
@@ -174,7 +170,7 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, no
 	}
 
 	return Result{
-		Version:        version,
+		Version:        ResultLatestVersion,
 		LastRound:      lastRound,
 		TxnGroups:      groups,
 		EvalOverrides:  resultEvalConstants,
@@ -182,10 +178,6 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, no
 		IncludeStack:   request.IncludeStack,
 		IncludeScratch: request.IncludeScratch,
 	}, nil
-}
-
-func makeSimulationResult(lastRound basics.Round, request Request, nodeConfig config.Local) (Result, error) {
-	return makeSimulationResultWithVersion(lastRound, request, nodeConfig, ResultLatestVersion)
 }
 
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation
