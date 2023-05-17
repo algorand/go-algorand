@@ -1580,6 +1580,10 @@ txn ApplicationID
 int 0
 ==
 bnz main_l6
+txn OnCompletion
+int OptIn
+==
+bnz main_l6
 txn NumAppArgs
 int 1
 ==
@@ -1647,6 +1651,24 @@ itxn_field Receiver
 itxn_next
 int appl
 itxn_field TypeEnum
+itxn CreatedApplicationID
+itxn_field ApplicationID
+int 0
+itxn_field Fee
+int OptIn
+itxn_field OnCompletion
+itxn_next
+int appl
+itxn_field TypeEnum
+itxn CreatedApplicationID
+itxn_field ApplicationID
+int 0
+itxn_field Fee
+int ClearState
+itxn_field OnCompletion
+itxn_next
+int appl
+itxn_field TypeEnum
 txna ApplicationArgs 0
 btoi
 int 1
@@ -1696,7 +1718,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
 			ApplicationArgs: [][]byte{{byte(MaxDepth)}},
-			Fee:             MinFee * uint64(MaxDepth*3+2),
+			Fee:             MinFee * uint64(MaxDepth*5+2),
 		})
 
 		txntest.Group(&createTxn, &paymentTxn, &callsMaxDepth)
@@ -1717,9 +1739,11 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{PC: 8},
 			{PC: 9},
 			{PC: 10},
-			{PC: 149},
-			{PC: 150},
+			{PC: 185},
+			{PC: 186},
 		}
+
+		clearStateOpcodeTrace := []simulation.OpcodeTraceUnit{{PC: 1}}
 
 		recursiveLongOpcodeTrace := []simulation.OpcodeTraceUnit{
 			{PC: 1},
@@ -1731,79 +1755,115 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{PC: 15},
 			{PC: 16},
 			{PC: 17},
-			{PC: 21},
+			{PC: 20},
+			{PC: 22},
 			{PC: 23},
-			{PC: 25},
-			{PC: 27},
-			{PC: 29},
-			{PC: 31},
-			{PC: 33},
-			{PC: 35},
-			{PC: 37},
-			{PC: 39},
-			{PC: 41},
-			{PC: 43},
-			{PC: 45},
-			{PC: 47},
+			{PC: 24},
+			{PC: 28},
+			{PC: 30},
+			{PC: 32},
+			{PC: 34},
+			{PC: 36},
+			{PC: 38},
+			{PC: 40},
+			{PC: 42},
+			{PC: 44},
+			{PC: 46},
 			{PC: 48},
 			{PC: 50},
-			{PC: 51},
-			{PC: 53},
+			{PC: 52},
 			{PC: 54},
-			{PC: 56},
-			{PC: 59},
+			{PC: 55},
+			{PC: 57},
+			{PC: 58},
 			{PC: 60},
 			{PC: 61},
-			{PC: 62},
 			{PC: 63},
 			{PC: 66},
 			{PC: 67},
 			{PC: 68},
 			{PC: 69},
+			{PC: 70},
+			{PC: 73},
 			{PC: 74},
 			{PC: 75},
 			{PC: 76},
-			{PC: 78},
-			{PC: 79},
 			{PC: 81},
+			{PC: 82},
 			{PC: 83},
 			{PC: 85},
-			{PC: 87},
-			{PC: 89},
+			{PC: 86},
+			{PC: 88},
 			{PC: 90},
-			{PC: 91},
 			{PC: 92},
 			{PC: 94},
-			{PC: 95},
+			{PC: 96},
 			{PC: 97},
+			{PC: 98},
 			{PC: 99},
-			{PC: 103},
+			{PC: 101},
+			{PC: 102},
 			{PC: 104},
 			{PC: 106},
+			{PC: 110},
+			{PC: 111},
 			{PC: 113},
-			{PC: 116},
-			{PC: 117},
-			{PC: 118},
-			{PC: 119},
-			{PC: 121},
-			{PC: 122},
+			{PC: 120},
 			{PC: 123},
+			{PC: 124},
 			{PC: 125},
+			{PC: 126},
 			{PC: 128},
 			{PC: 129},
 			{PC: 130},
-			{PC: 131},
 			{PC: 132},
 			{PC: 134},
 			{PC: 136},
-			{PC: 138},
+			{PC: 137},
 			{PC: 139},
-			{PC: 141},
+			{PC: 140},
+			{PC: 142},
 			{PC: 143},
-			{PC: 145},
+			{PC: 144},
 			{PC: 146},
-			{PC: 72},
-			{PC: 73},
+			{PC: 148},
+			{PC: 150},
+			{PC: 151},
+			{PC: 153},
+			{PC: 155},
+			{PC: 157},
+			{PC: 158},
+			{PC: 159},
+			{PC: 161},
+			{PC: 164},
+			{PC: 165},
+			{PC: 166},
+			{PC: 167},
+			{PC: 168},
+			{PC: 170},
+			{PC: 172},
+			{PC: 174},
+			{PC: 175},
+			{PC: 177},
+			{PC: 179},
+			{PC: 181},
+			{PC: 182},
+			{PC: 79},
+			{PC: 80},
+		}
+
+		optInTrace := []simulation.OpcodeTraceUnit{
+			{PC: 1},
+			{PC: 6},
+			{PC: 8},
+			{PC: 9},
+			{PC: 10},
+			{PC: 13},
+			{PC: 15},
+			{PC: 16},
+			{PC: 17},
+			{PC: 185},
+			{PC: 186},
 		}
 
 		finalDepthTrace := []simulation.OpcodeTraceUnit{
@@ -1816,43 +1876,49 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{PC: 15},
 			{PC: 16},
 			{PC: 17},
-			{PC: 21},
+			{PC: 20},
+			{PC: 22},
 			{PC: 23},
-			{PC: 25},
-			{PC: 27},
-			{PC: 29},
-			{PC: 31},
-			{PC: 33},
-			{PC: 35},
-			{PC: 37},
-			{PC: 39},
-			{PC: 41},
-			{PC: 43},
-			{PC: 45},
-			{PC: 47},
+			{PC: 24},
+			{PC: 28},
+			{PC: 30},
+			{PC: 32},
+			{PC: 34},
+			{PC: 36},
+			{PC: 38},
+			{PC: 40},
+			{PC: 42},
+			{PC: 44},
+			{PC: 46},
 			{PC: 48},
 			{PC: 50},
-			{PC: 51},
-			{PC: 53},
+			{PC: 52},
 			{PC: 54},
-			{PC: 56},
-			{PC: 59},
+			{PC: 55},
+			{PC: 57},
+			{PC: 58},
 			{PC: 60},
 			{PC: 61},
-			{PC: 62},
 			{PC: 63},
 			{PC: 66},
 			{PC: 67},
 			{PC: 68},
 			{PC: 69},
-			{PC: 72},
+			{PC: 70},
 			{PC: 73},
+			{PC: 74},
+			{PC: 75},
+			{PC: 76},
+			{PC: 79},
+			{PC: 80},
 		}
 
 		stepToInnerMap := []simulation.TraceStepInnerIndexPair{
-			{TraceStep: 47, InnerIndex: 0},
-			{TraceStep: 78, InnerIndex: 1},
-			{TraceStep: 78, InnerIndex: 2},
+			{TraceStep: 51, InnerIndex: 0},
+			{TraceStep: 100, InnerIndex: 1},
+			{TraceStep: 100, InnerIndex: 2},
+			{TraceStep: 100, InnerIndex: 3},
+			{TraceStep: 100, InnerIndex: 4},
 		}
 
 		nodeConfig := config.GetDefaultLocal()
@@ -1895,14 +1961,18 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 													ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 3},
 												},
 												{},
+												{},
+												{},
 												{
 													ApplyData: transactions.ApplyData{
 														EvalDelta: transactions.EvalDelta{
 															Logs: []string{string(uint64ItoB(1 << (MaxDepth - 1)))},
 															InnerTxns: []transactions.SignedTxnWithAD{
 																{
-																	ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 6},
+																	ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 8},
 																},
+																{},
+																{},
 																{},
 																{
 																	ApplyData: transactions.ApplyData{
@@ -1919,7 +1989,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 										},
 									},
 								},
-								AppBudgetConsumed: 306,
+								AppBudgetConsumed: 378,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: simulation.ProgramTrace{
 										Trace:          recursiveLongOpcodeTrace,
@@ -1931,6 +2001,12 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 										},
 										{},
 										{
+											ApprovalProgramTrace: simulation.ProgramTrace{Trace: optInTrace},
+										},
+										{
+											ClearStateProgramTrace: simulation.ProgramTrace{Trace: clearStateOpcodeTrace},
+										},
+										{
 											ApprovalProgramTrace: simulation.ProgramTrace{
 												Trace:          recursiveLongOpcodeTrace,
 												StepToInnerMap: stepToInnerMap,
@@ -1941,6 +2017,12 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 												},
 												{},
 												{
+													ApprovalProgramTrace: simulation.ProgramTrace{Trace: optInTrace},
+												},
+												{
+													ClearStateProgramTrace: simulation.ProgramTrace{Trace: clearStateOpcodeTrace},
+												},
+												{
 													ApprovalProgramTrace: simulation.ProgramTrace{Trace: finalDepthTrace},
 												},
 											},
@@ -1950,7 +2032,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 							},
 						},
 						AppBudgetAdded:    4200,
-						AppBudgetConsumed: 313,
+						AppBudgetConsumed: 385,
 					},
 				},
 				IncludePC: true,
