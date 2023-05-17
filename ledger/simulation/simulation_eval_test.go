@@ -979,7 +979,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 					{signedCreateTxn, signedExpensiveTxn},
 				},
 				ExtraOpcodeBudget: extraOpcodeBudget,
-				ExecTraceConfig:   simulation.IncludePC,
+				IncludePC:         true,
 			},
 			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
@@ -1010,8 +1010,8 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 						AppBudgetConsumed: 1408,
 					},
 				},
-				EvalOverrides:   simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
-				ExecTraceConfig: simulation.IncludePC,
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
+				IncludePC:     true,
 			},
 		}
 	})
@@ -1863,7 +1863,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedCreateTxn, signedPaymentTxn, signedCallsMaxDepth},
 				},
-				ExecTraceConfig: simulation.IncludePC,
+				IncludePC: true,
 			},
 			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
@@ -1953,7 +1953,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 						AppBudgetConsumed: 313,
 					},
 				},
-				ExecTraceConfig: simulation.IncludePC,
+				IncludePC: true,
 			},
 		}
 	})
@@ -2001,13 +2001,13 @@ byte "hello"; log; int 1`,
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedPayTxn, signedAppCallTxn},
 				},
-				ExecTraceConfig: simulation.IncludePC,
+				IncludePC: true,
 			},
 			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
-				Version:         simulation.ResultLatestVersion,
-				LastRound:       env.TxnInfo.LatestRound(),
-				ExecTraceConfig: simulation.IncludePC,
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				IncludePC: true,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{

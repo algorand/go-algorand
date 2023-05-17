@@ -106,12 +106,31 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
-	Version       uint64
-	LastRound     basics.Round
-	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
-	EvalOverrides ResultEvalOverrides
-	Block         *ledgercore.ValidatedBlock
-	ExecTraceConfig
+	Version        uint64
+	LastRound      basics.Round
+	TxnGroups      []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
+	EvalOverrides  ResultEvalOverrides
+	Block          *ledgercore.ValidatedBlock
+	IncludePC      bool
+	IncludeStack   bool
+	IncludeScratch bool
+}
+
+// ReturnTrace reads from Result object and decides if simulation returns PC.
+// It only reads IncludePC for any option combination must contain IncludePC field, or it won't make sense.
+// The other invalid options would be eliminated in validateSimulateRequest early.
+func (r Result) ReturnTrace() bool { return r.IncludePC }
+
+// validateSimulateRequestTraceOptions checks the validity of trace related options are well-formed in Request.
+func validateSimulateRequestTraceOptions(request Request) error {
+	if (request.IncludeStack || request.IncludeScratch) && !request.IncludePC {
+		return InvalidRequestError{
+			SimulatorError{
+				err: fmt.Errorf("the simulate request is not well formed: request.ExecTraceConfig is not NoExecTrace, but IncludePC is false"),
+			},
+		}
+	}
+	return nil
 }
 
 // validateSimulateRequest first checks relation between request and nodeConfig:
@@ -119,21 +138,17 @@ type Result struct {
 // - error on asking for exec trace
 // - (TODO) error on asking for unlimited resource access
 // then it checks the validity of request itself:
-// - if ExecTraceConfig is not NoExecTrace, but it does not contain IncludePC bit, then the method error
+// - validateSimulateRequestTraceOptions checks the validity of trace related options are well-formed in Request.
 func validateSimulateRequest(request Request, nodeConfig config.Local) error {
-	if !nodeConfig.EnableDeveloperAPI && request.ExecTraceConfig != NoExecTrace {
+	if !nodeConfig.EnableDeveloperAPI && request.IncludePC {
 		return InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace"),
 			},
 		}
 	}
-	if request.ExecTraceConfig != NoExecTrace && !request.ExecTraceConfig.IncludePC() {
-		return InvalidRequestError{
-			SimulatorError{
-				err: fmt.Errorf("the simulate request is not well formed: request.ExecTraceConfig is not NoExecTrace, but IncludePC is false"),
-			},
-		}
+	if err := validateSimulateRequestTraceOptions(request); err != nil {
+		return err
 	}
 	return nil
 }
@@ -159,11 +174,13 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, no
 	}
 
 	return Result{
-		Version:         version,
-		LastRound:       lastRound,
-		TxnGroups:       groups,
-		EvalOverrides:   resultEvalConstants,
-		ExecTraceConfig: request.ExecTraceConfig,
+		Version:        version,
+		LastRound:      lastRound,
+		TxnGroups:      groups,
+		EvalOverrides:  resultEvalConstants,
+		IncludePC:      request.IncludePC,
+		IncludeStack:   request.IncludeStack,
+		IncludeScratch: request.IncludeScratch,
 	}, nil
 }
 

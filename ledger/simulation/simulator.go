@@ -38,36 +38,15 @@ type simulatorLedger struct {
 	start basics.Round
 }
 
-// ExecTraceConfig is a type-alias to uint64, which is an enumeration over configs for returning trace in evaluation
-type ExecTraceConfig uint64
-
-const (
-	// NoExecTrace stands for no exec trace returning in simulation
-	NoExecTrace ExecTraceConfig = 0
-	// IncludePC stands for simulation will return only application's PC traversal
-	IncludePC = 1 << (iota - 1)
-	// IncludeStack stands for simulation will return app's PC traversal and corresponding stack changes
-	IncludeStack
-	// IncludeScratch stands for simulation will return app's PC traversal, corresponding stack changes and scratch slot changes
-	IncludeScratch
-)
-
-// IncludePC tells if an enumeration ExecTraceConfig has IncludePC bit
-func (c ExecTraceConfig) IncludePC() bool { return c&IncludePC == IncludePC }
-
-// IncludeStack tells if an enumeration ExecTraceConfig has IncludeStack bit
-func (c ExecTraceConfig) IncludeStack() bool { return c&IncludeStack == IncludeStack }
-
-// IncludeScratch tells if an enumeration ExecTraceConfig has IncludeScratch bit
-func (c ExecTraceConfig) IncludeScratch() bool { return c&IncludeScratch == IncludeScratch }
-
 // Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
 type Request struct {
 	TxnGroups            [][]transactions.SignedTxn
 	AllowEmptySignatures bool
 	AllowMoreLogging     bool
 	ExtraOpcodeBudget    uint64
-	ExecTraceConfig
+	IncludePC            bool
+	IncludeStack         bool
+	IncludeScratch       bool
 }
 
 // Latest is part of the LedgerForSimulator interface.

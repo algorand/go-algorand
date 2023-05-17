@@ -174,7 +174,7 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 }
 
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
-	if tracer.result.ExecTraceConfig != NoExecTrace {
+	if tracer.result.ReturnTrace() {
 		var txnTraceStackElem *TransactionTrace
 
 		// The last question is, where should this transaction trace attach to:
@@ -229,7 +229,7 @@ func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad tran
 	tracer.saveApplyData(ad)
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
-	if tracer.result.ExecTraceConfig != NoExecTrace {
+	if tracer.result.ReturnTrace() {
 		lastOne := tracer.execTraceStack[len(tracer.execTraceStack)-1]
 		lastOne.ProgramTraceRef = nil
 		tracer.execTraceStack = tracer.execTraceStack[:len(tracer.execTraceStack)-1]
@@ -256,7 +256,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 	// logic sig opcode part
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig ops
-		if tracer.result.ExecTraceConfig == NoExecTrace {
+		if !tracer.result.ReturnTrace() {
 			return
 		}
 		// BeforeOpcode runs for logic sig happens before txn group exec, including app calls
@@ -275,7 +275,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		appIDToSave = cx.AppID()
 	}
 	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
-	if tracer.result.ExecTraceConfig == NoExecTrace {
+	if !tracer.result.ReturnTrace() {
 		return
 	}
 	currentTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
@@ -294,7 +294,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 	// Before Program, activated for logic sig, happens before txn group execution
 	// we should create trace object for this txn result
 	if cx.RunMode() != logic.ModeApp {
-		if tracer.result.ExecTraceConfig != NoExecTrace {
+		if tracer.result.ReturnTrace() {
 			indexIntoTxnGroup := cx.GroupIndex()
 			tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace = &TransactionTrace{}
 			traceRef := tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace
@@ -307,7 +307,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	if cx.RunMode() != logic.ModeApp {
 		// Report cost for LogicSig program and exit
 		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigBudgetConsumed = uint64(cx.Cost())
-		if tracer.result.ExecTraceConfig != NoExecTrace {
+		if tracer.result.ReturnTrace() {
 			tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].Trace.ProgramTraceRef = nil
 		}
 		return
