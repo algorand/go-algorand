@@ -305,11 +305,12 @@ func (r *accountsReader) ListCreatables(maxIdx basics.CreatableIndex, maxResults
 		}
 
 		// read the key
-		key := string(iter.Key())
+		// schema: <prefix>-<cidx>
+		key := iter.Key()
 
-		// extract cidx, its the last section after the "-"
-		splitKey := strings.Split(key, "-")
-		cidx = binary.BigEndian.Uint64([]byte(splitKey[len(splitKey)-1]))
+		// extract cidx
+		cidxOffset := len(kvPrefixCreatorIndex) + 1
+		cidx = binary.BigEndian.Uint64(key[cidxOffset : cidxOffset+8])
 
 		// get value for current item in the iterator
 		value, err = iter.Value()
