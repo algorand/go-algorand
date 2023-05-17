@@ -11,7 +11,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -962,7 +961,9 @@ func BlockMaxSize() (s int) {
 	s += 11
 	// Calculating size of slice: z.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
-	s += 5 + transactions.PaysetMaxSize()
+	s += 5
+	// Using totalallocbound for: z.Payset
+	s += config.MaxTxnBytesPerBlock
 	return
 }
 

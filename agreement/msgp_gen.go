@@ -12,7 +12,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -4903,7 +4902,10 @@ func ProposalMaxSize() (s int) {
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
-	s += 5 + transactions.PaysetMaxSize() + 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()
+	s += 5
+	// Using totalallocbound for: z.unauthenticatedProposal.Block.Payset
+	s += config.MaxTxnBytesPerBlock
+	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()
 	return
 }
 
@@ -9134,7 +9136,10 @@ func TransmittedPayloadMaxSize() (s int) {
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
-	s += 5 + transactions.PaysetMaxSize() + 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize() + 3 + UnauthenticatedVoteMaxSize()
+	s += 5
+	// Using totalallocbound for: z.unauthenticatedProposal.Block.Payset
+	s += config.MaxTxnBytesPerBlock
+	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize() + 3 + UnauthenticatedVoteMaxSize()
 	return
 }
 
@@ -10744,7 +10749,10 @@ func UnauthenticatedProposalMaxSize() (s int) {
 	s += 11
 	// Calculating size of slice: z.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
-	s += 5 + transactions.PaysetMaxSize() + 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()
+	s += 5
+	// Using totalallocbound for: z.Block.Payset
+	s += config.MaxTxnBytesPerBlock
+	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()
 	return
 }
 

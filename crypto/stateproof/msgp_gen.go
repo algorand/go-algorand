@@ -1460,7 +1460,13 @@ func (z *StateProof) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func StateProofMaxSize() (s int) {
-	s = 1 + 2 + crypto.GenericDigestMaxSize() + 2 + msgp.Uint64Size + 2 + merklearray.ProofMaxSize() + 2 + merklearray.ProofMaxSize() + 2 + msgp.ByteSize + 2
+	s = 1 + 2 + crypto.GenericDigestMaxSize() + 2 + msgp.Uint64Size + 2
+	// Using totalallocbound for: z.SigProofs
+	s += SigPartProofMaxSize
+	s += 2
+	// Using totalallocbound for: z.PartProofs
+	s += SigPartProofMaxSize
+	s += 2 + msgp.ByteSize + 2
 	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.Reveals
 	s += MaxReveals * (msgp.Uint64Size)

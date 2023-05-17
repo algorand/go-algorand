@@ -43,6 +43,9 @@ const (
 	VoteBundleTag Tag = "VB"
 )
 
+// The following constants are overestimates in some cases but are reasonable upper bounds
+// for the purposes of limiting the number of bytes read from the network.
+
 //AgreementVoteTagMaxSize is the maximum size of an AgreementVoteTag message
 const AgreementVoteTagMaxSize = 1228
 
@@ -65,21 +68,26 @@ const PingTagMaxSize = 8
 const PingReplyTagMaxSize = 8
 
 // ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
-const ProposalPayloadTagMaxSize = 24964890784104943 // Wrong because of oversized stateproof
+// This value is dominated by the MaxTxnBytesPerBlock
+const ProposalPayloadTagMaxSize = 5247818
 
 // StateProofSigTagMaxSize is the maximum size of a StateProofSigTag message
-const StateProofSigTagMaxSize = 2266266 // Wrong because of oversized stateproof
+const StateProofSigTagMaxSize = 6378
 
-// TopicMsgRespTagMaxSize is the maximum size of a TopicMsgRespTag message	:w
+// TopicMsgRespTagMaxSize is the maximum size of a TopicMsgRespTag message
+// This is a response to a topic message request (either UE or MI) and the largest possible
+// response is the largest possible block.
 const TopicMsgRespTagMaxSize = 6 * 1024 * 1024 // TODO: Actually calculate the size, for now set to maxAllocation
 
-// TxnTagMaxSize is the maximum size of a TxnTag message
-const TxnTagMaxSize = 23286393616 // Wrong because of oversized stateproof
+// TxnTagMaxSize is the maximum size of a TxnTag message. This is equal to SignedTxnMaxSize()
+// which is size of just a single message containing maximum Stateproof. Since Stateproof
+// transactions can't be batched we don't need to multiply by MaxTxnBatchSize.
+const TxnTagMaxSize = 4619953
 
 // UniEnsBlockReqTagMaxSize is the maximum size of a UniEnsBlockReqTag message
 const UniEnsBlockReqTagMaxSize = 67
 
-// VoteBundleTagMaxSize is the maximum size of a VoteBundleTag message:w
+// VoteBundleTagMaxSize is the maximum size of a VoteBundleTag message
 const VoteBundleTagMaxSize = 23754054
 
 // MaxMessageSize returns the maximum size of a message for a given tag

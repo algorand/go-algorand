@@ -34,7 +34,6 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
-//        |-----> SingleLeafProofMaxSize()
 //
 // Tree
 //   |-----> (*) MarshalMsg
@@ -543,15 +542,6 @@ func (z *SingleLeafProof) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *SingleLeafProof) MsgIsZero() bool {
 	return (len((*z).Proof.Path) == 0) && ((*z).Proof.HashFactory.MsgIsZero()) && ((*z).Proof.TreeDepth == 0)
-}
-
-// MaxSize returns a maximum valid message size for this message type
-func SingleLeafProofMaxSize() (s int) {
-	s = 1 + 4
-	// Calculating size of slice: z.Proof.Path
-	s += msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree / 2) * (crypto.GenericDigestMaxSize()))
-	s += 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler

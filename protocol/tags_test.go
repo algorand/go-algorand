@@ -100,6 +100,7 @@ func TestTagList(t *testing.T) {
 func TestMaxSizesDefined(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
+	// Verify that we have a nonzero max message size for each tag in the TagList
 	for _, tag := range TagList {
 		require.Greater(t, tag.MaxMessageSize(), uint64(0))
 	}

@@ -606,6 +606,18 @@ var MaxAppBytesValueLen int
 // key/value store
 var MaxAppBytesKeyLen int
 
+// StateProofTopVoters is a bound on how many online accounts get to
+// participate in forming the state proof, by including the
+// top StateProofTopVoters accounts (by normalized balance) into the
+// vector commitment.
+var StateProofTopVoters int
+
+// MaxTxnBytesPerBlock determines the maximum number of bytes
+// that transactions can take up in a block.  Specifically,
+// the sum of the lengths of encodings of each transaction
+// in a block must not exceed MaxTxnBytesPerBlock.
+var MaxTxnBytesPerBlock int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -652,6 +664,8 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAssetURLBytes, &MaxAssetURLBytes)
 	checkSetMax(p.MaxAppBytesValueLen, &MaxAppBytesValueLen)
 	checkSetMax(p.MaxAppKeyLen, &MaxAppBytesKeyLen)
+	checkSetMax(int(p.StateProofTopVoters), &StateProofTopVoters)
+	checkSetMax(p.MaxTxnBytesPerBlock, &MaxTxnBytesPerBlock)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.

@@ -564,11 +564,10 @@ func TestMaxSizesCorrect(t *testing.T) {
 	require.Equal(t, ppSize, protocol.ProposalPayloadTag.MaxMessageSize())
 	spSize := uint64(stateproof.SigFromAddrMaxSize())
 	require.Equal(t, spSize, protocol.StateProofSigTag.MaxMessageSize())
-	txSize := uint64(config.MaxTxGroupSize * transactions.SignedTxnMaxSize())
+	txSize := uint64(transactions.SignedTxnMaxSize())
 	require.Equal(t, txSize, protocol.TxnTag.MaxMessageSize())
 	msSize := uint64(crypto.DigestMaxSize())
 	require.Equal(t, msSize, protocol.MsgDigestSkipTag.MaxMessageSize())
 	vbSize := uint64(agreement.UnauthenticatedBundleMaxSize())
 	require.Equal(t, vbSize, protocol.VoteBundleTag.MaxMessageSize())
-
 }

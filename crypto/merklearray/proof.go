@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/msgp/msgp"
 )
 
 // Proof is used to convince a verifier about membership of leaves: h0,h1...hn
@@ -41,10 +42,27 @@ type Proof struct {
 // SingleLeafProof is used to convince a verifier about membership of a specific
 // leaf h at index i on a tree. The verifier has a trusted value of the tree
 // root hash. it corresponds to merkle verification path.
+//msgp:maxsize ignore SingleLeafProof
 type SingleLeafProof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Proof
+}
+
+// ProofMaxSizeByElements returns the maximum msgp encoded size of merklearray.Proof structs containing n signatures
+// This is necessary because the allocbounds on the proof are actual theoretical bounds but for calculating maximum
+// proof size for individual message types we have smaller valid bounds.
+func ProofMaxSizeByElements(n int) (s int) {
+	s = 1 + 4
+	// Calculating size of slice: z.Path
+	s += msgp.ArrayHeaderSize + n*(crypto.GenericDigestMaxSize())
+	s += 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
+	return
+}
+
+// SingleLeafProofMaxSize returns the maximum msgp encoded size of proof verifying a single leaf
+func SingleLeafProofMaxSize() int {
+	return ProofMaxSizeByElements(MaxEncodedTreeDepth)
 }
 
 // GetFixedLengthHashableRepresentation serializes the proof into a sequence of bytes.
