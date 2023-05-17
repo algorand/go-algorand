@@ -113,7 +113,7 @@ func (lf *ledgerFetcher) headLedger(ctx context.Context, peer network.Peer, roun
 	case http.StatusNotFound: // server could not find a block with that round numbers.
 		return errNoLedgerForRound
 	default:
-		return fmt.Errorf("getPeerLedger error response status code %d", response.StatusCode)
+		return fmt.Errorf("headLedger error response status code %d", response.StatusCode)
 	}
 }
 
@@ -126,26 +126,9 @@ func (lf *ledgerFetcher) downloadLedger(ctx context.Context, peer network.Peer, 
 }
 
 func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round) error {
-	parsedURL, err := network.ParseHostOrURL(peer.GetAddress())
+	response, err := lf.requestLedger(ctx, peer, round, http.MethodGet)
 	if err != nil {
-		return err
-	}
-
-	parsedURL.Path = lf.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
-	ledgerURL := parsedURL.String()
-	lf.log.Debugf("ledger GET %#v peer %#v %T", ledgerURL, peer, peer)
-	request, err := http.NewRequest(http.MethodGet, ledgerURL, nil)
-	if err != nil {
-		return err
-	}
-
-	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, lf.config.MaxCatchpointDownloadDuration)
-	defer timeoutContextCancel()
-	request = request.WithContext(timeoutContext)
-	network.SetUserAgentHeader(request.Header)
-	response, err := peer.GetHTTPClient().Do(request)
-	if err != nil {
-		lf.log.Debugf("getPeerLedger GET %v : %s", ledgerURL, err)
+		lf.log.Debugf("getPeerLedger GET : %s", err)
 		return err
 	}
 	defer response.Body.Close()
