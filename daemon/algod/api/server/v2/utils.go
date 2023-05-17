@@ -360,6 +360,32 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
+func convertProgramTrace(internalProgramTrace simulation.ProgramTrace) *model.SimulateProgramTrace {
+	var modelProgramTrace model.SimulateProgramTrace
+	if len(internalProgramTrace.Trace) == 0 {
+		return nil
+	}
+	modelProgramTrace.Trace = make([]model.SimulationOpcodeTraceUnit, len(internalProgramTrace.Trace))
+	for i := range internalProgramTrace.Trace {
+		modelProgramTrace.Trace[i] = model.SimulationOpcodeTraceUnit{
+			PC: internalProgramTrace.Trace[i].PC,
+		}
+	}
+
+	if len(internalProgramTrace.StepToInnerMap) > 0 {
+		stepToInnerMap := make([]model.SimulationPcToInnerIndex, len(internalProgramTrace.StepToInnerMap))
+		for i := range internalProgramTrace.StepToInnerMap {
+			stepToInnerMap[i] = model.SimulationPcToInnerIndex{
+				PC:         internalProgramTrace.StepToInnerMap[i].TraceStep,
+				InnerIndex: internalProgramTrace.StepToInnerMap[i].InnerIndex,
+			}
+		}
+		modelProgramTrace.StepToInnerMap = &stepToInnerMap
+	}
+
+	return &modelProgramTrace
+}
+
 func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTransactionExecTrace {
 	if txnTrace == nil {
 		return nil
@@ -367,45 +393,9 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 
 	var execTraceModel model.SimulationTransactionExecTrace
 
-	if len(txnTrace.LogicSigTrace.Trace) > 0 {
-		execTraceModel.LogicSigTrace = &model.SimulateProgramTrace{}
-
-		execTraceModel.LogicSigTrace.Trace = make([]model.SimulationOpcodeTraceUnit, len(txnTrace.LogicSigTrace.Trace))
-		for i := range txnTrace.LogicSigTrace.Trace {
-			execTraceModel.LogicSigTrace.Trace[i] = model.SimulationOpcodeTraceUnit{
-				PC: txnTrace.LogicSigTrace.Trace[i].PC,
-			}
-		}
-	}
-
-	if len(txnTrace.ClearStateProgramTrace.Trace) > 0 {
-		execTraceModel.ClearStateProgramTrace = &model.SimulateProgramTrace{}
-
-		execTraceModel.ClearStateProgramTrace.Trace = make([]model.SimulationOpcodeTraceUnit, len(txnTrace.ClearStateProgramTrace.Trace))
-		for i := range txnTrace.ClearStateProgramTrace.Trace {
-			execTraceModel.ClearStateProgramTrace.Trace[i] = model.SimulationOpcodeTraceUnit{
-				PC: txnTrace.ClearStateProgramTrace.Trace[i].PC,
-			}
-		}
-	}
-
-	if len(txnTrace.ApprovalProgramTrace.Trace) > 0 {
-		execTraceModel.ApprovalProgramTrace = &model.SimulateProgramTrace{}
-		execTraceModel.ApprovalProgramTrace.Trace = make([]model.SimulationOpcodeTraceUnit, len(txnTrace.ApprovalProgramTrace.Trace))
-		for i := range txnTrace.ApprovalProgramTrace.Trace {
-			execTraceModel.ApprovalProgramTrace.Trace[i] = model.SimulationOpcodeTraceUnit{
-				PC: txnTrace.ApprovalProgramTrace.Trace[i].PC,
-			}
-		}
-		stepToInnerMap := make([]model.SimulationPcToInnerIndex, len(txnTrace.ApprovalProgramTrace.StepToInnerMap))
-		for i := range txnTrace.ApprovalProgramTrace.StepToInnerMap {
-			stepToInnerMap[i] = model.SimulationPcToInnerIndex{
-				PC:         txnTrace.ApprovalProgramTrace.StepToInnerMap[i].TraceStep,
-				InnerIndex: txnTrace.ApprovalProgramTrace.StepToInnerMap[i].InnerIndex,
-			}
-		}
-		execTraceModel.ApprovalProgramTrace.StepToInnerMap = &stepToInnerMap
-	}
+	execTraceModel.LogicSigTrace = convertProgramTrace(txnTrace.LogicSigTrace)
+	execTraceModel.ClearStateProgramTrace = convertProgramTrace(txnTrace.ClearStateProgramTrace)
+	execTraceModel.ApprovalProgramTrace = convertProgramTrace(txnTrace.ApprovalProgramTrace)
 
 	if len(txnTrace.InnerTraces) > 0 {
 		innerTrace := make([]model.SimulationTransactionExecTrace, len(txnTrace.InnerTraces))
