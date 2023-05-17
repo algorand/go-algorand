@@ -182,7 +182,7 @@ const ConsensusV33 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/830a4e673148498cc7230a0d1ba1ed0a5471acc6",
 )
 
-// ConsensusV34 enables the TEAL v7 opcodes, stateproofs, shorter lambda.
+// ConsensusV34 enables the TEAL v7 opcodes, stateproofs, shorter lambda to 1.7s.
 const ConsensusV34 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/2dd5435993f6f6d65691140f592ebca5ef19ffbd",
 )
@@ -192,9 +192,20 @@ const ConsensusV35 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/433d8e9a7274b6fca703d91213e05c7e6a589e69",
 )
 
-// ConsensusV36 adds box storage
+// ConsensusV36 adds box storage in TEAL v8
 const ConsensusV36 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/44fa607d6051730f5264526bf3c108d51f0eadb6",
+)
+
+// ConsensusV37 enables AVM resources sharing and pre-check ECDSA curve
+const ConsensusV37 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/61879ef45bb8f38338ae8f84b4411e94b3aa8796",
+)
+
+// ConsensusV38 enables state proof verification using a special tracker, TEAL v9 features and
+// shortens the lambda to 1.5s.
+const ConsensusV38 = ConsensusVersion(
+	"TBD",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
@@ -226,7 +237,7 @@ const ConsensusVAlpha5 = ConsensusVersion("alpha5")
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV36
+const ConsensusCurrentVersion = ConsensusV38
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
