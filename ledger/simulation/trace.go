@@ -126,7 +126,7 @@ func validateSimulateRequestTraceOptions(request Request) error {
 	if (request.IncludeStack || request.IncludeScratch) && !request.IncludePC {
 		return InvalidRequestError{
 			SimulatorError{
-				err: fmt.Errorf("the simulate request is not well formed: request.ExecTraceConfig is not NoExecTrace, but IncludePC is false"),
+				err: fmt.Errorf("the simulate request is not well formed: request has exec-trace-related option turned on, but IncludePC is false"),
 			},
 		}
 	}
