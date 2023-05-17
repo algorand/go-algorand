@@ -235,9 +235,9 @@ func (w *accountsWriter) AccountsPutOnlineRoundParams(onlineRoundParamsData []le
 	//
 
 	// insert the round params
-	for i, params := range onlineRoundParamsData {
+	for i := range onlineRoundParamsData {
 		rnd := basics.Round(int(startRound) + i)
-		raw := protocol.Encode(&params)
+		raw := protocol.Encode(&onlineRoundParamsData[i])
 		err := w.kvw.Set(onlineAccountRoundParamsKey(rnd), raw)
 		if err != nil {
 			return err
