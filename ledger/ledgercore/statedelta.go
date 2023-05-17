@@ -219,12 +219,94 @@ func (sd *StateDelta) PopulateStateDelta(hdr *bookkeeping.BlockHeader, prevTimes
 	sd.PrevTimestamp = prevTimestamp
 }
 
+// Hydrate reverses the effects of Dehydrate, restoring internal data.
+func (sd *StateDelta) Hydrate() {
+	sd.Accts.Hydrate()
+}
+
+// Dehydrate normalized the fields of this StateDelta, and clears any redundant internal caching.
+// This is useful for comparing StateDelta objects for equality.
+//
+// NOTE: initialHint is lost in dehydration. All other fields can be restored by calling Hydrate()
+func (sd *StateDelta) Dehydrate() {
+	sd.Accts.Dehydrate()
+	sd.initialHint = 0
+	if sd.KvMods == nil {
+		sd.KvMods = make(map[string]KvValueDelta)
+	}
+	if sd.Txids == nil {
+		sd.Txids = make(map[transactions.Txid]IncludedTransactions)
+	}
+	if sd.Txleases == nil {
+		sd.Txleases = make(map[Txlease]basics.Round)
+	}
+	if sd.Creatables == nil {
+		sd.Creatables = make(map[basics.CreatableIndex]ModifiedCreatable)
+	}
+}
+
 // MakeAccountDeltas creates account delta
 // if adding new fields make sure to add them to the .reset() and .isEmpty() methods
 func MakeAccountDeltas(hint int) AccountDeltas {
 	return AccountDeltas{
 		Accts:      make([]BalanceRecord, 0, hint*2),
 		acctsCache: make(map[basics.Address]int, hint*2),
+	}
+}
+
+// Hydrate reverses the effects of Dehydrate, restoring internal data.
+func (ad *AccountDeltas) Hydrate() {
+	if ad.acctsCache == nil {
+		ad.acctsCache = make(map[basics.Address]int, len(ad.Accts))
+	}
+	for idx, acct := range ad.Accts {
+		ad.acctsCache[acct.Addr] = idx
+	}
+
+	if ad.appResourcesCache == nil {
+		ad.appResourcesCache = make(map[AccountApp]int, len(ad.AppResources))
+	}
+	for idx, app := range ad.AppResources {
+		ad.appResourcesCache[AccountApp{app.Addr, app.Aidx}] = idx
+	}
+
+	if ad.assetResourcesCache == nil {
+		ad.assetResourcesCache = make(map[AccountAsset]int, len(ad.AssetResources))
+	}
+	for idx, asset := range ad.AssetResources {
+		ad.assetResourcesCache[AccountAsset{asset.Addr, asset.Aidx}] = idx
+	}
+}
+
+// Dehydrate normalized the fields of this AccountDeltas, and clears any redundant internal caching.
+// This is useful for comparing AccountDeltas objects for equality.
+func (ad *AccountDeltas) Dehydrate() {
+	if ad.Accts == nil {
+		ad.Accts = []BalanceRecord{}
+	}
+	if ad.AppResources == nil {
+		ad.AppResources = []AppResourceRecord{}
+	}
+	if ad.AssetResources == nil {
+		ad.AssetResources = []AssetResourceRecord{}
+	}
+	if ad.acctsCache == nil {
+		ad.acctsCache = make(map[basics.Address]int)
+	}
+	for key := range ad.acctsCache {
+		delete(ad.acctsCache, key)
+	}
+	if ad.appResourcesCache == nil {
+		ad.appResourcesCache = make(map[AccountApp]int)
+	}
+	for key := range ad.appResourcesCache {
+		delete(ad.appResourcesCache, key)
+	}
+	if ad.assetResourcesCache == nil {
+		ad.assetResourcesCache = make(map[AccountAsset]int)
+	}
+	for key := range ad.assetResourcesCache {
+		delete(ad.assetResourcesCache, key)
 	}
 }
 
@@ -360,21 +442,17 @@ func (ad AccountDeltas) ModifiedAccounts() []basics.Address {
 
 // MergeAccounts applies other accounts into this StateDelta accounts
 func (ad *AccountDeltas) MergeAccounts(other AccountDeltas) {
-	for new := range other.Accts {
-		addr := other.Accts[new].Addr
-		acct := other.Accts[new].AccountData
-		ad.Upsert(addr, acct)
+	for i := range other.Accts {
+		balanceRecord := &other.Accts[i]
+		ad.Upsert(balanceRecord.Addr, balanceRecord.AccountData)
 	}
-
-	for aapp, idx := range other.appResourcesCache {
-		params := other.AppResources[idx].Params
-		state := other.AppResources[idx].State
-		ad.UpsertAppResource(aapp.Address, aapp.App, params, state)
+	for i := range other.AppResources {
+		appResource := &other.AppResources[i]
+		ad.UpsertAppResource(appResource.Addr, appResource.Aidx, appResource.Params, appResource.State)
 	}
-	for aapp, idx := range other.assetResourcesCache {
-		params := other.AssetResources[idx].Params
-		holding := other.AssetResources[idx].Holding
-		ad.UpsertAssetResource(aapp.Address, aapp.Asset, params, holding)
+	for i := range other.AssetResources {
+		assetResource := &other.AssetResources[i]
+		ad.UpsertAssetResource(assetResource.Addr, assetResource.Aidx, assetResource.Params, assetResource.Holding)
 	}
 }
 
