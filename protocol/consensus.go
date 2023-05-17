@@ -205,7 +205,7 @@ const ConsensusV37 = ConsensusVersion(
 // ConsensusV38 enables state proof verification using a special tracker, TEAL v9 features and
 // shortens the lambda to 1.5s.
 const ConsensusV38 = ConsensusVersion(
-	"TBD",
+	"https://github.com/algorandfoundation/specs/tree/TBD",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
