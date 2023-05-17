@@ -106,7 +106,7 @@ fi
 # WE ALSO TEST OVERSPEND IN TRANSACTION GROUP #
 ###############################################
 
-${gcmd} clerk send -a 1000000000000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay1.tx"
+${gcmd} clerk send -a 1000000000000000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay1.tx"
 ${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay2.tx"
 
 cat "${TEMPDIR}/pay1.tx" "${TEMPDIR}/pay2.tx" | ${gcmd} clerk group -i - -o "${TEMPDIR}/grouped.tx"
