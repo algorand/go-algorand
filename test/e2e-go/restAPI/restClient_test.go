@@ -2011,45 +2011,45 @@ int 1
 return
 main_l5:
 itxn_begin
-int appl
-itxn_field TypeEnum
-int 0
-itxn_field Fee
-load 0
-itxn_field ApprovalProgram
-load 2
-itxn_field ClearStateProgram
+  int appl
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 0
+  itxn_field ApprovalProgram
+  load 2
+  itxn_field ClearStateProgram
 itxn_submit
 itxn_begin
-int pay
-itxn_field TypeEnum
-int 0
-itxn_field Fee
-load 4
-int 100000
--
-itxn_field Amount
-byte "appID"
-gitxn 0 CreatedApplicationID
-itob
-concat
-sha512_256
-itxn_field Receiver
+  int pay
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 4
+  int 100000
+  -
+  itxn_field Amount
+  byte "appID"
+  gitxn 0 CreatedApplicationID
+  itob
+  concat
+  sha512_256
+  itxn_field Receiver
 itxn_next
-int appl
-itxn_field TypeEnum
-txna ApplicationArgs 0
-btoi
-int 1
--
-itob
-itxn_field ApplicationArgs
-itxn CreatedApplicationID
-itxn_field ApplicationID
-int 0
-itxn_field Fee
-int DeleteApplication
-itxn_field OnCompletion
+  int appl
+  itxn_field TypeEnum
+  txna ApplicationArgs 0
+  btoi
+  int 1
+  -
+  itob
+  itxn_field ApplicationArgs
+  itxn CreatedApplicationID
+  itxn_field ApplicationID
+  int 0
+  itxn_field Fee
+  int DeleteApplication
+  itxn_field OnCompletion
 itxn_submit
 b main_l4
 main_l6:
