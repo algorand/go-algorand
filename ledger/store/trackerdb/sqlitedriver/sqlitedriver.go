@@ -67,7 +67,7 @@ func (s *trackerSQLStore) Batch(fn trackerdb.BatchFn) (err error) {
 
 func (s *trackerSQLStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
 	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		return fn(ctx, sqlBatchScope{tx, &sqlWriter{tx}})
+		return fn(ctx, &sqlBatchScope{tx, false, &sqlWriter{tx}})
 	})
 }
 
@@ -76,7 +76,7 @@ func (s *trackerSQLStore) BeginBatch(ctx context.Context) (trackerdb.Batch, erro
 	if err != nil {
 		return nil, err
 	}
-	return &sqlBatchScope{handle, &sqlWriter{handle}}, nil
+	return &sqlBatchScope{handle, false, &sqlWriter{handle}}, nil
 }
 
 func (s *trackerSQLStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
@@ -103,7 +103,7 @@ func (s *trackerSQLStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 
 func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
 	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		return fn(ctx, sqlTransactionScope{tx, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
+		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
 	})
 }
 
@@ -112,7 +112,7 @@ func (s *trackerSQLStore) BeginTransaction(ctx context.Context) (trackerdb.Trans
 	if err != nil {
 		return nil, err
 	}
-	return &sqlTransactionScope{handle, &sqlReader{handle}, &sqlWriter{handle}, &sqlCatchpoint{handle}}, nil
+	return &sqlTransactionScope{handle, false, &sqlReader{handle}, &sqlWriter{handle}, &sqlCatchpoint{handle}}, nil
 }
 
 func (s trackerSQLStore) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
@@ -272,20 +272,29 @@ func (c *sqlCatchpoint) MakeOrderedAccountsIter(accountCount int) trackerdb.Orde
 }
 
 type sqlBatchScope struct {
-	tx *sql.Tx
+	tx       *sql.Tx
+	commited bool
 	trackerdb.Writer
 }
 
-func (bs sqlBatchScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
+func (bs *sqlBatchScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
 	return db.ResetTransactionWarnDeadline(ctx, bs.tx, deadline)
 }
 
-func (bs sqlBatchScope) Close() error {
-	return bs.tx.Rollback()
+func (bs *sqlBatchScope) Close() error {
+	if !bs.commited {
+		return bs.tx.Rollback()
+	}
+	return nil
 }
 
-func (bs sqlBatchScope) Commit() error {
-	return bs.tx.Commit()
+func (bs *sqlBatchScope) Commit() error {
+	err := bs.tx.Commit()
+	if err != nil {
+		return err
+	}
+	bs.commited = true
+	return nil
 }
 
 type sqlSnapshotScope struct {
@@ -298,24 +307,33 @@ func (ss sqlSnapshotScope) Close() error {
 }
 
 type sqlTransactionScope struct {
-	tx *sql.Tx
+	tx       *sql.Tx
+	commited bool
 	trackerdb.Reader
 	trackerdb.Writer
 	trackerdb.Catchpoint
 }
 
-func (txs sqlTransactionScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
+func (txs *sqlTransactionScope) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	return RunMigrations(ctx, txs.tx, params, log, targetVersion)
 }
 
-func (txs sqlTransactionScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
+func (txs *sqlTransactionScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
 	return db.ResetTransactionWarnDeadline(ctx, txs.tx, deadline)
 }
 
-func (txs sqlTransactionScope) Close() error {
-	return txs.tx.Rollback()
+func (txs *sqlTransactionScope) Close() error {
+	if !txs.commited {
+		return txs.tx.Rollback()
+	}
+	return nil
 }
 
-func (txs sqlTransactionScope) Commit() error {
-	return txs.tx.Commit()
+func (txs *sqlTransactionScope) Commit() error {
+	err := txs.tx.Commit()
+	if err != nil {
+		return err
+	}
+	txs.commited = true
+	return nil
 }
