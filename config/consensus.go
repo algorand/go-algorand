@@ -488,6 +488,9 @@ type ConsensusParams struct {
 	// returning false, if pubkey is not on the curve.
 	EnablePrecheckECDSACurve bool
 
+	// EnableBareBudgetError specifies that I/O budget overruns should not be considered EvalError
+	EnableBareBudgetError bool
+
 	// StateProofUseTrackerVerification specifies whether the node will use data from state proof verification tracker
 	// in order to verify state proofs.
 	StateProofUseTrackerVerification bool
@@ -495,6 +498,15 @@ type ConsensusParams struct {
 	// EnableCatchpointsWithSPContexts specifies when to re-enable version 7 catchpoints.
 	// Version 7 includes state proof verification contexts
 	EnableCatchpointsWithSPContexts bool
+
+	// AppForbidLowResources enforces a rule that prevents apps from accessing
+	// asas and apps below 256, in an effort to decrease the ambiguity of
+	// opcodes that accept IDs or slot indexes. Simultaneously, the first ID
+	// allocated in new chains is raised to 1001.
+	AppForbidLowResources bool
+
+	// EnableBoxRefNameError specifies that box ref names should be validated early
+	EnableBoxRefNameError bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1262,6 +1274,9 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnablePrecheckECDSACurve = true
+	vFuture.AppForbidLowResources = true
+	vFuture.EnableBareBudgetError = true
+	vFuture.EnableBoxRefNameError = true
 
 	vFuture.StateProofUseTrackerVerification = true
 	vFuture.EnableCatchpointsWithSPContexts = true

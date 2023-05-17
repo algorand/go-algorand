@@ -1024,7 +1024,7 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 func (c *Client) RemoveParticipationKey(participationID string) error {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	return algod.RemoveParticipationKeyByID(participationID)
@@ -1269,14 +1269,24 @@ func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
 	return
 }
 
-// TransactionSimulation takes raw transaction or raw transaction group, and returns relevant simulation results.
-func (c *Client) TransactionSimulation(data []byte) (resp model.SimulateResponse, err error) {
+// SimulateTransactionsRaw simulates a transaction group by taking raw request bytes and returns relevant simulation results.
+func (c *Client) SimulateTransactionsRaw(encodedRequest []byte) (result v2.PreEncodedSimulateResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
 	}
-	resp, err = algod.SimulateRawTransaction(data)
+	var resp []byte
+	resp, err = algod.RawSimulateRawTransaction(encodedRequest)
+	if err != nil {
+		return
+	}
+	err = protocol.DecodeReflect(resp, &result)
 	return
+}
+
+// SimulateTransactions simulates transactions and returns relevant simulation results.
+func (c *Client) SimulateTransactions(request v2.PreEncodedSimulateRequest) (result v2.PreEncodedSimulateResponse, err error) {
+	return c.SimulateTransactionsRaw(protocol.EncodeReflect(&request))
 }
 
 // TransactionProof returns a Merkle proof for a transaction in a block.

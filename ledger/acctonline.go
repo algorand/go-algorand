@@ -547,7 +547,7 @@ func (ao *onlineAccounts) onlineTotalsEx(rnd basics.Round) (basics.MicroAlgos, e
 	totalsOnline, err := ao.onlineTotalsImpl(rnd)
 	ao.accountsMu.RUnlock()
 	if err == nil {
-		return totalsOnline, err
+		return totalsOnline, nil
 	}
 
 	var roundOffsetError *RoundOffsetError

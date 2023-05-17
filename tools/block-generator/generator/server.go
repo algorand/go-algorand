@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,6 +68,8 @@ func MakeServerWithMiddleware(configFile string, addr string, blocksMiddleware B
 	mux.HandleFunc("/genesis", getGenesisHandler(gen))
 	mux.HandleFunc("/report", getReportHandler(gen))
 	mux.HandleFunc("/v2/status/wait-for-block-after/", getStatusWaitHandler(gen))
+	mux.HandleFunc("/v2/ledger/sync/", func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc("/v2/deltas/", getDeltasHandler(gen))
 
 	return &http.Server{
 		Addr:              addr,
@@ -107,12 +110,16 @@ func getGenesisHandler(gen Generator) func(w http.ResponseWriter, r *http.Reques
 func getBlockHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// The generator doesn't actually care about the block...
-		round, err := parseRound(r.URL.Path)
+		s, err := parseURL(r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
+		round, err := strconv.ParseUint(s, 0, 64)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		maybeWriteError(w, gen.WriteBlock(w, round))
 	}
 }
@@ -120,55 +127,38 @@ func getBlockHandler(gen Generator) func(w http.ResponseWriter, r *http.Request)
 func getAccountHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// The generator doesn't actually care about the block...
-		account, err := parseAccount(r.URL.Path)
+		account, err := parseURL(r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
 		maybeWriteError(w, gen.WriteAccount(w, account))
 	}
 }
 
-const blockQueryPrefix = "/v2/blocks/"
-const blockQueryBlockIdx = len(blockQueryPrefix)
-const accountsQueryPrefix = "/v2/accounts/"
-const accountsQueryAccountIdx = len(accountsQueryPrefix)
-
-func parseRound(path string) (uint64, error) {
-	if !strings.HasPrefix(path, blockQueryPrefix) {
-		return 0, fmt.Errorf("not a blocks query: %s", path)
-	}
-
-	result := uint64(0)
-	pathlen := len(path)
-
-	if pathlen == blockQueryBlockIdx {
-		return 0, fmt.Errorf("no block in path")
-	}
-
-	for i := blockQueryBlockIdx; i < pathlen; i++ {
-		if path[i] < '0' || path[i] > '9' {
-			if i == blockQueryBlockIdx {
-				return 0, fmt.Errorf("no block in path")
-			}
-			break
+func getDeltasHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s, err := parseURL(r.URL.Path)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		result = (uint64(10) * result) + uint64(int(path[i])-'0')
+		round, err := strconv.ParseUint(s, 0, 64)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		maybeWriteError(w, gen.WriteDeltas(w, round))
 	}
-	return result, nil
 }
 
-func parseAccount(path string) (string, error) {
-	if !strings.HasPrefix(path, accountsQueryPrefix) {
-		return "", fmt.Errorf("not a accounts query: %s", path)
+func parseURL(path string) (string, error) {
+	i := strings.LastIndex(path, "/")
+	if i == len(path)-1 {
+		return "", fmt.Errorf("invalid request path, %s", path)
 	}
-
-	pathlen := len(path)
-
-	if pathlen == accountsQueryAccountIdx {
-		return "", fmt.Errorf("no address in path")
+	if strings.Contains(path[i+1:], "?") {
+		return strings.Split(path[i+1:], "?")[0], nil
 	}
-
-	return path[accountsQueryAccountIdx:], nil
+	return path[i+1:], nil
 }

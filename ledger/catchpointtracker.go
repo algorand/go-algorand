@@ -1363,7 +1363,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 		fileInfo, err := file.Stat()
 		if err != nil {
 			// we couldn't get the stat, so just return with the file.
-			return &readCloseSizer{ReadCloser: file, size: -1}, nil
+			return &readCloseSizer{ReadCloser: file, size: -1}, nil //nolint:nilerr // intentionally ignoring Stat error
 		}
 		crw, err := ct.dbs.MakeCatchpointReaderWriter()
 		if err != nil {

@@ -379,7 +379,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// Ensure that the only operation we can do is ClearState if the application
 	// does not exist
 	if !exists && ac.OnCompletion != transactions.ClearStateOC {
-		return fmt.Errorf("only clearing out is supported for applications that do not exist")
+		return fmt.Errorf("only ClearState is supported for an application (%d) that does not exist", appIdx)
 	}
 
 	// If this txn is going to set new programs (either for creation or
@@ -413,8 +413,8 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		if exists {
 			pass, evalDelta, evalErr := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
 			if evalErr != nil {
-				// Fail on non-logic eval errors and ignore LogicEvalError errors
-				if _, ok := evalErr.(ledgercore.LogicEvalError); !ok {
+				// ClearStateProgram evaluation can't make the txn fail.
+				if _, ok := evalErr.(logic.EvalError); !ok {
 					return evalErr
 				}
 			}

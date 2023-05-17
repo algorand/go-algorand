@@ -71,7 +71,7 @@ func TestBlockEvaluatorFeeSink(t *testing.T) {
 	genesisBlockHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, eval.specials.FeeSink, testSinkAddr)
 }
@@ -90,7 +90,7 @@ func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator,
 	blkHeader, err := l.BlockHdr(basics.Round(0))
 	require.NoError(t, err)
 	newBlock := bookkeeping.MakeBlock(blkHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 	eval.validate = true
 	eval.generate = false
@@ -136,7 +136,7 @@ ok:
 		Type:   protocol.ApplicationCallTx,
 		Header: header,
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-			ApplicationID: 1,
+			ApplicationID: 1001,
 		},
 	}
 
@@ -154,7 +154,7 @@ ok:
 				EvalDelta: transactions.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
 					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
 				},
-				ApplicationID: 1,
+				ApplicationID: 1001,
 			},
 		},
 		{
@@ -195,7 +195,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	require.NoError(t, err)
 	deltas := eval.state.deltas()
 	ad, _ := deltas.Accts.GetBasicsAccountData(addr)
-	state := ad.AppParams[1].GlobalState
+	state := ad.AppParams[1001].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
@@ -275,13 +275,14 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			t.Parallel()
 			genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-			innerAppID := basics.AppIndex(3)
+			basicAppID := basics.AppIndex(1001)
+			innerAppID := basics.AppIndex(1003)
 			innerAppAddress := innerAppID.Address()
 			balances := genesisInitState.Accounts
 			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
 
 			genesisBalances := bookkeeping.GenesisBalances{
-				Balances:    genesisInitState.Accounts,
+				Balances:    balances,
 				FeeSink:     testSinkAddr,
 				RewardsPool: testPoolAddr,
 				Timestamp:   0,
@@ -291,7 +292,8 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			blkHeader, err := l.BlockHdr(basics.Round(0))
 			require.NoError(t, err)
 			newBlock := bookkeeping.MakeBlock(blkHeader)
-			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+			tracer := &mocktracer.Tracer{}
+			eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, tracer)
 			require.NoError(t, err)
 			eval.validate = true
 			eval.generate = true
@@ -342,7 +344,7 @@ int 1`,
 			// an app call with inner txn
 			innerAppCallTxn := txntest.Txn{
 				Type:   protocol.ApplicationCallTx,
-				Sender: addrs[0],
+				Sender: addrs[4],
 				ClearStateProgram: `#pragma version 6
 int 1`,
 
@@ -351,25 +353,54 @@ int 1`,
 				Fee:         minFee,
 				GenesisHash: genHash,
 			}
+
+			expectedFeeSinkDataForScenario := ledgercore.ToAccountData(balances[testSinkAddr])
+			expectedFeeSinkDataForScenario.MicroAlgos.Raw += basicAppCallTxn.Txn().Fee.Raw
+			if testCase.firstTxnBehavior == "approve" {
+				expectedFeeSinkDataForScenario.MicroAlgos.Raw += payTxn.Txn().Fee.Raw
+			}
+
 			scenario := testCase.innerAppCallScenario(mocktracer.TestScenarioInfo{
-				CallingTxn:   innerAppCallTxn.Txn(),
-				MinFee:       minFee,
-				CreatedAppID: innerAppID,
+				CallingTxn:     innerAppCallTxn.Txn(),
+				SenderData:     ledgercore.ToAccountData(balances[addrs[4]]),
+				AppAccountData: ledgercore.ToAccountData(balances[innerAppAddress]),
+				FeeSinkData:    expectedFeeSinkDataForScenario,
+				FeeSinkAddr:    testSinkAddr,
+				MinFee:         minFee,
+				CreatedAppID:   innerAppID,
+				BlockHeader:    eval.block.BlockHeader,
+				PrevTimestamp:  blkHeader.TimeStamp,
 			})
 			innerAppCallTxn.ApprovalProgram = scenario.Program
 
 			txntest.Group(&basicAppCallTxn, &payTxn, &innerAppCallTxn)
 
+			// Update the expected state delta to reflect the inner app call txid
+			scenarioTxidValue, ok := scenario.ExpectedStateDelta.Txids[transactions.Txid{}]
+			if ok {
+				delete(scenario.ExpectedStateDelta.Txids, transactions.Txid{})
+				scenario.ExpectedStateDelta.Txids[innerAppCallTxn.Txn().ID()] = scenarioTxidValue
+			}
+			for i := range scenario.ExpectedEvents {
+				deltas := scenario.ExpectedEvents[i].Deltas
+				if deltas == nil {
+					continue
+				}
+				txidValue, ok := deltas.Txids[transactions.Txid{}]
+				if ok {
+					delete(deltas.Txids, transactions.Txid{})
+					deltas.Txids[innerAppCallTxn.Txn().ID()] = txidValue
+				}
+			}
+
 			txgroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
 				basicAppCallTxn.Txn().Sign(keys[0]),
 				payTxn.Txn().Sign(keys[1]),
-				innerAppCallTxn.Txn().Sign(keys[0]),
+				innerAppCallTxn.Txn().Sign(keys[4]),
 			})
 
 			require.Len(t, eval.block.Payset, 0)
 
-			tracer := &mocktracer.Tracer{}
-			eval.Tracer = tracer
 			err = eval.TransactionGroup(txgroup)
 			switch testCase.firstTxnBehavior {
 			case "approve":
@@ -389,7 +420,7 @@ int 1`,
 			}
 
 			expectedBasicAppCallAD := transactions.ApplyData{
-				ApplicationID: 1,
+				ApplicationID: basicAppID,
 				EvalDelta: transactions.EvalDelta{
 					GlobalDelta: basics.StateDelta{},
 					LocalDeltas: map[uint64]basics.StateDelta{},
@@ -403,9 +434,108 @@ int 1`,
 					},
 				}
 
-			var expectedEvents []mocktracer.Event
+			expectedFeeSinkData := ledgercore.ToAccountData(balances[testSinkAddr])
+			expectedFeeSinkData.MicroAlgos.Raw += txgroup[0].Txn.Fee.Raw
+			expectedAcct0Data := ledgercore.ToAccountData(balances[addrs[0]])
+			expectedAcct0Data.MicroAlgos.Raw -= txgroup[0].Txn.Fee.Raw
+			expectedAcct0Data.TotalAppParams = 1
+
+			expectedBlockHeader := eval.block.BlockHeader
+			expectedBasicAppCallDelta := ledgercore.StateDelta{
+				Accts: ledgercore.AccountDeltas{
+					Accts: []ledgercore.BalanceRecord{
+						{
+							Addr:        addrs[0],
+							AccountData: expectedAcct0Data,
+						},
+						{
+							Addr:        testSinkAddr,
+							AccountData: expectedFeeSinkData,
+						},
+					},
+					AppResources: []ledgercore.AppResourceRecord{
+						{
+							Aidx: basicAppID,
+							Addr: addrs[0],
+							Params: ledgercore.AppParamsDelta{
+								Params: &basics.AppParams{
+									ApprovalProgram:   txgroup[0].Txn.ApprovalProgram,
+									ClearStateProgram: txgroup[0].Txn.ClearStateProgram,
+								},
+							},
+						},
+					},
+				},
+				Creatables: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
+					basics.CreatableIndex(basicAppID): {
+						Ctype:   basics.AppCreatable,
+						Created: true,
+						Creator: addrs[0],
+					},
+				},
+				Txids: map[transactions.Txid]ledgercore.IncludedTransactions{
+					txgroup[0].Txn.ID(): {
+						LastValid: txgroup[0].Txn.LastValid,
+						Intra:     0,
+					},
+				},
+				Hdr:           &expectedBlockHeader,
+				PrevTimestamp: blkHeader.TimeStamp,
+			}
+			expectedBasicAppCallDelta.Hydrate()
+
+			expectedEvents := []mocktracer.Event{mocktracer.BeforeBlock(eval.block.Round())}
 			if testCase.firstTxnBehavior == "approve" {
-				expectedEvents = mocktracer.FlattenEvents([][]mocktracer.Event{
+				err = eval.endOfBlock()
+				require.NoError(t, err)
+
+				expectedAcct1Data := ledgercore.AccountData{}
+				expectedAcct2Data := ledgercore.ToAccountData(balances[addrs[2]])
+				expectedAcct2Data.MicroAlgos.Raw += payTxn.Amount
+				expectedAcct3Data := ledgercore.ToAccountData(balances[addrs[3]])
+				expectedAcct3Data.MicroAlgos.Raw += expectedPayTxnAD.ClosingAmount.Raw
+				expectedFeeSinkData.MicroAlgos.Raw += txgroup[1].Txn.Fee.Raw
+
+				expectedPayTxnDelta := ledgercore.StateDelta{
+					Accts: ledgercore.AccountDeltas{
+						Accts: []ledgercore.BalanceRecord{
+							{
+								Addr:        addrs[1],
+								AccountData: expectedAcct1Data,
+							},
+							{
+								Addr:        testSinkAddr,
+								AccountData: expectedFeeSinkData,
+							},
+							{
+								Addr:        addrs[2],
+								AccountData: expectedAcct2Data,
+							},
+							{
+								Addr:        addrs[3],
+								AccountData: expectedAcct3Data,
+							},
+						},
+					},
+					Txids: map[transactions.Txid]ledgercore.IncludedTransactions{
+						txgroup[1].Txn.ID(): {
+							LastValid: txgroup[1].Txn.LastValid,
+							Intra:     0, // will be incremented once merged
+						},
+					},
+					Hdr:           &expectedBlockHeader,
+					PrevTimestamp: blkHeader.TimeStamp,
+				}
+				expectedPayTxnDelta.Hydrate()
+
+				expectedDelta := mocktracer.MergeStateDeltas(expectedBasicAppCallDelta, expectedPayTxnDelta, scenario.ExpectedStateDelta)
+
+				// If the scenario failed, we expect the failed txn ID to be removed from the group state delta
+				if scenario.Outcome != mocktracer.ApprovalOutcome {
+					delete(expectedDelta.Txids, txgroup[2].ID())
+				}
+
+				expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
 					{
 						mocktracer.BeforeTxnGroup(3),
 						mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
@@ -420,14 +550,18 @@ int 1`,
 					},
 					scenario.ExpectedEvents,
 					{
-						mocktracer.AfterTxnGroup(3, scenario.Outcome != mocktracer.ApprovalOutcome),
+						mocktracer.AfterTxnGroup(3, &expectedDelta, scenario.Outcome != mocktracer.ApprovalOutcome),
+						mocktracer.AfterBlock(eval.block.Round()),
 					},
-				})
+				})...)
 			} else {
+				// Removed failed txid from expected state delta
+				delete(expectedBasicAppCallDelta.Txids, txgroup[0].Txn.ID())
+
 				hasError := testCase.firstTxnBehavior == "error"
 				// EvalDeltas are removed from failed app call transactions
 				expectedBasicAppCallAD.EvalDelta = transactions.EvalDelta{}
-				expectedEvents = mocktracer.FlattenEvents([][]mocktracer.Event{
+				expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
 					{
 						mocktracer.BeforeTxnGroup(3),
 						mocktracer.BeforeTxn(protocol.ApplicationCallTx), // start basicAppCallTxn
@@ -437,11 +571,12 @@ int 1`,
 					{
 						mocktracer.AfterProgram(logic.ModeApp, hasError),
 						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, true), // end basicAppCallTxn
-						mocktracer.AfterTxnGroup(3, true),
+						mocktracer.AfterTxnGroup(3, &expectedBasicAppCallDelta, true),
 					},
-				})
+				})...)
 			}
-			require.Equal(t, expectedEvents, mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events))
+			actualEvents := mocktracer.StripInnerTxnGroupIDsFromEvents(tracer.Events)
+			mocktracer.AssertEventsEqual(t, expectedEvents, actualEvents)
 		})
 	}
 }
@@ -501,7 +636,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	l.genesisHash = genesisInitState.GenesisHash
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	// won't work before funding bank
@@ -595,6 +730,8 @@ type evalTestLedger struct {
 	feeSink             basics.Address
 	rewardsPool         basics.Address
 	latestTotals        ledgercore.AccountTotals
+	tracer              logic.EvalTracer
+	boxes               map[string][]byte
 }
 
 // newTestLedger creates a in memory Ledger that is as realistic as
@@ -605,10 +742,15 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 		roundBalances: make(map[basics.Round]map[basics.Address]basics.AccountData),
 		feeSink:       balances.FeeSink,
 		rewardsPool:   balances.RewardsPool,
+		tracer:        nil,
+		boxes:         make(map[string][]byte),
 	}
 
+	protoVersion := protocol.ConsensusFuture
+	proto := config.Consensus[protoVersion]
+
 	crypto.RandBytes(l.genesisHash[:])
-	genBlock, err := bookkeeping.MakeGenesisBlock(protocol.ConsensusFuture,
+	genBlock, err := bookkeeping.MakeGenesisBlock(protoVersion,
 		balances, "test", l.genesisHash)
 	require.NoError(t, err)
 	l.roundBalances[0] = balances.Balances
@@ -616,12 +758,11 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 
 	// calculate the accounts totals.
 	var ot basics.OverflowTracker
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for _, acctData := range balances.Balances {
 		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
 	l.genesisProto = proto
-	l.genesisProtoVersion = protocol.ConsensusCurrentVersion
+	l.genesisProtoVersion = protoVersion
 
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
@@ -635,7 +776,7 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 func (ledger *evalTestLedger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
 	verifiedTxnCache := verify.MakeVerifiedTransactionCache(config.GetDefaultLocal().VerifiedTranscationsCacheSize)
 
-	delta, err := Eval(ctx, ledger, blk, true, verifiedTxnCache, executionPool)
+	delta, err := Eval(ctx, ledger, blk, true, verifiedTxnCache, executionPool, ledger.tracer)
 	if err != nil {
 		return nil, err
 	}
@@ -648,13 +789,14 @@ func (ledger *evalTestLedger) Validate(ctx context.Context, blk bookkeeping.Bloc
 // of the block that the caller is planning to evaluate. If the length of the
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
 // passed, avoiding unnecessary payset slice growth.
-func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*BlockEvaluator, error) {
+func (ledger *evalTestLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*BlockEvaluator, error) {
 	return StartEvaluator(ledger, hdr,
 		EvaluatorOptions{
 			PaysetHint:          paysetHint,
 			Validate:            true,
 			Generate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
+			Tracer:              tracer,
 		})
 }
 
@@ -692,7 +834,7 @@ func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Ad
 	res := ledgercore.AppResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
-		return res, fmt.Errorf("no such account %s", addr.String())
+		return res, fmt.Errorf("no such account %s while looking up app", addr.String())
 	}
 	if params, ok := ad.AppParams[aidx]; ok {
 		res.AppParams = &params
@@ -707,7 +849,7 @@ func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address,
 	res := ledgercore.AssetResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
 	if !ok {
-		return res, fmt.Errorf("no such account %s", addr.String())
+		return res, fmt.Errorf("no such account %s while looking up asset", addr.String())
 	}
 	if params, ok := ad.AssetParams[aidx]; ok {
 		res.AssetParams = &params
@@ -719,7 +861,9 @@ func (ledger *evalTestLedger) LookupAsset(rnd basics.Round, addr basics.Address,
 }
 
 func (ledger *evalTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
-	panic("unimplemented")
+	// The test ledger only has one view of the value of a box--no rnd based retrieval is implemented currently
+	val, _ := ledger.boxes[key]
+	return val, nil
 }
 
 // GenesisHash returns the genesis hash for this ledger.
@@ -834,7 +978,7 @@ func (ledger *evalTestLedger) nextBlock(t testing.TB) *BlockEvaluator {
 	require.NoError(t, err)
 
 	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
-	eval, err := ledger.StartEvaluator(nextHdr, 0, 0)
+	eval, err := ledger.StartEvaluator(nextHdr, 0, 0, nil)
 	require.NoError(t, err)
 	return eval
 }
@@ -1017,7 +1161,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	newBlock := bookkeeping.MakeBlock(l.blocks[0].BlockHeader)
 
-	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	// Advance the evaluator a couple rounds...
@@ -1054,7 +1198,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	validatedBlock, err := blkEval.GenerateBlock()
 	require.NoError(t, err)
 
-	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil)
+	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil, l.tracer)
 	require.NoError(t, err)
 
 	acctData, _ := blkEval.state.lookup(recvAddr)
@@ -1065,7 +1209,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlock := *validatedBlock
 
 	// First validate that bad block is fine if we dont touch it...
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
 
 	badBlock = *validatedBlock
@@ -1075,7 +1219,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, basics.Address{1})
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
@@ -1089,7 +1233,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	}
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
@@ -1099,12 +1243,12 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, badBlockObj.ExpiredParticipationAccounts[0])
 	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.Error(t, err)
 
 	badBlock = *validatedBlock
 	// sanity check that bad block is being actually copied and not just the pointer
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil)
+	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
 
 }
@@ -1158,7 +1302,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 
 	newBlock := bookkeeping.MakeBlock(l.blocks[0].BlockHeader)
 
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	// Advance the evaluator a couple rounds...
@@ -1256,7 +1400,7 @@ func TestExpiredAccountGeneration(t *testing.T) {
 
 	newBlock := bookkeeping.MakeBlock(l.blocks[0].BlockHeader)
 
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	// Advance the evaluator a couple rounds...

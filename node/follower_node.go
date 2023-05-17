@@ -135,10 +135,10 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)
 
-	// Initialize sync round to the next round so that nothing falls out of the cache on Start
-	err = node.SetSyncRound(uint64(node.Ledger().NextRound()))
+	// Initialize sync round to the latest db round + 1 so that nothing falls out of the cache on Start
+	err = node.SetSyncRound(uint64(node.Ledger().LatestTrackerCommitted() + 1))
 	if err != nil {
-		log.Errorf("unable to set sync round to Ledger.NextRound %v", err)
+		log.Errorf("unable to set sync round to Ledger.DBRound %v", err)
 		return nil, err
 	}
 
@@ -240,7 +240,7 @@ func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transaction
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (result simulation.Result, err error) {
+func (node *AlgorandFollowerNode) Simulate(_ simulation.Request) (result simulation.Result, err error) {
 	err = fmt.Errorf("cannot simulate in data mode")
 	return
 }
@@ -342,14 +342,7 @@ func (node *AlgorandFollowerNode) StartCatchup(catchpoint string) error {
 		}
 		return MakeCatchpointUnableToStartError(stats.CatchpointLabel, catchpoint)
 	}
-	cpRound, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
-	if err != nil {
-		return err
-	}
-	sRound := node.GetSyncRound()
-	if sRound > 0 && uint64(cpRound) > sRound {
-		return MakeCatchpointSyncRoundFailure(catchpoint, sRound)
-	}
+	var err error
 	accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
 	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, accessor, node.config)
 	if err != nil {
@@ -414,7 +407,15 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 			prevNodeCancelFunc()
 			return
 		}
+
+		// Catchup finished, resume.
 		defer node.mu.Unlock()
+
+		// update sync round before starting services
+		if err := node.SetSyncRound(uint64(node.ledger.LastRound())); err != nil {
+			node.log.Warnf("unable to set sync round while resuming fast catchup: %v", err)
+		}
+
 		// start
 		node.catchupService.Start()
 		node.blockService.Start()
@@ -446,4 +447,16 @@ func (node *AlgorandFollowerNode) GetSyncRound() uint64 {
 // UnsetSyncRound removes the sync round constraint on the catchup service
 func (node *AlgorandFollowerNode) UnsetSyncRound() {
 	node.catchupService.UnsetDisableSyncRound()
+}
+
+// SetBlockTimeStampOffset sets a timestamp offset in the block header.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) SetBlockTimeStampOffset(offset int64) error {
+	return fmt.Errorf("cannot set block timestamp offset in follower mode")
+}
+
+// GetBlockTimeStampOffset gets a timestamp offset.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) GetBlockTimeStampOffset() (*int64, error) {
+	return nil, fmt.Errorf("cannot get block timestamp offset in follower mode")
 }

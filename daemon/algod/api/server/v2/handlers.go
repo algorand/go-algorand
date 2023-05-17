@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"io"
 	"math"
 	"net/http"
@@ -91,6 +92,7 @@ type LedgerForAPI interface {
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
 	GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error)
+	GetTracer() logic.EvalTracer
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -100,7 +102,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error)
+	Simulate(request simulation.Request) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -115,6 +117,8 @@ type NodeInterface interface {
 	SetSyncRound(rnd uint64) error
 	GetSyncRound() uint64
 	UnsetSyncRound()
+	GetBlockTimeStampOffset() (*int64, error)
+	SetBlockTimeStampOffset(int64) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -923,29 +927,41 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.PostTransactionsResponse{TxId: txid.String()})
 }
 
-// preEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
-type preEncodedSimulateTxnResult struct {
+// PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
+type PreEncodedSimulateTxnResult struct {
 	Txn                    PreEncodedTxInfo `codec:"txn-result"`
-	MissingSignature       *bool            `codec:"missing-signature,omitempty"`
 	AppBudgetConsumed      *uint64          `codec:"app-budget-consumed,omitempty"`
 	LogicSigBudgetConsumed *uint64          `codec:"logic-sig-budget-consumed,omitempty"`
 }
 
-// preEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
-type preEncodedSimulateTxnGroupResult struct {
-	Txns              []preEncodedSimulateTxnResult `codec:"txn-results"`
+// PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
+type PreEncodedSimulateTxnGroupResult struct {
+	Txns              []PreEncodedSimulateTxnResult `codec:"txn-results"`
 	FailureMessage    *string                       `codec:"failure-message,omitempty"`
 	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
 	AppBudgetAdded    *uint64                       `codec:"app-budget-added,omitempty"`
 	AppBudgetConsumed *uint64                       `codec:"app-budget-consumed,omitempty"`
 }
 
-// preEncodedSimulateResponse mirrors model.SimulateResponse
-type preEncodedSimulateResponse struct {
-	Version      uint64                             `codec:"version"`
-	LastRound    uint64                             `codec:"last-round"`
-	TxnGroups    []preEncodedSimulateTxnGroupResult `codec:"txn-groups"`
-	WouldSucceed bool                               `codec:"would-succeed"`
+// PreEncodedSimulateResponse mirrors model.SimulateResponse
+type PreEncodedSimulateResponse struct {
+	Version       uint64                             `codec:"version"`
+	LastRound     uint64                             `codec:"last-round"`
+	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	EvalOverrides *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
+}
+
+// PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
+type PreEncodedSimulateRequestTransactionGroup struct {
+	Txns []transactions.SignedTxn `codec:"txns"`
+}
+
+// PreEncodedSimulateRequest mirrors model.SimulateRequest
+type PreEncodedSimulateRequest struct {
+	TxnGroups            []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	AllowEmptySignatures bool                                        `codec:"allow-empty-signatures,omitempty"`
+	AllowMoreLogging     bool                                        `codec:"allow-more-logging,omitempty"`
+	ExtraOpcodeBudget    uint64                                      `codec:"extra-opcode-budget,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
@@ -961,15 +977,38 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	}
 	proto := config.Consensus[stat.LastVersion]
 
-	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
+	requestBuffer := new(bytes.Buffer)
+	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxTealDryrunBytes)
+	_, err = requestBuffer.ReadFrom(requestBodyReader)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
+	requestData := requestBuffer.Bytes()
+
+	var simulateRequest PreEncodedSimulateRequest
+	err = decode(protocol.CodecHandle, requestData, &simulateRequest)
+	if err != nil {
+		err = decode(protocol.JSONStrictHandle, requestData, &simulateRequest)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
+	for _, txgroup := range simulateRequest.TxnGroups {
+		if len(txgroup.Txns) == 0 {
+			err = errors.New("empty txgroup")
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		if len(txgroup.Txns) > proto.MaxTxGroupSize {
+			err = fmt.Errorf("transaction group size %d exceeds protocol max %d", len(txgroup.Txns), proto.MaxTxGroupSize)
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
 
 	// Simulate transaction
-	simulationResult, err := v2.Node.Simulate(txgroup)
+	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
 	if err != nil {
-		var invalidTxErr simulation.InvalidTxGroupError
+		var invalidTxErr simulation.InvalidRequestError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
@@ -984,12 +1023,12 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
-	data, err := encode(handle, &response)
+	responseData, err := encode(handle, &response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
 
-	return ctx.Blob(http.StatusOK, contentType, data)
+	return ctx.Blob(http.StatusOK, contentType, responseData)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
@@ -1102,7 +1141,7 @@ func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64, params m
 	}
 	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
 	if err != nil {
-		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
 	data, err := encode(handle, sDelta)
 	if err != nil {
@@ -1312,8 +1351,6 @@ func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
 		code = http.StatusOK
 	case *node.CatchpointUnableToStartError:
 		return badRequest(ctx, err, err.Error(), v2.Log)
-	case *node.CatchpointSyncRoundFailure:
-		return badRequest(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
 	default:
 		return internalError(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
 	}
@@ -1460,6 +1497,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	}
 
 	response := model.BoxResponse{
+		Round: uint64(lastRound),
 		Name:  boxName,
 		Value: value,
 	}
@@ -1666,7 +1704,85 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// GetLedgerStateDeltaForTransactionGroup retrieves the delta for a specified transaction group.
+// (GET /v2/deltas/txn/group/{id})
+func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id string, params model.GetLedgerStateDeltaForTransactionGroupParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+	idDigest, err := crypto.DigestFromString(id)
+	if err != nil {
+		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
+	}
+	tracer, ok := v2.Node.LedgerForAPI().GetTracer().(*eval.TxnGroupDeltaTracer)
+	if !ok {
+		return notImplemented(ctx, err, errFailedRetrievingTracer, v2.Log)
+	}
+	delta, err := tracer.GetDeltaForID(idDigest)
+	if err != nil {
+		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+	}
+	data, err := encode(handle, delta)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
+// GetTransactionGroupLedgerStateDeltasForRound retrieves the deltas for transaction groups in a given round.
+// (GET /v2/deltas/{round}/txn/group)
+func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Context, round uint64, params model.GetTransactionGroupLedgerStateDeltasForRoundParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+	tracer, ok := v2.Node.LedgerForAPI().GetTracer().(*eval.TxnGroupDeltaTracer)
+	if !ok {
+		return notImplemented(ctx, err, errFailedRetrievingTracer, v2.Log)
+	}
+	deltas, err := tracer.GetDeltasForRound(basics.Round(round))
+	if err != nil {
+		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+	}
+	data, err := encode(handle, deltas)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
 // ExperimentalCheck is only available when EnabledExperimentalAPI is true
 func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, true)
+}
+
+// GetBlockTimeStampOffset gets the timestamp offset.
+// This is only available in dev mode.
+// (GET /v2/devmode/blocks/offset)
+func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
+	offset, err := v2.Node.GetBlockTimeStampOffset()
+	if err != nil {
+		err = fmt.Errorf("cannot get block timestamp offset because we are not in dev mode")
+		return badRequest(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
+	} else if offset == nil {
+		err = fmt.Errorf("block timestamp offset was never set, using real clock for timestamps")
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
+	}
+	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(*offset)})
+}
+
+// SetBlockTimeStampOffset sets the timestamp offset.
+// This is only available in dev mode.
+// (POST /v2/devmode/blocks/offset/{offset})
+func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error {
+	if offset > math.MaxInt64 {
+		err := fmt.Errorf("block timestamp offset cannot be larger than max int64 value")
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
+	}
+	err := v2.Node.SetBlockTimeStampOffset(int64(offset))
+	if err != nil {
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
+	}
+	return ctx.NoContent(http.StatusOK)
 }

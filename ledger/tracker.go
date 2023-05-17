@@ -727,8 +727,8 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 			roundsBehind = blk.Round() - tr.dbRound
 			tr.mu.RUnlock()
 
-			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
-			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(catchpointInterval) {
+			// are we farther behind than we need to be? Consider: catchpoint interval, flush interval and max acct lookback.
+			if roundsBehind > basics.Round(maxAcctLookback) && roundsBehind > initializeCachesRoundFlushInterval+basics.Round(catchpointInterval) {
 				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any further changes
 				// would just accumulate in memory.
 				close(blockEvalFailed)
@@ -762,4 +762,12 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 		err = blockRetrievalError
 	}
 	return
+}
+
+// getDbRound accesses dbRound with protection by the trackerRegistry's mutex.
+func (tr *trackerRegistry) getDbRound() basics.Round {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+	return dbRound
 }

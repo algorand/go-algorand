@@ -13,6 +13,7 @@ linters:
     - govet
     - ineffassign
     - misspell
+    - nilerr
     - nolintlint
     - revive
     - staticcheck
@@ -119,6 +120,7 @@ issues:
         # - govet
         - ineffassign
         - misspell
+        # - nilerr
         - nolintlint
         # - revive
         - staticcheck

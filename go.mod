@@ -6,13 +6,13 @@ require (
 	github.com/DataDog/zstd v1.5.2
 	github.com/algorand/avm-abi v0.2.0
 	github.com/algorand/falcon v0.0.0-20220727072124-02a2a64c4414
-	github.com/algorand/go-codec/codec v1.1.8
+	github.com/algorand/go-codec/codec v1.1.9
 	github.com/algorand/go-deadlock v0.2.2
 	github.com/algorand/go-sumhash v0.1.0
 	github.com/algorand/graphtrace v0.1.0
 	github.com/algorand/msgp v1.1.53
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0
-	github.com/algorand/websocket v1.4.5
+	github.com/algorand/websocket v1.4.6
 	github.com/aws/aws-sdk-go v1.33.0
 	github.com/consensys/gnark-crypto v0.7.0
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
@@ -33,9 +33,10 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/crypto v0.1.0
-	golang.org/x/sys v0.1.0
-	golang.org/x/text v0.4.0
+	golang.org/x/sys v0.7.0
+	golang.org/x/text v0.9.0
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -66,10 +67,9 @@ require (
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.1 // indirect
-	golang.org/x/net v0.1.0 // indirect
-	golang.org/x/term v0.1.0 // indirect
+	golang.org/x/net v0.9.0 // indirect
+	golang.org/x/term v0.7.0 // indirect
 	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

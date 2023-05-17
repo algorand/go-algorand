@@ -274,7 +274,7 @@ func newOpStream(version uint64) OpStream {
 	}
 
 	for i := range o.known.scratchSpace {
-		o.known.scratchSpace[i] = StackUint64
+		o.known.scratchSpace[i] = StackZeroUint64
 	}
 
 	return o
@@ -312,7 +312,7 @@ type ProgramKnowledge struct {
 
 func (pgm *ProgramKnowledge) top() (StackType, bool) {
 	if len(pgm.stack) == 0 {
-		return pgm.bottom, pgm.bottom != StackNone
+		return pgm.bottom, pgm.bottom.AVMType != avmNone
 	}
 	last := len(pgm.stack) - 1
 	return pgm.stack[last], true
@@ -387,7 +387,7 @@ func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
 	end := len(ops.known.stack)
 	tip := ops.known.stack[end-len(spec.Return.Types):]
 	for i := range tip {
-		if tip[i] == StackAny {
+		if tip[i].AVMType == avmAny {
 			tip[i] = replacement
 			return
 		}
@@ -1158,8 +1158,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
-// getImm interprets the arg at index argIndex as an immediate
-func getImm(args []string, argIndex int) (int, bool) {
+// getImm interprets the arg at index argIndex as an immediate that must be
+// between -128 and 127 (if signed=true) or between 0 and 255 (if signed=false)
+func getImm(args []string, argIndex int, signed bool) (int, bool) {
 	if len(args) <= argIndex {
 		return 0, false
 	}
@@ -1168,6 +1169,15 @@ func getImm(args []string, argIndex int) (int, bool) {
 	n, err := strconv.ParseInt(args[argIndex], 0, 9)
 	if err != nil {
 		return 0, false
+	}
+	if signed {
+		if n < -128 || n > 127 {
+			return 0, false
+		}
+	} else {
+		if n < 0 || n > 255 {
+			return 0, false
+		}
 	}
 	return int(n), true
 }
@@ -1193,7 +1203,7 @@ func typeSwap(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1210,7 +1220,7 @@ func typeDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, erro
 }
 
 func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1226,7 +1236,7 @@ func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 
 	idx := top - n
 	if idx < 0 {
-		if pgm.bottom == StackNone {
+		if pgm.bottom.AVMType == avmNone {
 			// By demanding n+1 elements, we'll trigger an error
 			return anyTypes(n + 1), nil, nil
 		}
@@ -1242,7 +1252,7 @@ func typeBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeFrameDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, true)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1263,7 +1273,7 @@ func typeFrameDig(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes,
 }
 
 func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, true)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1306,8 +1316,10 @@ func typeFrameBury(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes
 func typeEquals(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 0 {
-		//Require arg0 and arg1 to have same type
-		return StackTypes{pgm.stack[top], pgm.stack[top]}, nil, nil
+		// Require arg0 and arg1 to have same avm type
+		// but the bounds shouldn't matter
+		widened := pgm.stack[top].widened()
+		return StackTypes{widened, widened}, nil, nil
 	}
 	return nil, nil, nil
 }
@@ -1335,9 +1347,7 @@ func typeDupTwo(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 func typeSelect(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	top := len(pgm.stack) - 1
 	if top >= 2 {
-		if pgm.stack[top-1] == pgm.stack[top-2] {
-			return nil, StackTypes{pgm.stack[top-1]}, nil
-		}
+		return nil, StackTypes{pgm.stack[top-1].union(pgm.stack[top-2])}, nil
 	}
 	return nil, nil, nil
 }
@@ -1351,7 +1361,7 @@ func typeSetBit(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 }
 
 func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1373,7 +1383,7 @@ func typeCover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 }
 
 func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1390,6 +1400,12 @@ func typeUncover(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, 
 	return anyTypes(depth), returns, nil
 }
 
+func typeByteMath(resultSize uint64) refineFunc {
+	return func(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+		return nil, StackTypes{NewStackType(avmBytes, bound(0, resultSize))}, nil
+	}
+}
+
 func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
 	if len(args) != 1 {
 		return nil, nil, nil
@@ -1402,7 +1418,7 @@ func typeTxField(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, 
 }
 
 func typeStore(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	scratchIndex, ok := getImm(args, 0)
+	scratchIndex, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1418,17 +1434,26 @@ func typeStores(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, e
 	if top < 0 {
 		return nil, nil, nil
 	}
-	for i := range pgm.scratchSpace {
-		// We can't know what slot stacktop is being stored in, but we can at least keep the slots that are the same type as stacktop
-		if pgm.scratchSpace[i] != pgm.stack[top] {
-			pgm.scratchSpace[i] = StackAny
+
+	// If the index of the scratch slot is a const
+	// we can modify only that scratch slots type
+	if top >= 1 {
+		if idx, isConst := pgm.stack[top-1].constant(); isConst {
+			pgm.scratchSpace[idx] = pgm.stack[top]
+			return nil, nil, nil
 		}
+	}
+
+	for i := range pgm.scratchSpace {
+		// We can't know what slot stacktop is being stored in
+		// so we adjust the bounds and type of each slot as if the stacktop type were stored there.
+		pgm.scratchSpace[i] = pgm.scratchSpace[i].union(pgm.stack[top])
 	}
 	return nil, nil, nil
 }
 
 func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	scratchIndex, ok := getImm(args, 0)
+	scratchIndex, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1436,13 +1461,13 @@ func typeLoad(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeProto(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	a, aok := getImm(args, 0)
-	_, rok := getImm(args, 1)
+	a, aok := getImm(args, 0, false)
+	_, rok := getImm(args, 1, false)
 	if !aok || !rok {
 		return nil, nil, nil
 	}
 
-	if len(pgm.stack) != 0 || pgm.bottom != StackAny {
+	if len(pgm.stack) != 0 || pgm.bottom.AVMType != avmAny {
 		return nil, nil, fmt.Errorf("proto must be unreachable from previous PC")
 	}
 	pgm.stack = anyTypes(a)
@@ -1451,6 +1476,16 @@ func typeProto(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 }
 
 func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+
+	top := len(pgm.stack) - 1
+	if top < 0 {
+		return nil, nil, nil
+	}
+
+	if val, isConst := pgm.stack[top].constant(); isConst {
+		return nil, StackTypes{pgm.scratchSpace[val]}, nil
+	}
+
 	scratchType := pgm.scratchSpace[0]
 	for _, item := range pgm.scratchSpace {
 		// If all the scratch slots are one type, then we can say we are loading that type
@@ -1462,7 +1497,7 @@ func typeLoads(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, er
 }
 
 func typePopN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1470,7 +1505,7 @@ func typePopN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, err
 }
 
 func typeDupN(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
-	n, ok := getImm(args, 0)
+	n, ok := getImm(args, 0, false)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -1504,6 +1539,33 @@ func typePushInts(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes,
 	}
 
 	return nil, types, nil
+}
+
+func typePushInt(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	types := make(StackTypes, len(args))
+	for i := range types {
+		val, err := strconv.ParseUint(args[i], 10, 64)
+		if err != nil {
+			types[i] = StackUint64
+		} else {
+			types[i] = NewStackType(avmUint64, bound(val, val))
+		}
+	}
+	return nil, types, nil
+}
+
+func typeBzero(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	// Bzero should only allow its input int to be up to maxStringSize bytes
+	return StackTypes{StackUint64.narrowed(bound(0, maxStringSize))}, StackTypes{StackBytes}, nil
+}
+
+func typeByte(pgm *ProgramKnowledge, args []string) (StackTypes, StackTypes, error) {
+	if len(args) == 0 {
+		return nil, StackTypes{StackBytes}, nil
+	}
+	val, _, _ := parseBinaryArgs(args)
+	l := uint64(len(val))
+	return nil, StackTypes{NewStackType(avmBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
 }
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
@@ -1570,14 +1632,36 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 	}
 	spec, ok := OpsByName[ops.Version][name]
 	if !ok {
-		spec, ok = OpsByName[AssemblerMaxVersion][name]
-		if ok {
-			ops.errorf("%s opcode was introduced in v%d", name, spec.Version)
-		} else {
-			ops.errorf("unknown opcode: %s", name)
-		}
+		var err error
+		spec, err = unknownOpcodeComplaint(name, ops.Version)
+		// unknownOpcodeComplaint's job is to return a nice error, so err != nil
+		ops.error(err)
 	}
 	return spec, spec.Name, ok
+}
+
+// unknownOpcodeComplaint returns the best error it can for a missing opcode,
+// plus a "standin" OpSpec, if possible.
+func unknownOpcodeComplaint(name string, v uint64) (OpSpec, error) {
+	first, last := -1, -1
+	var standin OpSpec
+	for i := 1; i < len(OpsByName); i++ {
+		spec, ok := OpsByName[i][name]
+		if ok {
+			standin = spec
+			if first == -1 {
+				first = i
+			}
+			last = i
+		}
+	}
+	if first > int(v) {
+		return standin, fmt.Errorf("%s opcode was introduced in v%d", name, first)
+	}
+	if last != -1 && last < int(v) {
+		return standin, fmt.Errorf("%s opcode was removed in v%d", name, last+1)
+	}
+	return OpSpec{}, fmt.Errorf("unknown opcode: %s", name)
 }
 
 // pseudoOps allows us to provide convenient ops that mirror existing ops without taking up another opcode. Using "txn" in version 2 and on, for example, determines whether to actually assemble txn or to use txna instead based on the number of immediates.
@@ -1586,8 +1670,8 @@ func getSpec(ops *OpStream, name string, args []string) (OpSpec, string, bool) {
 const anyImmediates = -1
 
 var pseudoOps = map[string]map[int]OpSpec{
-	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt)}},
-	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte)}},
+	"int":  {anyImmediates: OpSpec{Name: "int", Proto: proto(":i"), OpDetails: assembler(asmInt).typed(typePushInt)}},
+	"byte": {anyImmediates: OpSpec{Name: "byte", Proto: proto(":b"), OpDetails: assembler(asmByte).typed(typeByte)}},
 	// parse basics.Address, actually just another []byte constant
 	"addr": {anyImmediates: OpSpec{Name: "addr", Proto: proto(":b"), OpDetails: assembler(asmAddr)}},
 	// take a signature, hash it, and take first 4 bytes, actually just another []byte constant
@@ -1691,18 +1775,6 @@ func (le lineError) Error() string {
 
 func (le lineError) Unwrap() error {
 	return le.Err
-}
-
-func typecheck(expected, got StackType) bool {
-	// Some ops push 'any' and we wait for run time to see what it is.
-	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
-	if expected == StackAny && got == StackNone { // Any is lenient, but stack can't be empty
-		return false
-	}
-	if (expected == StackAny) || (got == StackAny) {
-		return true
-	}
-	return expected == got
 }
 
 // newline not included since handled in scanner
@@ -1813,7 +1885,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 		return
 	}
 	argcount := len(args)
-	if argcount > len(ops.known.stack) && ops.known.bottom == StackNone {
+	if argcount > len(ops.known.stack) && ops.known.bottom.AVMType == avmNone {
 		ops.typeErrorf("%s expects %d stack arguments but stack height is %d",
 			strings.Join(instruction, " "), argcount, len(ops.known.stack))
 	} else {
@@ -1827,7 +1899,7 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 			} else {
 				ops.trace(", %s", argType)
 			}
-			if !typecheck(argType, stype) {
+			if !stype.overlaps(argType) {
 				ops.typeErrorf("%s arg %d wanted type %s got %s",
 					strings.Join(instruction, " "), i, argType, stype)
 			}
@@ -1986,7 +2058,7 @@ func (ops *OpStream) assemble(text string) error {
 	if ops.Errors != nil {
 		l := len(ops.Errors)
 		if l == 1 {
-			return errors.New("1 error")
+			return fmt.Errorf("1 error: %w", ops.Errors[0])
 		}
 		return fmt.Errorf("%d errors", l)
 	}

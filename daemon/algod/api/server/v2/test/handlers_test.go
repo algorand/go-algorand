@@ -23,11 +23,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -64,12 +68,12 @@ import (
 
 const stateProofInterval = uint64(256)
 
-func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+func setupMockNodeForMethodGet(t *testing.T, status node.StatusReport, devmode bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, status)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, devmode)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -81,6 +85,10 @@ func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers,
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	return handler, c, rec, rootkeys, stxns, releasefunc
+}
+
+func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+	return setupMockNodeForMethodGet(t, status, false)
 }
 
 func numOrNil(n uint64) *uint64 {
@@ -187,7 +195,7 @@ func TestSyncRound(t *testing.T) {
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -242,7 +250,6 @@ func TestSyncRound(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	mockCall.Unset()
-	c, rec = newReq(t)
 
 	mock.AssertExpectationsForObjects(t, mockNode)
 }
@@ -716,13 +723,13 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
-func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
+func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transactions.SignedTxn) []byte) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
 	numAccounts := 5
 	numTransactions := 5
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler = v2.Handlers{
 
 		Node:     mockNode,
@@ -733,7 +740,7 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int) (handler v
 	var body io.Reader
 	if txnToUse >= 0 {
 		stxn := stxns[txnToUse]
-		bodyBytes := protocol.Encode(&stxn)
+		bodyBytes := txnPrep(stxn)
 		body = bytes.NewReader(bodyBytes)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", body)
@@ -743,7 +750,10 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int) (handler v
 }
 
 func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode)
+	txnPrep := func(stxn transactions.SignedTxn) []byte {
+		return protocol.Encode(&stxn)
+	}
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
 	defer releasefunc()
 	err := handler.RawTransaction(c)
 	require.NoError(t, err)
@@ -759,7 +769,17 @@ func TestPostTransaction(t *testing.T) {
 }
 
 func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode)
+	txnPrep := func(stxn transactions.SignedTxn) []byte {
+		request := v2.PreEncodedSimulateRequest{
+			TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+				{
+					Txns: []transactions.SignedTxn{stxn},
+				},
+			},
+		}
+		return protocol.EncodeReflect(&request)
+	}
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
 	defer releasefunc()
 	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: (*model.SimulateTransactionParamsFormat)(&format)})
 	require.NoError(t, err)
@@ -806,49 +826,35 @@ func TestPostSimulateTransaction(t *testing.T) {
 	}
 }
 
-func copyInnerTxnGroupIDs(t *testing.T, dst, src *model.PendingTransactionResponse) {
+func copyInnerTxnGroupIDs(t *testing.T, dst, src *v2.PreEncodedTxInfo) {
 	t.Helper()
 
-	// msgpack decodes to map[interface{}]interface{} while JSON decodes to map[string]interface{}
-	txn := dst.Txn["txn"]
-	switch dstTxnMap := txn.(type) {
-	case map[string]interface{}:
-		srcTxnMap := src.Txn["txn"].(map[string]interface{})
-		groupID, hasGroupID := srcTxnMap["grp"]
-		if hasGroupID {
-			dstTxnMap["grp"] = groupID
-		}
-	case map[interface{}]interface{}:
-		srcTxnMap := src.Txn["txn"].(map[interface{}]interface{})
-		groupID, hasGroupID := srcTxnMap["grp"]
-		if hasGroupID {
-			dstTxnMap["grp"] = groupID
-		}
+	if !src.Txn.Txn.Group.IsZero() {
+		dst.Txn.Txn.Group = src.Txn.Txn.Group
 	}
 
-	if dst.InnerTxns == nil || src.InnerTxns == nil {
+	if dst.Inners == nil || src.Inners == nil {
 		return
 	}
 
-	assert.Equal(t, len(*dst.InnerTxns), len(*src.InnerTxns))
+	assert.Equal(t, len(*dst.Inners), len(*src.Inners))
 
-	for innerIndex := range *dst.InnerTxns {
-		if innerIndex == len(*src.InnerTxns) {
+	for innerIndex := range *dst.Inners {
+		if innerIndex == len(*src.Inners) {
 			break
 		}
-		dstInner := &(*dst.InnerTxns)[innerIndex]
-		srcInner := &(*src.InnerTxns)[innerIndex]
+		dstInner := &(*dst.Inners)[innerIndex]
+		srcInner := &(*src.Inners)[innerIndex]
 		copyInnerTxnGroupIDs(t, dstInner, srcInner)
 	}
 }
 
-func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual model.SimulateResponse) {
+func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual v2.PreEncodedSimulateResponse) {
 	t.Helper()
 
 	if len(expectedError) != 0 {
 		require.NotNil(t, actual.TxnGroups[0].FailureMessage)
 		require.Contains(t, *actual.TxnGroups[0].FailureMessage, expectedError)
-		require.False(t, expected.WouldSucceed, "Test case WouldSucceed value is not consistent with expected failure")
 		// if it matched the expected error, copy the actual one so it will pass the equality check below
 		expected.TxnGroups[0].FailureMessage = actual.TxnGroups[0].FailureMessage
 	}
@@ -861,23 +867,23 @@ func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, 
 		}
 		expectedGroup := &expected.TxnGroups[groupIndex]
 		actualGroup := &actual.TxnGroups[groupIndex]
-		assert.Equal(t, len(expectedGroup.TxnResults), len(actualGroup.TxnResults))
-		for txnIndex := range expectedGroup.TxnResults {
-			if txnIndex == len(actualGroup.TxnResults) {
+		assert.Equal(t, len(expectedGroup.Txns), len(actualGroup.Txns))
+		for txnIndex := range expectedGroup.Txns {
+			if txnIndex == len(actualGroup.Txns) {
 				break
 			}
-			expectedTxn := &expectedGroup.TxnResults[txnIndex]
-			actualTxn := &actualGroup.TxnResults[txnIndex]
-			if expectedTxn.TxnResult.InnerTxns == nil || actualTxn.TxnResult.InnerTxns == nil {
+			expectedTxn := &expectedGroup.Txns[txnIndex]
+			actualTxn := &actualGroup.Txns[txnIndex]
+			if expectedTxn.Txn.Inners == nil || actualTxn.Txn.Inners == nil {
 				continue
 			}
-			assert.Equal(t, len(*expectedTxn.TxnResult.InnerTxns), len(*actualTxn.TxnResult.InnerTxns))
-			for innerIndex := range *expectedTxn.TxnResult.InnerTxns {
-				if innerIndex == len(*actualTxn.TxnResult.InnerTxns) {
+			assert.Equal(t, len(*expectedTxn.Txn.Inners), len(*actualTxn.Txn.Inners))
+			for innerIndex := range *expectedTxn.Txn.Inners {
+				if innerIndex == len(*actualTxn.Txn.Inners) {
 					break
 				}
-				expectedInner := &(*expectedTxn.TxnResult.InnerTxns)[innerIndex]
-				actualInner := &(*actualTxn.TxnResult.InnerTxns)[innerIndex]
+				expectedInner := &(*expectedTxn.Txn.Inners)[innerIndex]
+				actualInner := &(*actualTxn.Txn.Inners)[innerIndex]
 				copyInnerTxnGroupIDs(t, expectedInner, actualInner)
 			}
 		}
@@ -886,20 +892,20 @@ func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, 
 	require.Equal(t, expected, actual)
 }
 
-func makePendingTxnResponse(t *testing.T, txn transactions.SignedTxnWithAD, handle codec.Handle) model.PendingTransactionResponse {
+func makePendingTxnResponse(t *testing.T, txn transactions.SignedTxnWithAD) v2.PreEncodedTxInfo {
 	t.Helper()
 	preEncoded := v2.ConvertInnerTxn(&txn)
 
-	// encode to bytes
-	var encodedBytes []byte
-	encoder := codec.NewEncoderBytes(&encodedBytes, handle)
-	err := encoder.Encode(&preEncoded)
-	require.NoError(t, err)
+	// In theory we could return preEncoded directly, but there appears to be some subtle differences
+	// once you encode and decode the object, such as *uint64 fields turning from 0 to nil. So to be
+	// safe, let's encode and decode the object.
 
-	// decode to model.PendingTransactionResponse
-	var response model.PendingTransactionResponse
-	decoder := codec.NewDecoderBytes(encodedBytes, handle)
-	err = decoder.Decode(&response)
+	// Encode to bytes
+	encodedBytes := protocol.EncodeReflect(&preEncoded)
+
+	// Decode to v2.PreEncodedTxInfo
+	var response v2.PreEncodedTxInfo
+	err := protocol.DecodeReflect(encodedBytes, &response)
 	require.NoError(t, err)
 
 	return response
@@ -915,7 +921,7 @@ func TestSimulateTransaction(t *testing.T) {
 	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_998, 999_999, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -931,7 +937,7 @@ func TestSimulateTransaction(t *testing.T) {
 	for name, scenarioFn := range scenarios {
 		t.Run(name, func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
 			sender := roots[0]
-			futureAppID := basics.AppIndex(2)
+			futureAppID := basics.AppIndex(1002)
 
 			payTxn := txnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -961,10 +967,14 @@ int 1`,
 
 			// build request body
 			var body io.Reader
-			var bodyBytes []byte
-			for _, stxn := range stxns {
-				bodyBytes = append(bodyBytes, protocol.Encode(&stxn)...)
+			request := v2.PreEncodedSimulateRequest{
+				TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+					{
+						Txns: stxns,
+					},
+				},
 			}
+			bodyBytes := protocol.EncodeReflect(&request)
 
 			msgpackFormat := model.SimulateTransactionParamsFormatMsgpack
 			jsonFormat := model.SimulateTransactionParamsFormatJson
@@ -1011,7 +1021,7 @@ int 1`,
 					require.Equal(t, 200, rec.Code, rec.Body.String())
 
 					// decode actual response
-					var actualBody model.SimulateResponse
+					var actualBody v2.PreEncodedSimulateResponse
 					decoder := codec.NewDecoderBytes(rec.Body.Bytes(), responseFormat.handle)
 					err = decoder.Decode(&actualBody)
 					require.NoError(t, err)
@@ -1030,32 +1040,31 @@ int 1`,
 					for i := range scenario.TxnAppBudgetConsumed {
 						txnAppBudgetUsed = append(txnAppBudgetUsed, numOrNil(scenario.TxnAppBudgetConsumed[i]))
 					}
-					expectedBody := model.SimulateResponse{
-						Version: 1,
-						TxnGroups: []model.SimulateTransactionGroupResult{
+					expectedBody := v2.PreEncodedSimulateResponse{
+						Version: 2,
+						TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 							{
 								AppBudgetAdded:    appBudgetAdded,
 								AppBudgetConsumed: appBudgetConsumed,
 								FailedAt:          expectedFailedAt,
-								TxnResults: []model.SimulateTransactionResult{
+								Txns: []v2.PreEncodedSimulateTxnResult{
 									{
-										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[0],
 											// expect no ApplyData info
-										}, responseFormat.handle),
+										}),
 										AppBudgetConsumed: txnAppBudgetUsed[0],
 									},
 									{
-										TxnResult: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
 											SignedTxn: stxns[1],
 											ApplyData: scenario.ExpectedSimulationAD,
-										}, responseFormat.handle),
+										}),
 										AppBudgetConsumed: txnAppBudgetUsed[1],
 									},
 								},
 							},
 						},
-						WouldSucceed: scenario.Outcome == mocktracer.ApprovalOutcome,
 					}
 					assertSimulationResultsEqual(t, scenario.ExpectedError, expectedBody, actualBody)
 				})
@@ -1074,7 +1083,7 @@ func TestSimulateTransactionVerificationFailure(t *testing.T) {
 	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1114,6 +1123,73 @@ func TestSimulateTransactionVerificationFailure(t *testing.T) {
 	require.Equal(t, 400, rec.Code, rec.Body.String())
 }
 
+func TestSimulateTransactionMultipleGroups(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// prepare node and handler
+	numAccounts := 5
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+
+	sender := roots[0]
+	receiver := roots[1]
+
+	txn1 := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   1,
+	})
+	txn2 := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   2,
+	})
+
+	stxn1 := txn1.Txn().Sign(sender.Secrets())
+	stxn2 := txn2.Txn().Sign(sender.Secrets())
+
+	// build request body
+	request := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn1},
+			},
+			{
+				Txns: []transactions.SignedTxn{stxn2},
+			},
+		},
+	}
+	bodyBytes := protocol.EncodeReflect(&request)
+	body := bytes.NewReader(bodyBytes)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	rec := httptest.NewRecorder()
+
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// simulate transaction
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{})
+	require.NoError(t, err)
+	bodyString := rec.Body.String()
+	require.Equal(t, 400, rec.Code, bodyString)
+	require.Contains(t, bodyString, "expected 1 transaction group, got 2")
+}
+
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
 	numAccounts := 1
 	numTransactions := 1
@@ -1121,7 +1197,7 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nodeError, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nodeError, cannedStatusReportGolden, false)
 	handler := v2.Handlers{Node: mockNode, Log: logging.Base(), Shutdown: dummyShutdownChan}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -1149,10 +1225,6 @@ func TestStartCatchup(t *testing.T) {
 
 	badCatchPoint := "bad catchpoint"
 	startCatchupTest(t, badCatchPoint, nil, 400)
-
-	// Test that a catchup fails w/ 400 when the catchpoint round is > syncRound (while syncRound is set)
-	syncRoundError := node.MakeCatchpointSyncRoundFailure(goodCatchPoint, 1)
-	startCatchupTest(t, goodCatchPoint, syncRoundError, 400)
 }
 
 func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
@@ -1162,7 +1234,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1197,7 +1269,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int,
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -1268,7 +1340,7 @@ func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -1336,7 +1408,7 @@ func tealDryrunTest(
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -1445,7 +1517,7 @@ func TestTealDryrun(t *testing.T) {
 	gdr.ProtocolVersion = ""
 
 	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
-	require.Equal(t, string(protocol.ConsensusCurrentVersion), ddr.ProtocolVersion)
+	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
 	gdr.ProtocolVersion = string(protocol.ConsensusFuture)
 	ddr = tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
 	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
@@ -1465,7 +1537,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 
 	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
 	defer releasefunc()
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1549,7 +1621,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 	t.Run("Internal error", func(t *testing.T) {
 		// Create mock node with an error.
 		expectedErr := errors.New("expected error")
-		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr, cannedStatusReportGolden)
+		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr, cannedStatusReportGolden, false)
 		handler := v2.Handlers{
 			Node:     mockNode,
 			Log:      logging.Base(),
@@ -1940,4 +2012,194 @@ func TestExperimentalCheck(t *testing.T) {
 
 	require.Equal(t, 200, rec.Code)
 	require.Equal(t, "true\n", string(rec.Body.Bytes()))
+}
+
+func TestTimestampOffsetNotInDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	// TestGetBlockTimeStampOffset 400 - offset is not set and mock node is
+	// not in dev mode
+	err := handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed retrieving timestamp offset from node: cannot get block timestamp offset because we are not in dev mode\"}\n", rec.Body.String())
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 400 - cannot set timestamp offset when not
+	// in dev mode
+	err = handler.SetBlockTimeStampOffset(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: cannot set block timestamp when not in dev mode\"}\n", rec.Body.String())
+}
+
+func TestTimestampOffsetInDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupMockNodeForMethodGet(t, cannedStatusReportGolden, true)
+	defer releasefunc()
+
+	// TestGetBlockTimeStampOffset 404
+	err := handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+	require.Equal(t, "{\"message\":\"failed retrieving timestamp offset from node: block timestamp offset was never set, using real clock for timestamps\"}\n", rec.Body.String())
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 200
+	err = handler.SetBlockTimeStampOffset(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	c, rec = newReq(t)
+
+	// TestGetBlockTimeStampOffset 200
+	err = handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 400
+	err = handler.SetBlockTimeStampOffset(c, math.MaxUint64)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: block timestamp offset cannot be larger than max int64 value\"}\n", rec.Body.String())
+}
+
+func TestDeltasForTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	blk1 := bookkeeping.BlockHeader{Round: 1}
+	blk2 := bookkeeping.BlockHeader{Round: 2}
+	delta1 := ledgercore.StateDelta{Hdr: &blk1}
+	delta2 := ledgercore.StateDelta{Hdr: &blk2, KvMods: map[string]ledgercore.KvValueDelta{"bx1": {Data: []byte("foobar")}}}
+	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+	groupID1, err := crypto.DigestFromString(crypto.Hash([]byte("hello")).String())
+	require.NoError(t, err)
+	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{
+		Type:   protocol.AssetTransferTx,
+		Header: transactions.Header{Group: groupID1}},
+	}}
+
+	tracer := eval.MakeTxnGroupDeltaTracer(2)
+	handlers := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: tracer,
+			},
+		},
+		Log: logging.Base(),
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	// Add blocks to tracer
+	tracer.BeforeBlock(&blk1)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil)
+	tracer.BeforeBlock(&blk2)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil)
+
+	// Test /v2/deltas/{round}/txn/group
+	jsonFormatForRound := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(1),
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+
+	var roundResponse model.TransactionGroupLedgerStateDeltaForRoundResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &roundResponse)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(roundResponse))
+	require.Equal(t, []string{txn1.ID().String()}, roundResponse[0].Ids)
+	hdr, ok := roundResponse[0].Delta["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
+
+	// Test invalid round parameter
+	c, rec = newReq(t)
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(4),
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	// Test /v2/deltas/txn/group/{id}
+	jsonFormatForTxn := model.GetLedgerStateDeltaForTransactionGroupParamsFormatJson
+	c, rec = newReq(t)
+	// Use TxID
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		txn2.Txn.ID().String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	var groupResponse model.LedgerStateDeltaForTransactionGroupResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	groupHdr, ok := groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Use Group ID
+	c, rec = newReq(t)
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	require.NotNil(t, groupResponse["KvMods"])
+	groupHdr, ok = groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Test invalid ID
+	c, rec = newReq(t)
+	badID := crypto.Hash([]byte("invalidID")).String()
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		badID,
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	// Test nil Tracer
+	nilTracerHandler := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: nil,
+			},
+		},
+		Log: logging.Base(),
+	}
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 501, rec.Code)
+
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		0,
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 501, rec.Code)
 }

@@ -129,9 +129,7 @@ func newBlock(t *testing.T, ml *mockLedgerForTracker, testProtocolVersion protoc
 	delta.Accts.MergeAccounts(updates)
 	delta.Totals = newTotals
 
-	err := ml.addMockBlock(blockEntry{block: blk}, delta)
-	require.NoError(t, err)
-	ml.trackers.newBlock(blk, delta)
+	ml.addBlock(blockEntry{block: blk}, delta)
 
 	return newTotals
 }
@@ -779,7 +777,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 
 		delta.Totals = accumulateTotals(t, consensusVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		allTotals[i] = delta.Totals
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 
 		if i > basics.Round(maxBalLookback) && i%10 == 0 {

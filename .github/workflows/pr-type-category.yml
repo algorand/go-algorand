@@ -17,8 +17,10 @@ jobs:
           labels: "New Feature, Enhancement, Bug-Fix, Not-Yet-Enabled, Skip-Release-Notes"
 
       - name: "Checking for PR Category in PR title. Should be like '<category>: <pr title>'."
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
+          if [[ ! "$PR_TITLE" =~ ^.{2,}\:.{2,} ]]; then
             echo "## PR Category is missing from PR title. Please add it like '<category>: <pr title>'." >> GITHUB_STEP_SUMMARY
             exit 1
           fi

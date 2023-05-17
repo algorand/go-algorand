@@ -620,6 +620,7 @@ type EvaluatorOptions struct {
 	Generate            bool
 	MaxTxnBytesPerBlock int
 	ProtoParams         *config.ConsensusParams
+	Tracer              logic.EvalTracer
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -678,6 +679,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
 		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
+		Tracer:              evalOpts.Tracer,
 	}
 
 	// Preallocate space for the payset so that we don't have to
@@ -784,6 +786,10 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	if ot.Overflowed {
 		// TODO this should never happen; should we panic here?
 		return nil, fmt.Errorf("overflowed subtracting rewards for block %v", hdr.Round)
+	}
+
+	if eval.Tracer != nil {
+		eval.Tracer.BeforeBlock(&eval.block.BlockHeader)
 	}
 
 	return eval, nil
@@ -959,7 +965,8 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		eval.Tracer.BeforeTxnGroup(evalParams)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			eval.Tracer.AfterTxnGroup(evalParams, err)
+			deltas := cow.deltas()
+			eval.Tracer.AfterTxnGroup(evalParams, &deltas, err)
 		}()
 	}
 
@@ -1334,6 +1341,10 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		return err
 	}
 
+	if eval.Tracer != nil {
+		eval.Tracer.AfterBlock(&eval.block.BlockHeader)
+	}
+
 	return nil
 }
 
@@ -1544,7 +1555,7 @@ func (validator *evalTxValidator) run() {
 // Validate: Eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: Eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  Eval(context.Background(), l, blk, false, txcache, nil)
-func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (ledgercore.StateDelta, error) {
+func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, tracer logic.EvalTracer) (ledgercore.StateDelta, error) {
 	// flush the pending writes in the cache to make everything read so far available during eval
 	l.FlushCaches()
 
@@ -1553,6 +1564,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 			PaysetHint: len(blk.Payset),
 			Validate:   validate,
 			Generate:   false,
+			Tracer:     tracer,
 		})
 	if err != nil {
 		return ledgercore.StateDelta{}, err
