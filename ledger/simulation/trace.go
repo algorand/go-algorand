@@ -128,7 +128,7 @@ func validateSimulateRequest(request Request, nodeConfig config.Local) error {
 			},
 		}
 	}
-	if request.ExecTraceConfig != NoExecTrace && request.ExecTraceConfig&IncludePC != IncludePC {
+	if request.ExecTraceConfig != NoExecTrace && !request.ExecTraceConfig.IncludePC() {
 		return InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("the simulate request is not well formed: request.ExecTraceConfig is not NoExecTrace, but IncludePC is false"),

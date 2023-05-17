@@ -52,6 +52,15 @@ const (
 	IncludeScratch
 )
 
+// IncludePC tells if an enumeration ExecTraceConfig has IncludePC bit
+func (c ExecTraceConfig) IncludePC() bool { return c&IncludePC == IncludePC }
+
+// IncludeStack tells if an enumeration ExecTraceConfig has IncludeStack bit
+func (c ExecTraceConfig) IncludeStack() bool { return c&IncludeStack == IncludeStack }
+
+// IncludeScratch tells if an enumeration ExecTraceConfig has IncludeScratch bit
+func (c ExecTraceConfig) IncludeScratch() bool { return c&IncludeScratch == IncludeScratch }
+
 // Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
 type Request struct {
 	TxnGroups            [][]transactions.SignedTxn

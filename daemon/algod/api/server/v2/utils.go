@@ -489,13 +489,13 @@ func convertSimulationExecTraceResponse(execTraceConfigEnum simulation.ExecTrace
 	constTrue := true
 	execTraceConfig := model.SimulateTraceConfig{}
 
-	if execTraceConfigEnum&simulation.IncludePC == simulation.IncludePC {
+	if execTraceConfigEnum.IncludePC() {
 		execTraceConfig.UseExecTrace = &constTrue
 	}
-	if execTraceConfigEnum&simulation.IncludeStack == simulation.IncludeStack {
+	if execTraceConfigEnum.IncludeStack() {
 		execTraceConfig.IncludeStack = &constTrue
 	}
-	if execTraceConfigEnum&simulation.IncludeScratch == simulation.IncludeScratch {
+	if execTraceConfigEnum.IncludeScratch() {
 		execTraceConfig.IncludeScratch = &constTrue
 	}
 
