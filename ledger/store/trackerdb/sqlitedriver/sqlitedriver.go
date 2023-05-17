@@ -272,8 +272,8 @@ func (c *sqlCatchpoint) MakeOrderedAccountsIter(accountCount int) trackerdb.Orde
 }
 
 type sqlBatchScope struct {
-	tx       *sql.Tx
-	commited bool
+	tx        *sql.Tx
+	committed bool
 	trackerdb.Writer
 }
 
@@ -282,7 +282,7 @@ func (bs *sqlBatchScope) ResetTransactionWarnDeadline(ctx context.Context, deadl
 }
 
 func (bs *sqlBatchScope) Close() error {
-	if !bs.commited {
+	if !bs.committed {
 		return bs.tx.Rollback()
 	}
 	return nil
@@ -293,7 +293,7 @@ func (bs *sqlBatchScope) Commit() error {
 	if err != nil {
 		return err
 	}
-	bs.commited = true
+	bs.committed = true
 	return nil
 }
 
@@ -307,8 +307,8 @@ func (ss sqlSnapshotScope) Close() error {
 }
 
 type sqlTransactionScope struct {
-	tx       *sql.Tx
-	commited bool
+	tx        *sql.Tx
+	committed bool
 	trackerdb.Reader
 	trackerdb.Writer
 	trackerdb.Catchpoint
@@ -323,7 +323,7 @@ func (txs *sqlTransactionScope) ResetTransactionWarnDeadline(ctx context.Context
 }
 
 func (txs *sqlTransactionScope) Close() error {
-	if !txs.commited {
+	if !txs.committed {
 		return txs.tx.Rollback()
 	}
 	return nil
@@ -334,6 +334,6 @@ func (txs *sqlTransactionScope) Commit() error {
 	if err != nil {
 		return err
 	}
-	txs.commited = true
+	txs.committed = true
 	return nil
 }
