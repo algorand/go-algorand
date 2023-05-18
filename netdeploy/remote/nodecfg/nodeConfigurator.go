@@ -178,7 +178,7 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 				dest = filepath.Join(nodeDest, genesisDir, config.LedgerFilenamePrefix)
 				err = util.CopyFolder(nc.bootstrappedTrackerDir, dest)
 				if err != nil {
-					return nil, fmt.Errorf("failed to copy database directory %s from %s to %s : %w", "bootstrapped", filepath.Dir(nc.bootstrappedBlockFile), dest, err)
+					return nil, fmt.Errorf("failed to copy database directory from %s to %s : %w", nc.bootstrappedTrackerDir, dest, err)
 				}
 			}
 		}
