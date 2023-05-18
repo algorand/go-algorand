@@ -1,7 +1,8 @@
+SCENARIO = test_config.yml
 debug-blockgen:
 	python run_runner.py \
 	--conduit-binary ./conduit \
-	--scenario test_config.yml \
+	--scenario $(SCENARIO) \
 	--keep-alive \
 	--skip-runner \
 	--test-duration 30s
