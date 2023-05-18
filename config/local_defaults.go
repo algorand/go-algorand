@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    27,
+	Version:                                    28,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -119,6 +119,7 @@ var defaultLocal = Local{
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
+	StorageEngine:                              "sqlite",
 	SuggestedFeeBlockHistory:                   3,
 	SuggestedFeeSlidingWindowSize:              50,
 	TLSCertFile:                                "",
