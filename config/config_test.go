@@ -419,7 +419,7 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 			args:   args{networkID: "testnet"},
 			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "testnet.algorand.network",
 				BackupSRVBootstrap: "testnet.algorand.net",
-				DedupExp:           regexp.MustCompile("(algorand-testnet.(network|net))$")}},
+				DedupExp:           regexp.MustCompile("(algorand-testnet.(network|net))")}},
 		},
 		{name: "test5 - intended to match local template",
 			fields:             fields{DNSBootstrapID: "<network>.algorand.network"},
@@ -431,7 +431,7 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 			args:   args{networkID: "devnet"},
 			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.algorand.network",
 				BackupSRVBootstrap: "devnet.algorand.net",
-				DedupExp:           regexp.MustCompile("(algorand-devnet.(network|net))$")},
+				DedupExp:           regexp.MustCompile("(algorand-devnet.(network|net))")},
 				{PrimarySRVBootstrap: "devnet.cloudfront.com"}},
 		},
 	}

@@ -60,7 +60,7 @@ func TestParseDNSBootstrapIDBackupWithExpectedDefaultTemplate(t *testing.T) {
 		assert.True(t, strings.EqualFold(strings.Replace("<network>.algorand.net", "<network>",
 			string(network), -1), dnsBootstrap.BackupSRVBootstrap))
 		assert.Equal(t,
-			strings.Replace("(algorand-<network>.(network|net))$", "<network>", string(network), -1),
+			strings.Replace("(algorand-<network>.(network|net))", "<network>", string(network), -1),
 			dnsBootstrap.DedupExp.String())
 	})
 }
@@ -171,7 +171,7 @@ func TestParseDNSBootstrapIDBackupWithSingleDomainDedup(t *testing.T) {
 		assert.True(t, strings.EqualFold(primaryDomain, dnsBootstrap.PrimarySRVBootstrap))
 		assert.True(t, strings.EqualFold(backupDomain, dnsBootstrap.BackupSRVBootstrap))
 		assert.Equal(t,
-			strings.Replace("(algorand-<network>.network)$", "<network>", string(network), -1),
+			strings.Replace("(algorand-<network>.network)", "<network>", string(network), -1),
 			dnsBootstrap.DedupExp.String())
 	})
 }

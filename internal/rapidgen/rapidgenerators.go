@@ -24,13 +24,22 @@ import (
 	"strings"
 )
 
+func DomainWithPort() *rapid.Generator {
+	return rapid.Custom(func(t *rapid.T) string {
+		return fmt.Sprintf("%s:%d", Domain().Draw(t, "domain"), rapid.IntRange(1, 65535).Draw(t, "port"))
+	})
+}
+
 // Domain generates an RFC 1035 compliant domain name.
 func Domain() *rapid.Generator {
 	return DomainOf(255, 63, "", nil)
 }
 
-func DomainWithSuffix(suffix string, dontMatch []string) *rapid.Generator {
-	return DomainOf(253, 63, suffix, dontMatch)
+func DomainWithSuffixAndPort(suffix string, dontMatch []string) *rapid.Generator {
+	return rapid.Custom(func(t *rapid.T) string {
+		return fmt.Sprintf("%s:%d", DomainOf(253, 63, suffix, dontMatch).Draw(t, "domain"),
+			rapid.IntRange(1, 65535).Draw(t, "port"))
+	})
 }
 
 // DomainOf generates an RFC 1035 compliant domain name,

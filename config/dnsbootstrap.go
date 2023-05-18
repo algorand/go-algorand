@@ -115,7 +115,7 @@ func parseDNSBootstrap(dnsBootstrapID string, network protocol.NetworkID, defaul
 			// If the string happens to start with <name>, we drop this part
 			dq[0] = nameExp.ReplaceAllString(dq[0], "")
 
-			dedupExp = regexp.MustCompile("(" + dq[0] + ")$")
+			dedupExp = regexp.MustCompile("(" + dq[0] + ")")
 		}
 	}
 
