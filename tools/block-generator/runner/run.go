@@ -55,7 +55,7 @@ type Args struct {
 	ResetReportDir           bool
 	RunValidation            bool
 	KeepDataDir              bool
-	DBRound                  uint64
+	NextDBRound              uint64
 	GenesisFile              string
 }
 
@@ -125,7 +125,7 @@ func (r *Args) run() error {
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
-	generatorShutdownFunc, _ := startGenerator(r.Path, r.DBRound, r.GenesisFile, algodNet, blockMiddleware)
+	generatorShutdownFunc, _ := startGenerator(r.Path, r.NextDBRound, r.GenesisFile, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
 		if err := generatorShutdownFunc(); err != nil {
@@ -157,7 +157,7 @@ func (r *Args) run() error {
 	}
 
 	// Start conduit
-	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary, r.DBRound)
+	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary, r.NextDBRound)
 	if err != nil {
 		return fmt.Errorf("failed to start Conduit: %w", err)
 	}
