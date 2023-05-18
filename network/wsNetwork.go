@@ -1741,10 +1741,7 @@ func (wn *WebsocketNetwork) meshThread() {
 func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 	// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
 	dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
-
-	// If there is more than one entry in the DNS bootstrap array, we treat the first as 'primary',
-	// second as 'secondary' and attempt to merge/dedup the lists of relay records. Additional entries
-	// will be processed independently.
+	
 	for _, dnsBootstrap := range dnsBootstrapArray {
 		primaryRelayAddrs, primaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrap.PrimarySRVBootstrap)
 
