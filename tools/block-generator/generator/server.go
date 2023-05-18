@@ -60,7 +60,7 @@ func MakeServerWithMiddleware(dbround uint64, genesisFile string, configFile str
 	util.MaybeFail(err, "problem loading config file. Use '--config' or create a config file.")
 	var bkGenesis bookkeeping.Genesis
 	if genesisFile != "" {
-		bkGenesis, err = readGenesis(genesisFile)
+		bkGenesis, err = bookkeeping.LoadGenesisFromFile(genesisFile)
 		util.MaybeFail(err, "Failed to parse genesis file '%s'", genesisFile)
 	}
 	gen, err := MakeGenerator(dbround, bkGenesis, config)

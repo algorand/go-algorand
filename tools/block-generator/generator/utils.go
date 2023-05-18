@@ -20,11 +20,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
-	"os"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-codec/codec"
 )
 
@@ -81,13 +78,4 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 		return nil, fmt.Errorf("failed to encode object: %w", err)
 	}
 	return output, nil
-}
-
-func readGenesis(filepath string) (genesis bookkeeping.Genesis, err error) {
-	genesisText, err := os.ReadFile(filepath)
-	if err != nil {
-		return
-	}
-	err = protocol.DecodeJSON(genesisText, &genesis)
-	return
 }
