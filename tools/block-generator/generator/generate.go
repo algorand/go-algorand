@@ -62,8 +62,8 @@ const (
 
 	assetTotal = uint64(100000000000000000)
 
-	consensusTimeMilli int64 = 4500
-	startingTxnCounter       = 1000
+	consensusTimeMilli int64  = 4500
+	startingTxnCounter uint64 = 1000
 )
 
 // GenerationConfig defines the tunable parameters for block generation.
