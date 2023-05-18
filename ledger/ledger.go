@@ -630,11 +630,12 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 	return l.accts.LatestTotals()
 }
 
-// OnlineTotals returns the online totals of all accounts at the end of round rnd.
-func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+// OnlineCirculation returns the online totals of all accounts at the end of round rnd.
+// It implements agreement's calls for Circulation(rnd)
+func (l *Ledger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.onlineTotals(rnd)
+	return l.acctsOnline.onlineCirculation(rnd, voteRnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.

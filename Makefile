@@ -13,6 +13,10 @@ ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
 S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
+GOLANG_VERSIONS 		:= $(shell ./scripts/get_golang_version.sh all)
+GOLANG_VERSION_BUILD 	:= $(firstword $(GOLANG_VERSIONS))
+GOLANG_VERSION_SUPPORT 	:= $(lastword $(GOLANG_VERSIONS))
+
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
@@ -100,6 +104,12 @@ fix: build
 
 lint: deps
 	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
+
+tidy:
+	export PATH=$(GOPATH1)/bin:$(PATH) && \
+	go install golang.org/dl/go$(GOLANG_VERSION_BUILD)@latest && \
+	go$(GOLANG_VERSION_BUILD) download && \
+	go$(GOLANG_VERSION_BUILD) mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
 
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
