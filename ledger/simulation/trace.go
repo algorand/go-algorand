@@ -104,34 +104,25 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 	return logicEvalConstants
 }
 
+// ExecTraceConfig gathers all execution trace related configs for simulation result
+type ExecTraceConfig struct {
+	Enable bool
+}
+
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
-	Version        uint64
-	LastRound      basics.Round
-	TxnGroups      []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
-	EvalOverrides  ResultEvalOverrides
-	Block          *ledgercore.ValidatedBlock
-	IncludePC      bool
-	IncludeStack   bool
-	IncludeScratch bool
+	Version       uint64
+	LastRound     basics.Round
+	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
+	EvalOverrides ResultEvalOverrides
+	Block         *ledgercore.ValidatedBlock
+	TraceConfig   ExecTraceConfig
 }
 
 // ReturnTrace reads from Result object and decides if simulation returns PC.
-// It only reads IncludePC for any option combination must contain IncludePC field, or it won't make sense.
+// It only reads Enable for any option combination must contain Enable field, or it won't make sense.
 // The other invalid options would be eliminated in validateSimulateRequest early.
-func (r Result) ReturnTrace() bool { return r.IncludePC }
-
-// validateSimulateRequestTraceOptions checks the validity of trace related options are well-formed in Request.
-func validateSimulateRequestTraceOptions(request Request) error {
-	if (request.IncludeStack || request.IncludeScratch) && !request.IncludePC {
-		return InvalidRequestError{
-			SimulatorError{
-				err: fmt.Errorf("the simulate request is not well formed: request has exec-trace-related option turned on, but IncludePC is false"),
-			},
-		}
-	}
-	return nil
-}
+func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 
 // validateSimulateRequest first checks relation between request and nodeConfig:
 // if nodeConfig is running with `EnableDeveloperAPI` turned off, this method would:
@@ -140,15 +131,12 @@ func validateSimulateRequestTraceOptions(request Request) error {
 // then it checks the validity of request itself:
 // - validateSimulateRequestTraceOptions checks the validity of trace related options are well-formed in Request.
 func validateSimulateRequest(request Request, nodeConfig config.Local) error {
-	if !nodeConfig.EnableDeveloperAPI && request.IncludePC {
+	if !nodeConfig.EnableDeveloperAPI && request.TraceConfig.Enable {
 		return InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace"),
 			},
 		}
-	}
-	if err := validateSimulateRequestTraceOptions(request); err != nil {
-		return err
 	}
 	return nil
 }
@@ -170,13 +158,11 @@ func makeSimulationResult(lastRound basics.Round, request Request, nodeConfig co
 	}
 
 	return Result{
-		Version:        ResultLatestVersion,
-		LastRound:      lastRound,
-		TxnGroups:      groups,
-		EvalOverrides:  resultEvalConstants,
-		IncludePC:      request.IncludePC,
-		IncludeStack:   request.IncludeStack,
-		IncludeScratch: request.IncludeScratch,
+		Version:       ResultLatestVersion,
+		LastRound:     lastRound,
+		TxnGroups:     groups,
+		EvalOverrides: resultEvalConstants,
+		TraceConfig:   request.TraceConfig,
 	}, nil
 }
 
@@ -184,30 +170,6 @@ func makeSimulationResult(lastRound basics.Round, request Request, nodeConfig co
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
 	PC uint64
-
-	// TODO: additional effects, like stack and scratch space changes
-	// 		Ideally these effects contain only the "delta" information, unlike the
-	// 		current dryrun trace, which returns the _entire_ stack and scratch space
-	// 		for _every_ opcode.
-	//
-	// For stack, an interface that returns the first index that's changed and the rest of the stack
-	// seems like a good idea. E.g. if the stack changes from [A, B, C] to [A, X, Y], the delta effect
-	// could be something like { index: 1, elements: [X, Y] }. You can also think of it in terms of
-	// pushes and pops if you want, so { pops: 2, pushes: [X, Y] }; the only difference is that index
-	// is the absolute stack index while pops is a relative index from the end.
-	//
-	// * Note, this is not very efficient for opcodes like frame_bury and cover, which insert a single
-	//   value potentially very deep into the stack, so perhaps an additional special case could be
-	//   created to address that, maybe like { bury: X, depth: Y }? (I view this as nice to have but
-	//   not critical for our first implementation).
-	//
-	// For scratch space, the good news is we don't have any opcodes which mutate more than 1 slot
-	// at a time, and you can't ever delete a scratch value. So I think a more basic scheme is appropriate;
-	// something that includes the index being set and the value should be sufficient.
-	//
-	// A note about types: stack and scratch space is "untyped", meaning either uint64s or byteslices
-	// can be anywhere. Since JSON and msgpack arrays can also be untyped, I think it's a good idea
-	// to embrace this and encode either a number or a byte string for each value.
 }
 
 // TraceStepInnerIndexPair is the struct that contains execution step in trace and index into inner txn traces.
@@ -233,8 +195,8 @@ type TransactionTrace struct {
 	ClearStateProgramTrace ProgramTrace
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
 	LogicSigTrace ProgramTrace
-	// ProgramTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
-	ProgramTraceRef *ProgramTrace
+	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
+	programTraceRef *ProgramTrace
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.

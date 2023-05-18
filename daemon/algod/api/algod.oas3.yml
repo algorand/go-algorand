@@ -1905,17 +1905,17 @@
       "SimulateProgramTrace": {
         "description": "Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.",
         "properties": {
-          "step-to-inner-map": {
-            "description": "The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
-            "items": {
-              "$ref": "#/components/schemas/SimulationPcToInnerIndex"
-            },
-            "type": "array"
-          },
           "trace": {
             "description": "An array of opcodes and effects during simulation execution.",
             "items": {
               "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          },
+          "trace-elem-index-to-inner-index": {
+            "description": "The map from the trace elem index to the inner trace index, indicating which step contract simulation branches off into an inner txn. The trace elem index is always pointing to an itxn_submit.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationPcToInnerIndex"
             },
             "type": "array"
           }
@@ -1978,15 +1978,7 @@
       "SimulateTraceConfig": {
         "description": "An object including that configures simulation execution trace.",
         "properties": {
-          "include-scratch": {
-            "description": "A boolean option for including scratch slot update in Execution Trace response.",
-            "type": "boolean"
-          },
-          "include-stack": {
-            "description": "A boolean option for including stack changes in Execution Trace response.",
-            "type": "boolean"
-          },
-          "use-exec-trace": {
+          "enable": {
             "description": "A boolean option for opting in execution trace features simulation endpoint.",
             "type": "boolean"
           }
@@ -2076,31 +2068,31 @@
       "SimulationOpcodeTraceUnit": {
         "description": "The set of trace information and effect from evaluating a single opcode.",
         "properties": {
-          "PC": {
+          "pc": {
             "description": "The program counter of the current opcode being evaluated.",
             "type": "integer"
           }
         },
         "required": [
-          "PC"
+          "pc"
         ],
         "type": "object"
       },
       "SimulationPcToInnerIndex": {
         "description": "The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
         "properties": {
-          "PC": {
-            "description": "The program counter of the current opcode being evaluated.",
-            "type": "integer"
-          },
           "inner-index": {
             "description": "The index into inner trace array, to which inner transaction get branched off from program execution.",
+            "type": "integer"
+          },
+          "pc": {
+            "description": "The program counter of the current opcode being evaluated.",
             "type": "integer"
           }
         },
         "required": [
-          "PC",
-          "inner-index"
+          "inner-index",
+          "pc"
         ],
         "type": "object"
       },

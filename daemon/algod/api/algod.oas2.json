@@ -3482,16 +3482,8 @@
       "description": "An object including that configures simulation execution trace.",
       "type": "object",
       "properties": {
-        "use-exec-trace": {
+        "enable": {
           "description": "A boolean option for opting in execution trace features simulation endpoint.",
-          "type": "boolean"
-        },
-        "include-stack": {
-          "description": "A boolean option for including stack changes in Execution Trace response.",
-          "type": "boolean"
-        },
-        "include-scratch": {
-          "description": "A boolean option for including scratch slot update in Execution Trace response.",
           "type": "boolean"
         }
       }
@@ -3510,8 +3502,8 @@
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
         },
-        "step-to-inner-map": {
-          "description": "The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
+        "trace-elem-index-to-inner-index": {
+          "description": "The map from the trace elem index to the inner trace index, indicating which step contract simulation branches off into an inner txn. The trace elem index is always pointing to an itxn_submit.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/SimulationPcToInnerIndex"
@@ -3882,10 +3874,10 @@
       "description": "The set of trace information and effect from evaluating a single opcode.",
       "type": "object",
       "required": [
-        "PC"
+        "pc"
       ],
       "properties": {
-        "PC": {
+        "pc": {
           "description": "The program counter of the current opcode being evaluated.",
           "type": "integer"
         }
@@ -3895,11 +3887,11 @@
       "description": "The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
       "type": "object",
       "required": [
-        "PC",
+        "pc",
         "inner-index"
       ],
       "properties": {
-        "PC": {
+        "pc": {
           "description": "The program counter of the current opcode being evaluated.",
           "type": "integer"
         },

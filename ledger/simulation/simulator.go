@@ -44,9 +44,7 @@ type Request struct {
 	AllowEmptySignatures bool
 	AllowMoreLogging     bool
 	ExtraOpcodeBudget    uint64
-	IncludePC            bool
-	IncludeStack         bool
-	IncludeScratch       bool
+	TraceConfig          ExecTraceConfig
 }
 
 // Latest is part of the LedgerForSimulator interface.

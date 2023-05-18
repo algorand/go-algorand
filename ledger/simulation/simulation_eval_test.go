@@ -964,7 +964,12 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 		commonLeadingSteps := []simulation.OpcodeTraceUnit{
 			{PC: 1}, {PC: 4}, {PC: 6},
 		}
-		firstTrace := append(commonLeadingSteps, simulation.OpcodeTraceUnit{PC: 1409})
+
+		// Get the first trace
+		firstTrace := commonLeadingSteps
+		firstTrace = append(firstTrace, simulation.OpcodeTraceUnit{PC: 1409})
+
+		// Get the second trace
 		secondTrace := commonLeadingSteps
 		for i := 9; i <= 1409; i++ {
 			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: uint64(i)})
@@ -979,7 +984,9 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 					{signedCreateTxn, signedExpensiveTxn},
 				},
 				ExtraOpcodeBudget: extraOpcodeBudget,
-				IncludePC:         true,
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
 			},
 			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
@@ -1011,7 +1018,9 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 					},
 				},
 				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
-				IncludePC:     true,
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
 			},
 		}
 	})
@@ -1704,13 +1713,14 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 		})
 
 		MaxDepth := 2
-		MinFee := uint64(1e5)
+		MinBalance := env.TxnInfo.CurrentProtocolParams().MinBalance
+		MinFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
 
 		paymentTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: futureAppID.Address(),
-			Amount:   MinFee * uint64(MaxDepth+1),
+			Amount:   MinBalance * uint64(MaxDepth+1),
 		})
 
 		callsMaxDepth := env.TxnInfo.NewTxn(txntest.Txn{
@@ -1726,12 +1736,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedPaymentTxn := paymentTxn.Txn().Sign(sender.Sk)
 		signedCallsMaxDepth := callsMaxDepth.Txn().Sign(sender.Sk)
-
-		uint64ItoB := func(v uint64) []byte {
-			bytes := make([]byte, 8)
-			binary.BigEndian.PutUint64(bytes, v)
-			return bytes
-		}
 
 		creationOpcodeTrace := []simulation.OpcodeTraceUnit{
 			{PC: 1},
@@ -1929,7 +1933,9 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedCreateTxn, signedPaymentTxn, signedCallsMaxDepth},
 				},
-				IncludePC: true,
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
 			},
 			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
@@ -1955,7 +1961,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 									ApplyData: transactions.ApplyData{
 										ApplicationID: 0,
 										EvalDelta: transactions.EvalDelta{
-											Logs: []string{string(uint64ItoB(1 << MaxDepth))},
+											Logs: []string{string(uint64ToBytes(1 << MaxDepth))},
 											InnerTxns: []transactions.SignedTxnWithAD{
 												{
 													ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 3},
@@ -1966,7 +1972,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 												{
 													ApplyData: transactions.ApplyData{
 														EvalDelta: transactions.EvalDelta{
-															Logs: []string{string(uint64ItoB(1 << (MaxDepth - 1)))},
+															Logs: []string{string(uint64ToBytes(1 << (MaxDepth - 1)))},
 															InnerTxns: []transactions.SignedTxnWithAD{
 																{
 																	ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 8},
@@ -1977,7 +1983,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 																{
 																	ApplyData: transactions.ApplyData{
 																		EvalDelta: transactions.EvalDelta{
-																			Logs: []string{string(uint64ItoB(1 << (MaxDepth - 2)))},
+																			Logs: []string{string(uint64ToBytes(1 << (MaxDepth - 2)))},
 																		},
 																	},
 																},
@@ -2035,7 +2041,9 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 						AppBudgetConsumed: 385,
 					},
 				},
-				IncludePC: true,
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
 			},
 		}
 	})
@@ -2083,13 +2091,17 @@ byte "hello"; log; int 1`,
 				TxnGroups: [][]transactions.SignedTxn{
 					{signedPayTxn, signedAppCallTxn},
 				},
-				IncludePC: true,
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
 			},
 			nodeConfig: &nodeConfig,
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
-				IncludePC: true,
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{

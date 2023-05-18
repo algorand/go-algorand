@@ -632,11 +632,11 @@ type PendingTransactionResponse struct {
 
 // SimulateProgramTrace Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.
 type SimulateProgramTrace struct {
-	// StepToInnerMap The map from the step index of trace to the inner trace index, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.
-	StepToInnerMap *[]SimulationPcToInnerIndex `json:"step-to-inner-map,omitempty"`
-
 	// Trace An array of opcodes and effects during simulation execution.
 	Trace []SimulationOpcodeTraceUnit `json:"trace"`
+
+	// TraceElemIndexToInnerIndex The map from the trace elem index to the inner trace index, indicating which step contract simulation branches off into an inner txn. The trace elem index is always pointing to an itxn_submit.
+	TraceElemIndexToInnerIndex *[]SimulationPcToInnerIndex `json:"trace-elem-index-to-inner-index,omitempty"`
 }
 
 // SimulateRequest Request type for simulation endpoint.
@@ -665,14 +665,8 @@ type SimulateRequestTransactionGroup struct {
 
 // SimulateTraceConfig An object including that configures simulation execution trace.
 type SimulateTraceConfig struct {
-	// IncludeScratch A boolean option for including scratch slot update in Execution Trace response.
-	IncludeScratch *bool `json:"include-scratch,omitempty"`
-
-	// IncludeStack A boolean option for including stack changes in Execution Trace response.
-	IncludeStack *bool `json:"include-stack,omitempty"`
-
-	// UseExecTrace A boolean option for opting in execution trace features simulation endpoint.
-	UseExecTrace *bool `json:"use-exec-trace,omitempty"`
+	// Enable A boolean option for opting in execution trace features simulation endpoint.
+	Enable *bool `json:"enable,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -725,17 +719,17 @@ type SimulationEvalOverrides struct {
 
 // SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
 type SimulationOpcodeTraceUnit struct {
-	// PC The program counter of the current opcode being evaluated.
-	PC uint64 `json:"PC"`
+	// Pc The program counter of the current opcode being evaluated.
+	Pc uint64 `json:"pc"`
 }
 
 // SimulationPcToInnerIndex The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.
 type SimulationPcToInnerIndex struct {
-	// PC The program counter of the current opcode being evaluated.
-	PC uint64 `json:"PC"`
-
 	// InnerIndex The index into inner trace array, to which inner transaction get branched off from program execution.
 	InnerIndex uint64 `json:"inner-index"`
+
+	// Pc The program counter of the current opcode being evaluated.
+	Pc uint64 `json:"pc"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.

@@ -1369,7 +1369,7 @@ func traceCmdOptionToSimulateTraceConfigModel() *model.SimulateTraceConfig {
 	constTrue := true
 
 	if simulateExecTraceOptIn {
-		simulateTraceConfig.UseExecTrace = &constTrue
+		simulateTraceConfig.Enable = &constTrue
 	}
 
 	if simulateTraceConfig == (model.SimulateTraceConfig{}) {
