@@ -170,7 +170,7 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 				dest = filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.tracker.sqlite", config.LedgerFilenamePrefix))
 				_, err = util.CopyFile(nc.bootstrappedTrackerFile, dest)
 				if err != nil {
-					return nil, fmt.Errorf("failed to copy database file %s from %s to %s : %w", "bootstrapped.tracker.sqlite", filepath.Dir(nc.bootstrappedBlockFile), dest, err)
+					return nil, fmt.Errorf("failed to copy database file %s from %s to %s : %w", filepath.Base(nc.bootstrappedBlockFile), filepath.Dir(nc.bootstrappedBlockFile), dest, err)
 				}
 			}
 			if nc.bootstrappedTrackerDir != "" {
