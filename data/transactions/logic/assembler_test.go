@@ -2329,6 +2329,12 @@ func TestPragmas(t *testing.T) {
 	testProg(t, "#pragma version 5 blah", assemblerNoVersion,
 		Expect{1, "unexpected extra tokens: blah"})
 
+	testProg(t, "#pragma typetrack", assemblerNoVersion,
+		Expect{1, "no typetrack value"})
+
+	testProg(t, "#pragma typetrack blah", assemblerNoVersion,
+		Expect{1, `bad #pragma typetrack: "blah"`})
+
 	testProg(t, "#pragma typetrack false blah", assemblerNoVersion,
 		Expect{1, "unexpected extra tokens: blah"})
 
