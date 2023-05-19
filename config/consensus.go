@@ -1291,8 +1291,8 @@ func initConsensusProtocols() {
 	v38.ExcludeExpiredCirculation = true
 
 	// TEAL resources sharing and other features
-	v37.LogicSigVersion = 9
-	v37.EnablePrecheckECDSACurve = true
+	v38.LogicSigVersion = 9
+	v38.EnablePrecheckECDSACurve = true
 	v38.AppForbidLowResources = true
 	v38.EnableBareBudgetError = true
 	v38.EnableBoxRefNameError = true
