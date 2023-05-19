@@ -1289,7 +1289,7 @@ func initConsensusProtocols() {
 	v38.StateProofUseTrackerVerification = true
 	v38.EnableCatchpointsWithSPContexts = true
 
-	// online circulation on-demaind expiration
+	// online circulation on-demand expiration
 	v38.ExcludeExpiredCirculation = true
 
 	// TEAL resources sharing and other features
