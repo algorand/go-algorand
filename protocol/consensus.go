@@ -197,7 +197,7 @@ const ConsensusV36 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/44fa607d6051730f5264526bf3c108d51f0eadb6",
 )
 
-// ConsensusV37 enables AVM resources sharing and pre-check ECDSA curve
+// ConsensusV37 enables AVM pre-check ECDSA curve
 const ConsensusV37 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/61879ef45bb8f38338ae8f84b4411e94b3aa8796",
 )
