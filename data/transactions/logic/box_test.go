@@ -242,7 +242,7 @@ func TestBoxAvailability(t *testing.T) {
 	TestApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, nil, 8, ledger, NewExpect(1, fmt.Sprintf("invalid Box reference %#x", 'B')))
+	}, nil, 8, ledger, Exp(1, fmt.Sprintf("invalid Box reference %#x", 'B')))
 
 	// B is available if indexed by 0 in tx[1].Boxes
 	group := MakeSampleTxnGroup(MakeSampleTxn(), txntest.Txn{
@@ -254,7 +254,7 @@ func TestBoxAvailability(t *testing.T) {
 	TestApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, group, 8, ledger, NewExpect(1, "no such box"))
+	}, group, 8, ledger, Exp(1, "no such box"))
 
 	// B is available if listed by appId in tx[1].Boxes
 	group = MakeSampleTxnGroup(MakeSampleTxn(), txntest.Txn{
@@ -267,7 +267,7 @@ func TestBoxAvailability(t *testing.T) {
 	TestApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
-	}, group, 8, ledger, NewExpect(1, "no such box"))
+	}, group, 8, ledger, Exp(1, "no such box"))
 }
 
 func TestBoxReadBudget(t *testing.T) {
