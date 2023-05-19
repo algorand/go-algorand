@@ -1748,7 +1748,12 @@ func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Contex
 	if err != nil {
 		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
 	}
-	data, err := encode(handle, deltas)
+	response := struct {
+		Deltas []eval.TxnGroupDeltaWithIds
+	}{
+		Deltas: deltas,
+	}
+	data, err := encode(handle, response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}

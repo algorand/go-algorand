@@ -1142,8 +1142,10 @@ type SupplyResponse struct {
 	TotalMoney uint64 `json:"total-money"`
 }
 
-// TransactionGroupLedgerStateDeltaForRoundResponse defines model for TransactionGroupLedgerStateDeltaForRoundResponse.
-type TransactionGroupLedgerStateDeltaForRoundResponse = []LedgerStateDeltaForTransactionGroup
+// TransactionGroupLedgerStateDeltasForRoundResponse defines model for TransactionGroupLedgerStateDeltasForRoundResponse.
+type TransactionGroupLedgerStateDeltasForRoundResponse struct {
+	Deltas []LedgerStateDeltaForTransactionGroup `json:"deltas"`
+}
 
 // TransactionParametersResponse TransactionParams contains the parameters that help a client construct
 // a new transaction.

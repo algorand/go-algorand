@@ -1564,7 +1564,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/TransactionGroupLedgerStateDeltaForRoundResponse"
+            "$ref": "#/responses/TransactionGroupLedgerStateDeltasForRoundResponse"
           },
           "401": {
             "description": "Invalid API Token",
@@ -4132,12 +4132,20 @@
         "$ref": "#/definitions/LedgerStateDelta"
       }
     },
-    "TransactionGroupLedgerStateDeltaForRoundResponse": {
+    "TransactionGroupLedgerStateDeltasForRoundResponse": {
       "description": "Response containing all ledger state deltas for transaction groups, with their associated Ids, in a single round.",
       "schema": {
-        "type": "array",
-        "items": {
-          "$ref": "#/definitions/LedgerStateDeltaForTransactionGroup"
+        "type": "object",
+        "required": [
+          "deltas"
+        ],
+        "properties": {
+          "deltas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/LedgerStateDeltaForTransactionGroup"
+            }
+          }
         }
       }
     },
