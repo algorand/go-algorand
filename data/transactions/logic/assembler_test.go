@@ -2324,6 +2324,26 @@ func TestPragmas(t *testing.T) {
 
 	ops = testProg(t, "    #pragma version 5     ", assemblerNoVersion)
 	require.Equal(t, uint64(5), ops.Version)
+
+	testProg(t, "#pragma version 5 blah", assemblerNoVersion,
+		Expect{1, "unexpected extra tokens: blah"})
+
+	testProg(t, "#pragma typetrack", assemblerNoVersion,
+		Expect{1, "no typetrack value"})
+
+	testProg(t, "#pragma typetrack blah", assemblerNoVersion,
+		Expect{1, `bad #pragma typetrack: "blah"`})
+
+	testProg(t, "#pragma typetrack false blah", assemblerNoVersion,
+		Expect{1, "unexpected extra tokens: blah"})
+
+	// Currently pragmas don't treat semicolons as newlines. It would probably
+	// be nice to fix this.
+	testProg(t, "#pragma version 5; int 1", assemblerNoVersion,
+		Expect{1, "unexpected extra tokens: ; int 1"})
+
+	testProg(t, "#pragma typetrack false; int 1", assemblerNoVersion,
+		Expect{1, "unexpected extra tokens: ; int 1"})
 }
 
 func TestAssemblePragmaVersion(t *testing.T) {

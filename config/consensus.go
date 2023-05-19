@@ -507,6 +507,11 @@ type ConsensusParams struct {
 
 	// EnableBoxRefNameError specifies that box ref names should be validated early
 	EnableBoxRefNameError bool
+
+	// ExcludeExpiredCirculation excludes expired stake from the total online stake
+	// used by agreement for Circulation, and updates the calculation of StateProofOnlineTotalWeight used
+	// by state proofs to use the same method (rather than excluding stake from the top N stakeholders as before).
+	ExcludeExpiredCirculation bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1305,6 +1310,8 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.ExcludeExpiredCirculation = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

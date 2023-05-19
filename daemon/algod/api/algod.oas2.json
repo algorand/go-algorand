@@ -1469,8 +1469,7 @@
         "description": "Get ledger deltas for a round.",
         "tags": [
             "public",
-            "data",
-            "experimental"
+            "nonparticipating"
         ],
         "produces": [
           "application/json",
@@ -1539,8 +1538,7 @@
         "description": "Get ledger deltas for transaction groups in a given round.",
         "tags": [
           "public",
-          "data",
-          "experimental"
+          "nonparticipating"
         ],
         "produces": [
           "application/json",
@@ -1609,8 +1607,7 @@
         "description": "Get a ledger delta for a given transaction group.",
         "tags": [
           "public",
-          "data",
-          "experimental"
+          "nonparticipating"
         ],
         "produces": [
           "application/json",

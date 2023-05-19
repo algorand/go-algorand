@@ -21,8 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/eval"
-	"github.com/algorand/go-deadlock"
 	"os"
 	"runtime"
 	"strings"
@@ -37,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
@@ -45,6 +44,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-deadlock"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -65,6 +65,20 @@ type mockLedgerForTracker struct {
 
 	// trackerRegistry manages persistence into DB so we have to have it here even for a single tracker test
 	trackers trackerRegistry
+}
+
+// onlineTotals returns the online totals of all accounts at the end of round rnd.
+// used in tests only
+func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+
+	totals := au.roundTotals[offset]
+	return totals.Online.Money, nil
 }
 
 func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]ledgercore.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
@@ -325,7 +339,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, latestRnd, latest)
 
 	// the log has "onlineAccounts failed to fetch online totals for rnd" warning that is expected
-	_, err := ao.onlineTotals(latest + 1)
+	_, err := ao.onlineCirculation(latest+1, latest+1+basics.Round(ao.maxBalLookback()))
 	require.Error(t, err)
 
 	var validThrough basics.Round
@@ -334,7 +348,8 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
-		_, err := ao.onlineTotals(base - basics.Round(ao.maxBalLookback()))
+		rnd := base - basics.Round(ao.maxBalLookback())
+		_, err := ao.onlineCirculation(rnd, base)
 		require.Error(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
@@ -397,7 +412,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			bll := accts[rnd]
 			require.Equal(t, all, bll)
 
-			totals, err := ao.onlineTotals(rnd)
+			totals, err := ao.onlineCirculation(rnd, rnd+basics.Round(ao.maxBalLookback()))
 			require.NoError(t, err)
 			require.Equal(t, totals.Raw, totalOnline)
 
