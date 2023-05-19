@@ -95,6 +95,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			yType: "StateProof",
 		},
 	}
+
 	for _, tc := range testCases {
 		// These should be run in serial as they modify go.mod, go.sum and typeAnalyzer/main.go
 		// TODO: it probably is preferrable to setup and `go get` everything _before_ running the tests
