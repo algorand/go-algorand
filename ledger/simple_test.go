@@ -35,20 +35,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newSimpleLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local) *Ledger {
-	var genHash crypto.Digest
-	crypto.RandBytes(genHash[:])
-	return newSimpleLedgerFull(t, balances, cv, genHash, cfg)
+type simpleLedgerCfg struct {
+	onDisk      bool // default is in-memory
+	notArchival bool // default is archival
 }
 
-func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, genHash crypto.Digest, cfg config.Local) *Ledger {
+type simpleLedgerOption func(*simpleLedgerCfg)
+
+func simpleLedgerOnDisk() simpleLedgerOption {
+	return func(cfg *simpleLedgerCfg) { cfg.onDisk = true }
+}
+
+func simpleLedgerNotArchival() simpleLedgerOption {
+	return func(cfg *simpleLedgerCfg) { cfg.notArchival = true }
+}
+
+func newSimpleLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local, opts ...simpleLedgerOption) *Ledger {
+	var genHash crypto.Digest
+	crypto.RandBytes(genHash[:])
+	return newSimpleLedgerFull(t, balances, cv, genHash, cfg, opts...)
+}
+
+func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, genHash crypto.Digest, cfg config.Local, opts ...simpleLedgerOption) *Ledger {
+	var slCfg simpleLedgerCfg
+	for _, opt := range opts {
+		opt(&slCfg)
+	}
 	genBlock, err := bookkeeping.MakeGenesisBlock(cv, balances, "test", genHash)
 	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
+	dbName = strings.Replace(dbName, "/", "_", -1)
+	cfg.Archival = !slCfg.notArchival
+	l, err := OpenLedger(logging.Base(), dbName, !slCfg.onDisk, ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,
