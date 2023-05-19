@@ -2149,6 +2149,195 @@ byte "hello"; log; int 1`,
 	})
 }
 
+func TestFailingLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 8
+` + strings.Repeat(`byte "a"; keccak256; pop
+`, 2) + `int 0`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
+byte "hello"; log; int 1`,
+			ClearStateProgram: "#pragma version 8\n int 1",
+		})
+
+		txntest.Group(&payTxn, &appCallTxn)
+
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+
+		nodeConfig := config.GetDefaultLocal()
+		nodeConfig.EnableDeveloperAPI = true
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedPayTxn, signedAppCallTxn},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			nodeConfig:    &nodeConfig,
+			expectedError: "rejected by logic",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{1},
+						Txns: []simulation.TxnResult{
+							{},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{},
+								},
+								LogicSigBudgetConsumed: 266,
+								Trace: &simulation.TransactionTrace{
+									LogicSigTrace: simulation.ProgramTrace{
+										Trace: []simulation.OpcodeTraceUnit{
+											{PC: 1},
+											{PC: 5},
+											{PC: 6},
+											{PC: 7},
+											{PC: 8},
+											{PC: 9},
+											{PC: 10},
+											{PC: 11},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestFailingApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 8
+` + strings.Repeat(`byte "a"; keccak256; pop
+`, 2) + `int 1`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
+byte "hello"; log; int 0`,
+			ClearStateProgram: "#pragma version 8\n int 1",
+		})
+
+		txntest.Group(&payTxn, &appCallTxn)
+
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+
+		nodeConfig := config.GetDefaultLocal()
+		nodeConfig.EnableDeveloperAPI = true
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedPayTxn, signedAppCallTxn},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			nodeConfig:    &nodeConfig,
+			expectedError: "rejected by ApprovalProgram",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{1},
+						Txns: []simulation.TxnResult{
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: 1002,
+										EvalDelta:     transactions.EvalDelta{Logs: []string{"hello"}},
+									},
+								},
+								AppBudgetConsumed:      3,
+								LogicSigBudgetConsumed: 266,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: simulation.ProgramTrace{
+										Trace: []simulation.OpcodeTraceUnit{
+											{PC: 1},
+											{PC: 8},
+											{PC: 9},
+										},
+									},
+									LogicSigTrace: simulation.ProgramTrace{
+										Trace: []simulation.OpcodeTraceUnit{
+											{PC: 1},
+											{PC: 5},
+											{PC: 6},
+											{PC: 7},
+											{PC: 8},
+											{PC: 9},
+											{PC: 10},
+											{PC: 11},
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    700,
+						AppBudgetConsumed: 3,
+					},
+				},
+			},
+		}
+	})
+}
+
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
 // within a subsequent app call
 func TestBalanceChangesWithApp(t *testing.T) {
