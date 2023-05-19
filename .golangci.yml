@@ -118,8 +118,12 @@ issues:
         # - nilerr
         - nolintlint
         # - revive
-        - staticcheck
+        # - staticcheck
         - typecheck
+    - path: _test\.go
+      linters:
+        - staticcheck
+      text: "SA4006: this value" # of X is never used
     # Ignore missing parallel tests in existing packages
     - path: ^agreement.*_test\.go
       linters:
