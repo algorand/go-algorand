@@ -197,12 +197,15 @@ const ConsensusV36 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/44fa607d6051730f5264526bf3c108d51f0eadb6",
 )
 
-// ConsensusV37 enables AVM resources sharing (TEAL v9) and pre-check ECDSA curve
+// ConsensusV37 is a technical upgrade and released in the same time as ConsensusV38.
+// It is needed to allow nodes to build up a necessary state to support state proofs related
+// options in ConsensusV38
 const ConsensusV37 = ConsensusVersion(
-	"https://github.com/algorandfoundation/specs/tree/61879ef45bb8f38338ae8f84b4411e94b3aa8796",
+	"https://github.com/algorandfoundation/specs/tree/1ac4dd1f85470e1fb36c8a65520e1313d7dfed5e",
 )
 
-// ConsensusV38 enables state proof verification using a special tracker, TEAL v9 extra features and
+// ConsensusV38 enables state proof verification using a special tracker,
+// TEAL v9 resources sharing, pre-check ECDSA curve and extra features, and
 // shortens the lambda to 1.5s.
 const ConsensusV38 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/abd3d4823c6f77349fc04c3af7b1e99fe4df699f",

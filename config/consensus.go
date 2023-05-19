@@ -1275,10 +1275,6 @@ func initConsensusProtocols() {
 	v37 := v36
 	v37.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// TEAL resources sharing
-	v37.LogicSigVersion = 9
-	v37.EnablePrecheckECDSACurve = true
-
 	Consensus[protocol.ConsensusV37] = v37
 
 	// v36 can be upgraded to v37, with an update delay of 7 days ( see calculation above )
@@ -1294,7 +1290,9 @@ func initConsensusProtocols() {
 	// online circulation on-demand expiration
 	v38.ExcludeExpiredCirculation = true
 
-	// TEAL additional features
+	// TEAL resources sharing and other features
+	v37.LogicSigVersion = 9
+	v37.EnablePrecheckECDSACurve = true
 	v38.AppForbidLowResources = true
 	v38.EnableBareBudgetError = true
 	v38.EnableBoxRefNameError = true
