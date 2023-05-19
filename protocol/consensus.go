@@ -197,12 +197,12 @@ const ConsensusV36 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/44fa607d6051730f5264526bf3c108d51f0eadb6",
 )
 
-// ConsensusV37 enables AVM pre-check ECDSA curve
+// ConsensusV37 enables AVM resources sharing (TEAL v9) and pre-check ECDSA curve
 const ConsensusV37 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/61879ef45bb8f38338ae8f84b4411e94b3aa8796",
 )
 
-// ConsensusV38 enables state proof verification using a special tracker, TEAL v9 features and
+// ConsensusV38 enables state proof verification using a special tracker, TEAL v9 extra features and
 // shortens the lambda to 1.5s.
 const ConsensusV38 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/abd3d4823c6f77349fc04c3af7b1e99fe4df699f",
