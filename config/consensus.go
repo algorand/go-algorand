@@ -1289,6 +1289,9 @@ func initConsensusProtocols() {
 	v38.StateProofUseTrackerVerification = true
 	v38.EnableCatchpointsWithSPContexts = true
 
+	// online circulation on-demaind expiration
+	v38.ExcludeExpiredCirculation = true
+
 	// TEAL resources sharing and other features
 	v38.LogicSigVersion = 9
 	v38.AppForbidLowResources = true
@@ -1310,8 +1313,6 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
-
-	vFuture.ExcludeExpiredCirculation = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
