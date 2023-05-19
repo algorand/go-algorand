@@ -107,7 +107,7 @@ func (ref intReference) length(ops *OpStream, assembled []byte) (int, error) {
 	case opIntc:
 		return 2, nil
 	default:
-		return 0, ops.lineErrorf(ops.OffsetToLine[ref.position], "Unexpected op at intReference: %d", assembled[ref.position])
+		return 0, errorLinef(ops.OffsetToLine[ref.position], "unexpected op at intReference: %d", assembled[ref.position])
 	}
 }
 
@@ -176,7 +176,7 @@ func (ref byteReference) length(ops *OpStream, assembled []byte) (int, error) {
 	case opBytec:
 		return 2, nil
 	default:
-		return 0, ops.lineErrorf(ops.OffsetToLine[ref.position], "Unexpected op at byteReference: %d", assembled[ref.position])
+		return 0, errorLinef(ops.OffsetToLine[ref.position], "unexpected op at byteReference: %d", assembled[ref.position])
 	}
 }
 
@@ -359,7 +359,7 @@ func (pgm *ProgramKnowledge) reset() {
 func (ops *OpStream) createLabel(withColon token) {
 	label := strings.TrimSuffix(withColon.str, ":")
 	if _, ok := ops.labels[label]; ok {
-		ops.errorOnf(withColon, "duplicate label %#v", label)
+		ops.record(withColon.errorf("duplicate label %#v", label))
 	}
 	ops.labels[label] = ops.pending.Len()
 	ops.known.label()
@@ -503,15 +503,15 @@ func (ops *OpStream) byteLiteral(val []byte) error {
 }
 
 func asmInt(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
 	}
 
 	// After backBranchEnabledVersion, control flow is confusing, so if there's
 	// a manual cblock, use push instead of trying to use what's given.
 	if ops.cntIntcBlock > 0 && ops.Version >= backBranchEnabledVersion {
 		// We don't understand control-flow, so use pushint
-		ops.warnOnf(args[0], "int %s used with explicit intcblock. must pushint", args[0].str)
+		ops.warn(args[0], "int %s used with explicit intcblock. must pushint", args[0].str)
 		pushint := OpsByName[ops.Version]["pushint"]
 		return asmPushInt(ops, &pushint, mnemonic, args)
 	}
@@ -523,7 +523,7 @@ func asmInt(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceEr
 		if ok {
 			return asmPushInt(ops, &pushint, mnemonic, args)
 		}
-		return ops.errorOnf(mnemonic, "int %s used with manual intcblocks. Use intc.", args[0].str)
+		return mnemonic.errorf("int %s used with manual intcblocks. Use intc.", args[0].str)
 	}
 
 	// In both of the above clauses, we _could_ track whether a particular
@@ -538,54 +538,54 @@ func asmInt(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceEr
 	if !ok {
 		val, err := strconv.ParseUint(args[0].str, 0, 64)
 		if err != nil {
-			return ops.errorOn(args[0], err)
+			return args[0].error(err)
 		}
 		i = val
 	}
 	err := ops.intLiteral(i)
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	return nil
 }
 
 // Explicit invocation of const lookup and push
 func asmIntC(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
 	}
 	constIndex, err := byteImm(args[0].str, "constant")
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	err = ops.writeIntc(uint(constIndex))
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	return nil
 }
 func asmByteC(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
 	}
 	constIndex, err := byteImm(args[0].str, "constant")
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	err = ops.writeBytec(uint(constIndex))
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	return nil
 }
 
 func asmPushInt(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
 	}
 	val, err := strconv.ParseUint(args[0].str, 0, 64)
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
@@ -604,14 +604,14 @@ func asmPushBytes(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	// asmPushBytes is sometimes used to assemble the "byte" mnemonic, so use
 	// mnemonic.str instead of spec.Name when reporting errors.
 	if len(args) == 0 {
-		return ops.errorAfterf(mnemonic, "%s needs byte literal argument", mnemonic.str)
+		return mnemonic.errorAfterf("%s needs byte literal argument", mnemonic.str)
 	}
 	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
-		return ops.errorOnf(args[consumed], "%s %w", mnemonic.str, err)
+		return args[consumed].errorf("%s %w", mnemonic.str, err)
 	}
 	if len(args) != consumed {
-		return ops.errorOnf(args[consumed], "%s with extraneous argument", mnemonic.str)
+		return args[consumed].errorf("%s with extraneous argument", mnemonic.str)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
@@ -780,14 +780,14 @@ func parseStringLiteral(input string) (result []byte, err error) {
 // byte "this is a string\n"
 func asmByte(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	if len(args) == 0 {
-		return ops.errorAfterf(mnemonic, "%s needs byte literal argument", spec.Name)
+		return mnemonic.errorAfterf("%s needs byte literal argument", spec.Name)
 	}
 
 	// After backBranchEnabledVersion, control flow is confusing, so if there's
 	// a manual cblock, use push instead of trying to use what's given.
 	if ops.cntBytecBlock > 0 && ops.Version >= backBranchEnabledVersion {
 		// We don't understand control-flow, so use pushbytes
-		ops.warnOnf(args[0], "byte %s used with explicit bytecblock. must pushbytes", args[0].str)
+		ops.warn(args[0], "byte %s used with explicit bytecblock. must pushbytes", args[0].str)
 		pushbytes := OpsByName[ops.Version]["pushbytes"] // make sure pushbytes opcode is written
 		return asmPushBytes(ops, &pushbytes, mnemonic, args)
 	}
@@ -800,7 +800,7 @@ func asmByte(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceE
 		if ok {
 			return asmPushBytes(ops, &pushbytes, mnemonic, args)
 		}
-		return ops.errorOnf(args[0], "byte %s used with manual bytecblocks. Use bytec.", args[0].str)
+		return args[0].errorf("byte %s used with manual bytecblocks. Use bytec.", args[0].str)
 	}
 
 	// In both of the above clauses, we _could_ track whether a particular
@@ -808,44 +808,44 @@ func asmByte(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceE
 
 	val, consumed, err := parseBinaryArgs(args)
 	if err != nil {
-		return ops.errorOnf(args[consumed], "%s %w", spec.Name, err)
+		return args[consumed].errorf("%s %w", spec.Name, err)
 	}
 	if len(args) != consumed {
-		return ops.errorOnf(args[consumed], "%s with extraneous argument", spec.Name)
+		return args[consumed].errorf("%s with extraneous argument", spec.Name)
 	}
 	err = ops.byteLiteral(val)
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	return nil
 }
 
 // method "add(uint64,uint64)uint64"
 func asmMethod(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
 	}
 	arg := args[0].str
 	if len(arg) > 1 && arg[0] == '"' && arg[len(arg)-1] == '"' {
 		methodSig, err := parseStringLiteral(arg)
 		if err != nil {
-			return ops.errorOn(args[0], err)
+			return args[0].error(err)
 		}
 		methodSigStr := string(methodSig)
 		err = abi.VerifyMethodSignature(methodSigStr)
 		if err != nil {
 			// Warn if an invalid signature is used. Don't return an error, since the ABI is not
 			// governed by the core protocol, so there may be changes to it that we don't know about
-			ops.warnOnf(args[0], "invalid ARC-4 ABI method signature for method op: %w", err)
+			ops.warn(args[0], "invalid ARC-4 ABI method signature for method op: %w", err)
 		}
 		hash := sha512.Sum512_256(methodSig)
 		err = ops.byteLiteral(hash[:4])
 		if err != nil {
-			return ops.errorOn(args[0], err)
+			return args[0].error(err)
 		}
 		return nil
 	}
-	return ops.errorOn(args[0], "Unable to parse method signature")
+	return args[0].errorf("unable to parse method signature")
 }
 
 func asmIntImmArgs(ops *OpStream, args []token) ([]uint64, *sourceError) {
@@ -856,7 +856,7 @@ func asmIntImmArgs(ops *OpStream, args []token) ([]uint64, *sourceError) {
 	for i, xs := range args {
 		cu, err := strconv.ParseUint(xs.str, 0, 64)
 		if err != nil {
-			ops.errorOn(xs, err)
+			ops.record(xs.error(err))
 		}
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.pending.Write(scratch[:l])
@@ -876,7 +876,7 @@ func asmIntCBlock(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 		// If we previously processed an `int`, we thought we could insert our
 		// own intcblock, but now we see a manual one.
 		if ops.hasPseudoInt {
-			return ops.errorOn(mnemonic, "intcblock following int")
+			return mnemonic.errorf("intcblock following int")
 		}
 		ops.intcRefs = nil
 		ops.intc = ivals
@@ -896,7 +896,7 @@ func asmByteImmArgs(ops *OpStream, spec *OpSpec, args []token) ([][]byte, *sourc
 			// intcblock, but parseBinaryArgs would have
 			// to return a useful consumed value even in
 			// the face of errors.  Hard.
-			return nil, ops.errorOnf(rest[0], "%s %w", spec.Name, err)
+			return nil, rest[0].errorf("%s %w", spec.Name, err)
 		}
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
@@ -924,7 +924,7 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *s
 		// If we previously processed a pseudo `byte`, we thought we could
 		// insert our own bytecblock, but now we see a manual one.
 		if ops.hasPseudoByte {
-			return ops.errorOn(mnemonic, "bytecblock following byte/addr/method")
+			return mnemonic.errorf("bytecblock following byte/addr/method")
 		}
 		ops.bytecRefs = nil
 		ops.bytec = bvals
@@ -936,27 +936,27 @@ func asmByteCBlock(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *s
 // addr A1EU...
 // parses base32-with-checksum account address strings into a byte literal
 func asmAddr(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
 	}
 	addr, err := basics.UnmarshalChecksumAddress(args[0].str)
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	err = ops.byteLiteral(addr[:])
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	return nil
 }
 
 func asmArg(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
 	}
 	val, err := byteImm(args[0].str, "argument")
 	if err != nil {
-		return ops.errorOn(args[0], err)
+		return args[0].error(err)
 	}
 	altSpec := *spec
 	if val < 4 {
@@ -976,8 +976,8 @@ func asmArg(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceEr
 }
 
 func asmBranch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
 	}
 
 	ops.referToLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+spec.Size)
@@ -991,7 +991,7 @@ func asmBranch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourc
 func asmSwitch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	numOffsets := len(args)
 	if numOffsets > math.MaxUint8 {
-		return ops.errorOnf(args[math.MaxUint8], "%s cannot take more than 255 labels", spec.Name)
+		return args[math.MaxUint8].errorf("%s cannot take more than 255 labels", spec.Name)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(byte(numOffsets))
@@ -1014,7 +1014,7 @@ func asmSubstring(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	start, _ := strconv.ParseUint(args[0].str, 0, 64)
 	end, _ := strconv.ParseUint(args[1].str, 0, 64)
 	if end < start {
-		return ops.errorOn(args[0], "substring end is before start")
+		return args[0].errorf("substring end is before start")
 	}
 	return nil
 }
@@ -1046,7 +1046,7 @@ func asmItxn(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceE
 		itxna := OpsByName[ops.Version]["itxna"]
 		return asmDefault(ops, &itxna, mnemonic, args)
 	}
-	return ops.errorOnf(mnemonic, "%s expects 1 or 2 immediate arguments", spec.Name)
+	return mnemonic.errorf("%s expects 1 or 2 immediate arguments", spec.Name)
 }
 
 // asmGitxn substitutes gitna's spec if the are 3 args
@@ -1058,22 +1058,22 @@ func asmGitxn(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *source
 		itxna := OpsByName[ops.Version]["gitxna"]
 		return asmDefault(ops, &itxna, mnemonic, args)
 	}
-	return ops.errorOnf(mnemonic, "%s expects 2 or 3 immediate arguments", spec.Name)
+	return mnemonic.errorf("%s expects 2 or 3 immediate arguments", spec.Name)
 }
 
 func asmItxnField(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
 	}
 	fs, ok := txnFieldSpecByName[args[0].str]
 	if !ok {
-		return ops.errorOnf(args[0], "%s unknown field: %#v", spec.Name, args[0].str)
+		return args[0].errorf("%s unknown field: %#v", spec.Name, args[0].str)
 	}
 	if fs.itxVersion == 0 {
-		return ops.errorOnf(args[0], "%s %#v is not allowed.", spec.Name, args[0].str)
+		return args[0].errorf("%s %#v is not allowed.", spec.Name, args[0].str)
 	}
 	if fs.itxVersion > ops.Version {
-		return ops.errorOnf(args[0], "%s %s field was introduced in v%d. Missed #pragma version?", spec.Name, args[0].str, fs.itxVersion)
+		return args[0].errorf("%s %s field was introduced in v%d. Missed #pragma version?", spec.Name, args[0].str, fs.itxVersion)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(fs.Field())
@@ -1082,7 +1082,7 @@ func asmItxnField(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 
 type asmFunc func(*OpStream, *OpSpec, token, []token) *sourceError
 
-func checkArgCount(name string, mnemonic token, args []token, expected int) *sourceError {
+func (ops *OpStream) checkArgCount(name string, mnemonic token, args []token, expected int) *sourceError {
 	offered := len(args)
 	if offered != expected {
 		all := make([]token, len(args)+1)
@@ -1095,17 +1095,17 @@ func checkArgCount(name string, mnemonic token, args []token, expected int) *sou
 			col = all[expected+1].col // start of first extra arg
 		}
 		if expected == 1 {
-			return positionError(line, col, "%s expects 1 immediate argument", name)
+			return &sourceError{line, col, fmt.Errorf("%s expects 1 immediate argument", name)}
 		}
-		return positionError(line, col, "%s expects %d immediate arguments", name, expected)
+		return &sourceError{line, col, fmt.Errorf("%s expects %d immediate arguments", name, expected)}
 	}
 	return nil
 }
 
 // Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
 func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
-	if err := checkArgCount(spec.Name, mnemonic, args, len(spec.OpDetails.Immediates)); err != nil {
-		return ops.accumulate(err)
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, len(spec.OpDetails.Immediates)); err != nil {
+		return err
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	for i, imm := range spec.OpDetails.Immediates {
@@ -1130,7 +1130,8 @@ func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sour
 							if isPseudoName {
 								errMsg += " with " + joinIntsOnOr("immediate", len(args))
 							}
-							return ops.errorOnf(args[i], "%s can only use %#v as immediate %s", errMsg, args[i].str, strings.Join(correctImmediates, " or "))
+							return args[i].errorf("%s can only use %#v as immediate %s",
+								errMsg, args[i].str, strings.Join(correctImmediates, " or "))
 						}
 					}
 					if isPseudoName {
@@ -1144,17 +1145,17 @@ func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sour
 							}
 						}
 						if len(numImmediatesWithField) > 0 {
-							return ops.errorOnf(args[i], "%#v field of %s can only be used with %s", args[i].str, spec.Name, joinIntsOnOr("immediate", numImmediatesWithField...))
+							return args[i].errorf("%#v field of %s can only be used with %s", args[i].str, spec.Name, joinIntsOnOr("immediate", numImmediatesWithField...))
 						}
 					}
-					return ops.errorOnf(args[i], "%s unknown field: %#v", spec.Name, args[i].str)
+					return args[i].errorf("%s unknown field: %#v", spec.Name, args[i].str)
 				}
 				// refine the typestack now, so it is maintained even if there's a version error
 				if fs.Type().Typed() {
 					ops.returns(spec, fs.Type())
 				}
 				if fs.Version() > ops.Version {
-					return ops.errorOnf(args[i], "%s %s field was introduced in v%d. Missed #pragma version?",
+					return args[i].errorf("%s %s field was introduced in v%d. Missed #pragma version?",
 						spec.Name, args[i].str, fs.Version())
 				}
 				ops.pending.WriteByte(fs.Field())
@@ -1176,21 +1177,21 @@ func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sour
 							if isPseudoName {
 								errMsg += " with " + joinIntsOnOr("immediate", len(args))
 							}
-							return ops.errorOnf(args[i], "%s can only use %#v as immediate %s", errMsg, args[i].str, strings.Join(correctImmediates, " or "))
+							return args[i].errorf("%s can only use %#v as immediate %s", errMsg, args[i].str, strings.Join(correctImmediates, " or "))
 						}
 					}
-					return ops.errorOnf(args[i], "%s %w", spec.Name, err)
+					return args[i].errorf("%s %w", spec.Name, err)
 				}
 				ops.pending.WriteByte(val)
 			}
 		case immInt8:
 			val, err := int8Imm(args[i].str, imm.Name)
 			if err != nil {
-				return ops.errorOnf(args[i], "%s %w", spec.Name, err)
+				return args[i].errorf("%s %w", spec.Name, err)
 			}
 			ops.pending.WriteByte(val)
 		default:
-			return ops.errorOnf(args[i], "unable to assemble immKind %d", imm.kind)
+			return args[i].errorf("unable to assemble immKind %d", imm.kind)
 		}
 	}
 	return nil
@@ -1635,7 +1636,7 @@ func pseudoImmediatesError(ops *OpStream, mnemonic token, specs map[int]OpSpec) 
 		immediateCounts[i] = numImms
 		i++
 	}
-	ops.errorOn(mnemonic, mnemonic.str+" expects "+joinIntsOnOr("immediate argument", immediateCounts...))
+	ops.record(mnemonic.errorf("%s expects %s", mnemonic.str, joinIntsOnOr("immediate argument", immediateCounts...)))
 }
 
 // getSpec finds the OpSpec we need during assembly based on its name, our current version, and the immediates passed in
@@ -1663,8 +1664,8 @@ func getSpec(ops *OpStream, mnemonic token, args int) (OpSpec, string, bool) {
 		}
 		pseudo.Name = name
 		if pseudo.Version > ops.Version {
-			ops.errorOnf(mnemonic, "%s opcode with %s was introduced in v%d",
-				pseudo.Name, joinIntsOnOr("immediate", args), pseudo.Version)
+			ops.record(mnemonic.errorf("%s opcode with %s was introduced in v%d",
+				pseudo.Name, joinIntsOnOr("immediate", args), pseudo.Version))
 		}
 		if args == 0 {
 			return pseudo, pseudo.Name + " without immediates", true
@@ -1676,7 +1677,7 @@ func getSpec(ops *OpStream, mnemonic token, args int) (OpSpec, string, bool) {
 		var err error
 		spec, err = unknownOpcodeComplaint(name, ops.Version)
 		// unknownOpcodeComplaint's job is to return a nice error, so err != nil
-		ops.errorOn(mnemonic, err)
+		ops.record(mnemonic.error(err))
 	}
 	return spec, spec.Name, ok
 }
@@ -1822,12 +1823,8 @@ func (se sourceError) Unwrap() error {
 	return se.Err
 }
 
-func positionError(line, col int, format string, args ...interface{}) *sourceError {
-	return &sourceError{line, col, fmt.Errorf(format, args...)}
-}
-
-func tokenError(t token, format string, args ...interface{}) *sourceError {
-	return positionError(t.line, t.col, format, args...)
+func errorLinef(line int, format string, a ...interface{}) *sourceError {
+	return &sourceError{line, 0, fmt.Errorf(format, a...)}
 }
 
 func typecheck(expected, got StackType) bool {
@@ -1846,6 +1843,18 @@ type token struct {
 	str  string
 	col  int
 	line int
+}
+
+func (t token) error(err error) *sourceError {
+	return &sourceError{t.line, t.col, err}
+}
+
+func (t token) errorf(format string, args ...interface{}) *sourceError {
+	return t.error(fmt.Errorf(format, args...))
+}
+
+func (t token) errorAfterf(format string, args ...interface{}) *sourceError {
+	return &sourceError{t.line, t.col + len(t.str), fmt.Errorf(format, args...)}
 }
 
 // newline not included since handled in scanner
@@ -1947,7 +1956,7 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 
 func (ops *OpStream) typeErrorf(opcode token, format string, args ...interface{}) {
 	if ops.typeTracking {
-		ops.errorOnf(opcode, format, args...)
+		ops.record(opcode.errorf(format, args...))
 	}
 }
 
@@ -2022,17 +2031,21 @@ func nextStatement(ops *OpStream, tokens []token) (current, rest []token) {
 	return tokens, nil
 }
 
-type directiveFunc func(*OpStream, []token) error
+type directiveFunc func(*OpStream, []token) *sourceError
 
 var directives = map[string]directiveFunc{"pragma": pragma, "define": define}
 
 // assemble reads text from an input and accumulates the program
 func (ops *OpStream) assemble(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
-		return ops.errorOnf(token{line: 1}, "Can not assemble version %d", ops.Version)
+		err := fmt.Errorf("Can not assemble version %d", ops.Version)
+		ops.record(&sourceError{0, 0, err})
+		return err
 	}
 	if strings.TrimSpace(text) == "" {
-		return ops.errorOnf(token{line: 1}, "Cannot assemble empty program text")
+		err := errors.New("Cannot assemble empty program text")
+		ops.record(&sourceError{0, 0, err})
+		return err
 	}
 	fin := strings.NewReader(text)
 	scanner := bufio.NewScanner(fin)
@@ -2044,10 +2057,12 @@ func (ops *OpStream) assemble(text string) error {
 			if first := tokens[0]; first.str[0] == '#' {
 				directive := first.str[1:]
 				if dFunc, ok := directives[directive]; ok {
-					_ = dFunc(ops, tokens)
+					if err := dFunc(ops, tokens); err != nil {
+						ops.record(err)
+					}
 					ops.trace("%3d: %s line\n", first.line, first.str)
 				} else {
-					ops.errorOnf(first, "Unknown directive: %s", directive)
+					ops.record(first.errorf("Unknown directive: %s", directive))
 				}
 				continue
 			}
@@ -2068,7 +2083,7 @@ func (ops *OpStream) assemble(text string) error {
 			if opstring[len(opstring)-1] == ':' {
 				labelName := opstring[:len(opstring)-1]
 				if _, ok := ops.macros[labelName]; ok {
-					ops.errorOnf(current[0], "Cannot create label with same name as macro: %s", labelName)
+					ops.record(current[0].errorf("Cannot create label with same name as macro: %s", labelName))
 				} else {
 					ops.createLabel(current[0])
 				}
@@ -2100,8 +2115,10 @@ func (ops *OpStream) assemble(text string) error {
 					}
 				}
 				ops.trackStack(args, returns, expandedName, current)
-				spec.asm(ops, &spec, current[0], current[1:]) //nolint:errcheck // ignore error and continue, to collect more errors
-				if spec.deadens() {                           // An unconditional branch deadens the following code
+				if err := spec.asm(ops, &spec, current[0], current[1:]); err != nil {
+					ops.record(err)
+				}
+				if spec.deadens() { // An unconditional branch deadens the following code
 					ops.known.deaden()
 				}
 				if spec.Name == "callsub" {
@@ -2118,7 +2135,7 @@ func (ops *OpStream) assemble(text string) error {
 		if errors.Is(err, bufio.ErrTooLong) {
 			err = errors.New("line too long")
 		}
-		ops.errorOn(token{line: ops.sourceLine}, err)
+		ops.record(&sourceError{ops.sourceLine, 0, err})
 	}
 
 	if ops.Version >= optimizeConstantsEnabledVersion {
@@ -2166,7 +2183,7 @@ func (ops *OpStream) recheckMacroNames() error {
 	for macroName := range ops.macros {
 		err := checkMacroName(macroName, ops.Version, ops.labels)
 		if err != nil {
-			ops.errorOn(ops.macros[macroName][0], err)
+			ops.record(ops.macros[macroName][0].error(err))
 			delete(ops.macros, macroName)
 			errored = true
 		}
@@ -2231,17 +2248,17 @@ func checkMacroName(macroName string, version uint64, labels map[string]int) err
 	return nil
 }
 
-func define(ops *OpStream, tokens []token) error {
+func define(ops *OpStream, tokens []token) *sourceError {
 	if tokens[0].str != "#define" {
-		return ops.errorOnf(tokens[0], "invalid syntax: %s", tokens[0].str)
+		return tokens[0].errorf("invalid syntax: %s", tokens[0].str)
 	}
 	if len(tokens) < 3 {
-		return ops.errorOnf(tokens[len(tokens)-1], "define directive requires a name and body")
+		return tokens[len(tokens)-1].errorf("define directive requires a name and body")
 	}
 	name := tokens[1].str
 	err := checkMacroName(name, ops.Version, ops.labels)
 	if err != nil {
-		return ops.errorOn(tokens[1], err)
+		return tokens[1].error(err)
 	}
 	saved, ok := ops.macros[name]
 	ops.macros[name] = tokens[1:len(tokens):len(tokens)] // include the name itself at the front
@@ -2251,38 +2268,38 @@ func define(ops *OpStream, tokens []token) error {
 		} else {
 			delete(ops.macros, name) // remove new macro that caused cycle
 		}
-		ops.errorOnf(tokens[1], "macro expansion cycle discovered: %s", strings.Join(found, " -> "))
+		return tokens[1].errorf("macro expansion cycle discovered: %s", strings.Join(found, " -> "))
 	}
 	return nil
 }
 
-func pragma(ops *OpStream, tokens []token) error {
+func pragma(ops *OpStream, tokens []token) *sourceError {
 	if tokens[0].str != "#pragma" {
-		return ops.errorOnf(tokens[0], "invalid syntax: %s", tokens[0].str)
+		return tokens[0].errorf("invalid syntax: %s", tokens[0].str)
 	}
 	if len(tokens) < 2 {
-		return ops.errorOn(tokens[0], "empty pragma")
+		return tokens[0].errorf("empty pragma")
 	}
 	key := tokens[1].str
 	switch key {
 	case "version":
 		if len(tokens) < 3 {
-			return ops.errorOn(tokens[1], "no version value")
+			return tokens[1].errorf("no version value")
 		}
 		if len(tokens) > 3 {
-			return ops.errorOnf(tokens[3], "unexpected extra tokens:%s", reJoin("", tokens[3:]))
+			return tokens[3].errorf("unexpected extra tokens:%s", reJoin("", tokens[3:]))
 		}
 		var ver uint64
 		if ops.pending.Len() > 0 {
-			return ops.errorOn(tokens[0], "#pragma version is only allowed before instructions")
+			return tokens[0].errorf("#pragma version is only allowed before instructions")
 		}
 		value := tokens[2].str
 		ver, err := strconv.ParseUint(value, 0, 64)
 		if err != nil {
-			return ops.errorOnf(tokens[2], "bad #pragma version: %#v", value)
+			return tokens[2].errorf("bad #pragma version: %#v", value)
 		}
 		if ver > AssemblerMaxVersion {
-			return ops.errorOnf(tokens[2], "unsupported version: %d", ver)
+			return tokens[2].errorf("unsupported version: %d", ver)
 		}
 
 		// We initialize Version with assemblerNoVersion as a marker for
@@ -2290,24 +2307,27 @@ func pragma(ops *OpStream, tokens []token) error {
 		// version for v1.
 		if ops.Version == assemblerNoVersion {
 			ops.Version = ver
-			return ops.recheckMacroNames()
+			if err := ops.recheckMacroNames(); err != nil {
+				return tokens[2].error(err)
+			}
+			return nil
 		}
 		if ops.Version != ver {
-			return ops.errorOnf(tokens[2], "version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
+			return tokens[2].errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
 		}
 		// ops.Version is already correct, or needed to be upped.
 		return nil
 	case "typetrack":
 		if len(tokens) < 3 {
-			return ops.errorOn(tokens[1], "no typetrack value")
+			return tokens[1].errorf("no typetrack value")
 		}
 		if len(tokens) > 3 {
-			return ops.errorOnf(tokens[3], "unexpected extra tokens:%s", reJoin("", tokens[3:]))
+			return tokens[3].errorf("unexpected extra tokens:%s", reJoin("", tokens[3:]))
 		}
 		value := tokens[2].str
 		on, err := strconv.ParseBool(value)
 		if err != nil {
-			return ops.errorOnf(tokens[2], "bad #pragma typetrack: %#v", value)
+			return tokens[2].errorf("bad #pragma typetrack: %#v", value)
 		}
 		prev := ops.typeTracking
 		if !prev && on {
@@ -2317,7 +2337,7 @@ func pragma(ops *OpStream, tokens []token) error {
 
 		return nil
 	default:
-		return ops.errorOnf(tokens[0], "unsupported pragma directive: %#v", key)
+		return tokens[0].errorf("unsupported pragma directive: %#v", key)
 	}
 }
 
@@ -2328,7 +2348,7 @@ func (ops *OpStream) resolveLabels() {
 		dest, ok := ops.labels[lr.label.str]
 		if !ok {
 			if !reported[lr.label.str] {
-				ops.errorOnf(lr.label, "reference to undefined label %#v", lr.label.str)
+				ops.record(lr.label.errorf("reference to undefined label %#v", lr.label.str))
 			}
 			reported[lr.label.str] = true
 			continue
@@ -2337,19 +2357,19 @@ func (ops *OpStream) resolveLabels() {
 		// backward compatibility: do not allow jumps past last instruction in v1
 		if ops.Version <= 1 {
 			if dest == ops.pending.Len() {
-				ops.errorOnf(lr.label, "label %#v is too far away", lr.label.str)
+				ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
 			}
 		}
 
 		// All branch targets are encoded as 2 offset bytes. The destination is relative to the end of the
 		// instruction they appear in, which is available in lr.offsetPostion
 		if ops.Version < backBranchEnabledVersion && dest < lr.offsetPosition {
-			ops.errorOnf(lr.label, "label %#v is a back reference, back jump support was introduced in v4", lr.label.str)
+			ops.record(lr.label.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label.str))
 			continue
 		}
 		jump := dest - lr.offsetPosition
 		if jump > 0x7fff {
-			ops.errorOnf(lr.label, "label %#v is too far away", lr.label.str)
+			ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
 			continue
 		}
 		raw[lr.position] = uint8(jump >> 8)
@@ -2505,14 +2525,14 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 			}
 		}
 		if !found {
-			err = ops.lineErrorf(ops.OffsetToLine[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
+			err = errorLinef(ops.OffsetToLine[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
 			return
 		}
 	}
 
 	for _, f := range freqs {
 		if f.freq == 0 {
-			err = ops.errorf("Member of constant block is not used: %v", f.value)
+			err = errorLinef(ops.sourceLine, "member of constant block is not used: %v", f.value)
 			return
 		}
 	}
@@ -2543,7 +2563,7 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 			}
 		}
 		if newIndex == -1 {
-			return nil, ops.lineErrorf(ops.OffsetToLine[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
+			return nil, errorLinef(ops.OffsetToLine[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
 		}
 
 		newBytes := ref.makeNewReference(ops, singleton, newIndex)
@@ -2645,12 +2665,12 @@ func (ops *OpStream) prependCBlocks() []byte {
 	out := make([]byte, pbl+outl)
 	pl, err := prebytes.Read(out)
 	if pl != pbl || err != nil {
-		ops.errorf("wat: %d prebytes, %d to buffer? err=%w", pbl, pl, err)
+		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d prebytes, %d to buffer? %w", pbl, pl, err)})
 		return nil
 	}
 	ol, err := ops.pending.Read(out[pl:])
 	if ol != outl || err != nil {
-		ops.errorf("%d program bytes but %d to buffer. err=%w", outl, ol, err)
+		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d program bytes but %d to buffer. %w", outl, ol, err)})
 		return nil
 	}
 
@@ -2664,45 +2684,15 @@ func (ops *OpStream) prependCBlocks() []byte {
 	return out
 }
 
-func (ops *OpStream) errorOn(t token, problem interface{}) *sourceError {
-	return ops.sourceError(t.line, t.col, problem)
+// record puts an error onto a list for reporting later. The hope is that the
+// assembler can keep going after an error that is "swallowed" this way, so that
+// more than one TEAL error can be reported in one pass.  By explicitly
+// swallowing the error this way, we can use the linter properly.
+func (ops *OpStream) record(se *sourceError) {
+	ops.Errors = append(ops.Errors, *se)
 }
 
-func (ops *OpStream) sourceError(line int, col int, problem interface{}) *sourceError {
-	var err *sourceError
-	switch p := problem.(type) {
-	case string:
-		err = &sourceError{Line: line, Column: col, Err: errors.New(p)}
-	case error:
-		err = &sourceError{Line: line, Column: col, Err: p}
-	default:
-		err = &sourceError{Line: line, Column: col, Err: fmt.Errorf("%#v", p)}
-	}
-	return ops.accumulate(err)
-}
-
-func (ops *OpStream) accumulate(e *sourceError) *sourceError {
-	ops.Errors = append(ops.Errors, *e)
-	return e
-}
-
-func (ops *OpStream) errorf(format string, a ...interface{}) *sourceError {
-	return ops.sourceError(ops.sourceLine, 0, fmt.Errorf(format, a...))
-}
-
-func (ops *OpStream) errorOnf(t token, format string, a ...interface{}) *sourceError {
-	return ops.errorOn(t, fmt.Errorf(format, a...))
-}
-
-func (ops *OpStream) errorAfterf(t token, format string, a ...interface{}) *sourceError {
-	return ops.sourceError(t.line, t.col+len(t.str), fmt.Errorf(format, a...))
-}
-
-func (ops *OpStream) lineErrorf(line int, format string, a ...interface{}) error {
-	return ops.sourceError(line, 0, fmt.Errorf(format, a...))
-}
-
-func (ops *OpStream) warnOnf(t token, format string, a ...interface{}) {
+func (ops *OpStream) warn(t token, format string, a ...interface{}) {
 	warning := &sourceError{Line: t.line, Column: t.col, Err: fmt.Errorf(format, a...)}
 	ops.Warnings = append(ops.Warnings, warning)
 }

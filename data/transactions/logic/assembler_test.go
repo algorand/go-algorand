@@ -3520,7 +3520,6 @@ func TestAssembleEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	emptyExpect := exp(0, "Cannot assemble empty program text")
 	emptyPrograms := []string{
 		"",
 		"     ",
@@ -3532,7 +3531,7 @@ func TestAssembleEmpty(t *testing.T) {
 
 	for version := uint64(1); version <= AssemblerMaxVersion; version++ {
 		for _, prog := range emptyPrograms {
-			testProg(t, prog, version, emptyExpect)
+			testProg(t, prog, version, exp(0, "Cannot assemble empty program text"))
 		}
 		testProg(t, nonEmpty, version)
 	}
