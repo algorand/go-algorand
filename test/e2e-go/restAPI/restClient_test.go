@@ -1884,7 +1884,7 @@ int 1`
 	ops, err := logic.AssembleString(prog)
 	a.NoError(err)
 	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 8\n int 1")
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
 	a.NoError(err)
 	clearState := ops.Program
 
@@ -2088,7 +2088,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	ops, err := logic.AssembleString(maxDepthTealApproval)
 	a.NoError(err)
 	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 8; int 1")
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
 	a.NoError(err)
 	clearState := ops.Program
 
