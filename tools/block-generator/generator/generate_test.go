@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -33,15 +34,190 @@ import (
 )
 
 func makePrivateGenerator(t *testing.T, round uint64, genesis bookkeeping.Genesis) *generator {
-	publicGenerator, err := MakeGenerator(round, genesis, GenerationConfig{
+	cfg := GenerationConfig{
+		Name:                         "test",
 		NumGenesisAccounts:           10,
 		GenesisAccountInitialBalance: 1000000000000,
 		PaymentTransactionFraction:   1.0,
 		PaymentNewAccountFraction:    1.0,
 		AssetCreateFraction:          1.0,
-	})
+	}
+	validateWithDefaults(&cfg)
+	publicGenerator, err := MakeGenerator(round, genesis, cfg)
 	require.NoError(t, err)
 	return publicGenerator.(*generator)
+}
+
+func TestInitConfigFile(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	config, err := initializeConfigFile("../test_config.yml")
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), config.NumGenesisAccounts)
+	require.Equal(t, float32(0.25), config.AssetCloseFraction)
+	require.Equal(t, float32(0.0), config.AssetDestroyFraction)
+}
+
+func TestInitConfigFileNotExist(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	_, err := initializeConfigFile("this_is_not_a_config_file")
+
+	if _, ok := err.(*os.PathError); !ok {
+		require.Fail(t, "This should generate a path error")
+	}
+}
+
+func TestValidateWithDefaults(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	empty := func(fs ...float32) bool {
+		for _, f := range fs {
+			if f != 0 {
+				return false
+			}
+		}
+		return true
+	}
+
+	sum := func(fs ...float32) float32 {
+		s := float32(0)
+		for _, f := range fs {
+			s += f
+		}
+		return s
+	}
+
+	one := float32(1)
+
+	testCases := []struct {
+		name   string
+		genCfg GenerationConfig
+		err    error
+	}{
+		{
+			name: "all fields valid",
+			genCfg: GenerationConfig{
+				Name:                         "Test",
+				NumGenesisAccounts:           1,
+				GenesisAccountInitialBalance: 1,
+				TxnPerBlock:                  1,
+			},
+			err: nil,
+		},
+		{
+			name: "no name",
+			genCfg: GenerationConfig{
+				NumGenesisAccounts:           1,
+				GenesisAccountInitialBalance: 1,
+				TxnPerBlock:                  1,
+			},
+			err: fmt.Errorf("scenario name must be set"),
+		},
+		{
+			name: "no genesis accounts",
+			genCfg: GenerationConfig{
+				Name:                         "Test",
+				GenesisAccountInitialBalance: 1,
+				TxnPerBlock:                  1,
+			},
+			err: fmt.Errorf("number of genesis accounts must be > 0"),
+		},
+		{
+			name: "no genesis account balance",
+			genCfg: GenerationConfig{
+				Name:               "Test",
+				NumGenesisAccounts: 1,
+			},
+		},
+		{
+			name: "negative",
+			genCfg: GenerationConfig{
+				Name:                       "Test",
+				NumGenesisAccounts:         1,
+				PaymentTransactionFraction: -0.1,
+			},
+			err: fmt.Errorf("transaction distribution ratios sum should equal 1: param at index 0 is negative: -0.100000"),
+		},
+		{
+			name: "doesn't sum to 1",
+			genCfg: GenerationConfig{
+				Name:                   "Test",
+				NumGenesisAccounts:     1,
+				AppBoxesCreateFraction: 0.5,
+				AppBoxesUpdateFraction: 0.5,
+				AppBoxesCallFraction:   0.5,
+			},
+			err: fmt.Errorf("app boxes configuration ratios sum should equal 1: sum of params is not close to 1: 1.500000"),
+		},
+		{
+			name: "1-defaults",
+			genCfg: GenerationConfig{
+				Name:                         "Test",
+				NumGenesisAccounts:           1,
+				GenesisAccountInitialBalance: 42,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		cfg := tc.genCfg
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			emptyGenesisAccountInitialBalance := cfg.GenesisAccountInitialBalance == 0
+			emptyTxnDistributions := empty(cfg.PaymentTransactionFraction, cfg.AssetTransactionFraction, cfg.AppTransactionFraction)
+			emptyPymtFractions := empty(cfg.PaymentNewAccountFraction, cfg.PaymentFraction)
+			emptyAssetFractions := empty(cfg.AssetCreateFraction, cfg.AssetDestroyFraction, cfg.AssetOptinFraction, cfg.AssetCloseFraction, cfg.AssetXferFraction)
+			emptyAppFractions := empty(cfg.AppSwapFraction, cfg.AppBoxesFraction)
+			emptySwapFraction := empty(cfg.AppSwapCreateFraction, cfg.AppSwapUpdateFraction, cfg.AppSwapDeleteFraction, cfg.AppSwapOptinFraction, cfg.AppSwapCallFraction, cfg.AppSwapCloseFraction, cfg.AppSwapClearFraction)
+			emptyBoxesFraction := empty(cfg.AppBoxesCreateFraction, cfg.AppBoxesUpdateFraction, cfg.AppBoxesDeleteFraction, cfg.AppBoxesOptinFraction, cfg.AppBoxesCallFraction, cfg.AppBoxesCloseFraction, cfg.AppBoxesClearFraction)
+
+			err := validateWithDefaults(&cfg)
+
+			if tc.err == nil {
+				require.Nil(t, err)
+				require.Nil(t, cfg.CheckValid())
+
+				if emptyGenesisAccountInitialBalance {
+					require.Equal(t, genesisAccountInitialBalance, cfg.GenesisAccountInitialBalance)
+				}
+
+				if emptyTxnDistributions {
+					require.Equal(t, one, cfg.PaymentTransactionFraction)
+				}
+
+				if emptyPymtFractions {
+					require.Equal(t, one, cfg.PaymentNewAccountFraction)
+				}
+
+				if emptyAssetFractions {
+					require.Equal(t, one, cfg.AssetCreateFraction)
+				}
+
+				if emptyAppFractions {
+					require.Equal(t, one, cfg.AppSwapFraction)
+				}
+
+				if emptySwapFraction {
+					require.Equal(t, one, cfg.AppSwapCreateFraction)
+				}
+
+				if emptyBoxesFraction {
+					require.Equal(t, one, cfg.AppBoxesCreateFraction)
+				}
+
+				require.Equal(t, one, sum(cfg.PaymentTransactionFraction, cfg.AssetTransactionFraction, cfg.AppTransactionFraction))
+				require.Equal(t, one, sum(cfg.PaymentNewAccountFraction, cfg.PaymentFraction))
+				require.Equal(t, one, sum(cfg.AssetCreateFraction, cfg.AssetDestroyFraction, cfg.AssetOptinFraction, cfg.AssetCloseFraction, cfg.AssetXferFraction))
+				require.Equal(t, one, sum(cfg.AppSwapFraction, cfg.AppBoxesFraction))
+				require.Equal(t, one, sum(cfg.AppSwapCreateFraction, cfg.AppSwapUpdateFraction, cfg.AppSwapDeleteFraction, cfg.AppSwapOptinFraction, cfg.AppSwapCallFraction, cfg.AppSwapCloseFraction, cfg.AppSwapClearFraction))
+				require.Equal(t, one, sum(cfg.AppBoxesCreateFraction, cfg.AppBoxesUpdateFraction, cfg.AppBoxesDeleteFraction, cfg.AppBoxesOptinFraction, cfg.AppBoxesCallFraction, cfg.AppBoxesCloseFraction, cfg.AppBoxesClearFraction))
+
+			} else {
+				require.Equal(t, tc.err.Error(), err.Error())
+			}
+
+		})
+	}
 }
 
 func TestPaymentAcctCreate(t *testing.T) {
@@ -188,6 +364,13 @@ func TestAssetDestroy(t *testing.T) {
 	require.Len(t, g.assets, 0)
 }
 
+func TestAppCall(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+	_ = g
+
+}
+
 func TestWriteRoundZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var testcases = []struct {
@@ -211,7 +394,7 @@ func TestWriteRoundZero(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		tc := tc
-		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
 			var data []byte
@@ -293,8 +476,8 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		tc := tc
-		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
-			t.Parallel()
+		t.Run(tc.name, func(t *testing.T) {
+			// No t.Parallel() here, to avoid contention in the ledger
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
 			defer g.ledger.Close()
 			var data []byte
@@ -353,7 +536,9 @@ func TestHandlers(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
+		testcase := testcase
 		t.Run(testcase.name, func(t *testing.T) {
+			t.Parallel()
 			req := httptest.NewRequest("GET", testcase.url, nil)
 			w := httptest.NewRecorder()
 			handler(w, req)

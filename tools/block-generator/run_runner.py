@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 from pathlib import Path
 import shlex
@@ -19,7 +18,9 @@ CWD = Path.cwd()
 
 def run_cmd(cmd):
     process = subprocess.Popen(
-        shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        shlex.split(cmd.replace("\\\n", " ")),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     stdout, stderr = process.communicate()
     if process.returncode != 0:
@@ -69,10 +70,10 @@ def launch_json_args(cmd: str):
     return f"[{(NL.join(newlines)).replace(BS, '').replace(DC, ',').replace(' ', '')}]"
 
 
-def main():
+def parse_ars():
     parser = argparse.ArgumentParser()
     parser.add_argument("--conduit-binary", help="Path to conduit binary")
-    parser.add_argument("--db-round", type=int, default=0, help="Database round")
+    parser.add_argument("--next-db-round", type=int, default=0, help="Database round")
     parser.add_argument("--genesis-file", default='""', help="Genesis file")
     parser.add_argument(
         "--scenario", default=CWD / "test_config.yml", help="Scenario file"
@@ -99,6 +100,11 @@ def main():
 
     args = parser.parse_args()
     print(args)
+    return args
+
+
+def main():
+    args = parse_ars()
 
     try:
         if not args.purge:
@@ -125,7 +131,7 @@ runner \\
 --log-level trace \\
 --postgres-connection-string "host=localhost user=algorand password=algorand dbname={args.pg_database} port={args.pg_port} sslmode=disable" \\
 --scenario {args.scenario} \\
---db-round {args.db_round} \\
+--next-db-round {args.next_db_round} \\
 --genesis-file {args.genesis_file}"""
             if args.skip_runner:
                 print("Skipping test runner.")
