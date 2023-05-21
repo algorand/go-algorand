@@ -53,10 +53,10 @@ const (
 
 	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
 	// have clear resolution
-	peerRankDownloadFailed = 1100
+	peerRankDownloadFailed = 10000
 	// peerRankInvalidDownload is used for responses which are likely to be invalid - whether it's serving the wrong content
 	// or attempting to serve malicious content
-	peerRankInvalidDownload = 1200
+	peerRankInvalidDownload = 12000
 
 	// once a block is downloaded, the download duration is clamped into the range of [lowBlockDownloadThreshold..highBlockDownloadThreshold] and
 	// then mapped into the a ranking range.
