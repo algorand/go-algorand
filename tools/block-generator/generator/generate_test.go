@@ -18,11 +18,13 @@ package generator
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -30,9 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func makePrivateGenerator(t *testing.T) *generator {
-	partitiontest.PartitionTest(t)
-	publicGenerator, err := MakeGenerator(GenerationConfig{
+func makePrivateGenerator(t *testing.T, round uint64, genesis bookkeeping.Genesis) *generator {
+	publicGenerator, err := MakeGenerator(round, genesis, GenerationConfig{
 		NumGenesisAccounts:           10,
 		GenesisAccountInitialBalance: 1000000000000,
 		PaymentTransactionFraction:   1.0,
@@ -45,21 +46,21 @@ func makePrivateGenerator(t *testing.T) *generator {
 
 func TestPaymentAcctCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	g.generatePaymentTxnInternal(paymentAcctCreateTx, 0, 0)
 	require.Len(t, g.balances, int(g.config.NumGenesisAccounts+1))
 }
 
 func TestPaymentTransfer(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	g.generatePaymentTxnInternal(paymentTx, 0, 0)
 	require.Len(t, g.balances, int(g.config.NumGenesisAccounts))
 }
 
 func TestAssetXferNoAssetsOverride(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 
 	// First asset transaction must create.
 	actual, txn := g.generateAssetTxnInternal(assetXfer, 1, 0)
@@ -73,7 +74,7 @@ func TestAssetXferNoAssetsOverride(t *testing.T) {
 
 func TestAssetXferOneHolderOverride(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
 	g.finishRound(1)
@@ -90,7 +91,7 @@ func TestAssetXferOneHolderOverride(t *testing.T) {
 
 func TestAssetCloseCreatorOverride(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
 	g.finishRound(1)
@@ -107,7 +108,7 @@ func TestAssetCloseCreatorOverride(t *testing.T) {
 
 func TestAssetOptinEveryAccountOverride(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
 	g.finishRound(1)
@@ -140,7 +141,7 @@ func TestAssetOptinEveryAccountOverride(t *testing.T) {
 
 func TestAssetDestroyWithHoldingsOverride(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
 	g.finishRound(1)
@@ -161,7 +162,7 @@ func TestAssetDestroyWithHoldingsOverride(t *testing.T) {
 
 func TestAssetTransfer(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	g.finishRound(0)
 
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
@@ -175,7 +176,7 @@ func TestAssetTransfer(t *testing.T) {
 
 func TestAssetDestroy(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	g.finishRound(0)
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
 	g.finishRound(1)
@@ -189,18 +190,45 @@ func TestAssetDestroy(t *testing.T) {
 
 func TestWriteRoundZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
-	var data []byte
-	writer := bytes.NewBuffer(data)
-	g.WriteBlock(writer, 0)
-	var block rpcs.EncodedBlockCert
-	protocol.Decode(data, &block)
-	require.Len(t, block.Block.Payset, 0)
+	var testcases = []struct {
+		name    string
+		dbround uint64
+		round   uint64
+		genesis bookkeeping.Genesis
+	}{
+		{
+			name:    "empty database",
+			dbround: 0,
+			round:   0,
+			genesis: bookkeeping.Genesis{},
+		},
+		{
+			name:    "preloaded database",
+			dbround: 1,
+			round:   1,
+			genesis: bookkeeping.Genesis{Network: "TestWriteRoundZero"},
+		},
+	}
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
+			t.Parallel()
+			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
+			var data []byte
+			writer := bytes.NewBuffer(data)
+			g.WriteBlock(writer, tc.round)
+			var block rpcs.EncodedBlockCert
+			protocol.Decode(data, &block)
+			require.Len(t, block.Block.Payset, 0)
+			g.ledger.Close()
+		})
+	}
+
 }
 
 func TestWriteRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	var data []byte
 	writer := bytes.NewBuffer(data)
 	g.WriteBlock(writer, 0)
@@ -212,11 +240,95 @@ func TestWriteRound(t *testing.T) {
 	require.Equal(t, basics.Round(1), g.ledger.Latest())
 	_, err := g.ledger.GetStateDeltaForRound(1)
 	require.NoError(t, err)
+	// request a block that is several rounds ahead of the current round
+	err = g.WriteBlock(writer, 10)
+	require.NotNil(t, err)
+	require.Equal(t, err.Error(), "generator only supports sequential block access. Expected 2 but received request for 10")
+}
+
+func TestWriteRoundWithPreloadedDB(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var testcases = []struct {
+		name    string
+		dbround uint64
+		round   uint64
+		genesis bookkeeping.Genesis
+		err     error
+	}{
+		{
+			name:    "preloaded database starting at round 1",
+			dbround: 1,
+			round:   1,
+			genesis: bookkeeping.Genesis{Network: "generator-test1"},
+			err:     nil,
+		},
+		{
+			name:    "invalid request",
+			dbround: 10,
+			round:   1,
+			genesis: bookkeeping.Genesis{Network: "generator-test"},
+			err:     fmt.Errorf("cannot generate block for round 1, already in database"),
+		},
+		{
+			name:    "invalid request 2",
+			dbround: 1,
+			round:   10,
+			genesis: bookkeeping.Genesis{Network: "generator-test"},
+			err:     fmt.Errorf("generator only supports sequential block access. Expected 2 but received request for 10"),
+		},
+		{
+			name:    "preloaded database starting at 10",
+			dbround: 10,
+			round:   11,
+			genesis: bookkeeping.Genesis{Network: "generator-test2"},
+			err:     nil,
+		},
+		{
+			name:    "preloaded database request round 20",
+			dbround: 10,
+			round:   20,
+			genesis: bookkeeping.Genesis{Network: "generator-test3"},
+			err:     nil,
+		},
+	}
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
+			t.Parallel()
+			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
+			defer g.ledger.Close()
+			var data []byte
+			writer := bytes.NewBuffer(data)
+			err := g.WriteBlock(writer, tc.dbround)
+			require.Nil(t, err)
+			// invalid block request
+			if tc.round != tc.dbround && tc.err != nil {
+				err = g.WriteBlock(writer, tc.round)
+				require.NotNil(t, err)
+				require.Equal(t, err.Error(), tc.err.Error())
+				return
+			}
+			// write the rest of the blocks
+			for i := tc.dbround + 1; i <= tc.round; i++ {
+				err = g.WriteBlock(writer, i)
+				require.Nil(t, err)
+			}
+			var block rpcs.EncodedBlockCert
+			protocol.Decode(data, &block)
+			require.Len(t, block.Block.Payset, int(g.config.TxnPerBlock))
+			require.NotNil(t, g.ledger)
+			require.Equal(t, basics.Round(tc.round-tc.dbround), g.ledger.Latest())
+			if tc.round > tc.dbround {
+				_, err = g.ledger.GetStateDeltaForRound(basics.Round(tc.round - tc.dbround))
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestHandlers(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t)
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	handler := getBlockHandler(g)
 	var testcases = []struct {
 		name string
