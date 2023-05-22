@@ -127,9 +127,6 @@ func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 // validateSimulateRequest first checks relation between request and nodeConfig:
 // if nodeConfig is running with `EnableDeveloperAPI` turned off, this method would:
 // - error on asking for exec trace
-// - (TODO) error on asking for unlimited resource access
-// then it checks the validity of request itself:
-// - validateSimulateRequestTraceOptions checks the validity of trace related options are well-formed in Request.
 func validateSimulateRequest(request Request, nodeConfig config.Local) error {
 	if !nodeConfig.EnableDeveloperAPI && request.TraceConfig.Enable {
 		return InvalidRequestError{

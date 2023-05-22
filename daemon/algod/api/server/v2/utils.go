@@ -360,24 +360,25 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertProgramTrace(internalProgramTrace simulation.ProgramTrace) *model.SimulateProgramTrace {
-	var modelProgramTrace model.SimulateProgramTrace
-	if len(internalProgramTrace.Trace) == 0 {
+func convertProgramTrace(programTrace simulation.ProgramTrace) *model.SimulateProgramTrace {
+	if len(programTrace.Trace) == 0 {
 		return nil
 	}
-	modelProgramTrace.Trace = make([]model.SimulationOpcodeTraceUnit, len(internalProgramTrace.Trace))
-	for i := range internalProgramTrace.Trace {
+
+	var modelProgramTrace model.SimulateProgramTrace
+	modelProgramTrace.Trace = make([]model.SimulationOpcodeTraceUnit, len(programTrace.Trace))
+	for i := range programTrace.Trace {
 		modelProgramTrace.Trace[i] = model.SimulationOpcodeTraceUnit{
-			Pc: internalProgramTrace.Trace[i].PC,
+			Pc: programTrace.Trace[i].PC,
 		}
 	}
 
-	if len(internalProgramTrace.StepToInnerMap) > 0 {
-		traceIndexToInnerIndex := make([]model.SimulationPcToInnerIndex, len(internalProgramTrace.StepToInnerMap))
-		for i := range internalProgramTrace.StepToInnerMap {
+	if len(programTrace.StepToInnerMap) > 0 {
+		traceIndexToInnerIndex := make([]model.SimulationPcToInnerIndex, len(programTrace.StepToInnerMap))
+		for i := range programTrace.StepToInnerMap {
 			traceIndexToInnerIndex[i] = model.SimulationPcToInnerIndex{
-				Pc:         internalProgramTrace.StepToInnerMap[i].TraceStep,
-				InnerIndex: internalProgramTrace.StepToInnerMap[i].InnerIndex,
+				Pc:         programTrace.StepToInnerMap[i].TraceStep,
+				InnerIndex: programTrace.StepToInnerMap[i].InnerIndex,
 			}
 		}
 		modelProgramTrace.TraceElemIndexToInnerIndex = &traceIndexToInnerIndex
@@ -457,7 +458,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 		LastRound:       uint64(result.LastRound),
 		TxnGroups:       make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
 		EvalOverrides:   evalOverrides,
-		ExecTraceConfig: convertSimulationExecTraceResponse(result.TraceConfig),
+		ExecTraceConfig: convertToSimulationTraceConfigResponse(result.TraceConfig),
 	}
 
 	for i, txnGroup := range result.TxnGroups {
@@ -467,7 +468,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	return encodedSimulationResult
 }
 
-func convertSimulationExecTraceResponse(traceConfig simulation.ExecTraceConfig) *model.SimulateTraceConfig {
+func convertToSimulationTraceConfigResponse(traceConfig simulation.ExecTraceConfig) *model.SimulateTraceConfig {
 	// since we are making response, we assume that the request into simulate endpoint is well-formed.
 	// namely, the request get through validateSimulateRequest validation.
 	// we just parse enum bit by bit, and fill in model object.
@@ -480,9 +481,9 @@ func convertSimulationExecTraceResponse(traceConfig simulation.ExecTraceConfig) 
 	}
 }
 
-func convertExecTraceFromModelToSimulation(modelExecTrace *model.SimulateTraceConfig) simulation.ExecTraceConfig {
+func convertFromSimulationTraceConfigRequest(traceConfig *model.SimulateTraceConfig) simulation.ExecTraceConfig {
 	return simulation.ExecTraceConfig{
-		Enable: modelExecTrace != nil && *modelExecTrace.Enable,
+		Enable: traceConfig != nil && *traceConfig.Enable,
 	}
 }
 
@@ -496,7 +497,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowEmptySignatures: request.AllowEmptySignatures,
 		AllowMoreLogging:     request.AllowMoreLogging,
 		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
-		TraceConfig:          convertExecTraceFromModelToSimulation(request.ExecTraceConfig),
+		TraceConfig:          convertFromSimulationTraceConfigRequest(request.ExecTraceConfig),
 	}
 }
 
