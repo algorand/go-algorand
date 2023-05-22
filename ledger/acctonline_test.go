@@ -1368,7 +1368,9 @@ func addSinkAndPoolAccounts(genesisAccts []map[basics.Address]basics.AccountData
 
 func newBlockWithUpdates(genesisAccts []map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, prevTotals ledgercore.AccountTotals, t *testing.T, ml *mockLedgerForTracker, round int, oa *onlineAccounts) ledgercore.AccountTotals {
 	base := genesisAccts[0]
-	newTotals := newBlock(t, ml, protocol.ConsensusCurrentVersion, config.Consensus[protocol.ConsensusCurrentVersion], basics.Round(round), base, updates, prevTotals)
+	proto := ml.GenesisProtoVersion()
+	params := ml.GenesisProto()
+	newTotals := newBlock(t, ml, proto, params, basics.Round(round), base, updates, prevTotals)
 	commitSync(t, oa, ml, basics.Round(round))
 	return newTotals
 }
@@ -1416,7 +1418,8 @@ func TestAcctOnlineTop(t *testing.T) {
 	genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
 	addSinkAndPoolAccounts(genesisAccts)
 
-	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, genesisAccts)
+	// run this test on ConsensusV37 rules, run TestAcctOnlineTop_ChangeOnlineStake on current
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusV37, genesisAccts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
@@ -1752,7 +1755,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 		a.Contains(err.Error(), "is behind in-memory round")
 
 	case <-time.After(1 * time.Minute):
-		a.FailNow("timedout while waiting for post commit")
+		a.FailNow("timeout while waiting for post commit")
 	}
 }
 
@@ -1835,7 +1838,7 @@ func TestAcctOnlineTop_ChangeOnlineStake(t *testing.T) {
 	voteRndExpectedStake = algops.Sub(voteRndExpectedStake, allAccts[18].MicroAlgos) // Online on rnd but not valid on voteRnd
 	updatedAccts[15].Status = basics.Offline                                         // Mark account 15 offline for comparison
 	updatedAccts[18].Status = basics.Offline                                         // Mark account 18 offline for comparison
-	top = compareOnlineTotals(a, oa, 18, 19, 5, rnd15TotalOnlineStake, voteRndExpectedStake)
+	top = compareOnlineTotals(a, oa, 18, 19, 5, voteRndExpectedStake, voteRndExpectedStake)
 	compareTopAccounts(a, top, updatedAccts)
 }
 

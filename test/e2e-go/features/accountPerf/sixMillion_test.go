@@ -680,12 +680,13 @@ func scenarioB(
 	require.Equal(t, numberOfAssets, info.TotalCreatedAssets)
 
 	log.Infof("Verifying assets...")
-	// Verify the assets are transfered here
+	// Verify the assets are transferred here
 	tAssetAmt := uint64(0)
 	counter = 0
-	// this loop iterates over all the range of potentail assets, tries to confirm all of them.
+	// this loop iterates over all the range of potential assets, tries to confirm all of them.
 	// many of these are expected to be non-existing.
-	for aid := uint64(0); counter < numberOfAssets && aid < 2*numberOfAssets; aid++ {
+	startIdx := uint64(1000) // tx counter starts from 1000
+	for aid := startIdx; counter < numberOfAssets && aid < 2*startIdx*numberOfAssets; aid++ {
 		select {
 		case <-stopChan:
 			require.False(t, true, "Test interrupted")
