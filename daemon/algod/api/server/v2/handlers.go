@@ -1746,7 +1746,7 @@ func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Contex
 		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
 	}
 	response := struct {
-		Deltas []eval.TxnGroupDeltaWithIds
+		Deltas []eval.TxnGroupDeltaWithIds `codec:"deltas"`
 	}{
 		Deltas: deltas,
 	}
