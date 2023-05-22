@@ -1741,7 +1741,7 @@ func (wn *WebsocketNetwork) meshThread() {
 func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 	// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
 	dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
-	
+
 	for _, dnsBootstrap := range dnsBootstrapArray {
 		primaryRelayAddrs, primaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrap.PrimarySRVBootstrap)
 
@@ -2434,7 +2434,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	//TODO: The config.DNSBootstrapID direct call does not handle substitution - should we just remove this entirely?
-	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID, PhoneBookEntryRelayRole)
+	phonebook.ReplacePeerList(phonebookAddresses, string(networkID), PhoneBookEntryRelayRole)
 	wn = &WebsocketNetwork{
 		log:       log,
 		config:    config,
