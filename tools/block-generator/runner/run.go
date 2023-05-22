@@ -135,6 +135,7 @@ func (r *Args) run() error {
 		if err != nil && err == util.ErrorNotInitialized {
 			nextRound = 0
 		} else if err != nil {
+			return fmt.Errorf("getNextRound err: %w", err)
 		}
 	}
 	// Start services
