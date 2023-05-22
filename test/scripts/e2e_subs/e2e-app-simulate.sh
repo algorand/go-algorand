@@ -362,8 +362,8 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; t
     false
 fi
 
-# SIMULATION! with --allow-extra-budget should pass direct call
-RES=$(${gcmd} clerk simulate --allow-extra-opcode-budget -t "${TEMPDIR}/no-extra-opcode-budget.stx")
+# SIMULATION! with --allow-more-opcode-budget should pass direct call
+RES=$(${gcmd} clerk simulate --allow-more-opcode-budget -t "${TEMPDIR}/no-extra-opcode-budget.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the app call to generated large TEAL with extra budget should pass %Y%m%d_%H%M%S'
