@@ -3983,9 +3983,9 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		relayPeers = netA.GetPeers(PeersPhonebookRelays)
 		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
 
-		relayAddrs := make([]string, len(relayPeers))
-		for pi, peer := range relayPeers {
-			relayAddrs[pi] = peer.(HTTPPeer).GetAddress()
+		relayAddrs := make([]string, 0, len(relayPeers))
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
 		}
 
 		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
@@ -3993,9 +3993,9 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
 		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
 
-		archiveAddrs := make([]string, len(archivePeers))
-		for pi, peer := range archivePeers {
-			archiveAddrs[pi] = peer.(HTTPPeer).GetAddress()
+		archiveAddrs := make([]string, 0, len(archivePeers))
+		for _, peer := range archivePeers {
+			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
 		}
 
 		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
@@ -4004,6 +4004,9 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		// assert phonebook reflects fresh list / prior peers other than selected duplicate
 		// are not present
 		var priorRelayDomains = relayDomains
+
+		// Dont overlap with archive nodes previously specified, duplicates between them not stored in phonebook as of this writing
+		relayDomainsGen = rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", archiveDomains), 0, 200)
 		relayDomains = relayDomainsGen.Draw(t1, "relayDomains").([]string)
 
 		// Randomly select a prior relay domain
@@ -4020,9 +4023,9 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		relayPeers = netA.GetPeers(PeersPhonebookRelays)
 		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
 
-		relayAddrs = make([]string, len(relayPeers))
-		for pi, peer := range relayPeers {
-			relayAddrs[pi] = peer.(HTTPPeer).GetAddress()
+		relayAddrs = nil
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
 		}
 
 		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
@@ -4030,9 +4033,9 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
 		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
 
-		archiveAddrs = make([]string, len(archivePeers))
-		for pi, peer := range archivePeers {
-			archiveAddrs[pi] = peer.(HTTPPeer).GetAddress()
+		archiveAddrs = nil
+		for _, peer := range archivePeers {
+			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
 		}
 
 		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
