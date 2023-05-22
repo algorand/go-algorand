@@ -55,8 +55,8 @@ type Args struct {
 	ResetReportDir           bool
 	RunValidation            bool
 	KeepDataDir              bool
-	NextDBRound              uint64
 	GenesisFile              string
+	ResetDB                  bool
 }
 
 type config struct {
@@ -122,17 +122,31 @@ func (r *Args) run() error {
 			next.ServeHTTP(w, r)
 		})
 	}
+	// get next db round
+	var nextRound uint64
+	var err error
+	if r.ResetDB {
+		if err = util.EmptyDB(r.PostgresConnectionString); err != nil {
+			return fmt.Errorf("emptyDB err: %w", err)
+		}
+		nextRound = 0
+	} else {
+		nextRound, err = util.GetNextRound(r.PostgresConnectionString)
+		if err != nil && err == util.ErrorNotInitialized {
+			nextRound = 0
+		} else if err != nil {
+		}
+	}
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
-	generatorShutdownFunc, _ := startGenerator(r.Path, r.NextDBRound, r.GenesisFile, algodNet, blockMiddleware)
+	generatorShutdownFunc, _ := startGenerator(r.Path, nextRound, r.GenesisFile, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
 		if err := generatorShutdownFunc(); err != nil {
 			fmt.Printf("failed to shutdown generator: %s\n", err)
 		}
 	}()
-
 	// get conduit config template
 	t, err := template.New("conduit").Parse(conduitConfigTmpl)
 	if err != nil {
@@ -157,7 +171,7 @@ func (r *Args) run() error {
 	}
 
 	// Start conduit
-	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary, r.NextDBRound)
+	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary, nextRound)
 	if err != nil {
 		return fmt.Errorf("failed to start Conduit: %w", err)
 	}
