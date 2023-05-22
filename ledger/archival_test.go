@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
+	"github.com/algorand/go-algorand/ledger/store/catchpointdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -78,6 +79,10 @@ func (wl *wrappedLedger) Latest() basics.Round {
 
 func (wl *wrappedLedger) trackerDB() trackerdb.Store {
 	return wl.l.trackerDB()
+}
+
+func (wl *wrappedLedger) catchpointDB() catchpointdb.Store {
+	return wl.l.catchpointDB()
 }
 
 func (wl *wrappedLedger) blockDB() db.Pair {

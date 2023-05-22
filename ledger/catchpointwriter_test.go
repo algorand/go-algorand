@@ -692,7 +692,7 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess tracke
 			return err
 		}
 
-		return cw.ApplyCatchpointStagingBalances(ctx, 0, 0)
+		return cw.Apply(ctx, 0, 0)
 	})
 	require.NoError(t, err)
 

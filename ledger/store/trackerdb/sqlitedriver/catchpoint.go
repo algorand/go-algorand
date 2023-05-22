@@ -21,290 +21,127 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/mattn/go-sqlite3"
 )
 
-type catchpointReader struct {
-	q db.Queryable
-}
-
 type catchpointWriter struct {
-	e db.Executable
+	e        db.Executable
+	isShared bool
 }
 
-type catchpointReaderWriter struct {
-	catchpointReader
-	catchpointWriter
+// MakeCatchpointApplier creates a Catchpoint SQL reader+writer
+func MakeCatchpointApplier(e db.Executable, isShared bool) trackerdb.CatchpointApply {
+	return &catchpointWriter{e, isShared}
 }
 
-// NewCatchpointSQLReaderWriter creates a Catchpoint SQL reader+writer
-func NewCatchpointSQLReaderWriter(e db.Executable) *catchpointReaderWriter {
-	return &catchpointReaderWriter{
-		catchpointReader{q: e},
-		catchpointWriter{e: e},
+// Write implements trackerdb.CatchpointApply
+func (c *catchpointWriter) Write(ctx context.Context, payload trackerdb.CatchpointPayload) (trackerdb.CatchpointReport, error) {
+	wg := sync.WaitGroup{}
+
+	var report trackerdb.CatchpointReport
+
+	var errBalances error
+	var errCreatables error
+	var errHashes error
+	var errKVs error
+
+	// start the balances writer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		start := time.Now()
+		errBalances = c.writeCatchpointStagingBalances(ctx, payload.Accounts)
+		report.BalancesWriteDuration = time.Since(start)
+	}()
+
+	// on a in-memory database, wait for the writer to finish before starting the new writer
+	if c.isShared {
+		wg.Wait()
 	}
-}
 
-func (cr *catchpointReader) GetCatchpoint(ctx context.Context, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
-	err = cr.q.QueryRowContext(ctx, "SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
-	return
-}
-
-func (cr *catchpointReader) GetOldestCatchpointFiles(ctx context.Context, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
-	err = db.Retry(func() (err error) {
-		query := "SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?"
-		rows, err := cr.q.QueryContext(ctx, query, filesToKeep, fileCount)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-
-		fileNames = make(map[basics.Round]string)
-		for rows.Next() {
-			var fileName string
-			var round basics.Round
-			err = rows.Scan(&round, &fileName)
-			if err != nil {
-				return err
+	// starts the creatables writer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		hasCreatables := false
+		for _, accBal := range payload.Accounts {
+			for _, res := range accBal.Resources {
+				if res.IsOwning() {
+					hasCreatables = true
+					break
+				}
 			}
-			fileNames[round] = fileName
 		}
+		if hasCreatables {
+			start := time.Now()
+			errCreatables = c.writeCatchpointStagingCreatable(ctx, payload.Accounts)
+			report.CreatablesWriteDuration = time.Since(start)
+		}
+	}()
 
-		return rows.Err()
-	})
-	if err != nil {
-		fileNames = nil
-	}
-	return
-}
-
-func (cr *catchpointReader) ReadCatchpointStateUint64(ctx context.Context, stateName trackerdb.CatchpointState) (val uint64, err error) {
-	err = db.Retry(func() (err error) {
-		query := "SELECT intval FROM catchpointstate WHERE id=?"
-		var v sql.NullInt64
-		err = cr.q.QueryRowContext(ctx, query, stateName).Scan(&v)
-		if err == sql.ErrNoRows {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if v.Valid {
-			val = uint64(v.Int64)
-		}
-		return nil
-	})
-	return val, err
-}
-
-func (cr *catchpointReader) ReadCatchpointStateString(ctx context.Context, stateName trackerdb.CatchpointState) (val string, err error) {
-	err = db.Retry(func() (err error) {
-		query := "SELECT strval FROM catchpointstate WHERE id=?"
-		var v sql.NullString
-		err = cr.q.QueryRowContext(ctx, query, stateName).Scan(&v)
-		if err == sql.ErrNoRows {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		if v.Valid {
-			val = v.String
-		}
-		return nil
-	})
-	return val, err
-}
-
-func (cr *catchpointReader) SelectUnfinishedCatchpoints(ctx context.Context) ([]trackerdb.UnfinishedCatchpointRecord, error) {
-	var res []trackerdb.UnfinishedCatchpointRecord
-
-	f := func() error {
-		query := "SELECT round, blockhash FROM unfinishedcatchpoints ORDER BY round"
-		rows, err := cr.q.QueryContext(ctx, query)
-		if err != nil {
-			return err
-		}
-
-		// Clear `res` in case this function is repeated.
-		res = res[:0]
-		for rows.Next() {
-			var record trackerdb.UnfinishedCatchpointRecord
-			var blockHash []byte
-			err = rows.Scan(&record.Round, &blockHash)
-			if err != nil {
-				return err
-			}
-			copy(record.BlockHash[:], blockHash)
-			res = append(res, record)
-		}
-
-		return nil
-	}
-	err := db.Retry(f)
-	if err != nil {
-		return nil, err
+	// on a in-memory database, wait for the writer to finish before starting the new writer
+	if c.isShared {
+		wg.Wait()
 	}
 
-	return res, nil
-}
+	// start the accounts pending hashes writer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		start := time.Now()
+		errHashes = c.writeCatchpointStagingHashes(ctx, payload.Accounts)
+		report.HashesWriteDuration = time.Since(start)
+	}()
 
-func (cr *catchpointReader) SelectCatchpointFirstStageInfo(ctx context.Context, round basics.Round) (trackerdb.CatchpointFirstStageInfo, bool /*exists*/, error) {
-	var data []byte
-	f := func() error {
-		query := "SELECT info FROM catchpointfirststageinfo WHERE round=?"
-		err := cr.q.QueryRowContext(ctx, query, round).Scan(&data)
-		if err == sql.ErrNoRows {
-			data = nil
-			return nil
+	// on a in-memory database, wait for the writer to finish before starting the new writer
+	if c.isShared {
+		wg.Wait()
+	}
+
+	// start the kv store writer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		start := time.Now()
+		keys := make([][]byte, len(payload.KVRecords))
+		values := make([][]byte, len(payload.KVRecords))
+		hashes := make([][]byte, len(payload.KVRecords))
+		for i := 0; i < len(payload.KVRecords); i++ {
+			keys[i] = payload.KVRecords[i].Key
+			values[i] = payload.KVRecords[i].Value
+			hashes[i] = trackerdb.KvHashBuilderV6(string(keys[i]), values[i])
 		}
-		return err
+		errKVs = c.writeCatchpointStagingKVs(ctx, keys, values, hashes)
+		report.KVWriteDuration = time.Since(start)
+	}()
+
+	wg.Wait()
+
+	if errBalances != nil {
+		return report, errBalances
 	}
-	err := db.Retry(f)
-	if err != nil {
-		return trackerdb.CatchpointFirstStageInfo{}, false, err
+	if errCreatables != nil {
+		return report, errCreatables
 	}
-
-	if data == nil {
-		return trackerdb.CatchpointFirstStageInfo{}, false, nil
+	if errHashes != nil {
+		return report, errHashes
 	}
-
-	var res trackerdb.CatchpointFirstStageInfo
-	err = protocol.Decode(data, &res)
-	if err != nil {
-		return trackerdb.CatchpointFirstStageInfo{}, false, err
-	}
-
-	return res, true, nil
-}
-
-func (cr *catchpointReader) SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, maxRound basics.Round) ([]basics.Round, error) {
-	var res []basics.Round
-
-	f := func() error {
-		query := "SELECT round FROM catchpointfirststageinfo WHERE round <= ?"
-		rows, err := cr.q.QueryContext(ctx, query, maxRound)
-		if err != nil {
-			return err
-		}
-
-		// Clear `res` in case this function is repeated.
-		res = res[:0]
-		for rows.Next() {
-			var r basics.Round
-			err = rows.Scan(&r)
-			if err != nil {
-				return err
-			}
-			res = append(res, r)
-		}
-
-		return nil
-	}
-	err := db.Retry(f)
-	if err != nil {
-		return nil, err
+	if errKVs != nil {
+		return report, errKVs
 	}
 
-	return res, nil
-}
-
-func (cw *catchpointWriter) StoreCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
-	err = db.Retry(func() (err error) {
-		query := "DELETE FROM storedcatchpoints WHERE round=?"
-		_, err = cw.e.ExecContext(ctx, query, round)
-		if err != nil || (fileName == "" && catchpoint == "" && fileSize == 0) {
-			return err
-		}
-
-		query = "INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)"
-		_, err = cw.e.ExecContext(ctx, query, round, fileName, catchpoint, fileSize)
-		return err
-	})
-	return
-}
-
-func (cw *catchpointWriter) WriteCatchpointStateUint64(ctx context.Context, stateName trackerdb.CatchpointState, setValue uint64) (err error) {
-	err = db.Retry(func() (err error) {
-		if setValue == 0 {
-			return deleteCatchpointStateImpl(ctx, cw.e, stateName)
-		}
-
-		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
-		query := "INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)"
-		_, err = cw.e.ExecContext(ctx, query, stateName, setValue)
-		return err
-	})
-	return err
-}
-
-func (cw *catchpointWriter) WriteCatchpointStateString(ctx context.Context, stateName trackerdb.CatchpointState, setValue string) (err error) {
-	err = db.Retry(func() (err error) {
-		if setValue == "" {
-			return deleteCatchpointStateImpl(ctx, cw.e, stateName)
-		}
-
-		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
-		query := "INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)"
-		_, err = cw.e.ExecContext(ctx, query, stateName, setValue)
-		return err
-	})
-	return err
-}
-
-func (cw *catchpointWriter) InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error {
-	f := func() error {
-		query := "INSERT INTO unfinishedcatchpoints(round, blockhash) VALUES(?, ?)"
-		_, err := cw.e.ExecContext(ctx, query, round, blockHash[:])
-		return err
-	}
-	return db.Retry(f)
-}
-
-func (cw *catchpointWriter) DeleteUnfinishedCatchpoint(ctx context.Context, round basics.Round) error {
-	f := func() error {
-		query := "DELETE FROM unfinishedcatchpoints WHERE round = ?"
-		_, err := cw.e.ExecContext(ctx, query, round)
-		return err
-	}
-	return db.Retry(f)
-}
-
-func deleteCatchpointStateImpl(ctx context.Context, e db.Executable, stateName trackerdb.CatchpointState) error {
-	query := "DELETE FROM catchpointstate WHERE id=?"
-	_, err := e.ExecContext(ctx, query, stateName)
-	return err
-}
-
-func (cw *catchpointWriter) InsertOrReplaceCatchpointFirstStageInfo(ctx context.Context, round basics.Round, info *trackerdb.CatchpointFirstStageInfo) error {
-	infoSerialized := protocol.Encode(info)
-	f := func() error {
-		query := "INSERT OR REPLACE INTO catchpointfirststageinfo(round, info) VALUES(?, ?)"
-		_, err := cw.e.ExecContext(ctx, query, round, infoSerialized)
-		return err
-	}
-	return db.Retry(f)
-}
-
-func (cw *catchpointWriter) DeleteOldCatchpointFirstStageInfo(ctx context.Context, maxRoundToDelete basics.Round) error {
-	f := func() error {
-		query := "DELETE FROM catchpointfirststageinfo WHERE round <= ?"
-		_, err := cw.e.ExecContext(ctx, query, maxRoundToDelete)
-		return err
-	}
-	return db.Retry(f)
+	return report, nil
 }
 
 // WriteCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
-func (cw *catchpointWriter) WriteCatchpointStagingBalances(ctx context.Context, bals []trackerdb.NormalizedAccountBalance) error {
+func (cw *catchpointWriter) writeCatchpointStagingBalances(ctx context.Context, bals []trackerdb.NormalizedAccountBalance) error {
 	selectAcctStmt, err := cw.e.PrepareContext(ctx, "SELECT rowid FROM catchpointbalances WHERE address = ?")
 	if err != nil {
 		return err
@@ -371,7 +208,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingBalances(ctx context.Context, 
 }
 
 // WriteCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
-func (cw *catchpointWriter) WriteCatchpointStagingHashes(ctx context.Context, bals []trackerdb.NormalizedAccountBalance) error {
+func (cw *catchpointWriter) writeCatchpointStagingHashes(ctx context.Context, bals []trackerdb.NormalizedAccountBalance) error {
 	insertStmt, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
 	if err != nil {
 		return err
@@ -399,7 +236,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingHashes(ctx context.Context, ba
 // WriteCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
 // note that we cannot insert the resources here : in order to insert the resources, we need the rowid of the accountbase entry. This is being inserted by
 // writeCatchpointStagingBalances via a separate go-routine.
-func (cw *catchpointWriter) WriteCatchpointStagingCreatable(ctx context.Context, bals []trackerdb.NormalizedAccountBalance) error {
+func (cw *catchpointWriter) writeCatchpointStagingCreatable(ctx context.Context, bals []trackerdb.NormalizedAccountBalance) error {
 	var insertCreatorsStmt *sql.Stmt
 	var err error
 	insertCreatorsStmt, err = cw.e.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
@@ -433,7 +270,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingCreatable(ctx context.Context,
 
 // WriteCatchpointStagingKVs inserts all the KVs in the provided array into the
 // catchpoint kvstore staging table catchpointkvstore, and their hashes to the pending
-func (cw *catchpointWriter) WriteCatchpointStagingKVs(ctx context.Context, keys [][]byte, values [][]byte, hashes [][]byte) error {
+func (cw *catchpointWriter) writeCatchpointStagingKVs(ctx context.Context, keys [][]byte, values [][]byte, hashes [][]byte) error {
 	insertKV, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointkvstore(key, value) VALUES(?, ?)")
 	if err != nil {
 		return err
@@ -460,7 +297,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingKVs(ctx context.Context, keys 
 	return nil
 }
 
-func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, newCatchup bool) (err error) {
+func (cw *catchpointWriter) Reset(ctx context.Context, newCatchup bool) (err error) {
 	s := []string{
 		"DROP TABLE IF EXISTS catchpointbalances",
 		"DROP TABLE IF EXISTS catchpointassetcreators",
@@ -494,6 +331,7 @@ func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, 
 
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
+			"CREATE INDEX IF NOT EXISTS catchpointpendinghashesidx ON catchpointpendinghashes(data)",
 		)
 	}
 
@@ -509,7 +347,7 @@ func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, 
 
 // ApplyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
 // tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
-func (cw *catchpointWriter) ApplyCatchpointStagingBalances(ctx context.Context, balancesRound basics.Round, merkleRootRound basics.Round) (err error) {
+func (cw *catchpointWriter) Apply(ctx context.Context, balancesRound basics.Round, merkleRootRound basics.Round) (err error) {
 	stmts := []string{
 		"DROP TABLE IF EXISTS accountbase",
 		"DROP TABLE IF EXISTS assetcreators",
@@ -544,41 +382,4 @@ func (cw *catchpointWriter) ApplyCatchpointStagingBalances(ctx context.Context, 
 	}
 
 	return
-}
-
-// CreateCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
-func (cw *catchpointWriter) CreateCatchpointStagingHashesIndex(ctx context.Context) (err error) {
-	_, err = cw.e.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS catchpointpendinghashesidx ON catchpointpendinghashes(data)")
-	if err != nil {
-		return
-	}
-	return
-}
-
-// DeleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
-// once all the files have been deleted, it would go ahead and remove the entries from the table.
-func (crw *catchpointReaderWriter) DeleteStoredCatchpoints(ctx context.Context, dbDirectory string) (err error) {
-	catchpointsFilesChunkSize := 50
-	for {
-		fileNames, err := crw.GetOldestCatchpointFiles(ctx, catchpointsFilesChunkSize, 0)
-		if err != nil {
-			return err
-		}
-		if len(fileNames) == 0 {
-			break
-		}
-
-		for round, fileName := range fileNames {
-			err = trackerdb.RemoveSingleCatchpointFileFromDisk(dbDirectory, fileName)
-			if err != nil {
-				return err
-			}
-			// clear the entry from the database
-			err = crw.StoreCatchpoint(ctx, round, "", "", 0)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }

@@ -527,20 +527,8 @@ type testStagingWriter struct {
 	hashes map[[4 + crypto.DigestSize]byte]int
 }
 
-func (w *testStagingWriter) writeBalances(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
-	return nil
-}
-
-func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
-	return nil
-}
-
-func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
-	return nil
-}
-
-func (w *testStagingWriter) writeHashes(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
-	for _, bal := range balances {
+func (w *testStagingWriter) write(ctx context.Context, payload trackerdb.CatchpointPayload) (trackerdb.CatchpointReport, error) {
+	for _, bal := range payload.Accounts {
 		for _, hash := range bal.AccountHashes {
 			var key [4 + crypto.DigestSize]byte
 			require.Len(w.t, hash, 4+crypto.DigestSize)
@@ -548,11 +536,7 @@ func (w *testStagingWriter) writeHashes(ctx context.Context, balances []trackerd
 			w.hashes[key] = w.hashes[key] + 1
 		}
 	}
-	return nil
-}
-
-func (w *testStagingWriter) isShared() bool {
-	return false
+	return trackerdb.CatchpointReport{}, nil
 }
 
 // makeTestCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger

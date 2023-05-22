@@ -50,7 +50,7 @@ func Open(dbFilename string, dbMem bool, log logging.Logger) (store trackerdb.St
 
 // MakeStore crates a tracker SQL db from sql db handle.
 func MakeStore(pair db.Pair) trackerdb.Store {
-	return &trackerSQLStore{pair, &sqlReader{pair.Rdb.Handle}, &sqlWriter{pair.Wdb.Handle}, &sqlCatchpoint{pair.Wdb.Handle}}
+	return &trackerSQLStore{pair, &sqlReader{pair.Rdb.Handle}, &sqlWriter{pair.Wdb.Handle}, &sqlCatchpoint{pair.Wdb.Handle, pair.Wdb.IsSharedCacheConnection()}}
 }
 
 func (s *trackerSQLStore) SetSynchronousMode(ctx context.Context, mode db.SynchronousMode, fullfsync bool) (err error) {
@@ -103,7 +103,7 @@ func (s *trackerSQLStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 
 func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
 	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
+		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx, s.IsSharedCacheConnection()}})
 	})
 }
 
@@ -112,7 +112,7 @@ func (s *trackerSQLStore) BeginTransaction(ctx context.Context) (trackerdb.Trans
 	if err != nil {
 		return nil, err
 	}
-	return &sqlTransactionScope{handle, false, &sqlReader{handle}, &sqlWriter{handle}, &sqlCatchpoint{handle}}, nil
+	return &sqlTransactionScope{handle, false, &sqlReader{handle}, &sqlWriter{handle}, &sqlCatchpoint{handle, s.IsSharedCacheConnection()}}, nil
 }
 
 func (s trackerSQLStore) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
@@ -228,7 +228,8 @@ func (w *sqlWriter) ModifyAcctBaseTest() error {
 }
 
 type sqlCatchpoint struct {
-	e db.Executable
+	e        db.Executable
+	isShared bool
 }
 
 // MakeCatchpointPendingHashesIterator implements trackerdb.Catchpoint
@@ -236,19 +237,9 @@ func (c *sqlCatchpoint) MakeCatchpointPendingHashesIterator(hashCount int) track
 	return MakeCatchpointPendingHashesIterator(hashCount, c.e)
 }
 
-// MakeCatchpointReader implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
-	return NewCatchpointSQLReaderWriter(c.e), nil
-}
-
-// MakeCatchpointReaderWriter implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
-	return NewCatchpointSQLReaderWriter(c.e), nil
-}
-
 // MakeCatchpointWriter implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
-	return NewCatchpointSQLReaderWriter(c.e), nil
+func (c *sqlCatchpoint) MakeCatchpointWriter() (trackerdb.CatchpointApply, error) {
+	return MakeCatchpointApplier(c.e, c.isShared), nil
 }
 
 // MakeEncodedAccoutsBatchIter implements trackerdb.Catchpoint

@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/catchpointdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -135,6 +136,7 @@ type ledgerTracker interface {
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
 	trackerDB() trackerdb.Store
+	catchpointDB() catchpointdb.Store
 	blockDB() db.Pair
 	trackerLog() logging.Logger
 	trackerEvalVerified(bookkeeping.Block, eval.LedgerForEvaluator) (ledgercore.StateDelta, error)

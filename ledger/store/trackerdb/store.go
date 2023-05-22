@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -75,20 +77,38 @@ type Writer interface {
 //
 //	there are two distinct set of methods present:
 //	- read/write ops for managing catchpoint data
-//	- read/write ops on trackerdb to support building catchpoints
+//	- read/write internal catchup durable state (not sure if this should not be hidden)
+//	- read ops on trackerdb to support building catchpoints
+//	- write op for applying catchpoint to trackerdb
 //	we should split these two sets of methods into two separate interfaces
 type Catchpoint interface {
-	// reader
-	MakeCatchpointReader() (CatchpointReader, error)
+	// reader (used to generate a catchpoint)
 	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
 	MakeOrderedAccountsIter(accountCount int) OrderedAccountsIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
 	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
-	// writer
-	MakeCatchpointWriter() (CatchpointWriter, error)
+	// writer (used to apply a catchpoint)
+	MakeCatchpointWriter() (CatchpointApply, error)
 	// reader/writer
-	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
 	MakeMerkleCommitter(staging bool) (MerkleCommitter, error)
+}
+
+type CatchpointApply interface {
+	Reset(ctx context.Context, newCatchup bool) error
+	Write(ctx context.Context, payload CatchpointPayload) (CatchpointReport, error)
+	Apply(ctx context.Context, balancesRound basics.Round, merkleRootRound basics.Round) error
+}
+
+type CatchpointPayload struct {
+	Accounts  []NormalizedAccountBalance
+	KVRecords []encoded.KVRecordV6
+}
+
+type CatchpointReport struct {
+	BalancesWriteDuration   time.Duration
+	CreatablesWriteDuration time.Duration
+	HashesWriteDuration     time.Duration
+	KVWriteDuration         time.Duration
 }
 
 // ReaderWriter is the interface for the trackerdb read/write operations.

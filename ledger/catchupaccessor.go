@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
+	"github.com/algorand/go-algorand/ledger/store/catchpointdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -95,102 +96,30 @@ type CatchpointCatchupAccessor interface {
 }
 
 type stagingWriter interface {
-	writeBalances(context.Context, []trackerdb.NormalizedAccountBalance) error
-	writeCreatables(context.Context, []trackerdb.NormalizedAccountBalance) error
-	writeHashes(context.Context, []trackerdb.NormalizedAccountBalance) error
-	writeKVs(context.Context, []encoded.KVRecordV6) error
-	isShared() bool
+	write(context.Context, trackerdb.CatchpointPayload) (trackerdb.CatchpointReport, error)
 }
 
 type stagingWriterImpl struct {
 	wdb trackerdb.Store
 }
 
-func (w *stagingWriterImpl) writeBalances(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
-	return w.wdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		crw, err := tx.MakeCatchpointReaderWriter()
+func (w *stagingWriterImpl) write(ctx context.Context, payload trackerdb.CatchpointPayload) (trackerdb.CatchpointReport, error) {
+	var report trackerdb.CatchpointReport
+	err := w.wdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		crw, err := tx.MakeCatchpointWriter()
 		if err != nil {
 			return err
 		}
-		return crw.WriteCatchpointStagingBalances(ctx, balances)
+		report, err = crw.Write(ctx, payload)
+		return err
 	})
-}
-
-func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
-	return w.wdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		crw, err := tx.MakeCatchpointReaderWriter()
-		if err != nil {
-			return err
-		}
-
-		keys := make([][]byte, len(kvrs))
-		values := make([][]byte, len(kvrs))
-		hashes := make([][]byte, len(kvrs))
-		for i := 0; i < len(kvrs); i++ {
-			keys[i] = kvrs[i].Key
-
-			// Since `encoded.KVRecordV6` is `omitempty` and `omitemptyarray`,
-			// when we have an instance of `encoded.KVRecordV6` with nil value,
-			// an empty box is unmarshalled to have `nil` value,
-			// while this might be mistaken to be a box deletion.
-			//
-			// We don't want to mistake this to be a deleted box:
-			// We are (and should be) during Fast Catchup (FC)
-			// writing to DB with empty byte string, rather than writing nil.
-			//
-			// This matters in sqlite3,
-			// for sqlite3 differs on writing nil byte slice to table from writing []byte{}:
-			// - writing nil byte slice is true that `value is NULL`
-			// - writing []byte{} is false on `value is NULL`.
-			//
-			// For the sake of consistency, we convert nil to []byte{}.
-			//
-			// Also, from a round by round catchup perspective,
-			// when we delete a box, in accountsNewRoundImpl method,
-			// the kv pair with value = nil will be deleted from kvstore table.
-			// Thus, it seems more consistent and appropriate to write as []byte{}.
-
-			if kvrs[i].Value == nil {
-				kvrs[i].Value = []byte{}
-			}
-			values[i] = kvrs[i].Value
-			hashes[i] = trackerdb.KvHashBuilderV6(string(keys[i]), values[i])
-		}
-
-		return crw.WriteCatchpointStagingKVs(ctx, keys, values, hashes)
-	})
-}
-
-func (w *stagingWriterImpl) writeCreatables(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
-	return w.wdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-		crw, err := tx.MakeCatchpointReaderWriter()
-		if err != nil {
-			return err
-		}
-
-		return crw.WriteCatchpointStagingCreatable(ctx, balances)
-	})
-}
-
-func (w *stagingWriterImpl) writeHashes(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
-	return w.wdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
-		crw, err := tx.MakeCatchpointReaderWriter()
-		if err != nil {
-			return err
-		}
-
-		return crw.WriteCatchpointStagingHashes(ctx, balances)
-	})
-}
-
-func (w *stagingWriterImpl) isShared() bool {
-	return w.wdb.IsSharedCacheConnection()
+	return report, err
 }
 
 // catchpointCatchupAccessorImpl is the concrete implementation of the CatchpointCatchupAccessor interface
 type catchpointCatchupAccessorImpl struct {
 	ledger          *Ledger
-	catchpointStore trackerdb.CatchpointReaderWriter
+	catchpointStore catchpointdb.Store
 
 	stagingWriter stagingWriter
 
@@ -242,10 +171,9 @@ type CatchupAccessorClientLedger interface {
 
 // MakeCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger
 func MakeCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger) CatchpointCatchupAccessor {
-	crw, _ := ledger.trackerDB().MakeCatchpointReaderWriter()
 	return &catchpointCatchupAccessorImpl{
 		ledger:          ledger,
-		catchpointStore: crw,
+		catchpointStore: ledger.catchpointDB(),
 		stagingWriter:   &stagingWriterImpl{wdb: ledger.trackerDB()},
 		log:             log,
 	}
@@ -254,9 +182,9 @@ func MakeCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger) Catchpoin
 // GetState returns the current state of the catchpoint catchup
 func (c *catchpointCatchupAccessorImpl) GetState(ctx context.Context) (state CatchpointCatchupState, err error) {
 	var istate uint64
-	istate, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupState)
+	istate, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupState)
 	if err != nil {
-		return 0, fmt.Errorf("unable to read catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupState, err)
+		return 0, fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupState, err)
 	}
 	state = CatchpointCatchupState(istate)
 	return
@@ -267,18 +195,18 @@ func (c *catchpointCatchupAccessorImpl) SetState(ctx context.Context, state Catc
 	if state < CatchpointCatchupStateInactive || state > catchpointCatchupStateLast {
 		return fmt.Errorf("invalid catchpoint catchup state provided : %d", state)
 	}
-	err = c.catchpointStore.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupState, uint64(state))
+	err = c.catchpointStore.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupState, uint64(state))
 	if err != nil {
-		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupState, err)
+		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupState, err)
 	}
 	return
 }
 
 // GetLabel returns the current catchpoint catchup label
 func (c *catchpointCatchupAccessorImpl) GetLabel(ctx context.Context) (label string, err error) {
-	label, err = c.catchpointStore.ReadCatchpointStateString(ctx, trackerdb.CatchpointStateCatchupLabel)
+	label, err = c.catchpointStore.ReadCatchpointStateString(ctx, catchpointdb.CatchpointStateCatchupLabel)
 	if err != nil {
-		return "", fmt.Errorf("unable to read catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupLabel, err)
+		return "", fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupLabel, err)
 	}
 	return
 }
@@ -290,9 +218,9 @@ func (c *catchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 	if err != nil {
 		return
 	}
-	err = c.catchpointStore.WriteCatchpointStateString(ctx, trackerdb.CatchpointStateCatchupLabel, label)
+	err = c.catchpointStore.WriteCatchpointStateString(ctx, catchpointdb.CatchpointStateCatchupLabel, label)
 	if err != nil {
-		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupLabel, err)
+		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupLabel, err)
 	}
 	return
 }
@@ -310,32 +238,45 @@ func (c *catchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 			return err
 		}
 
-		err = crw.ResetCatchpointStagingBalances(ctx, newCatchup)
+		err = crw.Reset(ctx, newCatchup)
 		if err != nil {
 			return fmt.Errorf("unable to reset catchpoint catchup balances : %v", err)
 		}
-		if !newCatchup {
-			err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBalancesRound, 0)
-			if err != nil {
-				return err
-			}
-
-			err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBlockRound, 0)
-			if err != nil {
-				return err
-			}
-
-			err = crw.WriteCatchpointStateString(ctx, trackerdb.CatchpointStateCatchupLabel, "")
-			if err != nil {
-				return err
-			}
-			err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupState, 0)
-			if err != nil {
-				return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupState, err)
-			}
-		}
 		return
 	})
+	if err != nil {
+		// failed to reset staging balances
+		ledgerResetstagingbalancesMicros.AddMicrosecondsSince(start, nil)
+		return
+	}
+
+	if !newCatchup {
+		// reset catchup internal durable state
+		err = c.catchpointStore.Batch(func(ctx context.Context, tx catchpointdb.BatchScope) (err error) {
+			err = c.catchpointStore.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupBalancesRound, 0)
+			if err != nil {
+				return err
+			}
+
+			err = c.catchpointStore.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupBlockRound, 0)
+			if err != nil {
+				return err
+			}
+
+			err = c.catchpointStore.WriteCatchpointStateString(ctx, catchpointdb.CatchpointStateCatchupLabel, "")
+			if err != nil {
+				return err
+			}
+
+			err = c.catchpointStore.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupState, 0)
+			if err != nil {
+				return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupState, err)
+			}
+
+			return
+		})
+	}
+
 	ledgerResetstagingbalancesMicros.AddMicrosecondsSince(start, nil)
 	return
 }
@@ -423,33 +364,41 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
-	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		cw, err := tx.MakeCatchpointWriter()
+
+	// update catchup internal durable state
+	err = c.catchpointStore.Batch(func(ctx context.Context, tx catchpointdb.BatchScope) (err error) {
+		err = tx.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupVersion, fileHeader.Version)
 		if err != nil {
-			return err
+			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup version '%s': %v", catchpointdb.CatchpointStateCatchupVersion, err)
 		}
-		err = cw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion, fileHeader.Version)
+		err = tx.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
-			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup version '%s': %v", trackerdb.CatchpointStateCatchupVersion, err)
+			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupBlockRound, err)
 		}
+		if fileHeader.Version >= CatchpointFileVersionV6 {
+			err = tx.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupHashRound, uint64(fileHeader.BlocksRound))
+			if err != nil {
+				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupHashRound, err)
+			}
+		}
+		return
+	})
+	if err != nil {
+		// failed to update catchup internal state
+		ledgerProcessstagingcontentMicros.AddMicrosecondsSince(start, nil)
+		return err
+	}
+
+	// put totals on the ledger
+	err = c.ledger.trackerDB().Batch(func(ctx context.Context, tx trackerdb.BatchScope) (err error) {
 		aw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
 		}
 
-		err = cw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
-		if err != nil {
-			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupBlockRound, err)
-		}
-		if fileHeader.Version >= CatchpointFileVersionV6 {
-			err = cw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupHashRound, uint64(fileHeader.BlocksRound))
-			if err != nil {
-				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupHashRound, err)
-			}
-		}
-		err = aw.AccountsPutTotals(fileHeader.Totals, true)
-		return
+		return aw.AccountsPutTotals(fileHeader.Totals, true)
 	})
+
 	ledgerProcessstagingcontentMicros.AddMicrosecondsSince(start, nil)
 	if err == nil {
 		progress.SeenHeader = true
@@ -588,101 +537,49 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 	}
 
-	wg := sync.WaitGroup{}
-
-	var errBalances error
-	var errCreatables error
-	var errHashes error
-	var errKVs error
-	var durBalances time.Duration
-	var durCreatables time.Duration
-	var durHashes time.Duration
-	var durKVs time.Duration
-
-	// start the balances writer
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		writeBalancesStart := time.Now()
-		errBalances = c.stagingWriter.writeBalances(ctx, normalizedAccountBalances)
-		durBalances = time.Since(writeBalancesStart)
-	}()
-
-	// on a in-memory database, wait for the writer to finish before starting the new writer
-	if c.stagingWriter.isShared() {
-		wg.Wait()
-	}
-
-	// starts the creatables writer
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		hasCreatables := false
-		for _, accBal := range normalizedAccountBalances {
-			for _, res := range accBal.Resources {
-				if res.IsOwning() {
-					hasCreatables = true
-					break
-				}
-			}
+	// fix empty KV's
+	for i := range chunkKVs {
+		// Since `encoded.KVRecordV6` is `omitempty` and `omitemptyarray`,
+		// when we have an instance of `encoded.KVRecordV6` with nil value,
+		// an empty box is unmarshalled to have `nil` value,
+		// while this might be mistaken to be a box deletion.
+		//
+		// We don't want to mistake this to be a deleted box:
+		// We are (and should be) during Fast Catchup (FC)
+		// writing to DB with empty byte string, rather than writing nil.
+		//
+		// This matters in sqlite3,
+		// for sqlite3 differs on writing nil byte slice to table from writing []byte{}:
+		// - writing nil byte slice is true that `value is NULL`
+		// - writing []byte{} is false on `value is NULL`.
+		//
+		// For the sake of consistency, we convert nil to []byte{}.
+		//
+		// Also, from a round by round catchup perspective,
+		// when we delete a box, in accountsNewRoundImpl method,
+		// the kv pair with value = nil will be deleted from kvstore table.
+		// Thus, it seems more consistent and appropriate to write as []byte{}.
+		if chunkKVs[i].Value == nil {
+			chunkKVs[i].Value = []byte{}
 		}
-		if hasCreatables {
-			writeCreatablesStart := time.Now()
-			errCreatables = c.stagingWriter.writeCreatables(ctx, normalizedAccountBalances)
-			durCreatables = time.Since(writeCreatablesStart)
-		}
-	}()
-
-	// on a in-memory database, wait for the writer to finish before starting the new writer
-	if c.stagingWriter.isShared() {
-		wg.Wait()
 	}
 
-	// start the accounts pending hashes writer
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		writeHashesStart := time.Now()
-		errHashes = c.stagingWriter.writeHashes(ctx, normalizedAccountBalances)
-		durHashes = time.Since(writeHashesStart)
-	}()
-
-	// on a in-memory database, wait for the writer to finish before starting the new writer
-	if c.stagingWriter.isShared() {
-		wg.Wait()
+	// apply catchpoint
+	var report trackerdb.CatchpointReport
+	report, err = c.stagingWriter.write(ctx, trackerdb.CatchpointPayload{
+		Accounts:  normalizedAccountBalances,
+		KVRecords: chunkKVs,
+	})
+	if err != nil {
+		return err
 	}
-
-	// start the kv store writer
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		writeKVsStart := time.Now()
-		errKVs = c.stagingWriter.writeKVs(ctx, chunkKVs)
-		durKVs = time.Since(writeKVsStart)
-	}()
-
-	wg.Wait()
-
-	if errBalances != nil {
-		return errBalances
-	}
-	if errCreatables != nil {
-		return errCreatables
-	}
-	if errHashes != nil {
-		return errHashes
-	}
-	if errKVs != nil {
-		return errKVs
-	}
-
-	progress.BalancesWriteDuration += durBalances
-	progress.CreatablesWriteDuration += durCreatables
-	progress.HashesWriteDuration += durHashes
-	progress.KVWriteDuration += durKVs
 
 	ledgerProcessstagingbalancesMicros.AddMicrosecondsSince(start, nil)
+
+	progress.BalancesWriteDuration += report.BalancesWriteDuration
+	progress.CreatablesWriteDuration += report.CreatablesWriteDuration
+	progress.HashesWriteDuration += report.HashesWriteDuration
+	progress.KVWriteDuration += report.KVWriteDuration
 	progress.ProcessedBytes += uint64(len(bytes))
 	progress.ProcessedKVs += uint64(len(chunkKVs))
 	for _, acctBal := range normalizedAccountBalances {
@@ -723,23 +620,6 @@ func countHashes(hashes [][]byte) (accountCount, kvCount uint64) {
 // BuildMerkleTrie would process the catchpointpendinghashes and insert all the items in it into the merkle trie
 func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64, uint64)) (err error) {
 	dbs := c.ledger.trackerDB()
-	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		crw, err := tx.MakeCatchpointWriter()
-		if err != nil {
-			return err
-		}
-
-		// creating the index can take a while, so ensure we don't generate false alerts for no good reason.
-		_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(120*time.Second))
-		if err != nil {
-			return err
-		}
-
-		return crw.CreateCatchpointStagingHashesIndex(ctx)
-	})
-	if err != nil {
-		return
-	}
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -919,9 +799,9 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 // GetCatchupBlockRound returns the latest block round matching the current catchpoint
 func (c *catchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error) {
 	var iRound uint64
-	iRound, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBlockRound)
+	iRound, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupBlockRound)
 	if err != nil {
-		return 0, fmt.Errorf("unable to read catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchpointLookback, err)
+		return 0, fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchpointLookback, err)
 	}
 	return basics.Round(iRound), nil
 }
@@ -935,20 +815,20 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	var catchpointLabel string
 	var version uint64
 
-	catchpointLabel, err = c.catchpointStore.ReadCatchpointStateString(ctx, trackerdb.CatchpointStateCatchupLabel)
+	catchpointLabel, err = c.catchpointStore.ReadCatchpointStateString(ctx, catchpointdb.CatchpointStateCatchupLabel)
 	if err != nil {
-		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupLabel, err)
+		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupLabel, err)
 	}
 
-	version, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
+	version, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupVersion)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve catchpoint version: %v", err)
 	}
 
 	var iRound uint64
-	iRound, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBlockRound)
+	iRound, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupBlockRound)
 	if err != nil {
-		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupBlockRound, err)
+		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupBlockRound, err)
 	}
 	blockRound = basics.Round(iRound)
 
@@ -1026,18 +906,10 @@ func (c *catchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 	balancesRound := blk.Round() - basics.Round(catchpointLookback)
 	start := time.Now()
 	ledgerStorebalancesroundCount.Inc(nil)
-	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		crw, err := tx.MakeCatchpointWriter()
-		if err != nil {
-			return err
-		}
-
-		err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBalancesRound, uint64(balancesRound))
-		if err != nil {
-			return fmt.Errorf("CatchpointCatchupAccessorImpl::StoreBalancesRound: unable to write catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupBalancesRound, err)
-		}
-		return
-	})
+	err = c.catchpointStore.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupBalancesRound, uint64(balancesRound))
+	if err != nil {
+		return fmt.Errorf("CatchpointCatchupAccessorImpl::StoreBalancesRound: unable to write catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupBalancesRound, err)
+	}
 	ledgerStorebalancesroundMicros.AddMicrosecondsSince(start, nil)
 	return
 }
@@ -1126,36 +998,35 @@ func (c *catchpointCatchupAccessorImpl) CompleteCatchup(ctx context.Context) (er
 func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err error) {
 	start := time.Now()
 	ledgerCatchpointFinishBalsCount.Inc(nil)
+
+	balancesRound, err := c.catchpointStore.ReadCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupBalancesRound)
+	if err != nil {
+		return err
+	}
+
+	hashRound, err := c.catchpointStore.ReadCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupHashRound)
+	if err != nil {
+		return err
+	}
+
 	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		crw, err := tx.MakeCatchpointReaderWriter()
-		if err != nil {
-			return err
-		}
+		// get current totals
 
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
 
+		totals, err := ar.AccountsTotals(ctx, true)
+		if err != nil {
+			return err
+		}
+
+		//
+		// reset trackerdb
+		//
+
 		aw, err := tx.MakeAccountsWriter()
-		if err != nil {
-			return err
-		}
-
-		var balancesRound, hashRound uint64
-		var totals ledgercore.AccountTotals
-
-		balancesRound, err = crw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBalancesRound)
-		if err != nil {
-			return err
-		}
-
-		hashRound, err = crw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupHashRound)
-		if err != nil {
-			return err
-		}
-
-		totals, err = ar.AccountsTotals(ctx, true)
 		if err != nil {
 			return err
 		}
@@ -1193,7 +1064,16 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			}
 		}
 
-		err = crw.ApplyCatchpointStagingBalances(ctx, basics.Round(balancesRound), basics.Round(hashRound))
+		//
+		// apply catchpoint
+		//
+
+		crw, err := tx.MakeCatchpointWriter()
+		if err != nil {
+			return err
+		}
+
+		err = crw.Apply(ctx, basics.Round(balancesRound), basics.Round(hashRound))
 		if err != nil {
 			return err
 		}
@@ -1203,40 +1083,50 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		err = crw.ResetCatchpointStagingBalances(ctx, false)
+		err = crw.Reset(ctx, false)
 		if err != nil {
 			return err
 		}
 
-		err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBalancesRound, 0)
-		if err != nil {
-			return err
-		}
-
-		err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBlockRound, 0)
-		if err != nil {
-			return err
-		}
-
-		err = crw.WriteCatchpointStateString(ctx, trackerdb.CatchpointStateCatchupLabel, "")
-		if err != nil {
-			return err
-		}
-
-		if hashRound != 0 {
-			err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupHashRound, 0)
-			if err != nil {
-				return err
-			}
-		}
-
-		err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupState, 0)
-		if err != nil {
-			return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupState, err)
-		}
-
-		return
+		return nil
 	})
+
+	if err != nil {
+		// apply failed
+		ledgerCatchpointFinishBalsMicros.AddMicrosecondsSince(start, nil)
+		return err
+	}
+
+	// apply succeded
+	// reset catchup durable state
+
+	err = c.catchpointStore.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupBalancesRound, 0)
+	if err != nil {
+		return err
+	}
+
+	err = c.catchpointStore.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupBlockRound, 0)
+	if err != nil {
+		return err
+	}
+
+	err = c.catchpointStore.WriteCatchpointStateString(ctx, catchpointdb.CatchpointStateCatchupLabel, "")
+	if err != nil {
+		return err
+	}
+
+	if hashRound != 0 {
+		err = c.catchpointStore.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupHashRound, 0)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = c.catchpointStore.WriteCatchpointStateUint64(ctx, catchpointdb.CatchpointStateCatchupState, 0)
+	if err != nil {
+		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointdb.CatchpointStateCatchupState, err)
+	}
+
 	ledgerCatchpointFinishBalsMicros.AddMicrosecondsSince(start, nil)
 	return err
 }

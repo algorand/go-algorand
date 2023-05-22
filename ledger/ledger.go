@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
+	"github.com/algorand/go-algorand/ledger/store/catchpointdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
@@ -52,8 +53,9 @@ type Ledger struct {
 	// Database connections to the DBs storing blocks and tracker state.
 	// We use potentially different databases to avoid SQLite contention
 	// during catchup.
-	trackerDBs trackerdb.Store
-	blockDBs   db.Pair
+	trackerDBs    trackerdb.Store
+	catchpointDbs catchpointdb.Store
+	blockDBs      db.Pair
 
 	// blockQ is the buffer of added blocks that will be flushed to
 	// persistent storage
@@ -818,6 +820,11 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 // ledgerForTracker methods
 func (l *Ledger) trackerDB() trackerdb.Store {
 	return l.trackerDBs
+}
+
+// ledgerForTracker methods
+func (l *Ledger) catchpointDB() catchpointdb.Store {
+	return l.catchpointDbs
 }
 
 // ledgerForTracker methods

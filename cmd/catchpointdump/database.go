@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/store/catchpointdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/util/db"
@@ -103,30 +104,14 @@ func printDbVersion(staging bool, version uint64, outFile *os.File) {
 }
 
 func getVersion(filename string, staging bool) (uint64, error) {
-	dbAccessor, err := db.MakeAccessor(filename, true, false)
-	if err != nil || dbAccessor.Handle == nil {
+	rdb, err := db.MakeAccessor(filename, true, false)
+	if err != nil || rdb.Handle == nil {
 		return 0, err
 	}
-	defer dbAccessor.Close()
-	var version uint64
-	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		if staging {
-			// writing the version of the catchpoint file start only on ver >= CatchpointFileVersionV7.
-			// in case the catchpoint version does not exists ReadCatchpointStateUint64 returns 0
-			cw := sqlitedriver.NewCatchpointSQLReaderWriter(tx)
-			version, err = cw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
-			return err
-		}
+	catchpointDbs := catchpointdb.MakeStore(db.Pair{Rdb: rdb, Wdb: rdb})
+	defer catchpointDbs.Close()
 
-		versionAsInt32, err := db.GetUserVersion(ctx, tx)
-		version = uint64(versionAsInt32)
-		return err
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	return version, nil
+	return catchpointDbs.GetVersion(context.Background(), staging)
 }
 
 var checkCmd = &cobra.Command{

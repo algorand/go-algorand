@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/catchpointdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -3301,7 +3302,7 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 
 	catchpointAccessor, accessorProgress := initializeTestCatchupAccessor(t, l, uint64(len(initkeys)))
 
-	relCatchpointFilePath := filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(basics.Round(cfg.CatchpointInterval)))
+	relCatchpointFilePath := filepath.Join(catchpointdb.CatchpointDirName, catchpointdb.MakeCatchpointFilePath(basics.Round(cfg.CatchpointInterval)))
 	catchpointData := readCatchpointFile(t, relCatchpointFilePath)
 
 	err = catchpointAccessor.ProcessStagingBalances(context.Background(), catchpointData[1].headerName, catchpointData[1].data, &accessorProgress)

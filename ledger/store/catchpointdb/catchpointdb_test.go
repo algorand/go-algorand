@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package sqlitedriver
+package catchpointdb
 
 import (
 	"context"
@@ -24,7 +24,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
-	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -33,47 +32,46 @@ import (
 func TestCatchpointFirstStageInfoTable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
+	pair, _ := storetesting.DbOpenTest(t, true)
+	dbs := MakeStore(pair)
 	defer dbs.Close()
 
 	ctx := context.Background()
 
-	err := accountsCreateCatchpointFirstStageInfoTable(ctx, dbs.Wdb.Handle)
+	err := dbs.RunMigrations(ctx, LatestSchemaVersion)
 	require.NoError(t, err)
 
-	crw := NewCatchpointSQLReaderWriter(dbs.Wdb.Handle)
-
 	for _, round := range []basics.Round{4, 6, 8} {
-		info := trackerdb.CatchpointFirstStageInfo{
+		info := CatchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
-		err = crw.InsertOrReplaceCatchpointFirstStageInfo(ctx, round, &info)
+		err = dbs.InsertOrReplaceCatchpointFirstStageInfo(ctx, round, &info)
 		require.NoError(t, err)
 	}
 
 	for _, round := range []basics.Round{4, 6, 8} {
-		info, exists, err := crw.SelectCatchpointFirstStageInfo(ctx, round)
+		info, exists, err := dbs.SelectCatchpointFirstStageInfo(ctx, round)
 		require.NoError(t, err)
 		require.True(t, exists)
 
-		infoExpected := trackerdb.CatchpointFirstStageInfo{
+		infoExpected := CatchpointFirstStageInfo{
 			TotalAccounts: uint64(round) * 10,
 		}
 		require.Equal(t, infoExpected, info)
 	}
 
-	_, exists, err := crw.SelectCatchpointFirstStageInfo(ctx, 7)
+	_, exists, err := dbs.SelectCatchpointFirstStageInfo(ctx, 7)
 	require.NoError(t, err)
 	require.False(t, exists)
 
-	rounds, err := crw.SelectOldCatchpointFirstStageInfoRounds(ctx, 6)
+	rounds, err := dbs.SelectOldCatchpointFirstStageInfoRounds(ctx, 6)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{4, 6}, rounds)
 
-	err = crw.DeleteOldCatchpointFirstStageInfo(ctx, 6)
+	err = dbs.DeleteOldCatchpointFirstStageInfo(ctx, 6)
 	require.NoError(t, err)
 
-	rounds, err = crw.SelectOldCatchpointFirstStageInfoRounds(ctx, 9)
+	rounds, err = dbs.SelectOldCatchpointFirstStageInfoRounds(ctx, 9)
 	require.NoError(t, err)
 	require.Equal(t, []basics.Round{8}, rounds)
 }
@@ -81,28 +79,26 @@ func TestCatchpointFirstStageInfoTable(t *testing.T) {
 func TestUnfinishedCatchpointsTable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
+	pair, _ := storetesting.DbOpenTest(t, true)
+	dbs := MakeStore(pair)
 	defer dbs.Close()
 
-	cts := NewCatchpointSQLReaderWriter(dbs.Wdb.Handle)
-
-	err := accountsCreateUnfinishedCatchpointsTable(
-		context.Background(), dbs.Wdb.Handle)
+	err := dbs.RunMigrations(context.Background(), LatestSchemaVersion)
 	require.NoError(t, err)
 
 	var d3 crypto.Digest
 	rand.Read(d3[:])
-	err = cts.InsertUnfinishedCatchpoint(context.Background(), 3, d3)
+	err = dbs.InsertUnfinishedCatchpoint(context.Background(), 3, d3)
 	require.NoError(t, err)
 
 	var d5 crypto.Digest
 	rand.Read(d5[:])
-	err = cts.InsertUnfinishedCatchpoint(context.Background(), 5, d5)
+	err = dbs.InsertUnfinishedCatchpoint(context.Background(), 5, d5)
 	require.NoError(t, err)
 
-	ret, err := cts.SelectUnfinishedCatchpoints(context.Background())
+	ret, err := dbs.SelectUnfinishedCatchpoints(context.Background())
 	require.NoError(t, err)
-	expected := []trackerdb.UnfinishedCatchpointRecord{
+	expected := []UnfinishedCatchpointRecord{
 		{
 			Round:     3,
 			BlockHash: d3,
@@ -114,12 +110,12 @@ func TestUnfinishedCatchpointsTable(t *testing.T) {
 	}
 	require.Equal(t, expected, ret)
 
-	err = cts.DeleteUnfinishedCatchpoint(context.Background(), 3)
+	err = dbs.DeleteUnfinishedCatchpoint(context.Background(), 3)
 	require.NoError(t, err)
 
-	ret, err = cts.SelectUnfinishedCatchpoints(context.Background())
+	ret, err = dbs.SelectUnfinishedCatchpoints(context.Background())
 	require.NoError(t, err)
-	expected = []trackerdb.UnfinishedCatchpointRecord{
+	expected = []UnfinishedCatchpointRecord{
 		{
 			Round:     5,
 			BlockHash: d5,

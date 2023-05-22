@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/catchpointdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -95,7 +96,7 @@ func TestCatchpointGetCatchpointStream(t *testing.T) {
 	filesToCreate := 4
 
 	temporaryDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectory, trackerdb.CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectory, catchpointdb.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
@@ -103,7 +104,7 @@ func TestCatchpointGetCatchpointStream(t *testing.T) {
 
 	// Create the catchpoint files with dummy data
 	for i := 0; i < filesToCreate; i++ {
-		fileName := filepath.Join(trackerdb.CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
+		fileName := filepath.Join(catchpointdb.CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
 		err = os.WriteFile(filepath.Join(temporaryDirectory, fileName), data, 0666)
 		require.NoError(t, err)
@@ -129,7 +130,7 @@ func TestCatchpointGetCatchpointStream(t *testing.T) {
 	require.Equal(t, int64(3), len)
 
 	// File deleted, but record in the database
-	err = os.Remove(filepath.Join(temporaryDirectory, trackerdb.CatchpointDirName, "2.catchpoint"))
+	err = os.Remove(filepath.Join(temporaryDirectory, catchpointdb.CatchpointDirName, "2.catchpoint"))
 	require.NoError(t, err)
 	reader, err = ct.GetCatchpointStream(basics.Round(2))
 	require.Equal(t, ledgercore.ErrNoEntry{}, err)
@@ -175,7 +176,7 @@ func TestCatchpointsDeleteStored(t *testing.T) {
 	dummyCatchpointFiles := make([]string, dummyCatchpointFilesToCreate)
 	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
 		file := fmt.Sprintf("%s%c%d%c%d%cdummy_catchpoint_file-%d",
-			trackerdb.CatchpointDirName, os.PathSeparator,
+			catchpointdb.CatchpointDirName, os.PathSeparator,
 			i/10, os.PathSeparator,
 			i/2, os.PathSeparator,
 			i)
@@ -215,7 +216,7 @@ func TestCatchpointsDeleteStoredOnSchemaUpdate(t *testing.T) {
 		return
 	}
 	temporaryDirectroy := t.TempDir()
-	tempCatchpointDir := filepath.Join(temporaryDirectroy, trackerdb.CatchpointDirName)
+	tempCatchpointDir := filepath.Join(temporaryDirectroy, catchpointdb.CatchpointDirName)
 
 	// creating empty catchpoint directories
 	emptyDirPath := path.Join(tempCatchpointDir, "2f", "e1")
@@ -252,7 +253,7 @@ func TestCatchpointsDeleteStoredOnSchemaUpdate(t *testing.T) {
 	_, err = trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
 
-	emptyDirs, err := trackerdb.GetEmptyDirs(tempCatchpointDir)
+	emptyDirs, err := catchpointdb.GetEmptyDirs(tempCatchpointDir)
 	require.NoError(t, err)
 	onlyTempDirEmpty := len(emptyDirs) == 0
 	require.Equal(t, onlyTempDirEmpty, true)
@@ -320,7 +321,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, conf.CatchpointFileHistoryLength, numberOfCatchpointFiles)
 
-	emptyDirs, err := trackerdb.GetEmptyDirs(temporaryDirectory)
+	emptyDirs, err := catchpointdb.GetEmptyDirs(temporaryDirectory)
 	require.NoError(t, err)
 	onlyCatchpointDirEmpty := len(emptyDirs) == 0 ||
 		(len(emptyDirs) == 1 && emptyDirs[0] == temporaryDirectory)
@@ -335,7 +336,7 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
 
-	err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+	err = ct.createCatchpoint(context.Background(), accountsRound, round, catchpointdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
 	require.NoError(t, err)
 }
 
@@ -421,7 +422,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	ct.initialize(cfg, ".")
 
 	temporaryDirectroy := b.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectroy, trackerdb.CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectroy, catchpointdb.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(b, err)
 
@@ -1047,7 +1048,7 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 	defer ct.close()
 
 	temporaryDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectory, trackerdb.CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectory, catchpointdb.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 
@@ -1145,7 +1146,7 @@ func TestCatchpointFirstStagePersistence(t *testing.T) {
 	defer ml.Close()
 
 	tempDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(tempDirectory, trackerdb.CatchpointDirName)
+	catchpointsDirectory := filepath.Join(tempDirectory, catchpointdb.CatchpointDirName)
 
 	cfg := config.GetDefaultLocal()
 	cfg.CatchpointInterval = 4
@@ -1190,12 +1191,11 @@ func TestCatchpointFirstStagePersistence(t *testing.T) {
 	defer ml2.Close()
 	ml.Close()
 
-	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
-	require.NoError(t, err)
+	cps2 := ml2.catchpointDB()
 
 	// Insert unfinished first stage record.
 	err = cps2.WriteCatchpointStateUint64(
-		context.Background(), trackerdb.CatchpointStateWritingFirstStageInfo, 1)
+		context.Background(), catchpointdb.CatchpointStateWritingFirstStageInfo, 1)
 	require.NoError(t, err)
 
 	// Delete the database record.
@@ -1219,7 +1219,7 @@ func TestCatchpointFirstStagePersistence(t *testing.T) {
 
 	// Check that the unfinished first stage record is deleted.
 	v, err := ct2.catchpointStore.ReadCatchpointStateUint64(
-		context.Background(), trackerdb.CatchpointStateWritingFirstStageInfo)
+		context.Background(), catchpointdb.CatchpointStateWritingFirstStageInfo)
 	require.NoError(t, err)
 	require.Zero(t, v)
 }
@@ -1246,7 +1246,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 	defer ml.Close()
 
 	tempDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(tempDirectory, trackerdb.CatchpointDirName)
+	catchpointsDirectory := filepath.Join(tempDirectory, catchpointdb.CatchpointDirName)
 
 	cfg := config.GetDefaultLocal()
 	cfg.CatchpointInterval = 4
@@ -1269,7 +1269,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 	firstStageRound := secondStageRound - basics.Round(protoParams.CatchpointLookback)
 	catchpointDataFilePath :=
 		filepath.Join(catchpointsDirectory, makeCatchpointDataFilePath(firstStageRound))
-	var firstStageInfo trackerdb.CatchpointFirstStageInfo
+	var firstStageInfo catchpointdb.CatchpointFirstStageInfo
 	var catchpointData []byte
 
 	// Add blocks until the first catchpoint round.
@@ -1310,7 +1310,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 
 	// Check that the data file exists.
 	catchpointFilePath :=
-		filepath.Join(catchpointsDirectory, trackerdb.MakeCatchpointFilePath(secondStageRound))
+		filepath.Join(catchpointsDirectory, catchpointdb.MakeCatchpointFilePath(secondStageRound))
 	info, err := os.Stat(catchpointFilePath)
 	require.NoError(t, err)
 
@@ -1329,8 +1329,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 	err = os.WriteFile(catchpointDataFilePath, catchpointData, 0644)
 	require.NoError(t, err)
 
-	cw2, err := ml2.dbs.MakeCatchpointWriter()
-	require.NoError(t, err)
+	cw2 := ml2.catchpointDB()
 
 	// Restore the first stage database record.
 	err = cw2.InsertOrReplaceCatchpointFirstStageInfo(context.Background(), firstStageRound, &firstStageInfo)
@@ -1521,8 +1520,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *t
 	defer ml2.Close()
 	ml.Close()
 
-	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
-	require.NoError(t, err)
+	cps2 := ml2.catchpointDB()
 
 	// Sanity check: first stage record should be deleted.
 	_, exists, err := cps2.SelectCatchpointFirstStageInfo(context.Background(), firstStageRound)
@@ -1809,7 +1807,7 @@ func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
 
 	ct := newCatchpointTracker(t, ml, conf, ".")
 	temporaryDirectory := t.TempDir()
-	catchpointsDirectory := filepath.Join(temporaryDirectory, trackerdb.CatchpointDirName)
+	catchpointsDirectory := filepath.Join(temporaryDirectory, catchpointdb.CatchpointDirName)
 	err := os.Mkdir(catchpointsDirectory, 0777)
 	require.NoError(t, err)
 	defer os.RemoveAll(catchpointsDirectory)

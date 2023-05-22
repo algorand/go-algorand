@@ -741,7 +741,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			if err != nil {
 				return err
 			}
-			err = cw.WriteCatchpointStagingBalances(ctx, normalizedAccountBalances)
+			_, err = cw.Write(ctx, trackerdb.CatchpointPayload{Accounts: normalizedAccountBalances})
 			return
 		})
 

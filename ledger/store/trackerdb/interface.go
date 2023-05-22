@@ -72,15 +72,16 @@ type AccountsWriter interface {
 
 // AccountsWriterExt is the write interface used inside transactions and batch operations.
 type AccountsWriterExt interface {
-	AccountsReset(ctx context.Context) error
-	ResetAccountHashes(ctx context.Context) (err error)
-	TxtailNewRound(ctx context.Context, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error
+	CatchpointApplicationWriter
+
 	UpdateAccountsRound(rnd basics.Round) (err error)
-	UpdateAccountsHashRound(ctx context.Context, hashRound basics.Round) (err error)
 	AccountsPutTotals(totals ledgercore.AccountTotals, catchpointStaging bool) error
+
 	OnlineAccountsDelete(forgetBefore basics.Round) (err error)
 	AccountsPutOnlineRoundParams(onlineRoundParamsData []ledgercore.OnlineRoundParamsData, startRound basics.Round) error
 	AccountsPruneOnlineRoundParams(deleteBeforeRound basics.Round) error
+
+	TxtailNewRound(ctx context.Context, baseRound basics.Round, roundData [][]byte, forgetBeforeRound basics.Round) error
 }
 
 // AccountsReader is the "optimized" read interface for:
@@ -104,24 +105,38 @@ type AccountsReader interface {
 // AccountsReaderExt is the read interface for:
 // - accounts, resources, app kvs, creatables
 type AccountsReaderExt interface {
+	CatchpointCreationReader
+
+	AccountsRound() (rnd basics.Round, err error)
 	AccountsTotals(ctx context.Context, catchpointStaging bool) (totals ledgercore.AccountTotals, err error)
-	AccountsHashRound(ctx context.Context) (hashrnd basics.Round, err error)
-	LookupAccountAddressFromAddressID(ctx context.Context, ref AccountRef) (address basics.Address, err error)
+
 	LookupAccountRowID(basics.Address) (ref AccountRef, err error)
 	LookupResourceDataByAddrID(accountRef AccountRef, aidx basics.CreatableIndex) (data []byte, err error)
-	TotalResources(ctx context.Context) (total uint64, err error)
-	TotalAccounts(ctx context.Context) (total uint64, err error)
-	TotalKVs(ctx context.Context) (total uint64, err error)
-	AccountsRound() (rnd basics.Round, err error)
 	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
+
 	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
 	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
+
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
-	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
 	// testing
 	Testing() AccountsReaderTestExt
+}
+
+type CatchpointApplicationWriter interface {
+	AccountsReset(ctx context.Context) error
+	ResetAccountHashes(ctx context.Context) (err error)
+	UpdateAccountsHashRound(ctx context.Context, hashRound basics.Round) (err error)
+}
+
+type CatchpointCreationReader interface {
+	AccountsHashRound(ctx context.Context) (hashrnd basics.Round, err error)
+	LookupAccountAddressFromAddressID(ctx context.Context, ref AccountRef) (address basics.Address, err error)
+	TotalResources(ctx context.Context) (total uint64, err error)
+	TotalAccounts(ctx context.Context) (total uint64, err error)
+	TotalKVs(ctx context.Context) (total uint64, err error)
+	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
 }
 
 // AccountsReaderWriter is AccountsReader+AccountsWriter
@@ -148,52 +163,6 @@ type OnlineAccountsReader interface {
 	LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error)
 
 	Close()
-}
-
-// CatchpointWriter is the write interface for:
-// - catchpoints
-type CatchpointWriter interface {
-	CreateCatchpointStagingHashesIndex(ctx context.Context) (err error)
-
-	StoreCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error)
-
-	WriteCatchpointStateUint64(ctx context.Context, stateName CatchpointState, setValue uint64) (err error)
-	WriteCatchpointStateString(ctx context.Context, stateName CatchpointState, setValue string) (err error)
-
-	WriteCatchpointStagingBalances(ctx context.Context, bals []NormalizedAccountBalance) error
-	WriteCatchpointStagingKVs(ctx context.Context, keys [][]byte, values [][]byte, hashes [][]byte) error
-	WriteCatchpointStagingCreatable(ctx context.Context, bals []NormalizedAccountBalance) error
-	WriteCatchpointStagingHashes(ctx context.Context, bals []NormalizedAccountBalance) error
-
-	ApplyCatchpointStagingBalances(ctx context.Context, balancesRound basics.Round, merkleRootRound basics.Round) (err error)
-	ResetCatchpointStagingBalances(ctx context.Context, newCatchup bool) (err error)
-
-	InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error
-	DeleteUnfinishedCatchpoint(ctx context.Context, round basics.Round) error
-	DeleteOldCatchpointFirstStageInfo(ctx context.Context, maxRoundToDelete basics.Round) error
-	InsertOrReplaceCatchpointFirstStageInfo(ctx context.Context, round basics.Round, info *CatchpointFirstStageInfo) error
-
-	DeleteStoredCatchpoints(ctx context.Context, dbDirectory string) (err error)
-}
-
-// CatchpointReader is the read interface for:
-// - catchpoints
-type CatchpointReader interface {
-	GetCatchpoint(ctx context.Context, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error)
-	GetOldestCatchpointFiles(ctx context.Context, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error)
-
-	ReadCatchpointStateUint64(ctx context.Context, stateName CatchpointState) (val uint64, err error)
-	ReadCatchpointStateString(ctx context.Context, stateName CatchpointState) (val string, err error)
-
-	SelectUnfinishedCatchpoints(ctx context.Context) ([]UnfinishedCatchpointRecord, error)
-	SelectCatchpointFirstStageInfo(ctx context.Context, round basics.Round) (CatchpointFirstStageInfo, bool /*exists*/, error)
-	SelectOldCatchpointFirstStageInfoRounds(ctx context.Context, maxRound basics.Round) ([]basics.Round, error)
-}
-
-// CatchpointReaderWriter is CatchpointReader+CatchpointWriter
-type CatchpointReaderWriter interface {
-	CatchpointReader
-	CatchpointWriter
 }
 
 // MerkleCommitter allows storing and loading merkletrie pages from a sqlite database.

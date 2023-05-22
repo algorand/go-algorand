@@ -293,20 +293,8 @@ func (*catchpoint) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.
 	return nil
 }
 
-// MakeCatchpointReader implements trackerdb.Catchpoint
-func (*catchpoint) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
-	// TODO: catchpoint
-	return nil, nil
-}
-
-// MakeCatchpointReaderWriter implements trackerdb.Catchpoint
-func (*catchpoint) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
-	// TODO: catchpoint
-	return nil, nil
-}
-
 // MakeCatchpointWriter implements trackerdb.Catchpoint
-func (*catchpoint) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
+func (*catchpoint) MakeCatchpointWriter() (trackerdb.CatchpointApply, error) {
 	// TODO: catchpoint
 	return nil, nil
 }

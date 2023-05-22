@@ -34,18 +34,8 @@ func (*catchpoint) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.
 	panic("unimplemented")
 }
 
-// MakeCatchpointReader implements trackerdb.Catchpoint
-func (*catchpoint) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
-	panic("unimplemented")
-}
-
-// MakeCatchpointReaderWriter implements trackerdb.Catchpoint
-func (*catchpoint) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
-	panic("unimplemented")
-}
-
 // MakeCatchpointWriter implements trackerdb.Catchpoint
-func (*catchpoint) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
+func (*catchpoint) MakeCatchpointWriter() (trackerdb.CatchpointApply, error) {
 	panic("unimplemented")
 }
 

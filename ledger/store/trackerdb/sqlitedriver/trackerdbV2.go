@@ -18,6 +18,7 @@ package sqlitedriver
 
 import (
 	"context"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -28,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store/catchpointdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
@@ -217,7 +219,6 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 	}
 
 	if modifiedAccounts > 0 {
-		crw := NewCatchpointSQLReaderWriter(e)
 		arw := NewAccountsSQLReaderWriter(e)
 
 		tu.log.Infof("upgradeDatabaseSchema1 reencoded %d accounts", modifiedAccounts)
@@ -229,20 +230,8 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 			return fmt.Errorf("upgradeDatabaseSchema1 unable to reset account hashes : %v", err)
 		}
 
-		tu.log.Infof("upgradeDatabaseSchema1 preparing queries")
-		tu.log.Infof("upgradeDatabaseSchema1 resetting prior catchpoints")
-		// delete the last catchpoint label if we have any.
-		err = crw.WriteCatchpointStateString(ctx, trackerdb.CatchpointStateLastCatchpoint, "")
-		if err != nil {
-			return fmt.Errorf("upgradeDatabaseSchema1 unable to clear prior catchpoint : %v", err)
-		}
-
-		tu.log.Infof("upgradeDatabaseSchema1 deleting stored catchpoints")
-		// delete catchpoints.
-		err = crw.DeleteStoredCatchpoints(ctx, tu.Params.DbPathPrefix)
-		if err != nil {
-			return fmt.Errorf("upgradeDatabaseSchema1 unable to delete stored catchpoints : %v", err)
-		}
+		// we no longer cleanup catchpoints here
+		// Note: we no longer support cleanly upgrading from version 1.
 	} else {
 		tu.log.Infof("upgradeDatabaseSchema1 found that no accounts needed to be reencoded")
 	}
@@ -375,25 +364,45 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 }
 
 func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable) error {
-	cts := NewCatchpointSQLReaderWriter(e)
-	// Delete an unfinished catchpoint if there is one.
-	round, err := cts.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateWritingCatchpoint)
-	if err != nil {
-		return err
-	}
-	if round == 0 {
+	// this method comes from a time when catchpoint internal state was stored alongside the ledger data.
+
+	// Note: this is duplicate legacy** code from catchpointdb.ReadCatchpointStateUint64
+	var round uint64
+	err := db.Retry(func() (err error) {
+		var v sql.NullInt64
+		err = e.QueryRowContext(ctx, "SELECT intval FROM catchpointstate WHERE id=?", catchpointdb.CatchpointStateWritingCatchpoint).Scan(&v)
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if v.Valid {
+			round = uint64(v.Int64)
+		}
 		return nil
-	}
-
-	relCatchpointFilePath := filepath.Join(
-		trackerdb.CatchpointDirName,
-		trackerdb.MakeCatchpointFilePath(basics.Round(round)))
-	err = trackerdb.RemoveSingleCatchpointFileFromDisk(tu.DbPathPrefix, relCatchpointFilePath)
+	})
 	if err != nil {
 		return err
 	}
 
-	return cts.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateWritingCatchpoint, 0)
+	relCatchpointFilePath := filepath.Join(catchpointdb.CatchpointDirName, catchpointdb.MakeCatchpointFilePath(basics.Round(round)))
+	err = catchpointdb.RemoveSingleCatchpointFileFromDisk(tu.DbPathPrefix, relCatchpointFilePath)
+	if err != nil {
+		return err
+	}
+
+	// Note: this is duplicate legacy** code from catchpointdb.WriteCatchpointStateUint64
+	_, err = e.ExecContext(ctx, "DELETE FROM catchpointstate WHERE id=?", catchpointdb.CatchpointStateWritingCatchpoint)
+	if err != nil {
+		return err
+	}
+	_, err = e.ExecContext(ctx, "INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)", catchpointdb.CatchpointStateWritingCatchpoint, 0)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // upgradeDatabaseSchema6 upgrades the database schema from version 6 to version 7,
@@ -508,12 +517,12 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context
 }
 
 func removeEmptyDirsOnSchemaUpgrade(dbDirectory string) (err error) {
-	catchpointRootDir := filepath.Join(dbDirectory, trackerdb.CatchpointDirName)
+	catchpointRootDir := filepath.Join(dbDirectory, catchpointdb.CatchpointDirName)
 	if _, err := os.Stat(catchpointRootDir); os.IsNotExist(err) {
 		return nil
 	}
 	for {
-		emptyDirs, err := trackerdb.GetEmptyDirs(catchpointRootDir)
+		emptyDirs, err := catchpointdb.GetEmptyDirs(catchpointRootDir)
 		if err != nil {
 			return err
 		}

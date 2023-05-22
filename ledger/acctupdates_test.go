@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/catchpointdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/testdb"
@@ -53,6 +54,7 @@ var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c
 
 type mockLedgerForTracker struct {
 	dbs              trackerdb.Store
+	catchpointDbs    catchpointdb.Store
 	blocks           []blockEntry
 	deltas           []ledgercore.StateDelta
 	log              logging.Logger
@@ -255,6 +257,10 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 
 func (ml *mockLedgerForTracker) trackerDB() trackerdb.Store {
 	return ml.dbs
+}
+
+func (ml *mockLedgerForTracker) catchpointDB() catchpointdb.Store {
+	return ml.catchpointDbs
 }
 
 func (ml *mockLedgerForTracker) blockDB() db.Pair {
