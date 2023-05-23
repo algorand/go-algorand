@@ -1582,8 +1582,12 @@ int 1`
 	})
 }
 
-// The program is copied from pyteal source for c2c test over betanet:
-// source: https://github.com/ahangsu/c2c-testscript/blob/master/c2c_test/max_depth/app.py
+// The program is originated from pyteal source for c2c test over betanet:
+// https://github.com/ahangsu/c2c-testscript/blob/master/c2c_test/max_depth/app.py
+//
+// To fully test the PC exposure, we added opt-in and clear-state calls,
+// between funding and calling with on-complete deletion.
+// The modified version here: https://gist.github.com/ahangsu/7839f558dd36ad7117c0a12fb1dcc63a
 const maxDepthTealApproval = `#pragma version 8
 txn ApplicationID
 int 0
