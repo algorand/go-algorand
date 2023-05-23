@@ -2096,8 +2096,8 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	lc := basics.StateSchema{}
 
 	MaxDepth := 2
-	MinFee := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee
-	MinBalance := config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
+	MinFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
+	MinBalance := config.Consensus[protocol.ConsensusFuture].MinBalance
 
 	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
