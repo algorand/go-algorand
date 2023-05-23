@@ -1919,13 +1919,6 @@
               "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
             },
             "type": "array"
-          },
-          "trace-elem-index-to-inner-index": {
-            "description": "The map from the trace elem index to the inner trace index, indicating which step contract simulation branches off into an inner txn. The trace elem index is always pointing to an itxn_submit.",
-            "items": {
-              "$ref": "#/components/schemas/SimulationPcToInnerIndex"
-            },
-            "type": "array"
           }
         },
         "required": [
@@ -2079,27 +2072,16 @@
           "pc": {
             "description": "The program counter of the current opcode being evaluated.",
             "type": "integer"
-          }
-        },
-        "required": [
-          "pc"
-        ],
-        "type": "object"
-      },
-      "SimulationPcToInnerIndex": {
-        "description": "The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.",
-        "properties": {
-          "inner-index": {
-            "description": "The index into inner trace array, to which inner transaction get branched off from program execution.",
-            "type": "integer"
           },
-          "pc": {
-            "description": "The program counter of the current opcode being evaluated.",
-            "type": "integer"
+          "spawned-inners": {
+            "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
           }
         },
         "required": [
-          "inner-index",
           "pc"
         ],
         "type": "object"

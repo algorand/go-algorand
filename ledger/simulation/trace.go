@@ -167,21 +167,17 @@ func makeSimulationResult(lastRound basics.Round, request Request, nodeConfig co
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
 	PC uint64
-}
 
-// TraceStepInnerIndexPair is the struct that contains execution step in trace and index into inner txn traces.
-type TraceStepInnerIndexPair struct {
-	TraceStep  uint64
-	InnerIndex uint64
+	// SpawnedInners contains the indexes of traces for inner transactions spawned by this opcode,
+	// if any. These indexes refer to the InnerTraces array of the TransactionTrace object containing
+	// this OpcodeTraceUnit.
+	SpawnedInners []int
 }
 
 // ProgramTrace contains the simulation time opcode trace and the map from opcode trace index to inner transaction group index.
 type ProgramTrace struct {
 	// Trace contains the trace for an app evaluation, if this is an app call transaction.
 	Trace []OpcodeTraceUnit
-	// StepToInnerMap maps execution step that branches into an inner trace,
-	// to the index into the InnerTraces that runs after the execution step.
-	StepToInnerMap []TraceStepInnerIndexPair
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

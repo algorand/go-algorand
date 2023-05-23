@@ -1801,7 +1801,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{PC: 90},
 			{PC: 92},
 			{PC: 94},
-			{PC: 96},
+			{PC: 96, SpawnedInners: []int{0}},
 			{PC: 97},
 			{PC: 98},
 			{PC: 99},
@@ -1850,7 +1850,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{PC: 175},
 			{PC: 177},
 			{PC: 179},
-			{PC: 181},
+			{PC: 181, SpawnedInners: []int{1, 2, 3, 4}},
 			{PC: 182},
 			{PC: 79},
 			{PC: 80},
@@ -1915,14 +1915,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{PC: 76},
 			{PC: 79},
 			{PC: 80},
-		}
-
-		stepToInnerMap := []simulation.TraceStepInnerIndexPair{
-			{TraceStep: 51, InnerIndex: 0},
-			{TraceStep: 100, InnerIndex: 1},
-			{TraceStep: 100, InnerIndex: 2},
-			{TraceStep: 100, InnerIndex: 3},
-			{TraceStep: 100, InnerIndex: 4},
 		}
 
 		nodeConfig := config.GetDefaultLocal()
@@ -1998,8 +1990,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								AppBudgetConsumed: 378,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: simulation.ProgramTrace{
-										Trace:          recursiveLongOpcodeTrace,
-										StepToInnerMap: stepToInnerMap,
+										Trace: recursiveLongOpcodeTrace,
 									},
 									InnerTraces: []simulation.TransactionTrace{
 										{
@@ -2014,8 +2005,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 										},
 										{
 											ApprovalProgramTrace: simulation.ProgramTrace{
-												Trace:          recursiveLongOpcodeTrace,
-												StepToInnerMap: stepToInnerMap,
+												Trace: recursiveLongOpcodeTrace,
 											},
 											InnerTraces: []simulation.TransactionTrace{
 												{
