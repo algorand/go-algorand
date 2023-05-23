@@ -6,9 +6,17 @@ if [ "$DEBUG" = "1" ]; then
   set -x
 fi
 
+# To allow mounting the data directory we need to change permissions
+# to our algorand user. The script is initially run as the root user
+# in order to change permissions, afterwards the script is re-launched
+# as the algorand user.
+if [ "$(id -u)" = '0' ]; then
+  chown -R algorand:algorand $ALGORAND_DATA
+  exec runuser -u algorand "$BASH_SOURCE"
+fi
+
 # Script to configure or resume a network. Based on environment settings the
 # node will be setup with a private network or connect to a public network.
-
 ####################
 # Helper functions #
 ####################
@@ -35,13 +43,17 @@ function start_public_network() {
     catchup &
   fi
 
-  # redirect output to stdout
-  algod -o
+  if [ "$PEER_ADDRESS" != "" ]; then
+       printf "$PEER_ADDRESS"
+       algod -o -p $PEER_ADDRESS
+  else
+    # redirect output to stdout
+    algod -o
+  fi
 }
 
 function configure_data_dir() {
   cd "$ALGORAND_DATA"
-  algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
 
   # check for config file overrides.
   if [ -f "/etc/algorand/config.json" ]; then
@@ -57,9 +69,19 @@ function configure_data_dir() {
     cp /etc/algorand/logging.config logging.config
   fi
 
+  # initialize config with profile.
+  if [ "$PROFILE" != "" ]; then
+    algocfg profile set --yes -d "$ALGORAND_DATA" "$PROFILE" 
+  fi
+
+  # call after copying config.json to make sure the port is exposed.
+  algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
+
   # check for token overrides
   if [ "$TOKEN" != "" ]; then
-    echo "$TOKEN" >algod.token
+    for dir in ${ALGORAND_DATA}/../*/; do
+      echo "$TOKEN" > "$dir/algod.token"
+    done
   fi
   if [ "$ADMIN_TOKEN" != "" ]; then
     echo "$ADMIN_TOKEN" >algod.admin.token
@@ -142,8 +164,12 @@ function start_private_network() {
 
 function start_new_private_network() {
   local TEMPLATE="template.json"
-  if [ "$DEV_MODE" = "1" ]; then
-    TEMPLATE="devmode_template.json"
+  if [ -f "/etc/algorand/template.json" ]; then
+      cp /etc/algorand/template.json "/node/run/$TEMPLATE"
+  else
+      if [ "$DEV_MODE" = "1" ]; then
+          TEMPLATE="devmode_template.json"
+      fi
   fi
   sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "/node/run/$TEMPLATE"
   goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE"

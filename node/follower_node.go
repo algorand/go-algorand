@@ -240,7 +240,7 @@ func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transaction
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (result simulation.Result, err error) {
+func (node *AlgorandFollowerNode) Simulate(_ simulation.Request) (result simulation.Result, err error) {
 	err = fmt.Errorf("cannot simulate in data mode")
 	return
 }
@@ -342,14 +342,7 @@ func (node *AlgorandFollowerNode) StartCatchup(catchpoint string) error {
 		}
 		return MakeCatchpointUnableToStartError(stats.CatchpointLabel, catchpoint)
 	}
-	cpRound, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
-	if err != nil {
-		return err
-	}
-	sRound := node.GetSyncRound()
-	if sRound > 0 && uint64(cpRound) > sRound {
-		return MakeCatchpointSyncRoundFailure(catchpoint, sRound)
-	}
+	var err error
 	accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
 	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, accessor, node.config)
 	if err != nil {
@@ -389,7 +382,7 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 	outCtxCh = ctxCh
 	go func() {
 		node.mu.Lock()
-		// check that the node wasn't canceled. If it have been canceled, it means that the node.Stop() was called, in which case
+		// check that the node wasn't canceled. If it has been canceled, it means that the node.Stop() was called, in which case
 		// we should close the channel.
 		if node.ctx.Err() == context.Canceled {
 			close(ctxCh)
@@ -414,7 +407,15 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 			prevNodeCancelFunc()
 			return
 		}
+
+		// Catchup finished, resume.
 		defer node.mu.Unlock()
+
+		// update sync round before starting services
+		if err := node.SetSyncRound(uint64(node.ledger.LastRound())); err != nil {
+			node.log.Warnf("unable to set sync round while resuming fast catchup: %v", err)
+		}
+
 		// start
 		node.catchupService.Start()
 		node.blockService.Start()
@@ -446,4 +447,16 @@ func (node *AlgorandFollowerNode) GetSyncRound() uint64 {
 // UnsetSyncRound removes the sync round constraint on the catchup service
 func (node *AlgorandFollowerNode) UnsetSyncRound() {
 	node.catchupService.UnsetDisableSyncRound()
+}
+
+// SetBlockTimeStampOffset sets a timestamp offset in the block header.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) SetBlockTimeStampOffset(offset int64) error {
+	return fmt.Errorf("cannot set block timestamp offset in follower mode")
+}
+
+// GetBlockTimeStampOffset gets a timestamp offset.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) GetBlockTimeStampOffset() (*int64, error) {
+	return nil, fmt.Errorf("cannot get block timestamp offset in follower mode")
 }

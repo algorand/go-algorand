@@ -26,7 +26,7 @@ const (
 	inMemoryCommitterPageSize = int64(512)
 )
 
-// InMemoryCommitter is a fully function in-memory committer, supporting
+// InMemoryCommitter is a fully functional in-memory committer, supporting
 // persistence of pages.
 type InMemoryCommitter struct {
 	memStore map[uint64][]byte

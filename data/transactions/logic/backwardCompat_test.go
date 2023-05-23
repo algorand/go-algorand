@@ -284,7 +284,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	ep.TxnGroup[0].Lsig.Logic = program
 	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
 
-	// ensure v1 program runs well on latest TEAL evaluator
+	// ensure v1 program runs well on latest evaluator
 	require.Equal(t, uint8(1), program[0])
 
 	// Cost should stay exactly 2140
@@ -315,7 +315,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	ep2.Proto.LogicSigMaxCost = 2308
 	testLogicBytes(t, opsV2.Program, ep2)
 
-	// ensure v0 program runs well on latest TEAL evaluator
+	// ensure v0 program runs well on latest evaluator
 	ep, tx, _ = makeSampleEnv()
 	program[0] = 0
 	sig = c.Sign(Msg{

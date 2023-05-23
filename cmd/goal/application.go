@@ -163,10 +163,6 @@ func init() {
 	readStateAppCmd.Flags().BoolVar(&guessFormat, "guess-format", false, "Format application state using heuristics to guess data encoding.")
 
 	createAppCmd.MarkFlagRequired("creator")
-	createAppCmd.MarkFlagRequired("global-ints")
-	createAppCmd.MarkFlagRequired("global-byteslices")
-	createAppCmd.MarkFlagRequired("local-ints")
-	createAppCmd.MarkFlagRequired("local-byteslices")
 
 	optInAppCmd.MarkFlagRequired("app-id")
 	optInAppCmd.MarkFlagRequired("from")
@@ -1063,7 +1059,7 @@ var infoAppCmd = &cobra.Command{
 }
 
 // populateMethodCallTxnArgs parses and loads transactions from the files indicated by the values
-// slice. An error will occur if the transaction does not matched the expected type, it has a nonzero
+// slice. An error will occur if the transaction does not match the expected type, it has a nonzero
 // group ID, or if it is signed by a normal signature or Msig signature (but not Lsig signature)
 func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.SignedTxn, error) {
 	loadedTxns := make([]transactions.SignedTxn, len(values))

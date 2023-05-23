@@ -482,6 +482,7 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			upgradeVotesRequired := uint64(0)
 			upgradeNoVotes := uint64(0)
 			upgradeYesVotes := uint64(0)
+			upgradeVoteRounds := uint64(0)
 			if stat.UpgradeVotesRequired != nil {
 				upgradeVotesRequired = *stat.UpgradeVotesRequired
 			}
@@ -491,11 +492,14 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			if stat.UpgradeYesVotes != nil {
 				upgradeYesVotes = *stat.UpgradeYesVotes
 			}
+			if stat.UpgradeVoteRounds != nil {
+				upgradeVoteRounds = *stat.UpgradeVoteRounds
+			}
 			statusString = statusString + "\n" + fmt.Sprintf(
 				infoNodeStatusConsensusUpgradeVoting,
 				upgradeYesVotes,
 				upgradeNoVotes,
-				upgradeNextProtocolVoteBefore-stat.LastRound,
+				upgradeVoteRounds-upgradeYesVotes-upgradeNoVotes,
 				upgradeVotesRequired,
 				upgradeNextProtocolVoteBefore,
 			)

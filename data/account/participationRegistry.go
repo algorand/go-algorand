@@ -232,7 +232,7 @@ type ParticipationRegistry interface {
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
 	AppendKeys(id ParticipationID, keys StateProofKeys) error
 
-	// DeleteStateProofKeys removes all stateproof keys preceding a given round (including)
+	// DeleteStateProofKeys removes all stateproof keys up to, and not including, a given round
 	DeleteStateProofKeys(id ParticipationID, round basics.Round) error
 
 	// Delete removes a record from storage.
@@ -347,7 +347,7 @@ const (
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`
-	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<=?`
+	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<?`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`

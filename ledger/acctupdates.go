@@ -839,7 +839,12 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams 
 
 // VotersForStateProof returns the top online accounts at round rnd.
 func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
-	return aul.ao.voters.getVoters(rnd)
+	return aul.ao.voters.VotersForStateProof(rnd)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	// Since state proof transaction is not being verified (we only apply the change) during replay, we don't need to implement this function at the moment.
+	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: GetStateProofVerificationContext, needed for state proof verification, is not implemented in accountUpdatesLedgerEvaluator")
 }
 
 // BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
@@ -899,20 +904,6 @@ func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string)
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
-}
-
-// onlineTotals returns the online totals of all accounts at the end of round rnd.
-// used in tests only
-func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return basics.MicroAlgos{}, err
-	}
-
-	totals := au.roundTotals[offset]
-	return totals.Online.Money, nil
 }
 
 // latestTotalsImpl returns the totals of all accounts for the most recent round, as well as the round number

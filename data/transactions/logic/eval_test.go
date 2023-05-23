@@ -168,12 +168,9 @@ func (ep *EvalParams) reset() {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 	}
 	if ep.available != nil {
-		ep.available.apps = nil
-		ep.available.asas = nil
-		// reinitialize boxes because evaluation can add box refs for app creates.
 		available := NewEvalParams(ep.TxnGroup, ep.Proto, ep.Specials).available
 		if available != nil {
-			ep.available.boxes = available.boxes
+			ep.available = available
 		}
 		ep.available.dirtyBytes = 0
 	}
@@ -1153,6 +1150,10 @@ const globalV9TestProgram = globalV8TestProgram + `
 // No new globals in v9
 `
 
+const globalV10TestProgram = globalV9TestProgram + `
+// No new globals in v10
+`
+
 func TestGlobal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1163,16 +1164,17 @@ func TestGlobal(t *testing.T) {
 	}
 	// Associate the highest allowed global constant with each version's test program
 	tests := map[uint64]desc{
-		0: {GroupSize, globalV1TestProgram},
-		1: {GroupSize, globalV1TestProgram},
-		2: {CurrentApplicationID, globalV2TestProgram},
-		3: {CreatorAddress, globalV3TestProgram},
-		4: {CreatorAddress, globalV4TestProgram},
-		5: {GroupID, globalV5TestProgram},
-		6: {CallerApplicationAddress, globalV6TestProgram},
-		7: {CallerApplicationAddress, globalV7TestProgram},
-		8: {CallerApplicationAddress, globalV8TestProgram},
-		9: {CallerApplicationAddress, globalV9TestProgram},
+		0:  {GroupSize, globalV1TestProgram},
+		1:  {GroupSize, globalV1TestProgram},
+		2:  {CurrentApplicationID, globalV2TestProgram},
+		3:  {CreatorAddress, globalV3TestProgram},
+		4:  {CreatorAddress, globalV4TestProgram},
+		5:  {GroupID, globalV5TestProgram},
+		6:  {CallerApplicationAddress, globalV6TestProgram},
+		7:  {CallerApplicationAddress, globalV7TestProgram},
+		8:  {CallerApplicationAddress, globalV8TestProgram},
+		9:  {CallerApplicationAddress, globalV9TestProgram},
+		10: {CallerApplicationAddress, globalV10TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1676,6 +1678,11 @@ assert
 int 1
 `
 
+const testTxnProgramTextV10 = testTxnProgramTextV9 + `
+assert
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1779,15 +1786,16 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	tests := map[uint64]string{
-		1: testTxnProgramTextV1,
-		2: testTxnProgramTextV2,
-		3: testTxnProgramTextV3,
-		4: testTxnProgramTextV4,
-		5: testTxnProgramTextV5,
-		6: testTxnProgramTextV6,
-		7: testTxnProgramTextV7,
-		8: testTxnProgramTextV8,
-		9: testTxnProgramTextV9,
+		1:  testTxnProgramTextV1,
+		2:  testTxnProgramTextV2,
+		3:  testTxnProgramTextV3,
+		4:  testTxnProgramTextV4,
+		5:  testTxnProgramTextV5,
+		6:  testTxnProgramTextV6,
+		7:  testTxnProgramTextV7,
+		8:  testTxnProgramTextV8,
+		9:  testTxnProgramTextV9,
+		10: testTxnProgramTextV10,
 	}
 
 	for i, txnField := range TxnFieldNames {
@@ -2964,7 +2972,7 @@ func isNotPanic(t *testing.T, err error) {
 	if err == nil {
 		return
 	}
-	if pe, ok := err.(PanicError); ok {
+	if pe, ok := err.(panicError); ok {
 		t.Error(pe)
 	}
 }
@@ -3191,14 +3199,10 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 				params := defaultEvalParams()
 				params.TxnGroup[0].Lsig.Logic = ops.Program
 				err := CheckSignature(0, params)
-				require.Error(t, err)
-				if pe, ok := err.(PanicError); ok {
-					require.Equal(t, panicString, pe.PanicValue)
-					pes := pe.Error()
-					require.True(t, strings.Contains(pes, "panic"))
-				} else {
-					t.Errorf("expected PanicError object but got %T %#v", err, err)
-				}
+				var pe panicError
+				require.ErrorAs(t, err, &pe)
+				require.Equal(t, panicString, pe.PanicValue)
+				require.ErrorContains(t, pe, "panic")
 
 				var txn transactions.SignedTxn
 				txn.Lsig.Logic = ops.Program
@@ -3209,13 +3213,9 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 					t.Log(params.Trace.String())
 				}
 				require.False(t, pass)
-				if pe, ok := err.(PanicError); ok {
-					require.Equal(t, panicString, pe.PanicValue)
-					pes := pe.Error()
-					require.True(t, strings.Contains(pes, "panic"))
-				} else {
-					t.Errorf("expected PanicError object but got %T %#v", err, err)
-				}
+				require.ErrorAs(t, err, &pe)
+				require.Equal(t, panicString, pe.PanicValue)
+				require.ErrorContains(t, pe, "panic")
 
 				if v >= appsEnabledVersion {
 					txn = transactions.SignedTxn{
@@ -3227,13 +3227,9 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 					params.Ledger = NewLedger(nil)
 					pass, err = EvalApp(ops.Program, 0, 1, params)
 					require.False(t, pass)
-					if pe, ok := err.(PanicError); ok {
-						require.Equal(t, panicString, pe.PanicValue)
-						pes := pe.Error()
-						require.True(t, strings.Contains(pes, "panic"))
-					} else {
-						t.Errorf("expected PanicError object but got %T %#v", err, err)
-					}
+					require.ErrorAs(t, err, &pe)
+					require.Equal(t, panicString, pe.PanicValue)
+					require.ErrorContains(t, pe, "panic")
 				}
 			})
 		})
@@ -3378,10 +3374,11 @@ intc_1
 import random
 
 def foo():
-    for i in range(64):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('+')
+
+	for i in range(64):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('+')
 */
 const addBenchmarkSource = `int 20472989571761113
 int 80135167795737348
@@ -3516,10 +3513,11 @@ int 28939890412103745
 import random
 
 def foo():
-    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-    for i in range(63):
-        print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
-        print('+')
+
+	print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	for i in range(63):
+	    print('int {}'.format(random.randint(0,0x01ffffffffffffff)))
+	    print('+')
 */
 const addBenchmark2Source = `int 8371863094338737
 int 29595196041051360
@@ -4172,13 +4170,13 @@ func TestArgType(t *testing.T) {
 	t.Parallel()
 
 	var sv stackValue
-	require.Equal(t, StackUint64, sv.argType())
+	require.Equal(t, avmUint64, sv.avmType())
 	sv.Bytes = []byte("")
-	require.Equal(t, StackBytes, sv.argType())
+	require.Equal(t, avmBytes, sv.avmType())
 	sv.Uint = 1
-	require.Equal(t, StackBytes, sv.argType())
+	require.Equal(t, avmBytes, sv.avmType())
 	sv.Bytes = nil
-	require.Equal(t, StackUint64, sv.argType())
+	require.Equal(t, avmUint64, sv.avmType())
 }
 
 func TestApplicationsDisallowOldTeal(t *testing.T) {
@@ -4312,7 +4310,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"gtxn":       true,
 	}
 
-	ep := defaultEvalParams()
+	ep := defaultEvalParamsWithVersion(2)
 
 	cnt := 0
 	for _, spec := range OpSpecs {
@@ -4320,7 +4318,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			source, ok := tests[spec.Name]
 			require.True(t, ok, "Missed opcode in the test: %s", spec.Name)
 			require.Contains(t, source, spec.Name)
-			ops := testProg(t, source, AssemblerMaxVersion)
+			ops := testProg(t, source, 2)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
 			err := CheckContract(ops.Program, ep)
 			require.NoError(t, err, source)
@@ -4365,7 +4363,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 		"pushbytes":   `pushbytes "stringsfail?"`,
 	}
 
-	ep := defaultEvalParams()
+	ep := defaultEvalParamsWithVersion(3)
 
 	cnt := 0
 	for _, spec := range OpSpecs {
@@ -4373,7 +4371,7 @@ func TestAllowedOpcodesV3(t *testing.T) {
 			source, ok := tests[spec.Name]
 			require.True(t, ok, "Missed opcode in the test: %s", spec.Name)
 			require.Contains(t, source, spec.Name)
-			ops := testProg(t, source, AssemblerMaxVersion)
+			ops := testProg(t, source, 3)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
 			testAppBytes(t, ops.Program, ep, "REJECT")
 
@@ -4919,7 +4917,7 @@ func TestBytesMath(t *testing.T) {
 	// 64 byte long inputs are accepted, even if they produce longer outputs
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 65; ==", effs), 4)
 	// 65 byte inputs are not ok.
-	testPanics(t, fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs), 4)
+	testPanics(t, NoTrack(fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)), 4)
 
 	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
@@ -5023,7 +5021,7 @@ func TestBytesBits(t *testing.T) {
 	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
 
 	testAccepts(t, "int 4096; bzero; len; int 4096; ==", 4)
-	testPanics(t, "int 4097; bzero; len; int 4097; ==", 4)
+	testPanics(t, NoTrack("int 4097; bzero; len; int 4097; =="), 4)
 }
 
 func TestBytesConversions(t *testing.T) {
@@ -5153,9 +5151,9 @@ func TestPcDetails(t *testing.T) {
 		pc     int
 		det    string
 	}{
-		{"int 1; int 2; -", 5, "pushint 1\npushint 2\n-\n"},
-		{"int 1; err", 3, "pushint 1\nerr\n"},
-		{"int 1; dup; int 2; -; +", 6, "dup\npushint 2\n-\n"},
+		{"int 1; int 2; -", 5, "pushint 1; pushint 2; -"},
+		{"int 1; err", 3, "pushint 1; err"},
+		{"int 1; dup; int 2; -; +", 6, "dup; pushint 2; -"},
 		{"b end; end:", 4, ""},
 	}
 	for i, test := range tests {
@@ -5173,7 +5171,7 @@ func TestPcDetails(t *testing.T) {
 
 			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
 
-			pc, det := cx.PcDetails()
+			pc, det := cx.pcDetails()
 			assert.Equal(t, test.pc, pc)
 			assert.Equal(t, test.det, det)
 		})
@@ -5792,8 +5790,7 @@ func TestOpJSONRef(t *testing.T) {
 
 		pass, _, err := EvalContract(ops.Program, 0, 888, ep)
 		require.False(t, pass)
-		require.Error(t, err)
-		require.EqualError(t, err, s.error)
+		require.ErrorContains(t, err, s.error)
 
 		// reset pooled budget for new "app call"
 		*ep.PooledApplicationBudget = ep.Proto.MaxAppProgramCost

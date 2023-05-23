@@ -1,0 +1,16 @@
+name: "Asset Destroy"
+genesis_accounts: 10000
+genesis_account_balance: 1000000000000
+tx_per_block: 5000
+
+# transaction distribution
+tx_asset_fraction: 1.0
+
+# asset config
+asset_create_fraction: 0.8
+asset_destroy_fraction: 0.2
+asset_optin_fraction: 0.0
+asset_close_fraction: 0.0
+
+# pay config must equal 1.0
+pay_xfer_fraction: 1.0

@@ -113,6 +113,7 @@ type AccountsReaderExt interface {
 	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
 	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
+	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
@@ -226,4 +227,27 @@ type EncodedAccountsBatchIter interface {
 type CatchpointPendingHashesIter interface {
 	Next(ctx context.Context) (hashes [][]byte, err error)
 	Close()
+}
+
+// SpVerificationCtxReader is a reader abstraction for stateproof verification tracker
+// Use with SnapshotScope
+type SpVerificationCtxReader interface {
+	LookupSPContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	GetAllSPContexts(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error)
+	GetAllSPContextsFromCatchpointTbl(ctx context.Context) ([]ledgercore.StateProofVerificationContext, error)
+}
+
+// SpVerificationCtxWriter is a writer abstraction for stateproof verification tracker
+// Use with BatchScope
+type SpVerificationCtxWriter interface {
+	DeleteOldSPContexts(ctx context.Context, earliestLastAttestedRound basics.Round) error
+	StoreSPContexts(ctx context.Context, verificationContext []*ledgercore.StateProofVerificationContext) error
+	StoreSPContextsToCatchpointTbl(ctx context.Context, verificationContexts []ledgercore.StateProofVerificationContext) error
+}
+
+// SpVerificationCtxReaderWriter is SpVerificationCtxReader+SpVerificationCtxWriter
+// Use with TransactionScope
+type SpVerificationCtxReaderWriter interface {
+	SpVerificationCtxReader
+	SpVerificationCtxWriter
 }

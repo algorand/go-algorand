@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 // UnverifiedTxnSigJob is the sig verification job passed to the Stream verifier
@@ -113,7 +114,7 @@ type LedgerForStreamVerifier interface {
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 }
 
-func (tbp *txnSigBatchProcessor) Cleanup(pending []InputJob, err error) {
+func (tbp *txnSigBatchProcessor) Cleanup(pending []execpool.InputJob, err error) {
 	// report an error for the unchecked txns
 	// drop the messages without reporting if the receiver does not consume
 	for i := range pending {
@@ -122,7 +123,7 @@ func (tbp *txnSigBatchProcessor) Cleanup(pending []InputJob, err error) {
 	}
 }
 
-func (tbp txnSigBatchProcessor) GetErredUnprocessed(ue InputJob, err error) {
+func (tbp txnSigBatchProcessor) GetErredUnprocessed(ue execpool.InputJob, err error) {
 	uelt := ue.(*UnverifiedTxnSigJob)
 	tbp.sendResult(uelt.TxnGroup, uelt.BacklogMessage, err)
 }
@@ -143,7 +144,7 @@ func (tbp txnSigBatchProcessor) sendResult(veTxnGroup []transactions.SignedTxn, 
 
 // MakeSigVerifyJobProcessor returns the object implementing the stream verifier Helper interface
 func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
-	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnSigJob) (svp BatchProcessor, err error) {
+	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnSigJob) (svp execpool.BatchProcessor, err error) {
 	latest := ledger.Latest()
 	latestHdr, err := ledger.BlockHdr(latest)
 	if err != nil {
@@ -162,14 +163,14 @@ func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTra
 	}, nil
 }
 
-func (tbp *txnSigBatchProcessor) ProcessBatch(txns []InputJob) {
+func (tbp *txnSigBatchProcessor) ProcessBatch(txns []execpool.InputJob) {
 	batchVerifier, ctx := tbp.preProcessUnverifiedTxns(txns)
 	failed, err := batchVerifier.VerifyWithFeedback()
 	// this error can only be crypto.ErrBatchHasFailedSigs
 	tbp.postProcessVerifiedJobs(ctx, failed, err)
 }
 
-func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []InputJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uTxns))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
@@ -193,7 +194,7 @@ func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []InputJob) (bat
 func (ue UnverifiedTxnSigJob) GetNumberOfBatchableItems() (batchSigs uint64, err error) {
 	batchSigs = 0
 	for i := range ue.TxnGroup {
-		count, err := getNumberOfBatchableSigsInTxn(&ue.TxnGroup[i])
+		count, err := getNumberOfBatchableSigsInTxn(&ue.TxnGroup[i], i)
 		if err != nil {
 			return 0, err
 		}
@@ -202,8 +203,8 @@ func (ue UnverifiedTxnSigJob) GetNumberOfBatchableItems() (batchSigs uint64, err
 	return
 }
 
-func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn) (uint64, error) {
-	sigType, err := checkTxnSigTypeCounts(stx)
+func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) (uint64, error) {
+	sigType, err := checkTxnSigTypeCounts(stx, groupIndex)
 	if err != nil {
 		return 0, err
 	}

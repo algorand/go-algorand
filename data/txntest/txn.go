@@ -182,8 +182,7 @@ func assemble(source interface{}) []byte {
 		}
 		ops, err := logic.AssembleString(program)
 		if err != nil {
-			fmt.Printf("Bad program %v", ops.Errors)
-			panic(ops.Errors)
+			panic(fmt.Sprintf("Bad program %v", ops.Errors))
 		}
 		return ops.Program
 	case []byte:
@@ -256,8 +255,8 @@ func (tx Txn) Txn() transactions.Transaction {
 			OnCompletion:      tx.OnCompletion,
 			ApplicationArgs:   tx.ApplicationArgs,
 			Accounts:          tx.Accounts,
-			ForeignApps:       tx.ForeignApps,
-			ForeignAssets:     tx.ForeignAssets,
+			ForeignApps:       append([]basics.AppIndex(nil), tx.ForeignApps...),
+			ForeignAssets:     append([]basics.AssetIndex(nil), tx.ForeignAssets...),
 			Boxes:             tx.Boxes,
 			LocalStateSchema:  tx.LocalStateSchema,
 			GlobalStateSchema: tx.GlobalStateSchema,

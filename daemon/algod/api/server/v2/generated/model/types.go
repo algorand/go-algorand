@@ -106,10 +106,22 @@ const (
 	GetTransactionProofParamsFormatMsgpack GetTransactionProofParamsFormat = "msgpack"
 )
 
+// Defines values for GetLedgerStateDeltaForTransactionGroupParamsFormat.
+const (
+	GetLedgerStateDeltaForTransactionGroupParamsFormatJson    GetLedgerStateDeltaForTransactionGroupParamsFormat = "json"
+	GetLedgerStateDeltaForTransactionGroupParamsFormatMsgpack GetLedgerStateDeltaForTransactionGroupParamsFormat = "msgpack"
+)
+
 // Defines values for GetLedgerStateDeltaParamsFormat.
 const (
 	GetLedgerStateDeltaParamsFormatJson    GetLedgerStateDeltaParamsFormat = "json"
 	GetLedgerStateDeltaParamsFormatMsgpack GetLedgerStateDeltaParamsFormat = "msgpack"
+)
+
+// Defines values for GetTransactionGroupLedgerStateDeltasForRoundParamsFormat.
+const (
+	GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson    GetTransactionGroupLedgerStateDeltasForRoundParamsFormat = "json"
+	GetTransactionGroupLedgerStateDeltasForRoundParamsFormatMsgpack GetTransactionGroupLedgerStateDeltasForRoundParamsFormat = "msgpack"
 )
 
 // Defines values for GetPendingTransactionsParamsFormat.
@@ -400,6 +412,9 @@ type Box struct {
 	// Name \[name\] box name, base64 encoded
 	Name []byte `json:"name"`
 
+	// Round The round for which this information is relevant
+	Round uint64 `json:"round"`
+
 	// Value \[value\] box value, base64 encoded.
 	Value []byte `json:"value"`
 }
@@ -524,6 +539,13 @@ type KvDelta struct {
 // LedgerStateDelta Ledger StateDelta object
 type LedgerStateDelta = map[string]interface{}
 
+// LedgerStateDeltaForTransactionGroup Contains a ledger delta for a single transaction group
+type LedgerStateDeltaForTransactionGroup struct {
+	// Delta Ledger StateDelta object
+	Delta LedgerStateDelta `json:"delta"`
+	Ids   []string         `json:"ids"`
+}
+
 // LightBlockHeaderProof Proof of membership and position of a light block header.
 type LightBlockHeaderProof struct {
 	// Index The index of the light block header in the vector commitment tree
@@ -589,10 +611,10 @@ type PendingTransactionResponse struct {
 	// InnerTxns Inner transactions produced by application execution.
 	InnerTxns *[]PendingTransactionResponse `json:"inner-txns,omitempty"`
 
-	// LocalStateDelta \[ld\] Local state key/value changes for the application being executed by this transaction.
+	// LocalStateDelta Local state key/value changes for the application being executed by this transaction.
 	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
 
-	// Logs \[lg\] Logs for the application being executed by this transaction.
+	// Logs Logs for the application being executed by this transaction.
 	Logs *[][]byte `json:"logs,omitempty"`
 
 	// PoolError Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
@@ -608,8 +630,35 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// SimulateRequest Request type for simulation endpoint.
+type SimulateRequest struct {
+	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
+	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
+	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
+	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
+
+	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
+	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
+
+	// TxnGroups The transaction groups to simulate.
+	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
+}
+
+// SimulateRequestTransactionGroup A transaction group to simulate.
+type SimulateRequestTransactionGroup struct {
+	// Txns An atomic transaction group.
+	Txns []json.RawMessage `json:"txns"`
+}
+
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
 type SimulateTransactionGroupResult struct {
+	// AppBudgetAdded Total budget added during execution of app calls in the transaction group.
+	AppBudgetAdded *uint64 `json:"app-budget-added,omitempty"`
+
+	// AppBudgetConsumed Total budget consumed during execution of app calls in the transaction group.
+	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
+
 	// FailedAt If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.
 	FailedAt *[]uint64 `json:"failed-at,omitempty"`
 
@@ -622,11 +671,29 @@ type SimulateTransactionGroupResult struct {
 
 // SimulateTransactionResult Simulation result for an individual transaction
 type SimulateTransactionResult struct {
-	// MissingSignature A boolean indicating whether this transaction is missing signatures
-	MissingSignature *bool `json:"missing-signature,omitempty"`
+	// AppBudgetConsumed Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.
+	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
+
+	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
+	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
 
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`
+}
+
+// SimulationEvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
+type SimulationEvalOverrides struct {
+	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
+	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
+	// ExtraOpcodeBudget The extra opcode budget added to each transaction group during simulation
+	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
+
+	// MaxLogCalls The maximum log calls one can make during simulation
+	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
+
+	// MaxLogSize The maximum byte number to log during simulation
+	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
 }
 
 // StateDelta Application state delta.
@@ -862,11 +929,20 @@ type DryrunResponse struct {
 	Txns            []DryrunTxnResult `json:"txns"`
 }
 
+// GetBlockTimeStampOffsetResponse defines model for GetBlockTimeStampOffsetResponse.
+type GetBlockTimeStampOffsetResponse struct {
+	// Offset Timestamp offset in seconds.
+	Offset uint64 `json:"offset"`
+}
+
 // GetSyncRoundResponse defines model for GetSyncRoundResponse.
 type GetSyncRoundResponse struct {
 	// Round The minimum sync round for the ledger.
 	Round uint64 `json:"round"`
 }
+
+// LedgerStateDeltaForTransactionGroupResponse Ledger StateDelta object
+type LedgerStateDeltaForTransactionGroupResponse = LedgerStateDelta
 
 // LedgerStateDeltaResponse Ledger StateDelta object
 type LedgerStateDeltaResponse = LedgerStateDelta
@@ -942,7 +1018,7 @@ type NodeStatusResponse struct {
 	// UpgradeNodeVote This node's upgrade vote
 	UpgradeNodeVote *bool `json:"upgrade-node-vote,omitempty"`
 
-	// UpgradeVoteRounds Total voting ounds for current upgrade
+	// UpgradeVoteRounds Total voting rounds for current upgrade
 	UpgradeVoteRounds *uint64 `json:"upgrade-vote-rounds,omitempty"`
 
 	// UpgradeVotes Total votes cast for consensus upgrade
@@ -984,6 +1060,9 @@ type PostTransactionsResponse struct {
 
 // SimulateResponse defines model for SimulateResponse.
 type SimulateResponse struct {
+	// EvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
+	EvalOverrides *SimulationEvalOverrides `json:"eval-overrides,omitempty"`
+
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
@@ -992,9 +1071,6 @@ type SimulateResponse struct {
 
 	// Version The version of this response object.
 	Version uint64 `json:"version"`
-
-	// WouldSucceed Indicates whether the simulated transactions would have succeeded during an actual submission. If any transaction fails or is missing a signature, this will be false.
-	WouldSucceed bool `json:"would-succeed"`
 }
 
 // StateProofResponse Represents a state proof and its corresponding message
@@ -1010,6 +1086,11 @@ type SupplyResponse struct {
 
 	// TotalMoney TotalMoney
 	TotalMoney uint64 `json:"total-money"`
+}
+
+// TransactionGroupLedgerStateDeltasForRoundResponse defines model for TransactionGroupLedgerStateDeltasForRoundResponse.
+type TransactionGroupLedgerStateDeltasForRoundResponse struct {
+	Deltas []LedgerStateDeltaForTransactionGroup `json:"deltas"`
 }
 
 // TransactionParametersResponse TransactionParams contains the parameters that help a client construct
@@ -1150,6 +1231,15 @@ type GetTransactionProofParamsHashtype string
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
 
+// GetLedgerStateDeltaForTransactionGroupParams defines parameters for GetLedgerStateDeltaForTransactionGroup.
+type GetLedgerStateDeltaForTransactionGroupParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *GetLedgerStateDeltaForTransactionGroupParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// GetLedgerStateDeltaForTransactionGroupParamsFormat defines parameters for GetLedgerStateDeltaForTransactionGroup.
+type GetLedgerStateDeltaForTransactionGroupParamsFormat string
+
 // GetLedgerStateDeltaParams defines parameters for GetLedgerStateDelta.
 type GetLedgerStateDeltaParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
@@ -1158,6 +1248,15 @@ type GetLedgerStateDeltaParams struct {
 
 // GetLedgerStateDeltaParamsFormat defines parameters for GetLedgerStateDelta.
 type GetLedgerStateDeltaParamsFormat string
+
+// GetTransactionGroupLedgerStateDeltasForRoundParams defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
+type GetTransactionGroupLedgerStateDeltasForRoundParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *GetTransactionGroupLedgerStateDeltasForRoundParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// GetTransactionGroupLedgerStateDeltasForRoundParamsFormat defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
+type GetTransactionGroupLedgerStateDeltasForRoundParamsFormat string
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {
@@ -1208,3 +1307,6 @@ type TealCompileTextRequestBody = TealCompileTextBody
 
 // TealDryrunJSONRequestBody defines body for TealDryrun for application/json ContentType.
 type TealDryrunJSONRequestBody = DryrunRequest
+
+// SimulateTransactionJSONRequestBody defines body for SimulateTransaction for application/json ContentType.
+type SimulateTransactionJSONRequestBody = SimulateRequest

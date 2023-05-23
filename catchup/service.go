@@ -83,7 +83,7 @@ type Service struct {
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
 
-	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
+	// suspendForCatchpointWriting defines whether we've run into a state where the ledger is currently busy writing the
 	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
 	// and resume from there without stopping the catchup timer.
 	suspendForCatchpointWriting bool
@@ -157,6 +157,16 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 	return
 }
 
+// triggerSync attempts to wake up the sync loop.
+func (s *Service) triggerSync() {
+	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
+		select {
+		case s.syncNow <- struct{}{}:
+		default:
+		}
+	}
+}
+
 // SetDisableSyncRound attempts to set the first round we _do_not_ want to fetch from the network
 // Blocks from disableSyncRound or any round after disableSyncRound will not be fetched while this is set
 func (s *Service) SetDisableSyncRound(rnd uint64) error {
@@ -164,18 +174,14 @@ func (s *Service) SetDisableSyncRound(rnd uint64) error {
 		return ErrSyncRoundInvalid
 	}
 	atomic.StoreUint64(&s.disableSyncRound, rnd)
-	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
-		s.syncNow <- struct{}{}
-	}
+	s.triggerSync()
 	return nil
 }
 
 // UnsetDisableSyncRound removes any previously set disabled sync round
 func (s *Service) UnsetDisableSyncRound() {
 	atomic.StoreUint64(&s.disableSyncRound, 0)
-	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
-		s.syncNow <- struct{}{}
-	}
+	s.triggerSync()
 }
 
 // GetDisableSyncRound returns the disabled sync round
@@ -233,10 +239,10 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
 // Returns false if we should stop trying to catch up.  This may occur for several reasons:
-//  - If the context is canceled (e.g. if the node is shutting down)
-//  - If we couldn't fetch the block (e.g. if there are no peers available or we've reached the catchupRetryLimit)
-//  - If the block is already in the ledger (e.g. if agreement service has already written it)
-//  - If the retrieval of the previous block was unsuccessful
+//   - If the context is canceled (e.g. if the node is shutting down)
+//   - If we couldn't fetch the block (e.g. if there are no peers available, or we've reached the catchupRetryLimit)
+//   - If the block is already in the ledger (e.g. if agreement service has already written it)
+//   - If the retrieval of the previous block was unsuccessful
 func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool, lookbackComplete chan bool, peerSelector *peerSelector) bool {
 	// If sync-ing this round is not intended, don't fetch it
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
@@ -258,10 +264,10 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 			loggedMessage := fmt.Sprintf("fetchAndWrite(%d): block retrieval exceeded retry limit", r)
 			if _, initialSync := s.IsSynchronizing(); initialSync {
 				// on the initial sync, it's completly expected that we won't be able to get all the "next" blocks.
-				// Therefore info should suffice.
+				// Therefore, info should suffice.
 				s.log.Info(loggedMessage)
 			} else {
-				// On any subsequent sync, we migth be looking for multiple rounds into the future, so it's completly
+				// On any subsequent sync, we might be looking for multiple rounds into the future, so it's completely
 				// reasonable that we would fail retrieving the future block.
 				// Generate a warning here only if we're failing to retrieve X+1 or below.
 				// All other block retrievals should not generate a warning.
@@ -294,7 +300,7 @@ func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan bool,
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
 			peerSelector.rankPeer(psp, peerRankDownloadFailed)
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
-			// to avoid the usecase where the first block doesn't exists and we're making many requests down the chain
+			// to avoid the usecase where the first block doesn't exist, and we're making many requests down the chain
 			// for no reason.
 			if !hasLookback {
 				select {
@@ -479,7 +485,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		go func() {
 			defer wg.Done()
 			for t := range taskCh {
-				completed <- t() // This write to completed comes after a read from taskCh, so the invariant is preserved.
+				completed <- t() // This write comes after a read from taskCh, so the invariant is preserved.
 			}
 		}()
 	}
@@ -632,10 +638,10 @@ func (s *Service) periodicSync() {
 }
 
 // Syncs the client with the network. sync asks the network for last known block and tries to sync the system
-// up the to the highest number it gets.
+// up to the highest number it gets.
 func (s *Service) sync() {
 	// Only run sync once at a time
-	// Store start time of sync - in NS so we can compute time.Duration (which is based on NS)
+	// Store start time of sync - in NS, so we can compute time.Duration (which is based on NS)
 	start := time.Now()
 
 	timeInNS := start.UnixNano()

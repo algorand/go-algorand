@@ -19,6 +19,7 @@ package test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,6 +49,11 @@ type mockLedger struct {
 	kvstore  map[string][]byte
 	latest   basics.Round
 	blocks   []bookkeeping.Block
+	tracer   logic.EvalTracer
+}
+
+func (l *mockLedger) GetTracer() logic.EvalTracer {
+	return l.tracer
 }
 
 func (l *mockLedger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error) {
@@ -229,7 +235,7 @@ func setupTestForLargeResources(t *testing.T, acctSize, maxResults int, accountM
 	acctData = accountMaker(acctSize)
 	ml.accounts[fakeAddr] = acctData
 
-	mockNode := makeMockNode(&ml, t.Name(), nil, false)
+	mockNode := makeMockNode(&ml, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.MaxAPIResourcesPerAccount = uint64(maxResults)
 	dummyShutdownChan := make(chan struct{})
 	handlers = v2.Handlers{
