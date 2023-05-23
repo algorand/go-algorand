@@ -62,7 +62,8 @@ const (
 
 	assetTotal = uint64(100000000000000000)
 
-	consensusTimeMilli int64 = 4500
+	consensusTimeMilli int64  = 4500
+	startingTxnCounter uint64 = 1000
 )
 
 // GenerationConfig defines the tunable parameters for block generation.
@@ -99,7 +100,7 @@ func sumIsCloseToOne(numbers ...float32) bool {
 }
 
 // MakeGenerator initializes the Generator object.
-func MakeGenerator(config GenerationConfig) (Generator, error) {
+func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig) (Generator, error) {
 	if !sumIsCloseToOne(config.PaymentTransactionFraction, config.AssetTransactionFraction) {
 		return nil, fmt.Errorf("transaction distribution ratios should equal 1")
 	}
@@ -117,26 +118,33 @@ func MakeGenerator(config GenerationConfig) (Generator, error) {
 		config:                    config,
 		protocol:                  proto,
 		params:                    cconfig.Consensus[proto],
+		genesis:                   bkGenesis,
 		genesisHash:               [32]byte{},
 		genesisID:                 "blockgen-test",
 		prevBlockHash:             "",
 		round:                     0,
-		txnCounter:                0,
+		txnCounter:                startingTxnCounter,
 		timestamp:                 0,
 		rewardsLevel:              0,
 		rewardsResidue:            0,
 		rewardsRate:               0,
 		rewardsRecalculationRound: 0,
 		reportData:                make(map[TxTypeID]TxData),
+		nextdbround:               dbround,
 	}
 
 	gen.feeSink[31] = 1
 	gen.rewardsPool[31] = 2
 	gen.genesisHash[31] = 3
 
+	// if genesis is provided
+	if bkGenesis.Network != "" {
+		gen.genesisID = bkGenesis.ID()
+		gen.genesisHash = bkGenesis.Hash()
+	}
+
 	gen.initializeAccounting()
 	gen.initializeLedger()
-
 	for _, val := range getTransactionOptions() {
 		switch val {
 		case paymentTx:
@@ -201,6 +209,7 @@ type generator struct {
 	timestamp     int64
 	protocol      protocol.ConsensusVersion
 	params        cconfig.ConsensusParams
+	genesis       bookkeeping.Genesis
 	genesisID     string
 	genesisHash   crypto.Digest
 
@@ -232,6 +241,9 @@ type generator struct {
 
 	// ledger
 	ledger *ledger.Ledger
+
+	// next_account_round in the preloaded database
+	nextdbround uint64
 }
 
 type assetData struct {
@@ -274,15 +286,22 @@ func (g *generator) WriteReport(output io.Writer) error {
 
 func (g *generator) WriteStatus(output io.Writer) error {
 	response := model.NodeStatusResponse{
-		LastRound: g.round,
+		LastRound: g.round + g.nextdbround,
 	}
 	return json.NewEncoder(output).Encode(response)
 }
 
 func (g *generator) WriteGenesis(output io.Writer) error {
 	defer g.recordData(track(genesis))
-	var allocations []bookkeeping.GenesisAllocation
 
+	// return user provided genesis
+	if g.genesis.Network != "" {
+		_, err := output.Write(protocol.EncodeJSON(g.genesis))
+		return err
+	}
+
+	// return synthetic genesis
+	var allocations []bookkeeping.GenesisAllocation
 	for i := uint64(0); i < g.config.NumGenesisAccounts; i++ {
 		addr := indexToAccount(i)
 		allocations = append(allocations, bookkeeping.GenesisAllocation{
@@ -359,21 +378,27 @@ func (g *generator) finishRound(txnCount uint64) {
 
 // WriteBlock generates a block full of new transactions and writes it to the writer.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
-
-	if round != g.round {
-		fmt.Printf("Generator only supports sequential block access. Expected %d but received request for %d.\n", g.round, round)
+	if round < g.nextdbround {
+		return fmt.Errorf("cannot generate block for round %d, already in database", round)
 	}
+	if round-g.nextdbround != g.round {
+		return fmt.Errorf("generator only supports sequential block access. Expected %d but received request for %d", g.round+g.nextdbround, round)
+	}
+	numTxnForBlock := g.txnForRound(g.round)
 
-	numTxnForBlock := g.txnForRound(round)
-
-	// return genesis block
-	if round == 0 {
+	// return genesis block. offset round for non-empty database
+	if round-g.nextdbround == 0 {
 		// write the msgpack bytes for a block
-		block, err := rpcs.RawBlockBytes(g.ledger, basics.Round(round))
-		if err != nil {
-			return err
+		block, cert, _ := g.ledger.BlockCert(basics.Round(round - g.nextdbround))
+		// return the block with the requested round number
+		block.BlockHeader.Round = basics.Round(round)
+		encodedblock := rpcs.EncodedBlockCert{
+			Block:       block,
+			Certificate: cert,
 		}
-		_, err = output.Write(block)
+		blk := protocol.EncodeMsgp(&encodedblock)
+		// write the msgpack bytes for a block
+		_, err := output.Write(blk)
 		if err != nil {
 			return err
 		}
@@ -436,11 +461,13 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-	// write the msgpack bytes for a block
-	block, err := rpcs.RawBlockBytes(g.ledger, basics.Round(round))
+	// return the block with the requested round number
+	cert.Block.BlockHeader.Round = basics.Round(round)
+	block := protocol.EncodeMsgp(&cert)
 	if err != nil {
 		return err
 	}
+	// write the msgpack bytes for a block
 	_, err = output.Write(block)
 	if err != nil {
 		return err
@@ -451,7 +478,16 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 // WriteDeltas generates returns the deltas for payset.
 func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
-	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round))
+	// offset round for non-empty database
+	if round-g.nextdbround == 0 {
+		data, _ := encode(protocol.CodecHandle, ledgercore.StateDelta{})
+		_, err := output.Write(data)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round - g.nextdbround))
 	if err != nil {
 		return fmt.Errorf("err getting state delta for round %d: %w", round, err)
 	}
@@ -566,7 +602,6 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 
 	numAssets := uint64(len(g.assets))
 	var senderIndex uint64
-
 	if actual == assetCreate {
 		numAssets = uint64(len(g.assets)) + uint64(len(g.pendingAssets))
 		senderIndex = numAssets % g.config.NumGenesisAccounts
@@ -576,7 +611,6 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 		assetID := g.txnCounter + intra + 1
 		assetName := fmt.Sprintf("asset #%d", assetID)
 		txn = g.makeAssetCreateTxn(g.makeTxnHeader(senderAcct, round, intra), total, false, assetName)
-
 		// Compute asset ID and initialize holdings
 		holding := assetHolding{
 			acctIndex: senderIndex,
@@ -651,7 +685,6 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 
 			receiverArrayIndex := (rand.Uint64() % (uint64(len(asset.holdings)) - uint64(1))) + uint64(1)
 			receiver := indexToAccount(asset.holdings[receiverArrayIndex].acctIndex)
-
 			amount := uint64(10)
 
 			txn = g.makeAssetTransferTxn(g.makeTxnHeader(sender, round, intra), receiver, amount, basics.Address{}, asset.assetID)
@@ -739,7 +772,13 @@ func (g *generator) initializeLedger() {
 		fmt.Printf("error making genesis: %v\n.", err)
 		os.Exit(1)
 	}
-	l, err := ledger.OpenLedger(logging.Base(), "block-generator", true, ledgercore.InitState{
+	var prefix string
+	if g.genesisID == "" {
+		prefix = "block-generator"
+	} else {
+		prefix = g.genesisID
+	}
+	l, err := ledger.OpenLedger(logging.Base(), prefix, true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    bal.Balances,
 		GenesisHash: g.genesisHash,

@@ -867,7 +867,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 			Sender:            sender.Addr,
 			ApplicationID:     0,
 			ApprovalProgram:   expensiveAppSource,
-			ClearStateProgram: `#pragma version 6; int 0`,
+			ClearStateProgram: "#pragma version 6\nint 0",
 		})
 		// Expensive 700 repetition of int 1 and pop total cost 1404
 		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -938,7 +938,7 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 			Sender:            sender.Addr,
 			ApplicationID:     0,
 			ApprovalProgram:   expensiveAppSource,
-			ClearStateProgram: `#pragma version 6; int 0`,
+			ClearStateProgram: "#pragma version 6\nint 0",
 		})
 		// Expensive 700 repetition of int 1 and pop total cost 1404
 		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -1015,7 +1015,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 		Sender:            sender.Addr,
 		ApplicationID:     0,
 		ApprovalProgram:   expensiveAppSource,
-		ClearStateProgram: `#pragma version 6; int 0`,
+		ClearStateProgram: "#pragma version 6\nint 0",
 	})
 	// Expensive 700 repetition of int 1 and pop total cost 1404
 	expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{

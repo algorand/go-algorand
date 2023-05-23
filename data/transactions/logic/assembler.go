@@ -2193,6 +2193,9 @@ func pragma(ops *OpStream, tokens []string) error {
 		if len(tokens) < 3 {
 			return ops.error("no version value")
 		}
+		if len(tokens) > 3 {
+			return ops.errorf("unexpected extra tokens: %s", strings.Join(tokens[3:], " "))
+		}
 		value := tokens[2]
 		var ver uint64
 		if ops.pending.Len() > 0 {
@@ -2221,6 +2224,9 @@ func pragma(ops *OpStream, tokens []string) error {
 	case "typetrack":
 		if len(tokens) < 3 {
 			return ops.error("no typetrack value")
+		}
+		if len(tokens) > 3 {
+			return ops.errorf("unexpected extra tokens: %s", strings.Join(tokens[3:], " "))
 		}
 		value := tokens[2]
 		on, err := strconv.ParseBool(value)

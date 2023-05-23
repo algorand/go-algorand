@@ -757,7 +757,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 			return []transactions.SignedTxn{}, err
 		}
 		approval := ops.Program
-		ops, err = logic.AssembleString("#pragma version 2 int 1")
+		ops, err = logic.AssembleString("#pragma version 2\nint 1")
 		if err != nil {
 			panic(err)
 		}

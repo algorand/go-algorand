@@ -19,7 +19,6 @@ package runner
 import (
 	"bytes"
 	"context"
-
 	// embed conduit template config file
 	_ "embed"
 	"encoding/json"
@@ -56,6 +55,8 @@ type Args struct {
 	ResetReportDir           bool
 	RunValidation            bool
 	KeepDataDir              bool
+	NextDBRound              uint64
+	GenesisFile              string
 }
 
 type config struct {
@@ -124,7 +125,7 @@ func (r *Args) run() error {
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
-	generatorShutdownFunc, _ := startGenerator(r.Path, algodNet, blockMiddleware)
+	generatorShutdownFunc, _ := startGenerator(r.Path, r.NextDBRound, r.GenesisFile, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
 		if err := generatorShutdownFunc(); err != nil {
@@ -156,7 +157,7 @@ func (r *Args) run() error {
 	}
 
 	// Start conduit
-	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary)
+	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary, r.NextDBRound)
 	if err != nil {
 		return fmt.Errorf("failed to start Conduit: %w", err)
 	}
@@ -390,9 +391,9 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 }
 
 // startGenerator starts the generator server.
-func startGenerator(configFile string, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+func startGenerator(configFile string, dbround uint64, genesisFile string, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
 	// Start generator.
-	server, generator := generator.MakeServerWithMiddleware(configFile, addr, blockMiddleware)
+	server, generator := generator.MakeServerWithMiddleware(dbround, genesisFile, configFile, addr, blockMiddleware)
 
 	// Start the server
 	go func() {
@@ -415,9 +416,10 @@ func startGenerator(configFile string, addr string, blockMiddleware func(http.Ha
 }
 
 // startConduit starts the conduit binary.
-func startConduit(dataDir string, conduitBinary string) (func() error, error) {
+func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
 	cmd := exec.Command(
 		conduitBinary,
+		"-r", strconv.FormatUint(round, 10),
 		"-d", dataDir,
 	)
 

@@ -857,14 +857,22 @@
         },
         "description": "Supply represents the current supply of MicroAlgos in the system."
       },
-      "TransactionGroupLedgerStateDeltaForRoundResponse": {
+      "TransactionGroupLedgerStateDeltasForRoundResponse": {
         "content": {
           "application/json": {
             "schema": {
-              "items": {
-                "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+              "properties": {
+                "deltas": {
+                  "items": {
+                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  },
+                  "type": "array"
+                }
               },
-              "type": "array"
+              "required": [
+                "deltas"
+              ],
+              "type": "object"
             }
           }
         },
@@ -3975,8 +3983,7 @@
         "summary": "Get a LedgerStateDelta object for a given transaction group",
         "tags": [
           "public",
-          "data",
-          "experimental"
+          "nonparticipating"
         ]
       }
     },
@@ -4107,8 +4114,7 @@
         "summary": "Get a LedgerStateDelta object for a given round",
         "tags": [
           "public",
-          "data",
-          "experimental"
+          "nonparticipating"
         ]
       }
     },
@@ -4145,18 +4151,34 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  "properties": {
+                    "deltas": {
+                      "items": {
+                        "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                      },
+                      "type": "array"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "deltas"
+                  ],
+                  "type": "object"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  "properties": {
+                    "deltas": {
+                      "items": {
+                        "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                      },
+                      "type": "array"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "deltas"
+                  ],
+                  "type": "object"
                 }
               }
             },
@@ -4245,8 +4267,7 @@
         "summary": "Get LedgerStateDelta objects for all transaction groups in a given round",
         "tags": [
           "public",
-          "data",
-          "experimental"
+          "nonparticipating"
         ]
       }
     },

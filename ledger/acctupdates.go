@@ -906,20 +906,6 @@ func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, c
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 }
 
-// onlineTotals returns the online totals of all accounts at the end of round rnd.
-// used in tests only
-func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return basics.MicroAlgos{}, err
-	}
-
-	totals := au.roundTotals[offset]
-	return totals.Online.Money, nil
-}
-
 // latestTotalsImpl returns the totals of all accounts for the most recent round, as well as the round number
 func (au *accountUpdates) latestTotalsImpl() (basics.Round, ledgercore.AccountTotals, error) {
 	offset := len(au.deltas)

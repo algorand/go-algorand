@@ -154,6 +154,10 @@ const createStateProofVerificationTableQuery = `
 	lastattestedround integer primary key NOT NULL,
 	verificationcontext blob NOT NULL)`
 
+const createVoteLastValidIndex = `
+	CREATE INDEX IF NOT EXISTS onlineaccounts_votelastvalid_idx
+	ON onlineaccounts ( votelastvalid )`
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -926,4 +930,10 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	err = rows.Err()
 	updateStmt.Close()
 	return
+}
+
+func convertOnlineRoundParamsTail(ctx context.Context, tx *sql.Tx) error {
+	// create vote last index
+	_, err := tx.ExecContext(ctx, createVoteLastValidIndex)
+	return err
 }
