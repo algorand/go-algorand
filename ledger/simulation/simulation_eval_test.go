@@ -966,11 +966,13 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 		}
 
 		// Get the first trace
-		firstTrace := commonLeadingSteps
+		firstTrace := make([]simulation.OpcodeTraceUnit, len(commonLeadingSteps))
+		copy(firstTrace, commonLeadingSteps[:])
 		firstTrace = append(firstTrace, simulation.OpcodeTraceUnit{PC: 1409})
 
 		// Get the second trace
-		secondTrace := commonLeadingSteps
+		secondTrace := make([]simulation.OpcodeTraceUnit, len(commonLeadingSteps))
+		copy(secondTrace, commonLeadingSteps[:])
 		for i := 9; i <= 1409; i++ {
 			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: uint64(i)})
 		}
