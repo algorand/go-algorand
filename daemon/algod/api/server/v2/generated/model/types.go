@@ -542,8 +542,8 @@ type LedgerStateDelta = map[string]interface{}
 // LedgerStateDeltaForTransactionGroup Contains a ledger delta for a single transaction group
 type LedgerStateDeltaForTransactionGroup struct {
 	// Delta Ledger StateDelta object
-	Delta LedgerStateDelta `json:"delta"`
-	Ids   []string         `json:"ids"`
+	Delta LedgerStateDelta `json:"Delta"`
+	Ids   []string         `json:"Ids"`
 }
 
 // LightBlockHeaderProof Proof of membership and position of a light block header.
@@ -1090,7 +1090,7 @@ type SupplyResponse struct {
 
 // TransactionGroupLedgerStateDeltasForRoundResponse defines model for TransactionGroupLedgerStateDeltasForRoundResponse.
 type TransactionGroupLedgerStateDeltasForRoundResponse struct {
-	Deltas []LedgerStateDeltaForTransactionGroup `json:"deltas"`
+	Deltas []LedgerStateDeltaForTransactionGroup `json:"Deltas"`
 }
 
 // TransactionParametersResponse TransactionParams contains the parameters that help a client construct
