@@ -197,15 +197,11 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 			lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, TransactionTrace{})
 			txnTraceStackElem = &lastExecTrace.InnerTraces[len(lastExecTrace.InnerTraces)-1]
 
-			innerIndex := uint64(len(lastExecTrace.InnerTraces)) - 1
-			stepIndex := uint64(len(lastExecTrace.programTraceRef.Trace)) - 1
+			innerIndex := len(lastExecTrace.InnerTraces) - 1
+			parentOpIndex := len(lastExecTrace.programTraceRef.Trace) - 1
 
-			lastExecTrace.programTraceRef.StepToInnerMap = append(lastExecTrace.programTraceRef.StepToInnerMap,
-				TraceStepInnerIndexPair{
-					TraceStep:  stepIndex,
-					InnerIndex: innerIndex,
-				},
-			)
+			parentOp := &lastExecTrace.programTraceRef.Trace[parentOpIndex]
+			parentOp.SpawnedInners = append(parentOp.SpawnedInners, innerIndex)
 		}
 
 		currentTxn := ep.TxnGroup[groupIndex]
@@ -251,35 +247,29 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
-	currentOpcodeUnit := tracer.makeOpcodeTraceUnit(cx)
-
-	// logic sig opcode part
-	if cx.RunMode() != logic.ModeApp {
-		// do nothing for LogicSig ops
-		if !tracer.result.ReturnTrace() {
-			return
+	if cx.RunMode() == logic.ModeApp {
+		// Remember app EvalDelta before executing the opcode. We do this
+		// because if this opcode fails, the block evaluator resets the EvalDelta.
+		groupIndex := tracer.relativeGroupIndex()
+		var appIDToSave basics.AppIndex
+		if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
+			// App creation
+			appIDToSave = cx.AppID()
 		}
-		// BeforeOpcode runs for logic sig happens before txn group exec, including app calls
-		// get cx.GroupIndex() and append to trace
-		indexIntoTxnGroup := cx.GroupIndex()
-		execTrace := tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace
-		execTrace.programTraceRef.Trace = append(execTrace.programTraceRef.Trace, currentOpcodeUnit)
-		return
+		tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
 	}
 
-	// app call opcode part
-	groupIndex := tracer.relativeGroupIndex()
-	var appIDToSave basics.AppIndex
-	if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
-		// app creation
-		appIDToSave = cx.AppID()
+	if tracer.result.ReturnTrace() {
+		var txnTrace *TransactionTrace
+		if cx.RunMode() == logic.ModeSig {
+			groupIndex := cx.GroupIndex()
+			txnTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+		} else {
+			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
+		}
+		currentTrace := txnTrace.programTraceRef
+		currentTrace.Trace = append(currentTrace.Trace, tracer.makeOpcodeTraceUnit(cx))
 	}
-	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
-	if !tracer.result.ReturnTrace() {
-		return
-	}
-	currentTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
-	currentTrace.programTraceRef.Trace = append(currentTrace.programTraceRef.Trace, currentOpcodeUnit)
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {

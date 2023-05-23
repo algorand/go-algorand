@@ -634,9 +634,6 @@ type PendingTransactionResponse struct {
 type SimulateProgramTrace struct {
 	// Trace An array of opcodes and effects during simulation execution.
 	Trace []SimulationOpcodeTraceUnit `json:"trace"`
-
-	// TraceElemIndexToInnerIndex The map from the trace elem index to the inner trace index, indicating which step contract simulation branches off into an inner txn. The trace elem index is always pointing to an itxn_submit.
-	TraceElemIndexToInnerIndex *[]SimulationPcToInnerIndex `json:"trace-elem-index-to-inner-index,omitempty"`
 }
 
 // SimulateRequest Request type for simulation endpoint.
@@ -721,15 +718,9 @@ type SimulationEvalOverrides struct {
 type SimulationOpcodeTraceUnit struct {
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`
-}
 
-// SimulationPcToInnerIndex The mapping from a program counter to an index into inner app call traces, indicating which step contract simulation branches off into an inner txn. The step index index of trace is always pointing to an itxn_submit.
-type SimulationPcToInnerIndex struct {
-	// InnerIndex The index into inner trace array, to which inner transaction get branched off from program execution.
-	InnerIndex uint64 `json:"inner-index"`
-
-	// Pc The program counter of the current opcode being evaluated.
-	Pc uint64 `json:"pc"`
+	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
+	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.

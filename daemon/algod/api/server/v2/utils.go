@@ -368,20 +368,18 @@ func convertProgramTrace(programTrace simulation.ProgramTrace) *model.SimulatePr
 	var modelProgramTrace model.SimulateProgramTrace
 	modelProgramTrace.Trace = make([]model.SimulationOpcodeTraceUnit, len(programTrace.Trace))
 	for i := range programTrace.Trace {
-		modelProgramTrace.Trace[i] = model.SimulationOpcodeTraceUnit{
-			Pc: programTrace.Trace[i].PC,
-		}
-	}
-
-	if len(programTrace.StepToInnerMap) > 0 {
-		traceIndexToInnerIndex := make([]model.SimulationPcToInnerIndex, len(programTrace.StepToInnerMap))
-		for i := range programTrace.StepToInnerMap {
-			traceIndexToInnerIndex[i] = model.SimulationPcToInnerIndex{
-				Pc:         programTrace.StepToInnerMap[i].TraceStep,
-				InnerIndex: programTrace.StepToInnerMap[i].InnerIndex,
+		var spawnedInnersPtr *[]uint64
+		if len(programTrace.Trace[i].SpawnedInners) > 0 {
+			spawnedInners := make([]uint64, len(programTrace.Trace[i].SpawnedInners))
+			for j, innerIndex := range programTrace.Trace[i].SpawnedInners {
+				spawnedInners[j] = uint64(innerIndex)
 			}
+			spawnedInnersPtr = &spawnedInners
 		}
-		modelProgramTrace.TraceElemIndexToInnerIndex = &traceIndexToInnerIndex
+		modelProgramTrace.Trace[i] = model.SimulationOpcodeTraceUnit{
+			Pc:            programTrace.Trace[i].PC,
+			SpawnedInners: spawnedInnersPtr,
+		}
 	}
 
 	return &modelProgramTrace
