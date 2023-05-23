@@ -638,7 +638,7 @@ type SimulateRequest struct {
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
-	// ExecTraceConfig An object including that configures simulation execution trace.
+	// ExecTraceConfig An object that configures simulation execution trace.
 	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
 
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
@@ -654,7 +654,7 @@ type SimulateRequestTransactionGroup struct {
 	Txns []json.RawMessage `json:"txns"`
 }
 
-// SimulateTraceConfig An object including that configures simulation execution trace.
+// SimulateTraceConfig An object that configures simulation execution trace.
 type SimulateTraceConfig struct {
 	// Enable A boolean option for opting in execution trace features simulation endpoint.
 	Enable *bool `json:"enable,omitempty"`
@@ -1099,7 +1099,7 @@ type SimulateResponse struct {
 	// EvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
 	EvalOverrides *SimulationEvalOverrides `json:"eval-overrides,omitempty"`
 
-	// ExecTraceConfig An object including that configures simulation execution trace.
+	// ExecTraceConfig An object that configures simulation execution trace.
 	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
 
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.

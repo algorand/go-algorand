@@ -3479,7 +3479,7 @@
       }
     },
     "SimulateTraceConfig": {
-      "description": "An object including that configures simulation execution trace.",
+      "description": "An object that configures simulation execution trace.",
       "type": "object",
       "properties": {
         "enable": {
