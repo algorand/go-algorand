@@ -456,7 +456,7 @@ func (wp *wsPeer) reportReadErr(err error) {
 	// only report error if we haven't already closed the peer
 	if atomic.LoadInt32(&wp.didInnerClose) == 0 {
 		_, _, line, _ := runtime.Caller(1)
-		wp.net.log.Warnf("peer[%s] line=%d read err: %s", wp.conn.RemoteAddr().String(), line, err)
+		wp.net.log.Warnf("peer[%s] line=%d read err: %s", wp.conn.RemoteAddr().String(), line, err) //xx
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "reader err"})
 	}
 }
@@ -732,7 +732,7 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, msg.data)
 	if err != nil {
 		if atomic.LoadInt32(&wp.didInnerClose) == 0 {
-			wp.net.log.Warn("peer write error ", err)
+			wp.net.log.Warn("peer write error ", err) //xx
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "write err"})
 		}
 		return disconnectWriteError
@@ -883,7 +883,7 @@ func (wp *wsPeer) Close(deadline time.Time) {
 		close(wp.closing)
 		err := wp.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), deadline)
 		if err != nil {
-			wp.net.log.Infof("failed to write CloseMessage to connection for %s", wp.conn.RemoteAddr().String())
+			wp.net.log.Infof("failed to write CloseMessage to connection for %s", wp.conn.RemoteAddr().String()) //xx
 		}
 		err = wp.conn.CloseWithoutFlush()
 		if err != nil {

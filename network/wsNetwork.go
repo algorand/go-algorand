@@ -964,6 +964,7 @@ func (wn *WebsocketNetwork) Stop() {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
+	close(wn.messagesOfInterestRefresh)
 	wn.messagesOfInterestEncoded = false
 	wn.messagesOfInterestEnc = nil
 	wn.messagesOfInterest = nil
@@ -2414,7 +2415,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	if peer.outgoing && peer.peerMessageDelay > 0 {
 		logEntry = logEntry.With("messageDelay", peer.peerMessageDelay)
 	}
-	logEntry.Infof("Peer %s disconnected: %s", peer.rootURL, reason)
+	logEntry.Infof("Peer %s disconnected: %s", peer.rootURL, reason) //xx
 	peerAddr := peer.OriginAddress()
 	// we might be able to get addr out of conn, or it might be closed
 	if peerAddr == "" && peer.conn != nil {
@@ -2591,7 +2592,7 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	atomic.AddUint32(&wn.messagesOfInterestGeneration, 1)
 	var peers []*wsPeer
 	peers, _ = wn.peerSnapshot(peers)
-	wn.log.Infof("updateMessagesOfInterestEnc maybe sending messagesOfInterest %v", wn.messagesOfInterest)
+	wn.log.Infof("updateMessagesOfInterestEnc maybe sending messagesOfInterest %v", wn.messagesOfInterest) //xx
 	for _, peer := range peers {
 		wn.maybeSendMessagesOfInterest(peer, wn.messagesOfInterestEnc)
 	}
@@ -2599,7 +2600,10 @@ func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 
 func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 	for {
-		<-wn.messagesOfInterestRefresh
+		_, open := <-wn.messagesOfInterestRefresh
+		if !open {
+			return
+		}
 		// if we're not a relay, and not participating, we don't need txn pool
 		wantTXGossip := wn.nodeInfo.IsParticipating()
 		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
@@ -2607,7 +2611,7 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 			wn.RegisterMessageInterest(protocol.TxnTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
 		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
-			wn.log.Infof("postMessagesOfInterestThread: disabling TX gossip")
+			wn.log.Infof("postMessagesOfInterestThread: disabling TX gossip") //xx
 			wn.DeregisterMessageInterest(protocol.TxnTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipNo)
 		}
