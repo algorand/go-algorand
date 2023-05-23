@@ -2227,7 +2227,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 		{Pc: 83},
 		{Pc: 85},
 		{Pc: 87},
-		{Pc: 89},
+		{Pc: 89, SpawnedInners: &[]uint64{0}},
 		{Pc: 90},
 		{Pc: 91},
 		{Pc: 92},
@@ -2258,7 +2258,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 		{Pc: 139},
 		{Pc: 141},
 		{Pc: 143},
-		{Pc: 145},
+		{Pc: 145, SpawnedInners: &[]uint64{1, 2}},
 		{Pc: 146},
 		{Pc: 72},
 		{Pc: 73},
@@ -2307,12 +2307,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 		{Pc: 73},
 	}
 
-	traceIndexToInnerIndex := []model.SimulationPcToInnerIndex{
-		{Pc: 47, InnerIndex: 0},
-		{Pc: 78, InnerIndex: 1},
-		{Pc: 78, InnerIndex: 2},
-	}
-
 	a.Len(resp.TxnGroups[0].Txns, 2)
 	a.Nil(resp.TxnGroups[0].FailureMessage)
 	a.Nil(resp.TxnGroups[0].FailedAt)
@@ -2321,8 +2315,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 
 	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
 		ApprovalProgramTrace: &model.SimulateProgramTrace{
-			Trace:                      recursiveLongOpcodeTrace,
-			TraceElemIndexToInnerIndex: &traceIndexToInnerIndex,
+			Trace: recursiveLongOpcodeTrace,
 		},
 		InnerTrace: &[]model.SimulationTransactionExecTrace{
 			{
@@ -2331,8 +2324,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{},
 			{
 				ApprovalProgramTrace: &model.SimulateProgramTrace{
-					Trace:                      recursiveLongOpcodeTrace,
-					TraceElemIndexToInnerIndex: &traceIndexToInnerIndex,
+					Trace: recursiveLongOpcodeTrace,
 				},
 				InnerTrace: &[]model.SimulationTransactionExecTrace{
 					{
