@@ -1272,21 +1272,46 @@ func initConsensusProtocols() {
 
 	v35.ApprovedUpgrades[protocol.ConsensusV36] = 140000
 
+	v37 := v36
+	v37.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	Consensus[protocol.ConsensusV37] = v37
+
+	// v36 can be upgraded to v37, with an update delay of 7 days ( see calculation above )
+	v36.ApprovedUpgrades[protocol.ConsensusV37] = 140000
+
+	v38 := v37
+	v38.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// enables state proof recoverability
+	v38.StateProofUseTrackerVerification = true
+	v38.EnableCatchpointsWithSPContexts = true
+
+	// online circulation on-demand expiration
+	v38.ExcludeExpiredCirculation = true
+
+	// TEAL resources sharing and other features
+	v38.LogicSigVersion = 9
+	v38.EnablePrecheckECDSACurve = true
+	v38.AppForbidLowResources = true
+	v38.EnableBareBudgetError = true
+	v38.EnableBoxRefNameError = true
+
+	v38.AgreementFilterTimeoutPeriod0 = 3000 * time.Millisecond
+
+	Consensus[protocol.ConsensusV38] = v38
+
+	// v37 can be upgraded to v38, with an update delay of 12h:
+	// 10046 = (12 * 60 * 60 / 4.3)
+	// for the sake of future manual calculations, we'll round that down a bit :
+	v37.ApprovedUpgrades[protocol.ConsensusV38] = 10000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v36
+	vFuture := v38
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 9 // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnablePrecheckECDSACurve = true
-	vFuture.AppForbidLowResources = true
-	vFuture.EnableBareBudgetError = true
-	vFuture.EnableBoxRefNameError = true
-
-	vFuture.StateProofUseTrackerVerification = true
-	vFuture.EnableCatchpointsWithSPContexts = true
-
-	vFuture.ExcludeExpiredCirculation = true
+	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
