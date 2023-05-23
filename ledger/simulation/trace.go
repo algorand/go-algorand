@@ -174,22 +174,16 @@ type OpcodeTraceUnit struct {
 	SpawnedInners []int
 }
 
-// ProgramTrace contains the simulation time opcode trace and the map from opcode trace index to inner transaction group index.
-type ProgramTrace struct {
-	// Trace contains the trace for an app evaluation, if this is an app call transaction.
-	Trace []OpcodeTraceUnit
-}
-
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
 type TransactionTrace struct {
-	// ApprovalProgramTrace stands for ProgramTrace over application call on approval program
-	ApprovalProgramTrace ProgramTrace
-	// ClearStateProgramTrace stands for ProgramTrace over application call on clear-state program
-	ClearStateProgramTrace ProgramTrace
+	// ApprovalProgramTrace stands for a slice of OpcodeTraceUnit over application call on approval program
+	ApprovalProgramTrace []OpcodeTraceUnit
+	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
+	ClearStateProgramTrace []OpcodeTraceUnit
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
-	LogicSigTrace ProgramTrace
+	LogicSigTrace []OpcodeTraceUnit
 	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
-	programTraceRef *ProgramTrace
+	programTraceRef *[]OpcodeTraceUnit
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.

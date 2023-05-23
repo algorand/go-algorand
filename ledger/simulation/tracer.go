@@ -198,9 +198,9 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 			txnTraceStackElem = &lastExecTrace.InnerTraces[len(lastExecTrace.InnerTraces)-1]
 
 			innerIndex := len(lastExecTrace.InnerTraces) - 1
-			parentOpIndex := len(lastExecTrace.programTraceRef.Trace) - 1
+			parentOpIndex := len(*lastExecTrace.programTraceRef) - 1
 
-			parentOp := &lastExecTrace.programTraceRef.Trace[parentOpIndex]
+			parentOp := &(*lastExecTrace.programTraceRef)[parentOpIndex]
 			parentOp.SpawnedInners = append(parentOp.SpawnedInners, innerIndex)
 		}
 
@@ -267,8 +267,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		} else {
 			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
 		}
-		currentTrace := txnTrace.programTraceRef
-		currentTrace.Trace = append(currentTrace.Trace, tracer.makeOpcodeTraceUnit(cx))
+		*txnTrace.programTraceRef = append(*txnTrace.programTraceRef, tracer.makeOpcodeTraceUnit(cx))
 	}
 }
 

@@ -360,24 +360,23 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertProgramTrace(programTrace simulation.ProgramTrace) *model.SimulateProgramTrace {
-	if len(programTrace.Trace) == 0 {
+func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.SimulationOpcodeTraceUnit {
+	if len(programTrace) == 0 {
 		return nil
 	}
 
-	var modelProgramTrace model.SimulateProgramTrace
-	modelProgramTrace.Trace = make([]model.SimulationOpcodeTraceUnit, len(programTrace.Trace))
-	for i := range programTrace.Trace {
+	modelProgramTrace := make([]model.SimulationOpcodeTraceUnit, len(programTrace))
+	for i := range programTrace {
 		var spawnedInnersPtr *[]uint64
-		if len(programTrace.Trace[i].SpawnedInners) > 0 {
-			spawnedInners := make([]uint64, len(programTrace.Trace[i].SpawnedInners))
-			for j, innerIndex := range programTrace.Trace[i].SpawnedInners {
+		if len(programTrace[i].SpawnedInners) > 0 {
+			spawnedInners := make([]uint64, len(programTrace[i].SpawnedInners))
+			for j, innerIndex := range programTrace[i].SpawnedInners {
 				spawnedInners[j] = uint64(innerIndex)
 			}
 			spawnedInnersPtr = &spawnedInners
 		}
-		modelProgramTrace.Trace[i] = model.SimulationOpcodeTraceUnit{
-			Pc:            programTrace.Trace[i].PC,
+		modelProgramTrace[i] = model.SimulationOpcodeTraceUnit{
+			Pc:            programTrace[i].PC,
 			SpawnedInners: spawnedInnersPtr,
 		}
 	}

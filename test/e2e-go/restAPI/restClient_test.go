@@ -2314,26 +2314,16 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	a.Nil(resp.TxnGroups[0].Txns[0].TransactionTrace)
 
 	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
-		ApprovalProgramTrace: &model.SimulateProgramTrace{
-			Trace: recursiveLongOpcodeTrace,
-		},
+		ApprovalProgramTrace: &recursiveLongOpcodeTrace,
 		InnerTrace: &[]model.SimulationTransactionExecTrace{
-			{
-				ApprovalProgramTrace: &model.SimulateProgramTrace{Trace: creationOpcodeTrace},
-			},
+			{ApprovalProgramTrace: &creationOpcodeTrace},
 			{},
 			{
-				ApprovalProgramTrace: &model.SimulateProgramTrace{
-					Trace: recursiveLongOpcodeTrace,
-				},
+				ApprovalProgramTrace: &recursiveLongOpcodeTrace,
 				InnerTrace: &[]model.SimulationTransactionExecTrace{
-					{
-						ApprovalProgramTrace: &model.SimulateProgramTrace{Trace: creationOpcodeTrace},
-					},
+					{ApprovalProgramTrace: &creationOpcodeTrace},
 					{},
-					{
-						ApprovalProgramTrace: &model.SimulateProgramTrace{Trace: finalDepthTrace},
-					},
+					{ApprovalProgramTrace: &finalDepthTrace},
 				},
 			},
 		},

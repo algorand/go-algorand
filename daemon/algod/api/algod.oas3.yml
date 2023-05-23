@@ -1910,22 +1910,6 @@
         ],
         "type": "object"
       },
-      "SimulateProgramTrace": {
-        "description": "Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.",
-        "properties": {
-          "trace": {
-            "description": "An array of opcodes and effects during simulation execution.",
-            "items": {
-              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "trace"
-        ],
-        "type": "object"
-      },
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
@@ -2090,10 +2074,18 @@
         "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
         "properties": {
           "approval-program-trace": {
-            "$ref": "#/components/schemas/SimulateProgramTrace"
+            "description": "Program trace that contains a trace of opcode effects in an approval program.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
           },
           "clear-state-program-trace": {
-            "$ref": "#/components/schemas/SimulateProgramTrace"
+            "description": "Program trace that contains a trace of opcode effects in a clear state program.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
           },
           "inner-trace": {
             "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
@@ -2103,7 +2095,11 @@
             "type": "array"
           },
           "logic-sig-trace": {
-            "$ref": "#/components/schemas/SimulateProgramTrace"
+            "description": "Program trace that contains a trace of opcode effects in a logic sig.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
           }
         },
         "type": "object"

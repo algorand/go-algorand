@@ -630,12 +630,6 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
-// SimulateProgramTrace Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.
-type SimulateProgramTrace struct {
-	// Trace An array of opcodes and effects during simulation execution.
-	Trace []SimulationOpcodeTraceUnit `json:"trace"`
-}
-
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
 	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
@@ -725,17 +719,17 @@ type SimulationOpcodeTraceUnit struct {
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 type SimulationTransactionExecTrace struct {
-	// ApprovalProgramTrace Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.
-	ApprovalProgramTrace *SimulateProgramTrace `json:"approval-program-trace,omitempty"`
+	// ApprovalProgramTrace Program trace that contains a trace of opcode effects in an approval program.
+	ApprovalProgramTrace *[]SimulationOpcodeTraceUnit `json:"approval-program-trace,omitempty"`
 
-	// ClearStateProgramTrace Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.
-	ClearStateProgramTrace *SimulateProgramTrace `json:"clear-state-program-trace,omitempty"`
+	// ClearStateProgramTrace Program trace that contains a trace of opcode effects in a clear state program.
+	ClearStateProgramTrace *[]SimulationOpcodeTraceUnit `json:"clear-state-program-trace,omitempty"`
 
 	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
 	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
 
-	// LogicSigTrace Program trace that contains a trace of opcode effects and a map from index of opcode trace into inner transaction group index.
-	LogicSigTrace *SimulateProgramTrace `json:"logic-sig-trace,omitempty"`
+	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
+	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
 }
 
 // StateDelta Application state delta.
