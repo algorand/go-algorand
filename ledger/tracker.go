@@ -118,10 +118,11 @@ type ledgerTracker interface {
 	// An optional context is provided for long-running operations.
 	postCommitUnlocked(context.Context, *deferredCommitContext)
 
-	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
+	// handleUnorderedCommitOrError is a special method for handling deferred commits that are out of order
+	// or to handle errors reported by other trackers while committing a batch.
 	// Tracker might update own state in this case. For example, account updates tracker cancels
-	// scheduled catchpoint writing that deferred commit.
-	handleUnorderedCommit(*deferredCommitContext)
+	// scheduled catchpoint writing flag for this batch.
+	handleUnorderedCommitOrError(*deferredCommitContext)
 
 	// close terminates the tracker, reclaiming any resources
 	// like open database connections or goroutines.  close may
@@ -514,7 +515,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
 		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
 		for _, lt := range tr.trackers {
-			lt.handleUnorderedCommit(dcc)
+			lt.handleUnorderedCommitOrError(dcc)
 		}
 		tr.mu.RUnlock()
 		return nil
@@ -538,19 +539,26 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	dcc.oldBase = dbRound
 	dcc.flushTime = time.Now()
 
+	var err error
 	for _, lt := range tr.trackers {
-		err := lt.prepareCommit(dcc)
+		err = lt.prepareCommit(dcc)
 		if err != nil {
 			tr.log.Errorf(err.Error())
-			tr.mu.RUnlock()
-			return err
 		}
 	}
+	if err != nil {
+		for _, lt := range tr.trackers {
+			lt.handleUnorderedCommitOrError(dcc)
+		}
+		tr.mu.RUnlock()
+		return err
+	}
+
 	tr.mu.RUnlock()
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err = tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
@@ -568,6 +576,9 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
 	if err != nil {
+		for _, lt := range tr.trackers {
+			lt.handleUnorderedCommitOrError(dcc)
+		}
 		tr.log.Warnf("unable to advance tracker db snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
 		return err
 	}

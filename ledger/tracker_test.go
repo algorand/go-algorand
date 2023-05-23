@@ -191,8 +191,8 @@ func (bt *producePrepareBlockingTracker) postCommit(ctx context.Context, dcc *de
 func (bt *producePrepareBlockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-// handleUnorderedCommit is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) handleUnorderedCommit(*deferredCommitContext) {
+// handleUnorderedCommitOrError is not used by the blockingTracker
+func (bt *producePrepareBlockingTracker) handleUnorderedCommitOrError(*deferredCommitContext) {
 }
 
 // close is not used by the blockingTracker
