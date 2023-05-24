@@ -36,7 +36,6 @@ require (
 	golang.org/x/sys v0.7.0
 	golang.org/x/text v0.9.0
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -71,11 +70,11 @@ require (
 	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
 	github.com/fortytw2/leaktest v1.3.0 // indirect
-	github.com/lib/pq v1.0.0
 	github.com/mailru/easyjson v0.7.7 // indirect
 	golang.org/x/net v0.9.0 // indirect
 )
