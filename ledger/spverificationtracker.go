@@ -160,7 +160,7 @@ func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCom
 func (spt *spVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
 }
 
-func (spt *spVerificationTracker) handleUnorderedCommit(*deferredCommitContext) {
+func (spt *spVerificationTracker) handleUnorderedCommitOrError(*deferredCommitContext) {
 }
 
 func (spt *spVerificationTracker) close() {
