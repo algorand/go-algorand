@@ -109,7 +109,10 @@ lint: deps
 	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
 
 check_go_version:
-	@[ $(CURRENT_GO_VERSION_MAJOR) == $(GOLANG_VERSION_BUILD_MAJOR) ] || (echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)" && exit 1)
+	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
+		echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)"; \
+		exit 1; \
+	fi
 
 tidy: check_go_version
 	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
