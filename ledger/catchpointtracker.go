@@ -493,7 +493,6 @@ func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 	if ct.enableGeneratingCatchpointFiles && dcc.catchpointFirstStage {
 		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written
 		atomic.StoreInt32(&ct.catchpointDataWriting, int32(-1))
-		dcc.catchpointDataWriting = &ct.catchpointDataWriting
 	}
 
 	dcc.committedRoundDigests = make([]crypto.Digest, dcc.offset)

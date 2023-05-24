@@ -24,7 +24,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -1655,14 +1654,6 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 func (au *accountUpdates) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
-
-	defer func() {
-		if err != nil {
-			if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
-				atomic.StoreInt32(dcc.catchpointDataWriting, 0)
-			}
-		}
-	}()
 
 	_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {

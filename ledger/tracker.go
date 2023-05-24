@@ -215,12 +215,6 @@ type deferredCommitRange struct {
 	// a catchpoint data file, in this commit cycle iteration.
 	catchpointFirstStage bool
 
-	// catchpointDataWriting is a pointer to a variable with the same name in the
-	// catchpointTracker. It's used in order to reset the catchpointDataWriting flag from
-	// the acctupdates's prepareCommit/commitRound (which is called before the
-	// corresponding catchpoint tracker method.
-	catchpointDataWriting *int32
-
 	// enableGeneratingCatchpointFiles controls whether the node produces catchpoint files or not.
 	enableGeneratingCatchpointFiles bool
 
@@ -544,6 +538,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 		err = lt.prepareCommit(dcc)
 		if err != nil {
 			tr.log.Errorf(err.Error())
+			break
 		}
 	}
 	if err != nil {
