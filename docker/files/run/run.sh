@@ -78,14 +78,14 @@ function configure_data_dir() {
   algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
 
   # check for token overrides
-  if [ "$TOKEN" != "" ]; then
-    for dir in ${ALGORAND_DATA}/../*/; do
-      echo "$TOKEN" > "$dir/algod.token"
-    done
-  fi
-  if [ "$ADMIN_TOKEN" != "" ]; then
-    echo "$ADMIN_TOKEN" >algod.admin.token
-  fi
+  for dir in ${ALGORAND_DATA}/../*/; do
+    if [ "$TOKEN" != "" ]; then
+        echo "$TOKEN" > "$dir/algod.token"
+    fi
+    if [ "$ADMIN_TOKEN" != "" ]; then
+      echo "$ADMIN_TOKEN" > "$dir/algod.admin.token"
+    fi
+  done
 
   # configure telemetry
   if [ "$TELEMETRY_NAME" != "" ]; then
@@ -184,13 +184,17 @@ function start_new_private_network() {
 echo "Starting Algod Docker Container"
 echo "   ALGORAND_DATA:  $ALGORAND_DATA"
 echo "   NETWORK:        $NETWORK"
-echo "   ALGOD_PORT:     $ALGOD_PORT"
-echo "   FAST_CATCHUP:   $FAST_CATCHUP"
+echo "   PROFILE:        $PROFILE"
 echo "   DEV_MODE:       $DEV_MODE"
+echo "   START_KMD:      ${START_KMD:-"Not Set"}"
+echo "   FAST_CATCHUP:   $FAST_CATCHUP"
 echo "   TOKEN:          ${TOKEN:-"Not Set"}"
+echo "   ADMIN_TOKEN:    ${ADMIN_TOKEN:-"Not Set"}"
 echo "   KMD_TOKEN:      ${KMD_TOKEN:-"Not Set"}"
 echo "   TELEMETRY_NAME: $TELEMETRY_NAME"
-echo "   START_KMD:      ${START_KMD:-"Not Set"}"
+echo "   NUM_ROUNDS:     $NUM_ROUNDS"
+echo "   PEER_ADDRESS:   $PEER_ADDRESS"
+echo "   ALGOD_PORT:     $ALGOD_PORT"
 
 # If data directory is initialized, start existing environment.
 if [ -f "$ALGORAND_DATA/../network.json" ]; then
