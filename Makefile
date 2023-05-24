@@ -13,11 +13,12 @@ ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
 S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
-GOLANG_VERSIONS 		:= $(shell ./scripts/get_golang_version.sh all)
-GOLANG_VERSION_BUILD 	:= $(firstword $(GOLANG_VERSIONS))
-GOLANG_VERSION_SUPPORT 	:= $(lastword $(GOLANG_VERSIONS))
-
-CURRENT_GO_VERSION := $(shell go version | cut -d " " -f 3 | tr -d 'go')
+GOLANG_VERSIONS				:= $(shell ./scripts/get_golang_version.sh all)
+GOLANG_VERSION_BUILD		:= $(firstword $(GOLANG_VERSIONS))
+GOLANG_VERSION_SUPPORT		:= $(lastword $(GOLANG_VERSIONS))
+GOLANG_VERSION_BUILD_MAJOR	:= $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
+CURRENT_GO_VERSION			:= $(shell go version | cut -d " " -f 3 | tr -d 'go')
+CURRENT_GO_VERSION_MAJOR	:= $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
@@ -107,17 +108,11 @@ fix: build
 lint: deps
 	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
 
-# NOTE: tidy will download and install go version GOLANG_VERSION_BUILD 
-# 		if this isn't the system's current version
-tidy:
-	@if [ $(CURRENT_GO_VERSION) != $(GOLANG_VERSION_BUILD) ]; then \
-		export PATH=$(GOPATH1)/bin:$(PATH) && \
-		go install golang.org/dl/go$(GOLANG_VERSION_BUILD)@latest && \
-		go$(GOLANG_VERSION_BUILD) download && \
-		go$(GOLANG_VERSION_BUILD) mod tidy -compat=$(GOLANG_VERSION_SUPPORT); \
-	else \
-		go mod tidy -compat=$(GOLANG_VERSION_SUPPORT); \
-	fi
+check_go_version:
+	@[ $(CURRENT_GO_VERSION_MAJOR) == $(GOLANG_VERSION_BUILD_MAJOR) ] || (echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)" && exit 1)
+
+tidy: check_go_version
+	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
 
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
