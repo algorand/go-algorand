@@ -683,7 +683,6 @@ func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) Con
 					// delete upgrade to deleted version
 					delete(cParam.ApprovedUpgrades, consensusVersion)
 				}
-
 			}
 		} else {
 			// need to add/update entry
