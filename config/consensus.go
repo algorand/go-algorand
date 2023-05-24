@@ -679,10 +679,9 @@ func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) Con
 			for cVer, cParam := range staticConsensus {
 				if cVer == consensusVersion {
 					delete(staticConsensus, cVer)
-				} else {
-					// delete upgrade to deleted version
-					delete(cParam.ApprovedUpgrades, consensusVersion)
 				}
+				// delete upgrade to deleted version
+				delete(cParam.ApprovedUpgrades, consensusVersion)
 			}
 		} else {
 			// need to add/update entry
