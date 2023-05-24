@@ -599,7 +599,7 @@ func TestMinBalanceChanges(t *testing.T) {
 		},
 	}
 
-	const expectedID basics.AssetIndex = 1
+	const expectedID basics.AssetIndex = 1001
 	optInTxn := txntest.Txn{
 		Type:          "axfer",
 		Sender:        addrs[5],

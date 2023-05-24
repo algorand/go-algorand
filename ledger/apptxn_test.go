@@ -794,7 +794,7 @@ func TestAsaDuringInit(t *testing.T) {
 		defer dl.Close()
 
 		appID := basics.AppIndex(2)
-		if ver >= 37 { // AppForbidLowResources
+		if ver >= 38 { // AppForbidLowResources
 			appID += 1000
 		}
 		prefund := txntest.Txn{
@@ -1230,7 +1230,7 @@ func TestGtxnEffects(t *testing.T) {
 
 		// needed in very first app, so hardcode
 		asaID := basics.AssetIndex(3)
-		if ver >= 37 {
+		if ver >= 38 {
 			asaID += 1000
 		}
 		appID := dl.fundedApp(addrs[0], 1_000_000, main(`
@@ -3030,7 +3030,7 @@ app_local_put
 		switch {
 		case ver < 34: // before v7, app accounts not available at all
 			problem = "invalid Account reference " + id0.Address().String()
-		case ver < 37: // as of v7, it's the mutation that's the problem
+		case ver < 38: // as of v7, it's the mutation that's the problem
 			problem = "invalid Account reference for mutation"
 		}
 		dl.txgroup(problem, &fund0, &fund1, &optin, &callTx)
@@ -3157,7 +3157,7 @@ func TestEvalAppState(t *testing.T) {
 		defer dl.Close()
 
 		appID := basics.AppIndex(1)
-		if ver >= 37 { // AppForbidLowResources
+		if ver >= 38 { // AppForbidLowResources
 			appID += 1000
 		}
 		appcall1 := txntest.Txn{
