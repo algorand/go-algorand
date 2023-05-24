@@ -20,11 +20,6 @@ GOLANG_VERSION_BUILD_MAJOR	:= $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -
 CURRENT_GO_VERSION			:= $(shell go version | cut -d " " -f 3 | tr -d 'go')
 CURRENT_GO_VERSION_MAJOR	:= $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
 
-GOLANGCILINT_VERSION := $(shell yq e '.jobs.reviewdog-errors.steps[] | select(.name == "reviewdog-golangci-lint").with.golangci_lint_version' .github/workflows/reviewdog.yml)
-
-echo:
-	@echo $(GOLANGCILINT_VERSION)
-
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
