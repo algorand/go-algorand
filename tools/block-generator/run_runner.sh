@@ -13,7 +13,7 @@ fi
 POSTGRES_CONTAINER=generator-test-container
 POSTGRES_PORT=15432
 POSTGRES_DATABASE=generator_db
-CONFIG=${2:-"$(dirname $0)/test_config.yml"}
+CONFIG=${4:-"$(dirname $0)/test_config.yml"}
 echo "Using config file: $CONFIG"
 
 function start_postgres() {
@@ -54,4 +54,6 @@ $(dirname "$0")/block-generator runner \
 	--test-duration 30s \
 	--log-level trace \
 	--postgres-connection-string "host=localhost user=algorand password=algorand dbname=generator_db port=15432 sslmode=disable" \
-	--scenario ${CONFIG}
+	--scenario ${CONFIG} \
+	--db-round ${2:-0} \
+  --genesis-file ${3:-""} \
