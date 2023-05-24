@@ -17,6 +17,8 @@ GOLANG_VERSIONS 		:= $(shell ./scripts/get_golang_version.sh all)
 GOLANG_VERSION_BUILD 	:= $(firstword $(GOLANG_VERSIONS))
 GOLANG_VERSION_SUPPORT 	:= $(lastword $(GOLANG_VERSIONS))
 
+CURRENT_GO_VERSION := $(shell go version | cut -d " " -f 3 | tr -d 'go')
+
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
@@ -105,11 +107,17 @@ fix: build
 lint: deps
 	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
 
+# NOTE: tidy will download and install go version GOLANG_VERSION_BUILD 
+# 		if this isn't the system's current version
 tidy:
-	export PATH=$(GOPATH1)/bin:$(PATH) && \
-	go install golang.org/dl/go$(GOLANG_VERSION_BUILD)@latest && \
-	go$(GOLANG_VERSION_BUILD) download && \
-	go$(GOLANG_VERSION_BUILD) mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
+	@if [ $(CURRENT_GO_VERSION) != $(GOLANG_VERSION_BUILD) ]; then \
+		export PATH=$(GOPATH1)/bin:$(PATH) && \
+		go install golang.org/dl/go$(GOLANG_VERSION_BUILD)@latest && \
+		go$(GOLANG_VERSION_BUILD) download && \
+		go$(GOLANG_VERSION_BUILD) mod tidy -compat=$(GOLANG_VERSION_SUPPORT); \
+	else \
+		go mod tidy -compat=$(GOLANG_VERSION_SUPPORT); \
+	fi
 
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
