@@ -11,7 +11,7 @@ POSTGRES_CONTAINER = "generator-test-container"
 POSTGRES_PORT = 15432
 POSTGRES_DATABASE = "generator_db"
 
-REPORT_DIRECTORY = "OUTPUT_RUN_RUNNER_TEST"
+REPORT_DIRECTORY = "../../tmp/OUTPUT_RUN_RUNNER_TEST"
 
 CWD = Path.cwd()
 
@@ -23,10 +23,10 @@ def run_cmd(cmd):
         stderr=subprocess.PIPE,
     )
     stdout, stderr = process.communicate()
-    if process.returncode != 0:
+    if (rcode := process.returncode) != 0:
         print(f"Error executing command: {cmd}")
         print(stderr.decode())
-        sys.exit(1)
+        sys.exit(rcode)
     return stdout.decode()
 
 
@@ -73,30 +73,66 @@ def launch_json_args(cmd: str):
 def parse_ars():
     parser = argparse.ArgumentParser()
     parser.add_argument("--conduit-binary", help="Path to conduit binary")
-    parser.add_argument("--next-db-round", type=int, default=0, help="Database round")
-    parser.add_argument("--genesis-file", default='""', help="Genesis file")
     parser.add_argument(
-        "--scenario", default=CWD / "test_config.yml", help="Scenario file"
+        "--scenario",
+        default=(default := CWD / "test_config.yml"),
+        help=f"Scenario configuration file ({default=!s})",
+    )
+    parser.add_argument(
+        "--reset-db",
+        action="store_true",
+        default=False,
+        help="Reset the DB and start at round 0 (default=False)",
     )
     parser.add_argument(
         "--purge",
         action="store_true",
         default=False,
-        help="Shutdown container that has been kept alive",
+        help="Shutdown container that has been kept alive (default=False)",
     )
     parser.add_argument(
         "--keep-alive",
         action="store_true",
         default=False,
-        help="Keep postgres container alive",
+        help="Keep postgres container alive at end of run (default=False)",
     )
-    parser.add_argument("--pg-container", default=POSTGRES_CONTAINER)
-    parser.add_argument("--pg-port", default=POSTGRES_PORT)
-    parser.add_argument("--pg-database", default=POSTGRES_DATABASE)
-    parser.add_argument("--report-directory", default=REPORT_DIRECTORY)
-    parser.add_argument("--build-generator", action="store_true", default=False)
-    parser.add_argument("--skip-runner", action="store_true", default=False)
-    parser.add_argument("--test-duration", default="30s")
+    parser.add_argument(
+        "--pg-container",
+        default=(default := POSTGRES_CONTAINER),
+        help=f"Name of postgres container ({default=})",
+    )
+    parser.add_argument(
+        "--pg-port",
+        default=(default := POSTGRES_PORT),
+        help=f"Postgres port ({default=})",
+    )
+    parser.add_argument(
+        "--pg-database",
+        default=(default := POSTGRES_DATABASE),
+        help=f"Postgres database ({default=})",
+    )
+    parser.add_argument(
+        "--report-directory",
+        default=(default := REPORT_DIRECTORY),
+        help=f"Report directory ({default=})",
+    )
+    parser.add_argument(
+        "--build-generator",
+        action="store_true",
+        default=False,
+        help="Build the generator binary (default=False)",
+    )
+    parser.add_argument(
+        "--skip-runner",
+        action="store_true",
+        default=False,
+        help="Skip running the generator (default=False)",
+    )
+    parser.add_argument(
+        "--test-duration",
+        default=(default := "30s"),
+        help=f"Test duration ({default=})",
+    )
 
     args = parser.parse_args()
     print(args)
@@ -123,6 +159,7 @@ def main():
             print("Starting postgres container.")
             up(args)
 
+            SLNL = "\\\n"
             generator_cmd = f"""{CWD}/block-generator \\
 runner \\
 --conduit-binary "{args.conduit_binary}" \\
@@ -130,9 +167,7 @@ runner \\
 --test-duration {args.test_duration} \\
 --log-level trace \\
 --postgres-connection-string "host=localhost user=algorand password=algorand dbname={args.pg_database} port={args.pg_port} sslmode=disable" \\
---scenario {args.scenario} \\
---next-db-round {args.next_db_round} \\
---genesis-file {args.genesis_file}"""
+--scenario {args.scenario} {SLNL+'--reset-db' if args.reset_db else ''}"""
             if args.skip_runner:
                 print("Skipping test runner.")
                 print(f"Run it yourself:\n{generator_cmd}")
