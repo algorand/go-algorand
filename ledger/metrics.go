@@ -80,7 +80,7 @@ func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitCon
 func (mt *metricsTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-func (mt *metricsTracker) handleUnorderedCommit(*deferredCommitContext) {
+func (mt *metricsTracker) handleUnorderedCommitOrError(*deferredCommitContext) {
 }
 
 func (mt *metricsTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
