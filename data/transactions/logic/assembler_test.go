@@ -812,11 +812,11 @@ func TestOpUint(t *testing.T) {
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := newOpStream(v)
-			ops.intLiteral(0xcafebabe)
+			ops.intLiteral(0xcafef00d)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
-			expected := mutateProgVersion(v, "012001bef5fad70c22")
+			expected := mutateProgVersion(v, "xx20018de0fbd70c22")
 			require.Equal(t, expected, s)
 		})
 	}
@@ -829,11 +829,11 @@ func TestOpUint64(t *testing.T) {
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := newOpStream(v)
-			ops.intLiteral(0xcafebabecafebabe)
+			ops.intLiteral(0xcafef00dcafef00d)
 			prog := ops.prependCBlocks()
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
-			require.Equal(t, mutateProgVersion(v, "012001bef5fad7ecd7aeffca0122"), s)
+			require.Equal(t, mutateProgVersion(v, "xx20018de0fbd7dc81bcffca0122"), s)
 		})
 	}
 }
@@ -859,8 +859,8 @@ func TestAssembleInt(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	expectedDefaultConsts := "012001bef5fad70c22"
-	expectedOptimizedConsts := "0181bef5fad70c"
+	expectedDefaultConsts := "xx20018de0fbd70c22"
+	expectedOptimizedConsts := "xx818de0fbd70c"
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -869,7 +869,7 @@ func TestAssembleInt(t *testing.T) {
 				expected = expectedOptimizedConsts
 			}
 
-			text := "int 0xcafebabe"
+			text := "int 0xcafef00d"
 			ops := testProg(t, text, v)
 			s := hex.EncodeToString(ops.Program)
 			require.Equal(t, mutateProgVersion(v, expected), s)
