@@ -829,7 +829,7 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 		}
 		downloadErr = ledgerFetcher.headLedger(cs.ctx, psp, round)
 		if downloadErr == nil {
-			return downloadErr
+			return nil
 		}
 	}
 	return errNoLedgerForRound

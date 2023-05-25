@@ -63,16 +63,20 @@ func (e *CatchpointUnableToStartError) Error() string {
 		e.catchpointRunning)
 }
 
+// CatchpointNoPeersFoundError is returned when the catchpoint service cannot startup due to no peers being found
+// to serve the requested catchpoint
 type CatchpointNoPeersFoundError struct {
 	catchpointRequested string
 }
 
+// MakeCatchpointNoPeersFoundError creates a CatchpointNoPeersFoundError for a given catchpoint
 func MakeCatchpointNoPeersFoundError(catchpointRequested string) *CatchpointNoPeersFoundError {
 	return &CatchpointNoPeersFoundError{
 		catchpointRequested: catchpointRequested,
 	}
 }
 
+// Error satisfies the builtin interface `error`
 func (e *CatchpointNoPeersFoundError) Error() string {
 	return fmt.Sprintf(
 		"unable to find peers to serve requested catchpoint %s",
