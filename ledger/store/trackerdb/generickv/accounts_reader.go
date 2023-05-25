@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -160,10 +159,11 @@ func (r *accountsReader) LookupAllResources(addr basics.Address) (data []tracker
 		pitem := trackerdb.PersistedResourcesData{AcctRef: accountRef{addr}, Round: rnd}
 
 		// read the key to parse the aidx
-		key := string(iter.Key())
-		// extract aidx, its the last section after the "-"
-		splitKey := strings.Split(key, "-")
-		aidx = binary.BigEndian.Uint64([]byte(splitKey[len(splitKey)-1]))
+		// key is <prefix>-<addr>-<aidx> = <content>
+		key := iter.Key()
+
+		aidxOffset := len(kvPrefixResource) + 1 + 32 + 1
+		aidx = binary.BigEndian.Uint64(key[aidxOffset : aidxOffset+8])
 		pitem.Aidx = basics.CreatableIndex(aidx)
 
 		// get value for current item in the iterator
