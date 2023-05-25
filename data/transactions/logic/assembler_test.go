@@ -689,7 +689,8 @@ func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpSt
 				}
 				require.NotNil(t, found, "Error %s was not found on line %d", exp.s, exp.l)
 				if exp.c != 0 {
-					require.Equal(t, exp.c, found.Column, "Error %s was not found at column %d", exp.s, exp.c)
+					require.Equal(t, exp.c, found.Column, "Error %s was not found at column %d. %s was.",
+						exp.s, exp.c, found.Error())
 				}
 				msg := found.Unwrap().Error() // unwrap avoids line,col prefix for easier matching
 				if !testMatch(t, msg, exp.s) {
@@ -919,12 +920,23 @@ func TestAssembleBytes(t *testing.T) {
 	}{
 		{"byte", "...needs byte literal argument", 4},
 		{`byte "john" "doe"`, "...with extraneous argument", 12},
+		{"byte base64", "... base64 needs...", 5}, // maybe we should report error at end of "base64"?
+		{"byte base32", "... base32 needs...", 5},
 		// these next messages could have the exact column of the problem, but
 		// would require too much refactoring for the value
+		{`byte "jo\qhn"`, "...invalid escape sequence...", 5},
 		{`byte base64(YWJjZGVm)extrajunk`, "...must end at first closing parenthesis", 5},
 		{`byte base64(YWJjZGVm)x`, "...must end at first closing parenthesis", 5},
+		{`byte base64(YWJjZGVm`, "...lacks closing parenthesis", 5},
 		{`byte base32(MFRGGZDFMY)extrajunk`, "...must end at first closing parenthesis", 5},
 		{`byte base32(MFRGGZDFMY)x`, "...must end at first closing parenthesis", 5},
+		{`byte base32(MFRGGZDFMY`, "...lacks closing parenthesis", 5},
+		{`byte b32 mfrggzdfmy`, "...illegal base32 data at input byte 0", 9},
+		{`byte b32 MFrggzdfmy`, "...illegal base32 data at input byte 2", 9},
+		{`byte b32(mfrggzdfmy)`, "...illegal base32 data at input byte 4", 5},
+		{`byte b32(MFrggzdfmy)`, "...illegal base32 data at input byte 6", 5},
+		{`byte base32(mfrggzdfmy)`, "...illegal base32 data at input byte 7", 5},
+		{`byte base32(MFrggzdfmy)`, "...illegal base32 data at input byte 9", 5},
 	}
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1483,6 +1495,22 @@ int 2`
 	}
 }
 
+func TestAssembleRejectDupLabel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+ XXX: int 1; pop;
+  XXX: int 1; pop; // different indent to prove the returned column is from the right label
+ int 1
+`
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			testProg(t, source, v, exp(3, "duplicate label \"XXX\"", 2))
+		})
+	}
+}
+
 func TestAssembleJumpToTheEnd(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1714,8 +1742,11 @@ func TestConstantArgs(t *testing.T) {
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "int", v, exp(1, "int expects 1 immediate argument", 3))
+		testProg(t, "int pay", v)
+		testProg(t, "int pya", v, exp(1, "unable to parse \"pya\" as integer", 4))
 		testProg(t, "int 1 2", v, exp(1, "int expects 1 immediate argument", 6))
 		testProg(t, "intc", v, exp(1, "intc expects 1 immediate argument", 4))
+		testProg(t, "intc pay", v, exp(1, "unable to parse constant \"pay\" as integer", 5)) // don't accept "pay" constant
 		testProg(t, "intc hi bye", v, exp(1, "intc expects 1 immediate argument", 8))
 		testProg(t, "byte", v, exp(1, "byte needs byte literal argument", 4))
 		testProg(t, "byte b32", v, exp(1, "byte b32 needs byte literal argument"))
@@ -1723,14 +1754,17 @@ func TestConstantArgs(t *testing.T) {
 		testProg(t, "byte b32 MFRGGZDFMY MFRGGZDFMY", v, exp(1, "byte with extraneous argument", 20))
 		testProg(t, "bytec", v, exp(1, "bytec expects 1 immediate argument"))
 		testProg(t, "bytec 1 x", v, exp(1, "bytec expects 1 immediate argument"))
+		testProg(t, "bytec pay", v, exp(1, "unable to parse constant \"pay\" as integer", 6)) // don't accept "pay" constant
 		testProg(t, "addr", v, exp(1, "addr expects 1 immediate argument", 4))
 		testProg(t, "addr x   y", v, exp(1, "addr expects 1 immediate argument", 9))
+		testProg(t, "addr x", v, exp(1, "failed to decode address x ...", 5))
 		testProg(t, "method", v, exp(1, "method expects 1 immediate argument", 6))
 		testProg(t, "method xx yy", v, exp(1, "method expects 1 immediate argument", 10))
 	}
 	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "pushint", v, exp(1, "pushint expects 1 immediate argument"))
 		testProg(t, "pushint 3 4", v, exp(1, "pushint expects 1 immediate argument"))
+		testProg(t, "pushint x", v, exp(1, "unable to parse \"x\" as integer", 8))
 		testProg(t, "pushbytes", v, exp(1, "pushbytes needs byte literal argument"))
 		testProg(t, "pushbytes b32", v, exp(1, "pushbytes b32 needs byte literal argument"))
 		testProg(t, "pushbytes b32(MFRGGZDFMY", v, exp(1, "pushbytes argument b32(MFRGGZDFMY lacks closing parenthesis"))
@@ -2304,7 +2338,7 @@ func TestStringLiteralParsing(t *testing.T) {
 
 	s = `"test\a"`
 	result, err = parseStringLiteral(s)
-	require.EqualError(t, err, "invalid escape seq \\a")
+	require.EqualError(t, err, "invalid escape sequence \\a")
 	require.Nil(t, result)
 
 	s = `"test\x10\x1"`
@@ -2333,6 +2367,9 @@ func TestPragmas(t *testing.T) {
 
 	testProg(t, `#pragma version a`, assemblerNoVersion,
 		exp(1, `bad #pragma version: "a"`))
+
+	testProg(t, `#pramga version 3`, assemblerNoVersion,
+		exp(1, "unknown directive: pramga"))
 
 	// will default to 1
 	ops := testProg(t, "int 3", assemblerNoVersion)

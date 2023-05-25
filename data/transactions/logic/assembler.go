@@ -538,7 +538,7 @@ func asmInt(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceEr
 	if !ok {
 		val, err := strconv.ParseUint(args[0].str, 0, 64)
 		if err != nil {
-			return args[0].error(err)
+			return args[0].errorf("unable to parse %#v as integer", args[0].str)
 		}
 		i = val
 	}
@@ -585,7 +585,7 @@ func asmPushInt(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sour
 	}
 	val, err := strconv.ParseUint(args[0].str, 0, 64)
 	if err != nil {
-		return args[0].error(err)
+		return args[0].errorf("unable to parse %#v as integer", args[0].str)
 	}
 	ops.pending.WriteByte(spec.Opcode)
 	var scratch [binary.MaxVarintLen64]byte
@@ -655,6 +655,9 @@ func parseBinaryArgs(args []token) ([]byte, int, error) {
 		}
 		val, err := base32DecodeAnyPadding(arg[open+1 : close])
 		if err != nil {
+			if cie, ok := err.(base32.CorruptInputError); ok {
+				return nil, 0, base32.CorruptInputError(int64(cie) + int64(open) + 1)
+			}
 			return nil, 0, err
 		}
 		return val, 1, nil
@@ -748,7 +751,7 @@ func parseStringLiteral(input string) (result []byte, err error) {
 				pos++
 				continue
 			default:
-				return nil, fmt.Errorf("invalid escape seq \\%c", char)
+				return nil, fmt.Errorf("invalid escape sequence \\%c", char)
 			}
 		}
 		if hexSeq {
@@ -1642,11 +1645,11 @@ func pseudoImmediatesError(ops *OpStream, mnemonic token, specs map[int]OpSpec) 
 // getSpec finds the OpSpec we need during assembly based on its name, our current version, and the immediates passed in
 // Note getSpec handles both normal OpSpecs and those supplied by versionedPseudoOps
 // The returned string is the spec's name, annotated if it was a pseudoOp with no immediates to help disambiguate typetracking errors
-func getSpec(ops *OpStream, mnemonic token, args int) (OpSpec, string, bool) {
+func getSpec(ops *OpStream, mnemonic token, argCount int) (OpSpec, string, bool) {
 	name := mnemonic.str
 	pseudoSpecs, ok := ops.versionedPseudoOps[name]
 	if ok {
-		pseudo, ok := pseudoSpecs[args]
+		pseudo, ok := pseudoSpecs[argCount]
 		if !ok {
 			// Could be that pseudoOp wants to handle immediates itself so check -1 key
 			pseudo, ok = pseudoSpecs[anyImmediates]
@@ -1665,9 +1668,9 @@ func getSpec(ops *OpStream, mnemonic token, args int) (OpSpec, string, bool) {
 		pseudo.Name = name
 		if pseudo.Version > ops.Version {
 			ops.record(mnemonic.errorf("%s opcode with %s was introduced in v%d",
-				pseudo.Name, joinIntsOnOr("immediate", args), pseudo.Version))
+				pseudo.Name, joinIntsOnOr("immediate", argCount), pseudo.Version))
 		}
-		if args == 0 {
+		if argCount == 0 {
 			return pseudo, pseudo.Name + " without immediates", true
 		}
 		return pseudo, pseudo.Name, true
@@ -1861,7 +1864,7 @@ func (t token) errorAfterf(format string, args ...interface{}) *sourceError {
 var tokenSeparators = [256]bool{'\t': true, ' ': true, ';': true}
 
 // tokensFromLine splits a line into tokens, ignoring comments. tokens are
-// annotated with the correct column, but the caller should add the line number.
+// annotated with the provided lineno, and column where they are found.
 func tokensFromLine(line string, lineno int) []token {
 	var tokens []token
 
@@ -2062,7 +2065,7 @@ func (ops *OpStream) assemble(text string) error {
 					}
 					ops.trace("%3d: %s line\n", first.line, first.str)
 				} else {
-					ops.record(first.errorf("Unknown directive: %s", directive))
+					ops.record(first.errorf("unknown directive: %s", directive))
 				}
 				continue
 			}
@@ -3115,12 +3118,12 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
 
 		// Actually do the disassembly
-		var line string
-		line, err = disassemble(&dis, &op)
+		var instruction string
+		instruction, err = disassemble(&dis, &op)
 		if err != nil {
 			return
 		}
-		out.WriteString(line)
+		out.WriteString(instruction)
 		out.WriteRune('\n')
 		dis.pc = dis.nextpc
 	}
