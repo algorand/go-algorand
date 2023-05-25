@@ -1,6 +1,6 @@
 {
   "EvalMaxVersion": 9,
-  "LogicSigVersion": 8,
+  "LogicSigVersion": 9,
   "NamedTypes": [
     {
       "Name": "uint64",

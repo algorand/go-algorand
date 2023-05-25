@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/eval"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -42,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -2205,10 +2205,11 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	l.cfg = cfg
 	l.reloadLedger()
 
-	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
+	rnd := basics.Round(proto.MaxBalLookback - shorterLookback)
+	_, err = l.OnlineCirculation(rnd, rnd+basics.Round(proto.MaxBalLookback))
 	require.Error(t, err)
 	for i := basics.Round(proto.MaxBalLookback - shorterLookback + 1); i <= l.Latest(); i++ {
-		online, err := l.OnlineTotals(i)
+		online, err := l.OnlineCirculation(i, i+basics.Round(proto.MaxBalLookback))
 		require.NoError(t, err)
 		require.Equal(t, onlineTotals[i], online)
 	}
@@ -2631,10 +2632,11 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		l2.Close()
 	}()
 
-	_, err = l2.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
+	rnd := basics.Round(proto.MaxBalLookback - shorterLookback)
+	_, err = l2.OnlineCirculation(rnd, rnd+basics.Round(proto.MaxBalLookback))
 	require.Error(t, err)
 	for i := l2.Latest() - basics.Round(proto.MaxBalLookback-1); i <= l2.Latest(); i++ {
-		online, err := l2.OnlineTotals(i)
+		online, err := l2.OnlineCirculation(i, i+basics.Round(proto.MaxBalLookback))
 		require.NoError(t, err)
 		require.Equal(t, onlineTotals[i], online)
 	}

@@ -203,10 +203,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// opt-in, do no write
 	txHeader.Sender = userOptin
@@ -430,10 +429,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first txn => idx = 1001 since AppForbidLowResources sets tx counter to 1000
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// opt-in, write to local
 	txHeader.Sender = userLocal
@@ -673,10 +671,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// opt-in, write to local
 	txHeader.Sender = userLocal
@@ -827,10 +824,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// destoy the app
 	txHeader.Sender = creator
@@ -1150,7 +1146,7 @@ int 1
 			}
 
 			// create application
-			appIdx := basics.AppIndex(1) // first tnx => idx = 1
+			appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
 
 			approvalProgram := program
 			clearStateProgram := []byte("\x02") // empty

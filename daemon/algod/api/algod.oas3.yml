@@ -857,14 +857,22 @@
         },
         "description": "Supply represents the current supply of MicroAlgos in the system."
       },
-      "TransactionGroupLedgerStateDeltaForRoundResponse": {
+      "TransactionGroupLedgerStateDeltasForRoundResponse": {
         "content": {
           "application/json": {
             "schema": {
-              "items": {
-                "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+              "properties": {
+                "deltas": {
+                  "items": {
+                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  },
+                  "type": "array"
+                }
               },
-              "type": "array"
+              "required": [
+                "deltas"
+              ],
+              "type": "object"
             }
           }
         },
@@ -4153,18 +4161,34 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  "properties": {
+                    "deltas": {
+                      "items": {
+                        "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                      },
+                      "type": "array"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "deltas"
+                  ],
+                  "type": "object"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  "properties": {
+                    "deltas": {
+                      "items": {
+                        "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                      },
+                      "type": "array"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "deltas"
+                  ],
+                  "type": "object"
                 }
               }
             },
