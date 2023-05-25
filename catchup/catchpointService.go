@@ -823,14 +823,14 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	}
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	for i := 0; i < checkLedgerDownloadRetries; i++ {
-		psp, err := cs.blocksDownloadPeerSelector.getNextPeer()
-		if err != nil {
+		psp, downloadErr := cs.blocksDownloadPeerSelector.getNextPeer()
+		if downloadErr != nil {
 			return err
 		}
-		err = ledgerFetcher.headLedger(cs.ctx, psp, round)
-		if err == nil {
-			break
+		downloadErr = ledgerFetcher.headLedger(cs.ctx, psp, round)
+		if downloadErr == nil {
+			return downloadErr
 		}
 	}
-	return err
+	return errNoLedgerForRound
 }

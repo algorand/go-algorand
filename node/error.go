@@ -62,3 +62,20 @@ func (e *CatchpointUnableToStartError) Error() string {
 		e.catchpointRequested,
 		e.catchpointRunning)
 }
+
+type CatchpointNoPeersFoundError struct {
+	catchpointRequested string
+}
+
+func MakeCatchpointNoPeersFoundError(catchpointRequested string) *CatchpointNoPeersFoundError {
+	return &CatchpointNoPeersFoundError{
+		catchpointRequested: catchpointRequested,
+	}
+}
+
+func (e *CatchpointNoPeersFoundError) Error() string {
+	return fmt.Sprintf(
+		"unable to find peers to serve requested catchpoint %s",
+		e.catchpointRequested,
+	)
+}

@@ -28,17 +28,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-deadlock"
 )
 
 const basicTestCatchpointInterval = 4
@@ -275,6 +277,52 @@ func getFixture(consensusParams *config.ConsensusParams) *fixtures.RestClientFix
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
 	return &fixture
+}
+
+func TestCatchpointCatchupFailure(t *testing.T) {
+	// Overview of this test:
+	// Start a two-node network (primary has 100%, using has 0%)
+	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
+	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
+	// Shut down the primary node so that using node will have no peers for catchpoint catchup.
+	// Instruct the using node to catchpoint catchup from the proxy.
+	// Make sure starting the catchpoint service returns an error.
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	applyCatchpointConsensusChanges(&consensusParams)
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	fixture := getFixture(&consensusParams)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
+
+	primaryNode, primaryNodeRestClient, primaryErrorsCollector := startCatchpointGeneratingNode(a, fixture, "Primary")
+	defer primaryNode.StopAlgod()
+
+	primaryNodeAddr, err := primaryNode.GetListeningAddress()
+	a.NoError(err)
+
+	usingNode, usingNodeRestClient, wp, usingNodeErrorsCollector := startCatchpointUsingNode(a, fixture, "Node", primaryNodeAddr)
+	defer usingNodeErrorsCollector.Print()
+	defer wp.Close()
+	defer usingNode.StopAlgod()
+
+	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
+
+	catchpointLabel, err := waitForCatchpointGeneration(fixture, primaryNodeRestClient, targetCatchpointRound)
+	a.NoError(err)
+
+	primaryErrorsCollector.Print()
+	err = primaryNode.StopAlgod()
+	a.NoError(err)
+
+	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	a.ErrorContains(err, node.MakeCatchpointNoPeersFoundError(catchpointLabel).Error())
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
