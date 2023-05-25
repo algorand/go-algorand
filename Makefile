@@ -13,6 +13,13 @@ ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
 S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
+GOLANG_VERSIONS				:= $(shell ./scripts/get_golang_version.sh all)
+GOLANG_VERSION_BUILD		:= $(firstword $(GOLANG_VERSIONS))
+GOLANG_VERSION_SUPPORT		:= $(lastword $(GOLANG_VERSIONS))
+GOLANG_VERSION_BUILD_MAJOR	:= $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
+CURRENT_GO_VERSION			:= $(shell go version | cut -d " " -f 3 | tr -d 'go')
+CURRENT_GO_VERSION_MAJOR	:= $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
+
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
@@ -101,10 +108,19 @@ fix: build
 lint: deps
 	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
 
+check_go_version:
+	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
+		echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)"; \
+		exit 1; \
+	fi
+
+tidy: check_go_version
+	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
+
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
 
-sanity: fix lint fmt
+sanity: fix lint fmt tidy
 
 cover:
 	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)

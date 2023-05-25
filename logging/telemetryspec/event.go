@@ -196,7 +196,7 @@ type PeerEventDetails struct {
 	InstanceName  string
 	// Endpoint is the dialed-to address, for an outgoing connection. Not being used for incoming connection.
 	Endpoint string `json:",omitempty"`
-	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
+	// MessageDelay is the average relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`
 }
 
@@ -291,7 +291,7 @@ type PeerConnectionDetails struct {
 	ConnectionDuration uint
 	// Endpoint is the dialed-to address, for an outgoing connection. Not being used for incoming connection.
 	Endpoint string `json:",omitempty"`
-	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
+	// MessageDelay is the average relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
 	DuplicateFilterCount uint64

@@ -857,14 +857,22 @@
         },
         "description": "Supply represents the current supply of MicroAlgos in the system."
       },
-      "TransactionGroupLedgerStateDeltaForRoundResponse": {
+      "TransactionGroupLedgerStateDeltasForRoundResponse": {
         "content": {
           "application/json": {
             "schema": {
-              "items": {
-                "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+              "properties": {
+                "Deltas": {
+                  "items": {
+                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  },
+                  "type": "array"
+                }
               },
-              "type": "array"
+              "required": [
+                "Deltas"
+              ],
+              "type": "object"
             }
           }
         },
@@ -1735,10 +1743,10 @@
       "LedgerStateDeltaForTransactionGroup": {
         "description": "Contains a ledger delta for a single transaction group",
         "properties": {
-          "delta": {
+          "Delta": {
             "$ref": "#/components/schemas/LedgerStateDelta"
           },
-          "ids": {
+          "Ids": {
             "items": {
               "type": "string"
             },
@@ -1746,8 +1754,8 @@
           }
         },
         "required": [
-          "delta",
-          "ids"
+          "Delta",
+          "Ids"
         ],
         "type": "object"
       },
@@ -4143,18 +4151,34 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  "properties": {
+                    "Deltas": {
+                      "items": {
+                        "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                      },
+                      "type": "array"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "Deltas"
+                  ],
+                  "type": "object"
                 }
               },
               "application/msgpack": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  "properties": {
+                    "Deltas": {
+                      "items": {
+                        "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                      },
+                      "type": "array"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "Deltas"
+                  ],
+                  "type": "object"
                 }
               }
             },

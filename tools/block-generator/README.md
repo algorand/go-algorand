@@ -87,7 +87,7 @@ Flags:
   
 ### runner
 
-The runner mode is well suited for runing the same set of tests consistently across many scenarios and for different releases. The runner mode automates this process by starting the **daemon** with many different configurations, managing a postgres database, and running a separate Conduit process configured to use them.
+The runner mode is well suited for running the same set of tests consistently across many scenarios and for different releases. The runner mode automates this process by starting the **daemon** with many different configurations, managing a postgres database, and running a separate Conduit process configured to use them.
 
 The results of the testing are written to the directory specified by the **--report-directory** option, and include many different metrics. In addition to the report, the Conduit log is written to this directory. The files are named according to the scenario file, and end in "report" or "log".
 
@@ -146,7 +146,7 @@ Flags:
       --validate                            If set the validator will run after test-duration has elapsed to verify data is correct. An extra line in each report indicates validator success or failure.
 ```
 
-## Example Scenario Run using Conduit and Postgres - `run_runner.sh`
+## Example Run using Conduit and Postgres in **bash** via `run_runner.sh`
 
 A typical **runner** scenario involves:
 
@@ -180,5 +180,5 @@ Then you can execute the following command to run the scenario:
 
 ### Scenario Report
 
-If all goes well, the run will generate a directory `tools/block-generator/OUTPUT_RUN_RUNNER_TEST` and in that directory you can see the statistics
-of the run in `scenario.report`.
+If all goes well, the run will generate a directory `tmp/OUTPUT_RUN_RUNNER_TEST`
+and in that directory you can see the statistics of the run in `scenario.report`.

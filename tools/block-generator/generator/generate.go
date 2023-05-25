@@ -314,7 +314,7 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 		rewardsRate:               0,
 		rewardsRecalculationRound: 0,
 		reportData:                make(map[TxTypeID]TxData),
-		nextdbround:               dbround,
+		roundOffset:               dbround,
 	}
 
 	gen.feeSink[31] = 1
@@ -431,8 +431,7 @@ type generator struct {
 	// ledger
 	ledger *ledger.Ledger
 
-	// next_account_round in the preloaded database
-	nextdbround uint64
+	roundOffset uint64
 }
 
 type assetData struct {
@@ -475,7 +474,7 @@ func (g *generator) WriteReport(output io.Writer) error {
 
 func (g *generator) WriteStatus(output io.Writer) error {
 	response := model.NodeStatusResponse{
-		LastRound: g.round + g.nextdbround,
+		LastRound: g.round + g.roundOffset,
 	}
 	return json.NewEncoder(output).Encode(response)
 }
@@ -569,24 +568,21 @@ func (g *generator) finishRound(txnCount uint64) {
 
 // WriteBlock generates a block full of new transactions and writes it to the writer.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
-	if round < g.nextdbround {
+	if round < g.roundOffset {
 		return fmt.Errorf("cannot generate block for round %d, already in database", round)
 	}
-	if round-g.nextdbround != g.round {
-		return fmt.Errorf("generator only supports sequential block access. Expected %d but received request for %d", g.round+g.nextdbround, round)
+	if round-g.roundOffset != g.round {
+		return fmt.Errorf("generator only supports sequential block access. Expected %d but received request for %d", g.round+g.roundOffset, round)
 	}
 	numTxnForBlock := g.txnForRound(g.round)
 
 	// return genesis block. offset round for non-empty database
-	if round-g.nextdbround == 0 {
+	if round-g.roundOffset == 0 {
 		// write the msgpack bytes for a block
-		block, cert, _ := g.ledger.BlockCert(basics.Round(round - g.nextdbround))
+		block, _, _ := g.ledger.BlockCert(basics.Round(round - g.roundOffset))
 		// return the block with the requested round number
 		block.BlockHeader.Round = basics.Round(round)
-		encodedblock := rpcs.EncodedBlockCert{
-			Block:       block,
-			Certificate: cert,
-		}
+		encodedblock := rpcs.EncodedBlockCert{Block: block}
 		blk := protocol.EncodeMsgp(&encodedblock)
 		// write the msgpack bytes for a block
 		_, err := output.Write(blk)
@@ -669,8 +665,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 // WriteDeltas generates returns the deltas for payset.
 func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
-	// offset round for non-empty database
-	if round-g.nextdbround == 0 {
+	// the first generated round has no statedelta.
+	if round-g.roundOffset == 0 {
 		data, _ := encode(protocol.CodecHandle, ledgercore.StateDelta{})
 		_, err := output.Write(data)
 		if err != nil {
@@ -678,7 +674,7 @@ func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
 		}
 		return nil
 	}
-	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round - g.nextdbround))
+	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round - g.roundOffset))
 	if err != nil {
 		return fmt.Errorf("err getting state delta for round %d: %w", round, err)
 	}

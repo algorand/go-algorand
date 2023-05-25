@@ -54,11 +54,11 @@ func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
 	ct := &catchpointTracker{}
 
 	ct.catchpointDataWriting = -1
-	ans := ct.IsWritingCatchpointDataFile()
+	ans := ct.isWritingCatchpointDataFile()
 	require.True(t, ans)
 
 	ct.catchpointDataWriting = 0
-	ans = ct.IsWritingCatchpointDataFile()
+	ans = ct.isWritingCatchpointDataFile()
 	require.False(t, ans)
 }
 
@@ -569,7 +569,7 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 			ml.trackers.waitAccountsWriting()
 
 			// Let catchpoint data generation finish so that nothing gets skipped.
-			for ct.IsWritingCatchpointDataFile() {
+			for ct.isWritingCatchpointDataFile() {
 				time.Sleep(time.Millisecond)
 			}
 		}
@@ -612,7 +612,7 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 				ml2.trackers.committedUpTo(i)
 				ml2.trackers.waitAccountsWriting()
 				// Let catchpoint data generation finish so that nothing gets skipped.
-				for ct.IsWritingCatchpointDataFile() {
+				for ct.isWritingCatchpointDataFile() {
 					time.Sleep(time.Millisecond)
 				}
 			}
@@ -694,8 +694,8 @@ func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferred
 	}
 }
 
-// handleUnorderedCommit is not used by the blockingTracker
-func (bt *blockingTracker) handleUnorderedCommit(*deferredCommitContext) {
+// handleUnorderedCommitOrError is not used by the blockingTracker
+func (bt *blockingTracker) handleUnorderedCommitOrError(*deferredCommitContext) {
 }
 
 // close is not used by the blockingTracker
@@ -1089,7 +1089,7 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 			ml.trackers.committedUpTo(i)
 			ml.trackers.waitAccountsWriting()
 			// Let catchpoint data generation finish so that nothing gets skipped.
-			for ct.IsWritingCatchpointDataFile() {
+			for ct.isWritingCatchpointDataFile() {
 				time.Sleep(time.Millisecond)
 			}
 		}
@@ -1304,7 +1304,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 			ml.trackers.committedUpTo(i)
 			ml.trackers.waitAccountsWriting()
 			// Let catchpoint data generation finish so that nothing gets skipped.
-			for ct.IsWritingCatchpointDataFile() {
+			for ct.isWritingCatchpointDataFile() {
 				time.Sleep(time.Millisecond)
 			}
 		}
@@ -1509,7 +1509,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecordAfterRestart(t *t
 		ml.addToBlockQueue(blockEntry{block: blk}, delta)
 
 		// Let catchpoint data generation finish so that nothing gets skipped.
-		for ct.IsWritingCatchpointDataFile() {
+		for ct.isWritingCatchpointDataFile() {
 			time.Sleep(time.Millisecond)
 		}
 	}
@@ -1756,6 +1756,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
+		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
