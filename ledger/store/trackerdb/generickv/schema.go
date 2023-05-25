@@ -18,7 +18,6 @@ package generickv
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 
 	"github.com/algorand/go-algorand/data/basics"
 )
@@ -56,7 +55,7 @@ func bigEndianUint32(v uint32) []byte {
 func accountKey(address basics.Address) []byte {
 	ret := []byte(kvPrefixAccount)
 	ret = append(ret, "-"...)
-	ret = append(ret, hex.EncodeToString(address[:])...)
+	ret = append(ret, address[:]...)
 	return ret
 }
 
@@ -64,7 +63,7 @@ func accountKey(address basics.Address) []byte {
 func resourceKey(address basics.Address, aidx basics.CreatableIndex) []byte {
 	ret := []byte(kvPrefixResource)
 	ret = append(ret, "-"...)
-	ret = append(ret, hex.EncodeToString(address[:])...)
+	ret = append(ret, address[:]...)
 	ret = append(ret, "-"...)
 	ret = append(ret, bigEndianUint64(uint64(aidx))...)
 	return ret
@@ -73,7 +72,7 @@ func resourceKey(address basics.Address, aidx basics.CreatableIndex) []byte {
 func resourceAddrOnlyPartialKey(address basics.Address) []byte {
 	ret := []byte(kvPrefixResource)
 	ret = append(ret, "-"...)
-	ret = append(ret, hex.EncodeToString(address[:])...)
+	ret = append(ret, address[:]...)
 	ret = append(ret, "-"...)
 	return ret
 }
