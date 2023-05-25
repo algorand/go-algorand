@@ -862,7 +862,7 @@
           "application/json": {
             "schema": {
               "properties": {
-                "deltas": {
+                "Deltas": {
                   "items": {
                     "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
                   },
@@ -870,7 +870,7 @@
                 }
               },
               "required": [
-                "deltas"
+                "Deltas"
               ],
               "type": "object"
             }
@@ -1743,10 +1743,10 @@
       "LedgerStateDeltaForTransactionGroup": {
         "description": "Contains a ledger delta for a single transaction group",
         "properties": {
-          "delta": {
+          "Delta": {
             "$ref": "#/components/schemas/LedgerStateDelta"
           },
-          "ids": {
+          "Ids": {
             "items": {
               "type": "string"
             },
@@ -1754,8 +1754,8 @@
           }
         },
         "required": [
-          "delta",
-          "ids"
+          "Delta",
+          "Ids"
         ],
         "type": "object"
       },
@@ -4162,7 +4162,7 @@
               "application/json": {
                 "schema": {
                   "properties": {
-                    "deltas": {
+                    "Deltas": {
                       "items": {
                         "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
                       },
@@ -4170,7 +4170,7 @@
                     }
                   },
                   "required": [
-                    "deltas"
+                    "Deltas"
                   ],
                   "type": "object"
                 }
@@ -4178,7 +4178,7 @@
               "application/msgpack": {
                 "schema": {
                   "properties": {
-                    "deltas": {
+                    "Deltas": {
                       "items": {
                         "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
                       },
@@ -4186,7 +4186,7 @@
                     }
                   },
                   "required": [
-                    "deltas"
+                    "Deltas"
                   ],
                   "type": "object"
                 }

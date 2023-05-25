@@ -123,7 +123,7 @@ func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitCont
 func (bn *blockNotifier) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-func (bn *blockNotifier) handleUnorderedCommit(*deferredCommitContext) {
+func (bn *blockNotifier) handleUnorderedCommitOrError(*deferredCommitContext) {
 }
 
 func (bn *blockNotifier) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

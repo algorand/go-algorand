@@ -2667,14 +2667,14 @@
       "description": "Contains a ledger delta for a single transaction group",
       "type": "object",
       "required": [
-        "delta",
-        "ids"
+        "Delta",
+        "Ids"
       ],
       "properties": {
-        "delta": {
+        "Delta": {
           "$ref": "#/definitions/LedgerStateDelta"
         },
-        "ids": {
+        "Ids": {
           "type": "array",
           "items": {
             "type": "string"
@@ -4051,10 +4051,10 @@
       "schema": {
         "type": "object",
         "required": [
-          "deltas"
+          "Deltas"
         ],
         "properties": {
-          "deltas": {
+          "Deltas": {
             "type": "array",
             "items": {
               "$ref": "#/definitions/LedgerStateDeltaForTransactionGroup"
