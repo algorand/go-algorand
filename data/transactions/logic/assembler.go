@@ -1865,12 +1865,12 @@ var tokenSeparators = [256]bool{'\t': true, ' ': true, ';': true}
 
 // tokensFromLine splits a line into tokens, ignoring comments. tokens are
 // annotated with the provided lineno, and column where they are found.
-func tokensFromLine(line string, lineno int) []token {
+func tokensFromLine(sourceLine string, lineno int) []token {
 	var tokens []token
 
 	i := 0
-	for i < len(line) && tokenSeparators[line[i]] {
-		if line[i] == ';' {
+	for i < len(sourceLine) && tokenSeparators[sourceLine[i]] {
+		if sourceLine[i] == ';' {
 			tokens = append(tokens, token{";", i, lineno})
 		}
 		i++
@@ -1879,28 +1879,28 @@ func tokensFromLine(line string, lineno int) []token {
 	start := i
 	inString := false // tracked to allow spaces and comments inside
 	inBase64 := false // tracked to allow '//' inside
-	for i < len(line) {
-		if !tokenSeparators[line[i]] { // if not space
-			switch line[i] {
+	for i < len(sourceLine) {
+		if !tokenSeparators[sourceLine[i]] { // if not space
+			switch sourceLine[i] {
 			case '"': // is a string literal?
 				if !inString {
-					if i == 0 || i > 0 && tokenSeparators[line[i-1]] {
+					if i == 0 || i > 0 && tokenSeparators[sourceLine[i-1]] {
 						inString = true
 					}
 				} else {
-					if line[i-1] != '\\' { // if not escape symbol
+					if sourceLine[i-1] != '\\' { // if not escape symbol
 						inString = false
 					}
 				}
 			case '/': // is a comment?
-				if i < len(line)-1 && line[i+1] == '/' && !inBase64 && !inString {
+				if i < len(sourceLine)-1 && sourceLine[i+1] == '/' && !inBase64 && !inString {
 					if start != i { // if a comment without whitespace
-						tokens = append(tokens, token{line[start:i], start, lineno})
+						tokens = append(tokens, token{sourceLine[start:i], start, lineno})
 					}
 					return tokens
 				}
 			case '(': // is base64( seq?
-				prefix := line[start:i]
+				prefix := sourceLine[start:i]
 				if prefix == "base64" || prefix == "b64" {
 					inBase64 = true
 				}
@@ -1917,9 +1917,9 @@ func tokensFromLine(line string, lineno int) []token {
 		// we've hit a space, end last token unless inString
 
 		if !inString {
-			s := line[start:i]
+			s := sourceLine[start:i]
 			tokens = append(tokens, token{s, start, lineno})
-			if line[i] == ';' {
+			if sourceLine[i] == ';' {
 				tokens = append(tokens, token{";", i, lineno})
 			}
 			if inBase64 {
@@ -1932,8 +1932,8 @@ func tokensFromLine(line string, lineno int) []token {
 
 		// gobble up consecutive whitespace (but notice semis)
 		if !inString {
-			for i < len(line) && tokenSeparators[line[i]] {
-				if line[i] == ';' {
+			for i < len(sourceLine) && tokenSeparators[sourceLine[i]] {
+				if sourceLine[i] == ';' {
 					tokens = append(tokens, token{";", i, lineno})
 				}
 				i++
@@ -1943,8 +1943,8 @@ func tokensFromLine(line string, lineno int) []token {
 	}
 
 	// add rest of the string if any
-	if start < len(line) {
-		tokens = append(tokens, token{line[start:i], start, lineno})
+	if start < len(sourceLine) {
+		tokens = append(tokens, token{sourceLine[start:i], start, lineno})
 	}
 
 	return tokens
