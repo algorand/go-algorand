@@ -51,6 +51,7 @@ import (
 var dataDir = flag.String("d", "", "Data directory to track to get files from")
 var roundStart = flag.Int("r", 0, "Target round number to catch up to")
 var txnDir = flag.String("t", "", "Directory to read transaction files from")
+var txnFile = flag.String("tfile", "", "File to read transaction from")
 var txnLogDir = flag.String("txlog", "", "Directory to read txlog files from")
 var txnLogFile = flag.String("txlogfile", "", "File to read txlog from")
 var force = flag.Bool("y", false, "Suppress confirmation")
@@ -92,6 +93,15 @@ func decodeTxGroup(data []byte) ([]transactions.SignedTxn, error) {
 		}
 	}
 	return unverifiedTxGroup, nil
+}
+
+func decodeTxGroupSlices(data []byte) ([]transactions.SignedTxn, error) {
+	var result [][]transactions.SignedTxn
+	err := protocol.DecodeReflect(data, &result)
+	if err != nil {
+		return nil, fmt.Errorf("received a non-decodable txn slices: %v", err)
+	}
+	return result[0], nil
 }
 
 func getConfig() (config.Local, string, error) {
@@ -251,7 +261,25 @@ func transcribeSnappyLog(filePath string, output chan txGroupItem, wg *sync.Wait
 
 func readTransactions(output chan txGroupItem) {
 	defer close(output)
-	if len(*txnDir) > 0 {
+	if len(*txnFile) > 0 {
+		data, err := os.ReadFile(*txnFile)
+		if err != nil {
+			err = fmt.Errorf("cannot read transaction file %s: %v", *txnFile, err)
+			output <- txGroupItem{err: err}
+			return
+		}
+
+		txgroup, err := decodeTxGroup(data)
+		if err != nil {
+			txgroup, err = decodeTxGroupSlices(data)
+			if err != nil {
+				err = fmt.Errorf("cannot decode transaction file %s: %v", *txnFile, err)
+				output <- txGroupItem{err: err}
+				return
+			}
+		}
+		output <- txGroupItem{ts: time.Time{}, path: *txnFile, txgroup: txgroup}
+	} else if len(*txnDir) > 0 {
 		files, err := os.ReadDir(*txnDir)
 		if err != nil {
 			err = fmt.Errorf("cannot read transaction directory %s: %v", *txnDir, err)
@@ -385,7 +413,7 @@ func main() {
 		}
 	}
 	defer l.Close()
-	if len(*txnDir) == 0 && len(*txnLogDir) == 0 && len(*txnLogFile) == 0 {
+	if len(*txnDir) == 0 && len(*txnLogDir) == 0 && len(*txnLogFile) == 0 && len(*txnFile) == 0 {
 		fmt.Printf("No transaction [log] directory specified, exiting at round %d\n", l.Latest())
 		return
 	}
