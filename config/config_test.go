@@ -413,7 +413,6 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 			args:               args{networkID: "devnet"},
 			wantBootstrapArray: []*DNSBootstrap(nil),
 		},
-		// TODO: Test5 should become our legacy test while test 4 will be our standard sanity check upon config version bump
 		{name: "test4 - intended to mismatch local template",
 			fields: fields{DNSBootstrapID: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"},
 			args:   args{networkID: "testnet"},
@@ -421,7 +420,7 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 				BackupSRVBootstrap: "testnet.algorand.net",
 				DedupExp:           regexp.MustCompile("(algorand-testnet.(network|net))")}},
 		},
-		{name: "test5 - intended to match local template",
+		{name: "test5 - intended to match legacy template",
 			fields:             fields{DNSBootstrapID: "<network>.algorand.network"},
 			args:               args{networkID: "testnet"},
 			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "testnet.algorand.network"}},

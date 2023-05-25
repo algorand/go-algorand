@@ -120,7 +120,7 @@ type Local struct {
 	RestWriteTimeoutSeconds int `version[4]:"120"`
 
 	// SRV-based phonebook
-	DNSBootstrapID string `version[0]:"<network>.algorand.network"`
+	DNSBootstrapID string `version[0]:"<network>.algorand.network" version[28]:"<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"`
 
 	// Log file size limit in bytes. When set to 0 logs will be written to stdout.
 	LogSizeLimit uint64 `version[0]:"1073741824"`
@@ -543,7 +543,6 @@ func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray
 
 		bootstrapArray = append(bootstrapArray, bootstrapEntry)
 	}
-
 	return
 }
 
