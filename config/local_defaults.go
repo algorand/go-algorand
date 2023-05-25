@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    27,
+	Version:                                    28,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -129,6 +129,7 @@ var defaultLocal = Local{
 	TxBacklogReservedCapacityPerPeer:           20,
 	TxBacklogServiceRateWindowSeconds:          10,
 	TxBacklogSize:                              26000,
+	TxIncomingFilterMaxSize:                    250000,
 	TxIncomingFilteringFlags:                   1,
 	TxPoolExponentialIncreaseFactor:            2,
 	TxPoolSize:                                 75000,
