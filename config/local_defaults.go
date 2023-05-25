@@ -129,7 +129,7 @@ var defaultLocal = Local{
 	TxBacklogReservedCapacityPerPeer:           20,
 	TxBacklogServiceRateWindowSeconds:          10,
 	TxBacklogSize:                              26000,
-	TxIncomingFilterMaxSize:                    250000,
+	TxIncomingFilterMaxSize:                    500000,
 	TxIncomingFilteringFlags:                   1,
 	TxPoolExponentialIncreaseFactor:            2,
 	TxPoolSize:                                 75000,

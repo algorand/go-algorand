@@ -513,7 +513,7 @@ type Local struct {
 
 	// TxIncomingFilterMaxSize sets the maximum size for the de-duplication cache used by the incoming tx filter
 	// only relevant if TxIncomingFilteringFlags is non-zero
-	TxIncomingFilterMaxSize uint64 `version[28]:"250000"`
+	TxIncomingFilterMaxSize uint64 `version[28]:"500000"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
