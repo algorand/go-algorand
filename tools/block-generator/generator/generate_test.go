@@ -211,7 +211,6 @@ func TestValidateWithDefaults(t *testing.T) {
 				require.Equal(t, one, sum(cfg.AppSwapFraction, cfg.AppBoxesFraction))
 				require.Equal(t, one, sum(cfg.AppSwapCreateFraction, cfg.AppSwapUpdateFraction, cfg.AppSwapDeleteFraction, cfg.AppSwapOptinFraction, cfg.AppSwapCallFraction, cfg.AppSwapCloseFraction, cfg.AppSwapClearFraction))
 				require.Equal(t, one, sum(cfg.AppBoxesCreateFraction, cfg.AppBoxesUpdateFraction, cfg.AppBoxesDeleteFraction, cfg.AppBoxesOptinFraction, cfg.AppBoxesCallFraction, cfg.AppBoxesCloseFraction, cfg.AppBoxesClearFraction))
-
 			} else {
 				require.Equal(t, tc.err.Error(), err.Error())
 			}
