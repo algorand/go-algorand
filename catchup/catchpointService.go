@@ -41,7 +41,7 @@ const (
 
 	// checkLedgerDownloadRetries is the number of times the catchpoint service will attempt to HEAD request the
 	// ledger from peers when `Start`ing catchpoint catchup
-	checkLedgerDownloadRetries = 2
+	checkLedgerDownloadRetries = 10
 )
 
 // CatchpointCatchupNodeServices defines the external node support needed
@@ -821,16 +821,17 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	if err != nil {
 		return cs.abort(fmt.Errorf("failed to parse catchpoint label : %v", err))
 	}
+	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	for i := 0; i < checkLedgerDownloadRetries; i++ {
-		psp, downloadErr := cs.blocksDownloadPeerSelector.getNextPeer()
-		if downloadErr != nil {
+		psp, peerError := peerSelector.getNextPeer()
+		if peerError != nil {
 			return err
 		}
-		downloadErr = ledgerFetcher.headLedger(cs.ctx, psp, round)
-		if downloadErr == nil {
+		err = ledgerFetcher.headLedger(context.Background(), psp.Peer, round)
+		if err == nil {
 			return nil
 		}
 	}
-	return errNoLedgerForRound
+	return err
 }
