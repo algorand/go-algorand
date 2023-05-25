@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -348,7 +347,7 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 	return offset
 }
 
-func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
+func (ao *onlineAccounts) handleUnorderedCommitOrError(dcc *deferredCommitContext) {
 }
 
 func (ao *onlineAccounts) maxBalLookback() uint64 {
@@ -366,7 +365,7 @@ func (ao *onlineAccounts) prepareCommit(dcc *deferredCommitContext) error {
 	return ao.voters.prepareCommit(dcc)
 }
 
-// prepareCommitInternal preforms preapreCommit's logic without locking the tracker's mutex.
+// prepareCommitInternal preforms prepareCommit's logic without locking the tracker's mutex.
 func (ao *onlineAccounts) prepareCommitInternal(dcc *deferredCommitContext) error {
 	offset := dcc.offset
 
@@ -381,13 +380,6 @@ func (ao *onlineAccounts) prepareCommitInternal(dcc *deferredCommitContext) erro
 	// Index that corresponds to the oldest round still in deltas
 	startIndex := len(ao.onlineRoundParamsData) - len(ao.deltas) - 1
 	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
-		// in scheduleCommit, we expect that this function to update the catchpointWriting when
-		// it's on a catchpoint round and the node is configured to generate catchpoints. Doing this in a deferred function
-		// here would prevent us from "forgetting" to update this variable later on.
-		// The same is repeated in commitRound on errors.
-		if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
-			atomic.StoreInt32(dcc.catchpointDataWriting, 0)
-		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
 
