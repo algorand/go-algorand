@@ -474,7 +474,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 // WriteDeltas generates returns the deltas for payset.
 func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
-	// the first generataed round has no statedelta.
+	// the first generated round has no statedelta.
 	if round-g.roundOffset == 0 {
 		data, _ := encode(protocol.CodecHandle, ledgercore.StateDelta{})
 		_, err := output.Write(data)
