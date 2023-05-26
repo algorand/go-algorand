@@ -109,3 +109,8 @@ func TestCrossRepoTypes(t *testing.T) {
 		})
 	}
 }
+
+
+func TestFailIntentionally(t *testing.T) {
+	t.Fail()
+}
