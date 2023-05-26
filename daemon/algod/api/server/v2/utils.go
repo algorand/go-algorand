@@ -479,8 +479,12 @@ func convertToSimulationTraceConfigResponse(traceConfig simulation.ExecTraceConf
 }
 
 func convertFromSimulationTraceConfigRequest(traceConfig *model.SimulateTraceConfig) simulation.ExecTraceConfig {
+	if traceConfig == nil {
+		return simulation.ExecTraceConfig{}
+	}
+
 	return simulation.ExecTraceConfig{
-		Enable: traceConfig != nil && traceConfig.Enable != nil && *traceConfig.Enable,
+		Enable: traceConfig.Enable != nil && *traceConfig.Enable,
 	}
 }
 
