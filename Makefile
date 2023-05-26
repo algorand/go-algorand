@@ -214,14 +214,8 @@ buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_e
 	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 buildsrc-special: buildsrc
-	@echo "GOTRIMPATH: $(GOTRIMPATH)"
-	@echo "GOTAGS: $(GOTAGS)"
-	@echo "GOBUILDMODE: $(GOBUILDMODE)"
-	@echo "GOLDFLAGS: $(GOLDFLAGS)"
-	@echo "cat ${GOCACHE}/file.txt"
-	@cat "${GOCACHE}"/file.txt
-	
-
+	cd tools/block-generator && \
+	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
 	./scripts/check_golang_version.sh build
