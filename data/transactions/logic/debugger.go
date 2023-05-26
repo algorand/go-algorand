@@ -253,15 +253,6 @@ func (sv stackValue) toEncodedTealValue() basics.TealValue {
 	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
 }
 
-// valueDeltaToValueDelta converts delta's bytes to base64 in a new struct
-func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
-	return basics.ValueDelta{
-		Action: vd.Action,
-		Bytes:  base64.StdEncoding.EncodeToString([]byte(vd.Bytes)),
-		Uint:   vd.Uint,
-	}
-}
-
 // parseCallStack initializes an array of CallFrame objects from the raw
 // callstack.
 func (d *DebugState) parseCallstack(callstack []frame) []CallFrame {
