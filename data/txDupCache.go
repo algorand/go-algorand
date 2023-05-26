@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-deadlock"
 
 	"golang.org/x/crypto/blake2b"
@@ -108,7 +109,7 @@ func (c *digestCache) Delete(d *crypto.Digest) {
 	delete(c.prev, *d)
 }
 
-type cacheValue map[interface{}]struct{}
+type cacheValue map[network.Peer]struct{}
 
 // digestCacheData is a base data structure for rotating size N accepting crypto.Digest as a key
 type digestCacheData struct {
@@ -229,16 +230,16 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, cacheValue, *map
 
 // CheckAndPut adds msg into a cache if not found
 // returns a hashing key used for insertion if the message not found.
-func (c *txSaltedCache) CheckAndPut(msg []byte, sender interface{}) (*crypto.Digest, bool) {
+func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Digest, cacheValue, bool) {
 	c.mu.RLock()
-	d, val, page, found := c.innerCheck(msg)
+	d, vals, page, found := c.innerCheck(msg)
 	salt := c.curSalt
 	c.mu.RUnlock()
 	// fast read-only path: assuming most messages are duplicates, hash msg and check cache
 	senderFound := false
 	if found {
-		if _, senderFound = val[sender]; senderFound {
-			return d, true
+		if _, senderFound = vals[sender]; senderFound {
+			return d, vals, true
 		}
 	}
 
@@ -247,23 +248,23 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender interface{}) (*crypto.Dig
 	defer c.mu.Unlock()
 	// salt may have changed between RUnlock() and Lock(), rehash if needed
 	if salt != c.curSalt {
-		d, val, page, found = c.innerCheck(msg)
+		d, vals, page, found = c.innerCheck(msg)
 		if found {
-			if _, senderFound = val[sender]; senderFound {
+			if _, senderFound = vals[sender]; senderFound {
 				// already added to cache between RUnlock() and Lock(), return
-				return d, true
+				return d, vals, true
 			}
 		}
 	} else if found && page == &c.prev {
 		// there is match with prev page, update the value with data possible added in between locks
-		val, found = c.prev[*d]
+		vals, found = c.prev[*d]
 	} else { // not found or found in cur page
 		// Do another check to see if another copy of the transaction won the race to write it to the cache
 		// Only check current to save a lookup since swap is handled in the first branch
-		val, found = c.cur[*d]
+		vals, found = c.cur[*d]
 		if found {
-			if _, senderFound = val[sender]; senderFound {
-				return d, true
+			if _, senderFound = vals[sender]; senderFound {
+				return d, vals, true
 			}
 			page = &c.cur
 		}
@@ -273,9 +274,9 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender interface{}) (*crypto.Dig
 	// 1. the message is not in the cache
 	// 2. the message is in the cache but from other senders
 	if found && !senderFound {
-		val[sender] = struct{}{}
-		(*page)[*d] = val
-		return d, true
+		vals[sender] = struct{}{}
+		(*page)[*d] = vals
+		return d, vals, true
 	}
 
 	if len(c.cur) >= c.maxSize {
@@ -292,8 +293,9 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender interface{}) (*crypto.Dig
 		d = &dn
 	}
 
-	c.cur[*d] = cacheValue{sender: {}}
-	return d, false
+	vals = cacheValue{sender: {}}
+	c.cur[*d] = vals
+	return d, vals, false
 }
 
 // DeleteByKey from the cache by using a key used for insertion

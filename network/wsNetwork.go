@@ -171,9 +171,9 @@ const (
 type GossipNode interface {
 	Address() (string, bool)
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except Peer) error
+	BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except map[Peer]struct{}) error
 	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except Peer) error
+	RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except map[Peer]struct{}) error
 	Disconnect(badnode Peer)
 	DisconnectPeers()
 	Ready() chan struct{}
@@ -476,7 +476,7 @@ const (
 type broadcastRequest struct {
 	tags        []Tag
 	data        [][]byte
-	except      *wsPeer
+	except      map[Peer]struct{}
 	done        chan struct{}
 	enqueueTime time.Time
 	ctx         context.Context
@@ -519,14 +519,14 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 	dataArray[0] = data
 	tagArray := make([]protocol.Tag, 1, 1)
 	tagArray[0] = tag
-	return wn.BroadcastArray(ctx, tagArray, dataArray, wait, except)
+	return wn.BroadcastArray(ctx, tagArray, dataArray, wait, map[Peer]struct{}{except: {}})
 }
 
 // BroadcastArray sends an array of messages.
 // If except is not nil then we will not send it to that neighboring Peer.
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 // TODO: add `priority` argument so that we don't have to guess it based on tag
-func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
+func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except map[Peer]struct{}) error {
 	if wn.config.DisableNetworking {
 		return nil
 	}
@@ -537,7 +537,7 @@ func (wn *WebsocketNetwork) BroadcastArray(ctx context.Context, tags []protocol.
 
 	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
-		request.except = except.(*wsPeer)
+		request.except = except
 	}
 
 	broadcastQueue := wn.broadcastQueueBulk
@@ -587,7 +587,7 @@ func (wn *WebsocketNetwork) Relay(ctx context.Context, tag protocol.Tag, data []
 }
 
 // RelayArray relays array of messages
-func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
+func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except map[Peer]struct{}) error {
 	if wn.relayMessages {
 		return wn.BroadcastArray(ctx, tags, data, wait, except)
 	}
@@ -1577,7 +1577,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if wn.config.BroadcastConnectionsLimit >= 0 && sentMessageCount >= wn.config.BroadcastConnectionsLimit {
 			break
 		}
-		if peer == request.except {
+		if _, ok := request.except[peer]; ok {
 			continue
 		}
 		var ok bool

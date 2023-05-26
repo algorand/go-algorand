@@ -129,7 +129,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	var exist bool
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		ks[i], exist = cache.CheckAndPut(ds[i][:], struct{}{})
+		ks[i], _, exist = cache.CheckAndPut(ds[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, ks[i])
 
@@ -141,7 +141,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	// try to re-add, ensure not added
 	for i := 0; i < size; i++ {
-		k, exist := cache.CheckAndPut(ds[i][:], struct{}{})
+		k, _, exist := cache.CheckAndPut(ds[i][:], struct{}{})
 		require.True(t, exist)
 		require.NotEmpty(t, k)
 	}
@@ -153,7 +153,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	var ks2 [size]*crypto.Digest
 	for i := 0; i < size; i++ {
 		crypto.RandBytes(ds2[i][:])
-		ks2[i], exist = cache.CheckAndPut(ds2[i][:], struct{}{})
+		ks2[i], _, exist = cache.CheckAndPut(ds2[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, ks2[i])
 
@@ -165,7 +165,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	var d [8]byte
 	crypto.RandBytes(d[:])
-	k, exist := cache.CheckAndPut(d[:], struct{}{})
+	k, _, exist := cache.CheckAndPut(d[:], struct{}{})
 	require.False(t, exist)
 	require.NotEmpty(t, k)
 	exist = cache.check(d[:])
@@ -211,7 +211,7 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 	var ds [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		k, exist := cache.CheckAndPut(ds[i][:], struct{}{})
+		k, _, exist := cache.CheckAndPut(ds[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, k)
 
@@ -236,7 +236,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	var ds [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		k, exist := cache.CheckAndPut(ds[i][:], struct{}{})
+		k, _, exist := cache.CheckAndPut(ds[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, k)
 		exist = cache.check(ds[i][:])
@@ -251,7 +251,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	var ds2 [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds2[i][:]))
-		k, exist := cache.CheckAndPut(ds2[i][:], struct{}{})
+		k, _, exist := cache.CheckAndPut(ds2[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, k)
 		exist = cache.check(ds2[i][:])
@@ -394,7 +394,7 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.NotEmpty(t, d)
 
 	// add a value, ensure it can be found
-	d1, found := cache.CheckAndPut([]byte{1}, snd{id: 1})
+	d1, v1, found := cache.CheckAndPut([]byte{1}, snd{id: 1})
 	require.False(t, found)
 	require.NotNil(t, d1)
 	require.NotEmpty(t, d1)
@@ -408,18 +408,20 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.Equal(t, *p, cache.cur)
 	require.Len(t, *p, 1)
 	require.Len(t, v, 1)
+	require.Equal(t, v, v1)
 	require.Contains(t, v, snd{id: 1})
-	d, found = cache.CheckAndPut([]byte{1}, snd{id: 1})
+	d, v, found = cache.CheckAndPut([]byte{1}, snd{id: 1})
 	require.True(t, found)
 	require.NotNil(t, d)
 	require.NotEmpty(t, d)
 	require.Equal(t, *d, *d1)
+	require.Equal(t, v, v1)
 	require.Len(t, cache.cur, 1)
 	require.Len(t, cache.cur[*d], 1)
 	require.Nil(t, cache.prev)
 
 	// add a value with different sender
-	dt, found := cache.CheckAndPut([]byte{1}, snd{id: 2})
+	dt, vt, found := cache.CheckAndPut([]byte{1}, snd{id: 2})
 	require.True(t, found)
 	require.NotNil(t, dt)
 	require.NotEmpty(t, dt)
@@ -431,6 +433,7 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.NotNil(t, d)
 	require.Equal(t, *d, *dt)
 	require.Equal(t, *d, *d1)
+	require.Equal(t, v, vt)
 	require.Equal(t, p, &cache.cur)
 	require.Len(t, *p, 1)
 	require.Len(t, v, 2)
@@ -438,10 +441,11 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.Contains(t, v, snd{id: 2})
 
 	// add one more value to full cache.cur
-	d2, found := cache.CheckAndPut([]byte{2}, snd{id: 1})
+	d2, v2, found := cache.CheckAndPut([]byte{2}, snd{id: 1})
 	require.False(t, found)
 	require.NotNil(t, d2)
 	require.NotEmpty(t, d2)
+	require.Len(t, v2, 1)
 	require.Len(t, cache.cur, 2)
 	require.Len(t, cache.cur[*d1], 2)
 	require.Len(t, cache.cur[*d2], 1)
@@ -449,21 +453,23 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 
 	// adding new value would trigger cache swap
 	// first ensure new sender for seen message does not trigger a swap
-	dt, found = cache.CheckAndPut([]byte{2}, snd{id: 2})
+	dt, vt, found = cache.CheckAndPut([]byte{2}, snd{id: 2})
 	require.True(t, found)
 	require.NotNil(t, dt)
 	require.NotEmpty(t, dt)
 	require.Equal(t, *d2, *dt)
+	require.Len(t, vt, 2)
 	require.Len(t, cache.cur, 2)
 	require.Len(t, cache.cur[*d1], 2)
 	require.Len(t, cache.cur[*d2], 2)
 	require.Nil(t, cache.prev)
 
 	// add a new value triggers a swap
-	d3, found := cache.CheckAndPut([]byte{3}, snd{id: 1})
+	d3, v3, found := cache.CheckAndPut([]byte{3}, snd{id: 1})
 	require.False(t, found)
 	require.NotNil(t, d2)
 	require.NotEmpty(t, d2)
+	require.Len(t, v3, 1)
 	require.Len(t, cache.cur, 1)
 	require.Len(t, cache.cur[*d3], 1)
 	require.Len(t, cache.prev, 2)
@@ -471,7 +477,7 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.Len(t, cache.prev[*d2], 2)
 
 	// add a sender into old (prev) value
-	dt, found = cache.CheckAndPut([]byte{2}, snd{id: 3})
+	dt, vt, found = cache.CheckAndPut([]byte{2}, snd{id: 3})
 	require.True(t, found)
 	require.NotNil(t, dt)
 	require.NotEmpty(t, dt)
@@ -491,5 +497,6 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.Equal(t, p, &cache.prev)
 	require.Len(t, *p, 2)
 	require.Len(t, v, 3)
+	require.Equal(t, vt, v)
 	require.Contains(t, v, snd{id: 3})
 }
