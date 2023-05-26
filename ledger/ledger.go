@@ -832,7 +832,7 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eva
 func (l *Ledger) IsWritingCatchpointDataFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.catchpoint.IsWritingCatchpointDataFile()
+	return l.catchpoint.isWritingCatchpointDataFile()
 }
 
 // VerifiedTransactionCache returns the verify.VerifiedTransactionCache
