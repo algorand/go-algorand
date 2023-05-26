@@ -2019,15 +2019,15 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 // nextStatement breaks tokens into two slices at the first semicolon and expands macros along the way.
 func nextStatement(ops *OpStream, tokens []token) (current, rest []token) {
 	for i := 0; i < len(tokens); i++ {
-		token := tokens[i]
-		replacement, ok := ops.macros[token.str]
+		tok := tokens[i]
+		replacement, ok := ops.macros[tok.str]
 		if ok {
 			tokens = append(tokens[0:i], append(replacement[1:], tokens[i+1:]...)...)
 			// backup to handle potential re-expansion of the first token in the expansion
 			i--
 			continue
 		}
-		if token.str == ";" {
+		if tok.str == ";" {
 			return tokens[:i], tokens[i+1:]
 		}
 	}
