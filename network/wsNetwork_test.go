@@ -3954,6 +3954,7 @@ Exercises the updatePhonebookAddresses function, notably with different variatio
 archival addresses.
 */
 func TestUpdatePhonebookAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var netA *WebsocketNetwork
 
 	rapid.Check(t, func(t1 *rapid.T) {
