@@ -30,8 +30,8 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
-// digestCacheData is a base data structure for rotating size N accepting crypto.Digest as a key
-type digestCacheData struct {
+// digestCacheBase is a base data structure for rotating size N accepting crypto.Digest as a key
+type digestCacheBase struct {
 	cur  map[crypto.Digest]struct{}
 	prev map[crypto.Digest]struct{}
 
@@ -42,12 +42,12 @@ type digestCacheData struct {
 // digestCache is a rotating cache of size N accepting crypto.Digest as a key
 // and keeping up to 2*N elements in memory
 type digestCache struct {
-	digestCacheData
+	digestCacheBase
 }
 
 func makeDigestCache(size int) *digestCache {
 	c := &digestCache{
-		digestCacheData: digestCacheData{
+		digestCacheBase: digestCacheBase{
 			cur:     map[crypto.Digest]struct{}{},
 			maxSize: size,
 		},
@@ -108,6 +108,17 @@ func (c *digestCache) Delete(d *crypto.Digest) {
 	delete(c.prev, *d)
 }
 
+type cacheValue map[interface{}]struct{}
+
+// digestCacheData is a base data structure for rotating size N accepting crypto.Digest as a key
+type digestCacheData struct {
+	cur  map[crypto.Digest]cacheValue
+	prev map[crypto.Digest]cacheValue
+
+	maxSize int
+	mu      deadlock.RWMutex
+}
+
 // txSaltedCache is a digest cache with a rotating salt
 // uses blake2b hash function
 type txSaltedCache struct {
@@ -122,7 +133,7 @@ type txSaltedCache struct {
 func makeSaltedCache(size int) *txSaltedCache {
 	return &txSaltedCache{
 		digestCacheData: digestCacheData{
-			cur:     map[crypto.Digest]struct{}{},
+			cur:     map[crypto.Digest]cacheValue{},
 			maxSize: size,
 		},
 	}
@@ -180,17 +191,17 @@ func (c *txSaltedCache) innerSwap(scheduled bool) {
 
 	if scheduled {
 		// updating by timer, the prev size is a good estimation of a current load => preallocate
-		c.cur = make(map[crypto.Digest]struct{}, len(c.prev))
+		c.cur = make(map[crypto.Digest]cacheValue, len(c.prev))
 	} else {
 		// otherwise start empty
-		c.cur = map[crypto.Digest]struct{}{}
+		c.cur = map[crypto.Digest]cacheValue{}
 	}
 	c.moreSalt()
 }
 
-// innerCheck returns true if exists, and the current salted hash if does not.
-// locking semantic: write lock must be held
-func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
+// innerCheck returns true if exists, the salted hash if does not exist
+// locking semantic: read lock must be held
+func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, cacheValue, *map[crypto.Digest]cacheValue, bool) {
 	ptr := saltedPool.Get()
 	defer saltedPool.Put(ptr)
 
@@ -201,31 +212,34 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
 
 	d := crypto.Digest(blake2b.Sum256(toBeHashed))
 
-	_, found := c.cur[d]
+	v, found := c.cur[d]
 	if found {
-		return nil, true
+		return &d, v, &c.cur, true
 	}
 
 	toBeHashed = append(toBeHashed[:len(msg)], c.prevSalt[:]...)
 	toBeHashed = toBeHashed[:len(msg)+len(c.prevSalt)]
 	pd := crypto.Digest(blake2b.Sum256(toBeHashed))
-	_, found = c.prev[pd]
+	v, found = c.prev[pd]
 	if found {
-		return nil, true
+		return &pd, v, &c.prev, true
 	}
-	return &d, false
+	return &d, nil, nil, false
 }
 
 // CheckAndPut adds msg into a cache if not found
 // returns a hashing key used for insertion if the message not found.
-func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
+func (c *txSaltedCache) CheckAndPut(msg []byte, sender interface{}) (*crypto.Digest, bool) {
 	c.mu.RLock()
-	d, found := c.innerCheck(msg)
+	d, val, page, found := c.innerCheck(msg)
 	salt := c.curSalt
 	c.mu.RUnlock()
 	// fast read-only path: assuming most messages are duplicates, hash msg and check cache
+	senderFound := false
 	if found {
-		return d, found
+		if _, senderFound = val[sender]; senderFound {
+			return d, true
+		}
 	}
 
 	// not found: acquire write lock to add this msg hash to cache
@@ -233,17 +247,35 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 	defer c.mu.Unlock()
 	// salt may have changed between RUnlock() and Lock(), rehash if needed
 	if salt != c.curSalt {
-		d, found = c.innerCheck(msg)
+		d, val, page, found = c.innerCheck(msg)
 		if found {
-			// already added to cache between RUnlock() and Lock(), return
-			return d, found
+			if _, senderFound = val[sender]; senderFound {
+				// already added to cache between RUnlock() and Lock(), return
+				return d, true
+			}
 		}
-	} else {
+	} else if found && page == &c.prev {
+		// there is match with prev page, update the value with data possible added in between locks
+		val, found = c.prev[*d]
+	} else { // not found or found in cur page
 		// Do another check to see if another copy of the transaction won the race to write it to the cache
-		// Only check current to save a lookup since swaps are rare and no need to re-hash
-		if _, found := c.cur[*d]; found {
-			return d, found
+		// Only check current to save a lookup since swap is handled in the first branch
+		val, found = c.cur[*d]
+		if found {
+			if _, senderFound = val[sender]; senderFound {
+				return d, true
+			}
+			page = &c.cur
 		}
+	}
+
+	// at this point we know that either:
+	// 1. the message is not in the cache
+	// 2. the message is in the cache but from other senders
+	if found && !senderFound {
+		val[sender] = struct{}{}
+		(*page)[*d] = val
+		return d, true
 	}
 
 	if len(c.cur) >= c.maxSize {
@@ -260,7 +292,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 		d = &dn
 	}
 
-	c.cur[*d] = struct{}{}
+	c.cur[*d] = cacheValue{sender: {}}
 	return d, false
 }
 
@@ -270,6 +302,14 @@ func (c *txSaltedCache) DeleteByKey(d *crypto.Digest) {
 	defer c.mu.Unlock()
 	delete(c.cur, *d)
 	delete(c.prev, *d)
+}
+
+// Len returns size of a cache
+func (c *txSaltedCache) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return len(c.cur) + len(c.prev)
 }
 
 var saltedPool = sync.Pool{

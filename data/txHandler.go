@@ -567,7 +567,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	if handler.msgCache != nil {
 		// check for duplicate messages
 		// this helps against relaying duplicates
-		if msgKey, isDup = handler.msgCache.CheckAndPut(rawmsg.Data); isDup {
+		if msgKey, isDup = handler.msgCache.CheckAndPut(rawmsg.Data, rawmsg.Sender); isDup {
 			transactionMessagesDupRawMsg.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
