@@ -83,3 +83,7 @@ func (l *rejectingLimitListenerConn) Close() error {
 	l.releaseOnce.Do(l.release)
 	return err
 }
+
+func (l *rejectingLimitListenerConn) UnderlyingConn() net.Conn {
+	return l.Conn
+}

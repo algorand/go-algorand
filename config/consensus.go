@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -271,7 +271,7 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
-	// maximum number of "foreign references" (accounts, asa, app)
+	// maximum number of "foreign references" (accounts, asa, app, boxes)
 	// that can be attached to a single app call.
 	MaxAppTotalTxnReferences int
 
@@ -330,6 +330,26 @@ type ConsensusParams struct {
 	// MinBalance requirement (in addition to SchemaMinBalancePerEntry) for
 	// []byte values stored in LocalState or GlobalState key/value stores
 	SchemaBytesMinBalance uint64
+
+	// Maximum length of a box (Does not include name/key length. That is capped by MaxAppKeyLen)
+	MaxBoxSize uint64
+
+	// Minimum Balance Requirement (MBR) per box created (this accounts for a
+	// bit of overhead used to store the box bytes)
+	BoxFlatMinBalance uint64
+
+	// MBR per byte of box storage. MBR is incremented by BoxByteMinBalance * (len(name)+len(value))
+	BoxByteMinBalance uint64
+
+	// Number of box references allowed
+	MaxAppBoxReferences int
+
+	// Amount added to a txgroup's box I/O budget per box ref supplied.
+	// For reads: the sum of the sizes of all boxes in the group must be less than I/O budget
+	// For writes: the sum of the sizes of all boxes created or written must be less than I/O budget
+	// In both cases, what matters is the sizes of the boxes touched, not the
+	// number of times they are touched, or the size of the touches.
+	BytesPerBoxReference uint64
 
 	// maximum number of total key/value pairs allowed by a given
 	// LocalStateSchema (and therefore allowed in LocalState)
@@ -463,6 +483,35 @@ type ConsensusParams struct {
 	// the rewardsLevel, but the rewardsLevel has no meaning because the account
 	// has fewer than RewardUnit algos.
 	UnfundedSenders bool
+
+	// EnablePrecheckECDSACurve means that ecdsa_verify opcode will bail early,
+	// returning false, if pubkey is not on the curve.
+	EnablePrecheckECDSACurve bool
+
+	// EnableBareBudgetError specifies that I/O budget overruns should not be considered EvalError
+	EnableBareBudgetError bool
+
+	// StateProofUseTrackerVerification specifies whether the node will use data from state proof verification tracker
+	// in order to verify state proofs.
+	StateProofUseTrackerVerification bool
+
+	// EnableCatchpointsWithSPContexts specifies when to re-enable version 7 catchpoints.
+	// Version 7 includes state proof verification contexts
+	EnableCatchpointsWithSPContexts bool
+
+	// AppForbidLowResources enforces a rule that prevents apps from accessing
+	// asas and apps below 256, in an effort to decrease the ambiguity of
+	// opcodes that accept IDs or slot indexes. Simultaneously, the first ID
+	// allocated in new chains is raised to 1001.
+	AppForbidLowResources bool
+
+	// EnableBoxRefNameError specifies that box ref names should be validated early
+	EnableBoxRefNameError bool
+
+	// ExcludeExpiredCirculation excludes expired stake from the total online stake
+	// used by agreement for Circulation, and updates the calculation of StateProofOnlineTotalWeight used
+	// by state proofs to use the same method (rather than excluding stake from the top N stakeholders as before).
+	ExcludeExpiredCirculation bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -630,7 +679,7 @@ func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) Con
 			for cVer, cParam := range staticConsensus {
 				if cVer == consensusVersion {
 					delete(staticConsensus, cVer)
-				} else if _, has := cParam.ApprovedUpgrades[consensusVersion]; has {
+				} else {
 					// delete upgrade to deleted version
 					delete(cParam.ApprovedUpgrades, consensusVersion)
 				}
@@ -1208,12 +1257,61 @@ func initConsensusProtocols() {
 	v33.ApprovedUpgrades[protocol.ConsensusV35] = 10000
 	v34.ApprovedUpgrades[protocol.ConsensusV35] = 10000
 
+	v36 := v35
+	v36.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// Boxes (unlimited global storage)
+	v36.LogicSigVersion = 8
+	v36.MaxBoxSize = 32768
+	v36.BoxFlatMinBalance = 2500
+	v36.BoxByteMinBalance = 400
+	v36.MaxAppBoxReferences = 8
+	v36.BytesPerBoxReference = 1024
+
+	Consensus[protocol.ConsensusV36] = v36
+
+	v35.ApprovedUpgrades[protocol.ConsensusV36] = 140000
+
+	v37 := v36
+	v37.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	Consensus[protocol.ConsensusV37] = v37
+
+	// v36 can be upgraded to v37, with an update delay of 7 days ( see calculation above )
+	v36.ApprovedUpgrades[protocol.ConsensusV37] = 140000
+
+	v38 := v37
+	v38.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// enables state proof recoverability
+	v38.StateProofUseTrackerVerification = true
+	v38.EnableCatchpointsWithSPContexts = true
+
+	// online circulation on-demand expiration
+	v38.ExcludeExpiredCirculation = true
+
+	// TEAL resources sharing and other features
+	v38.LogicSigVersion = 9
+	v38.EnablePrecheckECDSACurve = true
+	v38.AppForbidLowResources = true
+	v38.EnableBareBudgetError = true
+	v38.EnableBoxRefNameError = true
+
+	v38.AgreementFilterTimeoutPeriod0 = 3000 * time.Millisecond
+
+	Consensus[protocol.ConsensusV38] = v38
+
+	// v37 can be upgraded to v38, with an update delay of 12h:
+	// 10046 = (12 * 60 * 60 / 4.3)
+	// for the sake of future manual calculations, we'll round that down a bit :
+	v37.ApprovedUpgrades[protocol.ConsensusV38] = 10000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v35
+	vFuture := v38
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 8 // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
@@ -1241,6 +1339,12 @@ func initConsensusProtocols() {
 	vAlpha4.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVAlpha4] = vAlpha4
 	vAlpha3.ApprovedUpgrades[protocol.ConsensusVAlpha4] = 10000
+
+	// vAlpha5 uses the same parameters as v36
+	vAlpha5 := v36
+	vAlpha5.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	Consensus[protocol.ConsensusVAlpha5] = vAlpha5
+	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

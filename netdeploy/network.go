@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,15 +19,15 @@ package netdeploy
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
@@ -58,15 +58,18 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
 	}
 	n.cfg.Name = name
-	n.cfg.TemplateFile = templateFile
 
-	template, err := loadTemplate(templateFile)
+	var err error
+	template := defaultNetworkTemplate
+
+	err = loadTemplateFromReader(templateReader, &template)
+
 	if err == nil {
 		if overrideDevMode {
 			template.Genesis.DevMode = true
@@ -74,9 +77,11 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 				template.Nodes[0].IsRelay = false
 			}
 		}
-		err = template.Validate()
+	} else {
+		return n, err
 	}
-	if err != nil {
+
+	if err = template.Validate(); err != nil {
 		return n, err
 	}
 
@@ -402,7 +407,7 @@ func (n Network) Stop(binDir string) {
 
 // NetworkNodeStatus represents the result from checking the status of a particular node instance
 type NetworkNodeStatus struct {
-	Status generatedV2.NodeStatusResponse
+	Status model.NodeStatusResponse
 	Error  error
 }
 
@@ -430,7 +435,7 @@ func (n Network) NodesStatus(binDir string) map[string]NetworkNodeStatus {
 	statuses := make(map[string]NetworkNodeStatus)
 
 	for _, relayDir := range n.cfg.RelayDirs {
-		var status generatedV2.NodeStatusResponse
+		var status model.NodeStatusResponse
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
 		algodClient, err := nc.AlgodClient()
 		if err == nil {
@@ -443,7 +448,7 @@ func (n Network) NodesStatus(binDir string) map[string]NetworkNodeStatus {
 	}
 
 	for _, nodeDir := range n.nodeDirs {
-		var status generatedV2.NodeStatusResponse
+		var status model.NodeStatusResponse
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
 		algodClient, err := nc.AlgodClient()
 		if err == nil {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,9 @@ import (
 // bundlePresent, and bundleVerified.
 // It returns the following type(s) of event: none, vote{Filtered,Malformed},
 // bundle{Filtered,Malformed}, and {soft,cert,next}Threshold.
-type voteAggregator struct{}
+type voteAggregator struct {
+	_struct struct{} `codec:","`
+}
 
 func (agg *voteAggregator) T() stateMachineTag {
 	return voteMachine

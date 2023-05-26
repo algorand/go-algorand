@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ type PpConfig struct {
 	RandomizeFee    bool
 	RandomizeAmt    bool
 	RandomizeDst    bool
+	MaxRandomDst    uint64
 	MaxFee          uint64
 	MinFee          uint64
 	MaxAmt          uint64
@@ -47,6 +48,7 @@ type PpConfig struct {
 	Quiet           bool
 	RandomNote      bool
 	RandomLease     bool
+	TotalLatencyOut string
 
 	Program            []byte
 	LogicArgs          [][]byte
@@ -60,7 +62,11 @@ type PpConfig struct {
 	// NumApp is the total number of apps to create
 	NumApp uint32
 	// NumAppOptIn is the number of apps each account opts in to
-	NumAppOptIn     uint32
+	NumAppOptIn uint32
+	// NumBoxUpdate is the number of boxes used per app, where box values are updated each call
+	NumBoxUpdate uint32
+	// NumBoxRead is the number of boxes used per app, where box values are only read each call
+	NumBoxRead      uint32
 	AppProgOps      uint32
 	AppProgHashes   uint32
 	AppProgHashSize string
@@ -77,9 +83,10 @@ type PpConfig struct {
 	// configuration related to using bootstrapped ledgers built by netgoal
 	// TODO: support generatedAssetsCount, generatedApplicationCount
 	DeterministicKeys            bool
-	GeneratedAccountsCount       uint32
+	GeneratedAccountsCount       uint64
 	GeneratedAccountSampleMethod string
-	GeneratedAccountsOffset      uint32
+	GeneratedAccountsOffset      uint64
+	GeneratedAccountsMnemonics   []string
 
 	WeightPayment     float64
 	WeightAsset       float64
@@ -93,6 +100,7 @@ var DefaultConfig = PpConfig{
 	RandomizeFee:    false,
 	RandomizeAmt:    false,
 	RandomizeDst:    false,
+	MaxRandomDst:    200000,
 	MaxFee:          10000,
 	MinFee:          1000,
 	MaxAmt:          1000,
@@ -105,6 +113,8 @@ var DefaultConfig = PpConfig{
 	NumAsset:        0,
 	MinAccountAsset: 10000000,
 	NumApp:          0,
+	NumBoxUpdate:    0,
+	NumBoxRead:      0,
 	AppProgOps:      0,
 	AppProgHashes:   0,
 	AppProgHashSize: "sha256",
@@ -176,6 +186,7 @@ var accountSampleMethods = []string{
 	"",
 	"random",
 	"sequential",
+	"mnemonic",
 }
 
 // Check returns an error if config is invalid.
@@ -190,8 +201,9 @@ func (cfg *PpConfig) Check() error {
 	if !sampleOk {
 		return fmt.Errorf("unknown GeneratedAccountSampleMethod: %s", cfg.GeneratedAccountSampleMethod)
 	}
-	if cfg.DeterministicKeys && (cfg.GeneratedAccountsOffset+cfg.NumPartAccounts > cfg.GeneratedAccountsCount) {
+	if cfg.DeterministicKeys && (cfg.GeneratedAccountsOffset+uint64(cfg.NumPartAccounts) > cfg.GeneratedAccountsCount) {
 		return fmt.Errorf("(GeneratedAccountsOffset %d) + (NumPartAccounts %d) > (GeneratedAccountsCount %d)", cfg.GeneratedAccountsOffset, cfg.NumPartAccounts, cfg.GeneratedAccountsCount)
 	}
+
 	return nil
 }

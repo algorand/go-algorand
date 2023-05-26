@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 
 func TestSaveNetworkCfg(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -48,6 +49,7 @@ func TestSaveNetworkCfg(t *testing.T) {
 
 func TestSaveConsensus(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 

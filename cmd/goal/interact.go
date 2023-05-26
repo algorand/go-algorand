@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/avm-abi/apps"
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
@@ -477,7 +479,7 @@ var appExecuteCmd = &cobra.Command{
 	Short: "Execute a procedure on an application",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
 		header := parseAppHeader()
@@ -513,7 +515,7 @@ var appExecuteCmd = &cobra.Command{
 
 		var inputs appCallInputs
 		for _, arg := range proc.Args {
-			var callArg appCallArg
+			var callArg apps.AppCallBytes
 			callArg.Encoding = arg.Kind
 
 			if !procFlags.Changed(arg.Name) && arg.Default != "" {
@@ -565,7 +567,7 @@ var appExecuteCmd = &cobra.Command{
 
 		appArgs := make([][]byte, len(inputs.Args))
 		for i, arg := range inputs.Args {
-			rawValue, err := parseAppArg(arg)
+			rawValue, err := arg.Raw()
 			if err != nil {
 				reportErrorf("Could not parse argument corresponding to '%s': %v", proc.Args[i].Name, err)
 			}
@@ -586,7 +588,7 @@ var appExecuteCmd = &cobra.Command{
 			localSchema = header.Query.Local.ToStateSchema()
 			globalSchema = header.Query.Global.ToStateSchema()
 		}
-		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, nil, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -634,8 +636,8 @@ var appExecuteCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				if txn.TransactionResults != nil && txn.TransactionResults.CreatedAppIndex != 0 {
-					reportInfof("Created app with app index %d", txn.TransactionResults.CreatedAppIndex)
+				if txn.ApplicationIndex != nil && *txn.ApplicationIndex != 0 {
+					reportInfof("Created app with app index %d", *txn.ApplicationIndex)
 				}
 			}
 		} else {
@@ -653,7 +655,7 @@ var appQueryCmd = &cobra.Command{
 	Short: "Query local or global state from an application",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
 		header := parseAppHeader()

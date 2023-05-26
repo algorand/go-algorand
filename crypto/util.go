@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -93,4 +93,11 @@ func HashObj(h Hashable) Digest {
 // NewHash returns a sha512-256 object to do the same operation as Hash()
 func NewHash() hash.Hash {
 	return sha512.New512_256()
+}
+
+// EncodeAndHash returns both the packed representation of the object and its hash.
+func EncodeAndHash(h Hashable) (Digest, []byte) {
+	hashid, encodedData := h.ToBeHashed()
+	hashrep := append([]byte(hashid), encodedData...)
+	return Hash(hashrep), encodedData
 }

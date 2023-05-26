@@ -880,6 +880,12 @@
       "BaseConfiguration": "c5d.9xlarge"
     },
     {
+      "Name": "AWS-CA-CENTRAL-1-Small",
+      "Provider": "AWS",
+      "Region": "ca-central-1",
+      "BaseConfiguration": "c5.2xlarge"
+    },
+    {
       "Name": "AWS-CA-CENTRAL-1-c5.xlarge",
       "Provider": "AWS",
       "Region": "ca-central-1",

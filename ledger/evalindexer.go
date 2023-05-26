@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
@@ -43,6 +43,7 @@ type indexerLedgerForEval interface {
 	GetAssetCreator(map[basics.AssetIndex]struct{}) (map[basics.AssetIndex]FoundAddress, error)
 	GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error)
 	LatestTotals() (ledgercore.AccountTotals, error)
+	LookupKv(basics.Round, string) ([]byte, error)
 
 	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 }
@@ -77,6 +78,8 @@ type indexerLedgerConnector struct {
 	latestRound    basics.Round
 	roundResources EvalForIndexerResources
 }
+
+func (l indexerLedgerConnector) FlushCaches() {}
 
 // BlockHdr is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
@@ -149,6 +152,15 @@ func (l indexerLedgerConnector) lookupResource(round basics.Round, address basic
 	return accountResourceMap[address][Creatable{aidx, ctype}], nil
 }
 
+// LookupKv delegates to the Ledger and marks the box key as touched for post-processing
+func (l indexerLedgerConnector) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	value, err := l.il.LookupKv(rnd, key)
+	if err != nil {
+		return value, fmt.Errorf("LookupKv() in indexerLedgerConnector internal error: %w", err)
+	}
+	return value, nil
+}
+
 // GetCreatorForRound is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) GetCreatorForRound(_ basics.Round, cindex basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	var foundAddress FoundAddress
@@ -203,6 +215,11 @@ func (l indexerLedgerConnector) VotersForStateProof(_ basics.Round) (*ledgercore
 	return nil, errors.New("VotersForStateProof() not implemented")
 }
 
+// GetStateProofVerificationContext is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, errors.New("GetStateProofVerificationContext() not implemented")
+}
+
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
 	return indexerLedgerConnector{
 		il:             il,
@@ -221,9 +238,9 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), proto, block.Round()-1, resources)
 
-	eval, err := internal.StartEvaluator(
+	eval, err := eval.StartEvaluator(
 		ilc, block.BlockHeader,
-		internal.EvaluatorOptions{
+		eval.EvaluatorOptions{
 			PaysetHint:  len(block.Payset),
 			ProtoParams: &proto,
 			Generate:    false,

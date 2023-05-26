@@ -1,5 +1,5 @@
-{ "Hosts":
-  [
+{
+  "Hosts": [
     {
       "Name": "N1",
       "Template": "AWS-US-EAST-2-m5d.2xl"

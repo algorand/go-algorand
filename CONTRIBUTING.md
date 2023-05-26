@@ -2,60 +2,62 @@
 
 If you are interested in contributing to the project, we welcome and thank you. We want to make the best decentralized and effective blockchain platform available and we appreciate your willingness to help us.
 
-The [Algorand GitHub Organization](https://github.com/algorand) has all of our open source projects, and dependencies which we fork and use in those projects. This contribution guide applies to all of these.
+The [Algorand GitHub Organization](https://github.com/algorand) has all of our open source projects, and dependencies which we fork and use in those projects. While technical details in this document are specific to `go-algorand`, the general ideas are applicable to all of our projects.
 
-Some of our most active projects include:
-* [go-algorand](https://github.com/algorand/go-algorand) - Algorand node software (this repository)
-* [go-algorand-sdk](https://github.com/algorand/go-algorand-sdk) - Golang SDK
-* [java-algorand-sdk](https://github.com/algorand/java-algorand-sdk) - Java SDK
-* [js-algorand-sdk](https://github.com/algorand/js-algorand-sdk) - JavaScript SDK
-* [indexer](https://github.com/algorand/indexer) - Blockchain analytics database
-* [ledger-app-algorand](https://github.com/algorand/ledger-app-algorand) - Ledger hardware wallet application
-* [mule](https://github.com/algorand/mule) - Continuous Integration automation tool
-* [py-algorand-sdk](https://github.com/algorand/py-algorand-sdk) - Python SDK
-* [sandbox](https://github.com/algorand/sandbox) - Algorand node quickstart tool
+## Non-code Contributions
 
-# Filing Issues
+While contributions come in many forms, this document is focused on code. For other types of involvement, see the following:
+* [Reporting issues and features requests.][go-algorand-issues]
+* [Security vulnerability disclosures.][security-disclosure]
+* [Documentation improvements.][algorand-docs]
 
-Did you discover a bug? Do you have a feature request? Filing issues is an easy way anyone can contribute and helps us improve Algorand. We use GitHub Issues to track all known bugs and feature requests.
+## Contribution Model
 
-Before logging an issue be sure to check current issues, verify that your [node is synced](https://developer.algorand.org/docs/introduction-installing-node#sync-node), check the [Developer Frequently Asked Questions](https://developer.algorand.org/docs/developer-faq) and [GitHub issues][issues_url] to see if your issue is described there.
+All changes to `go-algorand` are made through the same process: a pull request targeting the `master` branch. This goes for internal and external contributions. To familiarize yourself with the process we recommend that you review the current open pull requests, and the GitHub documentation for [creating a pull request from a fork][gh-pr-process].
 
-If you’d like to contribute to any of the repositories, please file a [GitHub issue][issues_url] using the issues menu item. Make sure to specify whether you are describing a bug or a new enhancement using the **Bug report** or **Feature request** button.
+Note: some of our other projects are using gitflow, for these the process is the same but you will target pull requests against the `develop` branch.
 
-See the GitHub help guide for more information on [filing an issue](https://help.github.com/en/articles/creating-an-issue).
+## Communication Channels
 
-## Vulnerabilities
+The core development team monitors the Algorand [discord community](https://discord.gg/algorand) and regularly responds to questions and suggestions. For very technical questions and implementation discussions GitHub Issues and Pull Requests are a good way to reach maintainers.
 
-Please don't create issues for any security vulnerabilities.  Instead, we would appreciate it if you reported them through our [vulnerability disclosure form][vuln_url].  This allows us to distribute a fix before the vulnerability is exploited.
+## Pull Requests
 
-Additionally, if you believe that you've discovered a security vulnerability, you might qualify for our bug bounty program.  Visit our [bug bounty site][bug_bounty_url] for details.
+All changes are are made via pull requests.
 
-If you have any questions, don't hesitate to contact us at security@algorand.com.
+Small changes are easier to review and merge than large ones, so the more focused a PR the better. If a feature requires refactoring, the refactoring should be a separate PR. If refactoring uncovers a bug, the fix should be a separate PR. These are not strict rules, but generally speaking, they make things easier to review which speeds up the PR process.
 
-# Contribution Model
+### General Guidelines
 
-For each of our repositories we use the same model for contributing code. Developers wanting to contribute must create pull requests. This process is described in the GitHub [Creating a pull request from a fork](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork) documentation. Each pull request should be initiated against the `master` branch in the Algorand repository.  After a pull request is submitted the core development team will review the submission and communicate with the developer using the comments sections of the PR. After the submission is reviewed and approved, it will be merged into the `master` branch of the source. These changes will be merged to our release branch on the next viable release date. For the SDKs, this may be immediate. Changes to the node software may take more time as we must ensure and verify the security, as well as apply protocol upgrades in an orderly way.
+* Have a clear well-formatted description in the pull request. This helps reviewers and later serves as documentation in the release notes.
+* Code must adhere to the [Go formatting guidelines](https://golang.org/doc/effective_go.html).
+* All tests must be passing.
+* New unit and integration tests should be added to ensure correctness and prevent regressions where appropriate.
+* Run linting and code formatting tools, see [the README](README.md) for details.
+* All CI checks should pass.
+* Use draft mode for PRs that are still in progress.
 
-Note: some of our projects are using gitflow, for these you will open pull requests against the `develop` branch.
+### Peer Review
 
-Again, if you have a patch for a critical security vulnerability, please use our [vulnerability disclosure form][vuln_url] instead of creating a PR.  We'll follow up with you on distributing the patch before we merge it.
+This is the single most important part of introducing new code to `go-algorand`.
 
-# Code Guidelines
+#### Concept Review
 
-For Go code we use the [Golang guidelines defined here](https://golang.org/doc/effective_go.html).
-* Code must adhere to the official Go formatting guidelines (i.e. uses gofmt).
-* We use **gofmt** and **golangci-lint**. Also make sure to run `make sanity` and `make generate` before opening a pull request.
-* Code must be documented adhering to the official Go commentary guidelines.
+Because code reviews are a considerable time commitment, the first step for peer review is convincing reviewers that it is worth their time. Typically this is done by keeping changes small, writing a thorough description to clearly explain the need for a given improvement, or discussing larger changes ahead of time through one of the communication channels.
 
-For JavaScript code we use the [MDN formatting rules](https://developer.mozilla.org/en-US/docs/MDN/Contribute/Guidelines/Code_guidelines/JavaScript).
+If reviewers are not convinced about the merits of a change, they may reject a PR instead of reviewing it. All rejections should include the rationale for how that decision was reached. It is not uncommon for this to occur. Some users opt to maintain long running forks to add features which are not suitable for the upstream repo at this time.
 
-For Java code we use [Oracle’s standard formatting rules for Java](https://www.oracle.com/technetwork/java/codeconventions-150003.pdf).
+#### Code Review
 
-# Communication Channels
+Reviewers will leave feedback directly on the pull request, typically inline with the code. This is an opportunity to discuss the changes. If a PR is left open with unresolved feedback it may eventually be closed.
 
-The core development team monitors the Algorand community forums and regularly responds to questions and suggestions. Issues and Pull Requests are handled on GitHub.
+The project maintainers are responsible for the code in `go-algorand`, so ultimately whether or not a pull request is merged depends on their involvement.
 
-[issues_url]: https://github.com/algorand/go-algorand/issues
-[vuln_url]: https://www.algorand.com/resources/blog/security
-[bug_bounty_url]: https://bugcrowd.com/algorand
+#### Merge
+
+All changes are subject to a minimum of two reviews from subject matter experts prior to merge. Once this approval is reached a small number of committers are responsible for merging the changes. The list of committers is limited for practical and security reasons.
+
+[gh-pr-process]: https://help.github.com/en/articles/creating-a-pull-request-from-a-fork
+[go-algorand-issues]: https://github.com/algorand/go-algorand/issues/new/choose
+[security-disclosure]: https://github.com/algorand/go-algorand/security/policy
+[algorand-docs]: https://github.com/algorand/docs/blob/staging/CONTRIBUTING.md

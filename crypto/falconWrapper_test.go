@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,10 +17,11 @@
 package crypto
 
 import (
+	"testing"
+
 	"github.com/algorand/falcon"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestSignAndVerifyFalcon(t *testing.T) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -105,6 +105,11 @@ func (il indexerLedgerForEvalImpl) GetAssetCreator(map[basics.AssetIndex]struct{
 func (il indexerLedgerForEvalImpl) GetAppCreator(map[basics.AppIndex]struct{}) (map[basics.AppIndex]FoundAddress, error) {
 	// This function is unused.
 	return nil, errors.New("GetAppCreator() not implemented")
+}
+
+func (il indexerLedgerForEvalImpl) LookupKv(basics.Round, string) ([]byte, error) {
+	// This function is unused.
+	return nil, errors.New("LookupKv() not implemented")
 }
 
 func (il indexerLedgerForEvalImpl) LatestTotals() (totals ledgercore.AccountTotals, err error) {

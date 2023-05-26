@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,10 +37,10 @@ import (
 var outputFilename string
 var templateToGenerate string
 var relaysToGenerate int
-var nodesToGenerate int
-var nodeHostsToGenerate int
-var nonPartnodesToGenerate int
-var nonPartnodesHostsToGenerate int
+var participationAlgodNodes int
+var participationHostMachines int
+var npnAlgodNodes int
+var npnHostMachines int
 var walletsToGenerate int
 var nodeTemplatePath string
 var nonParticipatingNodeTemplatePath string
@@ -63,10 +63,10 @@ func init() {
 
 	generateCmd.Flags().IntVarP(&walletsToGenerate, "wallets", "w", -1, "Wallets to generate")
 	generateCmd.Flags().IntVarP(&relaysToGenerate, "relays", "R", -1, "Relays to generate")
-	generateCmd.Flags().IntVarP(&nodeHostsToGenerate, "node-hosts", "N", -1, "Node-hosts to generate, default=nodes")
-	generateCmd.Flags().IntVarP(&nodesToGenerate, "nodes", "n", -1, "Nodes to generate")
-	generateCmd.Flags().IntVarP(&nonPartnodesToGenerate, "non-participating-nodes", "X", 0, "Non participating nodes to generate")
-	generateCmd.Flags().IntVarP(&nonPartnodesHostsToGenerate, "non-participating-nodes-hosts", "H", 0, "Non participating nodes hosts to generate")
+	generateCmd.Flags().IntVarP(&participationAlgodNodes, "participation-algod-nodes", "n", -1, "Total participation algod nodes to generate")
+	generateCmd.Flags().IntVarP(&participationHostMachines, "participation-host-machines", "N", -1, "Host machines to generate for participation algod nodes, default=participation-algod-nodes")
+	generateCmd.Flags().IntVarP(&npnAlgodNodes, "npn-algod-nodes", "x", 0, "Total non-participation algod nodes to generate")
+	generateCmd.Flags().IntVarP(&npnHostMachines, "npn-host-machines", "X", 0, "Host machines to generate for non-participation algod nodes, default=npn-algod-nodes")
 	generateCmd.Flags().StringVarP(&nodeTemplatePath, "node-template", "", "", "json for one node")
 	generateCmd.Flags().StringVarP(&nonParticipatingNodeTemplatePath, "non-participating-node-template", "", "", "json for non participating node")
 	generateCmd.Flags().StringVarP(&relayTemplatePath, "relay-template", "", "", "json for a relay node")
@@ -149,24 +149,27 @@ template modes for -t:`,
 			if walletsToGenerate < 0 {
 				reportErrorf("must specify number of wallets with -w")
 			}
-			err = generateWalletGenesis(outputFilename, walletsToGenerate, nonPartnodesToGenerate)
+			err = generateWalletGenesis(outputFilename, walletsToGenerate, npnAlgodNodes)
 		case "net", "network", "goalnet":
 			if walletsToGenerate < 0 {
 				reportErrorf("must specify number of wallets with -w")
 			}
-			if nodesToGenerate < 0 {
+			if participationAlgodNodes < 0 {
 				reportErrorf("must specify number of nodes with -n")
 			}
-			if nodeHostsToGenerate < 0 {
-				nodeHostsToGenerate = nodesToGenerate
+			if participationHostMachines < 0 {
+				participationHostMachines = participationAlgodNodes
+			}
+			if (npnAlgodNodes >= 0) && (npnHostMachines == 0) {
+				npnHostMachines = npnAlgodNodes
 			}
 			if relaysToGenerate < 0 {
 				reportErrorf("must specify number of relays with -R")
 			}
 			if templateType == "goalnet" {
-				err = generateNetworkGoalTemplate(outputFilename, walletsToGenerate, relaysToGenerate, nodesToGenerate, nonPartnodesHostsToGenerate)
+				err = generateNetworkGoalTemplate(outputFilename, walletsToGenerate, relaysToGenerate, participationAlgodNodes, npnAlgodNodes)
 			} else {
-				err = generateNetworkTemplate(outputFilename, walletsToGenerate, relaysToGenerate, nodeHostsToGenerate, nodesToGenerate, nonPartnodesHostsToGenerate, nonPartnodesToGenerate, baseNode, baseNonParticipatingNode, baseRelay)
+				err = generateNetworkTemplate(outputFilename, walletsToGenerate, relaysToGenerate, participationHostMachines, participationAlgodNodes, npnHostMachines, npnAlgodNodes, baseNode, baseNonParticipatingNode, baseRelay)
 			}
 		case "otwt":
 			err = generateNetworkTemplate(outputFilename, 1000, 10, 20, 100, 0, 0, baseNode, baseNonParticipatingNode, baseRelay)
@@ -234,9 +237,9 @@ func pickNodeConfig(alt []remote.NodeConfig, name string) remote.NodeConfig {
 	return alt[0]
 }
 
-func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes, npnHosts int) error {
+func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes, npnNodes int) error {
 	template := netdeploy.NetworkTemplate{}
-	template.Nodes = make([]remote.NodeConfigGoal, 0, relays+nodes+npnHosts)
+	template.Nodes = make([]remote.NodeConfigGoal, 0, relays+nodes+npnNodes)
 	template.Genesis = generateWalletGenesisData(walletsToGenerate, 0)
 	for i := 0; i < relays; i++ {
 		name := "relay" + strconv.Itoa(i+1)
@@ -257,7 +260,7 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 		template.Nodes = append(template.Nodes, newNode)
 	}
 
-	for i := 0; i < npnHosts; i++ {
+	for i := 0; i < npnNodes; i++ {
 		name := "nonParticipatingNode" + strconv.Itoa(i+1)
 		newNode := remote.NodeConfigGoal{
 			Name:    name,
@@ -286,8 +289,8 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 		}
 	}
 
-	if npnHosts > 0 {
-		for walletIndex < npnHosts {
+	if npnNodes > 0 {
+		for walletIndex < npnNodes {
 			for nodei, node := range template.Nodes {
 				if node.Name[0:4] != "nonP" {
 					continue
@@ -298,11 +301,11 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 				}
 				template.Nodes[nodei].Wallets = append(template.Nodes[nodei].Wallets, wallet)
 				walletIndex++
-				if walletIndex >= npnHosts {
+				if walletIndex >= npnNodes {
 					break
 				}
 			}
-			if walletIndex >= npnHosts {
+			if walletIndex >= npnNodes {
 				break
 			}
 		}
@@ -478,18 +481,18 @@ func saveGoalTemplateToDisk(template netdeploy.NetworkTemplate, filename string)
 	return err
 }
 
-func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
+func generateWalletGenesisData(wallets, npnNodes int) gen.GenesisData {
 	ratZero := big.NewRat(int64(0), int64(1))
 	ratHundred := big.NewRat(int64(100), int64(1))
 	data := gen.DefaultGenesis
-	totalWallets := wallets + npnHosts
+	totalWallets := wallets + npnNodes
 	data.Wallets = make([]gen.WalletData, totalWallets)
 	participatingNodeStake := big.NewRat(int64(100), int64(wallets))
 	nonParticipatingNodeStake := ratZero
-	if npnHosts > 0 {
+	if npnNodes > 0 {
 		// split participating an non participating stake evenly
 		participatingNodeStake = big.NewRat(int64(50), int64(wallets))
-		nonParticipatingNodeStake = big.NewRat(int64(50), int64(npnHosts))
+		nonParticipatingNodeStake = big.NewRat(int64(50), int64(npnNodes))
 	}
 
 	stake := ratZero
@@ -519,8 +522,8 @@ func generateWalletGenesisData(wallets, npnHosts int) gen.GenesisData {
 	return data
 }
 
-func generateWalletGenesis(filename string, wallets, npnHosts int) error {
-	data := generateWalletGenesisData(wallets, npnHosts)
+func generateWalletGenesis(filename string, wallets, npnNodes int) error {
+	data := generateWalletGenesisData(wallets, npnNodes)
 	return saveGenesisDataToDisk(data, filename)
 }
 

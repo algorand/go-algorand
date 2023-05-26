@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,12 +40,14 @@ type AccountBaseData struct {
 	RewardedMicroAlgos basics.MicroAlgos
 	AuthAddr           basics.Address
 
-	TotalAppSchema      basics.StateSchema
-	TotalExtraAppPages  uint32
-	TotalAppParams      uint64
-	TotalAppLocalStates uint64
-	TotalAssetParams    uint64
-	TotalAssets         uint64
+	TotalAppSchema      basics.StateSchema // Totals across created globals, and opted in locals.
+	TotalExtraAppPages  uint32             // Total number of extra pages across all created apps
+	TotalAppParams      uint64             // Total number of apps this account has created
+	TotalAppLocalStates uint64             // Total number of apps this account is opted into.
+	TotalAssetParams    uint64             // Total number of assets created by this account
+	TotalAssets         uint64             // Total of asset creations and optins (i.e. number of holdings)
+	TotalBoxes          uint64             // Total number of boxes associated to this account
+	TotalBoxBytes       uint64             // Total bytes for this account's boxes. keys _and_ values count
 }
 
 // VotingData holds participation information
@@ -82,6 +84,8 @@ func ToAccountData(acct basics.AccountData) AccountData {
 			TotalAssets:         uint64(len(acct.Assets)),
 			TotalAppParams:      uint64(len(acct.AppParams)),
 			TotalAppLocalStates: uint64(len(acct.AppLocalStates)),
+			TotalBoxes:          acct.TotalBoxes,
+			TotalBoxBytes:       acct.TotalBoxBytes,
 		},
 		VotingData: VotingData{
 			VoteID:          acct.VoteID,
@@ -112,6 +116,8 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.AuthAddr = acct.AuthAddr
 	a.TotalAppSchema = acct.TotalAppSchema
 	a.TotalExtraAppPages = acct.TotalExtraAppPages
+	a.TotalBoxes = acct.TotalBoxes
+	a.TotalBoxBytes = acct.TotalBoxBytes
 }
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
@@ -138,6 +144,7 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.Micro
 		u.TotalAppSchema,
 		uint64(u.TotalAppParams), uint64(u.TotalAppLocalStates),
 		uint64(u.TotalExtraAppPages),
+		u.TotalBoxes, u.TotalBoxBytes,
 	)
 }
 

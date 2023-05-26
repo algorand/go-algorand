@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -284,10 +284,15 @@ func run() int {
 		if err != nil {
 			log.Errorf("cannot locate node executable: %s", err)
 		} else {
-			phonebookDir := filepath.Dir(ex)
-			phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
-			if err != nil {
-				log.Debugf("Cannot load static phonebook: %v", err)
+			phonebookDirs := []string{filepath.Dir(ex), dataDir}
+			for _, phonebookDir := range phonebookDirs {
+				phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
+				if err == nil {
+					log.Debugf("Static phonebook loaded from %s", phonebookDir)
+					break
+				} else {
+					log.Debugf("Cannot load static phonebook from %s dir: %v", phonebookDir, err)
+				}
 			}
 		}
 	}
@@ -344,7 +349,17 @@ func run() int {
 
 		// Send a heartbeat event every 10 minutes as a sign of life
 		go func() {
-			ticker := time.NewTicker(10 * time.Minute)
+			var interval time.Duration
+			defaultIntervalSecs := config.GetDefaultLocal().HeartbeatUpdateInterval
+			switch {
+			case cfg.HeartbeatUpdateInterval <= 0: // use default
+				interval = time.Second * time.Duration(defaultIntervalSecs)
+			case cfg.HeartbeatUpdateInterval < 60: // min frequency 1 minute
+				interval = time.Minute
+			default:
+				interval = time.Second * time.Duration(cfg.HeartbeatUpdateInterval)
+			}
+			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 
 			sendHeartbeat := func() {

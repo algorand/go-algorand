@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,11 +25,29 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// testGenesisCfg provides a configuration object for NewTestGenesis.
+type testGenesisCfg struct {
+	rewardsPoolAmount basics.MicroAlgos
+}
+
+// TestGenesisOption provides functional options for testGenesisCfg.
+type TestGenesisOption func(*testGenesisCfg)
+
+// TestGenesisRewardsPoolSize configures the rewards pool size in the genesis block.
+func TestGenesisRewardsPoolSize(amount basics.MicroAlgos) TestGenesisOption {
+	return func(cfg *testGenesisCfg) { cfg.rewardsPoolAmount = amount }
+}
+
 // NewTestGenesis creates a bunch of accounts, splits up 10B algos
 // between them and the rewardspool and feesink, and gives out the
 // addresses and secrets it creates to enable tests.  For special
 // scenarios, manipulate these return values before using newTestLedger.
-func NewTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
+func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
+	var cfg testGenesisCfg
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	// irrelevant, but deterministic
 	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
 	if err != nil {
@@ -66,8 +84,12 @@ func NewTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 		Status:     basics.NotParticipating,
 	}
 
+	poolBal := basics.MicroAlgos{Raw: amount}
+	if cfg.rewardsPoolAmount.Raw > 0 {
+		poolBal = cfg.rewardsPoolAmount
+	}
 	accts[rewards] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
+		MicroAlgos: poolBal,
 	}
 
 	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)

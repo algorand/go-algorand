@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -232,7 +232,7 @@ type ParticipationRegistry interface {
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
 	AppendKeys(id ParticipationID, keys StateProofKeys) error
 
-	// DeleteStateProofKeys removes all stateproof keys preceding a given round (including)
+	// DeleteStateProofKeys removes all stateproof keys up to, and not including, a given round
 	DeleteStateProofKeys(id ParticipationID, round basics.Round) error
 
 	// Delete removes a record from storage.
@@ -347,7 +347,7 @@ const (
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`
-	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<=?`
+	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<?`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
@@ -1015,7 +1015,7 @@ func (db *participationDB) Flush(timeout time.Duration) error {
 // Close attempts to flush with db.flushTimeout, then waits for the write queue for another db.flushTimeout.
 func (db *participationDB) Close() {
 	if err := db.Flush(db.flushTimeout); err != nil {
-		db.log.Warnf("participationDB unhandled error during Close/Flush: %w", err)
+		db.log.Warnf("participationDB unhandled error during Close/Flush: %v", err)
 	}
 
 	db.store.Close()

@@ -7,7 +7,7 @@ version: 2.1
 orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.0
-  slack: circleci/slack@4.4.2
+  slack: circleci/slack@4.10.1
 
 parameters:
   ubuntu_image:
@@ -18,10 +18,15 @@ parameters:
     default: "/opt/cibuild"
   result_path:
     type: string
-    default: "/tmp/build_test_results"
+    default: "/tmp/build_test_results_<< pipeline.id >>"
   valid_nightly_branch:
     type: string
     default: /hotfix\/.*/
+  # The following is intentional - hardcoding a token for public repos
+  # is recommended here to allow fork access
+  codecov:
+    type: string
+    default: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"
 
 executors:
   amd64_medium:
@@ -64,6 +69,14 @@ executors:
   mac_arm64_large:
     <<: *executor-mac-arm64
 
+slack-fail-stop-step: &slack-fail-post-step
+  post-steps:
+    - slack/notify:
+        branch_pattern: "master,rel/beta,rel/nightly,rel/stable"
+        event: fail
+        template: basic_fail_1
+
+# ===== Workflow Definitions =====
 workflows:
   version: 2
   "circleci_build_and_test":
@@ -79,6 +92,7 @@ workflows:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - test:
           name: << matrix.platform >>_test
@@ -90,6 +104,8 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -98,6 +114,7 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - integration:
           name: << matrix.platform >>_integration
@@ -105,6 +122,8 @@ workflows:
             <<: *matrix-default
           filters:
             <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -113,6 +132,7 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - e2e_expect:
           name: << matrix.platform >>_e2e_expect
@@ -120,6 +140,8 @@ workflows:
             <<: *matrix-default
           filters:
             <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -128,6 +150,7 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - e2e_subs:
           name: << matrix.platform >>_e2e_subs
@@ -135,6 +158,8 @@ workflows:
             <<: *matrix-default
           filters:
             <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -145,6 +170,7 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
+          <<: *slack-fail-post-step
 
       - tests_verification_job:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -154,6 +180,8 @@ workflows:
               job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
       - tests_verification_job_nightly:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -164,6 +192,7 @@ workflows:
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
@@ -182,9 +211,226 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
+          <<: *slack-fail-post-step
 
       #- windows_x64_build
 
+# ===== Job Definitions =====
+jobs:
+  build_nightly:
+    description: "Persists build artifacts to workspace in order to support `upload_binaries`."
+    parameters:
+      platform:
+        type: string
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    steps:
+      - generic_build
+      - persist_to_workspace:
+          root: << parameters.build_dir >>
+          paths:
+            - project
+            - go
+            - gimme
+            - .gimme
+
+  test:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 32
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
+    steps:
+      - generic_build
+      - generic_test:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_test
+          short_test_flag: "-short"
+      - upload_coverage
+
+  test_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 4
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
+    steps:
+      - generic_build
+      - generic_test:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_test_nightly
+          no_output_timeout: 45m
+      - upload_coverage
+
+  integration:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 16
+    environment:
+      E2E_TEST_FILTER: "GO"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_integration
+          short_test_flag: "-short"
+
+  integration_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 4
+    environment:
+      E2E_TEST_FILTER: "GO"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_integration_nightly
+          no_output_timeout: 45m
+
+  e2e_expect:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 10
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_e2e_expect
+          short_test_flag: "-short"
+
+  e2e_expect_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 2
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform>>_e2e_expect_nightly
+          no_output_timeout: 45m
+
+  e2e_subs:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    environment:
+      E2E_TEST_FILTER: "SCRIPTS"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_e2e_subs
+          short_test_flag: "-short"
+
+  e2e_subs_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    environment:
+      E2E_TEST_FILTER: "SCRIPTS"
+      CI_PLATFORM: << parameters.platform >>
+      # This platform is arbitrary, basically we just want to keep temps for
+      # one of the platforms in the matrix.
+      CI_KEEP_TEMP_PLATFORM: "amd64"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_e2e_subs_nightly
+          no_output_timeout: 45m
+
+  windows_x64_build:
+    executor:
+      name: win/default
+      size: large
+    steps:
+      - checkout
+      - prepare_windows
+      - run:
+          no_output_timeout: 45m
+          command: |
+            # export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="/home/circleci/go"
+            export ALGORAND_DEADLOCK=enable
+            export SKIP_GO_INSTALLATION=True
+            export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
+            export MAKE=mingw32-make
+            $msys2 scripts/travis/build_test.sh
+          shell: bash.exe
+
+  tests_verification_job:
+    docker:
+      - image: python:3.9.6-alpine
+    resource_class: small
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform:
+        type: string
+      job_type:
+        type: string
+    steps:
+      - checkout
+      - tests_verification_command:
+          result_subdir: << parameters.platform >>_<< parameters.job_type >>
+
+  tests_verification_job_nightly:
+    docker:
+      - image: python:3.9.6-alpine
+    resource_class: small
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform:
+        type: string
+      job_type:
+        type: string
+    steps:
+      - checkout
+      - tests_verification_command:
+          result_subdir: << parameters.platform >>_<< parameters.job_type >>
+
+  upload_binaries:
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    steps:
+      - prepare_build_dir
+      - prepare_go
+      - upload_binaries_command:
+          platform: << parameters.platform >>
+
+# ===== Command Definitions =====
 commands:
   prepare_go:
     description: Clean out existing Go so we can use our preferred version
@@ -202,6 +448,7 @@ commands:
       - run:
           working_directory: /tmp
           command: |
+            sudo rm -rf ${HOME}/node_pkg/*
             sudo rm -rf << parameters.build_dir >>
             sudo mkdir -p << parameters.build_dir >>
             sudo chown -R $USER:$GROUP << parameters.build_dir >>
@@ -467,9 +714,6 @@ commands:
                 TestAlgohWithExpect \
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
-      - store_artifacts:
-          path: << parameters.result_path >>/<< parameters.result_subdir >>
-          destination: << parameters.result_subdir >>/combined-test-results
 
   upload_binaries_command:
     description: save build artifacts for potential deployments
@@ -502,229 +746,3 @@ commands:
                   command: |
                     export TRAVIS_BRANCH=${CIRCLE_BRANCH}
                     scripts/travis/test_release.sh
-
-jobs:
-  build_nightly:
-    description: "Persists build artifacts to workspace in order to support `upload_binaries`."
-    parameters:
-      platform:
-        type: string
-      build_dir:
-        type: string
-        default: << pipeline.parameters.build_dir >>
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    steps:
-      - generic_build
-      - persist_to_workspace:
-          root: << parameters.build_dir >>
-          paths:
-            - project
-            - go
-            - gimme
-            - .gimme
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
-
-  test:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 32
-    steps:
-      - generic_build
-      - generic_test:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_test
-          short_test_flag: "-short"
-      - upload_coverage
-
-  test_nightly:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
-    steps:
-      - generic_build
-      - generic_test:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_test_nightly
-          no_output_timeout: 45m
-      - upload_coverage
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
-
-  integration:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 16
-    environment:
-      E2E_TEST_FILTER: "GO"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_integration
-          short_test_flag: "-short"
-
-  integration_nightly:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
-    environment:
-      E2E_TEST_FILTER: "GO"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_integration_nightly
-          no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
-
-  e2e_expect:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 10
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_e2e_expect
-          short_test_flag: "-short"
-
-  e2e_expect_nightly:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 2
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform>>_e2e_expect_nightly
-          no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
-
-  e2e_subs:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    environment:
-      E2E_TEST_FILTER: "SCRIPTS"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_e2e_subs
-          short_test_flag: "-short"
-
-  e2e_subs_nightly:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    environment:
-      E2E_TEST_FILTER: "SCRIPTS"
-      CI_PLATFORM: << parameters.platform >>
-      # This platform is arbitrary, basically we just want to keep temps for
-      # one of the platforms in the matrix.
-      CI_KEEP_TEMP_PLATFORM: "amd64"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_e2e_subs_nightly
-          no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
-
-  windows_x64_build:
-    executor:
-      name: win/default
-      size: large
-    steps:
-      - checkout
-      - prepare_windows
-      - run:
-          no_output_timeout: 45m
-          command: |
-            # export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export GOPATH="/home/circleci/go"
-            export ALGORAND_DEADLOCK=enable
-            export SKIP_GO_INSTALLATION=True
-            export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
-            export MAKE=mingw32-make
-            $msys2 scripts/travis/build_test.sh
-          shell: bash.exe
-
-  tests_verification_job:
-    docker:
-      - image: python:3.9.6-alpine
-    resource_class: small
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-      job_type:
-        type: string
-    steps:
-      - checkout
-      - tests_verification_command:
-          result_subdir: << parameters.platform >>_<< parameters.job_type >>
-
-  tests_verification_job_nightly:
-    docker:
-      - image: python:3.9.6-alpine
-    resource_class: small
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-      job_type:
-        type: string
-    steps:
-      - checkout
-      - tests_verification_command:
-          result_subdir: << parameters.platform >>_<< parameters.job_type >>
-      - slack/notify:
-          <<: *slack-fail-event
-
-  upload_binaries:
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    steps:
-      - prepare_build_dir
-      - prepare_go
-      - upload_binaries_command:
-          platform: << parameters.platform >>
-      - slack/notify:
-          <<: *slack-fail-event

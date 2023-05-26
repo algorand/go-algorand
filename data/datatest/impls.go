@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -107,8 +107,8 @@ func (i ledgerImpl) LookupAgreement(r basics.Round, addr basics.Address) (basics
 }
 
 // Circulation implements Ledger.Circulation.
-func (i ledgerImpl) Circulation(r basics.Round) (basics.MicroAlgos, error) {
-	return i.l.Circulation(r)
+func (i ledgerImpl) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	return i.l.Circulation(r, voteRnd)
 }
 
 // Wait implements Ledger.Wait.

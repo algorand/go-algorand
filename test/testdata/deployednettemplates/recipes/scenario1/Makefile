@@ -1,4 +1,4 @@
-PARAMS=-w 100 -R 8 -N 20 -n 100 -H 10 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
+PARAMS=-w 100 -R 8 -N 20 -n 100 --npn-algod-nodes 10 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
 
 all:	net.json genesis.json
 

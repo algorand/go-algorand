@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ const (
 	inMemoryCommitterPageSize = int64(512)
 )
 
-// InMemoryCommitter is a fully function in-memory committer, supporting
+// InMemoryCommitter is a fully functional in-memory committer, supporting
 // persistence of pages.
 type InMemoryCommitter struct {
 	memStore map[uint64][]byte

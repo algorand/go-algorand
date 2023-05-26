@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -97,6 +97,15 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		totalAppLocalStates := rec.TotalAppLocalStates
 		if totalAppLocalStates > 0 {
 			return fmt.Errorf("cannot close: %d outstanding applications opted in. Please opt out or clear them", totalAppLocalStates)
+		}
+
+		// Confirm that there is no box-related state in the account
+		if rec.TotalBoxes > 0 {
+			return fmt.Errorf("cannot close: %d outstanding boxes", rec.TotalBoxes)
+		}
+		if rec.TotalBoxBytes > 0 {
+			// This should be impossible because every box byte comes from the existence of a box.
+			return fmt.Errorf("cannot close: %d outstanding box bytes", rec.TotalBoxBytes)
 		}
 
 		// Can't have created apps remaining either

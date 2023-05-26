@@ -2,6 +2,7 @@
   "network": {
     "wallets": 6,
     "nodes": 3,
+    "npn": 5,
     "ConsensusProtocol": "future"
   },
   "instances": {

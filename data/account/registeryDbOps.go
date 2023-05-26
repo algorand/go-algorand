@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,7 +85,7 @@ func (d deleteStateProofKeysOp) apply(db *participationDB) error {
 	})
 
 	if err != nil {
-		db.log.Warnf("participationDB unable to delete stateProof key: %w", err)
+		db.log.Warnf("participationDB unable to delete stateProof key: %v", err)
 	}
 	return err
 }

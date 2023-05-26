@@ -1,0 +1,141 @@
+#pragma version 6
+txn NumAppArgs
+int 0
+==
+bnz main_l6
+txna ApplicationArgs 0
+method "small_log()void"
+==
+bnz main_l5
+txna ApplicationArgs 0
+method "unlimited_log_test()void"
+==
+bnz main_l4
+err
+main_l4:
+txn OnCompletion
+int NoOp
+==
+txn ApplicationID
+int 0
+!=
+&&
+assert
+callsub unlimitedlogtest_1
+int 1
+return
+main_l5:
+txn OnCompletion
+int NoOp
+==
+txn ApplicationID
+int 0
+!=
+&&
+assert
+callsub smalllog_0
+int 1
+return
+main_l6:
+txn OnCompletion
+int NoOp
+==
+bnz main_l8
+err
+main_l8:
+txn ApplicationID
+int 0
+==
+assert
+int 1
+return
+
+// small_log
+smalllog_0:
+byte "yet another ephemeral log"
+log
+retsub
+
+// unlimited_log_test
+unlimitedlogtest_1:
+byte "The time has come,"
+log
+byte "To talk of many things"
+log
+byte "Of shoes--and ships--and sealing-wax--"
+log
+byte "Of cabbages--and kings--"
+log
+byte "And why the sea is boiling hot--"
+log
+byte "And whether pigs have wings."
+log
+byte "But wait a bit, the Oysters cried,"
+log
+byte "Before we have our chat"
+log
+byte "For some of us are out of breath,"
+log
+byte "And all of us are fat!"
+log
+byte "No hurry! said the Carpenter."
+log
+byte "They thanked him much for that."
+log
+byte "A loaf of bread, the Walrus said,"
+log
+byte "Is what we chiefly need"
+log
+byte "Pepper and vinegar besides"
+log
+byte "Are very good indeed--"
+log
+byte "Now if youre ready, Oysters dear,"
+log
+byte "We can begin to feed."
+log
+byte "But not on us! the Oysters cried,"
+log
+byte "Turning a little blue."
+log
+byte "After such kindness, that would be"
+log
+byte "A dismal thing to do!"
+log
+byte "The night is fine, the Walrus said."
+log
+byte "Do you admire the view?"
+log
+byte "It was so kind of you to come!"
+log
+byte "And you are very nice!"
+log
+byte "The Carpenter said nothing but"
+log
+byte "Cut us another slice"
+log
+byte "I wish you were not quite so deaf--"
+log
+byte "Ive had to ask you twice!"
+log
+byte "It seems a shame, the Walrus said,"
+log
+byte "To play them such a trick,"
+log
+byte "After weve brought them out so far,"
+log
+byte "And made them trot so quick!"
+log
+byte "The Carpenter said nothing but"
+log
+byte "The butters spread too thick!"
+log
+byte "I weep for you, the Walrus said"
+log
+byte "I deeply sympathize."
+log
+byte "With sobs and tears he sorted out"
+log
+byte "Those of the largest size,"
+log
+retsub

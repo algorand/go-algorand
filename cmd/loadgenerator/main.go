@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -69,14 +69,14 @@ func findRootKeys(algodDir string) []*crypto.SignatureSecrets {
 		var handle db.Accessor
 		handle, err := db.MakeErasableAccessor(path)
 		if err != nil {
-			return nil // don't care, move on
+			return nil //nolint:nilerr // don't care, move on
 		}
 		defer handle.Close()
 
 		// Fetch an account.Participation from the database
 		root, err := algodAcct.RestoreRoot(handle)
 		if err != nil {
-			return nil // don't care, move on
+			return nil //nolint:nilerr // don't care, move on
 		}
 		keylist = append(keylist, root.Secrets())
 		return nil
@@ -191,7 +191,7 @@ func spendLoop(cfg config, privateKey []*crypto.SignatureSecrets, publicKey []ba
 	return nil
 }
 
-func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) (nodeStatus generatedV2.NodeStatusResponse) {
+func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) (nodeStatus model.NodeStatusResponse) {
 	var err error
 	for {
 		nodeStatus, err = restClient.Status()
@@ -225,7 +225,7 @@ func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) 
 
 const transactionBlockSize = 800
 
-func generateTransactions(restClient client.RestClient, cfg config, privateKeys []*crypto.SignatureSecrets, publicKeys []basics.Address, nodeStatus generatedV2.NodeStatusResponse) (queueFull bool) {
+func generateTransactions(restClient client.RestClient, cfg config, privateKeys []*crypto.SignatureSecrets, publicKeys []basics.Address, nodeStatus model.NodeStatusResponse) (queueFull bool) {
 	start := time.Now()
 	var err error
 	var vers common.Version

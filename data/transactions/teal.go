@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,8 +32,13 @@ type EvalDelta struct {
 	GlobalDelta basics.StateDelta `codec:"gd"`
 
 	// When decoding EvalDeltas, the integer key represents an offset into
-	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
+	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ..., SharedAccts[0], SharedAccts[1], ...]
 	LocalDeltas map[uint64]basics.StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+
+	// If a program modifies the local of an account that is not the Sender, or
+	// in txn.Accounts, it must be recorded here, so that the key in LocalDeltas
+	// can refer to it.
+	SharedAccts []basics.Address `codec:"sa,allocbound=config.MaxEvalDeltaAccounts"`
 
 	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
 

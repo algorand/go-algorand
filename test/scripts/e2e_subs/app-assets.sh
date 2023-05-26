@@ -81,10 +81,10 @@ function asset-id {
 }
 
 APPACCT=$(python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'appID'+($APPID).to_bytes(8, 'big'))))")
-
+EXAMPLE_URL="http://example.com"
 function asset-create {
     amount=$1; shift
-    ${gcmd} asset create --creator "$SMALL" --total "$amount" --decimals 0 "$@"
+    ${gcmd} asset create --creator "$SMALL" --total "$amount" --decimals 0 "$@" --asseturl "$EXAMPLE_URL"
 }
 
 function asset-deposit {
@@ -99,6 +99,10 @@ function asset-optin {
 
 function clawback_addr {
     grep -o -E 'Clawback address: [A-Z0-9]{58}' | awk '{print $3}'
+}
+
+function asset_url {
+    grep -o -E 'URL:.*'|awk '{print $2}'
 }
 
 function payin {
@@ -180,6 +184,8 @@ asset-optin --assetid "$ASSETID" -a $USER #opt in to asset
 ${gcmd} asset config --manager $SMALL --assetid $ASSETID --new-clawback $USER
 cb_addr=$(${gcmd} asset info --assetid $ASSETID | clawback_addr)
 [ "$cb_addr" = "$USER" ]
+url=$(${gcmd} asset info --assetid $ASSETID | asset_url)
+[ "$url" = "$EXAMPLE_URL" ]
 ${gcmd} asset send -f "$SMALL" -t "$USER" -a "1000" --assetid "$ASSETID" --clawback "$USER"
 [ $(asset_bal "$USER") = 1000 ]
 [ $(asset_bal "$SMALL") = 999000 ]

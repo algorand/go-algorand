@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,7 +43,9 @@ type event interface {
 // A ConsensusVersionView is a view of the consensus version as read from a
 // LedgerReader, associated with some round.
 type ConsensusVersionView struct {
-	Err     serializableError
+	_struct struct{} `codec:","`
+
+	Err     *serializableError
 	Version protocol.ConsensusVersion
 }
 
@@ -69,8 +71,7 @@ type externalEvent interface {
 // type of the implementing struct.
 //
 //go:generate stringer -type=eventType
-//msgp:ignore eventType
-type eventType int
+type eventType uint8
 
 const (
 	// none is returned by state machines which have no event to return
@@ -145,7 +146,7 @@ const (
 	// that a certificate has formed for that proposal-value.
 	proposalCommittable
 
-	// proposalCommittable is returned by the proposal state machines when a
+	// proposalAccepted is returned by the proposal state machines when a
 	// proposal-value is accepted.
 	proposalAccepted
 
@@ -255,6 +256,7 @@ func (e emptyEvent) AttachConsensusVersion(v ConsensusVersionView) externalEvent
 }
 
 type messageEvent struct {
+	_struct struct{} `codec:","`
 	// {vote,bundle,payload}{Present,Verified}
 	T eventType
 
@@ -263,10 +265,10 @@ type messageEvent struct {
 
 	// Err is set if cryptographic verification was attempted and failed for
 	// Input.
-	Err serializableError
+	Err *serializableError
 	// TaskIndex is optionally set to track a message as it is processed
 	// through cryptographic verification.
-	TaskIndex int
+	TaskIndex uint64
 
 	// Tail is an optionally-set field which specifies an unauthenticated
 	// proposal which should be processed after Input is processed.  Tail is
@@ -314,12 +316,15 @@ func (e messageEvent) AttachConsensusVersion(v ConsensusVersionView) externalEve
 // freshnessData is bundled with filterableMessageEvent
 // to allow for delegated freshness computation
 type freshnessData struct {
+	_struct struct{} `codec:","`
+
 	PlayerRound          round
 	PlayerPeriod         period
 	PlayerStep           step
 	PlayerLastConcluding step
 }
 
+//msgp:ignore filterableMessageEvent
 type filterableMessageEvent struct {
 	messageEvent
 
@@ -534,7 +539,7 @@ type payloadProcessedEvent struct {
 
 	// Err is set to be the reason the proposal payload was rejected in
 	// payloadRejected.
-	Err serializableError
+	Err *serializableError
 }
 
 func (e payloadProcessedEvent) t() eventType {
@@ -558,7 +563,7 @@ type filteredEvent struct {
 
 	// Err is the reason cryptographic verification failed and is set for
 	// events {proposal,vote,bundle}Malformed.
-	Err serializableError
+	Err *serializableError
 }
 
 func (e filteredEvent) t() eventType {
@@ -623,6 +628,7 @@ func (e pinnedValueEvent) ComparableStr() string {
 }
 
 type thresholdEvent struct {
+	_struct struct{} `codec:","`
 	// {{soft,cert,next}Threshold, none}
 	T eventType
 
@@ -818,6 +824,7 @@ func (e nextThresholdStatusRequestEvent) ComparableStr() string {
 }
 
 type nextThresholdStatusEvent struct {
+	_struct struct{} `codec:","`
 	// the result of a nextThresholdStatusRequest. Contains two bits of information,
 	// capturing four cases:
 	// Bottom = false, Proposal = unset/bottom --> received no next value thresholds
@@ -910,8 +917,8 @@ type checkpointEvent struct {
 	Round  round
 	Period period
 	Step   step
-	Err    serializableError // the error that was generated while storing the state to disk; nil on success.
-	done   chan error        // an output channel to let the pseudonode that we're done processing. We don't want to serialize that, since it's not needed in recovery/autopsy.
+	Err    *serializableError // the error that was generated while storing the state to disk; nil on success.
+	done   chan error         // an output channel to let the pseudonode that we're done processing. We don't want to serialize that, since it's not needed in recovery/autopsy.
 }
 
 func (e checkpointEvent) t() eventType {
@@ -939,7 +946,22 @@ func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
 	return e
 }
 
+// AttachReceivedAt looks for an unauthenticatedProposal inside a
+// payloadPresent or votePresent messageEvent, and attaches the given
+// time to the proposal's receivedAt field.
 func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
-	e.Input.Proposal.receivedAt = d
+	if e.T == payloadPresent {
+		e.Input.UnauthenticatedProposal.receivedAt = d
+	} else if e.T == votePresent {
+		// Check for non-nil Tail, indicating this votePresent event
+		// contains a synthetic payloadPresent event that was attached
+		// to it by setupCompoundMessage.
+		if e.Tail != nil && e.Tail.T == payloadPresent {
+			// The tail event is payloadPresent, serialized together
+			// with the proposal vote as a single CompoundMessage
+			// using a protocol.ProposalPayloadTag network message.
+			e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+		}
+	}
 	return e
 }

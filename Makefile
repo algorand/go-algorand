@@ -13,6 +13,13 @@ ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
 S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
+GOLANG_VERSIONS				:= $(shell ./scripts/get_golang_version.sh all)
+GOLANG_VERSION_BUILD		:= $(firstword $(GOLANG_VERSIONS))
+GOLANG_VERSION_SUPPORT		:= $(lastword $(GOLANG_VERSIONS))
+GOLANG_VERSION_BUILD_MAJOR	:= $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
+CURRENT_GO_VERSION			:= $(shell go version | cut -d " " -f 3 | tr -d 'go')
+CURRENT_GO_VERSION_MAJOR	:= $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
+
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
@@ -85,7 +92,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./stateproof ./data/account ./daemon/algod/api/spec/v2
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
 
 default: build
 
@@ -99,12 +106,21 @@ fix: build
 	$(GOPATH1)/bin/algofix */
 
 lint: deps
-	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml 
+	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
+
+check_go_version:
+	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
+		echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)"; \
+		exit 1; \
+	fi
+
+tidy: check_go_version
+	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
 
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
 
-sanity: fix lint fmt
+sanity: fix lint fmt tidy
 
 cover:
 	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
@@ -147,21 +163,6 @@ deps:
 
 # artifacts
 
-# Regenerate algod swagger spec files
-ALGOD_API_SWAGGER_SPEC := daemon/algod/api/swagger.json
-ALGOD_API_FILES := $(shell find daemon/algod/api/server/common daemon/algod/api/server/v1 daemon/algod/api/spec/v1 -type f) \
-	daemon/algod/api/server/router.go
-ALGOD_API_SWAGGER_INJECT := daemon/algod/api/server/lib/bundledSpecInject.go
-
-# Note that swagger.json requires the go-swagger dep.
-$(ALGOD_API_SWAGGER_SPEC): $(ALGOD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
-	cd daemon/algod/api && \
-		PATH=$(GOPATH1)/bin:$$PATH \
-		go generate ./...
-
-$(ALGOD_API_SWAGGER_INJECT): deps $(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated
-	./daemon/algod/api/server/lib/bundle_swagger_json.sh
-
 # Regenerate kmd swagger spec files
 KMD_API_SWAGGER_SPEC := daemon/kmd/api/swagger.json
 KMD_API_FILES := $(shell find daemon/kmd/api/ -type f | grep -v $(KMD_API_SWAGGER_SPEC))
@@ -191,19 +192,17 @@ $(KMD_API_SWAGGER_INJECT): deps $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).
 
 # generated files we should make sure we clean
 GENERATED_FILES := \
-	$(ALGOD_API_SWAGGER_INJECT) \
 	$(KMD_API_SWAGGER_INJECT) \
-	$(ALGOD_API_SWAGGER_SPEC) $(ALGOD_API_SWAGGER_SPEC).validated \
 	$(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 
-rebuild_swagger: deps
+rebuild_kmd_swagger: deps
 	rm -f $(GENERATED_FILES)
 	# we need to invoke the make here since we want to ensure that the deletion and re-creating are sequential
-	make $(KMD_API_SWAGGER_INJECT) $(ALGOD_API_SWAGGER_INJECT)
+	make $(KMD_API_SWAGGER_INJECT)
 
 # develop
 
-build: buildsrc
+build: buildsrc buildsrc-special
 
 # We're making an empty file in the go-cache dir to
 # get around a bug in go build where it will fail
@@ -212,6 +211,10 @@ build: buildsrc
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
 	mkdir -p "${GOCACHE}" && \
 	touch "${GOCACHE}"/file.txt && \
+	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+
+buildsrc-special:
+	cd tools/block-generator && \
 	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
@@ -327,7 +330,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_swagger
+.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule

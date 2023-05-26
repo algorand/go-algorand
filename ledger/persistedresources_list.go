@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 package ledger
 
 // persistedResourcesDataList represents a doubly linked list.
-// must initiate with newPersistedAccountList.
+// must initiate with newPersistedResourcesList.
 type persistedResourcesDataList struct {
 	root     persistedResourcesDataListNode  // sentinel list element, only &root, root.prev, and root.next are used
 	freeList *persistedResourcesDataListNode // preallocated nodes location

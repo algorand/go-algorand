@@ -102,6 +102,18 @@ fi
 # case 3: asset created with manager, reserve, freezer, and clawback different from the creator
 ${gcmd} asset create --creator "${ACCOUNT}" --manager "${ACCOUNTB}" --reserve "${ACCOUNTC}" --freezer "${ACCOUNTD}" --clawback "${ACCOUNTE}" --name "${ASSET_NAME}" --unitname dma --total 1000000000000 --asseturl "${ASSET_URL}"
 
+# case 3a: asset info should fail if reserve address has not opted into the asset.
+EXPERROR='account asset info not found'
+RES=$(${gcmd} asset info --creator $ACCOUNT --unitname dma 2>&1 || true)
+if [[ $RES != *"${EXPERROR}"* ]]; then
+    date '+asset-misc FAIL asset info should fail unless reserve account was opted in %Y%m%d_%H%M%S'
+    exit 1
+else
+    echo ok
+fi
+
+# case 3b: Reserve address opts into the the asset, and gets asset info successfully.
+${gcmd} asset optin --creator "${ACCOUNT}" --asset dma --account ${ACCOUNTC}
 DIFF_MANAGER_ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname dma|grep 'Asset ID'|awk '{ print $3 }')
 
 DMA_MANAGER_ADDRESS=$(${gcmd} asset info --assetid ${DIFF_MANAGER_ASSET_ID} |grep 'Manager address'|awk '{ print $3 }')

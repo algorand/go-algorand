@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,8 @@ const getAllAddresses = math.MaxInt32
 
 // PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
 // currently, we have two roles : relay role and archiver role, which are mutually exclusive.
+//
+//msgp:ignore PhoneBookEntryRoles
 type PhoneBookEntryRoles int
 
 // PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record

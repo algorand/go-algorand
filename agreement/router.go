@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -66,6 +66,8 @@ type router interface {
 }
 
 type rootRouter struct {
+	_struct struct{} `codec:","`
+
 	root         actor    // playerMachine   (not restored: explicitly set on construction)
 	proposalRoot listener // proposalMachine
 	voteRoot     listener // voteMachine
@@ -73,20 +75,24 @@ type rootRouter struct {
 	ProposalManager proposalManager
 	VoteAggregator  voteAggregator
 
-	Children map[round]*roundRouter
+	Children map[round]*roundRouter `codec:"Children,allocbound=-"`
 }
 
 type roundRouter struct {
+	_struct struct{} `codec:","`
+
 	proposalRoot listener // proposalMachineRound
 	voteRoot     listener // voteMachineRound
 
 	ProposalStore    proposalStore
 	VoteTrackerRound voteTrackerRound
 
-	Children map[period]*periodRouter
+	Children map[period]*periodRouter `codec:"Children,allocbound=-"`
 }
 
 type periodRouter struct {
+	_struct struct{} `codec:","`
+
 	proposalRoot listener // proposalMachinePeriod
 	voteRoot     listener // voteMachinePeriod
 
@@ -95,10 +101,11 @@ type periodRouter struct {
 
 	ProposalTrackerContract proposalTrackerContract
 
-	Children map[step]*stepRouter
+	Children map[step]*stepRouter `codec:"Children,allocbound=-"`
 }
 
 type stepRouter struct {
+	_struct  struct{} `codec:","`
 	voteRoot listener // voteMachineStep
 
 	VoteTracker voteTracker

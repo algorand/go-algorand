@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,8 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -49,6 +52,9 @@ const msgsInReadBufferPerPeer = 10
 
 var tagStringList []string
 
+// allowCustomTags is set by tests to allow non-protocol-defined message tags. It is false in non-test code.
+var allowCustomTags bool
+
 func init() {
 	tagStringList = make([]string, len(protocol.TagList))
 	for i, t := range protocol.TagList {
@@ -58,6 +64,22 @@ func init() {
 	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
+
+	matched := false
+	for _, version := range SupportedProtocolVersions {
+		if version == versionPeerFeatures {
+			matched = true
+		}
+	}
+	if !matched {
+		panic(fmt.Sprintf("peer features version %s is not supported %v", versionPeerFeatures, SupportedProtocolVersions))
+	}
+
+	var err error
+	versionPeerFeaturesNum[0], versionPeerFeaturesNum[1], err = versionToMajorMinor(versionPeerFeatures)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse version %v: %s", versionPeerFeatures, err.Error()))
+	}
 }
 
 var networkSentBytesTotal = metrics.MakeCounter(metrics.NetworkSentBytesTotal)
@@ -75,24 +97,26 @@ var networkMessageQueueMicrosTotal = metrics.MakeCounter(metrics.MetricName{Name
 
 var duplicateNetworkMessageReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkMessageReceivedTotal)
 var duplicateNetworkMessageReceivedBytesTotal = metrics.MakeCounter(metrics.DuplicateNetworkMessageReceivedBytesTotal)
+var duplicateNetworkFilterReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkFilterReceivedTotal)
 var outgoingNetworkMessageFilteredOutTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutTotal)
 var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutBytesTotal)
+var unknownProtocolTagMessagesTotal = metrics.MakeCounter(metrics.UnknownProtocolTagMessagesTotal)
 
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
 var defaultSendMessageTags = map[protocol.Tag]bool{
-	protocol.AgreementVoteTag:   true,
-	protocol.MsgDigestSkipTag:   true,
-	protocol.NetPrioResponseTag: true,
-	protocol.PingTag:            true,
-	protocol.PingReplyTag:       true,
-	protocol.ProposalPayloadTag: true,
-	protocol.TopicMsgRespTag:    true,
-	protocol.MsgOfInterestTag:   true,
-	protocol.TxnTag:             true,
-	protocol.UniCatchupReqTag:   true,
-	protocol.UniEnsBlockReqTag:  true,
-	protocol.VoteBundleTag:      true,
+	protocol.AgreementVoteTag:     true,
+	protocol.MsgDigestSkipTag:     true,
+	protocol.NetPrioResponseTag:   true,
+	protocol.NetIDVerificationTag: true,
+	protocol.PingTag:              true,
+	protocol.PingReplyTag:         true,
+	protocol.ProposalPayloadTag:   true,
+	protocol.TopicMsgRespTag:      true,
+	protocol.MsgOfInterestTag:     true,
+	protocol.TxnTag:               true,
+	protocol.UniEnsBlockReqTag:    true,
+	protocol.VoteBundleTag:        true,
 }
 
 // interface allows substituting debug implementation for *websocket.Conn
@@ -105,6 +129,11 @@ type wsPeerWebsocketConn interface {
 	CloseWithoutFlush() error
 	SetPingHandler(h func(appData string) error)
 	SetPongHandler(h func(appData string) error)
+	wrappedConn
+}
+
+type wrappedConn interface {
+	UnderlyingConn() net.Conn
 }
 
 type sendMessage struct {
@@ -137,6 +166,8 @@ const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
 const disconnectCliqueResolve disconnectReason = "CliqueResolving"
 const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
+const disconnectDuplicateConnection disconnectReason = "DuplicateConnection"
+const disconnectBadIdentityData disconnectReason = "BadIdentityData"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -160,6 +191,14 @@ type wsPeer struct {
 
 	// Nonce used to uniquely identify requests
 	requestNonce uint64
+
+	// duplicateFilterCount counts how many times the remote peer has sent us a message hash
+	// to filter that it had already sent before.
+	// this needs to be 64-bit aligned for use with atomic.AddUint64 on 32-bit platforms.
+	duplicateFilterCount uint64
+
+	// These message counters need to be 64-bit aligned as well.
+	txMessageCount, miMessageCount, ppMessageCount, avMessageCount, unkMessageCount uint64
 
 	wsPeerCore
 
@@ -197,6 +236,12 @@ type wsPeer struct {
 	// is present in wn.peers.
 	peerIndex int
 
+	// the peer's identity key which it uses for identityChallenge exchanges
+	identity         crypto.PublicKey
+	identityVerified uint32
+	// the identityChallenge is recorded to the peer so it may verify its identity at a later time
+	identityChallenge identityChallengeValue
+
 	// Challenge sent to the peer on an incoming connection
 	prioChallenge string
 
@@ -209,6 +254,9 @@ type wsPeer struct {
 	// peer version ( this is one of the version supported by the current node and listed in SupportedProtocolVersions )
 	version string
 
+	// peer features derived from the peer version
+	features peerFeatureFlag
+
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
 
@@ -216,10 +264,10 @@ type wsPeer struct {
 	responseChannelsMutex deadlock.RWMutex
 
 	// sendMessageTag is a map of allowed message to send to a peer. We don't use any synchronization on this map, and the
-	// only gurentee is that it's being accessed only during startup and/or by the sending loop go routine.
+	// only guarantee is that it's being accessed only during startup and/or by the sending loop go routine.
 	sendMessageTag map[protocol.Tag]bool
 
-	// messagesOfInterestGeneration is this node's messagesOfInterest version that we have seent to this peer.
+	// messagesOfInterestGeneration is this node's messagesOfInterest version that we have seen to this peer.
 	messagesOfInterestGeneration uint32
 
 	// connMonitor used to measure the relative performance of the connection
@@ -227,10 +275,10 @@ type wsPeer struct {
 	// field set to nil.
 	connMonitor *connectionPerformanceMonitor
 
-	// peerMessageDelay is calculated by the connection monitor; it's the relative avarage per-message delay.
+	// peerMessageDelay is calculated by the connection monitor; it's the relative average per-message delay.
 	peerMessageDelay int64
 
-	// throttledOutgoingConnection determines if this outgoing connection will be throttled bassed on it's
+	// throttledOutgoingConnection determines if this outgoing connection will be throttled based on it's
 	// performance or not. Throttled connections are more likely to be short-lived connections.
 	throttledOutgoingConnection bool
 
@@ -240,6 +288,9 @@ type wsPeer struct {
 
 	// clientDataStoreMu synchronizes access to clientDataStore
 	clientDataStoreMu deadlock.Mutex
+
+	// closers is a slice of functions to run when the peer is closed
+	closers []func()
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -259,6 +310,12 @@ type UnicastPeer interface {
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
+}
+
+// TCPInfoUnicastPeer exposes information about the underlying connection if available on the platform
+type TCPInfoUnicastPeer interface {
+	UnicastPeer
+	GetUnderlyingConnTCPInfo() (*util.TCPInfo, error)
 }
 
 // Create a wsPeerCore object
@@ -288,7 +345,7 @@ func (wp *wsPeer) Version() string {
 	return wp.version
 }
 
-// 	Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
+// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
 // (Implements UnicastPeer)
 func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
 	var err error
@@ -309,6 +366,22 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 	}
 
 	return err
+}
+
+// GetUnderlyingConnTCPInfo unwraps the connection and returns statistics about it on supported underlying implementations
+//
+// (Implements TCPInfoUnicastPeer)
+func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
+	// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
+	var uconn net.Conn = wp.conn.UnderlyingConn()
+	for i := 0; i < 10; i++ {
+		wconn, ok := uconn.(wrappedConn)
+		if !ok {
+			break
+		}
+		uconn = wconn.UnderlyingConn()
+	}
+	return util.GetConnTCPInfo(uconn)
 }
 
 // Respond sends the response of a request message
@@ -401,6 +474,8 @@ func (wp *wsPeer) readLoop() {
 	}()
 	wp.conn.SetReadLimit(maxMessageLength)
 	slurper := MakeLimitedReaderSlurper(averageMessageLength, maxMessageLength)
+	dataConverter := makeWsPeerMsgDataConverter(wp)
+
 	for {
 		msg := IncomingMessage{}
 		mtype, reader, err := wp.conn.NextReader()
@@ -440,6 +515,11 @@ func (wp *wsPeer) readLoop() {
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
+		msg.Data, err = dataConverter.convert(msg.Tag, msg.Data)
+		if err != nil {
+			wp.reportReadErr(err)
+			return
+		}
 		msg.Net = wp.net
 		atomic.StoreInt64(&wp.lastPacketTime, msg.Received)
 		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
@@ -457,6 +537,7 @@ func (wp *wsPeer) readLoop() {
 		switch msg.Tag {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
+			atomic.AddUint64(&wp.miMessageCount, 1)
 			if wp.handleMessageOfInterest(msg) {
 				return
 			}
@@ -483,13 +564,28 @@ func (wp *wsPeer) readLoop() {
 			case channel <- &Response{Topics: topics}:
 				// do nothing. writing was successful.
 			default:
-				wp.net.log.Warnf("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
+				wp.net.log.Warn("wsPeer readLoop: channel blocked. Could not pass the response to the requester", wp.conn.RemoteAddr().String())
 			}
 			continue
 		case protocol.MsgDigestSkipTag:
 			// network maintenance message handled immediately instead of handing off to general handlers
 			wp.handleFilterMessage(msg)
 			continue
+		case protocol.TxnTag:
+			atomic.AddUint64(&wp.txMessageCount, 1)
+		case protocol.AgreementVoteTag:
+			atomic.AddUint64(&wp.avMessageCount, 1)
+		case protocol.ProposalPayloadTag:
+			atomic.AddUint64(&wp.ppMessageCount, 1)
+		// the remaining valid tags: no special handling here
+		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
+			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
+		default: // unrecognized tag
+			unknownProtocolTagMessagesTotal.Inc(nil)
+			atomic.AddUint64(&wp.unkMessageCount, 1)
+			if !allowCustomTags {
+				continue // drop message, skip adding it to queue
+			}
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
@@ -576,7 +672,14 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 	var digest crypto.Digest
 	copy(digest[:], msg.Data)
 	//wp.net.log.Debugf("add filter %v", digest)
-	wp.outgoingMsgFilter.CheckDigest(digest, true, true)
+	has := wp.outgoingMsgFilter.CheckDigest(digest, true, true)
+	if has {
+		// Count that this peer has sent us duplicate filter messages: this means it received the same
+		// large message concurrently from several peers, and then sent the filter message to us after
+		// each large message finished transferring.
+		duplicateNetworkFilterReceivedTotal.Inc(nil)
+		atomic.AddUint64(&wp.duplicateFilterCount, 1)
+	}
 }
 
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
@@ -787,6 +890,10 @@ func (wp *wsPeer) Close(deadline time.Time) {
 			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
 		}
 	}
+	// now call all registered closers
+	for _, f := range wp.closers {
+		f()
+	}
 }
 
 // CloseAndWait internally calls Close() then waits for all peer activity to stop
@@ -901,4 +1008,66 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	} else {
 		atomic.StoreUint32(&wp.messagesOfInterestGeneration, messagesOfInterestGeneration)
 	}
+}
+
+func (wp *wsPeer) pfProposalCompressionSupported() bool {
+	return wp.features&pfCompressedProposal != 0
+}
+
+func (wp *wsPeer) OnClose(f func()) {
+	if wp.closers == nil {
+		wp.closers = []func(){}
+	}
+	wp.closers = append(wp.closers, f)
+}
+
+//msgp:ignore peerFeatureFlag
+type peerFeatureFlag int
+
+const pfCompressedProposal peerFeatureFlag = 1
+
+// versionPeerFeatures defines protocol version when peer features were introduced
+const versionPeerFeatures = "2.2"
+
+// versionPeerFeaturesNum is a parsed numeric representation of versionPeerFeatures
+var versionPeerFeaturesNum [2]int64
+
+func versionToMajorMinor(version string) (int64, int64, error) {
+	parts := strings.Split(version, ".")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("version %s does not have two components", version)
+	}
+	major, err := strconv.ParseInt(parts[0], 10, 8)
+	if err != nil {
+		return 0, 0, err
+	}
+	minor, err := strconv.ParseInt(parts[1], 10, 8)
+	if err != nil {
+		return 0, 0, err
+	}
+	return major, minor, nil
+}
+
+func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFlag {
+	major, minor, err := versionToMajorMinor(version)
+	if err != nil {
+		return 0
+	}
+
+	if major < versionPeerFeaturesNum[0] {
+		return 0
+	}
+	if minor < versionPeerFeaturesNum[1] {
+		return 0
+	}
+
+	var features peerFeatureFlag
+	parts := strings.Split(announcedFeatures, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == PeerFeatureProposalCompression {
+			features |= pfCompressedProposal
+		}
+	}
+	return features
 }

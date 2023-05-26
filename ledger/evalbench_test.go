@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -491,7 +491,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		if withCrypto {
 			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
 		} else {
-			_, err = internal.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
+			_, err = eval.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil, l2.tracer)
 		}
 		require.NoError(b, err)
 	}
@@ -505,7 +505,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 
 func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSource BenchTxnGenerator, genesisInitState ledgercore.InitState, addrs []basics.Address, keys []*crypto.SignatureSecrets, l, l2 *Ledger) *ledgercore.ValidatedBlock {
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(b, err)
 
 	genHash := l.GenesisHash()
@@ -529,7 +529,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 					require.NoError(b, err)
 				}
 				newBlock = bookkeeping.MakeBlock(validatedBlock.Block().BlockHeader)
-				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 				require.NoError(b, err)
 				numBlocks++
 			}
@@ -550,7 +550,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 		wg.Wait()
 
 		newBlock = bookkeeping.MakeBlock(validatedBlock.Block().BlockHeader)
-		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 		require.NoError(b, err)
 	}
 

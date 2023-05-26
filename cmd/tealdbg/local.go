@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -536,7 +536,7 @@ func (r *LocalRunner) RunAll() error {
 		// ep.Debugger = r.debugger
 		// if ep.Debugger != nil // FALSE
 		if r.debugger != nil {
-			ep.Debugger = r.debugger
+			ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(r.debugger)
 		}
 	}
 

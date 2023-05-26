@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -273,6 +273,16 @@ func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
 	}
 	d.pos = (len(d.b) - len(rem))
 	return nil
+}
+
+// Consumed returns number of bytes consumed so far.
+func (d *MsgpDecoderBytes) Consumed() int {
+	return d.pos
+}
+
+// Remaining returns number of bytes remained in the input buffer.
+func (d *MsgpDecoderBytes) Remaining() int {
+	return len(d.b) - d.pos
 }
 
 // encodingPool holds temporary byte slice buffers used for encoding messages.

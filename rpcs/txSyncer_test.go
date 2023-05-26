@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -196,6 +196,8 @@ func TestSyncFromClient(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(clientPool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
 	require.NoError(t, syncer.syncFromClient(&client))
@@ -211,6 +213,8 @@ func TestSyncFromUnsupportedClient(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
 	require.Error(t, syncer.syncFromClient(&client))
@@ -226,6 +230,8 @@ func TestSyncFromClientAndQuit(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	syncer.cancel()
 	require.Error(t, syncer.syncFromClient(&client))
@@ -241,6 +247,8 @@ func TestSyncFromClientAndError(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	require.Error(t, syncer.syncFromClient(&client))
 	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
@@ -256,6 +264,8 @@ func TestSyncFromClientAndTimeout(t *testing.T) {
 	handler := mockHandler{}
 	syncTimeout := time.Duration(0)
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, syncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	require.Error(t, syncer.syncFromClient(&client))
 	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
@@ -277,6 +287,8 @@ func TestSync(t *testing.T) {
 	handler := mockHandler{}
 	syncerPool := makeMockPendingTxAggregate(3)
 	syncer := MakeTxSyncer(syncerPool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
 	require.NoError(t, syncer.sync())
@@ -290,6 +302,8 @@ func TestNoClientsSync(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
 	require.NoError(t, syncer.sync())

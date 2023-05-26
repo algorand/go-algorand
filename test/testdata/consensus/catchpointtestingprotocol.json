@@ -99,6 +99,7 @@
     "SupportTransactionLeases": true,
     "SupportTxGroups": true,
     "TxnCounter": true,
+    "EnableCatchpointsWithSPContexts": true,
     "UpgradeThreshold": 9000,
     "UpgradeVoteRounds": 10000
   }

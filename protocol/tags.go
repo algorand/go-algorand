@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,31 +25,30 @@ type Tag string
 // are encoded using a comma separator (see network/msgOfInterest.go).
 // The tags must be 2 bytes long.
 const (
-	UnknownMsgTag      Tag = "??"
-	AgreementVoteTag   Tag = "AV"
-	MsgOfInterestTag   Tag = "MI"
-	MsgDigestSkipTag   Tag = "MS"
-	NetPrioResponseTag Tag = "NP"
-	PingTag            Tag = "pi"
-	PingReplyTag       Tag = "pj"
-	ProposalPayloadTag Tag = "PP"
-	StateProofSigTag   Tag = "SP"
-	TopicMsgRespTag    Tag = "TS"
-	TxnTag             Tag = "TX"
-	UniCatchupReqTag   Tag = "UC" //Replaced by UniEnsBlockReqTag. Only for backward compatibility.
-	UniEnsBlockReqTag  Tag = "UE"
+	AgreementVoteTag     Tag = "AV"
+	MsgOfInterestTag     Tag = "MI"
+	MsgDigestSkipTag     Tag = "MS"
+	NetPrioResponseTag   Tag = "NP"
+	NetIDVerificationTag Tag = "NI"
+	PingTag              Tag = "pi"
+	PingReplyTag         Tag = "pj"
+	ProposalPayloadTag   Tag = "PP"
+	StateProofSigTag     Tag = "SP"
+	TopicMsgRespTag      Tag = "TS"
+	TxnTag               Tag = "TX"
+	//UniCatchupReqTag   Tag = "UC" was replaced by UniEnsBlockReqTag
+	UniEnsBlockReqTag Tag = "UE"
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
 	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
 	VoteBundleTag Tag = "VB"
 )
 
 // TagList is a list of all currently used protocol tags.
-// TODO: generate this and/or have a test that it is complete.
 var TagList = []Tag{
-	UnknownMsgTag,
 	AgreementVoteTag,
 	MsgOfInterestTag,
 	MsgDigestSkipTag,
+	NetIDVerificationTag,
 	NetPrioResponseTag,
 	PingTag,
 	PingReplyTag,
@@ -57,7 +56,6 @@ var TagList = []Tag{
 	StateProofSigTag,
 	TopicMsgRespTag,
 	TxnTag,
-	UniCatchupReqTag,
 	UniEnsBlockReqTag,
 	VoteBundleTag,
 }

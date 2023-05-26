@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
 type player struct {
+	_struct struct{} `codec:","`
 	// Round, Period, and Step hold the current round, period, and step of
 	// the player state machine.
 	Round  round
@@ -391,7 +392,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 
 	if e.t() == payloadPipelined {
 		e := e.(payloadProcessedEvent)
-		msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload} // TODO do we want to keep around the original handle?
+		msg := message{messageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload} // TODO do we want to keep around the original handle?
 		a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, p.Round, e.Period, e.Pinned)
 		actions = append(actions, a)
 	}
@@ -570,7 +571,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}
 
 		// relay as the proposer
-		if e.Input.MessageHandle == nil {
+		if e.Input.messageHandle == nil {
 			var uv unauthenticatedVote
 			switch ef.t() {
 			case payloadPipelined, payloadAccepted:

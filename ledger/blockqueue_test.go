@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -33,6 +34,33 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+func randomBlock(r basics.Round) blockEntry {
+	b := bookkeeping.Block{}
+	c := agreement.Certificate{}
+
+	b.BlockHeader.Round = r
+	b.BlockHeader.TimeStamp = int64(crypto.RandUint64())
+	b.RewardsPool = testPoolAddr
+	b.FeeSink = testSinkAddr
+	c.Round = r
+
+	return blockEntry{
+		block: b,
+		cert:  c,
+	}
+}
+
+func randomInitChain(proto protocol.ConsensusVersion, nblock int) []blockEntry {
+	res := make([]blockEntry, 0)
+	for i := 0; i < nblock; i++ {
+		blkent := randomBlock(basics.Round(i))
+		blkent.cert = agreement.Certificate{}
+		blkent.block.CurrentProtocol = proto
+		res = append(res, blkent)
+	}
+	return res
+}
 
 func TestPutBlockTooOld(t *testing.T) {
 	partitiontest.PartitionTest(t)

@@ -1,0 +1,10 @@
+package: model
+generate:
+  models: true
+output-options:
+  type-mappings:
+    integer: uint64
+  skip-prune: true
+output: ./server/v2/generated/model/types.go
+compatibility:
+  always-prefix-enum-values: true

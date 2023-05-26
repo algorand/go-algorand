@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,8 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,6 +35,9 @@ func makeKeyFromSeed(i uint64) *crypto.SignatureSecrets {
 }
 
 func TestDeterministicAccounts(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	initCfg := PpConfig{
 		NumPartAccounts:        20,
 		DeterministicKeys:      true,

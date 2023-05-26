@@ -1,5 +1,5 @@
 # scenario3s is scenario3 but smaller. (10000 wallets -> 500) (1000 algod participating nodes -> 100) It still keeps a global datacenter distribution.
-PARAMS=-w 500 -R 20 -N 100 -n 100 -H 15 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
+PARAMS=-w 500 -R 20 -N 100 -n 100 --npn-algod-nodes 15 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
 
 SOURCES=node.json ${GOPATH}/bin/netgoal Makefile relay.json nonPartNode.json
 
