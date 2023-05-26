@@ -1,6 +1,6 @@
 name: "Pay (small)"
-genesis_accounts: 10
-genesis_account_balance: 1000000000000000
+genesis_accounts: 10000
+genesis_account_balance: 1000000000000
 tx_per_block: 100
 
 # transaction distribution

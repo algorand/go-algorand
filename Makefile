@@ -202,7 +202,7 @@ rebuild_kmd_swagger: deps
 
 # develop
 
-build: buildsrc
+build: buildsrc buildsrc-special
 
 # We're making an empty file in the go-cache dir to
 # get around a bug in go build where it will fail
@@ -211,6 +211,10 @@ build: buildsrc
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
 	mkdir -p "${GOCACHE}" && \
 	touch "${GOCACHE}"/file.txt && \
+	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+
+buildsrc-special:
+	cd tools/block-generator && \
 	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
