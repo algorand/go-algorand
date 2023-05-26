@@ -83,7 +83,6 @@ const (
  * A few notes:
  * 1. The network parameter to this function is substituted into the dnsBootstrapID anywhere that <network> appears.
  * 2. The backup parameter's presence in the dNSBootstrapID is optional
- * 6. The dedup mask/expression is intended to be used to deduplicate SRV records that are returned by the DNS server. For example, if the dedup mask/expression is set to
  *
  * On the dedup mask/expression in particular:
  * 1. The dedup mask/expression is intended to be used to deduplicate SRV records returned from the primary and backup DNS servers
