@@ -497,11 +497,12 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	}
 
 	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
-	handler.net.RelayArray(
-		handler.ctx,
-		[]protocol.Tag{protocol.TxnTag},
-		[][]byte{reencode(verifiedTxGroup)},
-		false, wi.peers)
+	err = handler.net.RelayArray(
+		handler.ctx, []protocol.Tag{protocol.TxnTag},
+		[][]byte{reencode(verifiedTxGroup)}, false, wi.peers)
+	if err != nil {
+		logging.Base().Infof("unable to relay transaction: %v", err)
+	}
 }
 
 func (handler *TxHandler) deleteFromCaches(msgKey *crypto.Digest, canonicalKey *crypto.Digest) {
