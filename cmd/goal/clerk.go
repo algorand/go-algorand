@@ -73,7 +73,7 @@ var (
 	simulateAllowMoreLogging      bool
 	simulateAllowMoreOpcodeBudget bool
 	simulateExtraOpcodeBudget     uint64
-	simulateExecTraceOptIn        bool
+	simulateEnableRequestTrace    bool
 )
 
 func init() {
@@ -162,7 +162,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
-	simulateCmd.Flags().BoolVar(&simulateExecTraceOptIn, "trace", false, "Opt in to returning execution trace of app calls during simulation")
+	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1364,15 +1364,7 @@ func decodeTxnsFromFile(file string) []transactions.SignedTxn {
 }
 
 func traceCmdOptionToSimulateTraceConfigModel() *model.SimulateTraceConfig {
-	simulateTraceConfig := model.SimulateTraceConfig{}
-	constTrue := true
-
-	if simulateExecTraceOptIn {
-		simulateTraceConfig.Enable = &constTrue
+	return &model.SimulateTraceConfig{
+		Enable: &simulateEnableRequestTrace,
 	}
-
-	if simulateTraceConfig == (model.SimulateTraceConfig{}) {
-		return nil
-	}
-	return &simulateTraceConfig
 }
