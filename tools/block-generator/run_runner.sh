@@ -4,6 +4,8 @@
 
 set -e
 
+OUTPUT=../../tmp/OUTPUT_RUN_RUNNER_TEST
+
 CONDUIT_BINARY=$1
 if [ -z "$CONDUIT_BINARY" ]; then
   echo "path to conduit binary is required"
@@ -13,8 +15,8 @@ fi
 POSTGRES_CONTAINER=generator-test-container
 POSTGRES_PORT=15432
 POSTGRES_DATABASE=generator_db
-CONFIG=${2:-"$(dirname $0)/test_config.yml"}
-echo "Using config file: $CONFIG"
+SCENARIO=${2:-"$(dirname $0)/test_config.yml"}
+echo "Using scenario config file: $SCENARIO"
 
 function start_postgres() {
   docker rm -f $POSTGRES_CONTAINER > /dev/null 2>&1 || true
@@ -40,7 +42,7 @@ function shutdown() {
 
 trap shutdown EXIT
 
-rm -rf OUTPUT_RUN_RUNNER_TEST > /dev/null 2>&1
+rm -rf $OUTPUT > /dev/null 2>&1
 echo "Building generator."
 pushd $(dirname "$0") > /dev/null
 go build
@@ -50,9 +52,9 @@ start_postgres
 echo "Starting test runner"
 $(dirname "$0")/block-generator runner \
 	--conduit-binary "$CONDUIT_BINARY" \
-	--report-directory ../../tmp/OUTPUT_RUN_RUNNER_TEST \
+	--report-directory $OUTPUT \
 	--test-duration 30s \
 	--log-level trace \
 	--postgres-connection-string "host=localhost user=algorand password=algorand dbname=generator_db port=15432 sslmode=disable" \
-	--scenario ${CONFIG} \
+	--scenario ${SCENARIO} \
   --reset-db
