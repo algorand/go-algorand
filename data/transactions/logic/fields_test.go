@@ -232,7 +232,7 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 			ledger.NewAsset(txn.Sender, 55, basics.AssetParams{})
 			ep.Proto.LogicSigVersion = v
 			if field.version > v {
-				testProg(t, text, v, Expect{1, "...was introduced in..."})
+				testProg(t, text, v, exp(1, "...was introduced in..."))
 				ops := testProg(t, text, field.version) // assemble in the future
 				ops.Program[0] = byte(v)
 				testAppBytes(t, ops.Program, ep, "invalid asset_params_get field")
@@ -282,7 +282,7 @@ func TestAcctParamsFieldsVersions(t *testing.T) {
 			ledger.NewAccount(txn.Sender, 200_000)
 			if field.version > v {
 				// check assembler fails if version before introduction
-				testProg(t, text, v, Expect{1, "...was introduced in..."})
+				testProg(t, text, v, exp(1, "...was introduced in..."))
 				ops := testProg(t, text, field.version) // assemble in the future
 				ops.Program[0] = byte(v)                // but set version back to before intro
 				if v < 6 {

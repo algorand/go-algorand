@@ -17,9 +17,18 @@
 package util
 
 import (
+	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
+	// import postgres driver
+	_ "github.com/lib/pq"
 )
+
+// ErrorNotInitialized is returned when the database is not initialized.
+var ErrorNotInitialized error = errors.New("database not initialized")
 
 // MaybeFail exits if there was an error.
 func MaybeFail(err error, errfmt string, params ...interface{}) {
@@ -29,4 +38,41 @@ func MaybeFail(err error, errfmt string, params ...interface{}) {
 	fmt.Fprintf(os.Stderr, errfmt, params...)
 	fmt.Fprintf(os.Stderr, "\nError: %v\n", err)
 	os.Exit(1)
+}
+
+// GetNextRound returns the next account round from the metastate table.
+func GetNextRound(postgresConnectionString string) (uint64, error) {
+	conn, err := sql.Open("postgres", postgresConnectionString)
+	if err != nil {
+		return 0, fmt.Errorf("postgres connection string did not work: %w", err)
+	}
+	defer conn.Close()
+	query := `SELECT v FROM metastate WHERE k='state';`
+	var state []uint8
+	if err = conn.QueryRow(query).Scan(&state); err != nil {
+		if strings.Contains(err.Error(), `relation "metastate" does not exist`) {
+			return 0, ErrorNotInitialized
+		}
+		return 0, fmt.Errorf("unable to get next db round: %w", err)
+	}
+	kv := make(map[string]uint64)
+	err = json.Unmarshal(state, &kv)
+	if err != nil {
+		return 0, fmt.Errorf("unable to get next account round: %w", err)
+	}
+	return kv["next_account_round"], nil
+}
+
+// EmptyDB empties the database.
+func EmptyDB(postgresConnectionString string) error {
+	conn, err := sql.Open("postgres", postgresConnectionString)
+	if err != nil {
+		return fmt.Errorf("postgres connection string did not work: %w", err)
+	}
+	defer conn.Close()
+	query := `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`
+	if _, err = conn.Exec(query); err != nil {
+		return fmt.Errorf("unable to reset postgres DB: %w", err)
+	}
+	return nil
 }
