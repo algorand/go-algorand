@@ -144,8 +144,9 @@ func (nd *nodeDir) configureNetAddress() (err error) {
 	nd.config.NetAddress = nd.NetAddress
 	if nd.IsRelay() && nd.NetAddress[0] == ':' {
 		fmt.Fprintf(os.Stdout, " - adding to relay addresses\n")
-		domainName := strings.Replace(nd.config.DNSBootstrapID, "<network>", string(nd.configurator.genesisData.Network), -1)
-		nd.configurator.addRelaySrv(domainName, nd.NetAddress)
+		for _, bootstrapRecord := range nd.config.DNSBootstrapArray(nd.configurator.genesisData.Network) {
+			nd.configurator.addRelaySrv(bootstrapRecord.PrimarySRVBootstrap, nd.NetAddress)
+		}
 	}
 	err = nd.saveConfig()
 	return
@@ -309,7 +310,12 @@ func (nd *nodeDir) configureDNSBootstrap() (err error) {
 	}
 
 	if nd.config.DNSBootstrapID == config.GetDefaultLocal().DNSBootstrapID {
-		nd.config.DNSBootstrapID = strings.Replace(nd.config.DNSBootstrapID, "algorand", "algodev", -1)
+		// For this use-case, we are looking to set a custom template expression for the DNSBootstrapID
+		// Assumes network this is used for can be substituted in now..
+		bootstrapArray := nd.config.DNSBootstrapArray(nd.configurator.genesisData.Network)
+		if len(bootstrapArray) > 0 {
+			nd.config.DNSBootstrapID = bootstrapArray[0].PrimarySRVBootstrap
+		}
 		err = nd.saveConfig()
 	}
 	return
