@@ -231,17 +231,29 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, cacheValue, *map
 // CheckAndPut adds msg into a cache if not found
 // returns a hashing key used for insertion if the message not found.
 func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Digest, cacheValue, bool) {
+	// copy vals since its owned by the cache and may be concurrently modified
+	copy := func(in cacheValue) cacheValue {
+		out := make(cacheValue, len(in))
+		for p := range in {
+			out[p] = struct{}{}
+		}
+		return out
+	}
+
 	c.mu.RLock()
 	d, vals, page, found := c.innerCheck(msg)
 	salt := c.curSalt
-	c.mu.RUnlock()
 	// fast read-only path: assuming most messages are duplicates, hash msg and check cache
+	// keep lock - it is needed for copying vals in defer
 	senderFound := false
 	if found {
 		if _, senderFound = vals[sender]; senderFound {
+			vals = copy(vals)
+			c.mu.RUnlock()
 			return d, vals, true
 		}
 	}
+	c.mu.RUnlock()
 
 	// not found: acquire write lock to add this msg hash to cache
 	c.mu.Lock()
@@ -252,6 +264,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 		if found {
 			if _, senderFound = vals[sender]; senderFound {
 				// already added to cache between RUnlock() and Lock(), return
+				vals = copy(vals)
 				return d, vals, true
 			}
 		}
@@ -264,6 +277,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 		vals, found = c.cur[*d]
 		if found {
 			if _, senderFound = vals[sender]; senderFound {
+				vals = copy(vals)
 				return d, vals, true
 			}
 			page = &c.cur
@@ -276,6 +290,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 	if found && !senderFound {
 		vals[sender] = struct{}{}
 		(*page)[*d] = vals
+		vals = copy(vals)
 		return d, vals, true
 	}
 
@@ -295,6 +310,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 
 	vals = cacheValue{sender: {}}
 	c.cur[*d] = vals
+	vals = copy(vals)
 	return d, vals, false
 }
 
