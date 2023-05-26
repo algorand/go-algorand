@@ -160,7 +160,7 @@ func (sv stackValue) string(limit int) (string, error) {
 	return string(sv.Bytes), nil
 }
 
-func (sv stackValue) toTealValue() (tv basics.TealValue) {
+func (sv stackValue) toTealValue() basics.TealValue {
 	if sv.avmType() == avmBytes {
 		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
 	}
