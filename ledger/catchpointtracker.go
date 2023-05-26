@@ -449,7 +449,7 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 			ct.catchpointInterval, dcr.catchpointLookback)
 
 	// if we're still writing the previous balances, we can't move forward yet.
-	if ct.IsWritingCatchpointDataFile() {
+	if ct.isWritingCatchpointDataFile() {
 		// if we hit this path, it means that we're still writing a catchpoint.
 		// see if the new delta range contains another catchpoint.
 		if hasIntermediateFirstStageRound {
@@ -469,8 +469,6 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 		dcr.catchpointFirstStage = true
 
 		if ct.enableGeneratingCatchpointFiles {
-			// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
-			atomic.StoreInt32(&ct.catchpointDataWriting, int32(-1))
 			ct.catchpointDataSlowWriting = make(chan struct{}, 1)
 			if hasMultipleIntermediateFirstStageRounds {
 				close(ct.catchpointDataSlowWriting)
@@ -478,7 +476,6 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 		}
 	}
 
-	dcr.catchpointDataWriting = &ct.catchpointDataWriting
 	dcr.enableGeneratingCatchpointFiles = ct.enableGeneratingCatchpointFiles
 
 	rounds := ct.calculateCatchpointRounds(dcr)
@@ -492,6 +489,11 @@ func (ct *catchpointTracker) produceCommittingTask(committedRound basics.Round, 
 func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 	ct.catchpointsMu.RLock()
 	defer ct.catchpointsMu.RUnlock()
+
+	if ct.enableGeneratingCatchpointFiles && dcc.catchpointFirstStage {
+		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written
+		atomic.StoreInt32(&ct.catchpointDataWriting, int32(-1))
+	}
 
 	dcc.committedRoundDigests = make([]crypto.Digest, dcc.offset)
 	copy(dcc.committedRoundDigests, ct.roundDigest[:dcc.offset])
@@ -926,10 +928,10 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	}
 }
 
-// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
+// handleUnorderedCommitOrError is a special method for handling deferred commits that are out of order.
 // Tracker might update own state in this case. For example, account catchpoint tracker cancels
 // scheduled catchpoint writing that deferred commit.
-func (ct *catchpointTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
+func (ct *catchpointTracker) handleUnorderedCommitOrError(dcc *deferredCommitContext) {
 	// if the node is configured to generate catchpoint files, we might need to update the catchpointWriting variable.
 	if ct.enableGeneratingCatchpointFiles {
 		// determine if this was a catchpoint round
@@ -1085,9 +1087,9 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	return commitErr
 }
 
-// IsWritingCatchpointDataFile returns true iff a (first stage) catchpoint data file
+// isWritingCatchpointDataFile returns true iff a (first stage) catchpoint data file
 // is being generated.
-func (ct *catchpointTracker) IsWritingCatchpointDataFile() bool {
+func (ct *catchpointTracker) isWritingCatchpointDataFile() bool {
 	return atomic.LoadInt32(&ct.catchpointDataWriting) != 0
 }
 

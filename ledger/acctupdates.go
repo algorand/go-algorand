@@ -24,7 +24,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -1606,7 +1605,7 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-func (au *accountUpdates) handleUnorderedCommit(dcc *deferredCommitContext) {
+func (au *accountUpdates) handleUnorderedCommitOrError(dcc *deferredCommitContext) {
 }
 
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
@@ -1629,14 +1628,6 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
 		au.accountsMu.RUnlock()
-
-		// in scheduleCommit, we expect that this function to update the catchpointWriting when
-		// it's on a catchpoint round and the node is configured to generate catchpoints. Doing this in a deferred function
-		// here would prevent us from "forgetting" to update this variable later on.
-		// The same is repeated in commitRound on errors.
-		if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
-			atomic.StoreInt32(dcc.catchpointDataWriting, 0)
-		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
 
@@ -1667,14 +1658,6 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 func (au *accountUpdates) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
-
-	defer func() {
-		if err != nil {
-			if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
-				atomic.StoreInt32(dcc.catchpointDataWriting, 0)
-			}
-		}
-	}()
 
 	_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {

@@ -17,10 +17,8 @@
 package logic
 
 import (
-	"encoding/base64"
 	"testing"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -61,22 +59,6 @@ func TestLineToPC(t *testing.T) {
 	dState.PCOffset = []PCOffset{{PC: 1, Offset: 0}}
 	pc = dState.LineToPC(1)
 	require.Equal(t, 0, pc)
-}
-
-func TestValueDeltaToValueDelta(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	vDelta := basics.ValueDelta{
-		Action: basics.SetUintAction,
-		Bytes:  "some string",
-		Uint:   uint64(0xffffffff),
-	}
-	ans := valueDeltaToValueDelta(&vDelta)
-	require.Equal(t, vDelta.Action, ans.Action)
-	require.NotEqual(t, vDelta.Bytes, ans.Bytes)
-	require.Equal(t, base64.StdEncoding.EncodeToString([]byte(vDelta.Bytes)), ans.Bytes)
-	require.Equal(t, vDelta.Uint, ans.Uint)
 }
 
 const testCallStackProgram string = `intcblock 1

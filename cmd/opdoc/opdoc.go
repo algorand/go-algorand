@@ -91,7 +91,7 @@ func namedStackTypesMarkdown(out io.Writer, stackTypes []namedType) {
 	for _, st := range stackTypes {
 		fmt.Fprintf(out, "| %s | %s | %s |\n", st.Name, st.boundString(), st.AVMType)
 	}
-	out.Write([]byte("\n"))
+	fmt.Fprintf(out, "\n")
 }
 
 func integerConstantsTableMarkdown(out io.Writer) {
