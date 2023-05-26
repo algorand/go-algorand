@@ -54,7 +54,7 @@ func main() {
 		fmt.Println("-blockdb=file required")
 		usage()
 	}
-	uri := fmt.Sprintf("file:%s?mode=ro", *blockDBfile)
+	uri := fmt.Sprintf("file:%s?_journal_mode=wal", *blockDBfile)
 	fmt.Println("Opening", uri)
 	db, err := sql.Open("sqlite3", uri)
 	if err != nil {

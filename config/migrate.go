@@ -128,9 +128,6 @@ func getLatestConfigVersion() uint32 {
 }
 
 func getVersionedDefaultLocalConfig(version uint32) (local Local) {
-	if version < 0 {
-		return
-	}
 	if version > 0 {
 		local = getVersionedDefaultLocalConfig(version - 1)
 	}

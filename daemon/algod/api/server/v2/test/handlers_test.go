@@ -2077,7 +2077,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	blk1 := bookkeeping.BlockHeader{Round: 1}
 	blk2 := bookkeeping.BlockHeader{Round: 2}
 	delta1 := ledgercore.StateDelta{Hdr: &blk1}
-	delta2 := ledgercore.StateDelta{Hdr: &blk2}
+	delta2 := ledgercore.StateDelta{Hdr: &blk2, KvMods: map[string]ledgercore.KvValueDelta{"bx1": {Data: []byte("foobar")}}}
 	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
 	groupID1, err := crypto.DigestFromString(crypto.Hash([]byte("hello")).String())
 	require.NoError(t, err)
@@ -2114,12 +2114,12 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	var roundResponse model.TransactionGroupLedgerStateDeltaForRoundResponse
+	var roundResponse model.TransactionGroupLedgerStateDeltasForRoundResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &roundResponse)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(roundResponse))
-	require.Equal(t, []string{txn1.ID().String()}, roundResponse[0].Ids)
-	hdr, ok := roundResponse[0].Delta["Hdr"].(map[string]interface{})
+	require.Equal(t, 1, len(roundResponse.Deltas))
+	require.Equal(t, []string{txn1.ID().String()}, roundResponse.Deltas[0].Ids)
+	hdr, ok := roundResponse.Deltas[0].Delta["Hdr"].(map[string]interface{})
 	require.True(t, ok)
 	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
 
@@ -2160,6 +2160,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	require.NoError(t, err)
 	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
 	require.NoError(t, err)
+	require.NotNil(t, groupResponse["KvMods"])
 	groupHdr, ok = groupResponse["Hdr"].(map[string]interface{})
 	require.True(t, ok)
 	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
