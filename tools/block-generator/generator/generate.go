@@ -47,22 +47,27 @@ type TxTypeID string
 const (
 	genesis TxTypeID = "genesis"
 
-	// Payment Tx IDs
-	paymentTx         TxTypeID = "pay"
-	assetTx           TxTypeID = "asset"
-	applicationCallTx TxTypeID = "appl"
+	// TX Distribution / ID's
+	paymentTx     TxTypeID = "pay"
+	assetTx       TxTypeID = "asset"
+	applicationTx TxTypeID = "appl"
 	//keyRegistrationTx TxTypeID = "keyreg"
 
+	// Payment TX Distribution / ID's
 	paymentAcctCreateTx TxTypeID = "pay_create"
+	paymentPayTx        TxTypeID = "pay_pay"
 
-	// Asset Tx IDs
+	// Asset TX Distribution / ID's
 	assetCreate  TxTypeID = "asset_create"
+	assetDestroy TxTypeID = "asset_destroy"
 	assetOptin   TxTypeID = "asset_optin"
 	assetXfer    TxTypeID = "asset_xfer"
 	assetClose   TxTypeID = "asset_close"
-	assetDestroy TxTypeID = "asset_destroy"
 
-	// App Tx IDs
+	// App kind TX Distribution / ID's don't exist because these are flattened
+	// into weights across (app kinds) X (app tx type)
+
+	// App Swap TX Distribution / ID's
 	appSwapCreate TxTypeID = "app_swap_create"
 	appSwapUpdate TxTypeID = "app_swap_update"
 	appSwapDelete TxTypeID = "app_swap_delete"
@@ -71,6 +76,7 @@ const (
 	appSwapClose  TxTypeID = "app_swap_close"
 	appSwapClear  TxTypeID = "app_swap_clear"
 
+	// App Boxes TX Distribution / ID's
 	appBoxesCreate TxTypeID = "app_boxes_create"
 	appBoxesUpdate TxTypeID = "app_boxes_update"
 	appBoxesDelete TxTypeID = "app_boxes_delete"
@@ -78,6 +84,8 @@ const (
 	appBoxesCall   TxTypeID = "app_boxes_call"
 	appBoxesClose  TxTypeID = "app_boxes_close"
 	appBoxesClear  TxTypeID = "app_boxes_clear"
+
+	// TODO: consider an app that creates/destroys an app during opup
 
 	// Defaults
 	genesisAccountInitialBalance uint64 = 40000000000000
@@ -87,6 +95,8 @@ const (
 	consensusTimeMilli int64  = 4500
 	startingTxnCounter uint64 = 1000
 )
+
+// ---- types ----
 
 // GenerationConfig defines the tunable parameters for block generation.
 type GenerationConfig struct {
@@ -102,22 +112,22 @@ type GenerationConfig struct {
 	AssetTransactionFraction   float32 `yaml:"tx_asset_fraction"`
 	AppTransactionFraction     float32 `yaml:"tx_app_fraction"`
 
-	// Payment configuration
+	// Payment TX Distribution
 	PaymentNewAccountFraction float32 `yaml:"pay_acct_create_fraction"`
 	PaymentFraction           float32 `yaml:"pay_xfer_fraction"`
 
-	// Asset configuration
+	// Asset TX Distribution
 	AssetCreateFraction  float32 `yaml:"asset_create_fraction"`
 	AssetDestroyFraction float32 `yaml:"asset_destroy_fraction"`
 	AssetOptinFraction   float32 `yaml:"asset_optin_fraction"`
-	AssetCloseFraction   float32 `yaml:"asset_close_fraction"`
 	AssetXferFraction    float32 `yaml:"asset_xfer_fraction"`
+	AssetCloseFraction   float32 `yaml:"asset_close_fraction"`
 
-	// App type configuration
+	// App kind TX Distribution
 	AppSwapFraction  float32 `yaml:"app_swap_fraction"`
 	AppBoxesFraction float32 `yaml:"app_boxes_fraction"`
 
-	// App Swap configuration
+	// App Swap TX Distribution
 	AppSwapCreateFraction float32 `yaml:"app_swap_create_fraction"`
 	AppSwapUpdateFraction float32 `yaml:"app_swap_update_fraction"`
 	AppSwapDeleteFraction float32 `yaml:"app_swap_delete_fraction"`
@@ -126,7 +136,7 @@ type GenerationConfig struct {
 	AppSwapCloseFraction  float32 `yaml:"app_swap_close_fraction"`
 	AppSwapClearFraction  float32 `yaml:"app_swap_clear_fraction"`
 
-	// App Boxes configuration
+	// App Boxes TX Distribution
 	AppBoxesCreateFraction float32 `yaml:"app_boxes_create_fraction"`
 	AppBoxesUpdateFraction float32 `yaml:"app_boxes_update_fraction"`
 	AppBoxesDeleteFraction float32 `yaml:"app_boxes_delete_fraction"`
@@ -134,238 +144,6 @@ type GenerationConfig struct {
 	AppBoxesCallFraction   float32 `yaml:"app_boxes_call_fraction"`
 	AppBoxesCloseFraction  float32 `yaml:"app_boxes_close_fraction"`
 	AppBoxesClearFraction  float32 `yaml:"app_boxes_clear_fraction"`
-}
-
-// initialzieConfigFile reads the config file and validates its parameters. Certain missing
-// parameters are defaulted to a reasonable value when missing, or when an entire associated
-// group is missing.
-func initializeConfigFile(configFile string) (config GenerationConfig, err error) {
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		return
-	}
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
-		return
-	}
-
-	err = validateWithDefaults(&config)
-	return
-}
-
-func validateWithDefaults(config *GenerationConfig) error {
-
-	if config.Name == "" {
-		return fmt.Errorf("scenario name must be set")
-	}
-
-	if config.NumGenesisAccounts == 0 {
-		return fmt.Errorf("number of genesis accounts must be > 0")
-	}
-
-	if config.GenesisAccountInitialBalance == 0 {
-		config.GenesisAccountInitialBalance = genesisAccountInitialBalance
-	}
-
-	var weights []*float32
-
-	weights = []*float32{&config.PaymentTransactionFraction, &config.AssetTransactionFraction, &config.AppTransactionFraction}
-	if eTxnTypes := sumIsCloseToOneWithDefault(weights...); eTxnTypes != nil {
-		return fmt.Errorf("transaction distribution ratios sum should equal 1: %w", eTxnTypes)
-	}
-
-	weights = []*float32{&config.PaymentNewAccountFraction, &config.PaymentFraction}
-	if ePymtTypes := sumIsCloseToOneWithDefault(weights...); ePymtTypes != nil {
-		return fmt.Errorf("payment configuration ratios sum should equal 1: %w", ePymtTypes)
-	}
-
-	weights = []*float32{&config.AssetCreateFraction, &config.AssetDestroyFraction, &config.AssetOptinFraction, &config.AssetCloseFraction, &config.AssetXferFraction}
-	if eAssetTypes := sumIsCloseToOneWithDefault(weights...); eAssetTypes != nil {
-		return fmt.Errorf("asset configuration ratios sum should equal 1: %w", eAssetTypes)
-	}
-
-	weights = []*float32{&config.AppSwapFraction, &config.AppBoxesFraction}
-	if eAppTypes := sumIsCloseToOneWithDefault(weights...); eAppTypes != nil {
-		return fmt.Errorf("app configuration ratios sum should equal 1: %w", eAppTypes)
-	}
-
-	weights = []*float32{&config.AppSwapCreateFraction, &config.AppSwapUpdateFraction, &config.AppSwapDeleteFraction, &config.AppSwapOptinFraction, &config.AppSwapCallFraction, &config.AppSwapCloseFraction, &config.AppSwapClearFraction}
-	if eAppSwapTypes := sumIsCloseToOneWithDefault(weights...); eAppSwapTypes != nil {
-		return fmt.Errorf("app swap configuration ratios sum should equal 1: %w", eAppSwapTypes)
-	}
-
-	weights = []*float32{&config.AppBoxesCreateFraction, &config.AppBoxesUpdateFraction, &config.AppBoxesDeleteFraction, &config.AppBoxesOptinFraction, &config.AppBoxesCallFraction, &config.AppBoxesCloseFraction, &config.AppBoxesClearFraction}
-	if eAppBoxesTypes := sumIsCloseToOneWithDefault(weights...); eAppBoxesTypes != nil {
-		return fmt.Errorf("app boxes configuration ratios sum should equal 1: %w", eAppBoxesTypes)
-
-	}
-
-	return nil
-}
-
-func (cfg *GenerationConfig) CheckValid() error {
-	if cfg.Name == "" {
-		return fmt.Errorf("scenario name must be set")
-	}
-
-	if cfg.NumGenesisAccounts == 0 {
-		return fmt.Errorf("number of genesis accounts must be > 0")
-	}
-
-	if cfg.GenesisAccountInitialBalance == 0 {
-		return fmt.Errorf("genesis account initial balance must be > 0")
-	}
-
-	weights := []*float32{&cfg.PaymentTransactionFraction, &cfg.AssetTransactionFraction, &cfg.AppTransactionFraction}
-	sum, valid, err := validateSum(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid Transaction config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.PaymentNewAccountFraction, &cfg.PaymentFraction}
-	sum, valid, err = validateSum(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid Payment config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.AssetCreateFraction, &cfg.AssetDestroyFraction, &cfg.AssetOptinFraction, &cfg.AssetCloseFraction, &cfg.AssetXferFraction}
-	sum, valid, err = validateSum(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid Asset config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.AppSwapFraction, &cfg.AppBoxesFraction}
-	sum, valid, err = validateSum(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid App config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.AppSwapCreateFraction, &cfg.AppSwapUpdateFraction, &cfg.AppSwapDeleteFraction, &cfg.AppSwapOptinFraction, &cfg.AppSwapCallFraction, &cfg.AppSwapCloseFraction, &cfg.AppSwapClearFraction}
-	sum, valid, err = validateSum(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid AppSwap config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.AppBoxesCreateFraction, &cfg.AppBoxesUpdateFraction, &cfg.AppBoxesDeleteFraction, &cfg.AppBoxesOptinFraction, &cfg.AppBoxesCallFraction, &cfg.AppBoxesCloseFraction, &cfg.AppBoxesClearFraction}
-	sum, valid, err = validateSum(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid AppBoxes config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	return nil
-}
-
-// sumIsCloseToOneWithDefault returns no error if the sum of the params is close to 1.
-// It returns an error if any of the params are negative.
-// Finally, in the case that all the params are zero, it sets the first param to 1 and returns no error.
-func sumIsCloseToOneWithDefault(params ...*float32) error {
-	if len(params) == 0 {
-		return fmt.Errorf("no params provided")
-	}
-
-	sum, valid, err := validateSum(params)
-	if valid || err != nil {
-		return err
-	}
-
-	if sum == 0 {
-		*params[0] = 1
-		return nil
-	}
-
-	return fmt.Errorf("sum of params is not close to 1: %f", sum)
-}
-
-// validateSum returns the sum of the params, whether the sum is close to 1, and any error encountered.
-// In the case that err is not nil, the value of valid is undefined.
-func validateSum(params []*float32) (sum float32, valid bool, err error) {
-	for i, num := range params {
-		if *num < 0 {
-			return *num, false, fmt.Errorf("param at index %d is negative: %f", i, *num)
-		}
-		sum += *num
-	}
-	if 0.99 < sum && sum < 1.01 {
-		return sum, true, nil
-	}
-	return sum, false, nil
-}
-
-// MakeGenerator initializes the Generator object.
-func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig) (Generator, error) {
-	if err := config.CheckValid(); err != nil {
-		return nil, fmt.Errorf("invalid generator configuration: %w", err)
-	}
-
-	var proto protocol.ConsensusVersion = "future"
-	gen := &generator{
-		config:                    config,
-		protocol:                  proto,
-		params:                    cconfig.Consensus[proto],
-		genesis:                   bkGenesis,
-		genesisHash:               [32]byte{},
-		genesisID:                 "blockgen-test",
-		prevBlockHash:             "",
-		round:                     0,
-		txnCounter:                startingTxnCounter,
-		timestamp:                 0,
-		rewardsLevel:              0,
-		rewardsResidue:            0,
-		rewardsRate:               0,
-		rewardsRecalculationRound: 0,
-		reportData:                make(map[TxTypeID]TxData),
-		roundOffset:               dbround,
-	}
-
-	gen.feeSink[31] = 1
-	gen.rewardsPool[31] = 2
-	gen.genesisHash[31] = 3
-
-	// if genesis is provided
-	if bkGenesis.Network != "" {
-		gen.genesisID = bkGenesis.ID()
-		gen.genesisHash = bkGenesis.Hash()
-	}
-
-	gen.initializeAccounting()
-	gen.initializeLedger()
-	for _, val := range getTransactionOptions() {
-		switch val {
-		case paymentTx:
-			gen.transactionWeights = append(gen.transactionWeights, config.PaymentTransactionFraction)
-		case assetTx:
-			gen.transactionWeights = append(gen.transactionWeights, config.AssetTransactionFraction)
-		case applicationCallTx:
-			gen.transactionWeights = append(gen.transactionWeights, config.AppTransactionFraction)
-
-		}
-	}
-
-	for _, val := range getPaymentTxOptions() {
-		switch val {
-		case paymentTx:
-			gen.payTxWeights = append(gen.payTxWeights, config.PaymentFraction)
-		case paymentAcctCreateTx:
-			gen.payTxWeights = append(gen.payTxWeights, config.PaymentNewAccountFraction)
-		}
-	}
-
-	for _, val := range getAssetTxOptions() {
-		switch val {
-		case assetCreate:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetCreateFraction)
-		case assetDestroy:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetDestroyFraction)
-		case assetOptin:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetOptinFraction)
-		case assetXfer:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetXferFraction)
-		case assetClose:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetCloseFraction)
-		}
-	}
-
-	return gen, nil
 }
 
 // Generator is the interface needed to generate blocks.
@@ -458,15 +236,357 @@ type TxData struct {
 	GenerationCount uint64        `json:"num_generated"`
 }
 
-func track(id TxTypeID) (TxTypeID, time.Time) {
-	return id, time.Now()
+// ---- constructors ----
+
+// initialzieConfigFile reads the config file and validates its parameters. Certain missing
+// parameters are defaulted to a reasonable value when missing, or when an entire associated
+// group is missing.
+func initializeConfigFile(configFile string) (config GenerationConfig, err error) {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return
+	}
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return
+	}
+
+	err = validateWithDefaults(&config)
+	return
 }
-func (g *generator) recordData(id TxTypeID, start time.Time) {
-	data := g.reportData[id]
-	data.GenerationCount++
-	data.GenerationTime += time.Since(start)
-	g.reportData[id] = data
+
+// MakeGenerator initializes the Generator object.
+func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig) (Generator, error) {
+	if err := config.CheckValid(); err != nil {
+		return nil, fmt.Errorf("invalid generator configuration: %w", err)
+	}
+
+	var proto protocol.ConsensusVersion = "future"
+	gen := &generator{
+		config:                    config,
+		protocol:                  proto,
+		params:                    cconfig.Consensus[proto],
+		genesis:                   bkGenesis,
+		genesisHash:               [32]byte{},
+		genesisID:                 "blockgen-test",
+		prevBlockHash:             "",
+		round:                     0,
+		txnCounter:                startingTxnCounter,
+		timestamp:                 0,
+		rewardsLevel:              0,
+		rewardsResidue:            0,
+		rewardsRate:               0,
+		rewardsRecalculationRound: 0,
+		reportData:                make(map[TxTypeID]TxData),
+		roundOffset:               dbround,
+	}
+
+	gen.feeSink[31] = 1
+	gen.rewardsPool[31] = 2
+	gen.genesisHash[31] = 3
+
+	// if genesis is provided
+	if bkGenesis.Network != "" {
+		gen.genesisID = bkGenesis.ID()
+		gen.genesisHash = bkGenesis.Hash()
+	}
+
+	gen.initializeAccounting()
+	gen.initializeLedger()
+	for _, val := range getTransactionOptions() {
+		switch val {
+		case paymentTx:
+			gen.transactionWeights = append(gen.transactionWeights, config.PaymentTransactionFraction)
+		case assetTx:
+			gen.transactionWeights = append(gen.transactionWeights, config.AssetTransactionFraction)
+		case applicationTx:
+			gen.transactionWeights = append(gen.transactionWeights, config.AppTransactionFraction)
+
+		}
+	}
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.transactionWeights)); err != nil || !valid {
+		return gen, fmt.Errorf("invalid transaction config - bad txn distribution valid=%t: %w", valid, err)
+	}
+
+	for _, val := range getPaymentTxOptions() {
+		switch val {
+		case paymentAcctCreateTx:
+			gen.payTxWeights = append(gen.payTxWeights, config.PaymentNewAccountFraction)
+		case paymentPayTx:
+			gen.payTxWeights = append(gen.payTxWeights, config.PaymentFraction)
+		}
+	}
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.payTxWeights)); err != nil || !valid {
+		return gen, fmt.Errorf("invalid payment config - bad txn distribution valid=%t: %w", valid, err)
+	}
+
+	for _, val := range getAssetTxOptions() {
+		switch val {
+		case assetCreate:
+			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetCreateFraction)
+		case assetDestroy:
+			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetDestroyFraction)
+		case assetOptin:
+			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetOptinFraction)
+		case assetXfer:
+			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetXferFraction)
+		case assetClose:
+			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetCloseFraction)
+		}
+	}
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.assetTxWeights)); err != nil || !valid {
+		return gen, fmt.Errorf("invalid asset config - bad txn distribution valid=%t: %w", valid, err)
+	}
+
+	for _, val := range getAppTxOptions() {
+		switch val {
+		case appSwapCreate:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapCreateFraction)
+		case appSwapUpdate:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapUpdateFraction)
+		case appSwapDelete:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapDeleteFraction)
+		case appSwapOptin:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapOptinFraction)
+		case appSwapCall:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapCallFraction)
+		case appSwapClose:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapCloseFraction)
+		case appSwapClear:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapClearFraction)
+		case appBoxesCreate:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesCreateFraction)
+		case appBoxesUpdate:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesUpdateFraction)
+		case appBoxesDelete:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesDeleteFraction)
+		case appBoxesOptin:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesOptinFraction)
+		case appBoxesCall:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesCallFraction)
+		case appBoxesClose:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesCloseFraction)
+		case appBoxesClear:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesClearFraction)
+		}
+	}
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.appTxWeights)); err != nil || !valid {
+		return gen, fmt.Errorf("invalid app config - bad txn distribution valid=%t: %w", valid, err)
+	}
+
+	return gen, nil
 }
+
+// initializeAccounting creates the genesis accounts.
+func (g *generator) initializeAccounting() {
+	g.numPayments = 0
+	g.numAccounts = g.config.NumGenesisAccounts
+	for i := uint64(0); i < g.config.NumGenesisAccounts; i++ {
+		g.balances = append(g.balances, g.config.GenesisAccountInitialBalance)
+	}
+}
+
+func (g *generator) initializeLedger() {
+	genBal := convertToGenesisBalances(g.balances)
+	// add rewards pool with min balance
+	genBal[g.rewardsPool] = basics.AccountData{
+		MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
+	}
+	bal := bookkeeping.MakeGenesisBalances(genBal, g.feeSink, g.rewardsPool)
+	block, err := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)
+	if err != nil {
+		fmt.Printf("error making genesis: %v\n.", err)
+		os.Exit(1)
+	}
+	var prefix string
+	if g.genesisID == "" {
+		prefix = "block-generator"
+	} else {
+		prefix = g.genesisID
+	}
+	l, err := ledger.OpenLedger(logging.Base(), prefix, true, ledgercore.InitState{
+		Block:       block,
+		Accounts:    bal.Balances,
+		GenesisHash: g.genesisHash,
+	}, cconfig.GetDefaultLocal())
+	if err != nil {
+		fmt.Printf("error initializing ledger: %v\n.", err)
+		os.Exit(1)
+	}
+	g.ledger = l
+}
+
+// ---- validators ----
+
+func validateWithDefaults(config *GenerationConfig) error {
+
+	if config.Name == "" {
+		return fmt.Errorf("scenario name must be set")
+	}
+
+	if config.NumGenesisAccounts == 0 {
+		return fmt.Errorf("number of genesis accounts must be > 0")
+	}
+
+	if config.GenesisAccountInitialBalance == 0 {
+		config.GenesisAccountInitialBalance = genesisAccountInitialBalance
+	}
+
+	var weights []*float32
+
+	weights = []*float32{&config.PaymentTransactionFraction, &config.AssetTransactionFraction, &config.AppTransactionFraction}
+	if eTxnTypes := sumIsCloseToOneWithDefault(weights...); eTxnTypes != nil {
+		return fmt.Errorf("transaction distribution ratios sum should equal 1: %w", eTxnTypes)
+	}
+
+	weights = []*float32{&config.PaymentNewAccountFraction, &config.PaymentFraction}
+	if ePymtTypes := sumIsCloseToOneWithDefault(weights...); ePymtTypes != nil {
+		return fmt.Errorf("payment configuration ratios sum should equal 1: %w", ePymtTypes)
+	}
+
+	weights = []*float32{&config.AssetCreateFraction, &config.AssetDestroyFraction, &config.AssetOptinFraction, &config.AssetCloseFraction, &config.AssetXferFraction}
+	if eAssetTypes := sumIsCloseToOneWithDefault(weights...); eAssetTypes != nil {
+		return fmt.Errorf("asset configuration ratios sum should equal 1: %w", eAssetTypes)
+	}
+
+	weights = []*float32{&config.AppSwapFraction, &config.AppBoxesFraction}
+	if eAppTypes := sumIsCloseToOneWithDefault(weights...); eAppTypes != nil {
+		return fmt.Errorf("app configuration ratios sum should equal 1: %w", eAppTypes)
+	}
+
+	weights = []*float32{&config.AppSwapCreateFraction, &config.AppSwapUpdateFraction, &config.AppSwapDeleteFraction, &config.AppSwapOptinFraction, &config.AppSwapCallFraction, &config.AppSwapCloseFraction, &config.AppSwapClearFraction}
+	if eAppSwapTypes := sumIsCloseToOneWithDefault(weights...); eAppSwapTypes != nil {
+		return fmt.Errorf("app swap configuration ratios sum should equal 1: %w", eAppSwapTypes)
+	}
+
+	weights = []*float32{&config.AppBoxesCreateFraction, &config.AppBoxesUpdateFraction, &config.AppBoxesDeleteFraction, &config.AppBoxesOptinFraction, &config.AppBoxesCallFraction, &config.AppBoxesCloseFraction, &config.AppBoxesClearFraction}
+	if eAppBoxesTypes := sumIsCloseToOneWithDefault(weights...); eAppBoxesTypes != nil {
+		return fmt.Errorf("app boxes configuration ratios sum should equal 1: %w", eAppBoxesTypes)
+
+	}
+
+	return nil
+}
+
+func (cfg *GenerationConfig) CheckValid() error {
+	if cfg.Name == "" {
+		return fmt.Errorf("scenario name must be set")
+	}
+
+	if cfg.NumGenesisAccounts == 0 {
+		return fmt.Errorf("number of genesis accounts must be > 0")
+	}
+
+	if cfg.GenesisAccountInitialBalance == 0 {
+		return fmt.Errorf("genesis account initial balance must be > 0")
+	}
+
+	weights := []*float32{&cfg.PaymentTransactionFraction, &cfg.AssetTransactionFraction, &cfg.AppTransactionFraction}
+	sum, valid, err := validateSumCloseToOne(weights)
+	if err != nil || !valid {
+		return fmt.Errorf("invalid Transaction config with sum %f (%t): %w", sum, valid, err)
+	}
+
+	weights = []*float32{&cfg.PaymentNewAccountFraction, &cfg.PaymentFraction}
+	sum, valid, err = validateSumCloseToOne(weights)
+	if err != nil || !valid {
+		return fmt.Errorf("invalid Payment config with sum %f (%t): %w", sum, valid, err)
+	}
+
+	weights = []*float32{&cfg.AssetCreateFraction, &cfg.AssetDestroyFraction, &cfg.AssetOptinFraction, &cfg.AssetCloseFraction, &cfg.AssetXferFraction}
+	sum, valid, err = validateSumCloseToOne(weights)
+	if err != nil || !valid {
+		return fmt.Errorf("invalid Asset config with sum %f (%t): %w", sum, valid, err)
+	}
+
+	weights = []*float32{&cfg.AppSwapFraction, &cfg.AppBoxesFraction}
+	sum, valid, err = validateSumCloseToOne(weights)
+	if err != nil || !valid {
+		return fmt.Errorf("invalid App config with sum %f (%t): %w", sum, valid, err)
+	}
+
+	weights = []*float32{&cfg.AppSwapCreateFraction, &cfg.AppSwapUpdateFraction, &cfg.AppSwapDeleteFraction, &cfg.AppSwapOptinFraction, &cfg.AppSwapCallFraction, &cfg.AppSwapCloseFraction, &cfg.AppSwapClearFraction}
+	sum, valid, err = validateSumCloseToOne(weights)
+	if err != nil || !valid {
+		return fmt.Errorf("invalid AppSwap config with sum %f (%t): %w", sum, valid, err)
+	}
+
+	weights = []*float32{&cfg.AppBoxesCreateFraction, &cfg.AppBoxesUpdateFraction, &cfg.AppBoxesDeleteFraction, &cfg.AppBoxesOptinFraction, &cfg.AppBoxesCallFraction, &cfg.AppBoxesCloseFraction, &cfg.AppBoxesClearFraction}
+	sum, valid, err = validateSumCloseToOne(weights)
+	if err != nil || !valid {
+		return fmt.Errorf("invalid AppBoxes config with sum %f (%t): %w", sum, valid, err)
+	}
+
+	return nil
+}
+
+func asPtrSlice(weights []float32) []*float32 {
+	ptrs := make([]*float32, len(weights))
+	for i := range weights {
+		weight := weights[i]
+		ptrs[i] = &weight
+	}
+	return ptrs
+}
+
+// sumIsCloseToOneWithDefault returns no error if the sum of the params is close to 1.
+// It returns an error if any of the params are negative.
+// Finally, in the case that all the params are zero, it sets the first param to 1 and returns no error.
+func sumIsCloseToOneWithDefault(params ...*float32) error {
+	if len(params) == 0 {
+		return fmt.Errorf("no params provided")
+	}
+
+	sum, valid, err := validateSumCloseToOne(params)
+	if valid || err != nil {
+		return err
+	}
+
+	if sum == 0 {
+		*params[0] = 1
+		return nil
+	}
+
+	return fmt.Errorf("sum of params is not close to 1: %f", sum)
+}
+
+// validateSumCloseToOne returns the sum of the params, whether the sum is close to 1, and any error encountered.
+// In the case that err is not nil, the value of valid is undefined.
+func validateSumCloseToOne(params []*float32) (sum float32, valid bool, err error) {
+	for i, num := range params {
+		if *num < 0 {
+			return *num, false, fmt.Errorf("param at index %d is negative: %f", i, *num)
+		}
+		sum += *num
+	}
+	if 0.99 < sum && sum < 1.01 {
+		return sum, true, nil
+	}
+	return sum, false, nil
+}
+
+// ---- transaction options vectors ----
+
+func getTransactionOptions() []interface{} {
+	return []interface{}{paymentTx, assetTx, applicationTx}
+}
+
+func getPaymentTxOptions() []interface{} {
+	return []interface{}{paymentAcctCreateTx, paymentPayTx}
+}
+
+func getAssetTxOptions() []interface{} {
+	return []interface{}{assetCreate, assetDestroy, assetOptin, assetClose, assetXfer}
+}
+
+func getAppTxOptions() []interface{} {
+	return []interface{}{
+		appSwapCreate, appSwapUpdate, appSwapDelete, appSwapOptin, appSwapCall, appSwapClose, appSwapClear,
+		appBoxesCreate, appBoxesUpdate, appBoxesDelete, appBoxesOptin, appBoxesCall, appBoxesClose, appBoxesClear,
+	}
+}
+
+// ---- pure reporters ----
 
 func (g *generator) WriteReport(output io.Writer) error {
 	return json.NewEncoder(output).Encode(g.reportData)
@@ -478,6 +598,8 @@ func (g *generator) WriteStatus(output io.Writer) error {
 	}
 	return json.NewEncoder(output).Encode(response)
 }
+
+// ---- genesis ----
 
 func (g *generator) WriteGenesis(output io.Writer) error {
 	defer g.recordData(track(genesis))
@@ -524,47 +646,18 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 	return err
 }
 
-func getTransactionOptions() []interface{} {
-	return []interface{}{paymentTx, assetTx, applicationCallTx}
+func track(id TxTypeID) (TxTypeID, time.Time) {
+	return id, time.Now()
 }
 
-func (g *generator) generateTransaction(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
-	selection, err := weightedSelection(g.transactionWeights, getTransactionOptions(), paymentTx)
-	if err != nil {
-		return transactions.SignedTxn{}, transactions.ApplyData{}, err
-	}
-
-	switch selection {
-	case paymentTx:
-		return g.generatePaymentTxn(round, intra)
-	case assetTx:
-		return g.generateAssetTxn(round, intra)
-	case applicationCallTx:
-		return g.generateAppTxn(round, intra)
-	default:
-		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("no generator available for %s", selection)
-	}
+func (g *generator) recordData(id TxTypeID, start time.Time) {
+	data := g.reportData[id]
+	data.GenerationCount++
+	data.GenerationTime += time.Since(start)
+	g.reportData[id] = data
 }
 
-func (g *generator) txnForRound(round uint64) uint64 {
-	// There are no transactions in the 0th round
-	if round == 0 {
-		return 0
-	}
-	return g.config.TxnPerBlock
-}
-
-// finishRound tells the generator it can apply any pending state.
-func (g *generator) finishRound(txnCount uint64) {
-	g.txnCounter += txnCount
-
-	g.timestamp += consensusTimeMilli
-	g.round++
-
-	// Apply pending assets...
-	g.assets = append(g.assets, g.pendingAssets...)
-	g.pendingAssets = nil
-}
+// ---- transaction generation ----
 
 // WriteBlock generates a block full of new transactions and writes it to the writer.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
@@ -690,15 +783,45 @@ func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
 	return nil
 }
 
-// initializeAccounting creates the genesis accounts.
-func (g *generator) initializeAccounting() {
-	g.numPayments = 0
-	g.numAccounts = g.config.NumGenesisAccounts
-	for i := uint64(0); i < g.config.NumGenesisAccounts; i++ {
-		g.balances = append(g.balances, g.config.GenesisAccountInitialBalance)
+func (g *generator) generateTransaction(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
+	selection, err := weightedSelection(g.transactionWeights, getTransactionOptions(), paymentTx)
+	if err != nil {
+		return transactions.SignedTxn{}, transactions.ApplyData{}, err
+	}
+
+	switch selection {
+	case paymentTx:
+		return g.generatePaymentTxn(round, intra)
+	case assetTx:
+		return g.generateAssetTxn(round, intra)
+	case applicationTx:
+		return g.generateAppTxn(round, intra)
+	default:
+		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("no generator available for %s", selection)
 	}
 }
 
+func (g *generator) txnForRound(round uint64) uint64 {
+	// There are no transactions in the 0th round
+	if round == 0 {
+		return 0
+	}
+	return g.config.TxnPerBlock
+}
+
+// finishRound tells the generator it can apply any pending state.
+func (g *generator) finishRound(txnCount uint64) {
+	g.txnCounter += txnCount
+
+	g.timestamp += consensusTimeMilli
+	g.round++
+
+	// Apply pending assets...
+	g.assets = append(g.assets, g.pendingAssets...)
+	g.pendingAssets = nil
+}
+
+// TODO: Z - this is a lot more lightweight than txn.Sign(sender.sk)
 func signTxn(txn transactions.Transaction) transactions.SignedTxn {
 	stxn := transactions.SignedTxn{
 		Sig:      crypto.Signature{},
@@ -714,14 +837,10 @@ func signTxn(txn transactions.Transaction) transactions.SignedTxn {
 	return stxn
 }
 
-func getPaymentTxOptions() []interface{} {
-	return []interface{}{paymentTx, paymentAcctCreateTx}
-}
-
 // generatePaymentTxn creates a new payment transaction. The sender is always a genesis account, the receiver is random,
 // or a new account.
 func (g *generator) generatePaymentTxn(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
-	selection, err := weightedSelection(g.payTxWeights, getPaymentTxOptions(), paymentTx)
+	selection, err := weightedSelection(g.payTxWeights, getPaymentTxOptions(), paymentPayTx)
 	if err != nil {
 		return transactions.SignedTxn{}, transactions.ApplyData{}, err
 	}
@@ -738,7 +857,7 @@ func (g *generator) generatePaymentTxnInternal(selection TxTypeID, round uint64,
 	// Select a receiver
 	var receiveIndex uint64
 	switch selection {
-	case paymentTx:
+	case paymentPayTx:
 		receiveIndex = rand.Uint64() % g.numAccounts
 	case paymentAcctCreateTx:
 		// give new accounts get extra algos for sending other transactions
@@ -766,17 +885,6 @@ func (g *generator) generatePaymentTxnInternal(selection TxTypeID, round uint64,
 
 	txn := g.makePaymentTxn(g.makeTxnHeader(sender, round, intra), receiver, amount, basics.Address{})
 	return signTxn(txn), transactions.ApplyData{}, nil
-}
-
-func getAssetTxOptions() []interface{} {
-	return []interface{}{assetCreate, assetDestroy, assetOptin, assetXfer, assetClose}
-}
-
-func getAppTxOptions() []interface{} {
-	return []interface{}{
-		appSwapCreate, appSwapUpdate, appSwapDelete, appSwapOptin, appSwapCall, appSwapClose, appSwapClear,
-		appBoxesCreate, appBoxesUpdate, appBoxesDelete, appBoxesOptin, appBoxesCall, appBoxesClose, appBoxesClear,
-	}
 }
 
 func (g *generator) generateAssetTxnInternal(txType TxTypeID, round uint64, intra uint64) (actual TxTypeID, txn transactions.Transaction) {
@@ -966,36 +1074,6 @@ func (g *generator) generateAppTxn(round uint64, intra uint64) (transactions.Sig
 	}
 
 	return signTxn(txn), transactions.ApplyData{}, nil
-}
-
-func (g *generator) initializeLedger() {
-	genBal := convertToGenesisBalances(g.balances)
-	// add rewards pool with min balance
-	genBal[g.rewardsPool] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
-	}
-	bal := bookkeeping.MakeGenesisBalances(genBal, g.feeSink, g.rewardsPool)
-	block, err := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)
-	if err != nil {
-		fmt.Printf("error making genesis: %v\n.", err)
-		os.Exit(1)
-	}
-	var prefix string
-	if g.genesisID == "" {
-		prefix = "block-generator"
-	} else {
-		prefix = g.genesisID
-	}
-	l, err := ledger.OpenLedger(logging.Base(), prefix, true, ledgercore.InitState{
-		Block:       block,
-		Accounts:    bal.Balances,
-		GenesisHash: g.genesisHash,
-	}, cconfig.GetDefaultLocal())
-	if err != nil {
-		fmt.Printf("error initializing ledger: %v\n.", err)
-		os.Exit(1)
-	}
-	g.ledger = l
 }
 
 // Stop cleans up allocated resources.
