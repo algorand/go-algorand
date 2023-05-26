@@ -18,10 +18,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/protocol"
 	"net/url"
 	"regexp"
 	"strings"
+	
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type DNSBootstrap struct {
