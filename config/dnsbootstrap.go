@@ -52,19 +52,48 @@ var networkBootstrapOverrideMap = map[protocol.NetworkID]DNSBootstrap{
 	},
 }
 
-//var dedupExp = regexp.MustCompile(`(\(.*?\))`)
-var pipeExp = regexp.MustCompile(`\|`)
 var nameExp = regexp.MustCompile(`<name>\.?`)
 
 // Error strings
 const (
-	bootstrapErrorEmpty              = "DNSBootstrapID must be non-empty and a valid URL"
-	bootstrapErrorInvalidFormat      = "invalid formatted DNSBootstrapID"
-	bootstrapErrorParsingQueryParams = "error parsing query params from DNSBootstrapID"
+	bootstrapErrorEmpty                 = "DNSBootstrapID must be non-empty and a valid URL"
+	bootstrapErrorInvalidFormat         = "invalid formatted DNSBootstrapID"
+	bootstrapErrorParsingQueryParams    = "error parsing query params from DNSBootstrapID"
+	bootstrapErrorInvalidNameMacroUsage = "invalid usage of <name> macro in dedup param; must be at the beginning of the expression"
+	bootstrapDedupRegexDoesNotCompile   = "dedup regex does not compile"
 )
 
 // For supported networks, supports template formats like
 // `<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(net|network)`
+
+/**
+ * Validates and parses a DNSBootstrapID into a DNSBootstrap struct. We use Golang's url.ParseQuery as
+ * a convenience to parse out the ID and parameters (as the rules overlap cleanly).
+ *
+ * Non-exhaustive examples of valid formats:
+ *
+ * 1. <network>.algorand.network
+ * 2. myawesomebootstrap-<network>.specialdomain.com
+ * 3. <network>.algorand.network?backup=<network>.algorand.net
+ * 4. <network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(net|network)
+ * 5. <network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(net|network)
+ * 6. mybootstrap-<network>.sd.com?backup=mybackup-<network>.asd.net&dedup=<name>.md-<network>.(com|net)
+ *
+ * A few notes:
+ * 1. The network parameter to this function is substituted into the dnsBootstrapID anywhere that <network> appears.
+ * 2. The backup parameter's presence in the dNSBootstrapID is optional
+ * 6. The dedup mask/expression is intended to be used to deduplicate SRV records that are returned by the DNS server. For example, if the dedup mask/expression is set to
+ *
+ * On the dedup mask/expression in particular:
+ * 1. The dedup mask/expression is intended to be used to deduplicate SRV records returned from the primary and backup DNS servers
+ * 2. It is optional, even if backup is present. The dedup mask/expression must be a valid regular expression if set.
+ * 3. If the <name> macro is used in the dedup mask/expression (in most circumstances, recommended), it must be at the beginning of the expression. It is intended as a placeholder for unique server names.
+ *
+ * @param dnsBootstrapID The DNSBootstrapID to parse
+ * @param network The network to substitute into the DNSBootstrapID
+ * @param defaultTemplateOverridden Whether the default template was overridden at runtime
+ * @return A DNSBootstrap struct if successful, error otherwise
+ */
 func parseDNSBootstrap(dnsBootstrapID string, network protocol.NetworkID, defaultTemplateOverridden bool) (*DNSBootstrap, error) {
 	// For several non-mainnet/testnet networks, we essentially ignore the bootstrap and use our own
 	// if template was not overridden
@@ -82,42 +111,54 @@ func parseDNSBootstrap(dnsBootstrapID string, network protocol.NetworkID, defaul
 		return nil, fmt.Errorf(bootstrapErrorEmpty)
 	}
 
-	vu, e := url.Parse(dnsBootstrapID)
+	parsedTemplate, err := url.Parse(dnsBootstrapID)
 
-	if e != nil || vu.Host == "" {
+	if err != nil || parsedTemplate.Host == "" {
 		// Try parsing with scheme prepended
-		var e2 error
-		vu, e2 = url.Parse("https://" + dnsBootstrapID)
+		var err2 error
+		parsedTemplate, err2 = url.Parse("https://" + dnsBootstrapID)
 
-		if e2 != nil {
+		if err2 != nil {
 			return nil, fmt.Errorf("%s: %s, orig error: %s, with scheme error: %s",
-				bootstrapErrorInvalidFormat, dnsBootstrapID, e, e2)
+				bootstrapErrorInvalidFormat, dnsBootstrapID, err, err2)
 		}
 	}
 
-	m, qe := url.ParseQuery(vu.RawQuery)
+	m, err3 := url.ParseQuery(parsedTemplate.RawQuery)
 
-	if qe != nil {
-		return nil, fmt.Errorf("%s: %s, error: %s", bootstrapErrorParsingQueryParams, dnsBootstrapID, qe)
+	if err3 != nil {
+		return nil, fmt.Errorf("%s: %s, error: %s", bootstrapErrorParsingQueryParams, dnsBootstrapID, err3)
 	}
 
-	bq := m["backup"]
+	backupBootstrapParam := m["backup"]
 	var backupSRVBootstrap string
-	if len(bq) != 0 && bq[0] != "" {
-		backupSRVBootstrap = bq[0]
+	if len(backupBootstrapParam) != 0 && backupBootstrapParam[0] != "" {
+		backupSRVBootstrap = backupBootstrapParam[0]
 	}
 
-	var dedupExp *regexp.Regexp // = regexp.MustCompile(`(\(.*?\))`)
+	var dedupExp *regexp.Regexp
 	if backupSRVBootstrap != "" {
 		//dedup mask is optional, even with backup present
-		dq := m["dedup"]
-		if len(dq) != 0 && dq[0] != "" {
-			// If the string happens to start with <name>, we drop this part
-			dq[0] = nameExp.ReplaceAllString(dq[0], "")
+		dedupParam := m["dedup"]
+		if len(dedupParam) != 0 && dedupParam[0] != "" {
+			// If <name> shows up anywhere other than the beginning of the dedup expression, we return an error.
+			nameMacroLocations := nameExp.FindAllStringIndex(dedupParam[0], -1)
+			for _, loc := range nameMacroLocations {
+				if loc[0] != 0 {
+					return nil, fmt.Errorf("%s: %s", bootstrapErrorInvalidNameMacroUsage, dnsBootstrapID)
+				}
+			}
+			// If the string happens to start with <name>, we replace it with an empty string.
+			dedupParam[0] = nameExp.ReplaceAllString(dedupParam[0], "")
 
-			dedupExp = regexp.MustCompile("(" + dq[0] + ")")
+			var err4 error
+			dedupExp, err4 = regexp.Compile("(" + dedupParam[0] + ")")
+
+			if err4 != nil {
+				return nil, fmt.Errorf("%s: %s, error: %s", bootstrapDedupRegexDoesNotCompile, dnsBootstrapID, err4)
+			}
 		}
 	}
 
-	return &DNSBootstrap{PrimarySRVBootstrap: vu.Host, BackupSRVBootstrap: backupSRVBootstrap, DedupExp: dedupExp}, nil
+	return &DNSBootstrap{PrimarySRVBootstrap: parsedTemplate.Host, BackupSRVBootstrap: backupSRVBootstrap, DedupExp: dedupExp}, nil
 }

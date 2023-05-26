@@ -78,18 +78,14 @@ func DomainOf(maxLength, maxElementLength int, domainSuffix string, dontMatch []
 		})
 	}
 
-	if len(dontMatch) > 0 {
-		return genDomain().Filter(func(domain string) bool {
-			for _, v := range dontMatch {
-				if strings.ToLower(v) == strings.ToLower(domain) {
-					return false
-				}
+	return genDomain().Filter(func(domain string) bool {
+		for _, v := range dontMatch {
+			if strings.ToLower(v) == strings.ToLower(domain) {
+				return false
 			}
-			return true
-		})
-	} else {
-		return genDomain()
-	}
+		}
+		return true
+	})
 }
 
 var TldGenerator = rapid.SampledFrom(tlds) //nolint:golint,typecheck

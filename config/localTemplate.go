@@ -528,7 +528,7 @@ type Local struct {
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
 func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []*DNSBootstrap) {
-	//dnsBootstrapString := cfg.DNSBootstrap(networkID)
+
 	bootstrapStringArray := strings.Split(cfg.DNSBootstrapID, ";")
 	for _, bootstrapString := range bootstrapStringArray {
 		if len(strings.TrimSpace(bootstrapString)) == 0 {

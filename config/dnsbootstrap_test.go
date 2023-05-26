@@ -201,3 +201,23 @@ func TestParseDNSBootstrapIDInvalidQueryParamsRejected(t *testing.T) {
 
 	assert.ErrorContains(t, err, bootstrapErrorParsingQueryParams)
 }
+
+func TestParseDNSBootstrapIDInvalidNameMacroPosition(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var dnsBootstrapIDWithInvalidNameMacroUsage = "<network>.algorand.network?backup=<network>.algorand.net&dedup=algorand-<name>.algorand-<network>.(network|net)"
+
+	_, err := parseDNSBootstrap(dnsBootstrapIDWithInvalidNameMacroUsage, Mainnet, false)
+
+	assert.ErrorContains(t, err, bootstrapErrorInvalidNameMacroUsage)
+}
+
+func TestParseDNSBootstrapIDInvalidDedupRegex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var dnsBootstrapIDWithInvalidNameMacroUsage = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.((network|net)"
+
+	_, err := parseDNSBootstrap(dnsBootstrapIDWithInvalidNameMacroUsage, Mainnet, false)
+
+	assert.ErrorContains(t, err, bootstrapDedupRegexDoesNotCompile)
+}
