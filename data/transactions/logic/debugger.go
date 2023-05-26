@@ -184,7 +184,7 @@ func makeDebugState(cx *EvalContext) *DebugState {
 		if err != nil {
 			sv = stackValue{Bytes: []byte(err.Error())}
 		}
-		globals[fs.field] = stackValueToTealValue(&sv)
+		globals[fs.field] = sv.toEncodedTealValue()
 	}
 	ds.Globals = globals
 
@@ -244,13 +244,13 @@ func (d *DebugState) PCToLine(pc int) int {
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
-func stackValueToTealValue(sv *stackValue) basics.TealValue {
-	tv := sv.toTealValue()
-	return basics.TealValue{
-		Type:  tv.Type,
-		Bytes: base64.StdEncoding.EncodeToString([]byte(tv.Bytes)),
-		Uint:  tv.Uint,
+// toEncodedTealValue converts stackValue to basics.TealValue, with the Bytes
+// field b64 encoded, so it is suitable for conversion to JSON.
+func (sv stackValue) toEncodedTealValue() basics.TealValue {
+	if sv.avmType() == avmBytes {
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: base64.StdEncoding.EncodeToString(sv.Bytes)}
 	}
+	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
 }
 
 // valueDeltaToValueDelta converts delta's bytes to base64 in a new struct
@@ -296,12 +296,12 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 
 	stack := make([]basics.TealValue, len(cx.stack))
 	for i, sv := range cx.stack {
-		stack[i] = stackValueToTealValue(&sv)
+		stack[i] = sv.toEncodedTealValue()
 	}
 
 	scratch := make([]basics.TealValue, len(cx.scratch))
 	for i, sv := range cx.scratch {
-		scratch[i] = stackValueToTealValue(&sv)
+		scratch[i] = sv.toEncodedTealValue()
 	}
 
 	ds.Stack = stack
