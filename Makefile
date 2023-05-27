@@ -80,6 +80,9 @@ endif
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
+COVER_PROFILE 	:= $(SRCPATH)/coverage.txt
+COVER_OUT 		:= $(SRCPATH)/cover.out
+
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
 		 -X github.com/algorand/go-algorand/config.Branch=$(BUILDBRANCH) \
@@ -89,8 +92,9 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
-UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && find . -name 'go.mod' -execdir go list ./... \; | grep -v /go-algorand/test/ ))
-ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
+UNIT_TEST_SOURCES 			:= $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
+UNIT_TEST_SOURCES_SUBMOD 	:= $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && find . -mindepth 2 -name 'go.mod' -execdir go list ./... \; | grep -v /go-algorand/test/ ))
+ALGOD_API_PACKAGES 			:= $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
 MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
 
@@ -123,7 +127,8 @@ check_shell:
 sanity: fix lint fmt tidy
 
 cover:
-	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
+	go test $(GOTAGS) -coverprofile=$(COVER_OUT) $(UNIT_TEST_SOURCES)
+	@echo $(UNIT_TEST_SOURCES_SUBMOD) | tr ' ' '\n' | xargs -I {} sh -c 'cd {} && go test $(GOTAGS) -coverprofile=$(COVER_OUT)'
 
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
@@ -244,17 +249,21 @@ $(GOPATH1)/bin/ddconfig.sh: scripts/ddconfig.sh
 $(GOPATH1)/bin/%:
 	cp -f $< $@
 
-test: build
-	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
+run-test:
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic
+	@echo $(UNIT_TEST_SOURCES_SUBMOD) | tr ' ' '\n' | xargs -I {} sh -c 'cd {} && $(GOTESTCOMMAND) $(GOTAGS) -race -timeout 5m -coverprofile=$(COVER_PROFILE) -covermode=atomic
+
+test: build run-test
 
 benchcheck: build
 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h
+	@echo $(UNIT_TEST_SOURCES_SUBMOD) | tr ' ' '\n' | xargs -I {} sh -c 'cd {} && $(GOTESTCOMMAND) $(GOTAGS) -race -timeout 10m -run ^NOTHING -bench Benchmark -benchtime 1x'
 
-fulltest: build-race
-	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
+fulltest: build-race run-test
 
 shorttest: build-race
-	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
+	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic
+	@echo $(UNIT_TEST_SOURCES_SUBMOD) | tr ' ' '\n' | xargs -I {} sh -c 'cd {} && $(GOTESTCOMMAND) $(GOTAGS) -short -race -timeout 5m -coverprofile=$(COVER_PROFILE) -covermode=atomic'
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
