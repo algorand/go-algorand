@@ -602,7 +602,7 @@ commands:
             eval "$(<< parameters.build_dir >>/gimme "${GOLANG_VERSION}")"
             scripts/configure_dev.sh
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-            PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+            PACKAGES="$(find . -name 'go.mod' -execdir go list ./... \; | grep -v /go-algorand/test/)"
             export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
