@@ -62,17 +62,6 @@ func (tracer *cursorEvalTracer) relativeGroupIndex() int {
 	return tracer.relativeCursor[top]
 }
 
-// unifiedGroupIndex is a convenience method that gives index inside a group transaction from different run-mode:
-//  1. if we are running over application mode, then we can get information from cursorEvalTracer's relativeGroupIndex.
-//  2. otherwise, we should be under logic-sig mode, then we have to rely on cx.GroupIndex, for evaluation
-//     and verification of logic-sig happens ahead of transaction group evaluation.
-func (tracer *cursorEvalTracer) unifiedGroupIndex(cx *logic.EvalContext) int {
-	if cx.RunMode() == logic.ModeApp {
-		return tracer.relativeGroupIndex()
-	}
-	return cx.GroupIndex()
-}
-
 func (tracer *cursorEvalTracer) absolutePath() TxnPath {
 	path := make(TxnPath, len(tracer.relativeCursor))
 	for i, relativeGroupIndex := range tracer.relativeCursor {
@@ -257,7 +246,7 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
-	groupIndex := tracer.unifiedGroupIndex(cx)
+	groupIndex := cx.GroupIndex()
 
 	if cx.RunMode() == logic.ModeApp {
 		// Remember app EvalDelta before executing the opcode. We do this
@@ -290,7 +279,7 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 }
 
 func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
-	groupIndex := tracer.unifiedGroupIndex(cx)
+	groupIndex := cx.GroupIndex()
 
 	// Before Program, activated for logic sig, happens before txn group execution
 	// we should create trace object for this txn result
@@ -304,7 +293,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 }
 
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
-	groupIndex := tracer.unifiedGroupIndex(cx)
+	groupIndex := cx.GroupIndex()
 
 	if cx.RunMode() != logic.ModeApp {
 		// Report cost for LogicSig program and exit
