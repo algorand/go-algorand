@@ -960,23 +960,58 @@ func TestParentGlobals(t *testing.T) {
   byte "X"
   app_global_get_ex; pop; pop;	// we only care that it didn't panic
 `))
+
 		// Don't use `main` here, we want to do the work during creation.
-		createapp := txntest.Txn{
-			Type:   "appl",
-			Sender: addrs[0],
-			Fee:    2 * 1000, // to pay for self and call to helper
-			ApprovalProgram: `
+		createProgram := `
   itxn_begin
    int appl;      itxn_field TypeEnum
    int ` + strconv.Itoa(int(helper)) + `; itxn_field ApplicationID
   itxn_submit
   int 1
+`
+		createapp := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			Fee:             2 * 1000, // to pay for self and call to helper
+			ApprovalProgram: createProgram,
+			ForeignApps:     []basics.AppIndex{helper},
+		}
+		var creator basics.AppIndex
+		if ver >= 38 {
+			creator = dl.txn(&createapp).ApplyData.ApplicationID
+			require.NotZero(t, creator)
+		} else {
+			dl.txn(&createapp, "unavailable App")
+		}
+
+		// Now, test the same pattern, but do it all inside of yet another outer
+		// app, to show that the parent is available even if it was, itself
+		// created as an inner.  To do so, we also need to get 0.2 MBR to the
+		// outer app, since it will be creating the "middle" app.
+
+		outerAppAddress := (creator + 3).Address() // creator called an inner, so next is creator+2, then fund
+		outer := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			Fee:    3 * 1000, // to pay for self, call to inner create, and its call to helper
+			ApprovalProgram: `
+  itxn_begin
+   int appl;      itxn_field TypeEnum
+   byte 0x` + hex.EncodeToString(createapp.SignedTxn().Txn.ApprovalProgram) + `; itxn_field ApprovalProgram
+   byte 0x` + hex.EncodeToString(createapp.SignedTxn().Txn.ClearStateProgram) + `; itxn_field ClearStateProgram
+  itxn_submit
+  int 1
 `,
-			ForeignApps: []basics.AppIndex{helper},
+			ForeignApps: []basics.AppIndex{creator, helper},
+		}
+		fund := txntest.Txn{
+			Type:     "pay",
+			Amount:   200_000,
+			Sender:   addrs[0],
+			Receiver: outerAppAddress,
 		}
 		if ver >= 38 {
-			appID := dl.txn(&createapp).ApplyData.ApplicationID
-			require.NotZero(t, appID)
+			dl.txgroup("", &fund, &outer)
 		} else {
 			dl.txn(&createapp, "unavailable App")
 		}
