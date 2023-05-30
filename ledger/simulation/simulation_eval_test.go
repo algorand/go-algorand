@@ -23,7 +23,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -48,7 +47,7 @@ func uint64ToBytes(num uint64) []byte {
 
 type simulationTestCase struct {
 	input         simulation.Request
-	nodeConfig    *config.Local
+	developerAPI  bool
 	expected      simulation.Result
 	expectedError string
 }
@@ -127,14 +126,7 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 
 	testcase := f(env)
 
-	var nodeConfig config.Local
-	if testcase.nodeConfig != nil {
-		nodeConfig = *testcase.nodeConfig
-	} else {
-		nodeConfig = config.GetDefaultLocal()
-	}
-
-	actual, err := simulation.MakeSimulator(env.Ledger, nodeConfig.EnableDeveloperAPI).Simulate(testcase.input)
+	actual, err := simulation.MakeSimulator(env.Ledger, testcase.developerAPI).Simulate(testcase.input)
 	require.NoError(t, err)
 
 	validateSimulationResult(t, actual)
@@ -977,9 +969,6 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: uint64(i)})
 		}
 
-		nodeConfig := config.GetDefaultLocal()
-		nodeConfig.EnableDeveloperAPI = true
-
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -990,7 +979,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 					Enable: true,
 				},
 			},
-			nodeConfig: &nodeConfig,
+			developerAPI: true,
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
@@ -1923,9 +1912,6 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			{PC: 80},
 		}
 
-		nodeConfig := config.GetDefaultLocal()
-		nodeConfig.EnableDeveloperAPI = true
-
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -1935,7 +1921,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 					Enable: true,
 				},
 			},
-			nodeConfig: &nodeConfig,
+			developerAPI: true,
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
@@ -2075,9 +2061,6 @@ byte "hello"; log; int 1`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
-		nodeConfig := config.GetDefaultLocal()
-		nodeConfig.EnableDeveloperAPI = true
-
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -2087,7 +2070,7 @@ byte "hello"; log; int 1`,
 					Enable: true,
 				},
 			},
-			nodeConfig: &nodeConfig,
+			developerAPI: true,
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
@@ -2171,9 +2154,6 @@ byte "hello"; log; int 1`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
-		nodeConfig := config.GetDefaultLocal()
-		nodeConfig.EnableDeveloperAPI = true
-
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -2183,7 +2163,7 @@ byte "hello"; log; int 1`,
 					Enable: true,
 				},
 			},
-			nodeConfig:    &nodeConfig,
+			developerAPI:  true,
 			expectedError: "rejected by logic",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
@@ -2256,9 +2236,6 @@ byte "hello"; log; int 0`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
-		nodeConfig := config.GetDefaultLocal()
-		nodeConfig.EnableDeveloperAPI = true
-
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -2268,7 +2245,7 @@ byte "hello"; log; int 0`,
 					Enable: true,
 				},
 			},
-			nodeConfig:    &nodeConfig,
+			developerAPI:  true,
 			expectedError: "rejected by ApprovalProgram",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,

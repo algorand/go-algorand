@@ -2332,6 +2332,5 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	}
 	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
 
-	a.NotNil(resp.ExecTraceConfig)
 	a.Equal(execTraceConfig, resp.ExecTraceConfig)
 }
