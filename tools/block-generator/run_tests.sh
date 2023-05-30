@@ -93,5 +93,5 @@ echo "Log Level: $LOG_LEVEL"
   -c "$CONNECTION_STRING" \
   --report-directory "$REPORT_DIR" \
   --log-level "$LOG_LEVEL" \
-  --reset
+  --reset-report-dir
 
