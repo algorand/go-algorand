@@ -169,6 +169,8 @@ const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
 const disconnectDuplicateConnection disconnectReason = "DuplicateConnection"
 const disconnectBadIdentityData disconnectReason = "BadIdentityData"
 
+const lastSentRequestTime string = "lsrt"
+
 // Response is the structure holding the response from the server
 type Response struct {
 	Topics Topics
@@ -505,6 +507,24 @@ func (wp *wsPeer) readLoop() {
 			return
 		}
 		msg.Tag = Tag(string(tag[:]))
+
+		// Skip the message if it's a response to a request we didn't make or has timed out
+		if msg.Tag == protocol.TopicMsgRespTag && !wp.hasOutstandingRequests() {
+			// We never requested anything from this peer so sending a response is breach protocol -- disconnect
+			if wp.getPeerData(lastSentRequestTime) == nil {
+				wp.net.log.Errorf("wsPeer readloop: peer %s sent TS response without a request", wp.conn.RemoteAddr().String())
+				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
+				return
+			}
+			// Peer sent us a response to a request we made but we've already timed out	-- discard
+			n, err := io.Copy(io.Discard, reader)
+			if err != nil {
+				wp.net.log.Warnf("wsPeer readloop: could not discard timed-out TS message from %s : %s", wp.conn.RemoteAddr().String(), err)
+				continue
+			}
+			wp.net.log.Warnf("wsPeer readLoop: received a TS response for a stale request from %s. %d bytes discarded", wp.conn.RemoteAddr().String(), n)
+			continue
+		}
 		slurper.Reset()
 		err = slurper.Read(reader)
 		if err != nil {
@@ -942,13 +962,16 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 
 	// Send serializedMsg
 	msg := make([]sendMessage, 1, 1)
+
+	tStart := time.Now()
 	msg[0] = sendMessage{
 		data:         append([]byte(tag), serializedMsg...),
-		enqueued:     time.Now(),
-		peerEnqueued: time.Now(),
+		enqueued:     tStart,
+		peerEnqueued: tStart,
 		ctx:          context.Background()}
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
+		wp.setPeerData(lastSentRequestTime, tStart)
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
@@ -974,6 +997,12 @@ func (wp *wsPeer) makeResponseChannel(key uint64) (responseChannel chan *Respons
 	defer wp.responseChannelsMutex.Unlock()
 	wp.responseChannels[key] = newChan
 	return newChan
+}
+
+func (wp *wsPeer) hasOutstandingRequests() bool {
+	wp.responseChannelsMutex.Lock()
+	defer wp.responseChannelsMutex.Unlock()
+	return len(wp.responseChannels) > 0
 }
 
 // getAndRemoveResponseChannel returns the channel and deletes the channel from the map

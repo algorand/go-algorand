@@ -3945,3 +3945,54 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 	fmt.Printf("MI Message Count: %v\n", netA.peers[0].miMessageCount)
 	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount)
 }
+
+func TestDiscardUnrequestedBlockResponse(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.config.GossipFanout = 1
+
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.config.GossipFanout = 1
+
+	netC := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netC"})
+	netC.config.GossipFanout = 1
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 1, len(netA.peers))
+
+	// Create a buffer to monitor log output from netB
+	logBuffer := bytes.NewBuffer(nil)
+	netB.log.SetOutput(logBuffer)
+
+	// send an unrequested block response
+	msg := make([]sendMessage, 1, 1)
+	msg[0] = sendMessage{
+		data:         append([]byte(protocol.TopicMsgRespTag), []byte("foo")...),
+		enqueued:     time.Now(),
+		peerEnqueued: time.Now(),
+		ctx:          context.Background(),
+	}
+	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop and confirm that we hit the case of disconnecting a peer for sending an unrequested block response
+	netB.Stop()
+	lg := logBuffer.String()
+	assert.Contains(t, lg, "peer sent TS response without a request", gossipB)
+
+	// TODO: add a test for the case where we receive a block response for a block we didn't request
+
+}
