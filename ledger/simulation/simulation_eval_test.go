@@ -377,7 +377,7 @@ func TestStateProofTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
+	s := simulation.MakeSimulator(env.Ledger, false)
 
 	txgroup := []transactions.SignedTxn{
 		env.TxnInfo.NewTxn(txntest.Txn{
@@ -396,7 +396,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
+	s := simulation.MakeSimulator(env.Ledger, false)
 	sender1 := env.Accounts[0]
 	sender1Balance := env.Accounts[0].AcctData.MicroAlgos
 	sender2 := env.Accounts[1]
@@ -1115,7 +1115,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
+	s := simulation.MakeSimulator(env.Ledger, false)
 
 	sender := env.Accounts[0]
 
@@ -1323,7 +1323,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
+	s := simulation.MakeSimulator(env.Ledger, false)
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -2479,7 +2479,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
+	s := simulation.MakeSimulator(env.Ledger, false)
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{
