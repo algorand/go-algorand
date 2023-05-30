@@ -31,6 +31,8 @@ type testCase struct {
 }
 
 func TestCrossRepoTypes(t *testing.T) {
+	// NOTE: the heavy lifting is done by the first test case, so it's better to apply PartitionTest to the
+	// entire test as opposed to partitioning each test case.
 	partitiontest.PartitionTest(t)
 
 	testCases := []testCase{

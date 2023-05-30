@@ -80,8 +80,8 @@ endif
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
-COVER_PROFILE 	:= $(SRCPATH)/coverage.txt
-COVER_OUT 		:= $(SRCPATH)/cover.out
+COVER_PROFILE  := $(SRCPATH)/coverage.txt
+COVER_OUT      := $(SRCPATH)/cover.out
 
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
@@ -92,9 +92,9 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
-UNIT_TEST_SOURCES 			:= $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
-UNIT_TEST_SOURCES_SUBMOD 	:= $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && find . -mindepth 2 -name 'go.mod' -execdir go list ./... \; | grep -v /go-algorand/test/ ))
-ALGOD_API_PACKAGES 			:= $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
+UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
+UNIT_TEST_SOURCES_SUBMOD := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && find . -mindepth 2 -name 'go.mod' -execdir go list ./... \; | grep -v /go-algorand/test/ ))
+ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
 MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
 
