@@ -78,22 +78,22 @@ var networkBuildCmd = &cobra.Command{
 	},
 }
 
-func runBuildNetwork() (err error) {
+func runBuildNetwork() error {
 	if cpuprofilePath != "" {
-		f, osErr := os.Create(cpuprofilePath)
-		if osErr != nil {
-			log.Fatalf("%s: could not create CPU profile, %v", cpuprofilePath, osErr)
+		f, err := os.Create(cpuprofilePath)
+		if err != nil {
+			log.Fatalf("%s: could not create CPU profile, %v", cpuprofilePath, err)
 		}
 		defer f.Close() // error handling omitted for example
-		if ppErr := pprof.StartCPUProfile(f); ppErr != nil {
-			log.Fatalf("%s: could not start CPU profile, %v", cpuprofilePath, ppErr)
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatalf("%s: could not start CPU profile, %v", cpuprofilePath, err)
 		}
 		defer pprof.StopCPUProfile()
 	}
 
 	networkRootDir, err := filepath.Abs(networkRootDir)
 	if err != nil {
-		return
+		return err
 	}
 	// Make sure target directory doesn't already exist
 	exists := util.FileExists(networkRootDir)
@@ -109,7 +109,7 @@ func runBuildNetwork() (err error) {
 	}
 
 	if networkRecipeFile, err = filepath.Abs(networkRecipeFile); err != nil {
-		return
+		return err
 	}
 
 	var r recipe
