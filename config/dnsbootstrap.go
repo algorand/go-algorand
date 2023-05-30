@@ -21,7 +21,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	
+
 	"github.com/algorand/go-algorand/protocol"
 )
 
