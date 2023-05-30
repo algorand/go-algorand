@@ -604,7 +604,7 @@ commands:
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
-            GOMODS="$(find . -name 'go.mod')"
+            GOMODS="$(find . -name 'go.mod' -not -path './cmd/partitiontest_linter/*')"
             for gomod in $GOMODS; do
                 pushd $(dirname $gomod)
                 PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
