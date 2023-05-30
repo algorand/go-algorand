@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -94,6 +94,8 @@ func (d *testDbgAdapter) eventLoop() {
 
 func TestDebuggerSimple(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	proto := config.Consensus[protocol.ConsensusV18]
 	require.Greater(t, proto.LogicSigVersion, uint64(0))
 	debugger := MakeDebugger()
@@ -102,7 +104,7 @@ func TestDebuggerSimple(t *testing.T) {
 	debugger.AddAdapter(da)
 
 	ep := logic.NewEvalParams(make([]transactions.SignedTxnWithAD, 1), &proto, nil)
-	ep.Debugger = debugger
+	ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(debugger)
 	ep.SigLedger = logic.NoHeaderLedger{}
 
 	source := `int 0
@@ -148,6 +150,8 @@ func createSessionFromSource(t *testing.T, program string) *session {
 
 func TestSession(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	s := createSessionFromSource(t, "#pragma version %d\nint 1\ndup\n+\n")
 	err := s.SetBreakpoint(2)
 	require.NoError(t, err)
@@ -199,6 +203,7 @@ func TestSession(t *testing.T) {
 // that call stack is inspected correctly.
 func TestCallStackControl(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	newTestCase := func() (*session, chan struct{}, func(), *int) {
 		s := createSessionFromSource(t, "#pragma version %d\nlab1:\nint 1\ncallsub lab1\ndup\n+\n")
@@ -344,6 +349,7 @@ func TestCallStackControl(t *testing.T) {
 		},
 	}
 
+	// nolint:paralleltest // Linter is not following formulation of subtests.
 	for name, f := range cases {
 		t.Run(name, f)
 	}
@@ -351,6 +357,8 @@ func TestCallStackControl(t *testing.T) {
 
 func TestSourceMaps(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	s := createSessionFromSource(t, "#pragma version %d\nint 1\n")
 
 	// Source and source map checks

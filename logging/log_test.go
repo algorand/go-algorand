@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,6 +58,15 @@ func TestFileOutputNewLogger(t *testing.T) {
 	a.NotContains(bufNewLogger.String(), "Should show up in base logger but not in NewLogger")
 	a.Contains(bufNewLogger.String(), "Should show up in New logger but not in BaseLogger")
 
+}
+
+func TestSetGetLevel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	nl := NewLogger()
+	require.Equal(t, Info, nl.GetLevel())
+	nl.SetLevel(Error)
+	require.Equal(t, Error, nl.GetLevel())
 }
 
 func TestSetLevelNewLogger(t *testing.T) {

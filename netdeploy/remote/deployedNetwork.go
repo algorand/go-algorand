@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -757,7 +757,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 			return []transactions.SignedTxn{}, err
 		}
 		approval := ops.Program
-		ops, err = logic.AssembleString("#pragma version 2 int 1")
+		ops, err = logic.AssembleString("#pragma version 2\nint 1")
 		if err != nil {
 			panic(err)
 		}

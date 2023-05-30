@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,14 +69,14 @@ func findRootKeys(algodDir string) []*crypto.SignatureSecrets {
 		var handle db.Accessor
 		handle, err := db.MakeErasableAccessor(path)
 		if err != nil {
-			return nil // don't care, move on
+			return nil //nolint:nilerr // don't care, move on
 		}
 		defer handle.Close()
 
 		// Fetch an account.Participation from the database
 		root, err := algodAcct.RestoreRoot(handle)
 		if err != nil {
-			return nil // don't care, move on
+			return nil //nolint:nilerr // don't care, move on
 		}
 		keylist = append(keylist, root.Secrets())
 		return nil

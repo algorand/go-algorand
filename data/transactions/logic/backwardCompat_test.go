@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -284,7 +284,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	ep.TxnGroup[0].Lsig.Logic = program
 	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
 
-	// ensure v1 program runs well on latest TEAL evaluator
+	// ensure v1 program runs well on latest evaluator
 	require.Equal(t, uint8(1), program[0])
 
 	// Cost should stay exactly 2140
@@ -315,7 +315,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	ep2.Proto.LogicSigMaxCost = 2308
 	testLogicBytes(t, opsV2.Program, ep2)
 
-	// ensure v0 program runs well on latest TEAL evaluator
+	// ensure v0 program runs well on latest evaluator
 	ep, tx, _ = makeSampleEnv()
 	program[0] = 0
 	sig = c.Sign(Msg{
@@ -464,22 +464,27 @@ func TestBackwardCompatAssemble(t *testing.T) {
 	// v1 does not allow branching to the last line
 	// v2 makes such programs legal
 	t.Parallel()
-	source := "int 1; int 1; bnz done; done:"
 
-	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, assemblerNoVersion, Expect{1, "label \"done\" is too far away"})
-	})
+	// Label is ok, it just can't be branched to
+	source := "int 1; done:"
+	testProg(t, source, assemblerNoVersion)
+	testProg(t, source, 0)
+	testProg(t, source, 1)
 
-	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 0, Expect{1, "label \"done\" is too far away"})
-	})
-
-	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 1, Expect{1, "label \"done\" is too far away"})
-	})
+	// use multiple lines, so that error report is checked better
+	source = `int 1;
+ int 1;
+ bnz done;
+ done:
+`
+	testProg(t, source, assemblerNoVersion, exp(3, "label \"done\" is too far away", 5))
+	testProg(t, source, 0, exp(3, "label \"done\" is too far away", 5))
+	testProg(t, source, 1, exp(3, "label \"done\" is too far away", 5))
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		v := v
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Parallel()
 			testLogic(t, source, v, defaultEvalParams())
 		})
 	}
@@ -487,6 +492,7 @@ func TestBackwardCompatAssemble(t *testing.T) {
 
 func TestExplicitConstants(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.Equal(t, 4096, maxStringSize, "constant changed, make it version dependent")
 	require.Equal(t, 64, maxByteMathSize, "constant changed, move it version dependent")

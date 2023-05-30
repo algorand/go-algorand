@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package agreement
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -3230,6 +3231,131 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 
 	rePayloadEvent := ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
 	require.Truef(t, trace.Contains(rePayloadEvent), "Player should relay payload even if not staged in previous period")
+}
+
+// test that ReceivedAt and ValidateAt timing information are retained in proposalStore
+// when the payloadPresent and payloadVerified events are processed, and that both timings
+// are available when the ensureAction is called for the block.
+func TestPlayerRetainsReceivedValidatedAt(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = round(20239)
+	const p = period(1001)
+	pWhite, pM, helper := setupP(t, r-1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+
+	// send voteVerified message
+	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// send payloadPresent message
+	m := message{UnauthenticatedProposal: pP.u()}
+	inMsg = messageEvent{T: payloadPresent, Input: m}
+	inMsg = inMsg.AttachReceivedAt(time.Second)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m)
+}
+
+// test that ReceivedAt and ValidateAt timing information are retained in proposalStore
+// when the payloadPresent (as part of the CompoundMessage encoding used by PP messages)
+// and payloadVerified events are processed, and that both timings
+// are available when the ensureAction is called for the block.
+func TestPlayerRetainsReceivedValidatedAtPP(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = round(20239)
+	const p = period(1001)
+	pWhite, pM, helper := setupP(t, r-1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+
+	// create a PP message for an arbitrary proposal/payload similar to setupCompoundMessage
+	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	voteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
+	proposalMsg := message{UnauthenticatedProposal: pP.u()}
+	compoundMsg := messageEvent{T: votePresent, Input: voteMsg,
+		Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
+	inMsg := compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// make sure vote verify requests
+	verifyEvent := ev(cryptoAction{T: verifyVote, M: voteMsg, Round: r - 1, Period: p, Step: propose, TaskIndex: 1})
+	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
+
+	// send voteVerified
+	inMsg = messageEvent{T: voteVerified, Input: voteMsg, TaskIndex: 1}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg)
+}
+
+func assertCorrectReceivedAtSet(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerHelper,
+	r round, p period, pP *proposal, pV *proposalValue, m message) {
+	// make sure payload verify request
+	verifyEvent := ev(cryptoAction{T: verifyPayload, M: m, Round: r - 1, Period: p, Step: propose, TaskIndex: 0})
+	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify payload")
+
+	// payloadVerified
+	inMsg := messageEvent{T: payloadVerified, Input: message{Proposal: *pP}, Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion}}
+	inMsg = inMsg.AttachValidatedAt(2 * time.Second) // call AttachValidatedAt like demux would
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// gen cert to move into the next round
+	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
+	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p, cert, *pV)
+	}
+	bun := unauthenticatedBundle{
+		Round:    r - 1,
+		Period:   p,
+		Proposal: *pV,
+	}
+	inMsg = messageEvent{
+		T: bundleVerified,
+		Input: message{
+			Bundle: bundle{
+				U:     bun,
+				Votes: votes,
+			},
+			UnauthenticatedBundle: bun,
+		},
+		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+	}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	require.Equalf(t, r, pWhite.Round, "player did not enter new round")
+	require.Equalf(t, period(0), pWhite.Period, "player did not enter period 0 in new round")
+	commitEvent := ev(ensureAction{Certificate: Certificate(bun), Payload: *pP})
+	require.Truef(t, pM.getTrace().Contains(commitEvent), "Player should try to ensure block/digest on ledger")
+
+	// find and unwrap ensureAction from trace
+	var ea ensureAction
+	var foundEA bool
+	for _, ev := range pM.getTrace().events {
+		if wae, ok := ev.(wrappedActionEvent); ok {
+			if wae.action.t() == ensure {
+				require.False(t, foundEA)
+				ea = wae.action.(ensureAction)
+				foundEA = true
+			}
+		}
+	}
+	require.True(t, foundEA)
+	require.Equal(t, 2*time.Second, ea.Payload.validatedAt)
+	require.Equal(t, time.Second, ea.Payload.receivedAt)
 }
 
 // todo: test pipelined rounds, and round interruption

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -549,7 +549,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	a.NoError(err)
 	account1 := accountList[0]
 
-	txCount := uint64(0)
+	txCount := uint64(1000) // starting with v38 tx count is initialized to 1000
 	fee := uint64(1000000)
 
 	manager := account0

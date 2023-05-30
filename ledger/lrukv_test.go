@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -39,9 +40,9 @@ func TestLRUBasicKV(t *testing.T) {
 	// write 50 KVs
 	for i := 0; i < kvNum; i++ {
 		kvValue := fmt.Sprintf("kv %d value", i)
-		kv := persistedKVData{
-			value: []byte(kvValue),
-			round: basics.Round(i),
+		kv := trackerdb.PersistedKVData{
+			Value: []byte(kvValue),
+			Round: basics.Round(i),
 		}
 		baseKV.write(kv, fmt.Sprintf("key%d", i))
 	}
@@ -50,15 +51,15 @@ func TestLRUBasicKV(t *testing.T) {
 	for i := 0; i < kvNum; i++ {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), kv.round)
-		require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.value))
+		require.Equal(t, basics.Round(i), kv.Round)
+		require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.Value))
 	}
 
 	// verify expected missing entries
 	for i := kvNum; i < kvNum*2; i++ {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.False(t, has)
-		require.Equal(t, persistedKVData{}, kv)
+		require.Equal(t, trackerdb.PersistedKVData{}, kv)
 	}
 
 	baseKV.prune(kvNum / 2)
@@ -70,13 +71,48 @@ func TestLRUBasicKV(t *testing.T) {
 		if i >= kvNum/2 && i < kvNum {
 			// expected to have it.
 			require.True(t, has)
-			require.Equal(t, basics.Round(i), kv.round)
-			require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.value))
+			require.Equal(t, basics.Round(i), kv.Round)
+			require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.Value))
 		} else {
 			require.False(t, has)
-			require.Equal(t, persistedKVData{}, kv)
+			require.Equal(t, trackerdb.PersistedKVData{}, kv)
 		}
 	}
+}
+
+func TestLRUKVDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var baseKV lruKV
+	baseKV.init(logging.TestingLog(t), 0, 1)
+
+	kvNum := 5
+
+	for i := 1; i <= kvNum; i++ {
+		go func(i int) {
+			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
+			kvValue := fmt.Sprintf("kv %d value", i)
+			kv := trackerdb.PersistedKVData{
+				Value: []byte(kvValue),
+				Round: basics.Round(i),
+			}
+			baseKV.writePending(kv, fmt.Sprintf("key%d", i))
+		}(i)
+	}
+	require.Empty(t, baseKV.pendingKVs)
+	baseKV.flushPendingWrites()
+	require.Empty(t, baseKV.kvs)
+
+	for i := 0; i < kvNum; i++ {
+		kvValue := fmt.Sprintf("kv %d value", i)
+		kv := trackerdb.PersistedKVData{
+			Value: []byte(kvValue),
+			Round: basics.Round(i),
+		}
+		baseKV.write(kv, fmt.Sprintf("key%d", i))
+	}
+
+	require.Empty(t, baseKV.kvs)
 }
 
 func TestLRUKVPendingWrites(t *testing.T) {
@@ -90,9 +126,9 @@ func TestLRUKVPendingWrites(t *testing.T) {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			kvValue := fmt.Sprintf("kv %d value", i)
-			kv := persistedKVData{
-				value: []byte(kvValue),
-				round: basics.Round(i),
+			kv := trackerdb.PersistedKVData{
+				Value: []byte(kvValue),
+				Round: basics.Round(i),
 			}
 			baseKV.writePending(kv, fmt.Sprintf("key%d", i))
 		}(i)
@@ -141,9 +177,9 @@ func TestLRUKVPendingWritesWarning(t *testing.T) {
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
 			kvValue := fmt.Sprintf("kv %d value", i)
-			kv := persistedKVData{
-				value: []byte(kvValue),
-				round: basics.Round(i),
+			kv := trackerdb.PersistedKVData{
+				Value: []byte(kvValue),
+				Round: basics.Round(i),
 			}
 			baseKV.writePending(kv, fmt.Sprintf("key%d", i))
 		}
@@ -166,9 +202,9 @@ func TestLRUKVOmittedPendingWrites(t *testing.T) {
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
 		kvValue := fmt.Sprintf("kv %d value", i)
-		kv := persistedKVData{
-			value: []byte(kvValue),
-			round: basics.Round(i),
+		kv := trackerdb.PersistedKVData{
+			Value: []byte(kvValue),
+			Round: basics.Round(i),
 		}
 		baseKV.writePending(kv, fmt.Sprintf("key%d", i))
 	}
@@ -179,15 +215,15 @@ func TestLRUKVOmittedPendingWrites(t *testing.T) {
 	for i := 0; i < pendingWritesBuffer; i++ {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.True(t, has)
-		require.Equal(t, basics.Round(i), kv.round)
-		require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.value))
+		require.Equal(t, basics.Round(i), kv.Round)
+		require.Equal(t, fmt.Sprintf("kv %d value", i), string(kv.Value))
 	}
 
 	// verify expected missing entries
 	for i := pendingWritesBuffer; i < pendingWritesBuffer*2; i++ {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.False(t, has)
-		require.Equal(t, persistedKVData{}, kv)
+		require.Equal(t, trackerdb.PersistedKVData{}, kv)
 	}
 }
 
@@ -218,7 +254,7 @@ func benchLruWriteKVs(b *testing.B, fillerKVs []cachedKVData, kvs []cachedKVData
 
 func fillLRUKV(baseKV lruKV, fillerKVs []cachedKVData) lruKV {
 	for _, entry := range fillerKVs {
-		baseKV.write(entry.persistedKVData, entry.key)
+		baseKV.write(entry.PersistedKVData, entry.key)
 	}
 	return baseKV
 }
@@ -229,9 +265,9 @@ func generatePersistedKVData(startRound, endRound int) []cachedKVData {
 		kvValue := fmt.Sprintf("kv %d value", i)
 
 		kvs[i-startRound] = cachedKVData{
-			persistedKVData: persistedKVData{
-				value: []byte(kvValue),
-				round: basics.Round(i + startRound),
+			PersistedKVData: trackerdb.PersistedKVData{
+				Value: []byte(kvValue),
+				Round: basics.Round(i + startRound),
 			},
 			key: fmt.Sprintf("key%d", i),
 		}

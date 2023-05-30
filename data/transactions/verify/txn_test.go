@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,8 @@ package verify
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -30,6 +32,9 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
+	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -37,7 +42,7 @@ import (
 
 var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-var blockHeader = bookkeeping.BlockHeader{
+var blockHeader = &bookkeeping.BlockHeader{
 	RewardsState: bookkeeping.RewardsState{
 		FeeSink:     feeSink,
 		RewardsPool: poolAddr,
@@ -46,6 +51,8 @@ var blockHeader = bookkeeping.BlockHeader{
 		CurrentProtocol: protocol.ConsensusCurrentVersion,
 	},
 }
+var protoMaxGroupSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
+var txBacklogSize = config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnBytesPerBlock / 200
 
 var spec = transactions.SpecialAddresses{
 	FeeSink:     feeSink,
@@ -55,27 +62,29 @@ var spec = transactions.SpecialAddresses{
 func verifyTxn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier); err != nil {
+	if err := txnBatchPrep(s, txnIdx, groupCtx, batchVerifier, nil); err != nil {
 		return err
 	}
 	return batchVerifier.Verify()
 }
 
 type DummyLedgerForSignature struct {
+	badHdr bool
 }
 
 func (d *DummyLedgerForSignature) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{
-		Round:       50,
-		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
-		},
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:     feeSink,
-			RewardsPool: poolAddr,
-		},
-	}, nil
+	return createDummyBlockHeader(), nil
+}
+func (d *DummyLedgerForSignature) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
+	if d.badHdr {
+		return bookkeeping.BlockHeader{}, fmt.Errorf("test error block hdr")
+	}
+	return createDummyBlockHeader(), nil
+}
+func (d *DummyLedgerForSignature) Latest() basics.Round {
+	return 0
+}
+func (d *DummyLedgerForSignature) RegisterBlockListeners([]ledgercore.BlockListener) {
 }
 
 func keypair() *crypto.SignatureSecrets {
@@ -108,20 +117,7 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 			exp = int(blockRound) + rand.Intn(30)
 		}
 
-		txs[i] = transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      multiAddress[s],
-				Fee:         basics.MicroAlgos{Raw: f},
-				FirstValid:  basics.Round(iss),
-				LastValid:   basics.Round(exp),
-				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: multiAddress[r],
-				Amount:   basics.MicroAlgos{Raw: uint64(a)},
-			},
-		}
+		txs[i] = createPayTransaction(f, iss, exp, a, multiAddress[s], multiAddress[r])
 		signed[i].Txn = txs[i]
 
 		// create multi sig that 2 out of 3 has signed the txn
@@ -172,7 +168,7 @@ func generateAccounts(numAccs int) ([]*crypto.SignatureSecrets, []basics.Address
 	return secrets, addresses, pks
 }
 
-func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+func generateTestObjects(numTxs, numAccs, noteOffset int, blockRound basics.Round) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
 	txs := make([]transactions.Transaction, numTxs)
 	signed := make([]transactions.SignedTxn, numTxs)
 	secrets, addresses, _ := generateAccounts(numAccs)
@@ -192,20 +188,11 @@ func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transa
 			exp = int(blockRound) + rand.Intn(30)
 		}
 
-		txs[i] = transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      addresses[s],
-				Fee:         basics.MicroAlgos{Raw: f},
-				FirstValid:  basics.Round(iss),
-				LastValid:   basics.Round(exp),
-				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: addresses[r],
-				Amount:   basics.MicroAlgos{Raw: uint64(a)},
-			},
-		}
+		txs[i] = createPayTransaction(f, iss, exp, a, addresses[s], addresses[r])
+		noteField := make([]byte, binary.MaxVarintLen64)
+		binary.PutUvarint(noteField, uint64(i+noteOffset))
+		txs[i].Note = noteField
+
 		signed[i] = txs[i].Sign(secrets[s])
 		u += 100
 	}
@@ -218,7 +205,7 @@ func TestSignedPayment(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0)
+	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0, 0)
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
 	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil)
@@ -239,7 +226,7 @@ func TestSignedPayment(t *testing.T) {
 func TestTxnValidationEncodeDecode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signed, _, _ := generateTestObjects(100, 50, 0)
+	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
 	for _, txn := range signed {
 		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
@@ -261,7 +248,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 func TestTxnValidationEmptySig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signed, _, _ := generateTestObjects(100, 50, 0)
+	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
 	for _, txn := range signed {
 		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
@@ -279,14 +266,11 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	}
 }
 
-const spProto = protocol.ConsensusVersion("test-state-proof-enabled")
-
 func TestTxnValidationStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	proto.StateProofInterval = 256
-	config.Consensus[spProto] = proto
 
 	stxn := transactions.SignedTxn{
 		Txn: transactions.Transaction{
@@ -299,13 +283,13 @@ func TestTxnValidationStateProof(t *testing.T) {
 		},
 	}
 
-	var blockHeader = bookkeeping.BlockHeader{
+	var blockHeader = &bookkeeping.BlockHeader{
 		RewardsState: bookkeeping.RewardsState{
 			FeeSink:     feeSink,
 			RewardsPool: poolAddr,
 		},
 		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: spProto,
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
 		},
 	}
 
@@ -369,17 +353,219 @@ func TestDecodeNil(t *testing.T) {
 	}
 }
 
+func TestTxnGroupWithTracer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// In all cases, a group of three transactions is tested. They are:
+	//   1. A payment transaction from a LogicSig (program1)
+	//   2. An app call from a normal account
+	//   3. An app call from a LogicSig (program2)
+
+	testCases := []struct {
+		name           string
+		program1       string
+		program2       string
+		expectedError  string
+		expectedEvents []mocktracer.Event
+	}{
+		{
+			name: "both approve",
+			program1: `#pragma version 6
+pushint 1`,
+			program2: `#pragma version 6
+pushbytes "test"
+pop
+pushint 1`,
+			expectedEvents: mocktracer.FlattenEvents([][]mocktracer.Event{
+				{
+					mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
+					mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
+					mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+					// nothing for second txn (not signed with a LogicSig)
+					mocktracer.BeforeProgram(logic.ModeSig), // third txn start
+				},
+				mocktracer.OpcodeEvents(3, false), // third txn LogicSig: 3 ops
+				{
+					mocktracer.AfterProgram(logic.ModeSig, false), // third txn end
+				},
+			}),
+		},
+		{
+			name: "approve then reject",
+			program1: `#pragma version 6
+pushint 1`,
+			program2: `#pragma version 6
+pushbytes "test"
+pop
+pushint 0`,
+			expectedError: "rejected by logic",
+			expectedEvents: mocktracer.FlattenEvents([][]mocktracer.Event{
+				{
+					mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
+					mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
+					mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+					// nothing for second txn (not signed with a LogicSig)
+					mocktracer.BeforeProgram(logic.ModeSig), // third txn start
+				},
+				mocktracer.OpcodeEvents(3, false), // third txn LogicSig: 3 ops
+				{
+					mocktracer.AfterProgram(logic.ModeSig, false), // third txn end
+				},
+			}),
+		},
+		{
+			name: "approve then error",
+			program1: `#pragma version 6
+pushint 1`,
+			program2: `#pragma version 6
+pushbytes "test"
+pop
+err
+pushbytes "test2"
+pop`,
+			expectedError: "rejected by logic err=err opcode executed",
+			expectedEvents: mocktracer.FlattenEvents([][]mocktracer.Event{
+				{
+					mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
+					mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
+					mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+					// nothing for second txn (not signed with a LogicSig)
+					mocktracer.BeforeProgram(logic.ModeSig), // third txn start
+				},
+				mocktracer.OpcodeEvents(3, true), // third txn LogicSig: 3 ops
+				{
+					mocktracer.AfterProgram(logic.ModeSig, true), // third txn end
+				},
+			}),
+		},
+		{
+			name: "reject then approve",
+			program1: `#pragma version 6
+pushint 0`,
+			program2: `#pragma version 6
+pushbytes "test"
+pop
+pushint 1`,
+			expectedError: "rejected by logic",
+			expectedEvents: []mocktracer.Event{
+				mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
+				mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
+				mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+				// execution stops at rejection
+			},
+		},
+		{
+			name: "error then approve",
+			program1: `#pragma version 6
+err`,
+			program2: `#pragma version 6
+pushbytes "test"
+pop
+pushint 1`,
+			expectedError: "rejected by logic err=err opcode executed",
+			expectedEvents: []mocktracer.Event{
+				mocktracer.BeforeProgram(logic.ModeSig),                 // first txn start
+				mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(true), // first txn LogicSig: 1 op
+				mocktracer.AfterProgram(logic.ModeSig, true), // first txn end
+				// execution stops at error
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+			account := keypair()
+			accountAddr := basics.Address(account.SignatureVerifier)
+
+			ops1, err := logic.AssembleString(testCase.program1)
+			require.NoError(t, err)
+			program1Bytes := ops1.Program
+			program1Addr := basics.Address(logic.HashProgram(program1Bytes))
+
+			ops2, err := logic.AssembleString(testCase.program2)
+			require.NoError(t, err)
+			program2Bytes := ops2.Program
+			program2Addr := basics.Address(logic.HashProgram(program2Bytes))
+
+			// This app program shouldn't be invoked during this test
+			appProgram := "err"
+
+			lsigPay := txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   program1Addr,
+				Receiver: accountAddr,
+				Fee:      proto.MinTxnFee,
+			}
+
+			normalSigAppCall := txntest.Txn{
+				Type:              protocol.ApplicationCallTx,
+				Sender:            accountAddr,
+				ApprovalProgram:   appProgram,
+				ClearStateProgram: appProgram,
+				Fee:               proto.MinTxnFee,
+			}
+
+			lsigAppCall := txntest.Txn{
+				Type:              protocol.ApplicationCallTx,
+				Sender:            program2Addr,
+				ApprovalProgram:   appProgram,
+				ClearStateProgram: appProgram,
+				Fee:               proto.MinTxnFee,
+			}
+
+			txntest.Group(&lsigPay, &normalSigAppCall, &lsigAppCall)
+
+			txgroup := []transactions.SignedTxn{
+				{
+					Lsig: transactions.LogicSig{
+						Logic: program1Bytes,
+					},
+					Txn: lsigPay.Txn(),
+				},
+				normalSigAppCall.Txn().Sign(account),
+				{
+					Lsig: transactions.LogicSig{
+						Logic: program2Bytes,
+					},
+					Txn: lsigAppCall.Txn(),
+				},
+			}
+
+			mockTracer := &mocktracer.Tracer{}
+			_, err = TxnGroupWithTracer(txgroup, blockHeader, nil, logic.NoHeaderLedger{}, mockTracer)
+
+			if len(testCase.expectedError) != 0 {
+				require.ErrorContains(t, err, testCase.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+
+			require.Equal(t, testCase.expectedEvents, mockTracer.Events)
+		})
+	}
+}
+
 func TestPaysetGroups(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
+	if testing.Short() {
+		t.Log("this is a long test and skipping for -short")
+		return
+	}
+
+	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	execPool := execpool.MakePool(t)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
 	defer verificationPool.Shutdown()
 
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	startPaysetGroupsTime := time.Now()
 	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
@@ -399,9 +585,9 @@ func TestPaysetGroups(t *testing.T) {
 	// we define a test that would take 10 seconds to execute, and try to abort at 1.5 seconds.
 	txnCount := len(signedTxn) * 10 * int(time.Second/paysetGroupDuration)
 
-	_, signedTxn, secrets, addrs = generateTestObjects(txnCount, 20, 50)
+	_, signedTxn, secrets, addrs = generateTestObjects(txnCount, 20, 0, 50)
 
-	txnGroups = generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups = generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	ctx, ctxCancelFunc := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer ctxCancelFunc()
@@ -442,14 +628,14 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	if b.N < 2000 {
 		b.N = 2000
 	}
-	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	execPool := execpool.MakePool(b)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, b)
 	defer verificationPool.Shutdown()
 
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 	cache := MakeVerifiedTransactionCache(50000)
 
 	b.ResetTimer()
@@ -461,7 +647,7 @@ func BenchmarkPaysetGroups(b *testing.B) {
 func TestTxnGroupMixedSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, secrets, addrs := generateTestObjects(1, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(1, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	// add a simple logic that verifies this condition:
@@ -472,16 +658,16 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 ==`)
 	require.NoError(t, err)
 
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	dummyLedger := DummyLedgerForSignature{}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.NoError(t, err)
 
 	///// no sig
 	tmpSig := txnGroups[0][0].Sig
 	txnGroups[0][0].Sig = crypto.Signature{}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "has no sig")
 	txnGroups[0][0].Sig = tmpSig
@@ -492,14 +678,14 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
 	txnGroups[0][0].Msig.Subsigs = nil
 
 	///// Sig + logic
 	txnGroups[0][0].Lsig.Logic = op.Program
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
 	txnGroups[0][0].Lsig.Logic = []byte{}
@@ -512,7 +698,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
 	txnGroups[0][0].Lsig.Logic = []byte{}
@@ -528,36 +714,45 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Key: crypto.PublicKey{0x1},
 		Sig: crypto.Signature{0x2},
 	}
-	_, err = TxnGroup(txnGroups[0], blkHdr, nil, &dummyLedger)
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "should only have one of Sig or Msig")
 
 }
 
-func generateTransactionGroups(signedTxns []transactions.SignedTxn, secrets []*crypto.SignatureSecrets, addrs []basics.Address) [][]transactions.SignedTxn {
+func generateTransactionGroups(maxGroupSize int, signedTxns []transactions.SignedTxn,
+	secrets []*crypto.SignatureSecrets, addrs []basics.Address) [][]transactions.SignedTxn {
 	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
 	for i, addr := range addrs {
 		addrToSecret[addr] = secrets[i]
 	}
 
 	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxns))
-	for i := 0; i < len(signedTxns); i++ {
-		txnPerGroup := 1 + rand.Intn(15)
-		if i+txnPerGroup >= len(signedTxns) {
-			txnPerGroup = len(signedTxns) - i - 1
+	for i := 0; i < len(signedTxns); {
+		txnsInGroup := rand.Intn(protoMaxGroupSize-1) + 1
+		if txnsInGroup > maxGroupSize {
+			txnsInGroup = maxGroupSize
 		}
-		newGroup := signedTxns[i : i+txnPerGroup+1]
+		if i+txnsInGroup > len(signedTxns) {
+			txnsInGroup = len(signedTxns) - i
+		}
+
+		newGroup := signedTxns[i : i+txnsInGroup]
 		var txGroup transactions.TxGroup
-		for _, txn := range newGroup {
-			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
+		if txnsInGroup > 1 {
+			for _, txn := range newGroup {
+				txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
+			}
 		}
 		groupHash := crypto.HashObj(txGroup)
 		for j := range newGroup {
-			newGroup[j].Txn.Group = groupHash
+			if txnsInGroup > 1 {
+				newGroup[j].Txn.Group = groupHash
+			}
 			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
 		}
 		txnGroups = append(txnGroups, newGroup)
-		i += txnPerGroup
+		i += txnsInGroup
 	}
 
 	return txnGroups
@@ -566,17 +761,17 @@ func generateTransactionGroups(signedTxns []transactions.SignedTxn, secrets []*c
 func TestTxnGroupCacheUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, secrets, addrs := generateTestObjects(100, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Sig[0]++
 	}
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Sig[0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 }
 
 // TestTxnGroupCacheUpdateMultiSig makes sure that a payment transaction signed with multisig
@@ -598,7 +793,7 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Msig.Subsigs[0].Sig[0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 }
 
 // TestTxnGroupCacheUpdateFailLogic test makes sure that a payment transaction contains a logic (and no signature)
@@ -606,10 +801,10 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, _, _ := generateTestObjects(100, 20, 50)
+	_, signedTxn, _, _ := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
-	// sign the transcation with logic
+	// sign the transaction with logic
 	for i := 0; i < len(signedTxn); i++ {
 		// add a simple logic that verifies this condition:
 		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
@@ -637,8 +832,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
-
+	initCounter := logicCostTotal.GetUint64Value()
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+	currentCounter := logicCostTotal.GetUint64Value()
+	require.Greater(t, currentCounter, initCounter)
 }
 
 // TestTxnGroupCacheUpdateLogicWithSig makes sure that a payment transaction contains logicsig signed with single signature is valid (and added to the cache) only
@@ -647,7 +844,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 func TestTxnGroupCacheUpdateLogicWithSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	_, signedTxn, secrets, addresses := generateTestObjects(100, 20, 50)
+	_, signedTxn, secrets, addresses := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
 	for i := 0; i < len(signedTxn); i++ {
@@ -681,7 +878,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
 		txn.Lsig.Sig[0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 
 	// signature is correct and logic fails
 	breakSignatureFunc = func(txn *transactions.SignedTxn) {
@@ -690,7 +887,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc = func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 }
 
 // TestTxnGroupCacheUpdateLogicWithMultiSig makes sure that a payment transaction contains logicsig signed with multisig is valid
@@ -712,20 +909,7 @@ func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 		a := rand.Intn(1000)
 		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10))
 
-		signedTxn[i].Txn = transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:      multiAddress[s],
-				Fee:         basics.MicroAlgos{Raw: f},
-				FirstValid:  basics.Round(1),
-				LastValid:   basics.Round(100),
-				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: multiAddress[r],
-				Amount:   basics.MicroAlgos{Raw: uint64(a)},
-			},
-		}
+		signedTxn[i].Txn = createPayTransaction(f, 1, 100, a, multiAddress[s], multiAddress[r])
 		// add a simple logic that verifies this condition:
 		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
 		op, err := logic.AssembleString(`arg 0
@@ -765,7 +949,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		txn.Lsig.Msig.Subsigs[0].Sig[0]--
 	}
 
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchVerificationFailed.Error())
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
 	// signature is correct and logic fails
 	breakSignatureFunc = func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]++
@@ -773,7 +957,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	restoreSignatureFunc = func(txn *transactions.SignedTxn) {
 		txn.Lsig.Args[0][0]--
 	}
-	verifyGroup(t, txnGroups, blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 }
 
 func createDummyBlockHeader() bookkeeping.BlockHeader {
@@ -790,10 +974,27 @@ func createDummyBlockHeader() bookkeeping.BlockHeader {
 	}
 }
 
+func createPayTransaction(fee uint64, fv, lv, amount int, sender, receiver basics.Address) transactions.Transaction {
+	return transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sender,
+			Fee:         basics.MicroAlgos{Raw: fee},
+			FirstValid:  basics.Round(fv),
+			LastValid:   basics.Round(lv),
+			GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: receiver,
+			Amount:   basics.MicroAlgos{Raw: uint64(amount)},
+		},
+	}
+}
+
 // verifyGroup uses TxnGroup to verify txns and add them to the
 // cache. Then makes sure that only the valid txns are verified and added to
 // the cache.
-func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr bookkeeping.BlockHeader, breakSig func(txn *transactions.SignedTxn), restoreSig func(txn *transactions.SignedTxn), errorString string) {
+func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *bookkeeping.BlockHeader, breakSig func(txn *transactions.SignedTxn), restoreSig func(txn *transactions.SignedTxn), errorString string) {
 	cache := MakeVerifiedTransactionCache(1000)
 
 	breakSig(&txnGroups[0][0])
@@ -857,25 +1058,13 @@ func BenchmarkTxn(b *testing.B) {
 	if b.N < 2000 {
 		b.N = 2000
 	}
-	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
-	blk := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round:       50,
-			GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: protocol.ConsensusCurrentVersion,
-			},
-			RewardsState: bookkeeping.RewardsState{
-				FeeSink:     feeSink,
-				RewardsPool: poolAddr,
-			},
-		},
-	}
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 0, 50)
+	blk := bookkeeping.Block{BlockHeader: createDummyBlockHeader()}
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	b.ResetTimer()
 	for _, txnGroup := range txnGroups {
-		groupCtx, err := PrepareGroupContext(txnGroup, blk.BlockHeader, nil)
+		groupCtx, err := PrepareGroupContext(txnGroup, &blk.BlockHeader, nil)
 		require.NoError(b, err)
 		for i, txn := range txnGroup {
 			err := verifyTxn(&txn, i, groupCtx)

@@ -93,14 +93,6 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
-// MinFeeError
-//      |-----> MarshalMsg
-//      |-----> CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> Msgsize
-//      |-----> MsgIsZero
-//
 // OnCompletion
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
@@ -1883,33 +1875,37 @@ func (z *BoxRef) MsgIsZero() bool {
 func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0005Len := uint32(4)
-	var zb0005Mask uint8 /* 5 bits */
+	zb0006Len := uint32(5)
+	var zb0006Mask uint8 /* 6 bits */
 	if (*z).GlobalDelta.MsgIsZero() {
-		zb0005Len--
-		zb0005Mask |= 0x2
+		zb0006Len--
+		zb0006Mask |= 0x2
 	}
 	if len((*z).InnerTxns) == 0 {
-		zb0005Len--
-		zb0005Mask |= 0x4
+		zb0006Len--
+		zb0006Mask |= 0x4
 	}
 	if len((*z).LocalDeltas) == 0 {
-		zb0005Len--
-		zb0005Mask |= 0x8
+		zb0006Len--
+		zb0006Mask |= 0x8
 	}
 	if len((*z).Logs) == 0 {
-		zb0005Len--
-		zb0005Mask |= 0x10
+		zb0006Len--
+		zb0006Mask |= 0x10
 	}
-	// variable map header, size zb0005Len
-	o = append(o, 0x80|uint8(zb0005Len))
-	if zb0005Len != 0 {
-		if (zb0005Mask & 0x2) == 0 { // if not empty
+	if len((*z).SharedAccts) == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x20
+	}
+	// variable map header, size zb0006Len
+	o = append(o, 0x80|uint8(zb0006Len))
+	if zb0006Len != 0 {
+		if (zb0006Mask & 0x2) == 0 { // if not empty
 			// string "gd"
 			o = append(o, 0xa2, 0x67, 0x64)
 			o = (*z).GlobalDelta.MarshalMsg(o)
 		}
-		if (zb0005Mask & 0x4) == 0 { // if not empty
+		if (zb0006Mask & 0x4) == 0 { // if not empty
 			// string "itx"
 			o = append(o, 0xa3, 0x69, 0x74, 0x78)
 			if (*z).InnerTxns == nil {
@@ -1917,11 +1913,11 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 			} else {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).InnerTxns)))
 			}
-			for zb0004 := range (*z).InnerTxns {
-				o = (*z).InnerTxns[zb0004].MarshalMsg(o)
+			for zb0005 := range (*z).InnerTxns {
+				o = (*z).InnerTxns[zb0005].MarshalMsg(o)
 			}
 		}
-		if (zb0005Mask & 0x8) == 0 { // if not empty
+		if (zb0006Mask & 0x8) == 0 { // if not empty
 			// string "ld"
 			o = append(o, 0xa2, 0x6c, 0x64)
 			if (*z).LocalDeltas == nil {
@@ -1941,7 +1937,7 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 				o = zb0002.MarshalMsg(o)
 			}
 		}
-		if (zb0005Mask & 0x10) == 0 { // if not empty
+		if (zb0006Mask & 0x10) == 0 { // if not empty
 			// string "lg"
 			o = append(o, 0xa2, 0x6c, 0x67)
 			if (*z).Logs == nil {
@@ -1949,8 +1945,20 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 			} else {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Logs)))
 			}
-			for zb0003 := range (*z).Logs {
-				o = msgp.AppendString(o, (*z).Logs[zb0003])
+			for zb0004 := range (*z).Logs {
+				o = msgp.AppendString(o, (*z).Logs[zb0004])
+			}
+		}
+		if (zb0006Mask & 0x20) == 0 { // if not empty
+			// string "sa"
+			o = append(o, 0xa2, 0x73, 0x61)
+			if (*z).SharedAccts == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).SharedAccts)))
+			}
+			for zb0003 := range (*z).SharedAccts {
+				o = (*z).SharedAccts[zb0003].MarshalMsg(o)
 			}
 		}
 	}
@@ -1966,46 +1974,46 @@ func (_ *EvalDelta) CanMarshalMsg(z interface{}) bool {
 func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0005 int
-	var zb0006 bool
-	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0006 int
+	var zb0007 bool
+	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0005 > 0 {
-			zb0005--
+		if zb0006 > 0 {
+			zb0006--
 			bts, err = (*z).GlobalDelta.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalDelta")
 				return
 			}
 		}
-		if zb0005 > 0 {
-			zb0005--
-			var zb0007 int
-			var zb0008 bool
-			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
+		if zb0006 > 0 {
+			zb0006--
+			var zb0008 int
+			var zb0009 bool
+			zb0008, zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 				return
 			}
-			if zb0007 > config.MaxEvalDeltaAccounts {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxEvalDeltaAccounts))
+			if zb0008 > config.MaxEvalDeltaAccounts {
+				err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxEvalDeltaAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 				return
 			}
-			if zb0008 {
+			if zb0009 {
 				(*z).LocalDeltas = nil
 			} else if (*z).LocalDeltas == nil {
-				(*z).LocalDeltas = make(map[uint64]basics.StateDelta, zb0007)
+				(*z).LocalDeltas = make(map[uint64]basics.StateDelta, zb0008)
 			}
-			for zb0007 > 0 {
+			for zb0008 > 0 {
 				var zb0001 uint64
 				var zb0002 basics.StateDelta
-				zb0007--
+				zb0008--
 				zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
@@ -2019,66 +2027,95 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).LocalDeltas[zb0001] = zb0002
 			}
 		}
-		if zb0005 > 0 {
-			zb0005--
-			var zb0009 int
-			var zb0010 bool
-			zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0006 > 0 {
+			zb0006--
+			var zb0010 int
+			var zb0011 bool
+			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SharedAccts")
+				return
+			}
+			if zb0010 > config.MaxEvalDeltaAccounts {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(config.MaxEvalDeltaAccounts))
+				err = msgp.WrapError(err, "struct-from-array", "SharedAccts")
+				return
+			}
+			if zb0011 {
+				(*z).SharedAccts = nil
+			} else if (*z).SharedAccts != nil && cap((*z).SharedAccts) >= zb0010 {
+				(*z).SharedAccts = ((*z).SharedAccts)[:zb0010]
+			} else {
+				(*z).SharedAccts = make([]basics.Address, zb0010)
+			}
+			for zb0003 := range (*z).SharedAccts {
+				bts, err = (*z).SharedAccts[zb0003].UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "SharedAccts", zb0003)
+					return
+				}
+			}
+		}
+		if zb0006 > 0 {
+			zb0006--
+			var zb0012 int
+			var zb0013 bool
+			zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
-			if zb0009 > config.MaxLogCalls {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxLogCalls))
+			if zb0012 > config.MaxLogCalls {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxLogCalls))
 				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
-			if zb0010 {
+			if zb0013 {
 				(*z).Logs = nil
-			} else if (*z).Logs != nil && cap((*z).Logs) >= zb0009 {
-				(*z).Logs = ((*z).Logs)[:zb0009]
+			} else if (*z).Logs != nil && cap((*z).Logs) >= zb0012 {
+				(*z).Logs = ((*z).Logs)[:zb0012]
 			} else {
-				(*z).Logs = make([]string, zb0009)
+				(*z).Logs = make([]string, zb0012)
 			}
-			for zb0003 := range (*z).Logs {
-				(*z).Logs[zb0003], bts, err = msgp.ReadStringBytes(bts)
+			for zb0004 := range (*z).Logs {
+				(*z).Logs[zb0004], bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Logs", zb0003)
+					err = msgp.WrapError(err, "struct-from-array", "Logs", zb0004)
 					return
 				}
 			}
 		}
-		if zb0005 > 0 {
-			zb0005--
-			var zb0011 int
-			var zb0012 bool
-			zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0006 > 0 {
+			zb0006--
+			var zb0014 int
+			var zb0015 bool
+			zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "InnerTxns")
 				return
 			}
-			if zb0011 > config.MaxInnerTransactionsPerDelta {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxInnerTransactionsPerDelta))
+			if zb0014 > config.MaxInnerTransactionsPerDelta {
+				err = msgp.ErrOverflow(uint64(zb0014), uint64(config.MaxInnerTransactionsPerDelta))
 				err = msgp.WrapError(err, "struct-from-array", "InnerTxns")
 				return
 			}
-			if zb0012 {
+			if zb0015 {
 				(*z).InnerTxns = nil
-			} else if (*z).InnerTxns != nil && cap((*z).InnerTxns) >= zb0011 {
-				(*z).InnerTxns = ((*z).InnerTxns)[:zb0011]
+			} else if (*z).InnerTxns != nil && cap((*z).InnerTxns) >= zb0014 {
+				(*z).InnerTxns = ((*z).InnerTxns)[:zb0014]
 			} else {
-				(*z).InnerTxns = make([]SignedTxnWithAD, zb0011)
+				(*z).InnerTxns = make([]SignedTxnWithAD, zb0014)
 			}
-			for zb0004 := range (*z).InnerTxns {
-				bts, err = (*z).InnerTxns[zb0004].UnmarshalMsg(bts)
+			for zb0005 := range (*z).InnerTxns {
+				bts, err = (*z).InnerTxns[zb0005].UnmarshalMsg(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "InnerTxns", zb0004)
+					err = msgp.WrapError(err, "struct-from-array", "InnerTxns", zb0005)
 					return
 				}
 			}
 		}
-		if zb0005 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0005)
+		if zb0006 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0006)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -2089,11 +2126,11 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0006 {
+		if zb0007 {
 			(*z) = EvalDelta{}
 		}
-		for zb0005 > 0 {
-			zb0005--
+		for zb0006 > 0 {
+			zb0006--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -2107,27 +2144,27 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "ld":
-				var zb0013 int
-				var zb0014 bool
-				zb0013, zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0016 int
+				var zb0017 bool
+				zb0016, zb0017, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LocalDeltas")
 					return
 				}
-				if zb0013 > config.MaxEvalDeltaAccounts {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxEvalDeltaAccounts))
+				if zb0016 > config.MaxEvalDeltaAccounts {
+					err = msgp.ErrOverflow(uint64(zb0016), uint64(config.MaxEvalDeltaAccounts))
 					err = msgp.WrapError(err, "LocalDeltas")
 					return
 				}
-				if zb0014 {
+				if zb0017 {
 					(*z).LocalDeltas = nil
 				} else if (*z).LocalDeltas == nil {
-					(*z).LocalDeltas = make(map[uint64]basics.StateDelta, zb0013)
+					(*z).LocalDeltas = make(map[uint64]basics.StateDelta, zb0016)
 				}
-				for zb0013 > 0 {
+				for zb0016 > 0 {
 					var zb0001 uint64
 					var zb0002 basics.StateDelta
-					zb0013--
+					zb0016--
 					zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "LocalDeltas")
@@ -2140,57 +2177,84 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).LocalDeltas[zb0001] = zb0002
 				}
+			case "sa":
+				var zb0018 int
+				var zb0019 bool
+				zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "SharedAccts")
+					return
+				}
+				if zb0018 > config.MaxEvalDeltaAccounts {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(config.MaxEvalDeltaAccounts))
+					err = msgp.WrapError(err, "SharedAccts")
+					return
+				}
+				if zb0019 {
+					(*z).SharedAccts = nil
+				} else if (*z).SharedAccts != nil && cap((*z).SharedAccts) >= zb0018 {
+					(*z).SharedAccts = ((*z).SharedAccts)[:zb0018]
+				} else {
+					(*z).SharedAccts = make([]basics.Address, zb0018)
+				}
+				for zb0003 := range (*z).SharedAccts {
+					bts, err = (*z).SharedAccts[zb0003].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "SharedAccts", zb0003)
+						return
+					}
+				}
 			case "lg":
-				var zb0015 int
-				var zb0016 bool
-				zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0020 int
+				var zb0021 bool
+				zb0020, zb0021, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Logs")
 					return
 				}
-				if zb0015 > config.MaxLogCalls {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxLogCalls))
+				if zb0020 > config.MaxLogCalls {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxLogCalls))
 					err = msgp.WrapError(err, "Logs")
 					return
 				}
-				if zb0016 {
+				if zb0021 {
 					(*z).Logs = nil
-				} else if (*z).Logs != nil && cap((*z).Logs) >= zb0015 {
-					(*z).Logs = ((*z).Logs)[:zb0015]
+				} else if (*z).Logs != nil && cap((*z).Logs) >= zb0020 {
+					(*z).Logs = ((*z).Logs)[:zb0020]
 				} else {
-					(*z).Logs = make([]string, zb0015)
+					(*z).Logs = make([]string, zb0020)
 				}
-				for zb0003 := range (*z).Logs {
-					(*z).Logs[zb0003], bts, err = msgp.ReadStringBytes(bts)
+				for zb0004 := range (*z).Logs {
+					(*z).Logs[zb0004], bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Logs", zb0003)
+						err = msgp.WrapError(err, "Logs", zb0004)
 						return
 					}
 				}
 			case "itx":
-				var zb0017 int
-				var zb0018 bool
-				zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0022 int
+				var zb0023 bool
+				zb0022, zb0023, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "InnerTxns")
 					return
 				}
-				if zb0017 > config.MaxInnerTransactionsPerDelta {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(config.MaxInnerTransactionsPerDelta))
+				if zb0022 > config.MaxInnerTransactionsPerDelta {
+					err = msgp.ErrOverflow(uint64(zb0022), uint64(config.MaxInnerTransactionsPerDelta))
 					err = msgp.WrapError(err, "InnerTxns")
 					return
 				}
-				if zb0018 {
+				if zb0023 {
 					(*z).InnerTxns = nil
-				} else if (*z).InnerTxns != nil && cap((*z).InnerTxns) >= zb0017 {
-					(*z).InnerTxns = ((*z).InnerTxns)[:zb0017]
+				} else if (*z).InnerTxns != nil && cap((*z).InnerTxns) >= zb0022 {
+					(*z).InnerTxns = ((*z).InnerTxns)[:zb0022]
 				} else {
-					(*z).InnerTxns = make([]SignedTxnWithAD, zb0017)
+					(*z).InnerTxns = make([]SignedTxnWithAD, zb0022)
 				}
-				for zb0004 := range (*z).InnerTxns {
-					bts, err = (*z).InnerTxns[zb0004].UnmarshalMsg(bts)
+				for zb0005 := range (*z).InnerTxns {
+					bts, err = (*z).InnerTxns[zb0005].UnmarshalMsg(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "InnerTxns", zb0004)
+						err = msgp.WrapError(err, "InnerTxns", zb0005)
 						return
 					}
 				}
@@ -2223,19 +2287,23 @@ func (z *EvalDelta) Msgsize() (s int) {
 		}
 	}
 	s += 3 + msgp.ArrayHeaderSize
-	for zb0003 := range (*z).Logs {
-		s += msgp.StringPrefixSize + len((*z).Logs[zb0003])
+	for zb0003 := range (*z).SharedAccts {
+		s += (*z).SharedAccts[zb0003].Msgsize()
+	}
+	s += 3 + msgp.ArrayHeaderSize
+	for zb0004 := range (*z).Logs {
+		s += msgp.StringPrefixSize + len((*z).Logs[zb0004])
 	}
 	s += 4 + msgp.ArrayHeaderSize
-	for zb0004 := range (*z).InnerTxns {
-		s += (*z).InnerTxns[zb0004].Msgsize()
+	for zb0005 := range (*z).InnerTxns {
+		s += (*z).InnerTxns[zb0005].Msgsize()
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *EvalDelta) MsgIsZero() bool {
-	return ((*z).GlobalDelta.MsgIsZero()) && (len((*z).LocalDeltas) == 0) && (len((*z).Logs) == 0) && (len((*z).InnerTxns) == 0)
+	return ((*z).GlobalDelta.MsgIsZero()) && (len((*z).LocalDeltas) == 0) && (len((*z).SharedAccts) == 0) && (len((*z).Logs) == 0) && (len((*z).InnerTxns) == 0)
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3080,52 +3148,6 @@ func (z *LogicSig) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *LogicSig) MsgIsZero() bool {
 	return (len((*z).Logic) == 0) && ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && (len((*z).Args) == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z MinFeeError) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendString(o, string(z))
-	return
-}
-
-func (_ MinFeeError) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(MinFeeError)
-	if !ok {
-		_, ok = (z).(*MinFeeError)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *MinFeeError) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 string
-		zb0001, bts, err = msgp.ReadStringBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = MinFeeError(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *MinFeeError) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*MinFeeError)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z MinFeeError) Msgsize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z MinFeeError) MsgIsZero() bool {
-	return z == ""
 }
 
 // MarshalMsg implements msgp.Marshaler

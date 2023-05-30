@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
@@ -78,12 +79,12 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 		if i%2 == 0 {
 			accountStatus = basics.NotParticipating
 		}
-		initAccounts[genaddrs[i]] = basics.MakeAccountData(accountStatus, basics.MicroAlgos{Raw: uint64((i + 100) * 100000)})
+		initAccounts[genaddrs[i]] = basics_testing.MakeAccountData(accountStatus, basics.MicroAlgos{Raw: uint64((i + 100) * 100000)})
 	}
 	initKeys[poolAddr] = poolSecret
-	initAccounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
+	initAccounts[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
 	initKeys[sinkAddr] = sinkSecret
-	initAccounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
+	initAccounts[sinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
 
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
@@ -119,7 +120,8 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 func TestLedgerCirculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, keys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	proto := protocol.ConsensusCurrentVersion
+	genesisInitState, keys := testGenerateInitState(t, proto)
 
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -170,6 +172,8 @@ func TestLedgerCirculation(t *testing.T) {
 	srcAccountKey := keys[sourceAccount]
 	require.NotNil(t, srcAccountKey)
 
+	params := config.Consensus[proto]
+
 	for rnd := basics.Round(1); rnd < basics.Round(600); rnd++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
@@ -190,6 +194,8 @@ func TestLedgerCirculation(t *testing.T) {
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
 		l.WaitForCommit(rnd)
 
+		var voteRoundOffset = basics.Round(2 * params.SeedRefreshInterval * params.SeedLookback)
+
 		// test most recent round
 		if rnd < basics.Round(500) {
 			data, validThrough, _, err = realLedger.LookupAccount(rnd, destAccount)
@@ -201,11 +207,11 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, rnd, validThrough)
 			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgos.Raw)
 
-			roundCirculation, err := realLedger.OnlineTotals(rnd)
+			roundCirculation, err := realLedger.OnlineCirculation(rnd, rnd+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 
-			roundCirculation, err = l.OnlineTotals(rnd)
+			roundCirculation, err = l.OnlineCirculation(rnd, rnd+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(510) {
@@ -219,11 +225,11 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, rnd-1, validThrough)
 			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgos.Raw)
 
-			roundCirculation, err := realLedger.OnlineTotals(rnd - 1)
+			roundCirculation, err := realLedger.OnlineCirculation(rnd-1, rnd-1+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 
-			roundCirculation, err = l.OnlineTotals(rnd - 1)
+			roundCirculation, err = l.OnlineCirculation(rnd-1, rnd-1+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(520) {
@@ -235,17 +241,17 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Error(t, err)
 			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
 
-			_, err = realLedger.OnlineTotals(rnd + 1)
+			_, err = realLedger.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
 			require.Error(t, err)
 
-			_, err = l.OnlineTotals(rnd + 1)
+			_, err = l.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
 			require.Error(t, err)
 		} else if rnd < basics.Round(520) {
 			// test expired round ( expected error )
-			_, err = realLedger.OnlineTotals(rnd - 500)
+			_, err = realLedger.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
 			require.Error(t, err)
 
-			_, err = l.OnlineTotals(rnd - 500)
+			_, err = l.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
 			require.Error(t, err)
 		}
 	}
@@ -326,6 +332,10 @@ func TestLedgerSeed(t *testing.T) {
 
 func TestConsensusVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		t.Log("this is a long test and skipping for -short")
+		return
+	}
 
 	// find a consensus protocol that leads to ConsensusCurrentVersion
 	var previousProtocol protocol.ConsensusVersion
@@ -491,8 +501,8 @@ func TestLedgerErrorValidate(t *testing.T) {
 	blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 
 	accts := make(map[basics.Address]basics.AccountData)
-	accts[testPoolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
-	accts[testSinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
+	accts[testPoolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
+	accts[testSinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
 
 	genesisInitState := ledgercore.InitState{
 		Accounts:    accts,
@@ -513,7 +523,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 	defer realLedger.Close()
 
 	l := Ledger{Ledger: realLedger, log: log}
-	l.log.SetLevel(logging.Debug)
+	l.log.SetLevel(logging.Warn)
 	require.NotNil(t, &l)
 
 	totalsRound, _, err := realLedger.LatestTotals()

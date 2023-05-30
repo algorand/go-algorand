@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,13 +32,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/avm-abi/apps"
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -46,7 +47,7 @@ import (
 
 var catchpointFile string
 var outFileName string
-var excludedFields *cmdutil.CobraStringSliceValue = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
+var excludedFields = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
 
 func init() {
 	fileCmd.Flags().StringVarP(&catchpointFile, "tar", "t", "", "Specify the catchpoint file (either .tar or .tar.gz) to process")
@@ -126,14 +127,17 @@ var fileCmd = &cobra.Command{
 				}
 				defer outFile.Close()
 			}
-
-			err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
+			err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
 			if err != nil {
 				reportErrorf("Unable to print account database : %v", err)
 			}
-			err = printKeyValueStore("./ledger.tracker.sqlite", outFile)
+			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
 			if err != nil {
 				reportErrorf("Unable to print key value store : %v", err)
+			}
+			err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				reportErrorf("Unable to print state proof verification database : %v", err)
 			}
 		}
 	},
@@ -166,30 +170,35 @@ func isGzipCompressed(catchpointReader *bufio.Reader, catchpointFileSize int64) 
 	return prefixBytes[0] == gzipPrefix[0] && prefixBytes[1] == gzipPrefix[1]
 }
 
-func getCatchpointTarReader(catchpointReader *bufio.Reader, catchpointFileSize int64) (*tar.Reader, error) {
+func getCatchpointTarReader(catchpointReader *bufio.Reader, catchpointFileSize int64) (*tar.Reader, bool, error) {
 	if isGzipCompressed(catchpointReader, catchpointFileSize) {
 		gzipReader, err := gzip.NewReader(catchpointReader)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-
-		return tar.NewReader(gzipReader), nil
+		return tar.NewReader(gzipReader), true, nil
 	}
 
-	return tar.NewReader(catchpointReader), nil
+	return tar.NewReader(catchpointReader), false, nil
 }
 
 func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor, catchpointFile io.Reader, catchpointFileSize int64) (fileHeader ledger.CatchpointFileHeader, err error) {
 	fmt.Printf("\n")
-	printLoadCatchpointProgressLine(0, 50, 0)
+	const barLength = 50
+	printLoadCatchpointProgressLine(0, barLength, 0)
 	lastProgressUpdate := time.Now()
 	progress := uint64(0)
 	defer printLoadCatchpointProgressLine(0, 0, 0)
 
 	catchpointReader := bufio.NewReader(catchpointFile)
-	tarReader, err := getCatchpointTarReader(catchpointReader, catchpointFileSize)
+	tarReader, isCompressed, err := getCatchpointTarReader(catchpointReader, catchpointFileSize)
 	if err != nil {
 		return fileHeader, err
+	}
+	if isCompressed {
+		// gzip'ed file is about 3-6 times smaller than tar
+		// modify catchpointFileSize to make the progress bar more-less reflecting the state
+		catchpointFileSize = 4 * catchpointFileSize
 	}
 
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress
@@ -222,13 +231,17 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		if err != nil {
 			return fileHeader, err
 		}
-		if header.Name == "content.msgpack" {
+		if header.Name == ledger.CatchpointContentFileName {
 			// we already know it's valid, since we validated that above.
 			protocol.Decode(balancesBlockBytes, &fileHeader)
 		}
 		if time.Since(lastProgressUpdate) > 50*time.Millisecond && catchpointFileSize > 0 {
 			lastProgressUpdate = time.Now()
-			printLoadCatchpointProgressLine(int(float64(progress)*50.0/float64(catchpointFileSize)), 50, int64(progress))
+			progressRatio := int(float64(progress) * barLength / float64(catchpointFileSize))
+			if progressRatio > barLength {
+				progressRatio = barLength
+			}
+			printLoadCatchpointProgressLine(progressRatio, barLength, int64(progress))
 		}
 	}
 }
@@ -246,7 +259,7 @@ func printDumpingCatchpointProgressLine(progress int, barLength int, dld int64) 
 	fmt.Printf(escapeCursorUp + escapeDeleteLine + outString + "\n")
 }
 
-func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFileHeader, outFile *os.File, excludeFields []string) error {
+func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader ledger.CatchpointFileHeader, outFile *os.File, excludeFields []string) error {
 	lastProgressUpdate := time.Now()
 	progress := uint64(0)
 	defer printDumpingCatchpointProgressLine(0, 0, 0)
@@ -318,12 +331,17 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			totals.RewardsLevel)
 	}
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		arw := sqlitedriver.NewAccountsSQLReaderWriter(tx)
+
 		fmt.Printf("\n")
 		printDumpingCatchpointProgressLine(0, 50, 0)
 
 		if fileHeader.Version == 0 {
 			var totals ledgercore.AccountTotals
 			id := ""
+			if stagingTables {
+				id = "catchpointStaging"
+			}
 			row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
 			err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
 				&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
@@ -341,7 +359,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 
 		balancesTable := "accountbase"
 		resourcesTable := "resources"
-		if fileHeader.Version != 0 {
+		if stagingTables {
 			balancesTable = "catchpointbalances"
 			resourcesTable = "catchpointresources"
 		}
@@ -367,7 +385,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			return nil
 		}
 
-		if fileHeader.Version < ledger.CatchpointFileVersionV6 {
+		if fileHeader.Version != 0 && fileHeader.Version < ledger.CatchpointFileVersionV6 {
 			var rows *sql.Rows
 			rows, err = tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
 			if err != nil {
@@ -414,7 +432,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 				progress++
 				acctCount++
 			}
-			_, err = ledger.LoadAllFullAccounts(context.Background(), tx, balancesTable, resourcesTable, acctCb)
+			_, err = arw.LoadAllFullAccounts(context.Background(), balancesTable, resourcesTable, acctCb)
 			if err != nil {
 				return
 			}
@@ -422,16 +440,51 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 				return fmt.Errorf("expected %d accounts but got only %d", rowsCount, acctCount)
 			}
 		}
-
 		// increase the deadline warning to disable the warning message.
 		_, _ = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(5*time.Second))
 		return err
 	})
 }
 
+func printStateProofVerificationContext(databaseName string, stagingTables bool, outFile *os.File) error {
+	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
+	defer fileWriter.Flush()
+
+	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
+	if err != nil || dbAccessor.Handle == nil {
+		return err
+	}
+	defer dbAccessor.Close()
+
+	var stateProofVerificationContext []ledgercore.StateProofVerificationContext
+	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		if stagingTables {
+			stateProofVerificationContext, err = sqlitedriver.MakeStateProofVerificationReader(tx).GetAllSPContextsFromCatchpointTbl(ctx)
+		} else {
+			stateProofVerificationContext, err = sqlitedriver.MakeStateProofVerificationReader(tx).GetAllSPContexts(ctx)
+		}
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(fileWriter, "State Proof Verification Data:\n")
+	for _, ctx := range stateProofVerificationContext {
+		jsonData, err := json.Marshal(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(fileWriter, "%d : %s\n", ctx.LastAttestedRound, string(jsonData))
+	}
+
+	return nil
+}
+
 func printKeyValue(writer *bufio.Writer, key, value []byte) {
 	var pretty string
-	ai, rest, err := logic.SplitBoxKey(string(key))
+	ai, rest, err := apps.SplitBoxKey(string(key))
 	if err == nil {
 		pretty = fmt.Sprintf("box(%d, %s)", ai, base64.StdEncoding.EncodeToString([]byte(rest)))
 	} else {
@@ -441,7 +494,7 @@ func printKeyValue(writer *bufio.Writer, key, value []byte) {
 	fmt.Fprintf(writer, "%s : %v\n", pretty, base64.StdEncoding.EncodeToString(value))
 }
 
-func printKeyValueStore(databaseName string, outFile *os.File) error {
+func printKeyValueStore(databaseName string, stagingTables bool, outFile *os.File) error {
 	fmt.Printf("\n")
 	printDumpingCatchpointProgressLine(0, 50, 0)
 	lastProgressUpdate := time.Now()
@@ -456,15 +509,20 @@ func printKeyValueStore(databaseName string, outFile *os.File) error {
 		return err
 	}
 
+	kvTable := "kvstore"
+	if stagingTables {
+		kvTable = "catchpointkvstore"
+	}
+
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var rowsCount int64
-		err := tx.QueryRow("SELECT count(*) from catchpointkvstore").Scan(&rowsCount)
+		err := tx.QueryRow(fmt.Sprintf("SELECT count(*) from %s", kvTable)).Scan(&rowsCount)
 		if err != nil {
 			return err
 		}
 
 		// ordered to make dumps more "diffable"
-		rows, err := tx.Query("SELECT key, value FROM catchpointkvstore order by key")
+		rows, err := tx.Query(fmt.Sprintf("SELECT key, value FROM %s order by key", kvTable))
 		if err != nil {
 			return err
 		}

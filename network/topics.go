@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,8 @@ const (
 )
 
 // Topic is a key-value pair
+//
+//msgp:ignore Topic
 type Topic struct {
 	key  string
 	data []byte
@@ -43,6 +45,8 @@ func MakeTopic(key string, data []byte) Topic {
 // Topics is an array of type Topic
 // The maximum number of topics allowed is 32
 // Each topic key can be 64 characters long and cannot be size 0
+//
+//msgp:ignore Topics
 type Topics []Topic
 
 // MarshallTopics serializes the topics into a byte array

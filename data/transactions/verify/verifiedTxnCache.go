@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,7 +59,7 @@ type VerifiedTransactionCache interface {
 	// in the cache, the new entry overrides the old one.
 	Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext)
 	// AddPayset works in a similar way to Add, but is intended for adding an array of transaction groups, along with their corresponding contexts.
-	AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) error
+	AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext)
 	// GetUnverifiedTransactionGroups compares the provided payset against the currently cached transactions and figure which transaction groups aren't fully cached.
 	GetUnverifiedTransactionGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn
 	// UpdatePinned replaces the pinned entries with the one provided in the pinnedTxns map. This is typically expected to be a subset of the
@@ -106,13 +106,12 @@ func (v *verifiedTransactionCache) Add(txgroup []transactions.SignedTxn, groupCt
 }
 
 // AddPayset works in a similar way to Add, but is intended for adding an array of transaction groups, along with their corresponding contexts.
-func (v *verifiedTransactionCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) error {
+func (v *verifiedTransactionCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	for i := range txgroup {
 		v.add(txgroup[i], groupCtxs[i])
 	}
-	return nil
 }
 
 // GetUnverifiedTransactionGroups compares the provided payset against the currently cached transactions and figure which transaction groups aren't fully cached.
@@ -268,8 +267,7 @@ func (v *mockedCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupConte
 	return
 }
 
-func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) error {
-	return nil
+func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) {
 }
 
 func (v *mockedCache) GetUnverifiedTransactionGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {

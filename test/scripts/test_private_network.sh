@@ -23,6 +23,18 @@ ${GOPATH}/bin/goal network stop -r ${NETROOTPATH}
 
 ${GOPATH}/bin/goal network delete -r ${NETROOTPATH}
 
+# default network with no template specified
+
+rm -rf ${NETROOTPATH}
+
+${GOPATH}/bin/goal network create -r ${NETROOTPATH}
+
+${GOPATH}/bin/goal network start -r ${NETROOTPATH}
+
+${GOPATH}/bin/goal network stop -r ${NETROOTPATH}
+
+${GOPATH}/bin/goal network delete -r ${NETROOTPATH}
+
 echo "----------------------------------------------------------------------"
 echo "  DONE: test_private_network"
 echo "----------------------------------------------------------------------"

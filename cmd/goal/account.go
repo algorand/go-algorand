@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
@@ -64,6 +65,7 @@ var (
 	dumpOutFile        string
 	listAccountInfo    bool
 	onlyShowAssetIds   bool
+	partKeyIDToDelete  string
 )
 
 func init() {
@@ -83,6 +85,7 @@ func init() {
 	accountCmd.AddCommand(importRootKeysCmd)
 	accountCmd.AddCommand(accountMultisigCmd)
 	accountCmd.AddCommand(markNonparticipatingCmd)
+	accountCmd.AddCommand(deletePartKeyCmd)
 
 	accountMultisigCmd.AddCommand(newMultisigCmd)
 	accountMultisigCmd.AddCommand(deleteMultisigCmd)
@@ -211,6 +214,11 @@ func init() {
 	dumpCmd.Flags().StringVarP(&dumpOutFile, "outfile", "o", "", "Save balance record to specified output file")
 	dumpCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
 	balanceCmd.MarkFlagRequired("address")
+
+	// deletePartkeyCmd flags
+	deletePartKeyCmd.Flags().StringVarP(&partKeyIDToDelete, "partkeyid", "", "", "Participation Key ID to delete")
+	rewardsCmd.MarkFlagRequired("partkeyid")
+
 }
 
 func scLeaseBytes(cmd *cobra.Command) (leaseBytes [32]byte) {
@@ -233,7 +241,7 @@ var accountCmd = &cobra.Command{
 	Long:  `Collection of commands to support the creation and management of accounts / wallets tied to a specific Algorand node instance.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		accountList := makeAccountsList(ensureSingleDataDir())
+		accountList := makeAccountsList(datadir.EnsureSingleDataDir())
 
 		// Update the default account
 		if defaultAccountName != "" {
@@ -268,7 +276,7 @@ var renameCmd = &cobra.Command{
 	Long:  `Change the human-friendly name of an account. This is a local-only name, it is not stored on the network.`,
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		accountList := makeAccountsList(ensureSingleDataDir())
+		accountList := makeAccountsList(datadir.EnsureSingleDataDir())
 
 		oldName := args[0]
 		newName := args[1]
@@ -300,7 +308,7 @@ var newCmd = &cobra.Command{
 	Long:  `Coordinates the creation of a new account with KMD. The name specified here is stored in a local configuration file and is only used by goal when working against that specific node instance.`,
 	Args:  cobra.RangeArgs(0, 1),
 	Run: func(cmd *cobra.Command, args []string) {
-		accountList := makeAccountsList(ensureSingleDataDir())
+		accountList := makeAccountsList(datadir.EnsureSingleDataDir())
 		// Choose an account name
 		if len(args) == 0 {
 			accountName = accountList.getUnnamed()
@@ -318,7 +326,7 @@ var newCmd = &cobra.Command{
 			reportErrorf(errorNameAlreadyTaken, accountName)
 		}
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 
 		// Get a wallet handle
 		wh := ensureWalletHandle(dataDir, walletName)
@@ -342,13 +350,31 @@ var newCmd = &cobra.Command{
 	},
 }
 
+var deletePartKeyCmd = &cobra.Command{
+	Use:   "deletepartkey",
+	Short: "Delete a participation key",
+	Long:  `Delete the indicated participation key.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := datadir.EnsureSingleDataDir()
+
+		client := ensureAlgodClient(dataDir)
+
+		err := client.RemoveParticipationKey(partKeyIDToDelete)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+	},
+}
+
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete an account",
 	Long:  `Delete the indicated account. The key management daemon will no longer know about this account, although the account will still exist on the network.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 
 		client := ensureKmdClient(dataDir)
@@ -369,7 +395,7 @@ var newMultisigCmd = &cobra.Command{
 	Long:  `Create a new multisig account from a list of existing non-multisig addresses`,
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 
 		// Get a wallet handle to the default wallet
@@ -412,7 +438,7 @@ var deleteMultisigCmd = &cobra.Command{
 	Long:  `Delete a multisig account. Like ordinary account delete, the local node will no longer know about the account, but it may still exist on the network.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 
 		client := ensureKmdClient(dataDir)
@@ -433,7 +459,7 @@ var infoMultisigCmd = &cobra.Command{
 	Long:  `Print information about a multisig account, such as its Algorand multisig version, or the number of keys needed to validate a transaction from the multisig account.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureKmdClient(dataDir)
 		wh := ensureWalletHandle(dataDir, walletName)
 
@@ -457,7 +483,7 @@ var listCmd = &cobra.Command{
 	Long:  `Show the list of Algorand accounts on this machine. Indicates whether the account is [offline] or [online], and if the account is the default account for goal. Also displays account information with --info.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 
 		// Get a wallet handle to the specified wallet
@@ -514,7 +540,7 @@ var infoCmd = &cobra.Command{
 	Long:  `Retrieve information about the assets and applications the specified account has created or opted into.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
 		response, err := client.AccountInformation(accountAddress, true)
 		if err != nil {
@@ -704,7 +730,7 @@ var balanceCmd = &cobra.Command{
 	Long:  `Retrieve the balance record for the specified account. Algo balance is displayed in microAlgos.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
 		response, err := client.AccountInformation(accountAddress, false)
 		if err != nil {
@@ -721,7 +747,7 @@ var dumpCmd = &cobra.Command{
 	Long:  `Dump the balance record for the specified account to terminal as JSON or to a file as MessagePack.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
 		rawAddress, err := basics.UnmarshalChecksumAddress(accountAddress)
 		if err != nil {
@@ -749,7 +775,7 @@ var rewardsCmd = &cobra.Command{
 	Long:  `Retrieve the rewards for the specified account, including pending rewards. Units displayed are microAlgos.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
 		response, err := client.AccountInformation(accountAddress, false)
 		if err != nil {
@@ -776,7 +802,7 @@ var changeOnlineCmd = &cobra.Command{
 			reportErrorf("Going offline does not support --partkeyfile\n")
 		}
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		var client libgoal.Client
 		if statusChangeTxFile != "" {
 			// writing out a txn, don't need kmd
@@ -866,7 +892,7 @@ var addParticipationKeyCmd = &cobra.Command{
 	Long:  `Generate and install participation key for the specified account. This participation key can then be used for going online and participating in consensus.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 
 		if partKeyOutDir != "" && !util.IsDir(partKeyOutDir) {
 			reportErrorf(errorDirectoryNotExist, partKeyOutDir)
@@ -914,7 +940,7 @@ system security.
 No --delete-input flag specified, exiting without installing key.`)
 		}
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 
 		client := ensureAlgodClient(dataDir)
 		addResponse, err := client.AddParticipationKey(partKeyFile)
@@ -942,7 +968,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 	Long:  `Generate a participation key for the specified account and issue the necessary transaction to register it.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 
 		client := ensureAlgodClient(dataDir)
 
@@ -1021,7 +1047,7 @@ var renewAllParticipationKeyCmd = &cobra.Command{
 	Long:  `Generate new participation keys for all existing accounts with participation keys and issue the necessary transactions to register them.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			fmt.Printf("Renewing participation keys in %s...\n", dataDir)
 			err := renewPartKeysInDir(dataDir, roundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName)
 			if err != nil {
@@ -1113,7 +1139,7 @@ var listParticipationKeysCmd = &cobra.Command{
 	Long:  `List all participation keys tracked by algod along with summary of additional information. For detailed key information use 'partkeyinfo'.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 
 		client := ensureGoalClient(dataDir, libgoal.DynamicClient)
 		parts, err := client.ListParticipationKeys()
@@ -1177,7 +1203,7 @@ var importCmd = &cobra.Command{
 	Short: "Import an account key from mnemonic",
 	Long:  "Import an account key from a mnemonic generated by the export command or by algokey (NOT a mnemonic from the goal wallet command). The imported account will be listed alongside your wallet-generated accounts, but will not be tied to your wallet.",
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 		// Choose an account name
 		if len(args) == 0 {
@@ -1235,7 +1261,7 @@ var exportCmd = &cobra.Command{
 	Short: "Export an account key for use with account import",
 	Long:  "Export an account mnemonic seed, for use with account import. This exports the seed for a single account and should NOT be confused with the wallet mnemonic.",
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureKmdClient(dataDir)
 
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -1269,7 +1295,7 @@ var importRootKeysCmd = &cobra.Command{
 	Long:  "Import .rootkey files from the data directory into a kmd wallet. This is analogous to using the import command with an account seed mnemonic: the imported account will be displayed alongside your wallet-derived accounts, but will not be tied to your wallet mnemonic.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		// Generate a participation keys database and install it
 		client := ensureKmdClient(dataDir)
 
@@ -1361,7 +1387,7 @@ var partkeyInfoCmd = &cobra.Command{
 	Long:  `Output details about all available part keys in the specified data directory(ies), such as key validity period.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			fmt.Printf("Dumping participation key info from %s...\n", dataDir)
 			client := ensureAlgodClient(dataDir)
 
@@ -1403,7 +1429,7 @@ var markNonparticipatingCmd = &cobra.Command{
 
 		checkTxValidityPeriodCmdFlags(cmd)
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		firstTxRound, lastTxRound, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {

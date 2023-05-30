@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package netdeploy
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -57,15 +58,18 @@ type Network struct {
 
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
 	}
 	n.cfg.Name = name
-	n.cfg.TemplateFile = templateFile
 
-	template, err := loadTemplate(templateFile)
+	var err error
+	template := defaultNetworkTemplate
+
+	err = loadTemplateFromReader(templateReader, &template)
+
 	if err == nil {
 		if overrideDevMode {
 			template.Genesis.DevMode = true
@@ -73,9 +77,11 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 				template.Nodes[0].IsRelay = false
 			}
 		}
-		err = template.Validate()
+	} else {
+		return n, err
 	}
-	if err != nil {
+
+	if err = template.Validate(); err != nil {
 		return n, err
 	}
 

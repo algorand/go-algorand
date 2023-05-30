@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0 # required for new-from-rev option in .golangci.yml
       - name: Install libraries
@@ -21,6 +21,7 @@ jobs:
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
+          go_version_file: go.mod
           golangci_lint_version: "v1.47.3"
           golangci_lint_flags: "-c .golangci.yml --allow-parallel-runners"
           reporter: "github-pr-check"
@@ -33,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0 # required for new-from-rev option in .golangci.yml
       - name: Install libraries
@@ -46,14 +47,14 @@ jobs:
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
       - name: Install specific golang
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: '1.17.13'
       - name: Create folders for golangci-lint
         run: mkdir -p cicdtmp/golangci-lint
       - name: Check if custom golangci-lint is already built
         id: cache-golangci-lint
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: cicdtmp/golangci-lint/golangci-lint-cgo
           key: cicd-golangci-lint-cgo-v0.0.1
@@ -69,7 +70,7 @@ jobs:
           cd ../../
       - name: Install reviewdog
         run: |
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.13.0/install.sh | sh -s
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.14.1/install.sh | sh -s
           reviewdog --version
       - name: Build custom linters
         run: |
@@ -80,17 +81,21 @@ jobs:
       - name: Run golangci-lint with reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >
-          ./cicdtmp/golangci-lint/golangci-lint-cgo run
-          --out-format line-number
-          -c .golangci-warnings.yml
-          --allow-parallel-runners
-          | reviewdog
-          -f=golangci-lint
-          -name="Lint Warnings"
-          -reporter=github-check
-          -filter-mode=added
-          -fail-on-error=false
+        run: |
+          set -e
+
+          ./cicdtmp/golangci-lint/golangci-lint-cgo run \
+          --out-format line-number \
+          -c .golangci-warnings.yml \
+          --issues-exit-code 0 \
+          --allow-parallel-runners > temp_golangci-lint-cgo.txt
+
+          cat temp_golangci-lint-cgo.txt | reviewdog \
+          -f=golangci-lint \
+          -name="Lint Warnings" \
+          -reporter=github-check \
+          -filter-mode=added \
+          -fail-on-error=true \
           -level=warning
       - name: Slack Notification
         env:

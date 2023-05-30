@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 
 func TestOpDocs(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
@@ -50,19 +51,21 @@ func TestOpDocs(t *testing.T) {
 // around for non-existent opcodes, most likely from a rename.
 func TestDocStragglers(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	for op := range opDocExtras {
 		_, ok := opDocByName[op]
-		require.True(t, ok, "%s is in opDocExtra, but not opDocByName", op)
+		assert.True(t, ok, "%s is in opDocExtra, but not opDocByName", op)
 	}
 	for op := range opcodeImmediateNotes {
 		_, ok := opDocByName[op]
-		require.True(t, ok, "%s is in opcodeImmediateNotes, but not opDocByName", op)
+		assert.True(t, ok, "%s is in opcodeImmediateNotes, but not opDocByName", op)
 	}
 }
 
 func TestOpGroupCoverage(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	opsSeen := make(map[string]bool, len(OpSpecs))
 	for _, op := range OpSpecs {
@@ -87,6 +90,7 @@ func TestOpGroupCoverage(t *testing.T) {
 
 func TestOpDoc(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	xd := OpDoc("txn")
 	require.NotEmpty(t, xd)
@@ -94,47 +98,30 @@ func TestOpDoc(t *testing.T) {
 	require.Empty(t, xd)
 }
 
-func TestOpImmediateNote(t *testing.T) {
+func TestOpImmediateDetails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	xd := OpImmediateNote("txn")
-	require.NotEmpty(t, xd)
-	xd = OpImmediateNote("+")
-	require.Empty(t, xd)
-}
+	for _, os := range OpSpecs {
+		deets := OpImmediateDetailsFromSpec(os)
+		require.Equal(t, len(os.Immediates), len(deets))
 
-func TestAllImmediatesDocumented(t *testing.T) {
-	partitiontest.PartitionTest(t)
+		for idx, d := range deets {
+			imm := os.Immediates[idx]
+			require.NotEmpty(t, d.Comment)
+			require.Equal(t, strings.ToLower(d.Name), imm.Name)
+			require.Equal(t, d.Encoding, imm.kind.String())
 
-	for _, op := range OpSpecs {
-		count := len(op.Immediates)
-		note := OpImmediateNote(op.Name)
-		if count == 1 && op.Immediates[0].kind >= immBytes {
-			// More elaborate than can be checked by easy count.
-			assert.NotEmpty(t, note)
-			continue
-		}
-		assert.Equal(t, count, strings.Count(note, "{"), "opcodeImmediateNotes for %s is wrong", op.Name)
-		assert.Equal(t, count, strings.Count(note, "}"), "opcodeImmediateNotes for %s is wrong", op.Name)
-		for _, imm := range op.Immediates {
-			switch imm.kind {
-			case immByte:
-				require.True(t, strings.HasPrefix(note, "{uint8 "), "%v %v", op.Name, note)
-			case immInt8:
-				require.True(t, strings.HasPrefix(note, "{int8 "), "%v %v", op.Name, note)
-			case immLabel:
-				require.True(t, strings.HasPrefix(note, "{int16 "), "%v %v", op.Name, note)
-			case immInt:
-				require.True(t, strings.HasPrefix(note, "{varuint "), "%v %v", op.Name, note)
+			if imm.Group != nil {
+				require.Equal(t, d.Reference, imm.Group.Name)
 			}
-			close := strings.Index(note, "}")
-			note = strings.TrimPrefix(note[close+1:], " ")
 		}
 	}
 }
 
 func TestOpDocExtra(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
@@ -144,6 +131,7 @@ func TestOpDocExtra(t *testing.T) {
 
 func TestOpAllCosts(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := OpAllCosts("+")
 	require.Len(t, a, 1)
@@ -158,6 +146,7 @@ func TestOpAllCosts(t *testing.T) {
 
 func TestOnCompletionDescription(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	desc := OnCompletionDescription(0)
 	require.Equal(t, "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.", desc)

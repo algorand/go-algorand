@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,15 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// AssetHolding converts between basics.AssetHolding and model.AssetHolding
+func AssetHolding(ah basics.AssetHolding, ai basics.AssetIndex) model.AssetHolding {
+	return model.AssetHolding{
+		Amount:   ah.Amount,
+		AssetID:  uint64(ai),
+		IsFrozen: ah.Frozen,
+	}
+}
+
 // AccountDataToAccount converts basics.AccountData to v2.model.Account
 func AccountDataToAccount(
 	address string, record *basics.AccountData,
@@ -39,11 +48,7 @@ func AccountDataToAccount(
 	for curid, holding := range record.Assets {
 		// Empty is ok, asset may have been deleted, so we can no
 		// longer fetch the creator
-		holding := model.AssetHolding{
-			Amount:   holding.Amount,
-			AssetID:  uint64(curid),
-			IsFrozen: holding.Frozen,
-		}
+		holding := AssetHolding(holding, curid)
 
 		assets = append(assets, holding)
 	}
@@ -86,15 +91,7 @@ func AccountDataToAccount(
 
 	appsLocalState := make([]model.ApplicationLocalState, 0, len(record.AppLocalStates))
 	for appIdx, state := range record.AppLocalStates {
-		localState := convertTKVToGenerated(&state.KeyValue)
-		appsLocalState = append(appsLocalState, model.ApplicationLocalState{
-			Id:       uint64(appIdx),
-			KeyValue: localState,
-			Schema: model.ApplicationStateSchema{
-				NumByteSlice: state.Schema.NumByteSlice,
-				NumUint:      state.Schema.NumUint,
-			},
-		})
+		appsLocalState = append(appsLocalState, AppLocalState(state, appIdx))
 	}
 	sort.Slice(appsLocalState, func(i, j int) bool {
 		return appsLocalState[i].Id < appsLocalState[j].Id
@@ -445,6 +442,19 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 		},
 	}
 	return app
+}
+
+// AppLocalState converts between basics.AppLocalState and model.ApplicationLocalState
+func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.ApplicationLocalState {
+	localState := convertTKVToGenerated(&state.KeyValue)
+	return model.ApplicationLocalState{
+		Id:       uint64(appIdx),
+		KeyValue: localState,
+		Schema: model.ApplicationStateSchema{
+			NumByteSlice: state.Schema.NumByteSlice,
+			NumUint:      state.Schema.NumUint,
+		},
+	}
 }
 
 // AssetParamsToAsset converts basics.AssetParams to model.Asset

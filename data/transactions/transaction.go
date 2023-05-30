@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -118,7 +118,7 @@ type ApplyData struct {
 
 	// If asa or app is being created, the id used. Else 0.
 	// Names chosen to match naming the corresponding txn.
-	// These are populated on when MaxInnerTransactions > 0 (TEAL 5)
+	// These are populated only when MaxInnerTransactions > 0 (TEAL 5)
 	ConfigAsset   basics.AssetIndex `codec:"caid"`
 	ApplicationID basics.AppIndex   `codec:"apid"`
 }
@@ -184,6 +184,7 @@ func (tx Transaction) ID() Txid {
 }
 
 // IDSha256 returns the digest (i.e., hash) of the transaction.
+// This is different from the canonical ID computed with Sum512_256 hashing function.
 func (tx Transaction) IDSha256() crypto.Digest {
 	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
 	defer protocol.PutEncodingBuf(enc)
@@ -234,10 +235,11 @@ func (tx Header) Alive(tc TxnContext) error {
 	// Check round validity
 	round := tc.Round()
 	if round < tx.FirstValid || round > tx.LastValid {
-		return TxnDeadError{
+		return &TxnDeadError{
 			Round:      round,
 			FirstValid: tx.FirstValid,
 			LastValid:  tx.LastValid,
+			Early:      round < tx.FirstValid,
 		}
 	}
 
@@ -474,6 +476,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			// recall 0 is the current app so indexes are shifted, thus test is for greater than, not gte.
 			if br.Index > uint64(len(tx.ForeignApps)) {
 				return fmt.Errorf("tx.Boxes[%d].Index is %d. Exceeds len(tx.ForeignApps)", i, br.Index)
+			}
+			if proto.EnableBoxRefNameError && len(br.Name) > proto.MaxAppKeyLen {
+				return fmt.Errorf("tx.Boxes[%d].Name too long, max len %d bytes", i, proto.MaxAppKeyLen)
 			}
 		}
 

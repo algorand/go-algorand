@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -495,7 +495,7 @@ func (t *demuxTester) LookupAgreement(basics.Round, basics.Address) (basics.Onli
 }
 
 // implement Ledger
-func (t *demuxTester) Circulation(basics.Round) (basics.MicroAlgos, error) {
+func (t *demuxTester) Circulation(basics.Round, basics.Round) (basics.MicroAlgos, error) {
 	// we don't care about this function in this test.
 	return basics.MicroAlgos{}, nil
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -72,10 +72,14 @@ const StateProofFileName = "stateproof.sqlite"
 // It is used for tracking participation key metadata.
 const ParticipationRegistryFilename = "partregistry.sqlite"
 
-// ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
+// ConfigurableConsensusProtocolsFilename defines a set of consensus protocols that
 // are to be loaded from the data directory ( if present ), to override the
 // built-in supported consensus protocols.
 const ConfigurableConsensusProtocolsFilename = "consensus.json"
+
+// The default gossip fanout setting when configured as a relay (here, as we
+// do not expose in normal config so it is not in code generated local_defaults.go
+const defaultRelayGossipFanout = 8
 
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
@@ -124,6 +128,12 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 		source.Archival = true
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
+
+		// If gossip fanout has not been explicitly overridden, use defaultRelayGossipFanout
+		// rather then the default gossip fanout setting from defaultLocal
+		if source.GossipFanout == defaultLocal.GossipFanout {
+			source.GossipFanout = defaultRelayGossipFanout
+		}
 	}
 
 	return source, err
@@ -238,6 +248,11 @@ const (
 	dnssecSRV = 1 << iota
 	dnssecRelayAddr
 	dnssecTelemetryAddr
+)
+
+const (
+	txFilterRawMsg    = 1
+	txFilterCanonical = 2
 )
 
 const (

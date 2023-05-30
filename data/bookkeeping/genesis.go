@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -221,6 +221,12 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 			},
 			UpgradeVote: UpgradeVote{},
 		},
+	}
+
+	// If a new network is being created in which AVM can't access low numbered
+	// resources, bump the TxnCounter so there won't be any such resources.
+	if params.AppForbidLowResources {
+		blk.TxnCounter = 1000
 	}
 
 	if params.SupportGenesisHash {

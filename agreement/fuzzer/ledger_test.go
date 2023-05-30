@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -236,7 +236,7 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 	return l.state[a].OnlineAccountData(), nil
 }
 
-func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

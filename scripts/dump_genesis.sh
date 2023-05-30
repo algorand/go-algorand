@@ -76,6 +76,9 @@ for LEDGER in $LEDGERS; do
       unfinishedcatchpoints)
         SORT=round
         ;;
+      stateproofverification)
+        SORT=lastattestedround
+        ;;
       kvstore)
         SORT=key
         ;;

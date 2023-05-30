@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -274,6 +274,7 @@ func TestWellFormedErrors(t *testing.T) {
 	protoV27 := config.Consensus[protocol.ConsensusV27]
 	protoV28 := config.Consensus[protocol.ConsensusV28]
 	protoV32 := config.Consensus[protocol.ConsensusV32]
+	protoV36 := config.Consensus[protocol.ConsensusV36]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	v5 := []byte{0x05}
@@ -565,6 +566,32 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			proto:         protoV32,
 			expectedError: fmt.Errorf("tx.Boxes too long, max number of box references is 0"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: make([]byte, 65)}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Boxes[0].Name too long, max len 64 bytes"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: make([]byte, 65)}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto:         protoV36,
+			expectedError: nil,
 		},
 	}
 	for _, usecase := range usecases {

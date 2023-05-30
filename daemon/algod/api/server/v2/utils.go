@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -61,6 +62,10 @@ func notFound(ctx echo.Context, internal error, external string, log logging.Log
 	return returnError(ctx, http.StatusNotFound, internal, external, log)
 }
 
+func notImplemented(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusNotImplemented, internal, external, log)
+}
+
 func addrOrNil(addr basics.Address) *string {
 	if addr.IsZero() {
 		return nil
@@ -88,6 +93,13 @@ func byteOrNil(data []byte) *[]byte {
 		return nil
 	}
 	return &data
+}
+
+func trueOrNil(b bool) *bool {
+	if !b {
+		return nil
+	}
+	return &b
 }
 
 func nilToZero(numPtr *uint64) uint64 {
@@ -206,16 +218,16 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 }
 
 // getCodecHandle converts a format string into the encoder + content type
-func getCodecHandle(formatPtr *model.Format) (codec.Handle, string, error) {
-	format := model.Json
+func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
+	format := "json"
 	if formatPtr != nil {
-		format = model.PendingTransactionInformationParamsFormat(strings.ToLower(string(*formatPtr)))
+		format = strings.ToLower(*formatPtr)
 	}
 
 	switch format {
-	case model.Json:
+	case "json":
 		return protocol.JSONStrictHandle, "application/json", nil
-	case model.Msgpack:
+	case "msgpack":
 		fallthrough
 	case "msgp":
 		return protocol.CodecHandle, "application/msgpack", nil
@@ -264,26 +276,29 @@ func stateDeltaToStateDelta(d basics.StateDelta) *model.StateDelta {
 	return &delta
 }
 
+func edIndexToAddress(index uint64, txn *transactions.Transaction, shared []basics.Address) string {
+	// index into [Sender, txn.Accounts[0], txn.Accounts[1], ..., shared[0], shared[1], ...]
+	switch {
+	case index == 0:
+		return txn.Sender.String()
+	case int(index-1) < len(txn.Accounts):
+		return txn.Accounts[index-1].String()
+	case int(index-1)-len(txn.Accounts) < len(shared):
+		return shared[int(index-1)-len(txn.Accounts)].String()
+	default:
+		return fmt.Sprintf("Invalid Account Index %d in LocalDelta", index)
+	}
+}
+
 func convertToDeltas(txn node.TxnWithStatus) (*[]model.AccountStateDelta, *model.StateDelta) {
 	var localStateDelta *[]model.AccountStateDelta
 	if len(txn.ApplyData.EvalDelta.LocalDeltas) > 0 {
 		d := make([]model.AccountStateDelta, 0)
-		accounts := txn.Txn.Txn.Accounts
+		shared := txn.ApplyData.EvalDelta.SharedAccts
 
 		for k, v := range txn.ApplyData.EvalDelta.LocalDeltas {
-			// Resolve address from index
-			var addr string
-			if k == 0 {
-				addr = txn.Txn.Txn.Sender.String()
-			} else {
-				if int(k-1) < len(accounts) {
-					addr = txn.Txn.Txn.Accounts[k-1].String()
-				} else {
-					addr = fmt.Sprintf("Invalid Address Index: %d", k-1)
-				}
-			}
 			d = append(d, model.AccountStateDelta{
-				Address: addr,
+				Address: edIndexToAddress(k, &txn.Txn.Txn, shared),
 				Delta:   *(stateDeltaToStateDelta(v)),
 			})
 		}
@@ -310,13 +325,14 @@ func convertLogs(txn node.TxnWithStatus) *[][]byte {
 
 func convertInners(txn *node.TxnWithStatus) *[]PreEncodedTxInfo {
 	inner := make([]PreEncodedTxInfo, len(txn.ApplyData.EvalDelta.InnerTxns))
-	for i, itxn := range txn.ApplyData.EvalDelta.InnerTxns {
-		inner[i] = convertInnerTxn(&itxn)
+	for i := range txn.ApplyData.EvalDelta.InnerTxns {
+		inner[i] = ConvertInnerTxn(&txn.ApplyData.EvalDelta.InnerTxns[i])
 	}
 	return &inner
 }
 
-func convertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
+// ConvertInnerTxn converts an inner SignedTxnWithAD to PreEncodedTxInfo for the REST API
+func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	// This copies from handlers.PendingTransactionInformation, with
 	// simplifications because we have a SignedTxnWithAD rather than
 	// TxnWithStatus, and we know this txn has committed.
@@ -342,6 +358,74 @@ func convertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	response.Logs = convertLogs(withStatus)
 	response.Inners = convertInners(&withStatus)
 	return response
+}
+
+func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
+	return PreEncodedSimulateTxnResult{
+		Txn:                    ConvertInnerTxn(&txnResult.Txn),
+		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
+		LogicSigBudgetConsumed: numOrNil(txnResult.LogicSigBudgetConsumed),
+	}
+}
+
+func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
+	txnResults := make([]PreEncodedSimulateTxnResult, len(txnGroupResult.Txns))
+	for i, txnResult := range txnGroupResult.Txns {
+		txnResults[i] = convertTxnResult(txnResult)
+	}
+
+	encoded := PreEncodedSimulateTxnGroupResult{
+		Txns:              txnResults,
+		FailureMessage:    strOrNil(txnGroupResult.FailureMessage),
+		AppBudgetAdded:    numOrNil(txnGroupResult.AppBudgetAdded),
+		AppBudgetConsumed: numOrNil(txnGroupResult.AppBudgetConsumed),
+	}
+
+	if len(txnGroupResult.FailedAt) > 0 {
+		failedAt := make([]uint64, len(txnGroupResult.FailedAt))
+		copy(failedAt, txnGroupResult.FailedAt)
+		encoded.FailedAt = &failedAt
+	}
+
+	return encoded
+}
+
+func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
+	var evalOverrides *model.SimulationEvalOverrides
+	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
+		evalOverrides = &model.SimulationEvalOverrides{
+			AllowEmptySignatures: trueOrNil(result.EvalOverrides.AllowEmptySignatures),
+			MaxLogSize:           result.EvalOverrides.MaxLogSize,
+			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
+			ExtraOpcodeBudget:    numOrNil(result.EvalOverrides.ExtraOpcodeBudget),
+		}
+	}
+
+	encodedSimulationResult := PreEncodedSimulateResponse{
+		Version:       result.Version,
+		LastRound:     uint64(result.LastRound),
+		TxnGroups:     make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		EvalOverrides: evalOverrides,
+	}
+
+	for i, txnGroup := range result.TxnGroups {
+		encodedSimulationResult.TxnGroups[i] = convertTxnGroupResult(txnGroup)
+	}
+
+	return encodedSimulationResult
+}
+
+func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {
+	txnGroups := make([][]transactions.SignedTxn, len(request.TxnGroups))
+	for i, txnGroup := range request.TxnGroups {
+		txnGroups[i] = txnGroup.Txns
+	}
+	return simulation.Request{
+		TxnGroups:            txnGroups,
+		AllowEmptySignatures: request.AllowEmptySignatures,
+		AllowMoreLogging:     request.AllowMoreLogging,
+		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
+	}
 }
 
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.

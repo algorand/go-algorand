@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -181,24 +181,22 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) model.Dryr
 	return st
 }
 
-// Register is fired on program creation (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) error {
+// Register is fired on program creation (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) {
 	ddr.disassembly = state.Disassembly
 	ddr.lines = strings.Split(state.Disassembly, "\n")
-	return nil
 }
 
-// Update is fired on every step (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) error {
+// Update is fired on every step (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) {
 	st := ddr.stateToState(state)
 	ddr.history = append(ddr.history, st)
 	ddr.updateScratch()
-	return nil
 }
 
-// Complete is called when the program exits (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
-	return ddr.Update(state)
+// Complete is called when the program exits (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) {
+	ddr.Update(state)
 }
 
 type dryrunLedger struct {
@@ -249,6 +247,10 @@ func (dl *dryrunLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, e
 
 func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
+}
+
+func (dl *dryrunLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("dryrunLedger: GetStateProofVerificationContext, needed for state proof verification, is not implemented in dryrun")
 }
 
 func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
@@ -421,7 +423,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 		var result model.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
-			ep.Debugger = &debug
+			ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
 			ep.SigLedger = &dl
 			pass, err := logic.EvalSignature(ti, ep)
 			var messages []string
@@ -474,7 +476,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 							}
 						}
 						if !found {
-							(*acct.AppsLocalState) = append(*acct.AppsLocalState, ls)
+							*acct.AppsLocalState = append(*acct.AppsLocalState, ls)
 						}
 					}
 					dl.dr.Accounts[idx] = acct
@@ -505,7 +507,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
 			} else {
 				var debug dryrunDebugReceiver
-				ep.Debugger = &debug
+				ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
 				var program []byte
 				messages = make([]string, 1)
 				if stxn.Txn.OnCompletion == transactions.ClearStateOC {
@@ -554,11 +556,8 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 				// This is necessary because the fields can only be represented as unsigned
 				// integers, so a negative cost would underflow. The two fields also provide
 				// more information, which can be useful for testing purposes.
-				// cost = budgetConsumed - budgetAdded
-				netCost := uint64(cost)
 				budgetAdded := uint64(proto.MaxAppProgramCost * numInnerTxns(delta))
 				budgetConsumed := uint64(cost) + budgetAdded
-				result.Cost = &netCost
 				result.BudgetAdded = &budgetAdded
 				result.BudgetConsumed = &budgetConsumed
 				maxCurrentBudget = pooledAppBudget

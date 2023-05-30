@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -133,14 +133,14 @@ type LedgerReader interface {
 	// protocol may lose liveness.
 	LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error)
 
-	// Circulation returns the total amount of money in circulation at the
-	// conclusion of a given round.
+	// Circulation returns the total amount of online money in circulation at the
+	// conclusion of a given round rnd that is eligible for voting at voteRnd.
 	//
 	// This method returns an error if the given Round has not yet been
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	Circulation(basics.Round) (basics.MicroAlgos, error)
+	Circulation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error)
 
 	// LookupDigest returns the Digest of the entry that was agreed on in a
 	// given round.

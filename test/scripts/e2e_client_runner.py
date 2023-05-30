@@ -58,7 +58,7 @@ def openalgod(algodata):
     algodnet = open(algodnetpath, 'rt').read().strip()
     algodtokenpath = os.path.join(algodata,'algod.token')
     algodtoken = open(algodtokenpath, 'rt').read().strip()
-    algod = algosdk.algod.AlgodClient(algodtoken, 'http://' + algodnet)
+    algod = algosdk.v2client.algod.AlgodClient(algodtoken, 'http://' + algodnet)
     return algod
 
 def read_script_for_timeout(fname):
@@ -112,9 +112,9 @@ def _script_thread_inner(runset, scriptname, timeout):
 
     # send one million Algos to the test wallet's account
     params = algod.suggested_params()
-    round = params['lastRound']
+    round = params.first
     max_init_wait_rounds = 5
-    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params['minFee'], first=round, last=round+max_init_wait_rounds, gh=params['genesishashb64'], receiver=addr, amt=1000000000000, flat_fee=True)
+    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params.min_fee, first=round, last=round+max_init_wait_rounds, gh=params.gh, receiver=addr, amt=1000000000000, flat_fee=True)
     stxn = kmd.sign_transaction(pubw, '', txn)
     txid = algod.send_transaction(stxn)
     ptxinfo = None
@@ -123,7 +123,7 @@ def _script_thread_inner(runset, scriptname, timeout):
         if txinfo.get('round'):
             break
         status = algod.status_after_block(round_num=round)
-        round = status['lastRound']
+        round = status['last-round']
 
     if ptxinfo is not None:
         sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname, max_init_wait_rounds))

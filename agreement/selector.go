@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -70,7 +70,7 @@ func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s
 		return
 	}
 
-	total, err := l.Circulation(balanceRound)
+	total, err := l.Circulation(balanceRound, r)
 	if err != nil {
 		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain total circulation in round %d: %v", r, balanceRound, err)
 		return

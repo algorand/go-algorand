@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,15 +19,15 @@ package ledger
 import (
 	"archive/tar"
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/algorand/msgp/msgp"
-
-	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/ledger/encoded"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -41,10 +41,10 @@ const (
 	// In reality most entries are asset holdings, and they are very small.
 	ResourcesPerCatchpointFileChunk = 100_000
 
-	// resourcesPerCatchpointFileChunkBackwardCompatible is the old value for ResourcesPerCatchpointFileChunk.
-	// Size of a single resource entry was underestimated to 300 bytes that holds only for assets and not for apps.
-	// It is safe to remove after April, 2023 since we are only supporting catchpoint that are 6 months old.
-	resourcesPerCatchpointFileChunkBackwardCompatible = 300_000
+	// SPContextPerCatchpointFile defines the maximum number of state proof verification data stored
+	// in the catchpoint file.
+	// (2 years * 31536000 seconds per year) / (256 rounds per state proof verification data * 3.6 seconds per round) ~= 70000
+	SPContextPerCatchpointFile = 70000
 )
 
 // catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -53,7 +53,7 @@ const (
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	ctx                  context.Context
-	tx                   *sql.Tx
+	tx                   trackerdb.TransactionScope
 	filePath             string
 	totalAccounts        uint64
 	totalKVs             uint64
@@ -64,78 +64,61 @@ type catchpointWriter struct {
 	chunkNum             uint64
 	writtenBytes         int64
 	biggestChunkLen      uint64
-	accountsIterator     encodedAccountsBatchIter
+	accountsIterator     accountsBatchIter
 	maxResourcesPerChunk int
 	accountsDone         bool
-	kvRows               *sql.Rows
+	kvRows               kvIter
 }
 
-type encodedBalanceRecordV5 struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
+type kvIter interface {
+	Next() bool
+	KeyValue() ([]byte, []byte, error)
+	Close()
+}
 
-	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw       `codec:"ad"` // encoding of basics.AccountData
+type accountsBatchIter interface {
+	Next(ctx context.Context, accountCount int, resourceCount int) ([]encoded.BalanceRecordV6, uint64, error)
+	Close()
 }
 
 type catchpointFileBalancesChunkV5 struct {
-	_struct  struct{}                 `codec:",omitempty,omitemptyarray"`
-	Balances []encodedBalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
-}
-
-// SortUint64 re-export this sort, which is implemented in basics, and being used by the msgp when
-// encoding the resources map below.
-type SortUint64 = basics.SortUint64
-
-type encodedBalanceRecordV6 struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Address     basics.Address      `codec:"a,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw            `codec:"b"`                                                              // encoding of baseAccountData
-	Resources   map[uint64]msgp.Raw `codec:"c,allocbound=resourcesPerCatchpointFileChunkBackwardCompatible"` // map of resourcesData
-
-	// flag indicating whether there are more records for the same account coming up
-	ExpectingMoreEntries bool `codec:"e"`
-}
-
-// Adjust these to be big enough for boxes, but not directly tied to box values.
-const (
-	// For boxes: "bx:<8 bytes><64 byte name>"
-	encodedKVRecordV6MaxKeyLength = 128
-
-	// For boxes: MaxBoxSize
-	encodedKVRecordV6MaxValueLength = 32768
-
-	// MaxEncodedKVDataSize is the max size of serialized KV entry, checked with TestEncodedKVDataSize.
-	// Exact value is 32906 that is 10 bytes more than 32768 + 128
-	MaxEncodedKVDataSize = 33000
-)
-
-type encodedKVRecordV6 struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Key   []byte `codec:"k,allocbound=encodedKVRecordV6MaxKeyLength"`
-	Value []byte `codec:"v,allocbound=encodedKVRecordV6MaxValueLength"`
+	_struct  struct{}                  `codec:",omitempty,omitemptyarray"`
+	Balances []encoded.BalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
 type catchpointFileChunkV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Balances    []encodedBalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	Balances    []encoded.BalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 	numAccounts uint64
-	KVs         []encodedKVRecordV6 `codec:"kv,allocbound=BalancesPerCatchpointFileChunk"`
+	KVs         []encoded.KVRecordV6 `codec:"kv,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
 func (chunk catchpointFileChunkV6) empty() bool {
 	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxResourcesPerChunk int) (*catchpointWriter, error) {
-	totalAccounts, err := totalAccounts(ctx, tx)
+type catchpointStateProofVerificationContext struct {
+	_struct struct{}                                   `codec:",omitempty,omitemptyarray"`
+	Data    []ledgercore.StateProofVerificationContext `codec:"spd,allocbound=SPContextPerCatchpointFile"`
+}
+
+func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.StateProofVerCtx, protocol.Encode(&data)
+}
+
+func makeCatchpointWriter(ctx context.Context, filePath string, tx trackerdb.TransactionScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
+	arw, err := tx.MakeAccountsReaderWriter()
 	if err != nil {
 		return nil, err
 	}
 
-	totalKVs, err := totalKVs(ctx, tx)
+	totalAccounts, err := arw.TotalAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	totalKVs, err := arw.TotalKVs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +146,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, maxR
 		file:                 file,
 		compressor:           compressor,
 		tar:                  tar,
+		accountsIterator:     tx.MakeEncodedAccoutsBatchIter(),
 		maxResourcesPerChunk: maxResourcesPerChunk,
 	}
 	return res, nil
@@ -174,6 +158,37 @@ func (cw *catchpointWriter) Abort() error {
 	cw.compressor.Close()
 	cw.file.Close()
 	return os.Remove(cw.filePath)
+}
+
+func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest, error) {
+	rawData, err := cw.tx.MakeSpVerificationCtxReaderWriter().GetAllSPContexts(cw.ctx)
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	wrappedData := catchpointStateProofVerificationContext{Data: rawData}
+	dataHash, encodedData := crypto.EncodeAndHash(wrappedData)
+
+	err = cw.tar.WriteHeader(&tar.Header{
+		Name: catchpointSPVerificationFileName,
+		Mode: 0600,
+		Size: int64(len(encodedData)),
+	})
+
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	_, err = cw.tar.Write(encodedData)
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	if chunkLen := uint64(len(encodedData)); cw.biggestChunkLen < chunkLen {
+		cw.biggestChunkLen = chunkLen
+	}
+
+	return dataHash, nil
 }
 
 // WriteStep works for a short period of time (determined by stepCtx) to get
@@ -238,7 +253,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		}
 
 		if cw.chunk.empty() {
-			err = cw.readDatabaseStep(cw.ctx, cw.tx)
+			err = cw.readDatabaseStep(cw.ctx)
 			if err != nil {
 				return
 			}
@@ -279,7 +294,7 @@ func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, respo
 		}
 		encodedChunk := protocol.Encode(&chk)
 		err := cw.tar.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("balances.%d.msgpack", chunkNum),
+			Name: fmt.Sprintf(catchpointBalancesFileNameTemplate, chunkNum),
 			Mode: 0600,
 			Size: int64(len(encodedChunk)),
 		})
@@ -302,9 +317,9 @@ func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, respo
 // all of the account chunks first, and then the kv chunks. Even if the accounts
 // are evenly divisible by BalancesPerCatchpointFileChunk, it must not return an
 // empty chunk between accounts and kvs.
-func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) error {
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context) error {
 	if !cw.accountsDone {
-		balances, numAccounts, err := cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
+		balances, numAccounts, err := cw.accountsIterator.Next(ctx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
 		if err != nil {
 			return err
 		}
@@ -320,22 +335,20 @@ func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) er
 
 	// Create the *Rows iterator JIT
 	if cw.kvRows == nil {
-		rows, err := tx.QueryContext(ctx, "SELECT key, value FROM kvstore")
+		rows, err := cw.tx.MakeKVsIter(ctx)
 		if err != nil {
 			return err
 		}
 		cw.kvRows = rows
 	}
 
-	kvrs := make([]encodedKVRecordV6, 0, BalancesPerCatchpointFileChunk)
+	kvrs := make([]encoded.KVRecordV6, 0, BalancesPerCatchpointFileChunk)
 	for cw.kvRows.Next() {
-		var k []byte
-		var v []byte
-		err := cw.kvRows.Scan(&k, &v)
+		k, v, err := cw.kvRows.KeyValue()
 		if err != nil {
 			return err
 		}
-		kvrs = append(kvrs, encodedKVRecordV6{Key: k, Value: v})
+		kvrs = append(kvrs, encoded.KVRecordV6{Key: k, Value: v})
 		if len(kvrs) == BalancesPerCatchpointFileChunk {
 			break
 		}

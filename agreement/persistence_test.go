@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -240,6 +240,7 @@ func TestEmptyMapDeserialization(t *testing.T) {
 }
 
 func TestDecodeFailures(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	ce := clock.Encode()
 	log := makeServiceLogger(logging.Base())

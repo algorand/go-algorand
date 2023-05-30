@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,15 @@ package test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -35,16 +41,24 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type mockLedger struct {
+	mock.Mock
 	accounts map[basics.Address]basics.AccountData
 	kvstore  map[string][]byte
 	latest   basics.Round
 	blocks   []bookkeeping.Block
+	tracer   logic.EvalTracer
+}
+
+func (l *mockLedger) GetTracer() logic.EvalTracer {
+	return l.tracer
+}
+
+func (l *mockLedger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error) {
+	args := l.Called(rnd)
+	return args.Get(0).(ledgercore.StateDelta), args.Error(1)
 }
 
 func (l *mockLedger) LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error) {
@@ -221,7 +235,7 @@ func setupTestForLargeResources(t *testing.T, acctSize, maxResults int, accountM
 	acctData = accountMaker(acctSize)
 	ml.accounts[fakeAddr] = acctData
 
-	mockNode := makeMockNode(&ml, t.Name(), nil)
+	mockNode := makeMockNode(&ml, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.MaxAPIResourcesPerAccount = uint64(maxResults)
 	dummyShutdownChan := make(chan struct{})
 	handlers = v2.Handlers{

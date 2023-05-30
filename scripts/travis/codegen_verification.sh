@@ -31,10 +31,10 @@ echo "Running check_license..."
 ./scripts/check_license.sh
 
 echo "Rebuild swagger.json files"
-make rebuild_swagger
+make rebuild_kmd_swagger
 
-echo "Regenerate config files"
-go generate ./config
+echo "Regenerate for stringer et el."
+make generate
 
 echo "Running fixcheck"
 GOPATH=$(go env GOPATH)
@@ -59,6 +59,17 @@ if [[ -n $(git status --porcelain) ]]; then
    exit 1
 else
    echo Enlistment is clean
+fi
+
+echo Checking Tidiness...
+make tidy
+if [[ -n $(git status --porcelain) ]]; then
+   echo Dirty after go mod tidy - did you forget to run make tidy?
+   git status -s
+   git --no-pager diff
+   exit 1
+else
+   echo All tidy
 fi
 
 # test binary compatibility

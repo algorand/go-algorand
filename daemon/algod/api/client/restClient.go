@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -45,10 +46,11 @@ const (
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/v2/transactions":  true,
-	"/v2/teal/dryrun":   true,
-	"/v2/teal/compile":  true,
-	"/v2/participation": true,
+	"/v2/transactions":          true,
+	"/v2/teal/dryrun":           true,
+	"/v2/teal/compile":          true,
+	"/v2/participation":         true,
+	"/v2/transactions/simulate": true,
 }
 
 // unauthorizedRequestError is generated when we receive 401 error from the server. This error includes the inner error
@@ -162,37 +164,49 @@ type RawResponse interface {
 	SetBytes([]byte)
 }
 
+// mergeRawQueries merges two raw queries, appending an "&" if both are non-empty
+func mergeRawQueries(q1, q2 string) string {
+	if q1 == "" || q2 == "" {
+		return q1 + q2
+	}
+	return q1 + "&" + q2
+}
+
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
-func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool) error {
+// if expectNoContent is true, then it is expected that the response received will have a content length of zero
+func (client RestClient) submitForm(
+	response interface{}, path string, params interface{}, body interface{},
+	requestMethod string, encodeJSON bool, decodeJSON bool, expectNoContent bool) error {
+
 	var err error
 	queryURL := client.serverURL
 	queryURL.Path = path
 
 	var req *http.Request
-	var body io.Reader
+	var bodyReader io.Reader
+	var v url.Values
 
-	if request != nil {
-		if rawRequestPaths[path] {
-			reqBytes, ok := request.([]byte)
-			if !ok {
-				return fmt.Errorf("couldn't decode raw request as bytes")
-			}
-			body = bytes.NewBuffer(reqBytes)
-		} else {
-			v, err := query.Values(request)
-			if err != nil {
-				return err
-			}
-
-			queryURL.RawQuery = v.Encode()
-			if encodeJSON {
-				jsonValue, _ := json.Marshal(request)
-				body = bytes.NewBuffer(jsonValue)
-			}
+	if params != nil {
+		v, err = query.Values(params)
+		if err != nil {
+			return err
 		}
 	}
 
-	req, err = http.NewRequest(requestMethod, queryURL.String(), body)
+	if requestMethod == "POST" && rawRequestPaths[path] {
+		reqBytes, ok := body.([]byte)
+		if !ok {
+			return fmt.Errorf("couldn't decode raw request as bytes")
+		}
+		bodyReader = bytes.NewBuffer(reqBytes)
+	} else if encodeJSON {
+		jsonValue, _ := json.Marshal(params)
+		bodyReader = bytes.NewBuffer(jsonValue)
+	}
+
+	queryURL.RawQuery = mergeRawQueries(queryURL.RawQuery, v.Encode())
+
+	req, err = http.NewRequest(requestMethod, queryURL.String(), bodyReader)
 	if err != nil {
 		return err
 	}
@@ -218,6 +232,13 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return err
 	}
 
+	if expectNoContent {
+		if resp.ContentLength == 0 {
+			return nil
+		}
+		return fmt.Errorf("expected empty response but got response of %d bytes", resp.ContentLength)
+	}
+
 	if decodeJSON {
 		dec := json.NewDecoder(resp.Body)
 		return dec.Decode(&response)
@@ -240,20 +261,26 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 
 // get performs a GET request to the specific path against the server
 func (client RestClient) get(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */)
+	return client.submitForm(response, path, request, nil, "GET", false /* encodeJSON */, true /* decodeJSON */, false)
+}
+
+// delete performs a DELETE request to the specific path against the server
+// when expectNoContent is true, then no content is expected to be returned from the endpoint
+func (client RestClient) delete(response interface{}, path string, request interface{}, expectNoContent bool) error {
+	return client.submitForm(response, path, request, nil, "DELETE", false /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // getRaw behaves identically to get but doesn't json decode the response, and
 // the response must implement the RawResponse interface
 func (client RestClient) getRaw(response RawResponse, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */)
+	return client.submitForm(response, path, request, nil, "GET", false /* encodeJSON */, false /* decodeJSON */, false)
 }
 
 // post sends a POST request to the given path with the given request object.
 // No query parameters will be sent if request is nil.
 // response must be a pointer to an object as post writes the response there.
-func (client RestClient) post(response interface{}, path string, request interface{}) error {
-	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */)
+func (client RestClient) post(response interface{}, path string, params interface{}, body interface{}, expectNoContent bool) error {
+	return client.submitForm(response, path, params, body, "POST", true /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
 // Status retrieves the StatusResponse from the running node
@@ -270,10 +297,16 @@ func (client RestClient) WaitForBlock(round basics.Round) (response model.NodeSt
 	return
 }
 
-// HealthCheck does a health check on the the potentially running node,
+// HealthCheck does a health check on the potentially running node,
 // returning an error if the API is down
 func (client RestClient) HealthCheck() error {
 	return client.get(nil, "/health", nil)
+}
+
+// ReadyCheck does a readiness check on the potentially running node,
+// returning an error if the node is not ready (caught up and healthy)
+func (client RestClient) ReadyCheck() error {
+	return client.get(nil, "/ready", nil)
 }
 
 // StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
@@ -490,7 +523,7 @@ func (client RestClient) SuggestedParams() (response model.TransactionParameters
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
-	err = client.post(&response, "/v2/transactions", protocol.Encode(&txn))
+	err = client.post(&response, "/v2/transactions", nil, protocol.Encode(&txn), false)
 	return
 }
 
@@ -504,7 +537,7 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var response model.PostTransactionsResponse
-	return client.post(&response, "/v2/transactions", enc)
+	return client.post(&response, "/v2/transactions", nil, enc, false)
 }
 
 // Block gets the block info for the given round
@@ -524,19 +557,19 @@ func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
 // Shutdown requests the node to shut itself down
 func (client RestClient) Shutdown() (err error) {
 	response := 1
-	err = client.post(&response, "/v2/shutdown", nil)
+	err = client.post(&response, "/v2/shutdown", nil, nil, false)
 	return
 }
 
 // AbortCatchup aborts the currently running catchup
 func (client RestClient) AbortCatchup(catchpointLabel string) (response model.CatchpointAbortResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true)
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, nil, "DELETE", false, true, false)
 	return
 }
 
 // Catchup start catching up to the give catchpoint label
 func (client RestClient) Catchup(catchpointLabel string) (response model.CatchpointStartResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true)
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, nil, "POST", false, true, false)
 	return
 }
 
@@ -551,23 +584,52 @@ func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, 
 	return
 }
 
+type compileParams struct {
+	SourceMap bool `url:"sourcemap,omitempty"`
+}
+
 // Compile compiles the given program and returned the compiled program
-func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash crypto.Digest, err error) {
+func (client RestClient) Compile(program []byte, useSourceMap bool) (compiledProgram []byte, programHash crypto.Digest, sourceMap *logic.SourceMap, err error) {
 	var compileResponse model.CompileResponse
-	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true)
+
+	compileRequest := compileParams{SourceMap: useSourceMap}
+
+	err = client.submitForm(&compileResponse, "/v2/teal/compile", compileRequest, program, "POST", false, true, false)
 	if err != nil {
-		return nil, crypto.Digest{}, err
+		return nil, crypto.Digest{}, nil, err
 	}
 	compiledProgram, err = base64.StdEncoding.DecodeString(compileResponse.Result)
 	if err != nil {
-		return nil, crypto.Digest{}, err
+		return nil, crypto.Digest{}, nil, err
 	}
 	var progAddr basics.Address
 	progAddr, err = basics.UnmarshalChecksumAddress(compileResponse.Hash)
 	if err != nil {
-		return nil, crypto.Digest{}, err
+		return nil, crypto.Digest{}, nil, err
 	}
 	programHash = crypto.Digest(progAddr)
+
+	// fast exit if we don't want sourcemap, then exit with what we have so far
+	if !useSourceMap {
+		return
+	}
+
+	// if we want sourcemap, then we convert the *map[string]interface{} into *logic.SourceMap
+	if compileResponse.Sourcemap == nil {
+		return nil, crypto.Digest{}, nil, fmt.Errorf("requesting for sourcemap but get nothing")
+	}
+
+	var srcMapInstance logic.SourceMap
+	var jsonBytes []byte
+
+	if jsonBytes, err = json.Marshal(*compileResponse.Sourcemap); err != nil {
+		return nil, crypto.Digest{}, nil, err
+	}
+	if err = json.Unmarshal(jsonBytes, &srcMapInstance); err != nil {
+		return nil, crypto.Digest{}, nil, err
+	}
+	sourceMap = &srcMapInstance
+
 	return
 }
 
@@ -610,7 +672,15 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 // RawDryrun gets the raw DryrunResponse associated with the passed address
 func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
 	var blob Blob
-	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */)
+	err = client.submitForm(&blob, "/v2/teal/dryrun", nil, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
+	response = blob
+	return
+}
+
+// RawSimulateRawTransaction simulates transactions by taking raw request bytes and returns relevant simulation results as raw bytes.
+func (client RestClient) RawSimulateRawTransaction(data []byte) (response []byte, err error) {
+	var blob Blob
+	err = client.submitForm(&blob, "/v2/transactions/simulate", rawFormat{Format: "msgpack"}, data, "POST", false /* encodeJSON */, false /* decodeJSON */, false)
 	response = blob
 	return
 }
@@ -636,7 +706,7 @@ func (client RestClient) TransactionProof(txid string, round uint64, hashType cr
 
 // PostParticipationKey sends a key file to the node.
 func (client RestClient) PostParticipationKey(file []byte) (response model.PostParticipationResponse, err error) {
-	err = client.post(&response, "/v2/participation", file)
+	err = client.post(&response, "/v2/participation", nil, file, false)
 	return
 }
 
@@ -649,5 +719,49 @@ func (client RestClient) GetParticipationKeys() (response model.ParticipationKey
 // GetParticipationKeyByID gets a single participation key
 func (client RestClient) GetParticipationKeyByID(participationID string) (response model.ParticipationKeyResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/participation/%s", participationID), nil)
+	return
+}
+
+// RemoveParticipationKeyByID removes a particiption key by its ID
+func (client RestClient) RemoveParticipationKeyByID(participationID string) (err error) {
+	err = client.delete(nil, fmt.Sprintf("/v2/participation/%s", participationID), nil, true)
+	return
+}
+
+/* Endpoint registered for follower nodes */
+
+// SetSyncRound sets the sync round for the catchup service
+func (client RestClient) SetSyncRound(round uint64) (err error) {
+	err = client.post(nil, fmt.Sprintf("/v2/ledger/sync/%d", round), nil, nil, true)
+	return
+}
+
+// UnsetSyncRound deletes the sync round constraint
+func (client RestClient) UnsetSyncRound() (err error) {
+	err = client.delete(nil, "/v2/ledger/sync", nil, true)
+	return
+}
+
+// GetSyncRound retrieves the sync round (if set)
+func (client RestClient) GetSyncRound() (response model.GetSyncRoundResponse, err error) {
+	err = client.get(&response, "/v2/ledger/sync", nil)
+	return
+}
+
+// GetLedgerStateDelta retrieves the ledger state delta for the round
+func (client RestClient) GetLedgerStateDelta(round uint64) (response model.LedgerStateDeltaResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d", round), nil)
+	return
+}
+
+// SetBlockTimestampOffset sets the offset in seconds to add to the block timestamp when in devmode
+func (client RestClient) SetBlockTimestampOffset(offset uint64) (err error) {
+	err = client.post(nil, fmt.Sprintf("/v2/devmode/blocks/offset/%d", offset), nil, nil, true)
+	return
+}
+
+// GetBlockTimestampOffset gets the offset in seconds which is being added to devmode blocks
+func (client RestClient) GetBlockTimestampOffset() (response model.GetBlockTimeStampOffsetResponse, err error) {
+	err = client.get(&response, "/v2/devmode/blocks/offset", nil)
 	return
 }

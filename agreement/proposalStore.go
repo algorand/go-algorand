@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,6 +85,9 @@ func (a blockAssembler) bind(p proposal) (blockAssembler, error) {
 
 	a.Payload = p
 	a.Assembled = true
+
+	// remember when the original unauthenticatedProposal was received
+	a.Payload.receivedAt = a.Pipeline.receivedAt
 
 	return a, nil
 }

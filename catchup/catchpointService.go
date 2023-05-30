@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/stateproof"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -33,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/stateproof"
 )
 
 const (
@@ -259,6 +258,7 @@ func (cs *CatchpointCatchupService) processStageInactive() (err error) {
 	if err != nil {
 		return cs.abort(fmt.Errorf("processStageInactive failed to set a catchpoint label : %v", err))
 	}
+
 	err = cs.updateStage(ledger.CatchpointCatchupStateLedgerDownload)
 	if err != nil {
 		return cs.abort(fmt.Errorf("processStageInactive failed to update stage : %v", err))

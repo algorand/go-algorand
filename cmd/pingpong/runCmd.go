@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,6 +90,7 @@ var generatedAccountsCount uint64
 var generatedAccountsOffset uint64
 var generatedAccountSampleMethod string
 var configPath string
+var latencyPath string
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -111,6 +112,7 @@ func init() {
 	runCmd.Flags().StringVar(&refreshTime, "refresh", "", "Duration of time (seconds) between refilling accounts with money (0 means no refresh)")
 	runCmd.Flags().StringVar(&logicProg, "program", "", "File containing the compiled program to include as a logic sig")
 	runCmd.Flags().StringVar(&configPath, "config", "", "path to read config json from, or json literal")
+	runCmd.Flags().StringVar(&latencyPath, "latency", "", "path to write txn latency log to (.gz for compressed)")
 	runCmd.Flags().BoolVar(&saveConfig, "save", false, "Save the effective configuration to disk")
 	runCmd.Flags().BoolVar(&useDefault, "reset", false, "Reset to the default configuration (not read from disk)")
 	runCmd.Flags().BoolVar(&quietish, "quiet", false, "quietish stdout logging")
@@ -316,7 +318,7 @@ var runCmd = &cobra.Command{
 			}
 			ops, err := logic.AssembleString(programStr)
 			if err != nil {
-				ops.ReportProblems(teal, os.Stderr)
+				ops.ReportMultipleErrors(teal, os.Stderr)
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}
 			cfg.Program = ops.Program
@@ -436,8 +438,14 @@ var runCmd = &cobra.Command{
 			cfg.GeneratedAccountSampleMethod = generatedAccountSampleMethod
 		}
 		// check if numAccounts is greater than the length of the mnemonic list, if provided
-		if cfg.DeterministicKeys && cfg.NumPartAccounts > uint32(len(cfg.GeneratedAccountsMnemonics)) {
+		if cfg.DeterministicKeys &&
+			len(cfg.GeneratedAccountsMnemonics) > 0 &&
+			cfg.NumPartAccounts > uint32(len(cfg.GeneratedAccountsMnemonics)) {
 			reportErrorf("numAccounts is greater than number of account mnemonics provided")
+		}
+
+		if latencyPath != "" {
+			cfg.TotalLatencyOut = latencyPath
 		}
 
 		cfg.SetDefaultWeights()

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -201,7 +201,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		switch e.t() {
 		case payloadVerified:
 			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
-		case payloadPresent:
+		case payloadPresent, votePresent:
 			e = e.(messageEvent).AttachReceivedAt(s.Clock.Since())
 		}
 	}()

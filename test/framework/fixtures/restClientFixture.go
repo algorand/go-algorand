@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,15 +22,14 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-
-	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
@@ -277,22 +276,41 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 	for txid, addr := range txidsAndAddresses {
 		_, err := f.WaitForConfirmedTxn(roundTimeout, addr, txid)
 		if err != nil {
-			f.t.Logf("txn failed to confirm: ", addr, txid)
+			f.t.Logf("txn failed to confirm: addr=%s, txid=%s", addr, txid)
 			pendingTxns, err := f.LibGoalClient.GetParsedPendingTransactions(0)
 			if err == nil {
 				pendingTxids := make([]string, 0, pendingTxns.TotalTransactions)
 				for _, txn := range pendingTxns.TopTransactions {
 					pendingTxids = append(pendingTxids, txn.Txn.ID().String())
 				}
-				f.t.Logf("pending txids: ", pendingTxids)
+				f.t.Logf("pending txids: %v", pendingTxids)
 			} else {
-				f.t.Logf("unable to log pending txns, ", err)
+				f.t.Logf("unable to log pending txns: %v", err)
 			}
 			allTxids := make([]string, 0, len(txidsAndAddresses))
 			for txID := range txidsAndAddresses {
 				allTxids = append(allTxids, txID)
 			}
-			f.t.Logf("all txids: ", allTxids)
+			f.t.Logf("all txids: %s", allTxids)
+
+			dataDirs := f.network.NodeDataDirs()
+			for _, nodedir := range dataDirs {
+				client, err := libgoal.MakeClientWithBinDir(f.binDir, nodedir, nodedir, libgoal.FullClient)
+				if err != nil {
+					f.t.Logf("failed to make a node client for %s: %v", nodedir, err)
+					continue
+				}
+				pendingTxns, err := client.GetParsedPendingTransactions(0)
+				if err != nil {
+					f.t.Logf("failed to get pending txns for %s: %v", nodedir, err)
+					continue
+				}
+				pendingTxids := make([]string, 0, pendingTxns.TotalTransactions)
+				for _, txn := range pendingTxns.TopTransactions {
+					pendingTxids = append(pendingTxids, txn.Txn.ID().String())
+				}
+				f.t.Logf("pending txids at node %s: %v", nodedir, pendingTxids)
+			}
 			return false
 		}
 	}
@@ -416,14 +434,4 @@ func (f *RestClientFixture) AssertValidTxid(txid string) {
 		}
 	}
 	require.True(f.t, allLettersOrNumbers, "txid should be all letters")
-}
-
-// AccountListContainsAddress searches the passed account list for the passed account address
-func (f *RestClientFixture) AccountListContainsAddress(searchList []v1.Account, address string) bool {
-	for _, item := range searchList {
-		if item.Address == address {
-			return true
-		}
-	}
-	return false
 }

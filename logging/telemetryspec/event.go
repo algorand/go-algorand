@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -99,17 +99,6 @@ type BlockAcceptedEventDetails struct {
 	VoteBufLen   uint64
 }
 
-// TopAccountsEvent event
-const TopAccountsEvent Event = "TopAccounts"
-
-// TopAccountEventDetails contains details for the BlockAcceptedEvent
-type TopAccountEventDetails struct {
-	Round              uint64
-	OnlineAccounts     []map[string]interface{}
-	OnlineCirculation  uint64
-	OfflineCirculation uint64
-}
-
 // AccountRegisteredEvent event
 const AccountRegisteredEvent Event = "AccountRegistered"
 
@@ -207,7 +196,7 @@ type PeerEventDetails struct {
 	InstanceName  string
 	// Endpoint is the dialed-to address, for an outgoing connection. Not being used for incoming connection.
 	Endpoint string `json:",omitempty"`
-	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
+	// MessageDelay is the average relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`
 }
 
@@ -302,12 +291,12 @@ type PeerConnectionDetails struct {
 	ConnectionDuration uint
 	// Endpoint is the dialed-to address, for an outgoing connection. Not being used for incoming connection.
 	Endpoint string `json:",omitempty"`
-	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
+	// MessageDelay is the average relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`
 	// DuplicateFilterCount is the number of times this peer has sent us a message hash to filter that it had already sent before.
 	DuplicateFilterCount uint64
 	// These message counters count received messages from this peer.
-	TXCount, MICount, AVCount, PPCount uint64
+	TXCount, MICount, AVCount, PPCount, UNKCount uint64
 	// TCPInfo provides connection measurements from TCP.
 	TCP util.TCPInfo `json:",omitempty"`
 }
@@ -318,6 +307,8 @@ const CatchpointGenerationEvent Event = "CatchpointGeneration"
 // CatchpointGenerationEventDetails is generated once a catchpoint file is being created, and provide
 // some statistics about that event.
 type CatchpointGenerationEventDetails struct {
+	// AccountsRound the round in which the account snapshot is taken
+	AccountsRound uint64
 	// WritingDuration is the total elapsed time it took to write the catchpoint file.
 	WritingDuration uint64
 	// CPUTime is the single-core time spent waiting to the catchpoint file to be written.
@@ -333,8 +324,10 @@ type CatchpointGenerationEventDetails struct {
 	KVsCount uint64
 	// FileSize is the size of the catchpoint file, in bytes.
 	FileSize uint64
-	// CatchpointLabel is the catchpoint label for which the catchpoint file was generated.
-	CatchpointLabel string
+	// MerkleTrieRootHash is the merkle trie root hash represents all accounts and kvs
+	MerkleTrieRootHash string
+	// SPVerificationCtxsHash is the hash of all the state proof verification contexts in the catchpoint
+	SPVerificationCtxsHash string
 }
 
 // CatchpointRootUpdateEvent event

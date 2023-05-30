@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ import (
 
 func TestNewAppEvalParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	params := []config.ConsensusParams{
 		{Application: true, MaxAppProgramCost: 700},
@@ -78,8 +79,11 @@ func TestNewAppEvalParams(t *testing.T) {
 	}
 
 	for i, param := range params {
+		param := param
 		for j, testCase := range cases {
+			i, j, param, testCase := i, j, param, testCase
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
+				t.Parallel()
 				ep := logic.NewEvalParams(testCase.group, &param, nil)
 				require.NotNil(t, ep)
 				require.Equal(t, ep.TxnGroup, testCase.group)

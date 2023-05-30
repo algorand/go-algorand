@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,11 +32,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -52,7 +53,7 @@ type benchConfig struct {
 	acctToApp map[basics.Address]map[basics.AppIndex]struct{}
 	l0        *Ledger
 	l1        *Ledger
-	eval      *internal.BlockEvaluator
+	eval      *eval.BlockEvaluator
 	numPay    uint64
 	numAst    uint64
 	numApp    uint64
@@ -81,7 +82,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	creator := basics.Address{}
 	_, err := rand.Read(creator[:])
 	require.NoError(b, err)
-	genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000000000})
+	genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000000000})
 
 	logger := logging.TestingLog(b)
 	logger.SetLevel(logging.Warn)
@@ -118,7 +119,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	require.NoError(b, err)
 
 	newBlk := bookkeeping.MakeBlock(blk.BlockHeader)
-	eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
+	blockEvaluator, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0, nil)
 	require.NoError(b, err)
 
 	bc = &benchConfig{
@@ -131,7 +132,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 		acctToApp: acctToApp,
 		l0:        l0,
 		l1:        l1,
-		eval:      eval,
+		eval:      blockEvaluator,
 	}
 
 	// start the ledger with a pool of accounts
@@ -143,7 +144,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	addBlock(bc)
 	vc := verify.GetMockedCache(true)
 	for _, blk := range bc.blocks {
-		_, err := internal.Eval(context.Background(), bc.l1, blk, true, vc, nil)
+		_, err := eval.Eval(context.Background(), bc.l1, blk, true, vc, nil, bc.l1.tracer)
 		require.NoError(b, err)
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)
@@ -325,7 +326,7 @@ func addBlock(bc *benchConfig) {
 	prev, err := bc.l0.BlockHdr(basics.Round(last))
 	require.NoError(bc.b, err)
 	newBlk := bookkeeping.MakeBlock(prev)
-	bc.eval, err = bc.l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
+	bc.eval, err = bc.l0.StartEvaluator(newBlk.BlockHeader, 5000, 0, nil)
 	bc.round++
 	require.NoError(bc.b, err)
 }
@@ -423,7 +424,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 	tt := time.Now()
 	b.ResetTimer()
 	for _, blk := range bc.blocks {
-		_, err := internal.Eval(context.Background(), bc.l1, blk, true, vc, nil)
+		_, err := eval.Eval(context.Background(), bc.l1, blk, true, vc, nil, bc.l1.tracer)
 		require.NoError(b, err)
 		err = bc.l1.AddBlock(blk, cert)
 		require.NoError(b, err)

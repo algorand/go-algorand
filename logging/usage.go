@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,7 +54,7 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 		Utime, Stime, _ = util.GetCurrentProcessTimes()
 
 		runtime.ReadMemStats(&mst)
-		ramUsageGauge.Set(float64(mst.HeapInuse))
+		ramUsageGauge.Set(uint64(mst.HeapInuse))
 
 		if hasPrev {
 			userNanos := Utime - prevUtime

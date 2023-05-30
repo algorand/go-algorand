@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -546,7 +546,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 	// so it will think the app doesn't exist
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "applications that do not exist")
+	a.Contains(err.Error(), "only ClearState is supported")
 	a.Equal(1, b.put)
 	a.Equal(1, b.putAppParams)
 
@@ -895,7 +895,7 @@ func TestAppCallClearState(t *testing.T) {
 	// one to opt out, one deallocate, no error from ApplicationCall
 	b.pass = true
 	b.delta = transactions.EvalDelta{GlobalDelta: nil}
-	b.err = ledgercore.LogicEvalError{Err: fmt.Errorf("test error")}
+	b.err = logic.EvalError{Err: fmt.Errorf("test error")}
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)

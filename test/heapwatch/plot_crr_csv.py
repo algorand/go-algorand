@@ -47,6 +47,9 @@ def main():
                     klist.append((xround, v))
                     minv = smin(minv, v)
                     maxv = smax(maxv, v)
+        if not fvals:
+            print(f"{fname} empty")
+            continue
         print("{} found series {}".format(fname, sorted(fvals.keys())))
         fig, ax = plt.subplots()
         ax.set_ylabel('bytes')

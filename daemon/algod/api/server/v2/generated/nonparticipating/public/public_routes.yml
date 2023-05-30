@@ -10,6 +10,8 @@ output-options:
   - private
   - common
   - participating
+  - data
+  - experimental
   type-mappings:
     integer: uint64
   skip-prune: true

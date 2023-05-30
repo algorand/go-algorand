@@ -18,10 +18,15 @@ parameters:
     default: "/opt/cibuild"
   result_path:
     type: string
-    default: "/tmp/build_test_results"
+    default: "/tmp/build_test_results_<< pipeline.id >>"
   valid_nightly_branch:
     type: string
     default: /hotfix\/.*/
+  # The following is intentional - hardcoding a token for public repos
+  # is recommended here to allow fork access
+  codecov:
+    type: string
+    default: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"
 
 executors:
   amd64_medium:
@@ -239,6 +244,8 @@ jobs:
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 32
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
     steps:
       - generic_build
       - generic_test:
@@ -251,9 +258,11 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
     steps:
       - generic_build
       - generic_test:
@@ -439,6 +448,7 @@ commands:
       - run:
           working_directory: /tmp
           command: |
+            sudo rm -rf ${HOME}/node_pkg/*
             sudo rm -rf << parameters.build_dir >>
             sudo mkdir -p << parameters.build_dir >>
             sudo chown -R $USER:$GROUP << parameters.build_dir >>
@@ -704,9 +714,6 @@ commands:
                 TestAlgohWithExpect \
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
-      - store_artifacts:
-          path: << parameters.result_path >>/<< parameters.result_subdir >>
-          destination: << parameters.result_subdir >>/combined-test-results
 
   upload_binaries_command:
     description: save build artifacts for potential deployments

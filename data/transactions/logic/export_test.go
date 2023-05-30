@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,10 +24,6 @@ import "github.com/algorand/go-algorand/data/basics"
 // we export some extra things to make testing easier there. But we do it in a
 // _test.go file, so they are only exported during testing.
 
-func NewExpect(l int, s string) Expect {
-	return Expect{l, s}
-}
-
 func (ep *EvalParams) Reset() {
 	ep.reset()
 }
@@ -44,6 +40,8 @@ func (l *Ledger) DelBoxes(app basics.AppIndex, names ...string) {
 	}
 }
 
+var DefaultEvalParams = defaultEvalParams
+var Exp = exp
 var MakeSampleEnv = makeSampleEnv
 var MakeSampleEnvWithVersion = makeSampleEnvWithVersion
 var MakeSampleTxn = makeSampleTxn
@@ -51,9 +49,15 @@ var MakeSampleTxnGroup = makeSampleTxnGroup
 var MakeTestProto = makeTestProto
 var MakeTestProtoV = makeTestProtoV
 var NoTrack = notrack
+var TestLogic = testLogic
 var TestApp = testApp
 var TestAppBytes = testAppBytes
 var TestApps = testApps
+var TestLogicRange = testLogicRange
 var TestProg = testProg
+var WithPanicOpcode = withPanicOpcode
 
 const CreatedResourcesVersion = createdResourcesVersion
+const AssemblerNoVersion = assemblerNoVersion
+const FirstTestID = firstTestID
+const TestCallStackProgram = testCallStackProgram

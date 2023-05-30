@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -15,48 +15,6 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 // Package server Algod REST API.
-//
-// API Endpoint for AlgoD Operations.
-//
-//
-//     Schemes: http
-//     Host: localhost
-//     BasePath: /
-//     Version: 0.0.1
-//     License:
-//     Contact: contact@algorand.com
-//
-//     Consumes:
-//     - application/json
-//
-//     Produces:
-//     - application/json
-//
-//     Security:
-//     - api_key:
-//
-//     SecurityDefinitions:
-//     api_key:
-//       type: apiKey
-//       name: X-Algo-API-Token
-//       in: header
-//       description: >-
-//         Generated header parameter. This token can be generated using the Goal command line tool. Example value
-//         ='b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697'
-//       required: true
-//       x-example: b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697
-//
-// swagger:meta
-//---
-// Currently, server implementation annotations serve as the API ground truth. From that,
-// we use go-swagger to generate a swagger spec.
-//
-// Autogenerate the swagger json - automatically run by the 'make build' step.
-// Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
-// loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
-//go:generate swagger generate spec -o="../swagger.json"
-//go:generate swagger validate ../swagger.json --stop-on-error
-//go:generate sh ./lib/bundle_swagger_json.sh
 package server
 
 import (
@@ -72,6 +30,8 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/data"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/experimental"
 	npprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/private"
 	nppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/public"
 	pprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/participating/private"
@@ -81,10 +41,18 @@ import (
 	"github.com/algorand/go-algorand/util/tokens"
 )
 
+// APINodeInterface describes all the node methods required by common and v2 APIs, and the server/router
+type APINodeInterface interface {
+	lib.NodeInterface
+	v2.NodeInterface
+}
+
 const (
 	apiV1Tag = "/v1"
 	// TokenHeader is the header where we put the token.
 	TokenHeader = "X-Algo-API-Token"
+	// maxRequestBodyBytes is the maximum request body size that we allow in our APIs.
+	maxRequestBodyBytes = "10MB"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -104,7 +72,7 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 }
 
 // NewRouter builds and returns a new router with our REST handlers registered.
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
+func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
 	if err := tokens.ValidateAPIToken(apiToken); err != nil {
 		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
 	}
@@ -124,7 +92,9 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 		middleware.RemoveTrailingSlash())
 	e.Use(
 		middlewares.MakeLogger(logger),
-		middlewares.MakeCORS(TokenHeader))
+		middlewares.MakeCORS(TokenHeader),
+		middleware.BodyLimit(maxRequestBodyBytes),
+	)
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
@@ -145,7 +115,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	// Registering v2 routes
 	v2Handler := v2.Handlers{
-		Node:     apiNode{node},
+		Node:     node,
 		Log:      logger,
 		Shutdown: shutdown,
 	}
@@ -154,10 +124,25 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
 	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 
+	if node.Config().EnableFollowMode {
+		data.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	}
+
+	if node.Config().EnableExperimentalAPI {
+		experimental.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	}
+
 	return e
 }
 
-// apiNode wraps the AlgorandFullNode to provide v2.NodeInterface.
-type apiNode struct{ *node.AlgorandFullNode }
+// FollowerNode wraps the AlgorandFollowerNode to provide v2.NodeInterface.
+type FollowerNode struct{ *node.AlgorandFollowerNode }
 
-func (n apiNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+// LedgerForAPI implements the v2.Handlers interface
+func (n FollowerNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+
+// APINode wraps the AlgorandFullNode to provide v2.NodeInterface.
+type APINode struct{ *node.AlgorandFullNode }
+
+// LedgerForAPI implements the v2.Handlers interface
+func (n APINode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
