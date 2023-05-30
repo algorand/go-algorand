@@ -63,6 +63,17 @@ func (tracer *cursorEvalTracer) relativeGroupIndex() int {
 	return tracer.relativeCursor[top]
 }
 
+// unifiedGroupIndex is a convenience method that gives index inside a group transaction from different run-mode:
+//  1. if we are running over application mode, then we can get information from cursorEvalTracer's relativeGroupIndex.
+//  2. otherwise, we should be under logic-sig mode, then we have to rely on cx.GroupIndex, for evaluation
+//     and verification of logic-sig happens ahead of transaction group evaluation.
+func (tracer *cursorEvalTracer) unifiedGroupIndex(cx *logic.EvalContext) int {
+	if cx.RunMode() == logic.ModeApp {
+		return tracer.relativeGroupIndex()
+	}
+	return cx.GroupIndex()
+}
+
 func (tracer *cursorEvalTracer) absolutePath() TxnPath {
 	path := make(TxnPath, len(tracer.relativeCursor))
 	for i, relativeGroupIndex := range tracer.relativeCursor {
@@ -247,10 +258,11 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
+	groupIndex := tracer.unifiedGroupIndex(cx)
+
 	if cx.RunMode() == logic.ModeApp {
 		// Remember app EvalDelta before executing the opcode. We do this
 		// because if this opcode fails, the block evaluator resets the EvalDelta.
-		groupIndex := tracer.relativeGroupIndex()
 		var appIDToSave basics.AppIndex
 		if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
 			// App creation
@@ -262,7 +274,6 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 	if tracer.result.ReturnTrace() {
 		var txnTrace *TransactionTrace
 		if cx.RunMode() == logic.ModeSig {
-			groupIndex := cx.GroupIndex()
 			txnTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 		} else {
 			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
@@ -280,24 +291,27 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 }
 
 func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
+	groupIndex := tracer.unifiedGroupIndex(cx)
+
 	// Before Program, activated for logic sig, happens before txn group execution
 	// we should create trace object for this txn result
 	if cx.RunMode() != logic.ModeApp {
 		if tracer.result.ReturnTrace() {
-			indexIntoTxnGroup := cx.GroupIndex()
-			tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace = &TransactionTrace{}
-			traceRef := tracer.result.TxnGroups[0].Txns[indexIntoTxnGroup].Trace
+			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &TransactionTrace{}
+			traceRef := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 			traceRef.programTraceRef = &traceRef.LogicSigTrace
 		}
 	}
 }
 
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
+	groupIndex := tracer.unifiedGroupIndex(cx)
+
 	if cx.RunMode() != logic.ModeApp {
 		// Report cost for LogicSig program and exit
-		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigBudgetConsumed = uint64(cx.Cost())
+		tracer.result.TxnGroups[0].Txns[groupIndex].LogicSigBudgetConsumed = uint64(cx.Cost())
 		if tracer.result.ReturnTrace() {
-			tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].Trace.programTraceRef = nil
+			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.programTraceRef = nil
 		}
 		return
 	}
