@@ -109,7 +109,7 @@ func TestSimulateWithTrace(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
 	sender := env.Accounts[0]
 
 	op, err := logic.AssembleString(`#pragma version 8

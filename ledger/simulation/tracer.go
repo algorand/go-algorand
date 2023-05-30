@@ -19,7 +19,6 @@ package simulation
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -102,8 +101,8 @@ type evalTracer struct {
 	execTraceStack []*TransactionTrace
 }
 
-func makeEvalTracer(lastRound basics.Round, request Request, nodeConfig config.Local) (*evalTracer, error) {
-	result, err := makeSimulationResult(lastRound, request, nodeConfig)
+func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
+	result, err := makeSimulationResult(lastRound, request, developerAPI)
 	if err != nil {
 		return nil, err
 	}

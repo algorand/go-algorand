@@ -134,7 +134,7 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 		nodeConfig = config.GetDefaultLocal()
 	}
 
-	actual, err := simulation.MakeSimulator(env.Ledger, nodeConfig).Simulate(testcase.input)
+	actual, err := simulation.MakeSimulator(env.Ledger, nodeConfig.EnableDeveloperAPI).Simulate(testcase.input)
 	require.NoError(t, err)
 
 	validateSimulationResult(t, actual)
@@ -377,7 +377,7 @@ func TestStateProofTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
 
 	txgroup := []transactions.SignedTxn{
 		env.TxnInfo.NewTxn(txntest.Txn{
@@ -396,7 +396,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
 	sender1 := env.Accounts[0]
 	sender1Balance := env.Accounts[0].AcctData.MicroAlgos
 	sender2 := env.Accounts[1]
@@ -1115,7 +1115,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
 
 	sender := env.Accounts[0]
 
@@ -1323,7 +1323,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -2479,7 +2479,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal().EnableDeveloperAPI)
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{

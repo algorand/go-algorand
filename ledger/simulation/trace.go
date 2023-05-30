@@ -124,11 +124,11 @@ type Result struct {
 // The other invalid options would be eliminated in validateSimulateRequest early.
 func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 
-// validateSimulateRequest first checks relation between request and nodeConfig:
-// if nodeConfig is running with `EnableDeveloperAPI` turned off, this method would:
+// validateSimulateRequest first checks relation between request and config variables, including developerAPI:
+// if `developerAPI` provided is turned off, this method would:
 // - error on asking for exec trace
-func validateSimulateRequest(request Request, nodeConfig config.Local) error {
-	if !nodeConfig.EnableDeveloperAPI && request.TraceConfig.Enable {
+func validateSimulateRequest(request Request, developerAPI bool) error {
+	if !developerAPI && request.TraceConfig.Enable {
 		return InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace"),
@@ -138,7 +138,7 @@ func validateSimulateRequest(request Request, nodeConfig config.Local) error {
 	return nil
 }
 
-func makeSimulationResult(lastRound basics.Round, request Request, nodeConfig config.Local) (Result, error) {
+func makeSimulationResult(lastRound basics.Round, request Request, developerAPI bool) (Result, error) {
 	groups := make([]TxnGroupResult, len(request.TxnGroups))
 
 	for i, txgroup := range request.TxnGroups {
@@ -150,7 +150,7 @@ func makeSimulationResult(lastRound basics.Round, request Request, nodeConfig co
 		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
-	if err := validateSimulateRequest(request, nodeConfig); err != nil {
+	if err := validateSimulateRequest(request, developerAPI); err != nil {
 		return Result{}, err
 	}
 
