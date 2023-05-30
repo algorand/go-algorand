@@ -30,6 +30,7 @@ var defaultLocal = Local{
 	Archival:                                   false,
 	BaseLoggerDebugLevel:                       4,
 	BlockServiceCustomFallbackEndpoints:        "",
+	BlockServiceHTTPMemCap:                     500000000,
 	BroadcastConnectionsLimit:                  -1,
 	CadaverDirectory:                           "",
 	CadaverSizeTarget:                          0,

@@ -510,6 +510,10 @@ type Local struct {
 	// EnableTxnEvalTracer turns on features in the BlockEvaluator which collect data on transactions, exposing them via algod APIs.
 	// It will store txn deltas created during block evaluation, potentially consuming much larger amounts of memory,
 	EnableTxnEvalTracer bool `version[27]:"false"`
+
+	// BlockServiceHTTPMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
+	// When it exceeds this capacity, it redirects the block requests to a different node
+	BlockServiceHTTPMemCap uint64 `version[27]:"500000000"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
