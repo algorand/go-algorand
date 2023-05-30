@@ -1363,8 +1363,8 @@ func decodeTxnsFromFile(file string) []transactions.SignedTxn {
 	return txgroup
 }
 
-func traceCmdOptionToSimulateTraceConfigModel() *model.SimulateTraceConfig {
-	return &model.SimulateTraceConfig{
-		Enable: &simulateEnableRequestTrace,
+func traceCmdOptionToSimulateTraceConfigModel() simulation.ExecTraceConfig {
+	return simulation.ExecTraceConfig{
+		Enable: simulateEnableRequestTrace,
 	}
 }

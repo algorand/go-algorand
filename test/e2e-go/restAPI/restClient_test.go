@@ -45,6 +45,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -2140,13 +2141,14 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	a.NoError(err)
 
 	// The first simulation should not pass, for simulation return PC in config has not been activated
-	constTrue := true
-	execTraceConfig := model.SimulateTraceConfig{Enable: &constTrue}
+	execTraceConfig := simulation.ExecTraceConfig{
+		Enable: true,
+	}
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
 		},
-		ExecTraceConfig: &execTraceConfig,
+		ExecTraceConfig: execTraceConfig,
 	}
 
 	_, err = testClient.SimulateTransactions(simulateRequest)
@@ -2331,5 +2333,5 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
 
 	a.NotNil(resp.ExecTraceConfig)
-	a.Equal(execTraceConfig, *resp.ExecTraceConfig)
+	a.Equal(execTraceConfig, resp.ExecTraceConfig)
 }

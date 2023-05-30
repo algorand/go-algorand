@@ -455,7 +455,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 		LastRound:       uint64(result.LastRound),
 		TxnGroups:       make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
 		EvalOverrides:   evalOverrides,
-		ExecTraceConfig: convertToSimulationTraceConfigResponse(result.TraceConfig),
+		ExecTraceConfig: result.TraceConfig,
 	}
 
 	for i, txnGroup := range result.TxnGroups {
@@ -463,29 +463,6 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	}
 
 	return encodedSimulationResult
-}
-
-func convertToSimulationTraceConfigResponse(traceConfig simulation.ExecTraceConfig) *model.SimulateTraceConfig {
-	// since we are making response, we assume that the request into simulate endpoint is well-formed.
-	// namely, the request get through validateSimulateRequest validation.
-	// we just parse enum bit by bit, and fill in model object.
-	if traceConfig == (simulation.ExecTraceConfig{}) {
-		return nil
-	}
-
-	return &model.SimulateTraceConfig{
-		Enable: trueOrNil(traceConfig.Enable),
-	}
-}
-
-func convertFromSimulationTraceConfigRequest(traceConfig *model.SimulateTraceConfig) simulation.ExecTraceConfig {
-	if traceConfig == nil {
-		return simulation.ExecTraceConfig{}
-	}
-
-	return simulation.ExecTraceConfig{
-		Enable: traceConfig.Enable != nil && *traceConfig.Enable,
-	}
 }
 
 func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {
@@ -498,7 +475,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowEmptySignatures: request.AllowEmptySignatures,
 		AllowMoreLogging:     request.AllowMoreLogging,
 		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
-		TraceConfig:          convertFromSimulationTraceConfigRequest(request.ExecTraceConfig),
+		TraceConfig:          request.ExecTraceConfig,
 	}
 }
 

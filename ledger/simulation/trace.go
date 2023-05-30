@@ -106,7 +106,7 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 
 // ExecTraceConfig gathers all execution trace related configs for simulation result
 type ExecTraceConfig struct {
-	Enable bool
+	Enable bool `codec:"enable,omitempty"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
