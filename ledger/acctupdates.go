@@ -1508,8 +1508,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 }
 
 // getCreatorForRound returns the asset/app creator for a given asset/app index at a given round
-func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (
-	/* creator */ basics.Address /* found */, bool, error) {
+func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (basics.Address, bool, error) {
 	unlock := false
 	if synchronized {
 		au.accountsMu.RLock()

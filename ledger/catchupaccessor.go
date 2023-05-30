@@ -603,9 +603,9 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		writeBalStart := time.Now()
+		writeBalancesStart := time.Now()
 		errBalances = c.stagingWriter.writeBalances(ctx, normalizedAccountBalances)
-		durBalances = time.Since(writeBalStart)
+		durBalances = time.Since(writeBalancesStart)
 	}()
 
 	// on a in-memory database, wait for the writer to finish before starting the new writer
@@ -627,9 +627,9 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			}
 		}
 		if hasCreatables {
-			writeStart := time.Now()
+			writeCreatablesStart := time.Now()
 			errCreatables = c.stagingWriter.writeCreatables(ctx, normalizedAccountBalances)
-			durCreatables = time.Since(writeStart)
+			durCreatables = time.Since(writeCreatablesStart)
 		}
 	}()
 

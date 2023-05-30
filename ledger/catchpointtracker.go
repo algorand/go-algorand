@@ -1066,6 +1066,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 	if ct.log.GetTelemetryEnabled() {
 		root, rootErr := ct.balancesTrie.RootHash()
 		if rootErr != nil {
+			// log rootErr if failed to fetch for reporting in telemetry, then return whether Commit() succeeded or not
 			ct.log.Errorf("accountsUpdateBalances: error retrieving balances trie root: %v", rootErr)
 			return commitErr
 		}
