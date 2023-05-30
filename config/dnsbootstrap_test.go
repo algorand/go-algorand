@@ -112,7 +112,7 @@ func TestParseDNSBootstrapIDNoBackup(t *testing.T) {
 		domainGen := rapidgen.Domain()
 		primaryDomain := domainGen.Draw(t1, "domain").(string)
 		includeDedup := rapid.Bool().Draw(t1, "with Dedup").(bool)
-		includeHttps := rapid.Bool().Draw(t1, "with HTTPS").(bool)
+		includeHTTPS := rapid.Bool().Draw(t1, "with HTTPS").(bool)
 
 		primaryDomainInput := primaryDomain
 		// Should be ignored without backup parameter being set
@@ -120,7 +120,7 @@ func TestParseDNSBootstrapIDNoBackup(t *testing.T) {
 			primaryDomainInput += "?dedup=<name>.algorand-<network>.(net|network)"
 		}
 
-		if includeHttps {
+		if includeHTTPS {
 			primaryDomainInput = "https://" + primaryDomainInput
 		}
 

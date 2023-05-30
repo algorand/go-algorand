@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// DNSBootstrap represents parsed / validated components derived from a DNSBootstrapID
 type DNSBootstrap struct {
 	PrimarySRVBootstrap string
 

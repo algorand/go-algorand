@@ -24,6 +24,7 @@ import (
 	"strings"
 )
 
+// DomainWithPort generates an RFC 1035 compliant domain name with a port.
 func DomainWithPort() *rapid.Generator {
 	return rapid.Custom(func(t *rapid.T) string {
 		return fmt.Sprintf("%s:%d", Domain().Draw(t, "domain"), rapid.IntRange(1, 65535).Draw(t, "port"))
@@ -35,6 +36,7 @@ func Domain() *rapid.Generator {
 	return DomainOf(255, 63, "", nil)
 }
 
+// DomainWithSuffixAndPort generates an RFC 1035 compliant domain name with the specified domain suffix (assumes compliant), taking a list of domains to not match.
 func DomainWithSuffixAndPort(suffix string, dontMatch []string) *rapid.Generator {
 	return rapid.Custom(func(t *rapid.T) string {
 		return fmt.Sprintf("%s:%d", DomainOf(253, 63, suffix, dontMatch).Draw(t, "domain"),
@@ -58,7 +60,7 @@ func DomainOf(maxLength, maxElementLength int, domainSuffix string, dontMatch []
 			if domainSuffix != "" {
 				domain = domainSuffix
 			} else {
-				domain = fmt.Sprint(TldGenerator.
+				domain = fmt.Sprint(tldGenerator.
 					Filter(func(s string) bool { return len(s)+2 <= maxLength }).
 					Draw(t, "domain"))
 			}
@@ -80,7 +82,7 @@ func DomainOf(maxLength, maxElementLength int, domainSuffix string, dontMatch []
 
 	return genDomain().Filter(func(domain string) bool {
 		for _, v := range dontMatch {
-			if strings.ToLower(v) == strings.ToLower(domain) {
+			if strings.EqualFold(v, domain) {
 				return false
 			}
 		}
@@ -88,7 +90,7 @@ func DomainOf(maxLength, maxElementLength int, domainSuffix string, dontMatch []
 	})
 }
 
-var TldGenerator = rapid.SampledFrom(tlds) //nolint:golint,typecheck
+var tldGenerator = rapid.SampledFrom(tlds)
 
 func assertf(ok bool, format string, args ...interface{}) {
 	if !ok {
