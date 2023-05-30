@@ -604,9 +604,9 @@ commands:
             scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
             export PARTITION_TOTAL=${CIRCLE_NODE_TOTAL}
             export PARTITION_ID=${CIRCLE_NODE_INDEX}
-            GOMODS="$(find . -name 'go.mod' -not -path './cmd/partitiontest_linter/*')"
-            for gomod in $GOMODS; do
-                pushd $(dirname $gomod)
+            GOMOD_DIRS="$(find . -name 'go.mod' -not -path './cmd/partitiontest_linter/*' -exec dirname {} \;)"
+            for gmdir in $GOMOD_DIRS; do
+                pushd $gmdir
                 PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
                 export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
                 gotestsum --format standard-verbose --junitfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/results.xml --jsonfile << parameters.result_path >>/<< parameters.result_subdir >>/${CIRCLE_NODE_INDEX}/testresults.json -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" << parameters.short_test_flag >> -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 $PACKAGE_NAMES
