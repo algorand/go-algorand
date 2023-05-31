@@ -74,6 +74,14 @@ func TestCrossRepoTypes(t *testing.T) {
 			yType:   "EvalDelta",
 		},
 		{
+			name:    "goal-v-sdk-consensus",
+			xPkg:    "github.com/algorand/go-algorand/config",
+			xType:   "ConsensusParams",
+			yPkg:    "github.com/algorand/go-algorand-sdk/v2/protocol/config",
+			yBranch: "develop",
+			yType:   "ConsensusParams",
+		},
+		{
 			name:    "goal-v-sdk-blockheader",
 			xPkg:    "github.com/algorand/go-algorand/data/bookkeeping",
 			xType:   "BlockHeader",
