@@ -92,8 +92,12 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
-UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
-UNIT_TEST_SOURCES_SUBMOD := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && find . -mindepth 2 -name 'go.mod' -execdir go list ./... \; | grep -v /go-algorand/test/ ))
+# UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
+# UNIT_TEST_SOURCES_SUBMOD := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && find . -mindepth 2 -name 'go.mod' -not -path './cmd/partitiontest_linter/*' -execdir go list ./... \; | grep -v /go-algorand/test/ ))
+
+# UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && find . -name 'go.mod' -not -path './cmd/partitiontest_linter/*' -execdir go list ./... \; | grep -v /go-algorand/test/ ))
+# UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && find . -name 'go.mod' -not -path './cmd/partitiontest_linter/*' -execdir go list ./... \; | grep -v /go-algorand/test/ ))
+GOMOD_DIRS := $(shell find . -name 'go.mod' -not -path './cmd/partitiontest_linter/*' -exec dirname {} \;)
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
 MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
@@ -126,10 +130,45 @@ check_shell:
 
 sanity: fix lint fmt tidy
 
-cover:
-	go test $(GOTAGS) -coverprofile=$(COVER_OUT) $(UNIT_TEST_SOURCES)
-	@echo $(UNIT_TEST_SOURCES_SUBMOD) | tr ' ' '\n' | xargs -I {} sh -c 'cd {} && go test $(GOTAGS) -coverprofile=$(COVER_OUT)'
+# cover:
+# 	go test $(GOTAGS) -coverprofile=$(COVER_OUT) $(UNIT_TEST_SOURCES)
 
+# cover:
+# 	for dir in $(GOMOD_DIRS); do \
+# 		pushd $$dir && \
+# 		UNIT_TEST_SOURCES_DIR=$$(go list ./... | grep -v /go-algorand/test/ ) && \
+# 		echo $${UNIT_TEST_SOURCES_DIR} && \
+# 		echo "go test $(GOTAGS) -coverprofile=$(COVER_OUT) $$UNIT_TEST_SOURCES_DIR" && \
+# 		popd ; \
+# 	done
+
+# define TEST_TEMPLATE
+# for dir in $(GOMOD_DIRS); do \
+# 	pushd $$dir && \
+# 	units=$$(go list ./... | grep -v /go-algorand/test/ ) && \
+# 	$(1) $$units $(2) && \
+# 	popd ; \
+# done
+# endef
+
+# template for running tests on eligible sub go modules:
+define SUBMODULE_TESTER
+for dir in $(GOMOD_DIRS); do \
+	pushd $$dir && \
+	units=$$(go list ./... | grep -v /go-algorand/test/ ) && \
+	$(1) $$units && \
+	popd ; \
+done
+endef
+
+# cover:
+# 	$(call TEST_TEMPLATE,go test $(GOTAGS) -coverprofile=$(COVER_OUT),)
+
+# cover all eligible sub go modules:
+cover:
+	$(call SUBMODULE_TESTER,go test $(GOTAGS) -coverprofile=$(COVER_OUT))
+
+# profile only the top-level go module:
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
 
@@ -249,21 +288,34 @@ $(GOPATH1)/bin/ddconfig.sh: scripts/ddconfig.sh
 $(GOPATH1)/bin/%:
 	cp -f $< $@
 
+# run-test:
+# 	for dir in $(GOMOD_DIRS); do \
+# 		pushd $$dir && \
+# 		units=$$(go list ./... | grep -v /go-algorand/test/ ) && \
+# 		$(GOTESTCOMMAND) $(GOTAGS) -race $$units -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic && \
+# 		popd; \
+# 	done
+
 run-test:
-	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic
-	@echo $(UNIT_TEST_SOURCES_SUBMOD) | tr ' ' '\n' | xargs -I {} sh -c 'cd {} && $(GOTESTCOMMAND) $(GOTAGS) -race -timeout 5m -coverprofile=$(COVER_PROFILE) -covermode=atomic
+	$(call TEST_TEMPLATE,$(GOTESTCOMMAND),-coverprofile=$(COVER_PROFILE) -covermode=atomic)
 
 test: build run-test
 
+# benchcheck: build
+# 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h
+
+# benchmark all eligible sub go modules:
 benchcheck: build
-	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h
-	@echo $(UNIT_TEST_SOURCES_SUBMOD) | tr ' ' '\n' | xargs -I {} sh -c 'cd {} && $(GOTESTCOMMAND) $(GOTAGS) -race -timeout 10m -run ^NOTHING -bench Benchmark -benchtime 1x'
+	$(call SUBMODULE_TESTER,$(GOTESTCOMMAND) -race -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h)
 
 fulltest: build-race run-test
 
+# shorttest: build-race
+# 	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic
+
+# shorttest all eligible sub go modules:
 shorttest: build-race
-	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic
-	@echo $(UNIT_TEST_SOURCES_SUBMOD) | tr ' ' '\n' | xargs -I {} sh -c 'cd {} && $(GOTESTCOMMAND) $(GOTAGS) -short -race -timeout 5m -coverprofile=$(COVER_PROFILE) -covermode=atomic'
+	$(call SUBMODULE_TESTER,$(GOTESTCOMMAND) $(GOTAGS) -short -race -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic)
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
