@@ -18,6 +18,8 @@ package sortition
 
 import (
 	"math/rand"
+	"os"
+	"strconv"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -69,6 +71,16 @@ func TestSortitionBasic(t *testing.T) {
 
 func TestCompareSortitionImpls(tt *testing.T) {
 	partitiontest.PartitionTest(tt)
+
+	// if TOTAL_MONEY env var is set, parse uint64 from env
+	var envTotalMoney uint64
+	if tm := os.Getenv("TOTAL_MONEY"); tm != "" {
+		if val, err := strconv.ParseUint(tm, 10, 64); err == nil {
+			envTotalMoney = val
+			tt.Logf("using TOTAL_MONEY=%d from env", envTotalMoney)
+		}
+	}
+
 	rapid.Check(tt, func(t *rapid.T) {
 		// select one of the protocol committee sizes
 		proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -84,8 +96,14 @@ func TestCompareSortitionImpls(tt *testing.T) {
 		//expectedSize := rapid.Uint64Range(1, totalMoney).Draw(t, "expectedSize").(uint64) // draw random
 
 		// total online circulation (must be at least committee size)
-		const totalMicroAlgos = 10000000000000000
-		totalMoney := rapid.Uint64Range(expectedSize, totalMicroAlgos).Draw(t, "totalMoney").(uint64)
+		var totalMoney uint64
+		if envTotalMoney != 0 {
+			totalMoney = envTotalMoney
+		} else {
+			const totalMicroAlgos = 10000000000000000
+			totalMoney = rapid.Uint64Range(expectedSize, totalMicroAlgos).Draw(t, "totalMoney").(uint64)
+		}
+
 		// participating account balance
 		money := rapid.Uint64Range(1, totalMoney-1).Draw(t, "money").(uint64)
 
