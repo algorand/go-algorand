@@ -434,9 +434,6 @@ type WebsocketNetwork struct {
 	// map to be sent to new peers as a MsgOfInterest message type.
 	messagesOfInterest map[protocol.Tag]bool
 
-	// maxMessageSizes specifies the maximum message size per tag that this node will accept.
-	maxMessageSizes map[protocol.Tag]int
-
 	// messagesOfInterestEnc is the encoding of messagesOfInterest,
 	// to be sent to new peers.  This is filled in at network start,
 	// at which point messagesOfInterestEncoded is set to prevent

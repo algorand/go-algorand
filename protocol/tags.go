@@ -78,7 +78,8 @@ const StateProofSigTagMaxSize = 6378
 // TopicMsgRespTagMaxSize is the maximum size of a TopicMsgRespTag message
 // This is a response to a topic message request (either UE or MI) and the largest possible
 // response is the largest possible block.
-const TopicMsgRespTagMaxSize = 6 * 1024 * 1024 // TODO: Actually calculate the size, for now set to maxAllocation
+// Matches  current network.MaxMessageLength
+const TopicMsgRespTagMaxSize = 6 * 1024 * 1024
 
 // TxnTagMaxSize is the maximum size of a TxnTag message. This is equal to SignedTxnMaxSize()
 // which is size of just a single message containing maximum Stateproof. Since Stateproof
@@ -89,7 +90,8 @@ const TxnTagMaxSize = 4619953
 const UniEnsBlockReqTagMaxSize = 67
 
 // VoteBundleTagMaxSize is the maximum size of a VoteBundleTag message
-const VoteBundleTagMaxSize = 23754054
+// Matches current network.MaxMessageLength
+const VoteBundleTagMaxSize = 6 * 1024 * 1024
 
 // MaxMessageSize returns the maximum size of a message for a given tag
 func (tag Tag) MaxMessageSize() uint64 {

@@ -41,7 +41,7 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-const maxMessageLength = 6 * 1024 * 1024 // Currently the biggest message is VB vote bundles. TODO: per message type size limit?
+const MaxMessageLength = 6 * 1024 * 1024 // Currently the biggest message is VB vote bundles.
 const averageMessageLength = 2 * 1024    // Most of the messages are smaller than this size, which makes it into a good base allocation.
 
 // This parameter controls how many messages from a single peer can be
@@ -472,8 +472,8 @@ func (wp *wsPeer) readLoop() {
 	defer func() {
 		wp.readLoopCleanup(cleanupCloseError)
 	}()
-	wp.conn.SetReadLimit(maxMessageLength)
-	slurper := MakeLimitedReaderSlurper(averageMessageLength, maxMessageLength)
+	wp.conn.SetReadLimit(MaxMessageLength)
+	slurper := MakeLimitedReaderSlurper(averageMessageLength, MaxMessageLength)
 	dataConverter := makeWsPeerMsgDataConverter(wp)
 
 	for {
@@ -701,8 +701,8 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 }
 
 func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
-	if len(msg.data) > maxMessageLength {
-		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
+	if len(msg.data) > MaxMessageLength {
+		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), MaxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
 		return disconnectReasonNone
 	}
