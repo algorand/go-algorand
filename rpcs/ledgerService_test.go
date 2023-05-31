@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type fakeNetwork struct {
@@ -70,6 +71,7 @@ func (r readCloseSizer) Close() error {
 }
 
 func TestLedgerService(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	genesisID := "testGenesisID"
 	cfg := config.GetDefaultLocal()
 	l := fakeLedger{Mock: &mock.Mock{}}

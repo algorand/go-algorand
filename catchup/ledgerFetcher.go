@@ -109,7 +109,7 @@ func (lf *ledgerFetcher) headLedger(ctx context.Context, peer network.Peer, roun
 	switch response.StatusCode {
 	case http.StatusOK:
 		return nil
-	case http.StatusNotFound: // server could not find a block with that round numbers.
+	case http.StatusNotFound: // server could not find a block with that round number.
 		return errNoLedgerForRound
 	default:
 		return fmt.Errorf("headLedger error response status code %d", response.StatusCode)

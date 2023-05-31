@@ -163,7 +163,7 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 func (cs *CatchpointCatchupService) Start(ctx context.Context) error {
 	err := cs.checkLedgerDownload()
 	if err != nil {
-		return err
+		return fmt.Errorf("aborting catchup Start(): %s", err)
 	}
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(ctx)
 	cs.abortCtx, cs.abortCtxFunc = context.WithCancel(context.Background())
@@ -833,5 +833,5 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 			return nil
 		}
 	}
-	return err
+	return fmt.Errorf("checkLedgerDownload(): catchpoint '%s' unavailable from peers: %s", cs.stats.CatchpointLabel, err)
 }
