@@ -658,23 +658,6 @@ func (at avmType) String() string {
 	return "internal error, unknown type"
 }
 
-// stackType lifts the avmType to a StackType
-// it can do this because the base StackTypes
-// are a superset of avmType
-func (at avmType) stackType() StackType {
-	switch at {
-	case avmNone:
-		return StackNone
-	case avmAny:
-		return StackAny
-	case avmUint64:
-		return StackUint64
-	case avmBytes:
-		return StackBytes
-	}
-	return StackNone
-}
-
 var (
 	// StackUint64 is any valid uint64
 	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
@@ -5377,14 +5360,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		txn.AssetParams.Total, err = sv.uint()
 	case ConfigAssetDecimals:
 		var decimals uint64
-		decimals, err = sv.uint()
-		if err == nil {
-			if decimals > uint64(cx.Proto.MaxAssetDecimals) {
-				err = fmt.Errorf("too many decimals (%d)", decimals)
-			} else {
-				txn.AssetParams.Decimals = uint32(decimals)
-			}
-		}
+		decimals, err = sv.uintMaxed(uint64(cx.Proto.MaxAssetDecimals))
+		txn.AssetParams.Decimals = uint32(decimals)
 	case ConfigAssetDefaultFrozen:
 		txn.AssetParams.DefaultFrozen, err = sv.bool()
 	case ConfigAssetUnitName:
