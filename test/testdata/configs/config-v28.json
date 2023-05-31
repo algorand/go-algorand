@@ -1,5 +1,5 @@
 {
-    "Version": 27,
+    "Version": 28,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AgreementIncomingBundlesQueueLength": 15,
@@ -9,6 +9,7 @@
     "Archival": false,
     "BaseLoggerDebugLevel": 4,
     "BlockServiceCustomFallbackEndpoints": "",
+    "BlockServiceHTTPMemCap": 500000000,
     "BroadcastConnectionsLimit": -1,
     "CadaverDirectory": "",
     "CadaverSizeTarget": 0,
