@@ -82,14 +82,11 @@ func (lf *ledgerFetcher) requestLedger(ctx context.Context, peer network.HTTPPee
 	parsedURL.Path = lf.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
 	ledgerURL := parsedURL.String()
 	lf.log.Debugf("ledger %s %#v peer %#v %T", method, ledgerURL, peer, peer)
-	request, err := http.NewRequest(method, ledgerURL, nil)
+	request, err := http.NewRequestWithContext(ctx, method, ledgerURL, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, lf.config.MaxCatchpointDownloadDuration)
-	defer timeoutContextCancel()
-	request = request.WithContext(timeoutContext)
 	network.SetUserAgentHeader(request.Header)
 	return peer.GetHTTPClient().Do(request)
 }
@@ -99,7 +96,9 @@ func (lf *ledgerFetcher) headLedger(ctx context.Context, peer network.Peer, roun
 	if !ok {
 		return errNonHTTPPeer
 	}
-	response, err := lf.requestLedger(ctx, httpPeer, round, http.MethodHead)
+	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, lf.config.MaxCatchpointDownloadDuration)
+	defer timeoutContextCancel()
+	response, err := lf.requestLedger(timeoutContext, httpPeer, round, http.MethodHead)
 	if err != nil {
 		lf.log.Debugf("getPeerLedger HEAD : %s", err)
 		return err
@@ -126,7 +125,9 @@ func (lf *ledgerFetcher) downloadLedger(ctx context.Context, peer network.Peer, 
 }
 
 func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round) error {
-	response, err := lf.requestLedger(ctx, peer, round, http.MethodGet)
+	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, lf.config.MaxCatchpointDownloadDuration)
+	defer timeoutContextCancel()
+	response, err := lf.requestLedger(timeoutContext, peer, round, http.MethodGet)
 	if err != nil {
 		lf.log.Debugf("getPeerLedger GET : %s", err)
 		return err

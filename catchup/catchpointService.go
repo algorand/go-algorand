@@ -819,7 +819,7 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	round, _, err := ledgercore.ParseCatchpointLabel(cs.stats.CatchpointLabel)
 	if err != nil {
-		return cs.abort(fmt.Errorf("failed to parse catchpoint label : %v", err))
+		return fmt.Errorf("failed to parse catchpoint label : %v", err)
 	}
 	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
