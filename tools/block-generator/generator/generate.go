@@ -88,7 +88,8 @@ const (
 	// TODO: consider an app that creates/destroys an app during opup
 
 	// Defaults
-	genesisAccountInitialBalance uint64 = 40000000000000
+	defaultGenesisAccountsCount         uint64 = 1000
+	defaultGenesisAccountInitialBalance uint64 = 1000000000000
 
 	assetTotal uint64 = 100000000000000000
 
@@ -425,11 +426,11 @@ func validateWithDefaults(config *GenerationConfig) error {
 	}
 
 	if config.NumGenesisAccounts == 0 {
-		return fmt.Errorf("number of genesis accounts must be > 0")
+		config.NumGenesisAccounts = defaultGenesisAccountsCount
 	}
 
 	if config.GenesisAccountInitialBalance == 0 {
-		config.GenesisAccountInitialBalance = genesisAccountInitialBalance
+		config.GenesisAccountInitialBalance = defaultGenesisAccountInitialBalance
 	}
 
 	var weights []*float32
