@@ -185,6 +185,7 @@ func download() {
 		serverList = strings.Split(*serversFlag, ";")
 	} else if *networkFlag != "" {
 		cfg := config.GetDefaultLocal()
+		// only using first dnsBootstrap entry (if more than one are configured) and just the primary SRV, not backup
 		dnsBootstrap := cfg.DNSBootstrapArray(protocol.NetworkID(*networkFlag))[0]
 		_, records, err := net.LookupSRV("algobootstrap", "tcp", dnsBootstrap.PrimarySRVBootstrap)
 		if err != nil {
