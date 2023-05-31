@@ -131,6 +131,7 @@ check_go_version:
 		exit 1; \
 	fi
 
+# for compatibility with codegen_verification.sh on CI, use cd instead of pushd/popd
 tidy: check_go_version
 	for dir in $(GOMOD_DIRS_ALL); do \
 		cd $$dir && \
