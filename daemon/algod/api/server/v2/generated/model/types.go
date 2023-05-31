@@ -658,6 +658,9 @@ type SimulateRequestTransactionGroup struct {
 type SimulateTraceConfig struct {
 	// Enable A boolean option for opting in execution trace features simulation endpoint.
 	Enable *bool `json:"enable,omitempty"`
+
+	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
+	StackChange *bool `json:"stack-change,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group

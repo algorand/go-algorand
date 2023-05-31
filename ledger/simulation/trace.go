@@ -107,6 +107,7 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 // ExecTraceConfig gathers all execution trace related configs for simulation result
 type ExecTraceConfig struct {
 	Enable bool `codec:"enable,omitempty"`
+	Stack  bool `codec:"stack-change,omitempty"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -124,6 +125,9 @@ type Result struct {
 // The other invalid options would be eliminated in validateSimulateRequest early.
 func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 
+// ReturnStackChange reads from Result object and decides if simulation return stack changes.
+func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
+
 // validateSimulateRequest first checks relation between request and config variables, including developerAPI:
 // if `developerAPI` provided is turned off, this method would:
 // - error on asking for exec trace
@@ -132,6 +136,13 @@ func validateSimulateRequest(request Request, developerAPI bool) error {
 		return InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace"),
+			},
+		}
+	}
+	if !request.TraceConfig.Enable && request.TraceConfig.Stack {
+		return InvalidRequestError{
+			SimulatorError{
+				err: fmt.Errorf("the request didn't ask for enabling returning basic trace, but ask for returning stack change"),
 			},
 		}
 	}
@@ -172,6 +183,8 @@ type OpcodeTraceUnit struct {
 	// if any. These indexes refer to the InnerTraces array of the TransactionTrace object containing
 	// this OpcodeTraceUnit.
 	SpawnedInners []int
+
+	// TODO add here for delta change
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

@@ -3485,6 +3485,10 @@
         "enable": {
           "description": "A boolean option for opting in execution trace features simulation endpoint.",
           "type": "boolean"
+        },
+        "stack-change": {
+          "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
+          "type": "boolean"
         }
       }
     },
