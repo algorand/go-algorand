@@ -242,7 +242,7 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 			if !ok {
 				response.Header().Set("Retry-After", blockResponseRetryAfter)
 				response.WriteHeader(http.StatusServiceUnavailable)
-				bs.log.Infof("ServeHTTP: returned retry-after: %v", err)
+				bs.log.Debugf("ServeHTTP: returned retry-after: %v", err)
 			}
 			return
 		default:
