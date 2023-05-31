@@ -133,9 +133,10 @@ check_go_version:
 
 tidy: check_go_version
 	for dir in $(GOMOD_DIRS_ALL); do \
-		pushd $$dir && \
+		cd $$dir && \
+		pwd && \
 		go mod tidy -compat=$(GOLANG_VERSION_SUPPORT) && \
-		popd ; \
+		cd - ; \
 	done
 
 check_shell:
