@@ -584,12 +584,12 @@ func TestNumInnerPooled(t *testing.T) {
 	TestApps(t, []string{short, long}, grp, LogicVersion, ledger)
 	TestApps(t, []string{long, short}, grp, LogicVersion, ledger)
 	TestApps(t, []string{long, long}, grp, LogicVersion, ledger,
-		NewExpect(1, "too many inner transactions"))
+		Exp(1, "too many inner transactions"))
 	grp = append(grp, grp[0])
 	TestApps(t, []string{short, long, long}, grp, LogicVersion, ledger,
-		NewExpect(2, "too many inner transactions"))
+		Exp(2, "too many inner transactions"))
 	TestApps(t, []string{long, long, long}, grp, LogicVersion, ledger,
-		NewExpect(1, "too many inner transactions"))
+		Exp(1, "too many inner transactions"))
 }
 
 func TestAssetCreate(t *testing.T) {

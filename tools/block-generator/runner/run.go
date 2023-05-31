@@ -19,7 +19,6 @@ package runner
 import (
 	"bytes"
 	"context"
-
 	// embed conduit template config file
 	_ "embed"
 	"encoding/json"
@@ -56,6 +55,8 @@ type Args struct {
 	ResetReportDir           bool
 	RunValidation            bool
 	KeepDataDir              bool
+	GenesisFile              string
+	ResetDB                  bool
 }
 
 type config struct {
@@ -121,17 +122,32 @@ func (r *Args) run() error {
 			next.ServeHTTP(w, r)
 		})
 	}
+	// get next db round
+	var nextRound uint64
+	var err error
+	if r.ResetDB {
+		if err = util.EmptyDB(r.PostgresConnectionString); err != nil {
+			return fmt.Errorf("emptyDB err: %w", err)
+		}
+		nextRound = 0
+	} else {
+		nextRound, err = util.GetNextRound(r.PostgresConnectionString)
+		if err != nil && err == util.ErrorNotInitialized {
+			nextRound = 0
+		} else if err != nil {
+			return fmt.Errorf("getNextRound err: %w", err)
+		}
+	}
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
-	generatorShutdownFunc, _ := startGenerator(r.Path, algodNet, blockMiddleware)
+	generatorShutdownFunc, _ := startGenerator(r.Path, nextRound, r.GenesisFile, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
 		if err := generatorShutdownFunc(); err != nil {
 			fmt.Printf("failed to shutdown generator: %s\n", err)
 		}
 	}()
-
 	// get conduit config template
 	t, err := template.New("conduit").Parse(conduitConfigTmpl)
 	if err != nil {
@@ -156,7 +172,7 @@ func (r *Args) run() error {
 	}
 
 	// Start conduit
-	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary)
+	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary, nextRound)
 	if err != nil {
 		return fmt.Errorf("failed to start Conduit: %w", err)
 	}
@@ -390,9 +406,9 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 }
 
 // startGenerator starts the generator server.
-func startGenerator(configFile string, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+func startGenerator(configFile string, dbround uint64, genesisFile string, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
 	// Start generator.
-	server, generator := generator.MakeServerWithMiddleware(configFile, addr, blockMiddleware)
+	server, generator := generator.MakeServerWithMiddleware(dbround, genesisFile, configFile, addr, blockMiddleware)
 
 	// Start the server
 	go func() {
@@ -415,9 +431,10 @@ func startGenerator(configFile string, addr string, blockMiddleware func(http.Ha
 }
 
 // startConduit starts the conduit binary.
-func startConduit(dataDir string, conduitBinary string) (func() error, error) {
+func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
 	cmd := exec.Command(
 		conduitBinary,
+		"-r", strconv.FormatUint(round, 10),
 		"-d", dataDir,
 	)
 
