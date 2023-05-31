@@ -70,7 +70,7 @@ var errBlockServiceClosed = errors.New("block service is shutting down")
 type errMemoryAtCapacity struct{ capacity, used uint64 }
 
 func (err errMemoryAtCapacity) Error() string {
-	return fmt.Sprintf("block service memory over capacity: %d / %d", err.capacity, err.used)
+	return fmt.Sprintf("block service memory over capacity: %d / %d", err.used, err.capacity)
 }
 
 // LedgerForBlockService describes the Ledger methods used by BlockService.
@@ -242,6 +242,7 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 			if !ok {
 				response.Header().Set("Retry-After", blockResponseRetryAfter)
 				response.WriteHeader(http.StatusServiceUnavailable)
+				bs.log.Infof("ServeHTTP: returned retry-after: %v", err)
 			}
 			return
 		default:

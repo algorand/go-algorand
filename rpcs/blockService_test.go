@@ -17,6 +17,7 @@
 package rpcs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -285,8 +286,13 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 func TestRedirectOnFullCapacity(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	log := logging.TestingLog(t)
-	log.SetLevel(logging.Error)
+	log1 := logging.TestingLog(t)
+	logBuffer1 := bytes.NewBuffer(nil)
+	log1.SetOutput(logBuffer1)
+
+	log2 := logging.TestingLog(t)
+	logBuffer2 := bytes.NewBuffer(nil)
+	log2.SetOutput(logBuffer2)
 
 	ledger1 := makeLedger(t, "l1")
 	defer ledger1.Close()
@@ -302,8 +308,8 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	net2 := &httpTestPeerSource{}
 
 	config := config.GetDefaultLocal()
-	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
-	bs2 := MakeBlockService(log, config, ledger2, net2, "test-genesis-ID")
+	bs1 := MakeBlockService(log1, config, ledger1, net1, "test-genesis-ID")
+	bs2 := MakeBlockService(log2, config, ledger2, net2, "test-genesis-ID")
 	// set the meory cap so that it can serve only 1 block at a time
 	bs1.memoryCap = 250
 	bs2.memoryCap = 250
@@ -393,6 +399,14 @@ forloop:
 	require.Equal(t, blk.TimeStamp, l2Block2Ts)
 	// check if node 2 was also overwhelmed and responded with retry-after, since it cannod redirect
 	require.True(t, l2Failed)
+
+	// First node redirects, does not return retry
+	require.True(t, strings.Contains(logBuffer1.String(), "redirectRequest: redirected block request to"))
+	require.False(t, strings.Contains(logBuffer1.String(), "ServeHTTP: returned retry-after: block service memory over capacity"))
+
+	// Second node cannot redirect, it returns retry-after when over capacity
+	require.False(t, strings.Contains(logBuffer2.String(), "redirectRequest: redirected block request to"))
+	require.True(t, strings.Contains(logBuffer2.String(), "ServeHTTP: returned retry-after: block service memory over capacity"))
 }
 
 // TestRedirectExceptions tests exception cases:
@@ -492,4 +506,10 @@ func addBlock(t *testing.T, ledger *data.Ledger) (timestamp int64) {
 	require.NoError(t, err)
 	require.Equal(t, blk.BlockHeader, hdr)
 	return blk.BlockHeader.TimeStamp
+}
+
+func TestErrMemoryAtCapacity(t *testing.T) {
+	macError := errMemoryAtCapacity{capacity: uint64(100), used: uint64(110)}
+	errStr := macError.Error()
+	require.Equal(t, "block service memory over capacity: 110 / 100", errStr)
 }
