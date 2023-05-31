@@ -272,7 +272,7 @@ $(GOPATH1)/bin/%:
 
 # run-test on all eligible sub go modules:
 run-test:
-	$(call SUBMODULE_TESTER,$(GOTESTCOMMAND) $(GOTAGS) -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic)
+	$(call SUBMODULE_TESTER,$(GOTESTCOMMAND) $(GOTAGS) -race -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic)
 
 test: build run-test
 
