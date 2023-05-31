@@ -123,7 +123,11 @@ check_go_version:
 	fi
 
 tidy: check_go_version
-	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
+	for dir in $(GOMOD_DIRS_ALL); do \
+		pushd $$dir && \
+		go mod tidy -compat=$(GOLANG_VERSION_SUPPORT) && \
+		popd ; \
+	done
 
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
