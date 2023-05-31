@@ -539,10 +539,16 @@ func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
 	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
-		ep.available.createdAsas = append(ep.available.createdAsas, aid)
+		if ep.available.createdAsas == nil {
+			ep.available.createdAsas = make(map[basics.AssetIndex]struct{})
+		}
+		ep.available.createdAsas[aid] = struct{}{}
 	}
 	if aid := ad.ApplicationID; aid != 0 {
-		ep.available.createdApps = append(ep.available.createdApps, aid)
+		if ep.available.createdApps == nil {
+			ep.available.createdApps = make(map[basics.AppIndex]struct{})
+		}
+		ep.available.createdApps[aid] = struct{}{}
 	}
 }
 
@@ -650,23 +656,6 @@ func (at avmType) String() string {
 		return "[]byte"
 	}
 	return "internal error, unknown type"
-}
-
-// stackType lifts the avmType to a StackType
-// it can do this because the base StackTypes
-// are a superset of avmType
-func (at avmType) stackType() StackType {
-	switch at {
-	case avmNone:
-		return StackNone
-	case avmAny:
-		return StackAny
-	case avmUint64:
-		return StackUint64
-	case avmBytes:
-		return StackBytes
-	}
-	return StackNone
 }
 
 var (
@@ -954,13 +943,20 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		}
 	}
 
-	// If this is a creation, make any "0 index" box refs available now that we
-	// have an appID.
+	// If this is a creation...
 	if cx.txn.Txn.ApplicationID == 0 {
+		// make any "0 index" box refs available now that we have an appID.
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
 				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = false
 			}
+		}
+		// and add the appID to `createdApps`
+		if cx.EvalParams.Proto.LogicSigVersion >= sharedResourcesVersion {
+			if cx.EvalParams.available.createdApps == nil {
+				cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
+			}
+			cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
 		}
 	}
 
@@ -4248,13 +4244,15 @@ func opExtract64Bits(cx *EvalContext) error {
 // assignAccount is used to convert a stackValue into a 32-byte account value,
 // enforcing any "availability" restrictions in force.
 func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
-	_, err := sv.address()
+	addr, err := sv.address()
 	if err != nil {
 		return basics.Address{}, err
 	}
 
-	addr, _, err := cx.accountReference(sv)
-	return addr, err
+	if cx.availableAccount(addr) {
+		return addr, nil
+	}
+	return basics.Address{}, fmt.Errorf("invalid Account reference %s", addr)
 }
 
 // accountReference yields the address and Accounts offset designated by a
@@ -4323,7 +4321,7 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, appID := range cx.available.createdApps {
+		for appID := range cx.available.createdApps {
 			createdAddress := cx.getApplicationAddress(appID)
 			if addr == createdAddress {
 				return true
@@ -5199,10 +5197,8 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, assetID := range cx.available.createdAsas {
-			if assetID == aid {
-				return true
-			}
+		if _, ok := cx.available.createdAsas[aid]; ok {
+			return true
 		}
 	}
 
@@ -5241,10 +5237,8 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, appID := range cx.available.createdApps {
-			if appID == aid {
-				return true
-			}
+		if _, ok := cx.available.createdApps[aid]; ok {
+			return true
 		}
 	}
 	// Or, it can be the current app
@@ -5366,14 +5360,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		txn.AssetParams.Total, err = sv.uint()
 	case ConfigAssetDecimals:
 		var decimals uint64
-		decimals, err = sv.uint()
-		if err == nil {
-			if decimals > uint64(cx.Proto.MaxAssetDecimals) {
-				err = fmt.Errorf("too many decimals (%d)", decimals)
-			} else {
-				txn.AssetParams.Decimals = uint32(decimals)
-			}
-		}
+		decimals, err = sv.uintMaxed(uint64(cx.Proto.MaxAssetDecimals))
+		txn.AssetParams.Decimals = uint32(decimals)
 	case ConfigAssetDefaultFrozen:
 		txn.AssetParams.DefaultFrozen, err = sv.bool()
 	case ConfigAssetUnitName:
