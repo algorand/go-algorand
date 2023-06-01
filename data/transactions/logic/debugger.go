@@ -128,6 +128,78 @@ func (cx *EvalContext) NextStackChange() StackChangeExplanation {
 	return OpSpecs[cx.program[cx.pc]].Explain(cx)
 }
 
+func opBuryStackChange(cx *EvalContext) StackChangeExplanation {
+	depth := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: depth + 2, Additions: depth + 1}
+}
+
+func opPopNStackChange(cx *EvalContext) StackChangeExplanation {
+	n := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: n}
+}
+
+func opDupNStackChange(cx *EvalContext) StackChangeExplanation {
+	n := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: 1, Additions: n + 1}
+}
+
+func opDigStackChange(cx *EvalContext) StackChangeExplanation {
+	depth := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: depth + 1, Additions: depth + 2}
+}
+
+func opCoverStackChange(cx *EvalContext) StackChangeExplanation {
+	depth := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: depth + 1, Additions: depth + 1}
+}
+
+func opUncoverStackChange(cx *EvalContext) StackChangeExplanation {
+	depth := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: depth + 1, Additions: depth + 1}
+}
+
+func opRetSubStackChange(cx *EvalContext) StackChangeExplanation {
+	topFrame := cx.callstack[len(cx.callstack)-1]
+	// fast path, no proto case
+	if !topFrame.clear {
+		return StackChangeExplanation{}
+	}
+
+	argStart := topFrame.height - topFrame.args
+	topStackIdx := len(cx.stack) - 1
+
+	diff := topStackIdx - argStart + 1
+
+	return StackChangeExplanation{Deletions: diff, Additions: topFrame.returns}
+}
+
+func opFrameBuryStackChange(cx *EvalContext) StackChangeExplanation {
+	topFrame := cx.callstack[len(cx.callstack)-1]
+
+	immIndex := int8(cx.program[cx.pc+1])
+	idx := topFrame.height + int(immIndex)
+	topStackIdx := len(cx.stack) - 1
+
+	diff := topStackIdx - idx + 1
+	return StackChangeExplanation{Deletions: diff, Additions: diff - 1}
+}
+
+func opFrameDigStackChange(cx *EvalContext) StackChangeExplanation {
+	topFrame := cx.callstack[len(cx.callstack)-1]
+
+	immIndex := int8(cx.program[cx.pc+1])
+	idx := topFrame.height + int(immIndex)
+	topStackIdx := len(cx.stack) - 1
+
+	diff := topStackIdx - idx + 1
+	return StackChangeExplanation{Deletions: diff, Additions: diff + 1}
+}
+
+func opMatchStackChange(cx *EvalContext) StackChangeExplanation {
+	labelNum := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: labelNum + 1}
+}
+
 // WebDebugger represents a connection to tealdbg
 type WebDebugger struct {
 	URL string

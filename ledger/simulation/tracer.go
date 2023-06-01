@@ -88,6 +88,8 @@ type evalTracer struct {
 	// from top level transaction to the current inner txn that contains latest TransactionTrace.
 	// NOTE: execTraceStack is used only for PC/Stack/Storage exposure.
 	execTraceStack []*TransactionTrace
+
+	nextStackChangeDescription logic.StackChangeExplanation
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
@@ -270,13 +272,14 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 	}
 
 	if tracer.result.ReturnStackChange() {
-		// TODO something here
+		tracer.nextStackChangeDescription = cx.NextStackChange()
+		// TODO probably store to-be-deleted stack elements for reporting
 	}
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	if tracer.result.ReturnStackChange() {
-		// TODO
+		// TODO store added stack elements for reporting, before that, handle errors tho.
 	}
 
 	if cx.RunMode() != logic.ModeApp {

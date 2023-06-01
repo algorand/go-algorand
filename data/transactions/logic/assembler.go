@@ -1786,7 +1786,11 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 		}
 		i++
 	}
-	return Proto{typedList{args, ""}, typedList{returns, ""}}, minVersion, true
+	return Proto{
+		Arg:     typedList{args, ""},
+		Return:  typedList{returns, ""},
+		Explain: defaultDebugExplain(len(filterNoneTypes(args)), len(filterNoneTypes(returns))),
+	}, minVersion, true
 }
 
 func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
