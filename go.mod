@@ -22,7 +22,7 @@ require (
 	github.com/getkin/kin-openapi v0.107.0
 	github.com/gofrs/flock v0.7.0
 	github.com/golang/snappy v0.0.4
-	github.com/google/go-cmp v0.5.9
+	github.com/google/go-cmp v0.5.6
 	github.com/google/go-querystring v1.0.0
 	github.com/gorilla/mux v1.8.0
 	github.com/jmoiron/sqlx v1.2.0
