@@ -247,8 +247,8 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 	partKeyBinary := buf.Bytes()
 
 	if len(partKeyBinary) == 0 {
-		err := fmt.Errorf(errRESTPayloadZeroLength)
-		return badRequest(ctx, err, err.Error(), v2.Log)
+		lenErr := fmt.Errorf(errRESTPayloadZeroLength)
+		return badRequest(ctx, lenErr, lenErr.Error(), v2.Log)
 	}
 
 	partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
@@ -372,9 +372,9 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 	// count total # of resources, if max limit is set
 	if maxResults := v2.Node.Config().MaxAPIResourcesPerAccount; maxResults != 0 {
-		record, _, _, err := myLedger.LookupAccount(myLedger.Latest(), addr)
-		if err != nil {
-			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		record, _, _, lookupErr := myLedger.LookupAccount(myLedger.Latest(), addr)
+		if lookupErr != nil {
+			return internalError(ctx, lookupErr, errFailedLookingUpLedger, v2.Log)
 		}
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
@@ -430,9 +430,9 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 	}
 
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
-		if err != nil {
-			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		data, encErr := encode(handle, record)
+		if encErr != nil {
+			return internalError(ctx, encErr, errFailedToEncodeResponse, v2.Log)
 		}
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
@@ -611,13 +611,13 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 
 	// msgpack format uses 'RawBlockBytes' and attaches a custom header.
 	if handle == protocol.CodecHandle {
-		blockbytes, err := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
-		if err != nil {
-			switch err.(type) {
+		blockbytes, blockErr := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
+		if blockErr != nil {
+			switch blockErr.(type) {
 			case ledgercore.ErrNoEntry:
-				return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+				return notFound(ctx, blockErr, errFailedLookingUpLedger, v2.Log)
 			default:
-				return internalError(ctx, err, err.Error(), v2.Log)
+				return internalError(ctx, blockErr, blockErr.Error(), v2.Log)
 			}
 		}
 
@@ -732,9 +732,9 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 			return badRequest(ctx, err, "unsupported hash type", v2.Log)
 		}
 
-		proof, err := tree.ProveSingleLeaf(uint64(idx))
-		if err != nil {
-			return internalError(ctx, err, "generating proof", v2.Log)
+		proof, proofErr := tree.ProveSingleLeaf(uint64(idx))
+		if proofErr != nil {
+			return internalError(ctx, proofErr, "generating proof", v2.Log)
 		}
 
 		response := model.TransactionProofResponse{

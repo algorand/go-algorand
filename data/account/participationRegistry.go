@@ -780,18 +780,18 @@ func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, roun
 	var rawStateProofKey []byte
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch secret key
-		keyFirstValidRound, err := partRecord.StateProof.FirstRoundInKeyLifetime(uint64(round))
-		if err != nil {
-			return err
+		keyFirstValidRound, err2 := partRecord.StateProof.FirstRoundInKeyLifetime(uint64(round))
+		if err2 != nil {
+			return err2
 		}
 
 		row := tx.QueryRow(selectStateProofKey, keyFirstValidRound, id[:])
-		err = row.Scan(&rawStateProofKey)
-		if err == sql.ErrNoRows {
+		err2 = row.Scan(&rawStateProofKey)
+		if err2 == sql.ErrNoRows {
 			return ErrSecretNotFound
 		}
-		if err != nil {
-			return fmt.Errorf("error while querying secrets: %w", err)
+		if err2 != nil {
+			return fmt.Errorf("error while querying secrets: %w", err2)
 		}
 
 		return nil
@@ -814,9 +814,9 @@ func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, roun
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch stateproof public data
 		row := tx.QueryRow(selectStateProofData, id[:])
-		err := row.Scan(&rawSignerContext)
-		if err != nil {
-			return fmt.Errorf("error while querying stateproof data: %w", err)
+		err2 := row.Scan(&rawSignerContext)
+		if err2 != nil {
+			return fmt.Errorf("error while querying stateproof data: %w", err2)
 		}
 		return nil
 	})

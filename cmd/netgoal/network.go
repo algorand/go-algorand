@@ -78,7 +78,7 @@ var networkBuildCmd = &cobra.Command{
 	},
 }
 
-func runBuildNetwork() (err error) {
+func runBuildNetwork() error {
 	if cpuprofilePath != "" {
 		f, err := os.Create(cpuprofilePath)
 		if err != nil {
@@ -93,7 +93,7 @@ func runBuildNetwork() (err error) {
 
 	networkRootDir, err := filepath.Abs(networkRootDir)
 	if err != nil {
-		return
+		return err
 	}
 	// Make sure target directory doesn't already exist
 	exists := util.FileExists(networkRootDir)
@@ -109,7 +109,7 @@ func runBuildNetwork() (err error) {
 	}
 
 	if networkRecipeFile, err = filepath.Abs(networkRecipeFile); err != nil {
-		return
+		return err
 	}
 
 	var r recipe
