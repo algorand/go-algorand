@@ -1469,8 +1469,7 @@
         "description": "Get ledger deltas for a round.",
         "tags": [
             "public",
-            "data",
-            "experimental"
+            "nonparticipating"
         ],
         "produces": [
           "application/json",
@@ -1539,8 +1538,7 @@
         "description": "Get ledger deltas for transaction groups in a given round.",
         "tags": [
           "public",
-          "data",
-          "experimental"
+          "nonparticipating"
         ],
         "produces": [
           "application/json",
@@ -1566,7 +1564,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/TransactionGroupLedgerStateDeltaForRoundResponse"
+            "$ref": "#/responses/TransactionGroupLedgerStateDeltasForRoundResponse"
           },
           "401": {
             "description": "Invalid API Token",
@@ -1609,8 +1607,7 @@
         "description": "Get a ledger delta for a given transaction group.",
         "tags": [
           "public",
-          "data",
-          "experimental"
+          "nonparticipating"
         ],
         "produces": [
           "application/json",
@@ -2664,14 +2661,14 @@
       "description": "Contains a ledger delta for a single transaction group",
       "type": "object",
       "required": [
-        "delta",
-        "ids"
+        "Delta",
+        "Ids"
       ],
       "properties": {
-        "delta": {
+        "Delta": {
           "$ref": "#/definitions/LedgerStateDelta"
         },
-        "ids": {
+        "Ids": {
           "type": "array",
           "items": {
             "type": "string"
@@ -3457,8 +3454,11 @@
           "description": "Applies extra opcode budget during simulation for each transaction group.",
           "type": "integer"
         },
+        "exec-trace-config": {
+          "$ref": "#/definitions/SimulateTraceConfig"
+        },
         "allow-unlimited-resource-access": {
-          "description": "Allow unlimited resource access during simulation. The node must set the config value EnableSimulationUnlimitedResourceAccess to true in order to allow this option.",
+          "description": "Allow unlimited resource access during simulation.",
           "type": "boolean"
         }
       }
@@ -3479,6 +3479,16 @@
             "format": "json",
             "x-algorand-format": "SignedTransaction"
           }
+        }
+      }
+    },
+    "SimulateTraceConfig": {
+      "description": "An object that configures simulation execution trace.",
+      "type": "object",
+      "properties": {
+        "enable": {
+          "description": "A boolean option for opting in execution trace features simulation endpoint.",
+          "type": "boolean"
         }
       }
     },
@@ -3733,6 +3743,9 @@
         "logic-sig-budget-consumed": {
           "description": "Budget used during execution of a logic sig transaction.",
           "type": "integer"
+        },
+        "exec-trace": {
+          "$ref": "#/definitions/SimulationTransactionExecTrace"
         }
       }
     },
@@ -3839,6 +3852,60 @@
         "allow-unlimited-resource-access": {
           "description": "If true, allows unlimited resource access during simulation.",
           "type": "boolean"
+        }
+      }
+    },
+    "SimulationOpcodeTraceUnit": {
+      "description": "The set of trace information and effect from evaluating a single opcode.",
+      "type": "object",
+      "required": [
+        "pc"
+      ],
+      "properties": {
+        "pc": {
+          "description": "The program counter of the current opcode being evaluated.",
+          "type": "integer"
+        },
+        "spawned-inners": {
+          "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "SimulationTransactionExecTrace": {
+      "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
+      "type": "object",
+      "properties": {
+        "approval-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in an approval program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "clear-state-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a clear state program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "logic-sig-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a logic sig.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "inner-trace": {
+          "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationTransactionExecTrace"
+          }
         }
       }
     }
@@ -4051,12 +4118,20 @@
         "$ref": "#/definitions/LedgerStateDelta"
       }
     },
-    "TransactionGroupLedgerStateDeltaForRoundResponse": {
+    "TransactionGroupLedgerStateDeltasForRoundResponse": {
       "description": "Response containing all ledger state deltas for transaction groups, with their associated Ids, in a single round.",
       "schema": {
-        "type": "array",
-        "items": {
-          "$ref": "#/definitions/LedgerStateDeltaForTransactionGroup"
+        "type": "object",
+        "required": [
+          "Deltas"
+        ],
+        "properties": {
+          "Deltas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/LedgerStateDeltaForTransactionGroup"
+            }
+          }
         }
       }
     },
@@ -4462,6 +4537,9 @@
           },
           "eval-overrides": {
             "$ref": "#/definitions/SimulationEvalOverrides"
+          },
+          "exec-trace-config": {
+            "$ref": "#/definitions/SimulateTraceConfig"
           }
         }
       }

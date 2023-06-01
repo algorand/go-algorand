@@ -1,7 +1,7 @@
 name: "Mixed (jumbo)"
 genesis_accounts: 10000
 genesis_account_balance: 1000000000000
-tx_per_block: 19999
+tx_per_block: 25000
 
 # transaction distribution
 tx_pay_fraction: 0.3

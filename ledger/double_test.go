@@ -42,7 +42,7 @@ import (
 // then temporarily placed in `generate` mode so that the entire block can be
 // generated in the copy second ledger, and compared.
 type DoubleLedger struct {
-	t *testing.T
+	t testing.TB
 
 	generator *Ledger
 	validator *Ledger
@@ -56,9 +56,9 @@ func (dl DoubleLedger) Close() {
 }
 
 // NewDoubleLedger creates a new DoubleLedger with the supplied balances and consensus version.
-func NewDoubleLedger(t *testing.T, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local) DoubleLedger {
-	g := newSimpleLedgerWithConsensusVersion(t, balances, cv, cfg)
-	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash(), cfg)
+func NewDoubleLedger(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local, opts ...simpleLedgerOption) DoubleLedger {
+	g := newSimpleLedgerWithConsensusVersion(t, balances, cv, cfg, opts...)
+	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash(), cfg, opts...)
 	return DoubleLedger{t, g, v, nil}
 }
 
@@ -77,7 +77,10 @@ func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) (stib *transacti
 				dl.eval = nil
 			} else {
 				vb := dl.endBlock()
-				stib = &vb.Block().Payset[0]
+				// It should have a stib, but don't panic here because of an earlier problem.
+				if len(vb.Block().Payset) > 0 {
+					stib = &vb.Block().Payset[0]
+				}
 			}
 		}()
 	}
@@ -165,7 +168,7 @@ func (dl *DoubleLedger) reloadLedgers() {
 	require.NoError(dl.t, dl.validator.reloadLedger())
 }
 
-func checkBlock(t *testing.T, checkLedger *Ledger, vb *ledgercore.ValidatedBlock) {
+func checkBlock(t testing.TB, checkLedger *Ledger, vb *ledgercore.ValidatedBlock) {
 	bl := vb.Block()
 	msg := bl.MarshalMsg(nil)
 	var reconstituted bookkeeping.Block

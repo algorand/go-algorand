@@ -121,14 +121,14 @@ cat "${TEMPDIR}/grouped-0.stx" "${TEMPDIR}/grouped-1.stx" > "${TEMPDIR}/grouped.
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
-    data '+app-simulate-test FAIL should FAIL for overspending in simulate self pay transaction group %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL should FAIL for overspending in simulate self pay transaction group %Y%m%d_%H%M%S'
     false
 fi
 
 OVERSPEND_INFO="overspend"
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"$OVERSPEND_INFO"* ]]; then
-    data '+app-simulate-test FAIL first overspending transaction in transaction group should contain message OVERSPEND %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL first overspending transaction in transaction group should contain message OVERSPEND %Y%m%d_%H%M%S'
     false
 fi
 
@@ -362,8 +362,8 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; t
     false
 fi
 
-# SIMULATION! with --allow-extra-budget should pass direct call
-RES=$(${gcmd} clerk simulate --allow-extra-opcode-budget -t "${TEMPDIR}/no-extra-opcode-budget.stx")
+# SIMULATION! with --allow-more-opcode-budget should pass direct call
+RES=$(${gcmd} clerk simulate --allow-more-opcode-budget -t "${TEMPDIR}/no-extra-opcode-budget.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the app call to generated large TEAL with extra budget should pass %Y%m%d_%H%M%S'

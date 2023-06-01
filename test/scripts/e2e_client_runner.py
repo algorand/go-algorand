@@ -450,16 +450,16 @@ def main():
     nodeDataDir = os.path.join(netdir, 'Node')
     primaryDataDir = os.path.join(netdir, 'Primary')
 
-    # Set EnableSimulationUnlimitedResourceAccess to true for both nodes
-    for dataDir in (nodeDataDir, primaryDataDir):
-        configFile = os.path.join(dataDir, 'config.json')
-        with open(configFile, 'r') as f:
-            configOptions = json.load(f)
+    # # Set EnableSimulationUnlimitedResourceAccess to true for both nodes
+    # for dataDir in (nodeDataDir, primaryDataDir):
+    #     configFile = os.path.join(dataDir, 'config.json')
+    #     with open(configFile, 'r') as f:
+    #         configOptions = json.load(f)
         
-        configOptions['EnableSimulationUnlimitedResourceAccess'] = True
+    #     configOptions['EnableSimulationUnlimitedResourceAccess'] = True
 
-        with open(configFile, 'w') as f:
-            json.dump(configOptions, f)
+    #     with open(configFile, 'w') as f:
+    #         json.dump(configOptions, f)
 
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
     atexit.register(goal_network_stop, netdir, env)

@@ -310,9 +310,9 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 		var totalHashesDeleted int
 		for _, addr := range addresses {
 			hash := trackerdb.AccountHashBuilder(addr, basics.AccountData{}, []byte{0x80})
-			deleted, err := trie.Delete(hash)
-			if err != nil {
-				tu.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, err)
+			deleted, delErr := trie.Delete(hash)
+			if delErr != nil {
+				tu.log.Errorf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v: %v", hex.EncodeToString(hash), addr, delErr)
 			} else {
 				if !deleted {
 					tu.log.Warnf("upgradeDatabaseSchema4: failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(hash), addr)
@@ -497,6 +497,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context
 	err = performKVStoreNullBlobConversion(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema9 unable to replace kvstore nil entries with empty byte slices : %v", err)
+	}
+
+	err = convertOnlineRoundParamsTail(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("upgradeDatabaseSchema10 unable to convert onlineroundparamstail: %v", err)
 	}
 
 	// update version

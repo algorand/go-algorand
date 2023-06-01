@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
@@ -40,13 +39,11 @@ type simulatorLedger struct {
 
 // Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
 type Request struct {
-	TxnGroups            [][]transactions.SignedTxn
-	AllowEmptySignatures bool
-	AllowMoreLogging     bool
-	ExtraOpcodeBudget    uint64
-	// AllowUnlimitedResourceAccess allows transactions to bypass resource access limitations. The
-	// node must set the config value EnableSimulationUnlimitedResourceAccess to true in order to
-	// allow this option.
+	TxnGroups                    [][]transactions.SignedTxn
+	AllowEmptySignatures         bool
+	AllowMoreLogging             bool
+	ExtraOpcodeBudget            uint64
+	TraceConfig                  ExecTraceConfig
 	AllowUnlimitedResourceAccess bool
 }
 
@@ -90,15 +87,15 @@ type EvalFailureError struct {
 
 // Simulator is a transaction group simulator for the block evaluator.
 type Simulator struct {
-	ledger     simulatorLedger
-	nodeConfig config.Local
+	ledger       simulatorLedger
+	developerAPI bool
 }
 
 // MakeSimulator creates a new simulator from a ledger.
-func MakeSimulator(ledger *data.Ledger, nodeConfig config.Local) *Simulator {
+func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	return &Simulator{
-		ledger:     simulatorLedger{ledger, ledger.Latest()},
-		nodeConfig: nodeConfig,
+		ledger:       simulatorLedger{ledger, ledger.Latest()},
+		developerAPI: developerAPI,
 	}
 }
 
@@ -199,14 +196,13 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 
 	// check that the extra budget is not exceeding simulation extra budget limit
 	if overrides.ExtraOpcodeBudget > MaxExtraOpcodeBudget {
-		return nil,
-			InvalidRequestError{
-				SimulatorError{
-					fmt.Errorf(
-						"extra budget %d > simulation extra budget limit %d",
-						overrides.ExtraOpcodeBudget, MaxExtraOpcodeBudget),
-				},
-			}
+		return nil, InvalidRequestError{
+			SimulatorError{
+				fmt.Errorf(
+					"extra budget %d > simulation extra budget limit %d",
+					overrides.ExtraOpcodeBudget, MaxExtraOpcodeBudget),
+			},
+		}
 	}
 
 	vb, err := s.evaluate(hdr, txgroup, tracer)
@@ -215,7 +211,7 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
 func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
-	simulatorTracer, err := makeEvalTracer(s.ledger.start, simulateRequest, s.nodeConfig)
+	simulatorTracer, err := makeEvalTracer(s.ledger.start, simulateRequest, s.developerAPI)
 	if err != nil {
 		return Result{}, err
 	}

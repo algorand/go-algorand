@@ -566,7 +566,7 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
 func (node *AlgorandFullNode) Simulate(request simulation.Request) (result simulation.Result, err error) {
-	simulator := simulation.MakeSimulator(node.ledger, node.config)
+	simulator := simulation.MakeSimulator(node.ledger, node.config.EnableDeveloperAPI)
 	return simulator.Simulate(request)
 }
 

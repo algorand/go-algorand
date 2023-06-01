@@ -24,19 +24,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
-
 	"github.com/algorand/go-algorand/ledger/simulation"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -49,7 +48,7 @@ func uint64ToBytes(num uint64) []byte {
 
 type simulationTestCase struct {
 	input         simulation.Request
-	nodeConfig    *config.Local
+	developerAPI  bool
 	expected      simulation.Result
 	expectedError string
 }
@@ -139,14 +138,7 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 
 	testcase := f(env)
 
-	var nodeConfig config.Local
-	if testcase.nodeConfig != nil {
-		nodeConfig = *testcase.nodeConfig
-	} else {
-		nodeConfig = config.GetDefaultLocal()
-	}
-
-	actual, err := simulation.MakeSimulator(env.Ledger, nodeConfig).Simulate(testcase.input)
+	actual, err := simulation.MakeSimulator(env.Ledger, testcase.developerAPI).Simulate(testcase.input)
 	require.NoError(t, err)
 
 	validateSimulationResult(t, actual)
@@ -405,7 +397,7 @@ func TestStateProofTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, false)
 
 	txgroup := []transactions.SignedTxn{
 		env.TxnInfo.NewTxn(txntest.Txn{
@@ -424,7 +416,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, false)
 	sender1 := env.Accounts[0]
 	sender1Balance := env.Accounts[0].AcctData.MicroAlgos
 	sender2 := env.Accounts[1]
@@ -903,7 +895,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 			Sender:            sender.Addr,
 			ApplicationID:     0,
 			ApprovalProgram:   expensiveAppSource,
-			ClearStateProgram: `#pragma version 6; int 0`,
+			ClearStateProgram: "#pragma version 6\nint 0",
 		})
 		// Expensive 700 repetition of int 1 and pop total cost 1404
 		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -953,6 +945,106 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 	})
 }
 
+func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction group has a cost of 4 + 1404
+	expensiveAppSource := `#pragma version 6
+	txn ApplicationID      // [appId]
+	bz end                 // []
+` + strings.Repeat(`int 1; pop;`, 700) + `end:
+	int 1`
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+		// App create with cost 4
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   expensiveAppSource,
+			ClearStateProgram: "#pragma version 6\nint 1",
+		})
+		// Expensive 700 repetition of int 1 and pop total cost 1404
+		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &expensiveTxn)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+		extraOpcodeBudget := uint64(100)
+
+		commonLeadingSteps := []simulation.OpcodeTraceUnit{
+			{PC: 1}, {PC: 4}, {PC: 6},
+		}
+
+		// Get the first trace
+		firstTrace := make([]simulation.OpcodeTraceUnit, len(commonLeadingSteps))
+		copy(firstTrace, commonLeadingSteps[:])
+		firstTrace = append(firstTrace, simulation.OpcodeTraceUnit{PC: 1409})
+
+		// Get the second trace
+		secondTrace := make([]simulation.OpcodeTraceUnit, len(commonLeadingSteps))
+		copy(secondTrace, commonLeadingSteps[:])
+		for i := 9; i <= 1409; i++ {
+			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: uint64(i)})
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedExpensiveTxn},
+				},
+				ExtraOpcodeBudget: extraOpcodeBudget,
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: firstTrace,
+								},
+							},
+							{
+								AppBudgetConsumed: 1404,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: secondTrace,
+								},
+							},
+						},
+						AppBudgetAdded:    1500,
+						AppBudgetConsumed: 1408,
+					},
+				},
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+		}
+	})
+}
+
 func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -974,7 +1066,7 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 			Sender:            sender.Addr,
 			ApplicationID:     0,
 			ApprovalProgram:   expensiveAppSource,
-			ClearStateProgram: `#pragma version 6; int 0`,
+			ClearStateProgram: "#pragma version 6\nint 0",
 		})
 		// Expensive 700 repetition of int 1 and pop total cost 1404
 		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -1040,7 +1132,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, false)
 
 	sender := env.Accounts[0]
 
@@ -1051,7 +1143,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 		Sender:            sender.Addr,
 		ApplicationID:     0,
 		ApprovalProgram:   expensiveAppSource,
-		ClearStateProgram: `#pragma version 6; int 0`,
+		ClearStateProgram: "#pragma version 6\nint 0",
 	})
 	// Expensive 700 repetition of int 1 and pop total cost 1404
 	expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -1248,7 +1340,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, false)
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -1433,7 +1525,6 @@ int 1`
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
-		receiver := env.Accounts[1]
 
 		futureAppID := basics.AppIndex(1001)
 
@@ -1449,7 +1540,6 @@ int 1`
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
-			Accounts:        []basics.Address{receiver.Addr},
 			ApplicationArgs: [][]byte{[]byte("first-arg")},
 		})
 
@@ -1507,6 +1597,730 @@ int 1`
 				},
 			},
 			expectedError: "logic eval error: program logs too large. 66150 bytes >  65536 bytes limit.",
+		}
+	})
+}
+
+// The program is originated from pyteal source for c2c test over betanet:
+// https://github.com/ahangsu/c2c-testscript/blob/master/c2c_test/max_depth/app.py
+//
+// To fully test the PC exposure, we added opt-in and clear-state calls,
+// between funding and calling with on-complete deletion.
+// The modified version here: https://gist.github.com/ahangsu/7839f558dd36ad7117c0a12fb1dcc63a
+const maxDepthTealApproval = `#pragma version 8
+txn ApplicationID
+int 0
+==
+bnz main_l6
+txn OnCompletion
+int OptIn
+==
+bnz main_l6
+txn NumAppArgs
+int 1
+==
+bnz main_l3
+err
+main_l3:
+global CurrentApplicationID
+app_params_get AppApprovalProgram
+store 1
+store 0
+global CurrentApplicationID
+app_params_get AppClearStateProgram
+store 3
+store 2
+global CurrentApplicationAddress
+acct_params_get AcctBalance
+store 5
+store 4
+load 1
+assert
+load 3
+assert
+load 5
+assert
+int 2
+txna ApplicationArgs 0
+btoi
+exp
+itob
+log
+txna ApplicationArgs 0
+btoi
+int 0
+>
+bnz main_l5
+main_l4:
+int 1
+return
+main_l5:
+itxn_begin
+  int appl
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 0
+  itxn_field ApprovalProgram
+  load 2
+  itxn_field ClearStateProgram
+itxn_submit
+itxn_begin
+  int pay
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 4
+  int 100000
+  -
+  itxn_field Amount
+  byte "appID"
+  gitxn 0 CreatedApplicationID
+  itob
+  concat
+  sha512_256
+  itxn_field Receiver
+itxn_next
+  int appl
+  itxn_field TypeEnum
+  itxn CreatedApplicationID
+  itxn_field ApplicationID
+  int 0
+  itxn_field Fee
+  int OptIn
+  itxn_field OnCompletion
+itxn_next
+  int appl
+  itxn_field TypeEnum
+  itxn CreatedApplicationID
+  itxn_field ApplicationID
+  int 0
+  itxn_field Fee
+  int ClearState
+  itxn_field OnCompletion
+itxn_next
+  int appl
+  itxn_field TypeEnum
+  txna ApplicationArgs 0
+  btoi
+  int 1
+  -
+  itob
+  itxn_field ApplicationArgs
+  itxn CreatedApplicationID
+  itxn_field ApplicationID
+  int 0
+  itxn_field Fee
+  int DeleteApplication
+  itxn_field OnCompletion
+itxn_submit
+b main_l4
+main_l6:
+int 1
+return`
+
+func TestMaxDepthAppWithPCTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   maxDepthTealApproval,
+			ClearStateProgram: "#pragma version 8\nint 1",
+		})
+
+		MaxDepth := 2
+		MinBalance := env.TxnInfo.CurrentProtocolParams().MinBalance
+		MinFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+
+		paymentTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   MinBalance * uint64(MaxDepth+1),
+		})
+
+		callsMaxDepth := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{{byte(MaxDepth)}},
+			Fee:             MinFee * uint64(MaxDepth*5+2),
+		})
+
+		txntest.Group(&createTxn, &paymentTxn, &callsMaxDepth)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedPaymentTxn := paymentTxn.Txn().Sign(sender.Sk)
+		signedCallsMaxDepth := callsMaxDepth.Txn().Sign(sender.Sk)
+
+		creationOpcodeTrace := []simulation.OpcodeTraceUnit{
+			{PC: 1},
+			{PC: 6},
+			{PC: 8},
+			{PC: 9},
+			{PC: 10},
+			{PC: 185},
+			{PC: 186},
+		}
+
+		clearStateOpcodeTrace := []simulation.OpcodeTraceUnit{{PC: 1}}
+
+		recursiveLongOpcodeTrace := []simulation.OpcodeTraceUnit{
+			{PC: 1},
+			{PC: 6},
+			{PC: 8},
+			{PC: 9},
+			{PC: 10},
+			{PC: 13},
+			{PC: 15},
+			{PC: 16},
+			{PC: 17},
+			{PC: 20},
+			{PC: 22},
+			{PC: 23},
+			{PC: 24},
+			{PC: 28},
+			{PC: 30},
+			{PC: 32},
+			{PC: 34},
+			{PC: 36},
+			{PC: 38},
+			{PC: 40},
+			{PC: 42},
+			{PC: 44},
+			{PC: 46},
+			{PC: 48},
+			{PC: 50},
+			{PC: 52},
+			{PC: 54},
+			{PC: 55},
+			{PC: 57},
+			{PC: 58},
+			{PC: 60},
+			{PC: 61},
+			{PC: 63},
+			{PC: 66},
+			{PC: 67},
+			{PC: 68},
+			{PC: 69},
+			{PC: 70},
+			{PC: 73},
+			{PC: 74},
+			{PC: 75},
+			{PC: 76},
+			{PC: 81},
+			{PC: 82},
+			{PC: 83},
+			{PC: 85},
+			{PC: 86},
+			{PC: 88},
+			{PC: 90},
+			{PC: 92},
+			{PC: 94},
+			{PC: 96, SpawnedInners: []int{0}},
+			{PC: 97},
+			{PC: 98},
+			{PC: 99},
+			{PC: 101},
+			{PC: 102},
+			{PC: 104},
+			{PC: 106},
+			{PC: 110},
+			{PC: 111},
+			{PC: 113},
+			{PC: 120},
+			{PC: 123},
+			{PC: 124},
+			{PC: 125},
+			{PC: 126},
+			{PC: 128},
+			{PC: 129},
+			{PC: 130},
+			{PC: 132},
+			{PC: 134},
+			{PC: 136},
+			{PC: 137},
+			{PC: 139},
+			{PC: 140},
+			{PC: 142},
+			{PC: 143},
+			{PC: 144},
+			{PC: 146},
+			{PC: 148},
+			{PC: 150},
+			{PC: 151},
+			{PC: 153},
+			{PC: 155},
+			{PC: 157},
+			{PC: 158},
+			{PC: 159},
+			{PC: 161},
+			{PC: 164},
+			{PC: 165},
+			{PC: 166},
+			{PC: 167},
+			{PC: 168},
+			{PC: 170},
+			{PC: 172},
+			{PC: 174},
+			{PC: 175},
+			{PC: 177},
+			{PC: 179},
+			{PC: 181, SpawnedInners: []int{1, 2, 3, 4}},
+			{PC: 182},
+			{PC: 79},
+			{PC: 80},
+		}
+
+		optInTrace := []simulation.OpcodeTraceUnit{
+			{PC: 1},
+			{PC: 6},
+			{PC: 8},
+			{PC: 9},
+			{PC: 10},
+			{PC: 13},
+			{PC: 15},
+			{PC: 16},
+			{PC: 17},
+			{PC: 185},
+			{PC: 186},
+		}
+
+		finalDepthTrace := []simulation.OpcodeTraceUnit{
+			{PC: 1},
+			{PC: 6},
+			{PC: 8},
+			{PC: 9},
+			{PC: 10},
+			{PC: 13},
+			{PC: 15},
+			{PC: 16},
+			{PC: 17},
+			{PC: 20},
+			{PC: 22},
+			{PC: 23},
+			{PC: 24},
+			{PC: 28},
+			{PC: 30},
+			{PC: 32},
+			{PC: 34},
+			{PC: 36},
+			{PC: 38},
+			{PC: 40},
+			{PC: 42},
+			{PC: 44},
+			{PC: 46},
+			{PC: 48},
+			{PC: 50},
+			{PC: 52},
+			{PC: 54},
+			{PC: 55},
+			{PC: 57},
+			{PC: 58},
+			{PC: 60},
+			{PC: 61},
+			{PC: 63},
+			{PC: 66},
+			{PC: 67},
+			{PC: 68},
+			{PC: 69},
+			{PC: 70},
+			{PC: 73},
+			{PC: 74},
+			{PC: 75},
+			{PC: 76},
+			{PC: 79},
+			{PC: 80},
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedPaymentTxn, signedCallsMaxDepth},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{ApplicationID: futureAppID},
+								},
+								AppBudgetConsumed: 7,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: creationOpcodeTrace,
+								},
+							},
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: 0,
+										EvalDelta: transactions.EvalDelta{
+											Logs: []string{string(uint64ToBytes(1 << MaxDepth))},
+											InnerTxns: []transactions.SignedTxnWithAD{
+												{
+													ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 3},
+												},
+												{},
+												{},
+												{},
+												{
+													ApplyData: transactions.ApplyData{
+														EvalDelta: transactions.EvalDelta{
+															Logs: []string{string(uint64ToBytes(1 << (MaxDepth - 1)))},
+															InnerTxns: []transactions.SignedTxnWithAD{
+																{
+																	ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 8},
+																},
+																{},
+																{},
+																{},
+																{
+																	ApplyData: transactions.ApplyData{
+																		EvalDelta: transactions.EvalDelta{
+																			Logs: []string{string(uint64ToBytes(1 << (MaxDepth - 2)))},
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 378,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: recursiveLongOpcodeTrace,
+									InnerTraces: []simulation.TransactionTrace{
+										{
+											ApprovalProgramTrace: creationOpcodeTrace,
+										},
+										{},
+										{
+											ApprovalProgramTrace: optInTrace,
+										},
+										{
+											ClearStateProgramTrace: clearStateOpcodeTrace,
+										},
+										{
+											ApprovalProgramTrace: recursiveLongOpcodeTrace,
+											InnerTraces: []simulation.TransactionTrace{
+												{
+													ApprovalProgramTrace: creationOpcodeTrace,
+												},
+												{},
+												{
+													ApprovalProgramTrace: optInTrace,
+												},
+												{
+													ClearStateProgramTrace: clearStateOpcodeTrace,
+												},
+												{
+													ApprovalProgramTrace: finalDepthTrace,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    4200,
+						AppBudgetConsumed: 385,
+					},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+		}
+	})
+}
+
+func TestLogicSigPCExposure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 8
+` + strings.Repeat(`byte "a"; keccak256; pop
+`, 2) + `int 1`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
+byte "hello"; log; int 1`,
+			ClearStateProgram: "#pragma version 8\n int 1",
+		})
+
+		txntest.Group(&payTxn, &appCallTxn)
+
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedPayTxn, signedAppCallTxn},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: 1002,
+										EvalDelta:     transactions.EvalDelta{Logs: []string{"hello"}},
+									},
+								},
+								AppBudgetConsumed:      3,
+								LogicSigBudgetConsumed: 266,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 8},
+										{PC: 9},
+									},
+									LogicSigTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 5},
+										{PC: 6},
+										{PC: 7},
+										{PC: 8},
+										{PC: 9},
+										{PC: 10},
+										{PC: 11},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    700,
+						AppBudgetConsumed: 3,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestFailingLogicSig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 8
+` + strings.Repeat(`byte "a"; keccak256; pop
+`, 2) + `int 0`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
+byte "hello"; log; int 1`,
+			ClearStateProgram: "#pragma version 8\n int 1",
+		})
+
+		txntest.Group(&payTxn, &appCallTxn)
+
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedPayTxn, signedAppCallTxn},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			developerAPI:  true,
+			expectedError: "rejected by logic",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{1},
+						Txns: []simulation.TxnResult{
+							{},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{},
+								},
+								LogicSigBudgetConsumed: 266,
+								Trace: &simulation.TransactionTrace{
+									LogicSigTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 5},
+										{PC: 6},
+										{PC: 7},
+										{PC: 8},
+										{PC: 9},
+										{PC: 10},
+										{PC: 11},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestFailingApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 8
+` + strings.Repeat(`byte "a"; keccak256; pop
+`, 2) + `int 1`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
+byte "hello"; log; int 0`,
+			ClearStateProgram: "#pragma version 8\n int 1",
+		})
+
+		txntest.Group(&payTxn, &appCallTxn)
+
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedPayTxn, signedAppCallTxn},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			developerAPI:  true,
+			expectedError: "rejected by ApprovalProgram",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{1},
+						Txns: []simulation.TxnResult{
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: 1002,
+										EvalDelta:     transactions.EvalDelta{Logs: []string{"hello"}},
+									},
+								},
+								AppBudgetConsumed:      3,
+								LogicSigBudgetConsumed: 266,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 8},
+										{PC: 9},
+									},
+									LogicSigTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 5},
+										{PC: 6},
+										{PC: 7},
+										{PC: 8},
+										{PC: 9},
+										{PC: 10},
+										{PC: 11},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    700,
+						AppBudgetConsumed: 3,
+					},
+				},
+			},
 		}
 	})
 }
@@ -1670,7 +2484,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger, config.GetDefaultLocal())
+	s := simulation.MakeSimulator(env.Ledger, false)
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -2227,34 +3041,6 @@ func TestMockTracerScenarios(t *testing.T) {
 	}
 }
 
-func TestUnlimitedResourceAccessDisabled(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	env := simulationtesting.PrepareSimulatorTest(t)
-	defer env.Close()
-	nodeConfig := config.GetDefaultLocal()
-	require.False(t, nodeConfig.EnableSimulationUnlimitedResourceAccess)
-	s := simulation.MakeSimulator(env.Ledger, nodeConfig)
-
-	sender := env.Accounts[0]
-
-	txn := env.TxnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   sender.Addr,
-		Receiver: sender.Addr,
-	})
-	stxn := txn.Txn().Sign(sender.Sk)
-
-	_, err := s.Simulate(
-		simulation.Request{
-			TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
-			AllowUnlimitedResourceAccess: true,
-		})
-	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
-	require.ErrorContains(t, err, "unlimited resource access is not enabled in node configuration: EnableSimulationUnlimitedResourceAccess is false")
-}
-
 // TestUnlimitedResourceAccess tests that app calls can access resources that they otherwise
 // should not be able to if AllowUnlimitedResourceAccess is enabled. Additional tests follow for
 // special cases.
@@ -2357,14 +3143,11 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 				})
 				stxn := txn.Txn().Sign(sender.Sk)
 
-				nodeConfig := config.GetDefaultLocal()
-				nodeConfig.EnableSimulationUnlimitedResourceAccess = true
 				return simulationTestCase{
 					input: simulation.Request{
 						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
 						AllowUnlimitedResourceAccess: true,
 					},
-					nodeConfig: &nodeConfig,
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
 						LastRound: env.TxnInfo.LatestRound(),
@@ -2468,14 +3251,11 @@ int 1
 					expectedFailedAt = simulation.TxnPath{0}
 				}
 
-				nodeConfig := config.GetDefaultLocal()
-				nodeConfig.EnableSimulationUnlimitedResourceAccess = true
 				return simulationTestCase{
 					input: simulation.Request{
 						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
 						AllowUnlimitedResourceAccess: true,
 					},
-					nodeConfig:    &nodeConfig,
 					expectedError: expectedError,
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
@@ -2579,14 +3359,11 @@ int 1
 				})
 				stxn := txn.Txn().Sign(sender.Sk)
 
-				nodeConfig := config.GetDefaultLocal()
-				nodeConfig.EnableSimulationUnlimitedResourceAccess = true
 				return simulationTestCase{
 					input: simulation.Request{
 						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
 						AllowUnlimitedResourceAccess: true,
 					},
-					nodeConfig: &nodeConfig,
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
 						LastRound: env.TxnInfo.LatestRound(),

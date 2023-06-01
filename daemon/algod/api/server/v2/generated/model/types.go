@@ -542,8 +542,8 @@ type LedgerStateDelta = map[string]interface{}
 // LedgerStateDeltaForTransactionGroup Contains a ledger delta for a single transaction group
 type LedgerStateDeltaForTransactionGroup struct {
 	// Delta Ledger StateDelta object
-	Delta LedgerStateDelta `json:"delta"`
-	Ids   []string         `json:"ids"`
+	Delta LedgerStateDelta `json:"Delta"`
+	Ids   []string         `json:"Ids"`
 }
 
 // LightBlockHeaderProof Proof of membership and position of a light block header.
@@ -638,8 +638,11 @@ type SimulateRequest struct {
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
-	// AllowUnlimitedResourceAccess Allow unlimited resource access during simulation. The node must set the config value EnableSimulationUnlimitedResourceAccess to true in order to allow this option.
+	// AllowUnlimitedResourceAccess Allow unlimited resource access during simulation.
 	AllowUnlimitedResourceAccess *bool `json:"allow-unlimited-resource-access,omitempty"`
+
+	// ExecTraceConfig An object that configures simulation execution trace.
+	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
 
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
@@ -652,6 +655,12 @@ type SimulateRequest struct {
 type SimulateRequestTransactionGroup struct {
 	// Txns An atomic transaction group.
 	Txns []json.RawMessage `json:"txns"`
+}
+
+// SimulateTraceConfig An object that configures simulation execution trace.
+type SimulateTraceConfig struct {
+	// Enable A boolean option for opting in execution trace features simulation endpoint.
+	Enable *bool `json:"enable,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -677,6 +686,9 @@ type SimulateTransactionResult struct {
 	// AppBudgetConsumed Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.
 	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
 
+	// ExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
+	ExecTrace *SimulationTransactionExecTrace `json:"exec-trace,omitempty"`
+
 	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
 	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
 
@@ -700,6 +712,30 @@ type SimulationEvalOverrides struct {
 
 	// MaxLogSize The maximum byte number to log during simulation
 	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
+}
+
+// SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
+type SimulationOpcodeTraceUnit struct {
+	// Pc The program counter of the current opcode being evaluated.
+	Pc uint64 `json:"pc"`
+
+	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
+	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`
+}
+
+// SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
+type SimulationTransactionExecTrace struct {
+	// ApprovalProgramTrace Program trace that contains a trace of opcode effects in an approval program.
+	ApprovalProgramTrace *[]SimulationOpcodeTraceUnit `json:"approval-program-trace,omitempty"`
+
+	// ClearStateProgramTrace Program trace that contains a trace of opcode effects in a clear state program.
+	ClearStateProgramTrace *[]SimulationOpcodeTraceUnit `json:"clear-state-program-trace,omitempty"`
+
+	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
+	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
+
+	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
+	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
 }
 
 // StateDelta Application state delta.
@@ -1069,6 +1105,9 @@ type SimulateResponse struct {
 	// EvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
 	EvalOverrides *SimulationEvalOverrides `json:"eval-overrides,omitempty"`
 
+	// ExecTraceConfig An object that configures simulation execution trace.
+	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
+
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
@@ -1094,8 +1133,10 @@ type SupplyResponse struct {
 	TotalMoney uint64 `json:"total-money"`
 }
 
-// TransactionGroupLedgerStateDeltaForRoundResponse defines model for TransactionGroupLedgerStateDeltaForRoundResponse.
-type TransactionGroupLedgerStateDeltaForRoundResponse = []LedgerStateDeltaForTransactionGroup
+// TransactionGroupLedgerStateDeltasForRoundResponse defines model for TransactionGroupLedgerStateDeltasForRoundResponse.
+type TransactionGroupLedgerStateDeltasForRoundResponse struct {
+	Deltas []LedgerStateDeltaForTransactionGroup `json:"Deltas"`
+}
 
 // TransactionParametersResponse TransactionParams contains the parameters that help a client construct
 // a new transaction.
