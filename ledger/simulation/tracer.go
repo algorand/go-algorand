@@ -57,11 +57,6 @@ func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledg
 	tracer.relativeCursor = tracer.relativeCursor[:top]
 }
 
-func (tracer *cursorEvalTracer) relativeGroupIndex() int {
-	top := len(tracer.relativeCursor) - 1
-	return tracer.relativeCursor[top]
-}
-
 func (tracer *cursorEvalTracer) absolutePath() TxnPath {
 	path := make(TxnPath, len(tracer.relativeCursor))
 	for i, relativeGroupIndex := range tracer.relativeCursor {

@@ -69,16 +69,9 @@ func (info TxnInfo) NewTxn(txn txntest.Txn) txntest.Txn {
 	return txn
 }
 
-// InnerTxn sets network- and parent-specific values to the given inner transaction. This is only
-// useful for creating an expected inner transaction to compare against.
-func (info TxnInfo) InnerTxn(parent transactions.SignedTxn, inner txntest.Txn) txntest.Txn {
-	inner.FirstValid = parent.Txn.FirstValid
-	inner.LastValid = parent.Txn.LastValid
-	inner.FillDefaults(info.CurrentProtocolParams())
-	return inner
-}
-
-// Environment contains the ledger and testing environment for transaction simulations
+// Environment contains the ledger and testing environment for transaction simulations. It also
+// provides convenience methods to execute transactions against the ledger prior to simulation. This
+// allows you to create specific a ledger state before running a simulation.
 type Environment struct {
 	t      *testing.T
 	Ledger *data.Ledger
@@ -241,7 +234,7 @@ func (env *Environment) Rekey(account, rekeyTo basics.Address) {
 }
 
 // PrepareSimulatorTest creates an environment to test transaction simulations. The caller is
-// responsible for calling Close() on the returned environment.
+// responsible for calling Close() on the returned Environment.
 func PrepareSimulatorTest(t *testing.T) Environment {
 	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 100)
 

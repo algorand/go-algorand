@@ -992,7 +992,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			cx.available.boxes[br] = false
 
 			used = basics.AddSaturate(used, size)
-			if used > cx.ioBudget && !cx.UnlimitedResourceAccess {
+			if used > cx.ioBudget {
 				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
 				if !cx.Proto.EnableBareBudgetError {
 					err = EvalError{err, "", gi, false}
@@ -4779,10 +4779,6 @@ func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 		return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
 	}
 
-	if cx.UnlimitedResourceAccess {
-		return aid, nil
-	}
-
 	return 0, fmt.Errorf("unavailable App %d", ref)
 }
 
@@ -4887,10 +4883,6 @@ func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err erro
 	// a new network - don't use indexes for references, use the Asset ID
 	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
-	}
-
-	if cx.UnlimitedResourceAccess {
-		return aid, nil
 	}
 
 	return 0, fmt.Errorf("unavailable Asset %d", ref)
@@ -5198,10 +5190,6 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
-	if cx.UnlimitedResourceAccess {
-		return aid, nil
-	}
-
 	return 0, fmt.Errorf("unavailable Asset %d", aid)
 }
 
@@ -5233,6 +5221,10 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 		}
 	}
 
+	if cx.UnlimitedResourceAccess && aid > lastForbiddenResource {
+		return true
+	}
+
 	return false
 }
 
@@ -5246,10 +5238,6 @@ func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 	aid := basics.AppIndex(uint)
 
 	if cx.availableApp(aid) {
-		return aid, nil
-	}
-
-	if cx.UnlimitedResourceAccess {
 		return aid, nil
 	}
 
@@ -5279,6 +5267,10 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 		if _, ok := cx.available.sharedApps[aid]; ok {
 			return true
 		}
+	}
+
+	if cx.UnlimitedResourceAccess && aid > lastForbiddenResource {
+		return true
 	}
 
 	return false
