@@ -626,6 +626,9 @@ func (cx *EvalContext) RunMode() RunMode {
 	return cx.runModeFlags
 }
 
+// PC returns the program counter of the current application being evaluated
+func (cx *EvalContext) PC() int { return cx.pc }
+
 // avmType describes the type of a value on the operand stack
 // avmTypes are a subset of StackTypes
 type avmType byte
