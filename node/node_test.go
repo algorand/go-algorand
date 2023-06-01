@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
@@ -538,4 +539,44 @@ func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 			require.Equal(t, test.expectedInt, getOfflineClosedStatus(test.acctData))
 		})
 	}
+}
+
+// TestNodeDuplicateTransactions creates a network of 4 nodes R, N1-N3, and check nodes do not receive
+// duplicate transactions back
+func TestNodeDuplicateTransactions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+
+	var allocation []bookkeeping.GenesisAllocation
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+		Allocation:  allocation,
+	}
+
+	cfg := config.GetDefaultLocal()
+
+	neighbors := make([]string, numAccounts)
+	for i := range neighbors {
+		neighbors[i] = "127.0.0.1:" + strconv.Itoa(10000+i)
+	}
+
+	wallets := make([]string, numAccounts)
+	nodes := make([]*AlgorandFullNode, numAccounts)
+	rootDirs := make([]string, 0)
+
+	for i := range wallets {
+		rootDirectory := t.TempDir()
+		rootDirs = append(rootDirs, rootDirectory)
+
+		defaultConfig.NetAddress = neighbors[i]
+		defaultConfig.SaveToDisk(rootDirectory)
+	}
+
+	p2pNode, err := network.NewWebsocketNetwork(log, cfg, phonebookAddresses, genesis.ID(), genesis.Network, node)
 }
