@@ -882,6 +882,16 @@ func parseStackTypes(spec string) StackTypes {
 	return types
 }
 
+func filterNoneTypes(sts StackTypes) StackTypes {
+	var filteredSts = make(StackTypes, 0, len(sts))
+	for i := range sts {
+		if sts[i].AVMType != avmNone {
+			filteredSts = append(filteredSts, sts[i])
+		}
+	}
+	return filteredSts
+}
+
 // panicError wraps a recover() catching a panic()
 type panicError struct {
 	PanicValue interface{}

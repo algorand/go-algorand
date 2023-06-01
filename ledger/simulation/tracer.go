@@ -268,9 +268,17 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		}
 		*txnTrace.programTraceRef = append(*txnTrace.programTraceRef, tracer.makeOpcodeTraceUnit(cx))
 	}
+
+	if tracer.result.ReturnStackChange() {
+		// TODO something here
+	}
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
+	if tracer.result.ReturnStackChange() {
+		// TODO
+	}
+
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig ops
 		return

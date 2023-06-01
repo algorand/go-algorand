@@ -184,7 +184,15 @@ type OpcodeTraceUnit struct {
 	// this OpcodeTraceUnit.
 	SpawnedInners []int
 
-	// TODO add here for delta change
+	// Below are fields exposed with stack-change option activated
+	// Opcode line (source?)
+	TEALSource string
+
+	// deleted elements from stack, help backwards debugging
+	Deleted []basics.TealValue
+
+	// what has been added to stack
+	Added []basics.TealValue
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

@@ -106,6 +106,28 @@ func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, evalError erro
 	a.debugger.Complete(a.refreshDebugState(cx, evalError))
 }
 
+type StackChangeExplanation struct {
+	Deletions int
+	Additions int
+}
+
+type debugExplain func(*EvalContext) StackChangeExplanation
+
+func (p Proto) explain(e debugExplain) Proto {
+	p.Explain = e
+	return p
+}
+
+func defaultDebugExplain(argCount, retCount int) debugExplain {
+	return func(_ *EvalContext) StackChangeExplanation {
+		return StackChangeExplanation{Deletions: argCount, Additions: retCount}
+	}
+}
+
+func (cx *EvalContext) NextStackChange() StackChangeExplanation {
+	return OpSpecs[cx.program[cx.pc]].Explain(cx)
+}
+
 // WebDebugger represents a connection to tealdbg
 type WebDebugger struct {
 	URL string
