@@ -197,9 +197,9 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 				srcAcctPresent = true
 			}
 
-			ai, err := ac.AccountInformation(addr, true)
-			if err != nil {
-				return err
+			ai, aiErr := ac.AccountInformation(addr, true)
+			if aiErr != nil {
+				return aiErr
 			}
 			amt := ai.Amount
 

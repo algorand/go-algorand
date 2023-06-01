@@ -153,12 +153,12 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 
 		resCb := func(addr basics.Address, cidx basics.CreatableIndex, resData *trackerdb.ResourcesData, encodedResourceData []byte, lastResource bool) error {
 			if resData != nil {
-				hash, err := trackerdb.ResourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
-				if err != nil {
-					return err
+				hash, err2 := trackerdb.ResourcesHashBuilderV6(resData, addr, cidx, resData.UpdateRound, encodedResourceData)
+				if err2 != nil {
+					return err2
 				}
-				_, err = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
-				return err
+				_, err2 = iterator.insertStmt.ExecContext(ctx, lastAddrID, hash)
+				return err2
 			}
 			return nil
 		}
@@ -418,7 +418,7 @@ func processAllResources(
 		count++
 		if resourceCount > 0 && count == resourceCount {
 			// last resource to be included in chunk
-			err := callback(addr, aidx, &resData, buf, true)
+			err = callback(addr, aidx, &resData, buf, true)
 			return pendingResourceRow{}, count, err
 		}
 		err = callback(addr, aidx, &resData, buf, false)

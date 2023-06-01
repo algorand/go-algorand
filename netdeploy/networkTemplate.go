@@ -141,9 +141,9 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 				return
 			}
 
-			stdout, stderr, err := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
-			if err != nil {
-				return nil, nil, fmt.Errorf("goal account importrootkey failed: %w\nstdout: %s\nstderr: %s", err, stdout, stderr)
+			stdout, stderr, execErr := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
+			if execErr != nil {
+				return nil, nil, fmt.Errorf("goal account importrootkey failed: %w\nstdout: %s\nstderr: %s", execErr, stdout, stderr)
 			}
 		}
 
