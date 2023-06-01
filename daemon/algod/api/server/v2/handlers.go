@@ -929,26 +929,28 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type PreEncodedSimulateTxnResult struct {
-	Txn                    PreEncodedTxInfo `codec:"txn-result"`
-	AppBudgetConsumed      *uint64          `codec:"app-budget-consumed,omitempty"`
-	LogicSigBudgetConsumed *uint64          `codec:"logic-sig-budget-consumed,omitempty"`
+	Txn                    PreEncodedTxInfo                      `codec:"txn-result"`
+	AppBudgetConsumed      *uint64                               `codec:"app-budget-consumed,omitempty"`
+	LogicSigBudgetConsumed *uint64                               `codec:"logic-sig-budget-consumed,omitempty"`
+	TransactionTrace       *model.SimulationTransactionExecTrace `codec:"exec-trace,omitempty"`
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
 type PreEncodedSimulateTxnGroupResult struct {
-	Txns              []PreEncodedSimulateTxnResult `codec:"txn-results"`
-	FailureMessage    *string                       `codec:"failure-message,omitempty"`
-	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
 	AppBudgetAdded    *uint64                       `codec:"app-budget-added,omitempty"`
 	AppBudgetConsumed *uint64                       `codec:"app-budget-consumed,omitempty"`
+	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
+	FailureMessage    *string                       `codec:"failure-message,omitempty"`
+	Txns              []PreEncodedSimulateTxnResult `codec:"txn-results"`
 }
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
 type PreEncodedSimulateResponse struct {
-	Version       uint64                             `codec:"version"`
-	LastRound     uint64                             `codec:"last-round"`
-	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
-	EvalOverrides *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
+	Version         uint64                             `codec:"version"`
+	LastRound       uint64                             `codec:"last-round"`
+	TxnGroups       []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	EvalOverrides   *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
+	ExecTraceConfig simulation.ExecTraceConfig         `codec:"exec-trace-config,omitempty"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
@@ -962,6 +964,7 @@ type PreEncodedSimulateRequest struct {
 	AllowEmptySignatures bool                                        `codec:"allow-empty-signatures,omitempty"`
 	AllowMoreLogging     bool                                        `codec:"allow-more-logging,omitempty"`
 	ExtraOpcodeBudget    uint64                                      `codec:"extra-opcode-budget,omitempty"`
+	ExecTraceConfig      simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
