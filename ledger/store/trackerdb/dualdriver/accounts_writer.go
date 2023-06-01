@@ -37,7 +37,7 @@ func (aw *accountsWriter) DeleteAccount(accRef trackerdb.AccountRef) (rowsAffect
 	// parse ref
 	xRef := accRef.(accountRef)
 	// Note: rowsAffected is ignored because it is not possible to determine this correctly in all engines
-	_, errP := aw.primary.DeleteAccount(xRef.primary)
+	rowsAffectedP, errP := aw.primary.DeleteAccount(xRef.primary)
 	_, errS := aw.secondary.DeleteAccount(xRef.secondary)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
@@ -45,13 +45,13 @@ func (aw *accountsWriter) DeleteAccount(accRef trackerdb.AccountRef) (rowsAffect
 		return
 	}
 	// check results match
-	return
+	return rowsAffectedP, nil
 }
 
 // DeleteCreatable implements trackerdb.AccountsWriter
 func (aw *accountsWriter) DeleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {
 	// Note: rowsAffected is ignored because it is not possible to determine this correctly in all engines
-	_, errP := aw.primary.DeleteCreatable(cidx, ctype)
+	rowsAffectedP, errP := aw.primary.DeleteCreatable(cidx, ctype)
 	_, errS := aw.secondary.DeleteCreatable(cidx, ctype)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
@@ -59,7 +59,7 @@ func (aw *accountsWriter) DeleteCreatable(cidx basics.CreatableIndex, ctype basi
 		return
 	}
 	// check results match
-	return
+	return rowsAffectedP, nil
 }
 
 // DeleteKvPair implements trackerdb.AccountsWriter
@@ -75,14 +75,14 @@ func (aw *accountsWriter) DeleteResource(accRef trackerdb.AccountRef, aidx basic
 	// parse ref
 	xRef := accRef.(accountRef)
 	// Note: rowsAffected is ignored because it is not possible to determine this correctly in all engines
-	_, errP := aw.primary.DeleteResource(xRef.primary, aidx)
+	rowsAffectedP, errP := aw.primary.DeleteResource(xRef.primary, aidx)
 	_, errS := aw.secondary.DeleteResource(xRef.secondary, aidx)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
 	if err != nil {
 		return
 	}
-	return
+	return rowsAffectedP, nil
 }
 
 // InsertAccount implements trackerdb.AccountsWriter
@@ -134,7 +134,7 @@ func (aw *accountsWriter) UpdateAccount(accRef trackerdb.AccountRef, normBalance
 	// parse ref
 	xRef := accRef.(accountRef)
 	// Note: rowsAffected is ignored because it is not possible to determine this correctly in all engines
-	_, errP := aw.primary.UpdateAccount(xRef.primary, normBalance, data)
+	rowsAffectedP, errP := aw.primary.UpdateAccount(xRef.primary, normBalance, data)
 	_, errS := aw.secondary.UpdateAccount(xRef.secondary, normBalance, data)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
@@ -142,7 +142,7 @@ func (aw *accountsWriter) UpdateAccount(accRef trackerdb.AccountRef, normBalance
 		return
 	}
 	// check results match
-	return
+	return rowsAffectedP, nil
 }
 
 // UpdateResource implements trackerdb.AccountsWriter
@@ -150,7 +150,7 @@ func (aw *accountsWriter) UpdateResource(accRef trackerdb.AccountRef, aidx basic
 	// parse ref
 	xRef := accRef.(accountRef)
 	// Note: rowsAffected is ignored because it is not possible to determine this correctly in all engines
-	_, errP := aw.primary.UpdateResource(xRef.primary, aidx, data)
+	rowsAffectedP, errP := aw.primary.UpdateResource(xRef.primary, aidx, data)
 	_, errS := aw.secondary.UpdateResource(xRef.secondary, aidx, data)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
@@ -158,7 +158,7 @@ func (aw *accountsWriter) UpdateResource(accRef trackerdb.AccountRef, aidx basic
 		return
 	}
 	// check results match
-	return
+	return rowsAffectedP, nil
 }
 
 // UpsertKvPair implements trackerdb.AccountsWriter

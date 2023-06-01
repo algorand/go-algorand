@@ -34,6 +34,7 @@ func init() {
 	registerTest("online-accounts-history", CustomTestOnlineAccountHistory)
 	registerTest("online-accounts-totals", CustomTestOnlineAccountTotals)
 	registerTest("online-accounts-delete", CustomTestOnlineAccountsDelete)
+	registerTest("online-accounts-expired", CustomTestAccountsOnlineExpired)
 }
 
 func CustomTestOnlineAccountsWriteRead(t *customT) {
@@ -465,4 +466,89 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 	poaB, err := oar.LookupOnline(addrB, basics.Round(2))
 	require.NoError(t, err)
 	require.NotNil(t, poaB.Ref) // B was found
+}
+
+func CustomTestAccountsOnlineExpired(t *customT) {
+	oaw, err := t.db.MakeOnlineAccountsOptimizedWriter(true)
+	require.NoError(t, err)
+
+	ar, err := t.db.MakeAccountsReader()
+	require.NoError(t, err)
+
+	// generate some test data
+	addrA := RandomAddress()
+	dataA1 := trackerdb.BaseOnlineAccountData{
+		BaseVotingData: trackerdb.BaseVotingData{VoteLastValid: basics.Round(2)},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(20)},
+		RewardsBase:    uint64(0),
+	}
+	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto)
+
+	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA1, dataA1, uint64(0), uint64(2))
+	require.NoError(t, err)
+
+	// generate some test data
+	dataA2 := trackerdb.BaseOnlineAccountData{
+		BaseVotingData: trackerdb.BaseVotingData{VoteLastValid: basics.Round(5)},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
+		RewardsBase:    uint64(0),
+	}
+	normalizedBalA2 := dataA2.NormalizedOnlineBalance(t.proto)
+
+	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA2, dataA2, uint64(1), uint64(5))
+	require.NoError(t, err)
+
+	// generate some test data
+	addrB := RandomAddress()
+	dataB1 := trackerdb.BaseOnlineAccountData{
+		// some value so its NOT empty
+		BaseVotingData: trackerdb.BaseVotingData{VoteLastValid: basics.Round(7)},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(75)},
+		RewardsBase:    uint64(0),
+	}
+	normalizedBalB1 := dataB1.NormalizedOnlineBalance(t.proto)
+
+	_, err = oaw.InsertOnlineAccount(addrB, normalizedBalB1, dataB1, uint64(2), uint64(7))
+	require.NoError(t, err)
+
+	// timeline
+	// round 0: A touched [0]    				// A expires at 2
+	// round 1: A touched [1,0]  				// A expires at 5
+	// round 2: B touched [2] + A remains [1,0] // A expires at 5, B expires at 7
+
+	//
+	// the test
+	//
+
+	// read (none)
+	expAccts, err := ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(0), t.proto, 0)
+	require.NoError(t, err)
+	require.Empty(t, expAccts)
+
+	// read (at acct round, voteRnd > lastValid)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(4), t.proto, 0)
+	require.NoError(t, err)
+	require.Len(t, expAccts, 1)
+	require.Equal(t, expAccts[addrA].MicroAlgosWithRewards, basics.MicroAlgos{Raw: uint64(20)}) // check item
+
+	// read (at acct round, voteRnd = lastValid)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(2), t.proto, 0)
+	require.NoError(t, err)
+	require.Empty(t, expAccts)
+
+	// read (at acct round, voteRnd < lastValid)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(1), t.proto, 0)
+	require.NoError(t, err)
+	require.Empty(t, expAccts)
+
+	// read (take latest exp value)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(1), basics.Round(4), t.proto, 0)
+	require.NoError(t, err)
+	require.Len(t, expAccts, 0)
+
+	// read (all)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(3), basics.Round(20), t.proto, 0)
+	require.Len(t, expAccts, 2)
+	require.Equal(t, expAccts[addrA].MicroAlgosWithRewards, basics.MicroAlgos{Raw: uint64(100)}) // check item
+	require.Equal(t, expAccts[addrB].MicroAlgosWithRewards, basics.MicroAlgos{Raw: uint64(75)})  // check item
 }

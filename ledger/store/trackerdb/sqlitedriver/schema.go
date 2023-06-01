@@ -932,8 +932,8 @@ func reencodeAccounts(ctx context.Context, e db.Executable) (modifiedAccounts ui
 	return
 }
 
-func convertOnlineRoundParamsTail(ctx context.Context, tx *sql.Tx) error {
+func convertOnlineRoundParamsTail(ctx context.Context, e db.Executable) error {
 	// create vote last index
-	_, err := tx.ExecContext(ctx, createVoteLastValidIndex)
+	_, err := e.ExecContext(ctx, createVoteLastValidIndex)
 	return err
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/generickv"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/stretchr/testify/require"
 )
@@ -68,6 +69,7 @@ func runGenericTestsWithDB(t *testing.T, dbFactory func(config.ConsensusParams) 
 	for _, entry := range genericTests {
 		// run each test defined in the suite using the Golang subtest
 		t.Run(entry.name, func(t *testing.T) {
+			partitiontest.PartitionTest(t)
 			// instantiate a new db for each test
 			entry.f(&customT{dbFactory(proto), proto, t})
 		})
