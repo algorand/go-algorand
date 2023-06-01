@@ -5,7 +5,7 @@
 # ./block-generator runner \
 #       -d 5s \
 #       -i <path to conduit binary> \
-#       -c "host=localhost user=algorand password=algorand dbname=algorand port=15432 sslmode=disable" \
+#       -c "host=localhost user=algorand password=algorand dbname=generator_db port=15432 sslmode=disable" \
 #       -r results \
 #       -s scenarios/config.payment.small.yml
 
@@ -28,7 +28,7 @@ function start_postgres() {
      -e POSTGRES_PASSWORD=algorand \
      -e PGPASSWORD=algorand \
      -p $POSTGRES_PORT:5432 \
-     postgres
+     postgres:13-alpine
 
    sleep 5
 
@@ -42,8 +42,8 @@ function shutdown() {
 trap shutdown EXIT
 
 pushd $(dirname "$0") > /dev/null
-echo "Starting postgres container at: \n\t\"host=localhost user=algorand password=algorand dbname=algorand port=15432\""
+echo "Starting postgres container at: \n\t\"host=localhost user=algorand password=algorand dbname=generator_db port=15432\""
 start_postgres
 echo "Sleeping, use Ctrl-C to end test."
-sleep 1000000000000000
+sleep 100000000
 

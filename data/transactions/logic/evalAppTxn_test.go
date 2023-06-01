@@ -128,6 +128,71 @@ func TestFieldTypes(t *testing.T) {
 	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Nonparticipation;"), ep, "not a uint64")
 }
 
+func TestFieldLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, _, _ := MakeSampleEnv()
+
+	intProgram := "itxn_begin; int %d; itxn_field %s; int 1"
+	goodInt := func(field string, value interface{}) {
+		TestApp(t, fmt.Sprintf(intProgram, value, field), ep)
+	}
+	badInt := func(field string, value interface{}) {
+		// error messages are different for different fields, just use a space
+		// to indicate there should be an error, it will surely match any error.
+		TestApp(t, NoTrack(fmt.Sprintf(intProgram, value, field)), ep, " ")
+	}
+	testInt := func(field string, max int) {
+		goodInt(field, 1)
+		goodInt(field, max)
+		badInt(field, max+1)
+	}
+	testBool := func(field string) {
+		goodInt(field, 0)
+		goodInt(field, 1)
+		badInt(field, 2)
+	}
+	bytesProgram := "itxn_begin; byte %#v; itxn_field %s; int 1"
+	goodBytes := func(field string, value string) {
+		TestApp(t, fmt.Sprintf(bytesProgram, value, field), ep)
+	}
+	badBytes := func(field string, value string) {
+		// error messages are different for different fields, just use a space
+		// to indicate there should be an error, it will surely match any error.
+		TestApp(t, NoTrack(fmt.Sprintf(bytesProgram, value, field)), ep, " ")
+	}
+	testBytes := func(field string, maxLen int) {
+		goodBytes(field, "")
+		goodBytes(field, strings.Repeat("a", maxLen))
+		badBytes(field, strings.Repeat("a", maxLen+1))
+	}
+
+	// header
+	badInt("TypeEnum", 0)
+	testInt("TypeEnum", len(TxnTypeNames)-1)
+	//keyreg
+	testBool("Nonparticipation")
+	//acfg
+	goodInt("ConfigAssetTotal", 1)
+	goodInt("ConfigAssetTotal", uint64(1<<63))
+	goodInt("ConfigAssetDecimals", 0)
+	testInt("ConfigAssetDecimals", int(ep.Proto.MaxAssetDecimals))
+	testBool("ConfigAssetDefaultFrozen")
+	testBytes("ConfigAssetUnitName", ep.Proto.MaxAssetUnitNameBytes)
+	testBytes("ConfigAssetName", ep.Proto.MaxAssetNameBytes)
+	testBytes("ConfigAssetURL", ep.Proto.MaxAssetURLBytes)
+	//afrz
+	testBool("FreezeAssetFrozen")
+	// appl
+	testInt("OnCompletion", len(OnCompletionNames)-1)
+	testInt("LocalNumUint", int(ep.Proto.MaxLocalSchemaEntries))
+	testInt("LocalNumByteSlice", int(ep.Proto.MaxLocalSchemaEntries))
+	testInt("GlobalNumUint", int(ep.Proto.MaxGlobalSchemaEntries))
+	testInt("GlobalNumByteSlice", int(ep.Proto.MaxGlobalSchemaEntries))
+	testInt("ExtraProgramPages", int(ep.Proto.MaxExtraAppProgramPages))
+}
+
 func appAddr(id int) basics.Address {
 	return basics.AppIndex(id).Address()
 }
@@ -584,12 +649,12 @@ func TestNumInnerPooled(t *testing.T) {
 	TestApps(t, []string{short, long}, grp, LogicVersion, ledger)
 	TestApps(t, []string{long, short}, grp, LogicVersion, ledger)
 	TestApps(t, []string{long, long}, grp, LogicVersion, ledger,
-		NewExpect(1, "too many inner transactions"))
+		Exp(1, "too many inner transactions"))
 	grp = append(grp, grp[0])
 	TestApps(t, []string{short, long, long}, grp, LogicVersion, ledger,
-		NewExpect(2, "too many inner transactions"))
+		Exp(2, "too many inner transactions"))
 	TestApps(t, []string{long, long, long}, grp, LogicVersion, ledger,
-		NewExpect(1, "too many inner transactions"))
+		Exp(1, "too many inner transactions"))
 }
 
 func TestAssetCreate(t *testing.T) {
