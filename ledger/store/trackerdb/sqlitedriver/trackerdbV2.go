@@ -498,7 +498,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context
 		return fmt.Errorf("upgradeDatabaseSchema9 unable to replace kvstore nil entries with empty byte slices : %v", err)
 	}
 
-	err = convertOnlineRoundParamsTail(ctx, tx)
+	err = convertOnlineRoundParamsTail(ctx, e)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema10 unable to convert onlineroundparamstail: %v", err)
 	}

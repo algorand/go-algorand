@@ -376,6 +376,84 @@ func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pers
 	return result, nil
 }
 
+// ExpiredOnlineAccountsForRound implements trackerdb.AccountsReaderExt
+func (r *accountsReader) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (data map[basics.Address]*ledgercore.OnlineAccountData, err error) {
+	// The SQL at the time of writing:
+	//
+	// SELECT address, data, max(updround)
+	// FROM onlineaccounts
+	// WHERE updround <= ?               				   <---- ? = rnd
+	// GROUP BY address
+	// HAVING votelastvalid < ? and votelastvalid > 0      <---- ? = voteRnd
+	// ORDER BY address
+
+	// initialize return map
+	data = make(map[basics.Address]*ledgercore.OnlineAccountData)
+	expired := make(map[basics.Address]struct{})
+
+	// prepare iter over online accounts (by balance)
+	low := []byte(kvPrefixOnlineAccountBalance)
+	low = append(low, "-"...)
+	high := onlineAccountBalanceOnlyPartialKey(rnd)
+	high[len(high)-1]++
+	// reverse order iterator to get high-to-low
+	iter := r.kvr.NewIter(low, high, true)
+	defer iter.Close()
+
+	var value []byte
+
+	// add the other results to the map
+	for iter.Next() {
+		// key is <prefix>-<rnd>-<balance>-<addr> = <content>
+		key := iter.Key()
+
+		// get the addrOffset where the address starts
+		addrOffset := len(kvPrefixOnlineAccountBalance) + 1 + 8 + 1 + 8 + 1
+
+		// extract address
+		var addr basics.Address
+		copy(addr[:], key[addrOffset:])
+
+		// skip if already in map
+		// we keep only the one with `max(updround)`
+		// the reverse iter makes us hit the max first
+		if _, ok := data[addr]; ok {
+			continue
+		}
+		// when the a ccount is expired we do not add it to the data
+		// but we might have an older version that is not expired show up
+		// this would be wrong, so we skip those accounts if the latest version is expired
+		if _, ok := expired[addr]; ok {
+			continue
+		}
+
+		value, err = iter.Value()
+		if err != nil {
+			return
+		}
+
+		oa := trackerdb.BaseOnlineAccountData{}
+		err = protocol.Decode(value, &oa)
+		if err != nil {
+			return
+		}
+
+		// filter by vote expiration
+		// sql: HAVING votelastvalid < ? and votelastvalid > 0
+		// Note: we might have to add an extra index during insert if this doing this in memory becomes a perf issue
+		if !(oa.VoteLastValid < voteRnd && oa.VoteLastValid > 0) {
+			expired[addr] = struct{}{}
+			continue
+		}
+
+		// load the data as a ledgercore OnlineAccount
+		oadata := oa.GetOnlineAccountData(proto, rewardsLevel)
+		data[addr] = &oadata
+	}
+
+	return
+}
+
 func (r *accountsReader) LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*trackerdb.TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
 	// The SQL at the time of writing:
 	//

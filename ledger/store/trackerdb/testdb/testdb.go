@@ -26,7 +26,7 @@ import (
 )
 
 // OpenForTesting will create a testing store to be used on tests outside of the trackerdb package.
-func OpenForTesting(t *testing.T) trackerdb.Store {
+func OpenForTesting(t testing.TB) trackerdb.Store {
 	primaryDB, _ := sqlitedriver.OpenForTesting(t, true)
 	secondaryDB := pebbledbdriver.OpenForTesting(t, true)
 

@@ -277,6 +277,24 @@ func (ar *accountsReaderExt) OnlineAccountsAll(maxAccounts uint64) (accounts []t
 	return accountsP, nil
 }
 
+// ExpiredOnlineAccountsForRound implements trackerdb.AccountsReaderExt
+func (ar *accountsReaderExt) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (expAccounts map[basics.Address]*ledgercore.OnlineAccountData, err error) {
+	expAccountsP, errP := ar.primary.ExpiredOnlineAccountsForRound(rnd, voteRnd, proto, rewardsLevel)
+	expAccountsS, errS := ar.secondary.ExpiredOnlineAccountsForRound(rnd, voteRnd, proto, rewardsLevel)
+	// coalesce errors
+	err = coalesceErrors(errP, errS)
+	if err != nil {
+		return
+	}
+	// check results match
+	if !cmp.Equal(expAccountsP, expAccountsS) {
+		err = ErrInconsistentResult
+		return
+	}
+	// return primary results
+	return expAccountsP, nil
+}
+
 // Testing implements trackerdb.AccountsReaderExt
 func (ar *accountsReaderExt) Testing() trackerdb.AccountsReaderTestExt {
 	// TODO
