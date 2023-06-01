@@ -311,7 +311,7 @@ int 1`
 		ledger.NewAccount(appAddr(888), 50_000)
 		// First show that we're not just letting anything get passed in
 		logic.TestApp(t, fmt.Sprintf(callWithAccount, "int 32; bzero; byte 0x07; b|"), ep,
-			"invalid Account reference AAAAA")
+			"unavailable Account AAAAA")
 		// Now show we can pass our own address
 		logic.TestApp(t, fmt.Sprintf(callWithAccount, "global CurrentApplicationAddress"), ep)
 		// Or the address of one of our ForeignApps
@@ -550,12 +550,12 @@ int 1
 		appl.ApplicationArgs = [][]byte{senderAcct[:]}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&keyreg, &appl), 9, ledger)
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&keyreg, &appl), 8, ledger,
-			logic.Exp(1, "invalid Account reference "+senderAcct.String()))
+			logic.Exp(1, "unavailable Account "+senderAcct.String()))
 
 		// confirm you can't just pay _anybody_. receiverAcct is not in use at all.
 		appl.ApplicationArgs = [][]byte{receiverAcct[:]}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&keyreg, &appl), 9, ledger,
-			logic.Exp(1, "invalid Account reference "+receiverAcct.String()))
+			logic.Exp(1, "unavailable Account "+receiverAcct.String()))
 	})
 
 	t.Run("pay", func(t *testing.T) {
@@ -569,17 +569,17 @@ int 1
 		appl.ApplicationArgs = [][]byte{senderAcct[:]}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&pay, &appl), 9, ledger)
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&pay, &appl), 8, ledger,
-			logic.Exp(1, "invalid Account reference "+senderAcct.String()))
+			logic.Exp(1, "unavailable Account "+senderAcct.String()))
 
 		appl.ApplicationArgs = [][]byte{receiverAcct[:]}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&pay, &appl), 9, ledger)
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&pay, &appl), 8, ledger,
-			logic.Exp(1, "invalid Account reference "+receiverAcct.String()))
+			logic.Exp(1, "unavailable Account "+receiverAcct.String()))
 
 		// confirm you can't just pay _anybody_. otherAcct is not in use at all.
 		appl.ApplicationArgs = [][]byte{otherAcct[:]}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&pay, &appl), 9, ledger,
-			logic.Exp(1, "invalid Account reference "+otherAcct.String()))
+			logic.Exp(1, "unavailable Account "+otherAcct.String()))
 	})
 
 	t.Run("axfer", func(t *testing.T) {
@@ -595,7 +595,7 @@ int 1
 		appl.ApplicationArgs = [][]byte{senderAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&axfer, &appl), 9, ledger)
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&axfer, &appl), 8, ledger,
-			logic.Exp(1, "invalid Account reference "+senderAcct.String()))
+			logic.Exp(1, "unavailable Account "+senderAcct.String()))
 		// but can't axfer to sender, because appAcct doesn't have holding access for the asa
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger,
 			logic.Exp(1, "unavailable Holding"))
@@ -626,7 +626,7 @@ int 1
 		// or correct asset to an unknown address
 		appl.ApplicationArgs = [][]byte{unusedAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&axfer, &appl), 9, ledger,
-			logic.Exp(1, "invalid Account reference"))
+			logic.Exp(1, "unavailable Account"))
 
 		// appl can acfg the asset from tx0 (which requires asset available, not holding)
 		appl.ApplicationArgs = [][]byte{{asa1}}
@@ -686,9 +686,9 @@ int 1
 		// and not to the receiver which isn't in afrz
 		appl.ApplicationArgs = [][]byte{receiverAcct[:], {asa1}}
 		logic.TestApps(t, []string{payToArg}, txntest.Group(&appl, &afrz), 9, ledger,
-			logic.Exp(0, "invalid Account reference "+receiverAcct.String()))
+			logic.Exp(0, "unavailable Account "+receiverAcct.String()))
 		logic.TestApps(t, []string{axferToArgs}, txntest.Group(&appl, &afrz), 9, ledger,
-			logic.Exp(0, "invalid Account reference "+receiverAcct.String()))
+			logic.Exp(0, "unavailable Account "+receiverAcct.String()))
 
 		// otherAcct is the afrz target, it's holding and account are available
 		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa1}}
@@ -728,7 +728,7 @@ int 1
 		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&appl0, &appl), 9, ledger)
 		logic.TestApps(t, []string{"", payToArg}, txntest.Group(&appl0, &appl), 8, ledger, // version 8 does not get sharing
-			logic.Exp(1, "invalid Account reference "+otherAcct.String()))
+			logic.Exp(1, "unavailable Account "+otherAcct.String()))
 		// appl can (almost) axfer asa1 to the otherAcct because both are in tx0
 		logic.TestApps(t, []string{"", axferToArgs}, txntest.Group(&appl0, &appl), 9, ledger,
 			logic.Exp(1, "axfer Sender: unavailable Holding"))
@@ -781,7 +781,7 @@ int 1
 		// when the inner program is v8, it can't perform the pay
 		appl.ApplicationArgs = [][]byte{{88}, otherAcct[:], {asa1}}
 		logic.TestApps(t, []string{"", innerCall}, txntest.Group(&appl0, &appl), 9, ledger,
-			logic.Exp(1, "invalid Account reference "+otherAcct.String()))
+			logic.Exp(1, "unavailable Account "+otherAcct.String()))
 		// unless the caller passes in the account, but it can't pass the
 		// account because that also would give the called app access to the
 		// passed account's local state (which isn't available to the caller)
