@@ -638,8 +638,8 @@ type SimulateRequest struct {
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
-	// AllowUnlimitedResourceAccess Allow unlimited resource access during simulation.
-	AllowUnlimitedResourceAccess *bool `json:"allow-unlimited-resource-access,omitempty"`
+	// AllowUnnamedResources Allow access to unnamed resources during simulation.
+	AllowUnnamedResources *bool `json:"allow-unnamed-resources,omitempty"`
 
 	// ExecTraceConfig An object that configures simulation execution trace.
 	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
@@ -701,8 +701,8 @@ type SimulationEvalOverrides struct {
 	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
 	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
 
-	// AllowUnlimitedResourceAccess If true, allows unlimited resource access during simulation.
-	AllowUnlimitedResourceAccess *bool `json:"allow-unlimited-resource-access,omitempty"`
+	// AllowUnnamedResources If true, allows access to unnamed resources during simulation.
+	AllowUnnamedResources *bool `json:"allow-unnamed-resources,omitempty"`
 
 	// ExtraOpcodeBudget The extra opcode budget added to each transaction group during simulation
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`

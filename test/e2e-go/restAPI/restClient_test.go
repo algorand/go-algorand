@@ -2335,7 +2335,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	a.Equal(execTraceConfig, resp.ExecTraceConfig)
 }
 
-func TestSimulateWithUnlimitedResourceAccess(t *testing.T) {
+func TestSimulateWithUnnamedResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2526,38 +2526,38 @@ int 1
 	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
 	a.NoError(err)
 
-	// Cannot access these resources with AllowUnlimitedResourceAccess=false
+	// Cannot access these resources by default
 	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{
 				Txns: []transactions.SignedTxn{stxn},
 			},
 		},
-		AllowUnlimitedResourceAccess: false,
+		AllowUnnamedResources: false,
 	})
 	a.NoError(err)
 	a.Contains(*resp.TxnGroups[0].FailureMessage, "logic eval error: invalid Account reference "+otherAddress)
 	a.Equal([]uint64{0}, *resp.TxnGroups[0].FailedAt)
 
-	// It should work with AllowUnlimitedResourceAccess=true
+	// It should work with AllowUnnamedResources=true
 	resp, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{
 				Txns: []transactions.SignedTxn{stxn},
 			},
 		},
-		AllowUnlimitedResourceAccess: true,
+		AllowUnnamedResources: true,
 	})
 	a.NoError(err)
 
 	budgetAdded, budgetUsed := uint64(700), uint64(40)
-	allowUnlimitedResourceAccess := true
+	allowUnnamedResources := true
 
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:   2,
 		LastRound: resp.LastRound,
 		EvalOverrides: &model.SimulationEvalOverrides{
-			AllowUnlimitedResourceAccess: &allowUnlimitedResourceAccess,
+			AllowUnnamedResources: &allowUnnamedResources,
 		},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{

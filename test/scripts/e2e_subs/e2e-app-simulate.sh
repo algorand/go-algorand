@@ -385,16 +385,16 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; t
     false
 fi
 
-############################################################
-# TEST ALLOW UNLIMITED RESOURCE ACCESS IN SIMULATION WORKS #
-############################################################
+##############################################
+# TEST ALLOW UNNAMED RESOURCES IN SIMULATION #
+##############################################
 
 printf '#pragma version 9\nint 1' > "${TEMPDIR}/simple-v9.teal"
 
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${DIR}/tealprogs/unlimited-resource-access.teal" --clear-prog "${TEMPDIR}/simple-v9.teal" 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${DIR}/tealprogs/unnamed-resource-access.teal" --clear-prog "${TEMPDIR}/simple-v9.teal" 2>&1 || true)
 EXPSUCCESS='Created app with app index'
 if [[ $RES != *"${EXPSUCCESS}"* ]]; then
-    date '+app-simulate-test FAIL the app creation for unlimited resource access should succeed %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app creation for unnamed resource access should succeed %Y%m%d_%H%M%S'
     false
 fi
 
@@ -410,31 +410,31 @@ ${gcmd} clerk send --from $ACCOUNT --to $OTHERADDR --amount 100000
 ASSETID=$(${gcmd} asset create --creator ${ACCOUNT} --total 100 | grep Created | awk '{ print $6 }')
 
 # Simulation with default settings should fail
-${gcmd} app call --app-id $APPID --from $ACCOUNT --app-arg "addr:$OTHERADDR" --app-arg "int:$ASSETID" --app-arg "int:$OTHERAPPID" 2>&1 -o "${TEMPDIR}/unlimited-resource-access.tx"
-${gcmd} clerk sign -i "${TEMPDIR}/unlimited-resource-access.tx" -o "${TEMPDIR}/unlimited-resource-access.stx"
-RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/unlimited-resource-access.stx")
+${gcmd} app call --app-id $APPID --from $ACCOUNT --app-arg "addr:$OTHERADDR" --app-arg "int:$ASSETID" --app-arg "int:$OTHERAPPID" 2>&1 -o "${TEMPDIR}/unnamed-resource-access.tx"
+${gcmd} clerk sign -i "${TEMPDIR}/unnamed-resource-access.tx" -o "${TEMPDIR}/unnamed-resource-access.stx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/unnamed-resource-access.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the app call without unlimited resource access should fail %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call without allow unnamed resources should fail %Y%m%d_%H%M%S'
     false
 fi
 
 EXPECTED_FAILURE="logic eval error: invalid Account reference $OTHERADDR"
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_FAILURE}"* ]]; then
-    date '+app-simulate-test FAIL the app call without unlimited resource access should fail with the expected error %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call without allow unnamed resources should fail with the expected error %Y%m%d_%H%M%S'
     false
 fi
 
-# Simulation with --allow-unlimited-resource-access should succeed
-RES=$(${gcmd} clerk simulate --allow-unlimited-resource-access -t "${TEMPDIR}/unlimited-resource-access.stx")
+# Simulation with --allow-unnamed-resources should succeed
+RES=$(${gcmd} clerk simulate --allow-unnamed-resources -t "${TEMPDIR}/unnamed-resource-access.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
-    date '+app-simulate-test FAIL the app call with unlimited resource access should pass %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL the app call with allow unnamed resources should pass %Y%m%d_%H%M%S'
     false
 fi
 
-if [[ $(echo "$RES" | jq '."eval-overrides"."allow-unlimited-resource-access"') != $CONST_TRUE ]]; then
-    date '+app-simulate-test FAIL the app call with unlimited resource access have the correct eval-overrides %Y%m%d_%H%M%S'
+if [[ $(echo "$RES" | jq '."eval-overrides"."allow-unnamed-resources"') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the app call with allow unnamed resources have the correct eval-overrides %Y%m%d_%H%M%S'
     false
 fi

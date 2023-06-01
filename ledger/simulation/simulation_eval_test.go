@@ -3041,14 +3041,13 @@ func TestMockTracerScenarios(t *testing.T) {
 	}
 }
 
-// TestUnlimitedResourceAccess tests that app calls can access resources that they otherwise
-// should not be able to if AllowUnlimitedResourceAccess is enabled. Additional tests follow for
-// special cases.
-func TestUnlimitedResourceAccess(t *testing.T) {
+// TestUnnamedResources tests that app calls can access resources that they otherwise should not be
+// able to if AllowUnnamedResources is enabled. Additional tests follow for special cases.
+func TestUnnamedResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
-	// be indexes into the foreign arrays, meaning we can't test the "unlimited" case.
+	// be indexes into the foreign arrays, meaning we can't test the unnamed case.
 	for v := 4; v <= logic.LogicVersion; v++ {
 		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
@@ -3145,8 +3144,8 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 
 				return simulationTestCase{
 					input: simulation.Request{
-						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
-						AllowUnlimitedResourceAccess: true,
+						TxnGroups:             [][]transactions.SignedTxn{{stxn}},
+						AllowUnnamedResources: true,
 					},
 					expected: simulation.Result{
 						Version:   simulation.ResultLatestVersion,
@@ -3170,7 +3169,7 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
-							AllowUnlimitedResourceAccess: true,
+							AllowUnnamedResources: true,
 						},
 					},
 				}
@@ -3179,13 +3178,13 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 	}
 }
 
-// TestUnlimitedResourceAccessAccountLocalWrite tests app call behavior when writing to an account's
-// local state they otherwise shouldn't have access to if AllowUnlimitedResourceAccess is enabled.
-func TestUnlimitedResourceAccessAccountLocalWrite(t *testing.T) {
+// TestUnnamedResourcesAccountLocalWrite tests app call behavior when writing to an account's local
+// state they otherwise shouldn't have access to if AllowUnnamedResources is enabled.
+func TestUnnamedResourcesAccountLocalWrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
-	// be indexes into the foreign arrays, meaning we can't test the "unlimited" case.
+	// be indexes into the foreign arrays, meaning we can't test the unnamed case.
 	for v := 4; v <= logic.LogicVersion; v++ {
 		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
@@ -3253,8 +3252,8 @@ int 1
 
 				return simulationTestCase{
 					input: simulation.Request{
-						TxnGroups:                    [][]transactions.SignedTxn{{stxn}},
-						AllowUnlimitedResourceAccess: true,
+						TxnGroups:             [][]transactions.SignedTxn{{stxn}},
+						AllowUnnamedResources: true,
 					},
 					expectedError: expectedError,
 					expected: simulation.Result{
@@ -3278,7 +3277,7 @@ int 1
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
-							AllowUnlimitedResourceAccess: true,
+							AllowUnnamedResources: true,
 						},
 					},
 				}

@@ -961,12 +961,12 @@ type PreEncodedSimulateRequestTransactionGroup struct {
 
 // PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
-	TxnGroups                    []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
-	AllowEmptySignatures         bool                                        `codec:"allow-empty-signatures,omitempty"`
-	AllowMoreLogging             bool                                        `codec:"allow-more-logging,omitempty"`
-	ExtraOpcodeBudget            uint64                                      `codec:"extra-opcode-budget,omitempty"`
-	ExecTraceConfig              simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
-	AllowUnlimitedResourceAccess bool                                        `codec:"allow-unlimited-resource-access,omitempty"`
+	TxnGroups             []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	AllowEmptySignatures  bool                                        `codec:"allow-empty-signatures,omitempty"`
+	AllowMoreLogging      bool                                        `codec:"allow-more-logging,omitempty"`
+	AllowUnnamedResources bool                                        `codec:"allow-unnamed-resources,omitempty"`
+	ExtraOpcodeBudget     uint64                                      `codec:"extra-opcode-budget,omitempty"`
+	ExecTraceConfig       simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.

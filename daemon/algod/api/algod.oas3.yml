@@ -1921,8 +1921,8 @@
             "description": "Lifts limits on log opcode usage during simulation.",
             "type": "boolean"
           },
-          "allow-unlimited-resource-access": {
-            "description": "Allow unlimited resource access during simulation.",
+          "allow-unnamed-resources": {
+            "description": "Allow access to unnamed resources during simulation.",
             "type": "boolean"
           },
           "exec-trace-config": {
@@ -2039,8 +2039,8 @@
             "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
             "type": "boolean"
           },
-          "allow-unlimited-resource-access": {
-            "description": "If true, allows unlimited resource access during simulation.",
+          "allow-unnamed-resources": {
+            "description": "If true, allows access to unnamed resources during simulation.",
             "type": "boolean"
           },
           "extra-opcode-budget": {

@@ -69,12 +69,12 @@ var (
 	requestFilename    string
 	requestOutFilename string
 
-	simulateAllowEmptySignatures         bool
-	simulateAllowMoreLogging             bool
-	simulateAllowMoreOpcodeBudget        bool
-	simulateExtraOpcodeBudget            uint64
-	simulateEnableRequestTrace           bool
-	simulateAllowUnlimitedResourceAccess bool
+	simulateAllowEmptySignatures  bool
+	simulateAllowMoreLogging      bool
+	simulateAllowMoreOpcodeBudget bool
+	simulateExtraOpcodeBudget     uint64
+	simulateEnableRequestTrace    bool
+	simulateAllowUnnamedResources bool
 )
 
 func init() {
@@ -164,7 +164,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
 	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
-	simulateCmd.Flags().BoolVar(&simulateAllowUnlimitedResourceAccess, "allow-unlimited-resource-access", false, "Allow unlimited resource access during simulation")
+	simulateCmd.Flags().BoolVar(&simulateAllowUnnamedResources, "allow-unnamed-resources", false, "Allow access to unnamed resources during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1277,11 +1277,11 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				AllowEmptySignatures:         simulateAllowEmptySignatures,
-				AllowMoreLogging:             simulateAllowMoreLogging,
-				ExtraOpcodeBudget:            simulateExtraOpcodeBudget,
-				ExecTraceConfig:              traceCmdOptionToSimulateTraceConfigModel(),
-				AllowUnlimitedResourceAccess: simulateAllowUnlimitedResourceAccess,
+				AllowEmptySignatures:  simulateAllowEmptySignatures,
+				AllowMoreLogging:      simulateAllowMoreLogging,
+				ExtraOpcodeBudget:     simulateExtraOpcodeBudget,
+				ExecTraceConfig:       traceCmdOptionToSimulateTraceConfigModel(),
+				AllowUnnamedResources: simulateAllowUnnamedResources,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1302,11 +1302,11 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				AllowEmptySignatures:         simulateAllowEmptySignatures,
-				AllowMoreLogging:             simulateAllowMoreLogging,
-				ExtraOpcodeBudget:            simulateExtraOpcodeBudget,
-				ExecTraceConfig:              traceCmdOptionToSimulateTraceConfigModel(),
-				AllowUnlimitedResourceAccess: simulateAllowUnlimitedResourceAccess,
+				AllowEmptySignatures:  simulateAllowEmptySignatures,
+				AllowMoreLogging:      simulateAllowMoreLogging,
+				ExtraOpcodeBudget:     simulateExtraOpcodeBudget,
+				ExecTraceConfig:       traceCmdOptionToSimulateTraceConfigModel(),
+				AllowUnnamedResources: simulateAllowUnnamedResources,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {

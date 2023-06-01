@@ -39,12 +39,12 @@ type simulatorLedger struct {
 
 // Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
 type Request struct {
-	TxnGroups                    [][]transactions.SignedTxn
-	AllowEmptySignatures         bool
-	AllowMoreLogging             bool
-	ExtraOpcodeBudget            uint64
-	TraceConfig                  ExecTraceConfig
-	AllowUnlimitedResourceAccess bool
+	TxnGroups             [][]transactions.SignedTxn
+	AllowEmptySignatures  bool
+	AllowMoreLogging      bool
+	AllowUnnamedResources bool
+	ExtraOpcodeBudget     uint64
+	TraceConfig           ExecTraceConfig
 }
 
 // Latest is part of the LedgerForSimulator interface.
