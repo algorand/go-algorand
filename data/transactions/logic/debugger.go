@@ -106,6 +106,8 @@ func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, evalError erro
 	a.debugger.Complete(a.refreshDebugState(cx, evalError))
 }
 
+// StackChangeExplanation explains the effect of an opcode over the stack.
+// An opcode may delete a few variables from stack, then add a few to stack.
 type StackChangeExplanation struct {
 	Deletions int
 	Additions int
@@ -124,6 +126,7 @@ func defaultDebugExplain(argCount, retCount int) debugExplain {
 	}
 }
 
+// NextStackChange is a helper function that queries EvalContext for the coming stack change of the current PC.
 func (cx *EvalContext) NextStackChange() StackChangeExplanation {
 	return OpSpecs[cx.program[cx.pc]].Explain(cx)
 }

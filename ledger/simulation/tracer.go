@@ -278,8 +278,9 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
-	if tracer.result.ReturnStackChange() {
+	if tracer.result.ReturnStackChange() { // XX
 		// TODO store added stack elements for reporting, before that, handle errors tho.
+		tracer.nextStackChangeDescription = cx.NextStackChange() // non-empty branch
 	}
 
 	if cx.RunMode() != logic.ModeApp {
