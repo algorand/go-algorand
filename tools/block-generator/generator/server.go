@@ -42,14 +42,15 @@ type BlocksMiddleware func(next http.Handler) http.Handler
 // This is needed to simplify tests by stopping block production while validation
 // is done on the data.
 func MakeServerWithMiddleware(dbround uint64, genesisFile string, configFile string, addr string, blocksMiddleware BlocksMiddleware) (*http.Server, Generator) {
-	validCfg, err := initializeConfigFile(configFile)
+	cfg, err := initializeConfigFile(configFile)
 	util.MaybeFail(err, "problem loading config file. Use '--config' or create a config file.")
 	var bkGenesis bookkeeping.Genesis
 	if genesisFile != "" {
 		bkGenesis, err = bookkeeping.LoadGenesisFromFile(genesisFile)
+		// TODO: consider using bkGenesis to set cfg.NumGenesisAccounts and cfg.GenesisAccountInitialBalance
 		util.MaybeFail(err, "Failed to parse genesis file '%s'", genesisFile)
 	}
-	gen, err := MakeGenerator(dbround, bkGenesis, validCfg)
+	gen, err := MakeGenerator(dbround, bkGenesis, cfg)
 	util.MaybeFail(err, "Failed to make generator with config file '%s'", configFile)
 
 	mux := http.NewServeMux()

@@ -237,13 +237,14 @@ type TxData struct {
 	GenerationCount uint64        `json:"num_generated"`
 }
 
-// ---- constructors ----
+// ---- config construction and validation ----
 
-// initialzieConfigFile reads the config file and validates its parameters. Certain missing
+// initializeConfigFile reads the config file and validates its parameters. Certain missing
 // parameters are defaulted to a reasonable value when missing, or when an entire associated
 // group is missing.
 func initializeConfigFile(configFile string) (config GenerationConfig, err error) {
-	data, err := os.ReadFile(configFile)
+	var data []byte
+	data, err = os.ReadFile(configFile)
 	if err != nil {
 		return
 	}
@@ -252,13 +253,120 @@ func initializeConfigFile(configFile string) (config GenerationConfig, err error
 		return
 	}
 
-	err = validateWithDefaults(&config)
+	err = config.validateWithDefaults(true)
 	return
 }
 
+// validateWithDefaults validates the config parameters. When defaults is true
+// certain missing parameters are defaulted to easonable values.
+// When defaults is false, validate only without attempting to set defaults.
+func (cfg *GenerationConfig) validateWithDefaults(defaults bool) error {
+	if cfg.Name == "" {
+		return fmt.Errorf("scenario name must be set")
+	}
+
+	if cfg.NumGenesisAccounts == 0 {
+		if defaults {
+			cfg.NumGenesisAccounts = defaultGenesisAccountsCount
+		} else {
+			return fmt.Errorf("number of genesis accounts must be > 0")
+		}
+	}
+
+	if cfg.GenesisAccountInitialBalance == 0 {
+		if defaults {
+			cfg.GenesisAccountInitialBalance = defaultGenesisAccountInitialBalance
+		} else {
+			return fmt.Errorf("genesis account initial balance must be > 0")
+		}
+	}
+
+	var weights []*float32
+
+	weights = []*float32{&cfg.PaymentTransactionFraction, &cfg.AssetTransactionFraction, &cfg.AppTransactionFraction}
+	if eTxnTypes := sumIsCloseToOneWithDefault(defaults, weights...); eTxnTypes != nil {
+		return fmt.Errorf("transaction distribution ratios sum should equal 1: %w", eTxnTypes)
+	}
+
+	weights = []*float32{&cfg.PaymentNewAccountFraction, &cfg.PaymentFraction}
+	if ePymtTypes := sumIsCloseToOneWithDefault(defaults, weights...); ePymtTypes != nil {
+		return fmt.Errorf("payment configuration ratios sum should equal 1: %w", ePymtTypes)
+	}
+
+	weights = []*float32{&cfg.AssetCreateFraction, &cfg.AssetDestroyFraction, &cfg.AssetOptinFraction, &cfg.AssetCloseFraction, &cfg.AssetXferFraction}
+	if eAssetTypes := sumIsCloseToOneWithDefault(defaults, weights...); eAssetTypes != nil {
+		return fmt.Errorf("asset configuration ratios sum should equal 1: %w", eAssetTypes)
+	}
+
+	weights = []*float32{&cfg.AppSwapFraction, &cfg.AppBoxesFraction}
+	if eAppTypes := sumIsCloseToOneWithDefault(defaults, weights...); eAppTypes != nil {
+		return fmt.Errorf("app configuration ratios sum should equal 1: %w", eAppTypes)
+	}
+
+	weights = []*float32{&cfg.AppSwapCreateFraction, &cfg.AppSwapUpdateFraction, &cfg.AppSwapDeleteFraction, &cfg.AppSwapOptinFraction, &cfg.AppSwapCallFraction, &cfg.AppSwapCloseFraction, &cfg.AppSwapClearFraction}
+	if eAppSwapTypes := sumIsCloseToOneWithDefault(defaults, weights...); eAppSwapTypes != nil {
+		return fmt.Errorf("app swap configuration ratios sum should equal 1: %w", eAppSwapTypes)
+	}
+
+	weights = []*float32{&cfg.AppBoxesCreateFraction, &cfg.AppBoxesUpdateFraction, &cfg.AppBoxesDeleteFraction, &cfg.AppBoxesOptinFraction, &cfg.AppBoxesCallFraction, &cfg.AppBoxesCloseFraction, &cfg.AppBoxesClearFraction}
+	if eAppBoxesTypes := sumIsCloseToOneWithDefault(defaults, weights...); eAppBoxesTypes != nil {
+		return fmt.Errorf("app boxes configuration ratios sum should equal 1: %w", eAppBoxesTypes)
+
+	}
+
+	return nil
+}
+
+func asPtrSlice(weights []float32) []*float32 {
+	ptrs := make([]*float32, len(weights))
+	for i := range weights {
+		weight := weights[i]
+		ptrs[i] = &weight
+	}
+	return ptrs
+}
+
+// sumIsCloseToOneWithDefault returns no error if the sum of the params is close to 1.
+// It returns an error if any of the params are negative.
+// Finally, in the case that all the params are zero, it sets the first param to 1 and returns no error.
+func sumIsCloseToOneWithDefault(defaults bool, params ...*float32) error {
+	if len(params) == 0 {
+		return fmt.Errorf("no params provided")
+	}
+
+	sum, valid, err := validateSumCloseToOne(params)
+	if valid || err != nil {
+		return err
+	}
+
+	if sum == 0 && defaults {
+		*params[0] = 1
+		return nil
+	}
+
+	return fmt.Errorf("sum of params is not close to 1: %f", sum)
+}
+
+// validateSumCloseToOne returns the sum of the params, whether the sum is close to 1, and any error encountered.
+// In the case that err is not nil, the value of valid is undefined.
+func validateSumCloseToOne(params []*float32) (sum float32, valid bool, err error) {
+	for i, num := range params {
+		if *num < 0 {
+			return *num, false, fmt.Errorf("param at index %d is negative: %f", i, *num)
+		}
+		sum += *num
+	}
+	if 0.99 < sum && sum < 1.01 {
+		return sum, true, nil
+	}
+	return sum, false, nil
+}
+
+// ---- constructors ----
+
 // MakeGenerator initializes the Generator object.
 func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig) (Generator, error) {
-	if err := config.CheckValid(); err != nil {
+	if err := config.validateWithDefaults(false); err != nil {
 		return nil, fmt.Errorf("invalid generator configuration: %w", err)
 	}
 
@@ -415,155 +523,6 @@ func (g *generator) initializeLedger() {
 		os.Exit(1)
 	}
 	g.ledger = l
-}
-
-// ---- validators ----
-
-func validateWithDefaults(config *GenerationConfig) error {
-
-	if config.Name == "" {
-		return fmt.Errorf("scenario name must be set")
-	}
-
-	if config.NumGenesisAccounts == 0 {
-		config.NumGenesisAccounts = defaultGenesisAccountsCount
-	}
-
-	if config.GenesisAccountInitialBalance == 0 {
-		config.GenesisAccountInitialBalance = defaultGenesisAccountInitialBalance
-	}
-
-	var weights []*float32
-
-	weights = []*float32{&config.PaymentTransactionFraction, &config.AssetTransactionFraction, &config.AppTransactionFraction}
-	if eTxnTypes := sumIsCloseToOneWithDefault(weights...); eTxnTypes != nil {
-		return fmt.Errorf("transaction distribution ratios sum should equal 1: %w", eTxnTypes)
-	}
-
-	weights = []*float32{&config.PaymentNewAccountFraction, &config.PaymentFraction}
-	if ePymtTypes := sumIsCloseToOneWithDefault(weights...); ePymtTypes != nil {
-		return fmt.Errorf("payment configuration ratios sum should equal 1: %w", ePymtTypes)
-	}
-
-	weights = []*float32{&config.AssetCreateFraction, &config.AssetDestroyFraction, &config.AssetOptinFraction, &config.AssetCloseFraction, &config.AssetXferFraction}
-	if eAssetTypes := sumIsCloseToOneWithDefault(weights...); eAssetTypes != nil {
-		return fmt.Errorf("asset configuration ratios sum should equal 1: %w", eAssetTypes)
-	}
-
-	weights = []*float32{&config.AppSwapFraction, &config.AppBoxesFraction}
-	if eAppTypes := sumIsCloseToOneWithDefault(weights...); eAppTypes != nil {
-		return fmt.Errorf("app configuration ratios sum should equal 1: %w", eAppTypes)
-	}
-
-	weights = []*float32{&config.AppSwapCreateFraction, &config.AppSwapUpdateFraction, &config.AppSwapDeleteFraction, &config.AppSwapOptinFraction, &config.AppSwapCallFraction, &config.AppSwapCloseFraction, &config.AppSwapClearFraction}
-	if eAppSwapTypes := sumIsCloseToOneWithDefault(weights...); eAppSwapTypes != nil {
-		return fmt.Errorf("app swap configuration ratios sum should equal 1: %w", eAppSwapTypes)
-	}
-
-	weights = []*float32{&config.AppBoxesCreateFraction, &config.AppBoxesUpdateFraction, &config.AppBoxesDeleteFraction, &config.AppBoxesOptinFraction, &config.AppBoxesCallFraction, &config.AppBoxesCloseFraction, &config.AppBoxesClearFraction}
-	if eAppBoxesTypes := sumIsCloseToOneWithDefault(weights...); eAppBoxesTypes != nil {
-		return fmt.Errorf("app boxes configuration ratios sum should equal 1: %w", eAppBoxesTypes)
-
-	}
-
-	return nil
-}
-
-func (cfg *GenerationConfig) CheckValid() error {
-	if cfg.Name == "" {
-		return fmt.Errorf("scenario name must be set")
-	}
-
-	if cfg.NumGenesisAccounts == 0 {
-		return fmt.Errorf("number of genesis accounts must be > 0")
-	}
-
-	if cfg.GenesisAccountInitialBalance == 0 {
-		return fmt.Errorf("genesis account initial balance must be > 0")
-	}
-
-	weights := []*float32{&cfg.PaymentTransactionFraction, &cfg.AssetTransactionFraction, &cfg.AppTransactionFraction}
-	sum, valid, err := validateSumCloseToOne(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid Transaction config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.PaymentNewAccountFraction, &cfg.PaymentFraction}
-	sum, valid, err = validateSumCloseToOne(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid Payment config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.AssetCreateFraction, &cfg.AssetDestroyFraction, &cfg.AssetOptinFraction, &cfg.AssetCloseFraction, &cfg.AssetXferFraction}
-	sum, valid, err = validateSumCloseToOne(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid Asset config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.AppSwapFraction, &cfg.AppBoxesFraction}
-	sum, valid, err = validateSumCloseToOne(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid App config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.AppSwapCreateFraction, &cfg.AppSwapUpdateFraction, &cfg.AppSwapDeleteFraction, &cfg.AppSwapOptinFraction, &cfg.AppSwapCallFraction, &cfg.AppSwapCloseFraction, &cfg.AppSwapClearFraction}
-	sum, valid, err = validateSumCloseToOne(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid AppSwap config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	weights = []*float32{&cfg.AppBoxesCreateFraction, &cfg.AppBoxesUpdateFraction, &cfg.AppBoxesDeleteFraction, &cfg.AppBoxesOptinFraction, &cfg.AppBoxesCallFraction, &cfg.AppBoxesCloseFraction, &cfg.AppBoxesClearFraction}
-	sum, valid, err = validateSumCloseToOne(weights)
-	if err != nil || !valid {
-		return fmt.Errorf("invalid AppBoxes config with sum %f (%t): %w", sum, valid, err)
-	}
-
-	return nil
-}
-
-func asPtrSlice(weights []float32) []*float32 {
-	ptrs := make([]*float32, len(weights))
-	for i := range weights {
-		weight := weights[i]
-		ptrs[i] = &weight
-	}
-	return ptrs
-}
-
-// sumIsCloseToOneWithDefault returns no error if the sum of the params is close to 1.
-// It returns an error if any of the params are negative.
-// Finally, in the case that all the params are zero, it sets the first param to 1 and returns no error.
-func sumIsCloseToOneWithDefault(params ...*float32) error {
-	if len(params) == 0 {
-		return fmt.Errorf("no params provided")
-	}
-
-	sum, valid, err := validateSumCloseToOne(params)
-	if valid || err != nil {
-		return err
-	}
-
-	if sum == 0 {
-		*params[0] = 1
-		return nil
-	}
-
-	return fmt.Errorf("sum of params is not close to 1: %f", sum)
-}
-
-// validateSumCloseToOne returns the sum of the params, whether the sum is close to 1, and any error encountered.
-// In the case that err is not nil, the value of valid is undefined.
-func validateSumCloseToOne(params []*float32) (sum float32, valid bool, err error) {
-	for i, num := range params {
-		if *num < 0 {
-			return *num, false, fmt.Errorf("param at index %d is negative: %f", i, *num)
-		}
-		sum += *num
-	}
-	if 0.99 < sum && sum < 1.01 {
-		return sum, true, nil
-	}
-	return sum, false, nil
 }
 
 // ---- transaction options vectors ----
@@ -1147,15 +1106,3 @@ func (g *generator) WriteAccount(output io.Writer, accountString string) error {
 
 	return json.NewEncoder(output).Encode(data)
 }
-
-// Accounts is used in the runner to generate a list of addresses.
-// func (g *generator) Accounts() <-chan basics.Address {
-// 	results := make(chan basics.Address, 10)
-// 	go func() {
-// 		defer close(results)
-// 		for i := uint64(0); i < g.numAccounts; i++ {
-// 			results <- indexToAccount(i)
-// 		}
-// 	}()
-// 	return results
-// }

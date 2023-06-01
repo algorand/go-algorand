@@ -154,11 +154,11 @@ func TestValidateWithDefaults(t *testing.T) {
 			emptySwapFraction := empty(cfg.AppSwapCreateFraction, cfg.AppSwapUpdateFraction, cfg.AppSwapDeleteFraction, cfg.AppSwapOptinFraction, cfg.AppSwapCallFraction, cfg.AppSwapCloseFraction, cfg.AppSwapClearFraction)
 			emptyBoxesFraction := empty(cfg.AppBoxesCreateFraction, cfg.AppBoxesUpdateFraction, cfg.AppBoxesDeleteFraction, cfg.AppBoxesOptinFraction, cfg.AppBoxesCallFraction, cfg.AppBoxesCloseFraction, cfg.AppBoxesClearFraction)
 
-			err := validateWithDefaults(&cfg)
+			err := cfg.validateWithDefaults(true)
 
 			if tc.err == nil {
 				require.Nil(t, err)
-				require.Nil(t, cfg.CheckValid())
+				require.Nil(t, cfg.validateWithDefaults(false))
 
 				if emptyGenesisAccounts {
 					require.Equal(t, defaultGenesisAccountsCount, cfg.NumGenesisAccounts)
