@@ -571,12 +571,14 @@ func TestMaxSizesCorrect(t *testing.T) {
 	require.Equal(t, txSize, protocol.TxnTag.MaxMessageSize())
 	msSize := uint64(crypto.DigestMaxSize())
 	require.Equal(t, msSize, protocol.MsgDigestSkipTag.MaxMessageSize())
-	ueSize := uint64(67) // TODO: calculate this programmatically
+
+	// UE is a handrolled message not using msgp
+	// including here for completeness ensured by protocol.TestMaxSizesTested
+	ueSize := uint64(67)
 	require.Equal(t, ueSize, protocol.UniEnsBlockReqTag.MaxMessageSize())
 
 	// VB and TS are the largest messages and are using the default network max size
-	// including the tests here for completeness of the this test which is ensured by
-	// protocol.TestMaxSizesTested test.
+	// including here for completeness ensured by protocol.TestMaxSizesTested
 	vbSize := uint64(network.MaxMessageLength)
 	require.Equal(t, vbSize, protocol.VoteBundleTag.MaxMessageSize())
 	tsSize := uint64(network.MaxMessageLength)
