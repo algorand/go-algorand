@@ -948,16 +948,16 @@ No --delete-input flag specified, exiting without installing key.`)
 			reportErrorf(errorRequestFail, err)
 		}
 		// In an abundance of caution, check for ourselves that the key has been installed.
-		if err := client.VerifyParticipationKey(time.Minute, addResponse.PartId); err != nil {
-			err = fmt.Errorf("unable to verify key installation. Verify key installation with 'goal account partkeyinfo' and delete '%s', or retry the command. Error: %w", partKeyFile, err)
-			reportErrorf(errorRequestFail, err)
+		if vErr := client.VerifyParticipationKey(time.Minute, addResponse.PartId); vErr != nil {
+			vErr = fmt.Errorf("unable to verify key installation. Verify key installation with 'goal account partkeyinfo' and delete '%s', or retry the command. Error: %w", partKeyFile, vErr)
+			reportErrorf(errorRequestFail, vErr)
 		}
 
 		reportInfof("Participation key installed successfully, Participation ID: %s\n", addResponse.PartId)
 
 		// Delete partKeyFile
-		if nil != os.Remove(partKeyFile) {
-			reportErrorf("An error occurred while removing the partkey file, please delete it manually: %s", err)
+		if osErr := os.Remove(partKeyFile); osErr != nil {
+			reportErrorf("An error occurred while removing the partkey file, please delete it manually: %s", osErr)
 		}
 	},
 }

@@ -19,6 +19,7 @@ package logic
 import (
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -383,7 +384,7 @@ func TestBalance(t *testing.T) {
 		// won't assemble in old version teal
 		if v < directRefEnabledVersion {
 			testProg(t, source, ep.Proto.LogicSigVersion,
-				Expect{1, "balance arg 0 wanted type uint64..."})
+				exp(1, "balance arg 0 wanted type uint64..."))
 			return
 		}
 
@@ -399,7 +400,7 @@ func TestBalance(t *testing.T) {
 }
 
 func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, version uint64, ledger *Ledger,
-	expected ...Expect) *EvalParams {
+	expected ...expect) *EvalParams {
 	t.Helper()
 	codes := make([][]byte, len(programs))
 	for i, program := range programs {
@@ -427,7 +428,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 	return ep
 }
 
-func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...Expect) {
+func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...expect) {
 	t.Helper()
 	require.LessOrEqual(t, len(programs), len(ep.TxnGroup))
 	for i := range ep.TxnGroup {
@@ -623,7 +624,7 @@ func TestAppCheckOptedIn(t *testing.T) {
 	testApp(t, "int 1; int 2; app_opted_in; int 0; ==", pre) // in pre, int 2 is an actual app id
 	testApp(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", now)
 	testProg(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", directRefEnabledVersion-1,
-		Expect{1, "app_opted_in arg 0 wanted type uint64..."})
+		exp(1, "app_opted_in arg 0 wanted type uint64..."))
 
 	// Receiver opts into 888, the current app in testApp
 	ledger.NewLocals(txn.Txn.Receiver, 888)
@@ -698,7 +699,7 @@ byte "ALGO"
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
 	testProg(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), directRefEnabledVersion-1,
-		Expect{4, "app_local_get_ex arg 0 wanted type uint64..."})
+		exp(4, "app_local_get_ex arg 0 wanted type uint64..."))
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), now)
 	// Next we're testing if the use of the current app's id works
 	// as a direct reference. The error is because the receiver
@@ -771,7 +772,7 @@ byte "ALGO"
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
 	testProg(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1,
-		Expect{3, "app_local_get arg 0 wanted type uint64..."})
+		exp(3, "app_local_get arg 0 wanted type uint64..."))
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02\"", -1), now,
 		"invalid Account reference")
@@ -1033,7 +1034,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 
 	// it wasn't legal to use a direct ref for account
 	testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
-		directRefEnabledVersion-1, Expect{1, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
+		directRefEnabledVersion-1, exp(1, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
 	// but it is now (empty asset yields 0,0 on stack)
 	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
 	// This is receiver, who is in Assets array
@@ -1076,7 +1077,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), now)
 
 	// but old code cannot
-	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, Expect{3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."})
+	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, exp(3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
 
 	if version < 5 {
 		// Can't run these with AppCreator anyway
@@ -2391,7 +2392,7 @@ int 1
 			delta := testApp(t, withBytes, ep)
 			// But won't even compile in old teal
 			testProg(t, withBytes, directRefEnabledVersion-1,
-				Expect{4, "app_local_put arg 0 wanted..."}, Expect{11, "app_local_del arg 0 wanted..."})
+				exp(4, "app_local_put arg 0 wanted..."), exp(11, "app_local_del arg 0 wanted..."))
 			require.Equal(t, 0, len(delta.GlobalDelta))
 			require.Equal(t, 2, len(delta.LocalDeltas))
 			ledger.Reset()
@@ -2900,9 +2901,9 @@ func TestTxnEffects(t *testing.T) {
 
 	// Look past the logs of tx 0
 	testApps(t, []string{"byte 0x37; log; int 1", "gtxna 0 Logs 1; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
-		Expect{1, "invalid Logs index 1"})
+		exp(1, "invalid Logs index 1"))
 	testApps(t, []string{"byte 0x37; log; int 1", "int 6; gtxnas 0 Logs; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
-		Expect{1, "invalid Logs index 6"})
+		exp(1, "invalid Logs index 6"))
 }
 
 func TestRound(t *testing.T) {
@@ -3002,7 +3003,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
 	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, LogicVersion, ledger,
-		Expect{0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"})
+		exp(0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"))
 
 	// Simulate test with 3 grouped txn
 	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, LogicVersion, ledger)
@@ -3261,5 +3262,25 @@ itxn_submit
 		maxAppCallDepth = 10_000_000
 
 		testApp(t, source, ep, "too many inner transactions 1 with 0 left")
+	})
+}
+
+func TestTxnaLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// txna came in v2, but Apps and Assets in v3.
+	TestLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		testApp(t, "txna Accounts "+strconv.Itoa(len(tx.Accounts))+";len", ep)
+		testApp(t, "txna Accounts "+strconv.Itoa(len(tx.Accounts)+1)+";len", ep, "invalid Accounts index")
+
+		testApp(t, "txna Applications "+strconv.Itoa(len(tx.ForeignApps)), ep)
+		testApp(t, "txna Applications "+strconv.Itoa(len(tx.ForeignApps)+1), ep, "invalid Applications index")
+
+		// Assets and AppArgs have no implicit 0 index, so everything shifts
+		testApp(t, "txna Assets "+strconv.Itoa(len(tx.ForeignAssets)-1), ep)
+		testApp(t, "txna Assets "+strconv.Itoa(len(tx.ForeignAssets)), ep, "invalid Assets index")
+
+		testApp(t, "txna ApplicationArgs "+strconv.Itoa(len(tx.ApplicationArgs)-1)+";len", ep)
+		testApp(t, "txna ApplicationArgs "+strconv.Itoa(len(tx.ApplicationArgs))+";len", ep, "invalid ApplicationArgs index")
 	})
 }
