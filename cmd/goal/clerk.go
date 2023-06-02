@@ -1279,9 +1279,9 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
+				AllowUnnamedResources: simulateAllowUnnamedResources,
 				ExtraOpcodeBudget:     simulateExtraOpcodeBudget,
 				ExecTraceConfig:       traceCmdOptionToSimulateTraceConfigModel(),
-				AllowUnnamedResources: simulateAllowUnnamedResources,
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1304,9 +1304,9 @@ var simulateCmd = &cobra.Command{
 				},
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
+				AllowUnnamedResources: simulateAllowUnnamedResources,
 				ExtraOpcodeBudget:     simulateExtraOpcodeBudget,
 				ExecTraceConfig:       traceCmdOptionToSimulateTraceConfigModel(),
-				AllowUnnamedResources: simulateAllowUnnamedResources,
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
