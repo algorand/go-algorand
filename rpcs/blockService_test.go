@@ -509,6 +509,8 @@ func addBlock(t *testing.T, ledger *data.Ledger) (timestamp int64) {
 }
 
 func TestErrMemoryAtCapacity(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	macError := errMemoryAtCapacity{capacity: uint64(100), used: uint64(110)}
 	errStr := macError.Error()
 	require.Equal(t, "block service memory over capacity: 110 / 100", errStr)
