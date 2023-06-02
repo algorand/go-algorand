@@ -120,7 +120,8 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 func TestLedgerCirculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, keys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	proto := protocol.ConsensusCurrentVersion
+	genesisInitState, keys := testGenerateInitState(t, proto)
 
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -171,6 +172,8 @@ func TestLedgerCirculation(t *testing.T) {
 	srcAccountKey := keys[sourceAccount]
 	require.NotNil(t, srcAccountKey)
 
+	params := config.Consensus[proto]
+
 	for rnd := basics.Round(1); rnd < basics.Round(600); rnd++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
@@ -191,6 +194,8 @@ func TestLedgerCirculation(t *testing.T) {
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
 		l.WaitForCommit(rnd)
 
+		var voteRoundOffset = basics.Round(2 * params.SeedRefreshInterval * params.SeedLookback)
+
 		// test most recent round
 		if rnd < basics.Round(500) {
 			data, validThrough, _, err = realLedger.LookupAccount(rnd, destAccount)
@@ -202,11 +207,11 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, rnd, validThrough)
 			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgos.Raw)
 
-			roundCirculation, err := realLedger.OnlineTotals(rnd)
+			roundCirculation, err := realLedger.OnlineCirculation(rnd, rnd+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 
-			roundCirculation, err = l.OnlineTotals(rnd)
+			roundCirculation, err = l.OnlineCirculation(rnd, rnd+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(510) {
@@ -220,11 +225,11 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, rnd-1, validThrough)
 			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgos.Raw)
 
-			roundCirculation, err := realLedger.OnlineTotals(rnd - 1)
+			roundCirculation, err := realLedger.OnlineCirculation(rnd-1, rnd-1+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 
-			roundCirculation, err = l.OnlineTotals(rnd - 1)
+			roundCirculation, err = l.OnlineCirculation(rnd-1, rnd-1+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(520) {
@@ -236,17 +241,17 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Error(t, err)
 			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
 
-			_, err = realLedger.OnlineTotals(rnd + 1)
+			_, err = realLedger.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
 			require.Error(t, err)
 
-			_, err = l.OnlineTotals(rnd + 1)
+			_, err = l.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
 			require.Error(t, err)
 		} else if rnd < basics.Round(520) {
 			// test expired round ( expected error )
-			_, err = realLedger.OnlineTotals(rnd - 500)
+			_, err = realLedger.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
 			require.Error(t, err)
 
-			_, err = l.OnlineTotals(rnd - 500)
+			_, err = l.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
 			require.Error(t, err)
 		}
 	}

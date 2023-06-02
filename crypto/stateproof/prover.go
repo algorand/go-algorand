@@ -228,9 +228,9 @@ func (b *Prover) CreateProof() (*StateProof, error) {
 	revealsSequence := make([]uint64, nr)
 	for j := uint64(0); j < nr; j++ {
 		coin := coinHash.getNextCoin()
-		pos, err := b.coinIndex(coin)
-		if err != nil {
-			return nil, err
+		pos, idxErr := b.coinIndex(coin)
+		if idxErr != nil {
+			return nil, idxErr
 		}
 
 		if pos >= uint64(len(b.Participants)) {

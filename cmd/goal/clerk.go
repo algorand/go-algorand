@@ -69,10 +69,11 @@ var (
 	requestFilename    string
 	requestOutFilename string
 
-	simulateAllowEmptySignatures   bool
-	simulateAllowMoreLogging       bool
-	simulateAllowExtraOpcodeBudget bool
-	simulateExtraOpcodeBudget      uint64
+	simulateAllowEmptySignatures  bool
+	simulateAllowMoreLogging      bool
+	simulateAllowMoreOpcodeBudget bool
+	simulateExtraOpcodeBudget     uint64
+	simulateEnableRequestTrace    bool
 )
 
 func init() {
@@ -159,8 +160,9 @@ func init() {
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
-	simulateCmd.Flags().BoolVar(&simulateAllowExtraOpcodeBudget, "allow-extra-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
+	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
+	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1246,12 +1248,11 @@ var simulateCmd = &cobra.Command{
 			reportErrorf("exactly one of --txfile or --request must be provided")
 		}
 
-		allowExtraBudgetProvided := cmd.Flags().Changed("allow-extra-opcode-budget")
 		extraBudgetProvided := cmd.Flags().Changed("extra-opcode-budget")
-		if allowExtraBudgetProvided && extraBudgetProvided {
+		if simulateAllowMoreOpcodeBudget && extraBudgetProvided {
 			reportErrorf("--allow-extra-opcode-budget and --extra-opcode-budget are mutually exclusive")
 		}
-		if allowExtraBudgetProvided {
+		if simulateAllowMoreOpcodeBudget {
 			simulateExtraOpcodeBudget = simulation.MaxExtraOpcodeBudget
 		}
 
@@ -1277,6 +1278,7 @@ var simulateCmd = &cobra.Command{
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
 				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1300,6 +1302,7 @@ var simulateCmd = &cobra.Command{
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
 				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
@@ -1358,4 +1361,10 @@ func decodeTxnsFromFile(file string) []transactions.SignedTxn {
 		txgroup = append(txgroup, txn)
 	}
 	return txgroup
+}
+
+func traceCmdOptionToSimulateTraceConfigModel() simulation.ExecTraceConfig {
+	return simulation.ExecTraceConfig{
+		Enable: simulateEnableRequestTrace,
+	}
 }

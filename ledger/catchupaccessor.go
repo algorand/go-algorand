@@ -603,9 +603,9 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		start := time.Now()
+		writeBalancesStart := time.Now()
 		errBalances = c.stagingWriter.writeBalances(ctx, normalizedAccountBalances)
-		durBalances = time.Since(start)
+		durBalances = time.Since(writeBalancesStart)
 	}()
 
 	// on a in-memory database, wait for the writer to finish before starting the new writer
@@ -627,9 +627,9 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			}
 		}
 		if hasCreatables {
-			start := time.Now()
+			writeCreatablesStart := time.Now()
 			errCreatables = c.stagingWriter.writeCreatables(ctx, normalizedAccountBalances)
-			durCreatables = time.Since(start)
+			durCreatables = time.Since(writeCreatablesStart)
 		}
 	}()
 
@@ -642,9 +642,9 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		start := time.Now()
+		writeHashesStart := time.Now()
 		errHashes = c.stagingWriter.writeHashes(ctx, normalizedAccountBalances)
-		durHashes = time.Since(start)
+		durHashes = time.Since(writeHashesStart)
 	}()
 
 	// on a in-memory database, wait for the writer to finish before starting the new writer
@@ -657,9 +657,9 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	go func() {
 		defer wg.Done()
 
-		start := time.Now()
+		writeKVsStart := time.Now()
 		errKVs = c.stagingWriter.writeKVs(ctx, chunkKVs)
-		durKVs = time.Since(start)
+		durKVs = time.Since(writeKVsStart)
 	}()
 
 	wg.Wait()
@@ -754,7 +754,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		defer wg.Done()
 		defer close(writerQueue)
 
-		err := dbs.Snapshot(func(transactionCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		dbErr := dbs.Snapshot(func(transactionCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
 			it := tx.MakeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize)
 			var hashes [][]byte
 			for {
@@ -778,8 +778,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(5*time.Second))
 			return err
 		})
-		if err != nil {
-			errChan <- err
+		if dbErr != nil {
+			errChan <- dbErr
 		}
 	}()
 
@@ -792,7 +792,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		accountHashesWritten, kvHashesWritten := uint64(0), uint64(0)
 		var mc trackerdb.MerkleCommitter
 
-		err := dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
+		txErr := dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
 			// create the merkle trie for the balances
 			mc, err = tx.MakeMerkleCommitter(true)
 			if err != nil {
@@ -802,8 +802,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			trie, err = merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 			return err
 		})
-		if err != nil {
-			errChan <- err
+		if txErr != nil {
+			errChan <- txErr
 			return
 		}
 
@@ -821,7 +821,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				continue
 			}
 
-			err = dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
+			txErr = dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
 				mc, err = tx.MakeMerkleCommitter(true)
 				if err != nil {
 					return
@@ -846,12 +846,12 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 
 				return nil
 			})
-			if err != nil {
+			if txErr != nil {
 				break
 			}
 
 			if uncommitedHashesCount >= trieRebuildCommitFrequency {
-				err = dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
+				txErr = dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
 					// set a long 30-second window for the evict before warning is generated.
 					_, err = tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
 					if err != nil {
@@ -869,7 +869,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					uncommitedHashesCount = 0
 					return nil
 				})
-				if err != nil {
+				if txErr != nil {
 					keepWriting = false
 					continue
 				}
@@ -879,12 +879,12 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				progressUpdates(accountHashesWritten, kvHashesWritten)
 			}
 		}
-		if err != nil {
-			errChan <- err
+		if txErr != nil {
+			errChan <- txErr
 			return
 		}
 		if uncommitedHashesCount > 0 {
-			err = dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
+			txErr = dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
 				// set a long 30-second window for the evict before warning is generated.
 				_, err = tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
 				if err != nil {
@@ -900,8 +900,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			})
 		}
 
-		if err != nil {
-			errChan <- err
+		if txErr != nil {
+			errChan <- txErr
 		}
 	}()
 

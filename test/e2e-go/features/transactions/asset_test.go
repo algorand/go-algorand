@@ -549,7 +549,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	a.NoError(err)
 	account1 := accountList[0]
 
-	txCount := uint64(0)
+	txCount := uint64(1000) // starting with v38 tx count is initialized to 1000
 	fee := uint64(1000000)
 
 	manager := account0

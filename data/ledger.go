@@ -51,16 +51,17 @@ type Ledger struct {
 	lastRoundSeed atomic.Value
 }
 
-// roundCirculationPair used to hold a pair of matching round number and the amount of online money
-type roundCirculationPair struct {
+// roundCirculationItem used to hold matching round number, vote round and the amount of online money
+type roundCirculationItem struct {
 	round       basics.Round
+	voteRound   basics.Round
 	onlineMoney basics.MicroAlgos
 }
 
 // roundCirculation is the cache for the circulating coins
 type roundCirculation struct {
 	// elements holds several round-onlineMoney pairs
-	elements [2]roundCirculationPair
+	elements [2]roundCirculationItem
 }
 
 // roundSeedPair is the cache for a single seed at a given round
@@ -174,28 +175,29 @@ func (l *Ledger) NextRound() basics.Round {
 }
 
 // Circulation implements agreement.Ledger.Circulation.
-func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+func (l *Ledger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	circulation, cached := l.lastRoundCirculation.Load().(roundCirculation)
 	if cached && r != basics.Round(0) {
 		for _, element := range circulation.elements {
-			if element.round == r {
+			if element.round == r && element.voteRound == voteRnd {
 				return element.onlineMoney, nil
 			}
 		}
 	}
 
-	totals, err := l.OnlineTotals(r)
+	totals, err := l.OnlineCirculation(r, voteRnd)
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
 
-	if !cached || r > circulation.elements[1].round {
+	if !cached || r > circulation.elements[1].round || voteRnd > circulation.elements[1].voteRound {
 		l.lastRoundCirculation.Store(
 			roundCirculation{
-				elements: [2]roundCirculationPair{
+				elements: [2]roundCirculationItem{
 					circulation.elements[1],
 					{
 						round:       r,
+						voteRound:   voteRnd,
 						onlineMoney: totals},
 				},
 			})

@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,6 +45,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -1738,17 +1740,6 @@ func TestSimulateWithUnlimitedLog(t *testing.T) {
 	}
 	a.NoError(err)
 
-	toAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-	closeToAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-
-	// Ensure these accounts don't exist
-	receiverBalance, err := testClient.GetBalance(toAddress)
-	a.NoError(err)
-	a.Zero(receiverBalance)
-	closeToBalance, err := testClient.GetBalance(closeToAddress)
-	a.NoError(err)
-	a.Zero(closeToBalance)
-
 	// construct program that uses a lot of log
 	prog := `#pragma version 8
 txn NumAppArgs
@@ -1785,12 +1776,10 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
-	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 	a.Greater(uint64(createdAppID), uint64(0))
@@ -1884,17 +1873,6 @@ func TestSimulateWithExtraBudget(t *testing.T) {
 	}
 	a.NoError(err)
 
-	toAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-	closeToAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-
-	// Ensure these accounts don't exist
-	receiverBalance, err := testClient.GetBalance(toAddress)
-	a.NoError(err)
-	a.Zero(receiverBalance)
-	closeToBalance, err := testClient.GetBalance(closeToAddress)
-	a.NoError(err)
-	a.Zero(closeToBalance)
-
 	// construct program that uses a lot of budget
 	prog := `#pragma version 8
 txn ApplicationID
@@ -1907,7 +1885,7 @@ int 1`
 	ops, err := logic.AssembleString(prog)
 	a.NoError(err)
 	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 8; int 1")
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
 	a.NoError(err)
 	clearState := ops.Program
 
@@ -1926,12 +1904,10 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
-	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 	a.Greater(uint64(createdAppID), uint64(0))
@@ -1987,4 +1963,374 @@ int 1`
 		},
 	}
 	a.Equal(expectedResult, resp)
+}
+
+// The program is copied from pyteal source for c2c test over betanet:
+// source: https://github.com/ahangsu/c2c-testscript/blob/master/c2c_test/max_depth/app.py
+const maxDepthTealApproval = `#pragma version 8
+txn ApplicationID
+int 0
+==
+bnz main_l6
+txn NumAppArgs
+int 1
+==
+bnz main_l3
+err
+main_l3:
+global CurrentApplicationID
+app_params_get AppApprovalProgram
+store 1
+store 0
+global CurrentApplicationID
+app_params_get AppClearStateProgram
+store 3
+store 2
+global CurrentApplicationAddress
+acct_params_get AcctBalance
+store 5
+store 4
+load 1
+assert
+load 3
+assert
+load 5
+assert
+int 2
+txna ApplicationArgs 0
+btoi
+exp
+itob
+log
+txna ApplicationArgs 0
+btoi
+int 0
+>
+bnz main_l5
+main_l4:
+int 1
+return
+main_l5:
+itxn_begin
+  int appl
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 0
+  itxn_field ApprovalProgram
+  load 2
+  itxn_field ClearStateProgram
+itxn_submit
+itxn_begin
+  int pay
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 4
+  int 100000
+  -
+  itxn_field Amount
+  byte "appID"
+  gitxn 0 CreatedApplicationID
+  itob
+  concat
+  sha512_256
+  itxn_field Receiver
+itxn_next
+  int appl
+  itxn_field TypeEnum
+  txna ApplicationArgs 0
+  btoi
+  int 1
+  -
+  itob
+  itxn_field ApplicationArgs
+  itxn CreatedApplicationID
+  itxn_field ApplicationID
+  int 0
+  itxn_field Fee
+  int DeleteApplication
+  itxn_field OnCompletion
+itxn_submit
+b main_l4
+main_l6:
+int 1
+return`
+
+func TestMaxDepthAppWithPCTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
+
+	// Get primary node
+	primaryNode, err := fixture.GetNodeController("Primary")
+	a.NoError(err)
+
+	fixture.Start()
+	defer primaryNode.FullStop()
+
+	// get lib goal client
+	testClient := fixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	_, err = testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(senderAddress, "no addr with funds")
+	a.NoError(err)
+
+	ops, err := logic.AssembleString(maxDepthTealApproval)
+	a.NoError(err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	MaxDepth := 2
+	MinFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
+	MinBalance := config.Consensus[protocol.ConsensusFuture].MinBalance
+
+	// create app and get the application ID
+	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
+		transactions.NoOpOC, approval, clearState, gl,
+		lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+
+	// fund app account
+	appFundTxn, err := testClient.SendPaymentFromWallet(
+		wh, nil, senderAddress, futureAppID.Address().String(),
+		0, MinBalance*uint64(MaxDepth+1), nil, "", 0, 0,
+	)
+	a.NoError(err)
+
+	// construct app calls
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(futureAppID), [][]byte{{byte(MaxDepth)}}, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee*uint64(3*MaxDepth+2), appCallTxn)
+	a.NoError(err)
+
+	// Group the transactions, and start the simulation
+	gid, err := testClient.GroupID([]transactions.Transaction{appFundTxn, appCallTxn})
+	a.NoError(err)
+	appFundTxn.Group = gid
+	appCallTxn.Group = gid
+
+	appFundTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appFundTxn)
+	a.NoError(err)
+	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
+	a.NoError(err)
+
+	// The first simulation should not pass, for simulation return PC in config has not been activated
+	execTraceConfig := simulation.ExecTraceConfig{
+		Enable: true,
+	}
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+		},
+		ExecTraceConfig: execTraceConfig,
+	}
+
+	_, err = testClient.SimulateTransactions(simulateRequest)
+	var httpError client.HTTPError
+	a.ErrorAs(err, &httpError)
+	a.Equal(http.StatusBadRequest, httpError.StatusCode)
+	a.Contains(httpError.ErrorString, "the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace")
+
+	// update the configuration file to enable EnableDeveloperAPI
+	err = primaryNode.FullStop()
+	a.NoError(err)
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	cfg.EnableDeveloperAPI = true
+	err = cfg.SaveToDisk(primaryNode.GetDataDir())
+	require.NoError(t, err)
+	fixture.Start()
+
+	resp, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	// Check expected == actual
+	creationOpcodeTrace := []model.SimulationOpcodeTraceUnit{
+		{Pc: 1},
+		{Pc: 6},
+		{Pc: 8},
+		{Pc: 9},
+		{Pc: 10},
+		{Pc: 149},
+		{Pc: 150},
+	}
+
+	recursiveLongOpcodeTrace := []model.SimulationOpcodeTraceUnit{
+		{Pc: 1},
+		{Pc: 6},
+		{Pc: 8},
+		{Pc: 9},
+		{Pc: 10},
+		{Pc: 13},
+		{Pc: 15},
+		{Pc: 16},
+		{Pc: 17},
+		{Pc: 21},
+		{Pc: 23},
+		{Pc: 25},
+		{Pc: 27},
+		{Pc: 29},
+		{Pc: 31},
+		{Pc: 33},
+		{Pc: 35},
+		{Pc: 37},
+		{Pc: 39},
+		{Pc: 41},
+		{Pc: 43},
+		{Pc: 45},
+		{Pc: 47},
+		{Pc: 48},
+		{Pc: 50},
+		{Pc: 51},
+		{Pc: 53},
+		{Pc: 54},
+		{Pc: 56},
+		{Pc: 59},
+		{Pc: 60},
+		{Pc: 61},
+		{Pc: 62},
+		{Pc: 63},
+		{Pc: 66},
+		{Pc: 67},
+		{Pc: 68},
+		{Pc: 69},
+		{Pc: 74},
+		{Pc: 75},
+		{Pc: 76},
+		{Pc: 78},
+		{Pc: 79},
+		{Pc: 81},
+		{Pc: 83},
+		{Pc: 85},
+		{Pc: 87},
+		{Pc: 89, SpawnedInners: &[]uint64{0}},
+		{Pc: 90},
+		{Pc: 91},
+		{Pc: 92},
+		{Pc: 94},
+		{Pc: 95},
+		{Pc: 97},
+		{Pc: 99},
+		{Pc: 103},
+		{Pc: 104},
+		{Pc: 106},
+		{Pc: 113},
+		{Pc: 116},
+		{Pc: 117},
+		{Pc: 118},
+		{Pc: 119},
+		{Pc: 121},
+		{Pc: 122},
+		{Pc: 123},
+		{Pc: 125},
+		{Pc: 128},
+		{Pc: 129},
+		{Pc: 130},
+		{Pc: 131},
+		{Pc: 132},
+		{Pc: 134},
+		{Pc: 136},
+		{Pc: 138},
+		{Pc: 139},
+		{Pc: 141},
+		{Pc: 143},
+		{Pc: 145, SpawnedInners: &[]uint64{1, 2}},
+		{Pc: 146},
+		{Pc: 72},
+		{Pc: 73},
+	}
+
+	finalDepthTrace := []model.SimulationOpcodeTraceUnit{
+		{Pc: 1},
+		{Pc: 6},
+		{Pc: 8},
+		{Pc: 9},
+		{Pc: 10},
+		{Pc: 13},
+		{Pc: 15},
+		{Pc: 16},
+		{Pc: 17},
+		{Pc: 21},
+		{Pc: 23},
+		{Pc: 25},
+		{Pc: 27},
+		{Pc: 29},
+		{Pc: 31},
+		{Pc: 33},
+		{Pc: 35},
+		{Pc: 37},
+		{Pc: 39},
+		{Pc: 41},
+		{Pc: 43},
+		{Pc: 45},
+		{Pc: 47},
+		{Pc: 48},
+		{Pc: 50},
+		{Pc: 51},
+		{Pc: 53},
+		{Pc: 54},
+		{Pc: 56},
+		{Pc: 59},
+		{Pc: 60},
+		{Pc: 61},
+		{Pc: 62},
+		{Pc: 63},
+		{Pc: 66},
+		{Pc: 67},
+		{Pc: 68},
+		{Pc: 69},
+		{Pc: 72},
+		{Pc: 73},
+	}
+
+	a.Len(resp.TxnGroups[0].Txns, 2)
+	a.Nil(resp.TxnGroups[0].FailureMessage)
+	a.Nil(resp.TxnGroups[0].FailedAt)
+
+	a.Nil(resp.TxnGroups[0].Txns[0].TransactionTrace)
+
+	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
+		ApprovalProgramTrace: &recursiveLongOpcodeTrace,
+		InnerTrace: &[]model.SimulationTransactionExecTrace{
+			{ApprovalProgramTrace: &creationOpcodeTrace},
+			{},
+			{
+				ApprovalProgramTrace: &recursiveLongOpcodeTrace,
+				InnerTrace: &[]model.SimulationTransactionExecTrace{
+					{ApprovalProgramTrace: &creationOpcodeTrace},
+					{},
+					{ApprovalProgramTrace: &finalDepthTrace},
+				},
+			},
+		},
+	}
+	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
+
+	a.Equal(execTraceConfig, resp.ExecTraceConfig)
 }
