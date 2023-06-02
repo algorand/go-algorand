@@ -188,13 +188,8 @@ func (c *txSaltedCache) innerSwap(scheduled bool) {
 	c.prevSalt = c.curSalt
 	c.prev = c.cur
 
-	if scheduled {
-		// updating by timer, the prev size is a good estimation of a current load => preallocate
-		c.cur = make(map[crypto.Digest]*sync.Map, len(c.prev))
-	} else {
-		// otherwise start empty
-		c.cur = map[crypto.Digest]*sync.Map{}
-	}
+	// the prev size is a good estimation of a current load
+	c.cur = make(map[crypto.Digest]*sync.Map, len(c.prev))
 	c.moreSalt()
 }
 
