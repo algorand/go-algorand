@@ -92,6 +92,8 @@ type netState struct {
 	assetPerAcct int
 	appsPerAcct  int
 
+	deterministicKeys bool
+
 	genesisID   string
 	genesisHash crypto.Digest
 	poolAddr    basics.Address
@@ -351,7 +353,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	return
 }
 
-//GenerateDatabaseFiles generates database files according to the configurations
+// GenerateDatabaseFiles generates database files according to the configurations
 func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, genesisFolder string) error {
 
 	accounts := make(map[basics.Address]basics.AccountData)
@@ -391,16 +393,17 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	log := logging.NewLogger()
 
 	bootstrappedNet := netState{
-		nAssets:       fileCfgs.GeneratedAssetsCount,
-		nApplications: fileCfgs.GeneratedApplicationCount,
-		txnState:      protocol.PaymentTx,
-		roundTxnCnt:   fileCfgs.RoundTransactionsCount,
-		round:         basics.Round(0),
-		genesisID:     genesis.ID(),
-		genesisHash:   genesis.Hash(),
-		poolAddr:      poolAddr,
-		sinkAddr:      sinkAddr,
-		log:           log,
+		nAssets:           fileCfgs.GeneratedAssetsCount,
+		nApplications:     fileCfgs.GeneratedApplicationCount,
+		txnState:          protocol.PaymentTx,
+		roundTxnCnt:       fileCfgs.RoundTransactionsCount,
+		round:             basics.Round(0),
+		genesisID:         genesis.ID(),
+		genesisHash:       genesis.Hash(),
+		poolAddr:          poolAddr,
+		sinkAddr:          sinkAddr,
+		log:               log,
+		deterministicKeys: fileCfgs.DeterministicKeys,
 	}
 
 	var params config.ConsensusParams
@@ -455,6 +458,8 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	for i := uint64(bootstrappedNet.round); i < fileCfgs.NumRounds; i++ {
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet, params, log)
+		// don't allow the ledger to fall more than 10 rounds behind before adding more
+		l.WaitForCommit(bootstrappedNet.round - 10)
 		err = l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
 			fmt.Printf("Error  %v\n", err)
@@ -486,9 +491,14 @@ func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bo
 	return bookkeeping.GenesisAllocation{}
 }
 
-func keypair() *crypto.SignatureSecrets {
+// keypair returns a random key, unless deterministic is true, which will set i as the seed for key generation.
+func keypair(i uint64, deterministic bool) *crypto.SignatureSecrets {
 	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
+	if deterministic {
+		binary.LittleEndian.PutUint64(seed[:], i)
+	} else {
+		crypto.RandBytes(seed[:])
+	}
 	s := crypto.GenerateSignatureSecrets(seed)
 	return s
 }
@@ -576,6 +586,8 @@ func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.B
 		//create accounts
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, roundTxnCnt, bootstrappedNet, csParams, log)
+		// don't allow the ledger to fall more than 10 rounds behind before adding more
+		l.WaitForCommit(bootstrappedNet.round - 10)
 		err := l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
 			fmt.Printf("Error %v\n", err)
@@ -659,7 +671,11 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 
 		if !bootstrappedNet.accountsCreated {
 			for i := uint64(0); i < n; i++ {
-				secretDst := keypair()
+				// adjust the index to account for previous rounds of account creation.
+				// TODO: adjusting the index to account for round assumes all blocks are being used
+				// for account creation. This assumption can create (relatively small) gaps in the keypair set
+				iAdj := i + (uint64(round) * bootstrappedNet.roundTxnCnt)
+				secretDst := keypair(iAdj, bootstrappedNet.deterministicKeys)
 				dst := basics.Address(secretDst.SignatureVerifier)
 				bootstrappedNet.accounts = append(bootstrappedNet.accounts, dst)
 
