@@ -474,6 +474,11 @@ func (l *Ledger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta,
 	return l.accts.lookupStateDelta(rnd)
 }
 
+// GetTracer returns the logic.EvalTracer attached to the ledger--can be nil.
+func (l *Ledger) GetTracer() logic.EvalTracer {
+	return l.tracer
+}
+
 // VotersForStateProof returns the top online accounts at round rnd.
 // The result might be nil, even with err=nil, if there are no voters
 // for that round because state proofs were not enabled.
@@ -625,11 +630,12 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 	return l.accts.LatestTotals()
 }
 
-// OnlineTotals returns the online totals of all accounts at the end of round rnd.
-func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+// OnlineCirculation returns the online totals of all accounts at the end of round rnd.
+// It implements agreement's calls for Circulation(rnd)
+func (l *Ledger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.onlineTotals(rnd)
+	return l.acctsOnline.onlineCirculation(rnd, voteRnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.
@@ -826,7 +832,7 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eva
 func (l *Ledger) IsWritingCatchpointDataFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.catchpoint.IsWritingCatchpointDataFile()
+	return l.catchpoint.isWritingCatchpointDataFile()
 }
 
 // VerifiedTransactionCache returns the verify.VerifiedTransactionCache

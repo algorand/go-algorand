@@ -83,7 +83,6 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
-	fmt.Println("Logging to: ", liveLog)
 	var maxLogAge time.Duration
 	var err error
 	if cfg.LogArchiveMaxAge != "" {
@@ -96,8 +95,10 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	var logWriter io.Writer
 	if cfg.LogSizeLimit > 0 {
+		fmt.Println("Logging to: ", liveLog)
 		logWriter = logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
 	} else {
+		fmt.Println("Logging to: stdout")
 		logWriter = os.Stdout
 	}
 	s.log.SetOutput(logWriter)
@@ -131,13 +132,13 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	}
 	if cfg.IsGossipServer() {
 		var ot basics.OverflowTracker
-		fdRequired := ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
+		fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
 		if ot.Overflowed {
 			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
 		}
-		_, hard, err := util.GetFdLimits()
-		if err != nil {
-			s.log.Errorf("Failed to get RLIMIT_NOFILE values: %s", err.Error())
+		_, hard, fdErr := util.GetFdLimits()
+		if fdErr != nil {
+			s.log.Errorf("Failed to get RLIMIT_NOFILE values: %s", fdErr.Error())
 		} else {
 			maxFDs := fdRequired
 			if fdRequired > hard {
@@ -156,10 +157,10 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 					}
 				}
 			}
-			err = util.SetFdSoftLimit(maxFDs)
-			if err != nil {
+			fdErr = util.SetFdSoftLimit(maxFDs)
+			if fdErr != nil {
 				// do not fail but log the error
-				s.log.Errorf("Failed to set a new RLIMIT_NOFILE value to %d (max %d): %s", fdRequired, hard, err.Error())
+				s.log.Errorf("Failed to set a new RLIMIT_NOFILE value to %d (max %d): %s", fdRequired, hard, fdErr.Error())
 			}
 		}
 	}

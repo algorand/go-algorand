@@ -4,7 +4,7 @@
 # and parsed as an array to check against the system's golang version depending
 # upon the context in which the project is being built.
 #
-# "dev" is to be used to satisfy the minium requirement we have to successfully
+# "dev" is to be used to satisfy the minimum requirement we have to successfully
 # build the project.
 #
 # The default is to return the pinned version needed for our production builds.

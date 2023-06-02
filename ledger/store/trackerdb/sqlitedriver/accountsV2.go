@@ -61,15 +61,15 @@ func (r *accountsV2Reader) Testing() trackerdb.TestAccountsReaderExt {
 	return r
 }
 
-func (r *accountsV2Reader) getOrPrepare(queryString string) (stmt *sql.Stmt, err error) {
+func (r *accountsV2Reader) getOrPrepare(queryString string) (*sql.Stmt, error) {
 	// fetch statement (use the query as the key)
 	if stmt, ok := r.preparedStatements[queryString]; ok {
 		return stmt, nil
 	}
 	// we do not have it, prepare it
-	stmt, err = r.q.Prepare(queryString)
+	stmt, err := r.q.Prepare(queryString)
 	if err != nil {
-		return
+		return nil, err
 	}
 	// cache the statement
 	r.preparedStatements[queryString] = stmt
@@ -295,6 +295,50 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pe
 		result = append(result, data)
 	}
 	return result, nil
+}
+
+// ExpiredOnlineAccountsForRound returns all online accounts known at `rnd` that will be expired by `voteRnd`.
+func (r *accountsV2Reader) ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
+	// This relies on SQLite's handling of max(updround) and bare columns not in the GROUP BY.
+	// The values of votelastvalid, votefirstvalid, and data will all be from the same row as max(updround)
+	rows, err := r.q.Query(`SELECT address, data, max(updround)
+FROM onlineaccounts
+WHERE updround <= ?
+GROUP BY address
+HAVING votelastvalid < ? and votelastvalid > 0
+ORDER BY address`, rnd, voteRnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ret := make(map[basics.Address]*ledgercore.OnlineAccountData)
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		var addr basics.Address
+		var baseData trackerdb.BaseOnlineAccountData
+		var updround sql.NullInt64
+		err := rows.Scan(&addrbuf, &buf, &updround)
+		if err != nil {
+			return nil, err
+		}
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return nil, err
+		}
+		copy(addr[:], addrbuf)
+		err = protocol.Decode(buf, &baseData)
+		if err != nil {
+			return nil, err
+		}
+		oadata := baseData.GetOnlineAccountData(proto, rewardsLevel)
+		if _, ok := ret[addr]; ok {
+			return nil, fmt.Errorf("duplicate address in expired online accounts: %s", addr.String())
+		}
+		ret[addr] = &oadata
+	}
+	return ret, nil
 }
 
 // TotalResources returns the total number of resources

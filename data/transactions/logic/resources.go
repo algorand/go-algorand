@@ -31,8 +31,8 @@ import (
 type resources struct {
 	// These resources were created previously in the group, so they can be used
 	// by later transactions.
-	createdAsas []basics.AssetIndex
-	createdApps []basics.AppIndex
+	createdAsas map[basics.AssetIndex]struct{}
+	createdApps map[basics.AppIndex]struct{}
 
 	// These resources have been used by some txn in the group, so they are
 	// available. These maps track the availability of the basic objects (often
@@ -101,6 +101,16 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 }
 
 func (cx *EvalContext) allows(tx *transactions.Transaction, calleeVer uint64) error {
+	// if the caller is pre-sharing, it can't prepare transactions with
+	// resources that are not available, so `tx` is surely legal.
+	if cx.version < sharedResourcesVersion {
+		// this is important, not just an optimization, because a pre-sharing
+		// creation txn has access to the app and app account it is currently
+		// creating (and therefore can pass that access down), but cx.available
+		// doesn't track that properly until v9's protocol upgrade. See
+		// TestInnerAppCreateAndOptin for an example.
+		return nil
+	}
 	switch tx.Type {
 	case protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx:
 		// these transactions don't touch cross-product resources, so no error is possible
@@ -110,7 +120,7 @@ func (cx *EvalContext) allows(tx *transactions.Transaction, calleeVer uint64) er
 	case protocol.AssetFreezeTx:
 		return cx.allowsAssetFreeze(&tx.Header, &tx.AssetFreezeTxnFields)
 	case protocol.ApplicationCallTx:
-		return cx.allowsApplicationCall(&tx.Header, &tx.ApplicationCallTxnFields, cx.version, calleeVer)
+		return cx.allowsApplicationCall(&tx.Header, &tx.ApplicationCallTxnFields, calleeVer)
 	default:
 		return fmt.Errorf("unknown inner transaction type %s", tx.Type)
 	}
@@ -158,13 +168,11 @@ func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) 
 		return true
 	}
 	// If an ASA was created in this group, then allow holding access for any allowed account.
-	for _, created := range r.createdAsas {
-		if created == ai {
-			return cx.availableAccount(addr)
-		}
+	if _, ok := r.createdAsas[ai]; ok {
+		return cx.availableAccount(addr)
 	}
 	// If the address was "created" by making its app in this group, then allow for available assets.
-	for _, created := range r.createdApps {
+	for created := range r.createdApps {
 		if cx.getApplicationAddress(created) == addr {
 			return cx.availableAsset(ai)
 		}
@@ -184,17 +192,15 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 		return true
 	}
 	// All locals of created apps are available
-	for _, created := range r.createdApps {
-		if created == ai {
-			return cx.availableAccount(addr)
-		}
+	if _, ok := r.createdApps[ai]; ok {
+		return cx.availableAccount(addr)
 	}
 	if cx.txn.Txn.ApplicationID == 0 && cx.appID == ai {
 		return cx.availableAccount(addr)
 	}
 
 	// All locals of created app accounts are available
-	for _, created := range r.createdApps {
+	for created := range r.createdApps {
 		if cx.getApplicationAddress(created) == addr {
 			return cx.availableApp(ai)
 		}
@@ -214,14 +220,14 @@ func (cx *EvalContext) requireHolding(acct basics.Address, id basics.AssetIndex)
 		return nil
 	}
 	if !cx.allowsHolding(acct, id) {
-		return fmt.Errorf("invalid Holding access %s x %d would be possible", acct, id)
+		return fmt.Errorf("unavailable Holding %s x %d would be accessible", acct, id)
 	}
 	return nil
 }
 
 func (cx *EvalContext) requireLocals(acct basics.Address, id basics.AppIndex) error {
 	if !cx.allowsLocals(acct, id) {
-		return fmt.Errorf("invalid Local State access %s x %d would be possible", acct, id)
+		return fmt.Errorf("unavailable Local State %s x %d would be accessible", acct, id)
 	}
 	return nil
 }
@@ -315,11 +321,10 @@ func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header
 	}
 }
 
-func (cx *EvalContext) allowsApplicationCall(hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields, callerVer, calleeVer uint64) error {
-	// If an old (pre resource sharing) app is being called from an app that has
-	// resource sharing enabled, we need to confirm that no new "cross-product"
-	// resources have become available.
-	if callerVer < sharedResourcesVersion || calleeVer >= sharedResourcesVersion {
+func (cx *EvalContext) allowsApplicationCall(hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields, calleeVer uint64) error {
+	// If the callee is at least sharedResourcesVersion, then it will check
+	// availability properly itself.
+	if calleeVer >= sharedResourcesVersion {
 		return nil
 	}
 

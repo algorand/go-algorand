@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"io"
 	"math"
 	"net/http"
@@ -91,6 +92,7 @@ type LedgerForAPI interface {
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
 	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
 	GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error)
+	GetTracer() logic.EvalTracer
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -245,8 +247,8 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 	partKeyBinary := buf.Bytes()
 
 	if len(partKeyBinary) == 0 {
-		err := fmt.Errorf(errRESTPayloadZeroLength)
-		return badRequest(ctx, err, err.Error(), v2.Log)
+		lenErr := fmt.Errorf(errRESTPayloadZeroLength)
+		return badRequest(ctx, lenErr, lenErr.Error(), v2.Log)
 	}
 
 	partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
@@ -370,9 +372,9 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 	// count total # of resources, if max limit is set
 	if maxResults := v2.Node.Config().MaxAPIResourcesPerAccount; maxResults != 0 {
-		record, _, _, err := myLedger.LookupAccount(myLedger.Latest(), addr)
-		if err != nil {
-			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		record, _, _, lookupErr := myLedger.LookupAccount(myLedger.Latest(), addr)
+		if lookupErr != nil {
+			return internalError(ctx, lookupErr, errFailedLookingUpLedger, v2.Log)
 		}
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
@@ -428,9 +430,9 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 	}
 
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
-		if err != nil {
-			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		data, encErr := encode(handle, record)
+		if encErr != nil {
+			return internalError(ctx, encErr, errFailedToEncodeResponse, v2.Log)
 		}
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
@@ -609,13 +611,13 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 
 	// msgpack format uses 'RawBlockBytes' and attaches a custom header.
 	if handle == protocol.CodecHandle {
-		blockbytes, err := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
-		if err != nil {
-			switch err.(type) {
+		blockbytes, blockErr := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
+		if blockErr != nil {
+			switch blockErr.(type) {
 			case ledgercore.ErrNoEntry:
-				return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+				return notFound(ctx, blockErr, errFailedLookingUpLedger, v2.Log)
 			default:
-				return internalError(ctx, err, err.Error(), v2.Log)
+				return internalError(ctx, blockErr, blockErr.Error(), v2.Log)
 			}
 		}
 
@@ -730,9 +732,9 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 			return badRequest(ctx, err, "unsupported hash type", v2.Log)
 		}
 
-		proof, err := tree.ProveSingleLeaf(uint64(idx))
-		if err != nil {
-			return internalError(ctx, err, "generating proof", v2.Log)
+		proof, proofErr := tree.ProveSingleLeaf(uint64(idx))
+		if proofErr != nil {
+			return internalError(ctx, proofErr, "generating proof", v2.Log)
 		}
 
 		response := model.TransactionProofResponse{
@@ -927,26 +929,28 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type PreEncodedSimulateTxnResult struct {
-	Txn                    PreEncodedTxInfo `codec:"txn-result"`
-	AppBudgetConsumed      *uint64          `codec:"app-budget-consumed,omitempty"`
-	LogicSigBudgetConsumed *uint64          `codec:"logic-sig-budget-consumed,omitempty"`
+	Txn                    PreEncodedTxInfo                      `codec:"txn-result"`
+	AppBudgetConsumed      *uint64                               `codec:"app-budget-consumed,omitempty"`
+	LogicSigBudgetConsumed *uint64                               `codec:"logic-sig-budget-consumed,omitempty"`
+	TransactionTrace       *model.SimulationTransactionExecTrace `codec:"exec-trace,omitempty"`
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
 type PreEncodedSimulateTxnGroupResult struct {
-	Txns              []PreEncodedSimulateTxnResult `codec:"txn-results"`
-	FailureMessage    *string                       `codec:"failure-message,omitempty"`
-	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
 	AppBudgetAdded    *uint64                       `codec:"app-budget-added,omitempty"`
 	AppBudgetConsumed *uint64                       `codec:"app-budget-consumed,omitempty"`
+	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
+	FailureMessage    *string                       `codec:"failure-message,omitempty"`
+	Txns              []PreEncodedSimulateTxnResult `codec:"txn-results"`
 }
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
 type PreEncodedSimulateResponse struct {
-	Version       uint64                             `codec:"version"`
-	LastRound     uint64                             `codec:"last-round"`
-	TxnGroups     []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
-	EvalOverrides *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
+	Version         uint64                             `codec:"version"`
+	LastRound       uint64                             `codec:"last-round"`
+	TxnGroups       []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	EvalOverrides   *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
+	ExecTraceConfig simulation.ExecTraceConfig         `codec:"exec-trace-config,omitempty"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
@@ -959,6 +963,8 @@ type PreEncodedSimulateRequest struct {
 	TxnGroups            []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
 	AllowEmptySignatures bool                                        `codec:"allow-empty-signatures,omitempty"`
 	AllowMoreLogging     bool                                        `codec:"allow-more-logging,omitempty"`
+	ExtraOpcodeBudget    uint64                                      `codec:"extra-opcode-budget,omitempty"`
+	ExecTraceConfig      simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
@@ -1005,7 +1011,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 	// Simulate transaction
 	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
 	if err != nil {
-		var invalidTxErr simulation.InvalidTxGroupError
+		var invalidTxErr simulation.InvalidRequestError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
@@ -1348,8 +1354,6 @@ func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
 		code = http.StatusOK
 	case *node.CatchpointUnableToStartError:
 		return badRequest(ctx, err, err.Error(), v2.Log)
-	case *node.CatchpointSyncRoundFailure:
-		return badRequest(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
 	default:
 		return internalError(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
 	}
@@ -1701,6 +1705,59 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 		Result: program,
 	}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetLedgerStateDeltaForTransactionGroup retrieves the delta for a specified transaction group.
+// (GET /v2/deltas/txn/group/{id})
+func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id string, params model.GetLedgerStateDeltaForTransactionGroupParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+	idDigest, err := crypto.DigestFromString(id)
+	if err != nil {
+		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
+	}
+	tracer, ok := v2.Node.LedgerForAPI().GetTracer().(*eval.TxnGroupDeltaTracer)
+	if !ok {
+		return notImplemented(ctx, err, errFailedRetrievingTracer, v2.Log)
+	}
+	delta, err := tracer.GetDeltaForID(idDigest)
+	if err != nil {
+		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+	}
+	data, err := encode(handle, delta)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
+// GetTransactionGroupLedgerStateDeltasForRound retrieves the deltas for transaction groups in a given round.
+// (GET /v2/deltas/{round}/txn/group)
+func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Context, round uint64, params model.GetTransactionGroupLedgerStateDeltasForRoundParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+	tracer, ok := v2.Node.LedgerForAPI().GetTracer().(*eval.TxnGroupDeltaTracer)
+	if !ok {
+		return notImplemented(ctx, err, errFailedRetrievingTracer, v2.Log)
+	}
+	deltas, err := tracer.GetDeltasForRound(basics.Round(round))
+	if err != nil {
+		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+	}
+	response := struct {
+		Deltas []eval.TxnGroupDeltaWithIds
+	}{
+		Deltas: deltas,
+	}
+	data, err := encode(handle, response)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // ExperimentalCheck is only available when EnabledExperimentalAPI is true

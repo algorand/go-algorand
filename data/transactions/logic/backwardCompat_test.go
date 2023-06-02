@@ -464,22 +464,22 @@ func TestBackwardCompatAssemble(t *testing.T) {
 	// v1 does not allow branching to the last line
 	// v2 makes such programs legal
 	t.Parallel()
-	source := "int 1; int 1; bnz done; done:"
 
-	t.Run("v=default", func(t *testing.T) {
-		t.Parallel()
-		testProg(t, source, assemblerNoVersion, Expect{1, "label \"done\" is too far away"})
-	})
+	// Label is ok, it just can't be branched to
+	source := "int 1; done:"
+	testProg(t, source, assemblerNoVersion)
+	testProg(t, source, 0)
+	testProg(t, source, 1)
 
-	t.Run("v=default", func(t *testing.T) {
-		t.Parallel()
-		testProg(t, source, 0, Expect{1, "label \"done\" is too far away"})
-	})
-
-	t.Run("v=default", func(t *testing.T) {
-		t.Parallel()
-		testProg(t, source, 1, Expect{1, "label \"done\" is too far away"})
-	})
+	// use multiple lines, so that error report is checked better
+	source = `int 1;
+ int 1;
+ bnz done;
+ done:
+`
+	testProg(t, source, assemblerNoVersion, exp(3, "label \"done\" is too far away", 5))
+	testProg(t, source, 0, exp(3, "label \"done\" is too far away", 5))
+	testProg(t, source, 1, exp(3, "label \"done\" is too far away", 5))
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		v := v

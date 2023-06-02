@@ -69,7 +69,7 @@ const maxLogCalls = 32
 // To be clear, 0 would prevent inner appls, 1 would mean inner app calls cannot
 // make inner appls. So the total app depth can be 1 higher than this number, if
 // you count the top-level app call.
-const maxAppCallDepth = 8
+var maxAppCallDepth = 8
 
 // maxStackDepth should not change unless controlled by an AVM version change
 const maxStackDepth = 1000
@@ -82,11 +82,18 @@ type stackValue struct {
 	Bytes []byte
 }
 
-func (sv stackValue) argType() StackType {
+func (sv stackValue) avmType() avmType {
 	if sv.Bytes != nil {
-		return StackBytes
+		return avmBytes
 	}
-	return StackUint64
+	return avmUint64
+}
+
+func (sv stackValue) stackType() StackType {
+	if sv.Bytes != nil {
+		return NewStackType(sv.avmType(), static(uint64(len(sv.Bytes))))
+	}
+	return NewStackType(sv.avmType(), static(sv.Uint))
 }
 
 func (sv stackValue) typeName() string {
@@ -153,8 +160,8 @@ func (sv stackValue) string(limit int) (string, error) {
 	return string(sv.Bytes), nil
 }
 
-func (sv stackValue) toTealValue() (tv basics.TealValue) {
-	if sv.argType() == StackBytes {
+func (sv stackValue) toTealValue() basics.TealValue {
+	if sv.avmType() == avmBytes {
 		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
 	}
 	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
@@ -532,10 +539,16 @@ func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
 	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
-		ep.available.createdAsas = append(ep.available.createdAsas, aid)
+		if ep.available.createdAsas == nil {
+			ep.available.createdAsas = make(map[basics.AssetIndex]struct{})
+		}
+		ep.available.createdAsas[aid] = struct{}{}
 	}
 	if aid := ad.ApplicationID; aid != 0 {
-		ep.available.createdApps = append(ep.available.createdApps, aid)
+		if ep.available.createdApps == nil {
+			ep.available.createdApps = make(map[basics.AppIndex]struct{})
+		}
+		ep.available.createdApps[aid] = struct{}{}
 	}
 }
 
@@ -613,25 +626,246 @@ func (cx *EvalContext) RunMode() RunMode {
 	return cx.runModeFlags
 }
 
-// StackType describes the type of a value on the operand stack
-type StackType byte
+// PC returns the program counter of the current application being evaluated
+func (cx *EvalContext) PC() int { return cx.pc }
+
+// avmType describes the type of a value on the operand stack
+// avmTypes are a subset of StackTypes
+type avmType byte
 
 const (
-	// StackNone in an OpSpec shows that the op pops or yields nothing
-	StackNone StackType = iota
+	// avmNone in an OpSpec shows that the op pops or yields nothing
+	avmNone avmType = iota
 
-	// StackAny in an OpSpec shows that the op pops or yield any type
-	StackAny
+	// avmAny in an OpSpec shows that the op pops or yield any type
+	avmAny
 
-	// StackUint64 in an OpSpec shows that the op pops or yields a uint64
-	StackUint64
+	// avmUint64 in an OpSpec shows that the op pops or yields a uint64
+	avmUint64
 
-	// StackBytes in an OpSpec shows that the op pops or yields a []byte
-	StackBytes
+	// avmBytes in an OpSpec shows that the op pops or yields a []byte
+	avmBytes
 )
+
+func (at avmType) String() string {
+	switch at {
+	case avmNone:
+		return "none"
+	case avmAny:
+		return "any"
+	case avmUint64:
+		return "uint64"
+	case avmBytes:
+		return "[]byte"
+	}
+	return "internal error, unknown type"
+}
+
+var (
+	// StackUint64 is any valid uint64
+	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
+	// StackBytes is any valid bytestring
+	StackBytes = NewStackType(avmBytes, bound(0, maxStringSize))
+	// StackAny could be Bytes or Uint64
+	StackAny = StackType{
+		Name:    avmAny.String(),
+		AVMType: avmAny,
+		Bound:   [2]uint64{0, 0},
+	}
+	// StackNone is used when there is no input or output to
+	// an opcode
+	StackNone = StackType{
+		Name:    avmNone.String(),
+		AVMType: avmNone,
+	}
+
+	// StackBoolean constrains the int to 1 or 0, representing True or False
+	StackBoolean = NewStackType(avmUint64, bound(0, 1), "bool")
+	// StackAddress represents an address
+	StackAddress = NewStackType(avmBytes, static(32), "address")
+	// StackBytes32 represents a bytestring that should have exactly 32 bytes
+	StackBytes32 = NewStackType(avmBytes, static(32), "[32]byte")
+	// StackBigInt represents a bytestring that should be treated like an int
+	StackBigInt = NewStackType(avmBytes, bound(0, maxByteMathSize), "bigint")
+	// StackMethodSelector represents a bytestring that should be treated like a method selector
+	StackMethodSelector = NewStackType(avmBytes, static(4), "method")
+	// StackStateKey represents a bytestring that can be used as a key to some storage (global/local/box)
+	StackStateKey = NewStackType(avmBytes, bound(0, 64), "stateKey")
+	// StackBoxName represents a bytestring that can be used as a key to a box
+	StackBoxName = NewStackType(avmBytes, bound(1, 64), "boxName")
+
+	// StackZeroUint64 is a StackUint64 with a minimum value of 0 and a maximum value of 0
+	StackZeroUint64 = NewStackType(avmUint64, bound(0, 0), "0")
+	// StackZeroBytes is a StackBytes with a minimum length of 0 and a maximum length of 0
+	StackZeroBytes = NewStackType(avmUint64, bound(0, 0), "''")
+
+	// AllStackTypes is a map of all the stack types we recognize
+	// so that we can iterate over them in doc prep
+	// and use them for opcode proto shorthand
+	AllStackTypes = map[rune]StackType{
+		'a': StackAny,
+		'b': StackBytes,
+		'i': StackUint64,
+		'x': StackNone,
+		'A': StackAddress,
+		'I': StackBigInt,
+		'T': StackBoolean,
+		'H': StackBytes32,
+		'M': StackMethodSelector,
+		'K': StackStateKey,
+		'N': StackBoxName,
+	}
+)
+
+func bound(min, max uint64) [2]uint64 {
+	return [2]uint64{min, max}
+}
+
+func static(size uint64) [2]uint64 {
+	return bound(size, size)
+}
+
+func union(a, b [2]uint64) [2]uint64 {
+	u := [2]uint64{a[0], a[1]}
+	if b[0] < u[0] {
+		u[0] = b[0]
+	}
+
+	if b[1] > u[1] {
+		u[1] = b[1]
+	}
+	return u
+}
+
+// StackType describes the type of a value on the operand stack
+type StackType struct {
+	Name    string // alias (address, boolean, ...) or derived name [5]byte
+	AVMType avmType
+	Bound   [2]uint64 // represents max/min value for uint64 or max/min length for byte[]
+}
+
+// NewStackType Initializes a new StackType with fields passed
+func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
+	name := at.String()
+
+	// It's static, set the name to show
+	// the static value
+	if bounds[0] == bounds[1] {
+		switch at {
+		case avmBytes:
+			name = fmt.Sprintf("[%d]byte", bounds[0])
+		case avmUint64:
+			name = fmt.Sprintf("%d", bounds[0])
+		}
+	}
+
+	if len(stname) > 0 {
+		name = stname[0]
+	}
+
+	return StackType{Name: name, AVMType: at, Bound: bounds}
+}
+
+func (st StackType) union(b StackType) StackType {
+	// TODO: Can we ever receive one or the other
+	// as None? should that be a panic?
+	if st.AVMType != b.AVMType {
+		return StackAny
+	}
+
+	// Same type now, so we can just take the union of the bounds
+	return NewStackType(st.AVMType, union(st.Bound, b.Bound))
+}
+
+func (st StackType) narrowed(bounds [2]uint64) StackType {
+	return NewStackType(st.AVMType, bounds)
+}
+
+func (st StackType) widened() StackType {
+	// Take only the avm type
+	switch st.AVMType {
+	case avmBytes:
+		return StackBytes
+	case avmUint64:
+		return StackUint64
+	case avmAny:
+		return StackAny
+	default:
+		panic(fmt.Sprintf("What are you tyring to widen?: %+v", st))
+	}
+}
+
+func (st StackType) constant() (uint64, bool) {
+	if st.Bound[0] == st.Bound[1] {
+		return st.Bound[0], true
+	}
+	return 0, false
+}
+
+// overlaps checks if there is enough overlap
+// between the given types that the receiver can
+// possible fit in the expected type
+func (st StackType) overlaps(expected StackType) bool {
+	if st.AVMType == avmNone || expected.AVMType == avmNone {
+		return false
+	}
+
+	if st.AVMType == avmAny || expected.AVMType == avmAny {
+		return true
+	}
+
+	// By now, both are either uint or bytes
+	// and must match
+	if st.AVMType != expected.AVMType {
+		return false
+	}
+
+	// Same type now
+	// Check if our constraints will satisfy the other type
+	smin, smax := st.Bound[0], st.Bound[1]
+	emin, emax := expected.Bound[0], expected.Bound[1]
+
+	return smin <= emax && smax >= emin
+}
+
+func (st StackType) String() string {
+	return st.Name
+}
+
+// Typed tells whether the StackType is a specific concrete type.
+func (st StackType) Typed() bool {
+	switch st.AVMType {
+	case avmUint64, avmBytes:
+		return true
+	}
+	return false
+}
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
+
+// Reversed returns the StackTypes in reverse order
+// useful for displaying the stack as an op sees it
+func (st StackTypes) Reversed() StackTypes {
+	nst := make(StackTypes, len(st))
+	for idx := 0; idx < len(st); idx++ {
+		nst[idx] = st[len(st)-1-idx]
+	}
+	return nst
+}
+
+func (st StackTypes) String() string {
+	// Note this reverses the stack so top appears first
+	return fmt.Sprintf("(%s)", strings.Join(st.strings(), ", "))
+}
+
+func (st StackTypes) strings() []string {
+	var strs = make([]string, len(st))
+	for idx, s := range st {
+		strs[idx] = s.String()
+	}
+	return strs
+}
 
 func parseStackTypes(spec string) StackTypes {
 	if spec == "" {
@@ -639,43 +873,13 @@ func parseStackTypes(spec string) StackTypes {
 	}
 	types := make(StackTypes, len(spec))
 	for i, letter := range spec {
-		switch letter {
-		case 'a':
-			types[i] = StackAny
-		case 'b':
-			types[i] = StackBytes
-		case 'i':
-			types[i] = StackUint64
-		case 'x':
-			types[i] = StackNone
-		default:
+		st, ok := AllStackTypes[letter]
+		if !ok {
 			panic(spec)
 		}
+		types[i] = st
 	}
 	return types
-}
-
-func (st StackType) String() string {
-	switch st {
-	case StackNone:
-		return "None"
-	case StackAny:
-		return "any"
-	case StackUint64:
-		return "uint64"
-	case StackBytes:
-		return "[]byte"
-	}
-	return "internal error, unknown type"
-}
-
-// Typed tells whether the StackType is a specific concrete type.
-func (st StackType) Typed() bool {
-	switch st {
-	case StackUint64, StackBytes:
-		return true
-	}
-	return false
 }
 
 // panicError wraps a recover() catching a panic()
@@ -742,13 +946,20 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		}
 	}
 
-	// If this is a creation, make any "0 index" box refs available now that we
-	// have an appID.
+	// If this is a creation...
 	if cx.txn.Txn.ApplicationID == 0 {
+		// make any "0 index" box refs available now that we have an appID.
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
 				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = false
 			}
+		}
+		// and add the appID to `createdApps`
+		if cx.EvalParams.Proto.LogicSigVersion >= sharedResourcesVersion {
+			if cx.EvalParams.available.createdApps == nil {
+				cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
+			}
+			cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
 		}
 	}
 
@@ -1037,8 +1248,8 @@ func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
 	return version, vlen, nil
 }
 
-func opCompat(expected, got StackType) bool {
-	if expected == StackAny {
+func opCompat(expected, got avmType) bool {
+	if expected == avmAny {
 		return true
 	}
 	return expected == got
@@ -1121,7 +1332,7 @@ func (cx *EvalContext) step() error {
 	}
 	first := len(cx.stack) - len(spec.Arg.Types)
 	for i, argType := range spec.Arg.Types {
-		if !opCompat(argType, cx.stack[first+i].argType()) {
+		if !opCompat(argType.AVMType, cx.stack[first+i].avmType()) {
 			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.stack[first+i].typeName())
 		}
 	}
@@ -1169,14 +1380,14 @@ func (cx *EvalContext) step() error {
 		}
 		first = postheight - len(spec.Return.Types)
 		for i, argType := range spec.Return.Types {
-			stackType := cx.stack[first+i].argType()
-			if !opCompat(argType, stackType) {
+			stackType := cx.stack[first+i].avmType()
+			if !opCompat(argType.AVMType, stackType) {
 				if spec.AlwaysExits() { // We test in the loop because it's the uncommon case.
 					break
 				}
 				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType)
 			}
-			if stackType == StackBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
+			if stackType == avmBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
 				return fmt.Errorf("%s produced a too big (%d) byte-array", spec.Name, len(cx.stack[first+i].Bytes))
 			}
 		}
@@ -1304,10 +1515,6 @@ func (cx *EvalContext) ensureStackCap(targetCap int) {
 		copy(newStack, cx.stack)
 		cx.stack = newStack
 	}
-}
-
-func opDeprecated(cx *EvalContext) error {
-	return fmt.Errorf("deprecated opcode %d executed", cx.program[cx.pc])
 }
 
 func opErr(cx *EvalContext) error {
@@ -1570,13 +1777,13 @@ func opOr(cx *EvalContext) error {
 func opEq(cx *EvalContext) error {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	ta := cx.stack[prev].argType()
-	tb := cx.stack[last].argType()
+	ta := cx.stack[prev].avmType()
+	tb := cx.stack[last].avmType()
 	if ta != tb {
 		return fmt.Errorf("cannot compare (%s to %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
 	}
 	var cond bool
-	if ta == StackBytes {
+	if ta == avmBytes {
 		cond = bytes.Equal(cx.stack[prev].Bytes, cx.stack[last].Bytes)
 	} else {
 		cond = cx.stack[prev].Uint == cx.stack[last].Uint
@@ -1612,7 +1819,7 @@ func opItob(cx *EvalContext) error {
 	ibytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(ibytes, cx.stack[last].Uint)
 	// cx.stack[last].Uint is not cleared out as optimization
-	// stackValue.argType() checks Bytes field first
+	// stackValue.avmType() checks Bytes field first
 	cx.stack[last].Bytes = ibytes
 	return nil
 }
@@ -1715,7 +1922,7 @@ func opSqrt(cx *EvalContext) error {
 
 func opBitLen(cx *EvalContext) error {
 	last := len(cx.stack) - 1
-	if cx.stack[last].argType() == StackUint64 {
+	if cx.stack[last].avmType() == avmUint64 {
 		cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
 		return nil
 	}
@@ -2369,14 +2576,14 @@ func opMatch(cx *EvalContext) error {
 
 	matchedIdx := n
 	for i, stackArg := range matchList {
-		if stackArg.argType() != matchVal.argType() {
+		if stackArg.avmType() != matchVal.avmType() {
 			continue
 		}
 
-		if matchVal.argType() == StackBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
+		if matchVal.avmType() == avmBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
 			matchedIdx = i
 			break
-		} else if matchVal.argType() == StackUint64 && matchVal.Uint == stackArg.Uint {
+		} else if matchVal.avmType() == avmUint64 && matchVal.Uint == stackArg.Uint {
 			matchedIdx = i
 			break
 		}
@@ -2417,26 +2624,26 @@ func opRetSub(cx *EvalContext) error {
 	if top < 0 {
 		return errors.New("retsub with empty callstack")
 	}
-	frame := cx.callstack[top]
-	if frame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
-		expect := frame.height + frame.returns
+	topFrame := cx.callstack[top]
+	if topFrame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
+		expect := topFrame.height + topFrame.returns
 		if len(cx.stack) < expect { // Check general error case first, only diffentiate when error is assured
 			switch {
-			case len(cx.stack) < frame.height:
+			case len(cx.stack) < topFrame.height:
 				return fmt.Errorf("retsub executed with stack below frame. Did you pop args?")
-			case len(cx.stack) == frame.height:
-				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", frame.returns)
+			case len(cx.stack) == topFrame.height:
+				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", topFrame.returns)
 			default:
 				return fmt.Errorf("retsub executed with %d return values on stack. proto declared %d",
-					len(cx.stack)-frame.height, frame.returns)
+					len(cx.stack)-topFrame.height, topFrame.returns)
 			}
 		}
-		argstart := frame.height - frame.args
-		copy(cx.stack[argstart:], cx.stack[frame.height:expect])
-		cx.stack = cx.stack[:argstart+frame.returns]
+		argstart := topFrame.height - topFrame.args
+		copy(cx.stack[argstart:], cx.stack[topFrame.height:expect])
+		cx.stack = cx.stack[:argstart+topFrame.returns]
 	}
 	cx.callstack = cx.callstack[:top]
-	cx.nextpc = frame.retpc
+	cx.nextpc = topFrame.retpc
 	return nil
 }
 
@@ -2514,8 +2721,8 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -2550,8 +2757,8 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -2577,8 +2784,8 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -2911,8 +3118,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		return sv, fmt.Errorf("invalid txn field %s", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -3359,8 +3566,8 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 
 	return sv, err
@@ -3788,7 +3995,7 @@ func opGetBit(cx *EvalContext) error {
 	target := cx.stack[prev]
 
 	var bit uint64
-	if target.argType() == StackUint64 {
+	if target.avmType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("getbit index > 63 with with Uint")
 		}
@@ -3830,7 +4037,7 @@ func opSetBit(cx *EvalContext) error {
 		return errors.New("setbit value > 1")
 	}
 
-	if target.argType() == StackUint64 {
+	if target.avmType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("setbit index > 63 with Uint")
 		}
@@ -4040,13 +4247,15 @@ func opExtract64Bits(cx *EvalContext) error {
 // assignAccount is used to convert a stackValue into a 32-byte account value,
 // enforcing any "availability" restrictions in force.
 func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
-	_, err := sv.address()
+	addr, err := sv.address()
 	if err != nil {
 		return basics.Address{}, err
 	}
 
-	addr, _, err := cx.accountReference(sv)
-	return addr, err
+	if cx.availableAccount(addr) {
+		return addr, nil
+	}
+	return basics.Address{}, fmt.Errorf("invalid Account reference %s", addr)
 }
 
 // accountReference yields the address and Accounts offset designated by a
@@ -4065,32 +4274,46 @@ func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
 // not, based on version.
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
-	if cx.version < sharedResourcesVersion {
-		if account.argType() == StackUint64 {
-			addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
-			return addr, account.Uint, err
-		}
-	}
-	addr, err := account.address()
+	addr, idx, err := cx.resolveAccount(account)
 	if err != nil {
 		return addr, 0, err
 	}
 
-	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
-	if err == nil {
-		return addr, idx, nil
+	if idx >= 0 {
+		return addr, uint64(idx), err
 	}
-
-	// IndexByAddress's `err` tells us we can't return the idx into
+	// negative idx tells us we can't return the idx into
 	// txn.Accounts, but the account might still be available (because it was
-	// created in earlier in the group, or because of group sharing)
+	// created earlier in the group, or because of group sharing)
 	ok := cx.availableAccount(addr)
 	if !ok {
-		// nope, it's not available at all. So return the `err` we have from
-		// above, indicating that it was not found.
-		return addr, 0, err
+		return addr, 0, fmt.Errorf("invalid Account reference %s", addr)
 	}
+	// available, but not in txn.Accounts. Return 1 higher to signal.
 	return addr, uint64(len(cx.txn.Txn.Accounts) + 1), nil
+}
+
+// resolveAccount determines the Address and slot indicated by a stackValue, so
+// it is either confirming that the bytes is indeed 32 bytes (and trying to find
+// it in txn.Accounts or returning -1), or it is performing the lookup of the
+// integer arg in txn.Accounts.
+func (cx *EvalContext) resolveAccount(account stackValue) (basics.Address, int, error) {
+	if account.avmType() == avmUint64 {
+		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
+		return addr, int(account.Uint), err
+	}
+	addr, err := account.address()
+	if err != nil {
+		return addr, -1, err
+	}
+
+	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
+	if err != nil {
+		// we don't want to convey `err`, because the supplied `account` does
+		// seem to be an address, but we can't give a valid index.
+		return addr, -1, nil //nolint:nilerr // see above comment
+	}
+	return addr, int(idx), nil
 }
 
 func (cx *EvalContext) availableAccount(addr basics.Address) bool {
@@ -4101,7 +4324,7 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, appID := range cx.available.createdApps {
+		for appID := range cx.available.createdApps {
 			createdAddress := cx.getApplicationAddress(appID)
 			if addr == createdAddress {
 				return true
@@ -4443,9 +4666,9 @@ func opAppLocalDel(cx *EvalContext) error {
 
 	// if deleting a non-existent value, don't record in EvalDelta, matching
 	// ledger behavior with previous BuildEvalDelta mechanism
-	if _, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
-		if err != nil {
-			return err
+	if _, ok, getErr := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
+		if getErr != nil {
+			return getErr
 		}
 		accountIdx = cx.ensureLocalDelta(accountIdx, addr)
 		cx.txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
@@ -4492,40 +4715,63 @@ func opAppGlobalDel(cx *EvalContext) error {
 // more than 2 or so, and was often called an "index".  But it was not a
 // basics.AssetIndex or basics.ApplicationIndex.
 
-func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, error) {
+func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppIndex, err error) {
 	if cx.version >= directRefEnabledVersion {
-		if ref == 0 || ref == uint64(cx.appID) {
-			return cx.appID, nil
-		}
-		aid := basics.AppIndex(ref)
-		if cx.availableApp(aid) {
-			return aid, nil
-		}
-
-		if cx.version < sharedResourcesVersion {
-			// Allow use of indexes, but this comes last so that clear advice can be
-			// given to anyone who cares about semantics in the first few rounds of
-			// a new network - don't use indexes for references, use the App ID
-			if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-				return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
-			}
-		}
-	} else {
-		// Old rules
-		if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
-			return cx.appID, nil
-		}
-		if foreign {
-			// In old versions, a foreign reference must be an index in ForeignAssets or 0
-			if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-				return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
-			}
-		} else {
-			// Otherwise it's direct
-			return basics.AppIndex(ref), nil
-		}
+		return cx.resolveApp(ref)
 	}
-	return 0, fmt.Errorf("invalid App reference %d", ref)
+
+	// resolveApp is already similarly protected (and must be, since it is
+	// called independently)
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low App lookup %d", aid)
+			}
+		}()
+	}
+	// Old rules, pre directRefEnabledVersion, when a ref has to be a slot for
+	// some opcodes, and had to be an ID for others.
+	if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
+		return cx.appID, nil
+	}
+	if foreign {
+		// In old versions, a foreign reference must be an index in ForeignApps or 0
+		if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
+			return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+		}
+		return 0, fmt.Errorf("App index %d beyond txn.ForeignApps", ref)
+	}
+	// Otherwise it's direct
+	return basics.AppIndex(ref), nil
+}
+
+// resolveApp figures out what App an integer is referring to, considering 0 as
+// current app first, then uses the integer as is if it is an availableApp, then
+// tries to perform a slot lookup.
+func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low App lookup %d", aid)
+			}
+		}()
+	}
+
+	if ref == 0 || ref == uint64(cx.appID) {
+		return cx.appID, nil
+	}
+	aid = basics.AppIndex(ref)
+	if cx.availableApp(aid) {
+		return aid, nil
+	}
+
+	// Allow use of indexes, but this comes last so that clear advice can be
+	// given to anyone who cares about semantics in the first few rounds of
+	// a new network - don't use indexes for references, use the App ID
+	if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
+		return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+	}
+	return 0, fmt.Errorf("unavailable App %d", ref)
 }
 
 // localsReference has the main job of resolving the account (as bytes or u64)
@@ -4535,33 +4781,32 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (basics.AppIndex, 
 // job in certainly old versions that need the slot index while doing a lookup.
 func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.Address, basics.AppIndex, uint64, error) {
 	if cx.version >= sharedResourcesVersion {
-		unused := uint64(0) // see function comment
-		addr, err := account.address()
+		addr, _, err := cx.resolveAccount(account)
 		if err != nil {
 			return basics.Address{}, 0, 0, err
 		}
-		aid := basics.AppIndex(ref)
-		if ref == 0 {
-			aid = cx.appID
-		}
-		if cx.allowsLocals(addr, aid) {
-			return addr, aid, unused, nil
+		aid, err := cx.resolveApp(ref)
+		if err == nil {
+			if cx.allowsLocals(addr, aid) {
+				return addr, aid, 0, nil // >v9 caller doesn't care about slot
+			}
 		}
 
-		// Do some extra lookups to give a more concise err. Whenever a locals
-		// is available, its account and app must be as well (but not vice
-		// versa, anymore). So, if (only) one of them is not available, yell
-		// about it, specifically.
+		// Do an extra check to give a better error. The app is definitely
+		// available. If the addr is too, then the trouble is they must have
+		// come from different transactions, and the HOLDING is the problem.
 
-		_, _, acctErr := cx.accountReference(account)
-		_, appErr := cx.appReference(ref, false)
+		acctOK := cx.availableAccount(addr)
 		switch {
-		case acctErr != nil && appErr == nil:
-			err = acctErr
-		case acctErr == nil && appErr != nil:
-			err = appErr
-		default:
-			err = fmt.Errorf("invalid Local State access %s x %d", addr, aid)
+		case err != nil && acctOK:
+			// do nothing, err contains the an Asset specific problem
+		case err == nil && acctOK:
+			// although both are available, the LOCALS are not
+			err = fmt.Errorf("unavailable Local State %s x %d", addr, aid)
+		case err != nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
+		case err == nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s", addr)
 		}
 
 		return basics.Address{}, 0, 0, err
@@ -4580,64 +4825,89 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 	return addr, app, addrIdx, nil
 }
 
-func (cx *EvalContext) assetReference(ref uint64, foreign bool) (basics.AssetIndex, error) {
+func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.AssetIndex, err error) {
 	if cx.version >= directRefEnabledVersion {
-		aid := basics.AssetIndex(ref)
-		if cx.availableAsset(aid) {
-			return aid, nil
-		}
-
-		if cx.version < sharedResourcesVersion {
-			// Allow use of indexes, but this comes last so that clear advice can be
-			// given to anyone who cares about semantics in the first few rounds of
-			// a new network - don't use indexes for references, use the asa ID.
-			if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-				return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
-			}
-		}
-	} else {
-		// Old rules
-		if foreign {
-			// In old versions, a foreign reference must be an index in ForeignAssets
-			if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-				return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
-			}
-		} else {
-			// Otherwise it's direct
-			return basics.AssetIndex(ref), nil
-		}
+		return cx.resolveAsset(ref)
 	}
-	return 0, fmt.Errorf("invalid Asset reference %d", ref)
 
+	// resolveAsset is already similarly protected (and must be, since it is
+	// called independently)
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low Asset lookup %d", aid)
+			}
+		}()
+	}
+	// Old rules, pre directRefEnabledVersion, when a ref has to be a slot for
+	// some opcodes, and had to be an ID for others.
+	if foreign {
+		// In old versions, a foreign reference must be an index in ForeignAssets
+		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
+			return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+		}
+		return 0, fmt.Errorf("Asset index %d beyond txn.ForeignAssets", ref)
+	}
+	// Otherwise it's direct
+	return basics.AssetIndex(ref), nil
+}
+
+const lastForbiddenResource = 255
+
+// resolveAsset figures out what Asset an integer is referring to, considering 0 as
+// current app first, then uses the integer as is if it is an availableAsset, then
+// tries to perform a slot lookup.
+func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err error) {
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low Asset lookup %d", aid)
+			}
+		}()
+	}
+	aid = basics.AssetIndex(ref)
+	if cx.availableAsset(aid) {
+		return aid, nil
+	}
+
+	// Allow use of indexes, but this comes last so that clear advice can be
+	// given to anyone who cares about semantics in the first few rounds of
+	// a new network - don't use indexes for references, use the Asset ID
+	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
+		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+	}
+	return 0, fmt.Errorf("unavailable Asset %d", ref)
 }
 
 func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.Address, basics.AssetIndex, error) {
 	if cx.version >= sharedResourcesVersion {
-		addr, err := account.address()
+		addr, _, err := cx.resolveAccount(account)
 		if err != nil {
 			return basics.Address{}, 0, err
 		}
-		aid := basics.AssetIndex(ref)
-		if cx.allowsHolding(addr, aid) {
-			return addr, aid, nil
+		aid, err := cx.resolveAsset(ref)
+		if err == nil {
+			if cx.allowsHolding(addr, aid) {
+				return addr, aid, nil
+			}
 		}
 
-		// Do some extra lookups to give a more concise err. Whenever a holding
-		// is available, its account and asset must be as well (but not vice
-		// versa, anymore). So, if (only) one of them is not available, yell
-		// about it, specifically.
+		// Do an extra check to give a better error. The asset is definitely
+		// available. If the addr is too, then the trouble is they must have
+		// come from different transactions, and the HOLDING is the problem.
 
-		_, _, acctErr := cx.accountReference(account)
-		_, assetErr := cx.assetReference(ref, false)
+		acctOK := cx.availableAccount(addr)
 		switch {
-		case acctErr != nil && assetErr == nil:
-			err = acctErr
-		case acctErr == nil && assetErr != nil:
-			err = assetErr
-		default:
-			err = fmt.Errorf("invalid Holding access %s x %d", addr, aid)
+		case err != nil && acctOK:
+			// do nothing, err contains the an Asset specific problem
+		case err == nil && acctOK:
+			// although both are available, the HOLDING is not
+			err = fmt.Errorf("unavailable Holding %s x %d", addr, aid)
+		case err != nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
+		case err == nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s", addr)
 		}
-
 		return basics.Address{}, 0, err
 	}
 
@@ -4911,7 +5181,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
-	return 0, fmt.Errorf("invalid Asset reference %d", aid)
+	return 0, fmt.Errorf("unavailable Asset %d", aid)
 }
 
 // availableAsset determines whether an asset is "available". Before
@@ -4930,10 +5200,8 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, assetID := range cx.available.createdAsas {
-			if assetID == aid {
-				return true
-			}
+		if _, ok := cx.available.createdAsas[aid]; ok {
+			return true
 		}
 	}
 
@@ -4960,7 +5228,7 @@ func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 		return aid, nil
 	}
 
-	return 0, fmt.Errorf("invalid App reference %d", aid)
+	return 0, fmt.Errorf("unavailable App %d", aid)
 }
 
 func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
@@ -4972,10 +5240,8 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, appID := range cx.available.createdApps {
-			if appID == aid {
-				return true
-			}
+		if _, ok := cx.available.createdApps[aid]; ok {
+			return true
 		}
 	}
 	// Or, it can be the current app
@@ -5097,14 +5363,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		txn.AssetParams.Total, err = sv.uint()
 	case ConfigAssetDecimals:
 		var decimals uint64
-		decimals, err = sv.uint()
-		if err == nil {
-			if decimals > uint64(cx.Proto.MaxAssetDecimals) {
-				err = fmt.Errorf("too many decimals (%d)", decimals)
-			} else {
-				txn.AssetParams.Decimals = uint32(decimals)
-			}
-		}
+		decimals, err = sv.uintMaxed(uint64(cx.Proto.MaxAssetDecimals))
+		txn.AssetParams.Decimals = uint32(decimals)
 	case ConfigAssetDefaultFrozen:
 		txn.AssetParams.DefaultFrozen, err = sv.bool()
 	case ConfigAssetUnitName:
@@ -5303,16 +5563,16 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		// transaction pool. Namely that any transaction that makes it
 		// to Perform (which is equivalent to eval.applyTransaction)
 		// is authorized, and WellFormed.
-		err := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
-		if err != nil {
-			return err
+		txnErr := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
+		if txnErr != nil {
+			return txnErr
 		}
 
 		// Recall that WellFormed does not care about individual
 		// transaction fees because of fee pooling. Checked above.
-		err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
-		if err != nil {
-			return err
+		txnErr = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		if txnErr != nil {
+			return txnErr
 		}
 
 		var calledVersion uint64
@@ -5336,9 +5596,9 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			// Set program by txn, approval, or clear state
 			program := cx.subtxns[itx].Txn.ApprovalProgram
 			if cx.subtxns[itx].Txn.ApplicationID != 0 {
-				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
-				if err != nil {
-					return err
+				app, _, paramsErr := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+				if paramsErr != nil {
+					return paramsErr
 				}
 				program = app.ApprovalProgram
 				if cx.subtxns[itx].Txn.OnCompletion == transactions.ClearStateOC {
@@ -5362,15 +5622,15 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			if cx.subtxns[itx].Txn.OnCompletion == transactions.OptInOC {
 				csp := cx.subtxns[itx].Txn.ClearStateProgram
 				if cx.subtxns[itx].Txn.ApplicationID != 0 {
-					app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
-					if err != nil {
-						return err
+					app, _, paramsErr := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+					if paramsErr != nil {
+						return paramsErr
 					}
 					csp = app.ClearStateProgram
 				}
-				csv, _, err := transactions.ProgramVersion(csp)
-				if err != nil {
-					return err
+				csv, _, verErr := transactions.ProgramVersion(csp)
+				if verErr != nil {
+					return verErr
 				}
 				if csv < cx.Proto.MinInnerApplVersion {
 					return fmt.Errorf("inner app call opt-in with CSP v%d < v%d",

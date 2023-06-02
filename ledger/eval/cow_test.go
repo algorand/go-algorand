@@ -192,6 +192,51 @@ func TestCowBalance(t *testing.T) {
 	checkCowByUpdate(t, c0, updates2)
 }
 
+// TestCowDeltasAfterCommit tests that deltas are still valid after committing to parent.
+func TestCowDeltasAfterCommit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	accts0 := ledgertesting.RandomAccounts(20, true)
+	ml := mockLedger{balanceMap: accts0}
+
+	c0 := makeRoundCowState(
+		&ml, bookkeeping.BlockHeader{}, config.Consensus[protocol.ConsensusCurrentVersion],
+		0, ledgercore.AccountTotals{}, 0)
+	checkCow(t, c0, accts0)
+
+	c1 := c0.child(0)
+
+	acctUpdates, _, _ := ledgertesting.RandomDeltas(10, accts0, 0)
+	applyUpdates(c1, acctUpdates)
+	acctUpdates.Dehydrate() // Prep for comparison
+
+	c1.kvPut("key", []byte("value"))
+	expectedKvMods := map[string]ledgercore.KvValueDelta{
+		"key": {
+			Data: []byte("value"),
+		},
+	}
+
+	actualDeltas := c1.deltas()
+	actualDeltas.Dehydrate() // Prep for comparison
+	require.Equal(t, acctUpdates, actualDeltas.Accts)
+	require.Equal(t, expectedKvMods, actualDeltas.KvMods)
+
+	// Parent should now have deltas
+	c1.commitToParent()
+	actualDeltas = c0.deltas()
+	actualDeltas.Dehydrate() // Prep for comparison
+	require.Equal(t, acctUpdates, actualDeltas.Accts)
+	require.Equal(t, expectedKvMods, actualDeltas.KvMods)
+
+	// Deltas remain valid in child after commit
+	actualDeltas = c0.deltas()
+	actualDeltas.Dehydrate() // Prep for comparison
+	require.Equal(t, acctUpdates, actualDeltas.Accts)
+	require.Equal(t, expectedKvMods, actualDeltas.KvMods)
+}
+
 func BenchmarkCowChild(b *testing.B) {
 	b.ReportAllocs()
 	cow := makeRoundCowState(nil, bookkeeping.BlockHeader{}, config.ConsensusParams{}, 10000, ledgercore.AccountTotals{}, 16)

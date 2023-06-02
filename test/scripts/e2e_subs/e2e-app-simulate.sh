@@ -106,7 +106,7 @@ fi
 # WE ALSO TEST OVERSPEND IN TRANSACTION GROUP #
 ###############################################
 
-${gcmd} clerk send -a 1000000000000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay1.tx"
+${gcmd} clerk send -a 1000000000000000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay1.tx"
 ${gcmd} clerk send -a 10000 -f ${ACCOUNT} -t ${ACCOUNT} -o "${TEMPDIR}/pay2.tx"
 
 cat "${TEMPDIR}/pay1.tx" "${TEMPDIR}/pay2.tx" | ${gcmd} clerk group -i - -o "${TEMPDIR}/grouped.tx"
@@ -121,14 +121,14 @@ cat "${TEMPDIR}/grouped-0.stx" "${TEMPDIR}/grouped-1.stx" > "${TEMPDIR}/grouped.
 RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/grouped.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
-    data '+app-simulate-test FAIL should FAIL for overspending in simulate self pay transaction group %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL should FAIL for overspending in simulate self pay transaction group %Y%m%d_%H%M%S'
     false
 fi
 
 OVERSPEND_INFO="overspend"
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"$OVERSPEND_INFO"* ]]; then
-    data '+app-simulate-test FAIL first overspending transaction in transaction group should contain message OVERSPEND %Y%m%d_%H%M%S'
+    date '+app-simulate-test FAIL first overspending transaction in transaction group should contain message OVERSPEND %Y%m%d_%H%M%S'
     false
 fi
 
@@ -139,7 +139,7 @@ fi
 printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple-v2.teal"
 
 # Real Create
-RES=$(${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --extra-pages 0 --from $ACCOUNT 2>&1 || true)
+RES=$(${gcmd} app method --method "create(uint64)uint64" --arg "1234" --create --approval-prog ${DIR}/tealprogs/app-abi-method-example.teal --clear-prog ${TEMPDIR}/simple-v2.teal --local-byteslices 1 --from $ACCOUNT 2>&1 || true)
 EXPECTED="method create(uint64)uint64 succeeded with output: 2468"
 if [[ $RES != *"${EXPECTED}"* ]]; then
     date '+app-simulate-test FAIL the method call to create(uint64)uint64 should not fail %Y%m%d_%H%M%S'
@@ -198,7 +198,7 @@ printf '#pragma version 6\nint 1' > "${TEMPDIR}/simple-v6.teal"
 # NOTE: logs-a-lot.teal contains a method that logs 1.4kb info, which is well over 1kb limit in binary
 #       we test it here to see if the simulate unlimit log works under goal clerk simulate
 
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/logs-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v6.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEAL}/logs-a-lot.teal" --clear-prog "${TEMPDIR}/simple-v6.teal" 2>&1 || true)
 EXPSUCCESS='Created app with app index'
 if [[ $RES != *"${EXPSUCCESS}"* ]]; then
     date '+app-simulate-test FAIL the app creation for logs-a-lot.teal should succeed %Y%m%d_%H%M%S'
@@ -286,5 +286,101 @@ EXPECTED_LAST_LINE_BIG_LOG='Those of the largest size,'
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."txn-result"."logs"[-1] | @base64d') != *"${EXPECTED_LAST_LINE_BIG_LOG}"* ]]; then
     date '+app-simulate-test FAIL the app call to logs-a-lot.teal for unlimited_log_test()void should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+############################################################
+# WE WANT TO FURTHER TEST EXTRA BUDGET IN SIMULATION WORKS #
+############################################################
+
+function generate_teal() {
+    FILE=$1
+    VERSION=$2
+    REPETITION=$3
+
+    printf '#pragma version %d\n txn ApplicationID\n bz end\n' $VERSION > "${FILE}"
+
+    # iterating in interval [0, REPETITION - 1]
+    for i in $(seq 0 1 $(expr $REPETITION - 1)); do
+        printf "int 1\npop\n" >> "${FILE}"
+    done
+
+    printf "end:\n int 1\n" >> "${FILE}"
+}
+
+BIG_TEAL_FILE="$TEMPDIR/int-pop-400-cost-a-lot.teal"
+generate_teal "$BIG_TEAL_FILE" 8 400
+
+printf '#pragma version 8\nint 1' > "${TEMPDIR}/simple-v8.teal"
+
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${TEMPDIR}/simple-v8.teal" --extra-pages 1 2>&1 || true)
+EXPSUCCESS='Created app with app index'
+if [[ $RES != *"${EXPSUCCESS}"* ]]; then
+    date '+app-simulate-test FAIL the app creation for generated large TEAL should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
+
+# SIMULATION! without extra budget should fail direct call
+${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 -o "${TEMPDIR}/no-extra-opcode-budget.tx"
+${gcmd} clerk sign -i "${TEMPDIR}/no-extra-opcode-budget.tx" -o "${TEMPDIR}/no-extra-opcode-budget.stx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/no-extra-opcode-budget.stx")
+
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL without extra budget should fail %Y%m%d_%H%M%S'
+    false
+fi
+
+EXPECTED_FAILURE='dynamic cost budget exceeded'
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_FAILURE}"* ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL should fail %Y%m%d_%H%M%S'
+    false
+fi
+
+# SIMULATION! with extra budget should pass direct call
+RES=$(${gcmd} clerk simulate --extra-opcode-budget 200 -t "${TEMPDIR}/no-extra-opcode-budget.stx")
+
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL with extra budget should pass %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."eval-overrides"."extra-opcode-budget"') -ne 200 ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL should have extra-opcode-budget 200 %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-added"') -ne 900 ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL should have app-budget-added 900 %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL should be consuming 804 budget %Y%m%d_%H%M%S'
+    false
+fi
+
+# SIMULATION! with --allow-more-opcode-budget should pass direct call
+RES=$(${gcmd} clerk simulate --allow-more-opcode-budget -t "${TEMPDIR}/no-extra-opcode-budget.stx")
+
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL with extra budget should pass %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."eval-overrides"."extra-opcode-budget"') -ne 320000 ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL should have extra-opcode-budget 320000 %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-added"') -ne 320700 ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL should have app-budget-added 320700 %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; then
+    date '+app-simulate-test FAIL the app call to generated large TEAL should be consuming 804 budget %Y%m%d_%H%M%S'
     false
 fi

@@ -24,7 +24,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -906,20 +905,6 @@ func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, c
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 }
 
-// onlineTotals returns the online totals of all accounts at the end of round rnd.
-// used in tests only
-func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return basics.MicroAlgos{}, err
-	}
-
-	totals := au.roundTotals[offset]
-	return totals.Online.Money, nil
-}
-
 // latestTotalsImpl returns the totals of all accounts for the most recent round, as well as the round number
 func (au *accountUpdates) latestTotalsImpl() (basics.Round, ledgercore.AccountTotals, error) {
 	offset := len(au.deltas)
@@ -929,17 +914,17 @@ func (au *accountUpdates) latestTotalsImpl() (basics.Round, ledgercore.AccountTo
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
 // and preparing the accountUpdates for operation.
-func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) (err error) {
+func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) error {
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
 	au.ledger = l
 
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = au.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
-		ar, err := tx.MakeAccountsReader()
-		if err != nil {
-			return err
+	err := au.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
+		ar, err0 := tx.MakeAccountsReader()
+		if err0 != nil {
+			return err0
 		}
 
 		totals, err0 := ar.AccountsTotals(ctx, false)
@@ -953,17 +938,17 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	ledgerAccountsinitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
-		return
+		return err
 	}
 
 	au.accountsq, err = au.dbs.MakeAccountsOptimizedReader()
 	if err != nil {
-		return
+		return err
 	}
 
 	hdr, err := l.BlockHdr(lastBalancesRound)
 	if err != nil {
-		return
+		return err
 	}
 
 	au.versions = []protocol.ConsensusVersion{hdr.CurrentProtocol}
@@ -983,7 +968,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		au.baseResources.init(au.log, 0, 1)
 		au.baseKVs.init(au.log, 0, 1)
 	}
-	return
+	return nil
 }
 
 // newBlockImpl is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
@@ -1186,7 +1171,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			// use a cache of the most recent account state.
 			ad = macct.data
 			foundAccount = true
-		} else if pad, has := au.baseAccounts.read(addr); has && pad.Round == currentDbRound {
+		} else if pad, inLRU := au.baseAccounts.read(addr); inLRU && pad.Round == currentDbRound {
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(pad)
@@ -1200,8 +1185,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 
 		// check for resources modified in the past rounds, in the deltas
 		for cidx, mr := range au.resources.getForAddress(addr) {
-			if err := addResource(cidx, rnd, mr.resource); err != nil {
-				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+			if addErr := addResource(cidx, rnd, mr.resource); addErr != nil {
+				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, addErr
 			}
 		}
 
@@ -1216,8 +1201,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				// would ensure that we promote this field.
 				au.baseResources.writePending(prd, addr)
 				if prd.AcctRef != nil {
-					if err := addResource(prd.Aidx, rnd, prd.AccountResource()); err != nil {
-						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+					if addErr := addResource(prd.Aidx, rnd, prd.AccountResource()); addErr != nil {
+						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, addErr
 					}
 				}
 			}
@@ -1271,8 +1256,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if resourceDbRound == currentDbRound {
 			for _, pd := range persistedResources {
 				au.baseResources.writePending(pd, addr)
-				if err := addResource(pd.Aidx, currentDbRound, pd.AccountResource()); err != nil {
-					return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+				if addErr := addResource(pd.Aidx, currentDbRound, pd.AccountResource()); addErr != nil {
+					return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, addErr
 				}
 			}
 			// We've found all the resources we could find for this address.
@@ -1523,7 +1508,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 }
 
 // getCreatorForRound returns the asset/app creator for a given asset/app index at a given round
-func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (creator basics.Address, ok bool, err error) {
+func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (basics.Address, bool, error) {
 	unlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -1539,6 +1524,7 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
+		var err error
 		offset, err = au.roundOffset(rnd)
 		if err != nil {
 			return basics.Address{}, false, err
@@ -1573,6 +1559,8 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 			unlock = false
 		}
 		// Check the database
+		var ok bool
+		var creator basics.Address
 		creator, ok, dbRound, err = au.accountsq.LookupCreator(cidx, ctype)
 		if err != nil {
 			return basics.Address{}, false, err
@@ -1616,7 +1604,7 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-func (au *accountUpdates) handleUnorderedCommit(dcc *deferredCommitContext) {
+func (au *accountUpdates) handleUnorderedCommitOrError(dcc *deferredCommitContext) {
 }
 
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
@@ -1639,14 +1627,6 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	// verify version correctness : all the entries in the au.versions[1:offset+1] should have the *same* version, and the committedUpTo should be enforcing that.
 	if au.versions[1] != au.versions[offset] {
 		au.accountsMu.RUnlock()
-
-		// in scheduleCommit, we expect that this function to update the catchpointWriting when
-		// it's on a catchpoint round and the node is configured to generate catchpoints. Doing this in a deferred function
-		// here would prevent us from "forgetting" to update this variable later on.
-		// The same is repeated in commitRound on errors.
-		if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
-			atomic.StoreInt32(dcc.catchpointDataWriting, 0)
-		}
 		return fmt.Errorf("attempted to commit series of rounds with non-uniform consensus versions")
 	}
 
@@ -1677,14 +1657,6 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 func (au *accountUpdates) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) (err error) {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
-
-	defer func() {
-		if err != nil {
-			if dcc.catchpointFirstStage && dcc.enableGeneratingCatchpointFiles {
-				atomic.StoreInt32(dcc.catchpointDataWriting, 0)
-			}
-		}
-	}()
 
 	_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(accountsUpdatePerRoundHighWatermark*time.Duration(offset)))
 	if err != nil {

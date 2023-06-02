@@ -106,10 +106,22 @@ const (
 	GetTransactionProofParamsFormatMsgpack GetTransactionProofParamsFormat = "msgpack"
 )
 
+// Defines values for GetLedgerStateDeltaForTransactionGroupParamsFormat.
+const (
+	GetLedgerStateDeltaForTransactionGroupParamsFormatJson    GetLedgerStateDeltaForTransactionGroupParamsFormat = "json"
+	GetLedgerStateDeltaForTransactionGroupParamsFormatMsgpack GetLedgerStateDeltaForTransactionGroupParamsFormat = "msgpack"
+)
+
 // Defines values for GetLedgerStateDeltaParamsFormat.
 const (
 	GetLedgerStateDeltaParamsFormatJson    GetLedgerStateDeltaParamsFormat = "json"
 	GetLedgerStateDeltaParamsFormatMsgpack GetLedgerStateDeltaParamsFormat = "msgpack"
+)
+
+// Defines values for GetTransactionGroupLedgerStateDeltasForRoundParamsFormat.
+const (
+	GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson    GetTransactionGroupLedgerStateDeltasForRoundParamsFormat = "json"
+	GetTransactionGroupLedgerStateDeltasForRoundParamsFormatMsgpack GetTransactionGroupLedgerStateDeltasForRoundParamsFormat = "msgpack"
 )
 
 // Defines values for GetPendingTransactionsParamsFormat.
@@ -527,6 +539,13 @@ type KvDelta struct {
 // LedgerStateDelta Ledger StateDelta object
 type LedgerStateDelta = map[string]interface{}
 
+// LedgerStateDeltaForTransactionGroup Contains a ledger delta for a single transaction group
+type LedgerStateDeltaForTransactionGroup struct {
+	// Delta Ledger StateDelta object
+	Delta LedgerStateDelta `json:"Delta"`
+	Ids   []string         `json:"Ids"`
+}
+
 // LightBlockHeaderProof Proof of membership and position of a light block header.
 type LightBlockHeaderProof struct {
 	// Index The index of the light block header in the vector commitment tree
@@ -619,6 +638,12 @@ type SimulateRequest struct {
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
+	// ExecTraceConfig An object that configures simulation execution trace.
+	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
+
+	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
+	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
+
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
 }
@@ -627,6 +652,12 @@ type SimulateRequest struct {
 type SimulateRequestTransactionGroup struct {
 	// Txns An atomic transaction group.
 	Txns []json.RawMessage `json:"txns"`
+}
+
+// SimulateTraceConfig An object that configures simulation execution trace.
+type SimulateTraceConfig struct {
+	// Enable A boolean option for opting in execution trace features simulation endpoint.
+	Enable *bool `json:"enable,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -652,6 +683,9 @@ type SimulateTransactionResult struct {
 	// AppBudgetConsumed Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.
 	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
 
+	// ExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
+	ExecTrace *SimulationTransactionExecTrace `json:"exec-trace,omitempty"`
+
 	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
 	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
 
@@ -664,11 +698,38 @@ type SimulationEvalOverrides struct {
 	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
 	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
 
+	// ExtraOpcodeBudget The extra opcode budget added to each transaction group during simulation
+	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
+
 	// MaxLogCalls The maximum log calls one can make during simulation
 	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
 
 	// MaxLogSize The maximum byte number to log during simulation
 	MaxLogSize *uint64 `json:"max-log-size,omitempty"`
+}
+
+// SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
+type SimulationOpcodeTraceUnit struct {
+	// Pc The program counter of the current opcode being evaluated.
+	Pc uint64 `json:"pc"`
+
+	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
+	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`
+}
+
+// SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
+type SimulationTransactionExecTrace struct {
+	// ApprovalProgramTrace Program trace that contains a trace of opcode effects in an approval program.
+	ApprovalProgramTrace *[]SimulationOpcodeTraceUnit `json:"approval-program-trace,omitempty"`
+
+	// ClearStateProgramTrace Program trace that contains a trace of opcode effects in a clear state program.
+	ClearStateProgramTrace *[]SimulationOpcodeTraceUnit `json:"clear-state-program-trace,omitempty"`
+
+	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
+	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
+
+	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
+	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
 }
 
 // StateDelta Application state delta.
@@ -916,6 +977,9 @@ type GetSyncRoundResponse struct {
 	Round uint64 `json:"round"`
 }
 
+// LedgerStateDeltaForTransactionGroupResponse Ledger StateDelta object
+type LedgerStateDeltaForTransactionGroupResponse = LedgerStateDelta
+
 // LedgerStateDeltaResponse Ledger StateDelta object
 type LedgerStateDeltaResponse = LedgerStateDelta
 
@@ -1035,6 +1099,9 @@ type SimulateResponse struct {
 	// EvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
 	EvalOverrides *SimulationEvalOverrides `json:"eval-overrides,omitempty"`
 
+	// ExecTraceConfig An object that configures simulation execution trace.
+	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
+
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
@@ -1058,6 +1125,11 @@ type SupplyResponse struct {
 
 	// TotalMoney TotalMoney
 	TotalMoney uint64 `json:"total-money"`
+}
+
+// TransactionGroupLedgerStateDeltasForRoundResponse defines model for TransactionGroupLedgerStateDeltasForRoundResponse.
+type TransactionGroupLedgerStateDeltasForRoundResponse struct {
+	Deltas []LedgerStateDeltaForTransactionGroup `json:"Deltas"`
 }
 
 // TransactionParametersResponse TransactionParams contains the parameters that help a client construct
@@ -1198,6 +1270,15 @@ type GetTransactionProofParamsHashtype string
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
 
+// GetLedgerStateDeltaForTransactionGroupParams defines parameters for GetLedgerStateDeltaForTransactionGroup.
+type GetLedgerStateDeltaForTransactionGroupParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *GetLedgerStateDeltaForTransactionGroupParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// GetLedgerStateDeltaForTransactionGroupParamsFormat defines parameters for GetLedgerStateDeltaForTransactionGroup.
+type GetLedgerStateDeltaForTransactionGroupParamsFormat string
+
 // GetLedgerStateDeltaParams defines parameters for GetLedgerStateDelta.
 type GetLedgerStateDeltaParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
@@ -1206,6 +1287,15 @@ type GetLedgerStateDeltaParams struct {
 
 // GetLedgerStateDeltaParamsFormat defines parameters for GetLedgerStateDelta.
 type GetLedgerStateDeltaParamsFormat string
+
+// GetTransactionGroupLedgerStateDeltasForRoundParams defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
+type GetTransactionGroupLedgerStateDeltasForRoundParams struct {
+	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
+	Format *GetTransactionGroupLedgerStateDeltasForRoundParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+}
+
+// GetTransactionGroupLedgerStateDeltasForRoundParamsFormat defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
+type GetTransactionGroupLedgerStateDeltasForRoundParamsFormat string
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {

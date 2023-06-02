@@ -17,10 +17,12 @@
 package node
 
 import (
+	"context"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -149,67 +151,21 @@ func TestDevModeWarning(t *testing.T) {
 	require.Contains(t, foundEntry.Message, "Follower running on a devMode network. Must submit txns to a different node.")
 }
 
-// TestSyncRoundWithRemake extends TestSyncRound to simulate starting and stopping the network
-func TestSyncRoundWithRemake(t *testing.T) {
+func TestFastCatchupResume(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+	node := setupFollowNode(t)
+	node.ctx = context.Background()
 
-	maxAcctLookback := uint64(100)
+	// Initialize sync round to a future round.
+	syncRound := uint64(10000)
+	node.SetSyncRound(syncRound)
+	require.Equal(t, syncRound, node.GetSyncRound())
 
-	followNode, tempDir := remakeableFollowNode(t, "", maxAcctLookback)
-	addBlock := func(round basics.Round) {
-		b := bookkeeping.Block{
-			BlockHeader: bookkeeping.BlockHeader{
-				GenesisHash: followNode.ledger.GenesisHash(),
-				Round:       round,
-				RewardsState: bookkeeping.RewardsState{
-					RewardsRate: 0,
-					RewardsPool: poolAddr,
-					FeeSink:     sinkAddr,
-				},
-			},
-		}
-		b.CurrentProtocol = protocol.ConsensusCurrentVersion
-		err := followNode.Ledger().AddBlock(b, agreement.Certificate{})
-		require.NoError(t, err)
+	// Force catchpoint catchup mode to end, this should set the sync round to the current ledger round (0).
+	out := node.SetCatchpointCatchupMode(false)
+	<-out
 
-		status, err := followNode.Status()
-		require.NoError(t, err)
-		require.Equal(t, round, status.LastRound)
-	}
-
-	// Part I. redo TestSyncRound
-	// main differences are:
-	// * cfg.DisableNetworking = true
-	// * cfg.MaxAcctLookback = 100 (instead of 4)
-
-	addBlock(basics.Round(1))
-
-	dbRound := uint64(followNode.Ledger().LatestTrackerCommitted())
-	// Sync Round should be initialized to the ledger's dbRound + 1
-	require.Equal(t, dbRound+1, followNode.GetSyncRound())
-	// Set a new sync round
-	require.NoError(t, followNode.SetSyncRound(dbRound+11))
-	// Ensure it is persisted
-	require.Equal(t, dbRound+11, followNode.GetSyncRound())
-	// Unset the sync round and make sure get returns 0
-	followNode.UnsetSyncRound()
-	require.Equal(t, uint64(0), followNode.GetSyncRound())
-
-	// Part II. fast forward and then remake the node
-
-	newRound := basics.Round(2 * maxAcctLookback)
-	for i := basics.Round(2); i <= newRound; i++ {
-		addBlock(i)
-	}
-
-	followNode, _ = remakeableFollowNode(t, tempDir, maxAcctLookback)
-	status, err := followNode.Status()
-	require.NoError(t, err)
-	require.Equal(t, newRound, status.LastRound)
-
-	// syncRound should be at
-	// newRound - maxAcctLookback + 1 = maxAcctLookback + 1
-	syncRound := followNode.GetSyncRound()
-	require.Equal(t, uint64(maxAcctLookback+1), syncRound)
+	// Verify the sync was reset.
+	assert.Equal(t, uint64(0), node.GetSyncRound())
 }
