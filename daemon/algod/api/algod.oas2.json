@@ -3453,6 +3453,9 @@
         "extra-opcode-budget": {
           "description": "Applies extra opcode budget during simulation for each transaction group.",
           "type": "integer"
+        },
+        "exec-trace-config": {
+          "$ref": "#/definitions/SimulateTraceConfig"
         }
       }
     },
@@ -3472,6 +3475,16 @@
             "format": "json",
             "x-algorand-format": "SignedTransaction"
           }
+        }
+      }
+    },
+    "SimulateTraceConfig": {
+      "description": "An object that configures simulation execution trace.",
+      "type": "object",
+      "properties": {
+        "enable": {
+          "description": "A boolean option for opting in execution trace features simulation endpoint.",
+          "type": "boolean"
         }
       }
     },
@@ -3726,6 +3739,9 @@
         "logic-sig-budget-consumed": {
           "description": "Budget used during execution of a logic sig transaction.",
           "type": "integer"
+        },
+        "exec-trace": {
+          "$ref": "#/definitions/SimulationTransactionExecTrace"
         }
       }
     },
@@ -3828,6 +3844,60 @@
         "extra-opcode-budget": {
           "description": "The extra opcode budget added to each transaction group during simulation",
           "type": "integer"
+        }
+      }
+    },
+    "SimulationOpcodeTraceUnit": {
+      "description": "The set of trace information and effect from evaluating a single opcode.",
+      "type": "object",
+      "required": [
+        "pc"
+      ],
+      "properties": {
+        "pc": {
+          "description": "The program counter of the current opcode being evaluated.",
+          "type": "integer"
+        },
+        "spawned-inners": {
+          "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "SimulationTransactionExecTrace": {
+      "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
+      "type": "object",
+      "properties": {
+        "approval-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in an approval program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "clear-state-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a clear state program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "logic-sig-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a logic sig.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "inner-trace": {
+          "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationTransactionExecTrace"
+          }
         }
       }
     }
@@ -4459,6 +4529,9 @@
           },
           "eval-overrides": {
             "$ref": "#/definitions/SimulationEvalOverrides"
+          },
+          "exec-trace-config": {
+            "$ref": "#/definitions/SimulateTraceConfig"
           }
         }
       }

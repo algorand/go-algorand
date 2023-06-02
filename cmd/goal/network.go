@@ -98,9 +98,9 @@ var networkCreateCmd = &cobra.Command{
 			if err != nil {
 				panic(err)
 			}
-			file, err := os.Open(networkTemplateFile)
-			if err != nil {
-				reportErrorf(errorCreateNetwork, err)
+			file, osErr := os.Open(networkTemplateFile)
+			if osErr != nil {
+				reportErrorf(errorCreateNetwork, osErr)
 			}
 
 			defer file.Close()
