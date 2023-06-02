@@ -183,7 +183,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 				baseOnlineAD.MicroAlgos = bad.MicroAlgos
 				baseOnlineAD.RewardsBase = bad.RewardsBase
 
-				_, err := oaow.InsertOnlineAccount(addr, account.NormalizedOnlineBalance(proto), baseOnlineAD, uint64(updRound), uint64(baseOnlineAD.VoteLastValid))
+				_, err = oaow.InsertOnlineAccount(addr, account.NormalizedOnlineBalance(proto), baseOnlineAD, uint64(updRound), uint64(baseOnlineAD.VoteLastValid))
 				if err != nil {
 					return err
 				}

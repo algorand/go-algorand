@@ -173,7 +173,8 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 
 			// delete on voting empty
 			var oad trackerdb.BaseOnlineAccountData
-			data, err := iter.Value()
+			var data []byte
+			data, err = iter.Value()
 			if err != nil {
 				return err
 			}
