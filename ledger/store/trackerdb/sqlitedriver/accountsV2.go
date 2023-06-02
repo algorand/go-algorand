@@ -61,15 +61,15 @@ func (r *accountsV2Reader) Testing() trackerdb.TestAccountsReaderExt {
 	return r
 }
 
-func (r *accountsV2Reader) getOrPrepare(queryString string) (stmt *sql.Stmt, err error) {
+func (r *accountsV2Reader) getOrPrepare(queryString string) (*sql.Stmt, error) {
 	// fetch statement (use the query as the key)
 	if stmt, ok := r.preparedStatements[queryString]; ok {
 		return stmt, nil
 	}
 	// we do not have it, prepare it
-	stmt, err = r.q.Prepare(queryString)
+	stmt, err := r.q.Prepare(queryString)
 	if err != nil {
-		return
+		return nil, err
 	}
 	// cache the statement
 	r.preparedStatements[queryString] = stmt

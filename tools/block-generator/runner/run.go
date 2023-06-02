@@ -178,8 +178,8 @@ func (r *Args) run() error {
 	}
 	defer func() {
 		// Shutdown conduit
-		if err := conduitShutdownFunc(); err != nil {
-			fmt.Printf("failed to shutdown Conduit: %s\n", err)
+		if sdErr := conduitShutdownFunc(); sdErr != nil {
+			fmt.Printf("failed to shutdown Conduit: %s\n", sdErr)
 		}
 	}()
 

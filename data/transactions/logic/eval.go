@@ -626,6 +626,9 @@ func (cx *EvalContext) RunMode() RunMode {
 	return cx.runModeFlags
 }
 
+// PC returns the program counter of the current application being evaluated
+func (cx *EvalContext) PC() int { return cx.pc }
+
 // avmType describes the type of a value on the operand stack
 // avmTypes are a subset of StackTypes
 type avmType byte
@@ -2621,26 +2624,26 @@ func opRetSub(cx *EvalContext) error {
 	if top < 0 {
 		return errors.New("retsub with empty callstack")
 	}
-	frame := cx.callstack[top]
-	if frame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
-		expect := frame.height + frame.returns
+	topFrame := cx.callstack[top]
+	if topFrame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
+		expect := topFrame.height + topFrame.returns
 		if len(cx.stack) < expect { // Check general error case first, only diffentiate when error is assured
 			switch {
-			case len(cx.stack) < frame.height:
+			case len(cx.stack) < topFrame.height:
 				return fmt.Errorf("retsub executed with stack below frame. Did you pop args?")
-			case len(cx.stack) == frame.height:
-				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", frame.returns)
+			case len(cx.stack) == topFrame.height:
+				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", topFrame.returns)
 			default:
 				return fmt.Errorf("retsub executed with %d return values on stack. proto declared %d",
-					len(cx.stack)-frame.height, frame.returns)
+					len(cx.stack)-topFrame.height, topFrame.returns)
 			}
 		}
-		argstart := frame.height - frame.args
-		copy(cx.stack[argstart:], cx.stack[frame.height:expect])
-		cx.stack = cx.stack[:argstart+frame.returns]
+		argstart := topFrame.height - topFrame.args
+		copy(cx.stack[argstart:], cx.stack[topFrame.height:expect])
+		cx.stack = cx.stack[:argstart+topFrame.returns]
 	}
 	cx.callstack = cx.callstack[:top]
-	cx.nextpc = frame.retpc
+	cx.nextpc = topFrame.retpc
 	return nil
 }
 
@@ -4663,9 +4666,9 @@ func opAppLocalDel(cx *EvalContext) error {
 
 	// if deleting a non-existent value, don't record in EvalDelta, matching
 	// ledger behavior with previous BuildEvalDelta mechanism
-	if _, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
-		if err != nil {
-			return err
+	if _, ok, getErr := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
+		if getErr != nil {
+			return getErr
 		}
 		accountIdx = cx.ensureLocalDelta(accountIdx, addr)
 		cx.txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
@@ -5560,16 +5563,16 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		// transaction pool. Namely that any transaction that makes it
 		// to Perform (which is equivalent to eval.applyTransaction)
 		// is authorized, and WellFormed.
-		err := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
-		if err != nil {
-			return err
+		txnErr := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
+		if txnErr != nil {
+			return txnErr
 		}
 
 		// Recall that WellFormed does not care about individual
 		// transaction fees because of fee pooling. Checked above.
-		err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
-		if err != nil {
-			return err
+		txnErr = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		if txnErr != nil {
+			return txnErr
 		}
 
 		var calledVersion uint64
@@ -5593,9 +5596,9 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			// Set program by txn, approval, or clear state
 			program := cx.subtxns[itx].Txn.ApprovalProgram
 			if cx.subtxns[itx].Txn.ApplicationID != 0 {
-				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
-				if err != nil {
-					return err
+				app, _, paramsErr := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+				if paramsErr != nil {
+					return paramsErr
 				}
 				program = app.ApprovalProgram
 				if cx.subtxns[itx].Txn.OnCompletion == transactions.ClearStateOC {
@@ -5619,15 +5622,15 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			if cx.subtxns[itx].Txn.OnCompletion == transactions.OptInOC {
 				csp := cx.subtxns[itx].Txn.ClearStateProgram
 				if cx.subtxns[itx].Txn.ApplicationID != 0 {
-					app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
-					if err != nil {
-						return err
+					app, _, paramsErr := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+					if paramsErr != nil {
+						return paramsErr
 					}
 					csp = app.ClearStateProgram
 				}
-				csv, _, err := transactions.ProgramVersion(csp)
-				if err != nil {
-					return err
+				csv, _, verErr := transactions.ProgramVersion(csp)
+				if verErr != nil {
+					return verErr
 				}
 				if csv < cx.Proto.MinInnerApplVersion {
 					return fmt.Errorf("inner app call opt-in with CSP v%d < v%d",

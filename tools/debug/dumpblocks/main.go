@@ -87,7 +87,7 @@ func main() {
 		}
 	}
 	if minRound == 0 {
-		err := db.QueryRow("SELECT MIN(rnd) FROM blocks").Scan(&minRound)
+		err = db.QueryRow("SELECT MIN(rnd) FROM blocks").Scan(&minRound)
 		if err != nil {
 			panic(err)
 		}

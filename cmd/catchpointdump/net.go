@@ -314,8 +314,8 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 	}
 
 	defer func() {
-		if err := deleteLedgerFiles(!loadOnly); err != nil {
-			reportWarnf("Error deleting ledger files: %v", err)
+		if delErr := deleteLedgerFiles(!loadOnly); delErr != nil {
+			reportWarnf("Error deleting ledger files: %v", delErr)
 		}
 	}()
 	defer l.Close()
