@@ -191,12 +191,17 @@ func TestAssetDestroy(t *testing.T) {
 	require.Len(t, g.assets, 0)
 }
 
-func TestAppCall(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
-	_ = g
+// func TestAppCreate(t *testing.T) {
+// 	partitiontest.PartitionTest(t)
+// 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 
-}
+// 	// First asset transaction must create.
+// 	actual, txn := g.generateAppCallInternal(appBoxesCreate, 1, 0)
+// 	require.Equal(t, appBoxesCreate, actual)
+// 	require.Equal(t, protocol.appCallTxn, txn.Type)
+// 	require.Len(t, g.apps, 0)
+// 	require.Len(t, g.pendingApps, 1)
+// }
 
 func TestWriteRoundZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -371,6 +376,43 @@ func TestHandlers(t *testing.T) {
 			handler(w, req)
 			require.Equal(t, http.StatusBadRequest, w.Code)
 			require.Contains(t, w.Body.String(), testcase.err)
+		})
+	}
+}
+
+func TestTxTypeParse(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	tests := []struct {
+		name   string
+		txType TxTypeID
+		IsApp  bool
+		Kind   appKind
+		TxType appTxType
+		err    string
+	}{
+		{"App Swap Create", "app_swap_create", true, appKindSwap, appTxTypeCreate, ""},
+		{"App Boxes Delete", "app_boxes_delete", true, appKindBoxes, appTxTypeDelete, ""},
+		{"not enough _'s", "app_swap", false, 0, 0, "invalid app tx type for parsing"},
+		{"too many _'s", "app_swap_delete_very_much", false, 0, 0, "invalid app tx type for parsing"},
+		{"Invalid App Kind", "app_invalid_delete", false, 0, 0, "invalid app kind"},
+		{"Invalid Tx Type", "app_boxes_invalid", false, 0, 0, "invalid app tx type"},
+		{"Not An App", "not_an_app", false, 0, 0, "not an app type"},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			isApp, kind, txType, err := parseAppTxType(test.txType)
+
+			if test.err != "" {
+				require.Error(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.IsApp, isApp, "Mismatch in isApp for %s", test.txType)
+				require.Equal(t, test.Kind, kind, "Mismatch in kind for %s", test.txType)
+				require.Equal(t, test.TxType, txType, "Mismatch in txType for %s", test.txType)
+			}
 		})
 	}
 }

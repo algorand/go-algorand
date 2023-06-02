@@ -21,8 +21,11 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 )
+
+// ---- header / boilerplate ----
 
 func (g *generator) makeTxnHeader(sender basics.Address, round, intra uint64) transactions.Header {
 	note := make([]byte, 8)
@@ -39,6 +42,22 @@ func (g *generator) makeTxnHeader(sender basics.Address, round, intra uint64) tr
 	}
 }
 
+func (g *generator) makeTestTxn(sender basics.Address, round, intra uint64) txntest.Txn {
+	note := make([]byte, 8)
+	binary.LittleEndian.PutUint64(note, uint64(g.txnCounter+intra))
+
+	return txntest.Txn{
+		Sender:      sender,
+		FirstValid:  basics.Round(round),
+		LastValid:   basics.Round(round + 1000),
+		GenesisID:   g.genesisID,
+		GenesisHash: g.genesisHash,
+		Note:        note,
+	}
+}
+
+// ---- payments ----
+
 func (g *generator) makePaymentTxn(header transactions.Header, receiver basics.Address, amount uint64, closeRemainderTo basics.Address) transactions.Transaction {
 	return transactions.Transaction{
 		Type:   protocol.PaymentTx,
@@ -50,6 +69,8 @@ func (g *generator) makePaymentTxn(header transactions.Header, receiver basics.A
 		},
 	}
 }
+
+// ---- asset transactions ----
 
 func (g *generator) makeAssetCreateTxn(header transactions.Header, total uint64, defaultFrozen bool, assetName string) transactions.Transaction {
 	return transactions.Transaction{
@@ -94,4 +115,36 @@ func (g *generator) makeAssetTransferTxn(header transactions.Header, receiver ba
 
 func (g *generator) makeAssetAcceptanceTxn(header transactions.Header, index uint64) transactions.Transaction {
 	return g.makeAssetTransferTxn(header, header.Sender, 0, basics.Address{}, index)
+}
+
+// ---- application transactions ----
+
+func (g *generator) makeAppCreateTxn(sender basics.Address, round, intra uint64, approval, clear string) transactions.Transaction {
+	createTxn := g.makeTestTxn(sender, round, intra)
+
+	createTxn.Type = protocol.ApplicationCallTx
+	createTxn.ApplicationID = 0
+	createTxn.ApprovalProgram = approval
+	/***
+	  `#pragma version 6
+	  txn ApplicationID
+	  bz create
+	  byte "app call"
+	  log
+	  b end
+	  create:
+	  byte "app creation"
+	  log
+	  end:
+	  int 1
+	  `
+	  ***/
+
+	createTxn.ClearStateProgram = clear
+	/***
+	  	`#pragma version 6
+	  int 0
+	  `
+	  ***/
+	return createTxn.Txn()
 }
