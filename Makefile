@@ -92,8 +92,8 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
-GOMOD_DIRS := $(shell find . -name 'go.mod' -not -path './cmd/partitiontest_linter/*' -exec dirname {} \;)
-GOMOD_DIRS_ALL := $(shell find . -name 'go.mod' -exec dirname {} \;)
+GOMOD_DIRS := $(sort $(shell find . -name 'go.mod' -not -path './cmd/partitiontest_linter/*' -exec dirname {} \;))
+GOMOD_DIRS_ALL := $(sort $(shell find . -name 'go.mod' -exec dirname {} \;))
 
 # Template for running tests on eligible sub go modules.
 # USAGE:
