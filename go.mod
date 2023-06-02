@@ -12,6 +12,7 @@ require (
 	github.com/algorand/graphtrace v0.1.0
 	github.com/algorand/msgp v1.1.53
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0
+	github.com/algorand/sortition v1.0.0
 	github.com/algorand/websocket v1.4.6
 	github.com/aws/aws-sdk-go v1.33.0
 	github.com/consensys/gnark-crypto v0.7.0

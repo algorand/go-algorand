@@ -7,7 +7,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-  uint64_t sortition_binomial_cdf_walk(double n, double p, double ratio, uint64_t money);
+  uint64_t sortition_binomial_cdf_walk_old(double n, double p, double ratio, uint64_t money);
 #ifdef __cplusplus
 }
 
