@@ -2244,13 +2244,13 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	// if we abort before making a wsPeer this cleanup logic will close the connection
 	closeEarly := func(msg string) {
 		deadline := time.Now().Add(peerDisconnectionAckDuration)
-		err := conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseProtocolError, msg), deadline)
-		if err != nil {
-			wn.log.Infof("tryConnect: failed to write CloseMessage to connection for %s", conn.RemoteAddr().String())
+		err2 := conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseProtocolError, msg), deadline)
+		if err2 != nil {
+			wn.log.Infof("tryConnect: failed to write CloseMessage to connection for %s: %v", conn.RemoteAddr().String(), err2)
 		}
-		err = conn.CloseWithoutFlush()
-		if err != nil {
-			wn.log.Infof("tryConnect: failed to CloseWithoutFlush to connection for %s", conn.RemoteAddr().String())
+		err2 = conn.CloseWithoutFlush()
+		if err2 != nil {
+			wn.log.Infof("tryConnect: failed to CloseWithoutFlush to connection for %s: %v", conn.RemoteAddr().String(), err2)
 		}
 	}
 

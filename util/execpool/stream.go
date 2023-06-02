@@ -112,8 +112,8 @@ func (sv *StreamToBatch) batchingLoop() {
 
 			// if no batchable items here, send this as a task of its own
 			if numberOfBatchable == 0 {
-				err := sv.addBatchToThePoolNow([]InputJob{job})
-				if err != nil {
+				addErr := sv.addBatchToThePoolNow([]InputJob{job})
+				if addErr != nil {
 					return
 				}
 				continue // job is handled, continue
@@ -129,8 +129,8 @@ func (sv *StreamToBatch) batchingLoop() {
 					// do not consider adding more jobs to this batch.
 					// bypass the exec pool situation and queue anyway
 					// this is to prevent creation of very large batches
-					err := sv.addBatchToThePoolNow(uJobs)
-					if err != nil {
+					addErr := sv.addBatchToThePoolNow(uJobs)
+					if addErr != nil {
 						return
 					}
 					added = true

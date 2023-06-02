@@ -43,6 +43,7 @@ type Request struct {
 	AllowEmptySignatures bool
 	AllowMoreLogging     bool
 	ExtraOpcodeBudget    uint64
+	TraceConfig          ExecTraceConfig
 }
 
 // Latest is part of the LedgerForSimulator interface.
@@ -85,13 +86,15 @@ type EvalFailureError struct {
 
 // Simulator is a transaction group simulator for the block evaluator.
 type Simulator struct {
-	ledger simulatorLedger
+	ledger       simulatorLedger
+	developerAPI bool
 }
 
 // MakeSimulator creates a new simulator from a ledger.
-func MakeSimulator(ledger *data.Ledger) *Simulator {
+func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	return &Simulator{
-		ledger: simulatorLedger{ledger, ledger.Latest()},
+		ledger:       simulatorLedger{ledger, ledger.Latest()},
+		developerAPI: developerAPI,
 	}
 }
 
@@ -192,14 +195,13 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 
 	// check that the extra budget is not exceeding simulation extra budget limit
 	if overrides.ExtraOpcodeBudget > MaxExtraOpcodeBudget {
-		return nil,
-			InvalidRequestError{
-				SimulatorError{
-					fmt.Errorf(
-						"extra budget %d > simulation extra budget limit %d",
-						overrides.ExtraOpcodeBudget, MaxExtraOpcodeBudget),
-				},
-			}
+		return nil, InvalidRequestError{
+			SimulatorError{
+				fmt.Errorf(
+					"extra budget %d > simulation extra budget limit %d",
+					overrides.ExtraOpcodeBudget, MaxExtraOpcodeBudget),
+			},
+		}
 	}
 
 	vb, err := s.evaluate(hdr, txgroup, tracer)
@@ -208,7 +210,10 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
 func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
-	simulatorTracer := makeEvalTracer(s.ledger.start, simulateRequest)
+	simulatorTracer, err := makeEvalTracer(s.ledger.start, simulateRequest, s.developerAPI)
+	if err != nil {
+		return Result{}, err
+	}
 
 	if len(simulateRequest.TxnGroups) != 1 {
 		return Result{}, InvalidRequestError{

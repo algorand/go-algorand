@@ -106,11 +106,11 @@ func main() {
 	if (cfg.ClientURL == nil || cfg.ClientURL.String() == "") || cfg.APIToken == "" {
 		if algodDir != "" {
 			path := filepath.Join(algodDir, "algod.net")
-			net, err := os.ReadFile(path)
-			maybefail(err, "%s: %v\n", path, err)
+			net, osErr := os.ReadFile(path)
+			maybefail(osErr, "%s: %v\n", path, osErr)
 			path = filepath.Join(algodDir, "algod.token")
-			token, err := os.ReadFile(path)
-			maybefail(err, "%s: %v\n", path, err)
+			token, osErr := os.ReadFile(path)
+			maybefail(osErr, "%s: %v\n", path, osErr)
 			cfg.ClientURL, err = url.Parse(fmt.Sprintf("http://%s", string(strings.TrimSpace(string(net)))))
 			maybefail(err, "bad net url %v\n", err)
 			cfg.APIToken = string(token)

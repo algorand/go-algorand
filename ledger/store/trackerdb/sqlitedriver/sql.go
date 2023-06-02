@@ -552,7 +552,7 @@ func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 			var buf []byte
 			data := trackerdb.PersistedOnlineAccountData{}
 			var rowid int64
-			err := rows.Scan(&rowid, &data.UpdRound, &rnd, &buf)
+			err = rows.Scan(&rowid, &data.UpdRound, &rnd, &buf)
 			if err != nil {
 				return err
 			}
@@ -564,7 +564,7 @@ func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 			data.Addr = addr
 			result = append(result, data)
 		}
-		return err
+		return nil
 	})
 	return
 }
