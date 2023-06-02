@@ -3960,8 +3960,8 @@ func customNetworkIDGen(networkID protocol.NetworkID) *rapid.Generator {
 // The hardcoded network IDs just make testing this function more difficult with no confidence gain (the custom logic
 // is already exercised well in the dnsbootstrap parsing tests).
 func nonHardcodedNetworkIDGen() *rapid.Generator {
-	return rapid.OneOf(customNetworkIdGen(config.Testnet), customNetworkIdGen(config.Mainnet),
-		customNetworkIdGen(config.Devtestnet))
+	return rapid.OneOf(customNetworkIDGen(config.Testnet), customNetworkIDGen(config.Mainnet),
+		customNetworkIDGen(config.Devtestnet))
 }
 
 /*
