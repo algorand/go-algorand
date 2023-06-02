@@ -110,9 +110,9 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
-	params, creator, err := getParams(balances, cc.ConfigAsset)
-	if err != nil {
-		return err
+	params, creator, paramsErr := getParams(balances, cc.ConfigAsset)
+	if paramsErr != nil {
+		return paramsErr
 	}
 
 	if params.Manager.IsZero() || (header.Sender != params.Manager) {
@@ -186,9 +186,9 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			params.Clawback = cc.AssetParams.Clawback
 		}
 
-		err = balances.PutAssetParams(creator, cc.ConfigAsset, params)
-		if err != nil {
-			return err
+		paramsErr = balances.PutAssetParams(creator, cc.ConfigAsset, params)
+		if paramsErr != nil {
+			return paramsErr
 		}
 	}
 
