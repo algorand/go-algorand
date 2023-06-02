@@ -1101,7 +1101,7 @@ loop:
 
 type dupMockNetwork struct {
 	mocks.MockNetwork
-	mu    sync.Mutex
+	mu    deadlock.Mutex
 	relay []*sync.Map
 }
 
