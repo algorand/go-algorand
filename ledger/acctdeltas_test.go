@@ -59,7 +59,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aor, err := tx.Testing().MakeAccountsOptimizedReader()
+	aor, err := tx.MakeAccountsOptimizedReader()
 	require.NoError(t, err)
 
 	var totalOnline, totalOffline, totalNotPart uint64
