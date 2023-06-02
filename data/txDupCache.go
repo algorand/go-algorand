@@ -109,12 +109,10 @@ func (c *digestCache) Delete(d *crypto.Digest) {
 	delete(c.prev, *d)
 }
 
-type cacheValue map[network.Peer]struct{}
-
 // digestCacheData is a base data structure for rotating size N accepting crypto.Digest as a key
 type digestCacheData struct {
-	cur  map[crypto.Digest]cacheValue
-	prev map[crypto.Digest]cacheValue
+	cur  map[crypto.Digest]*sync.Map
+	prev map[crypto.Digest]*sync.Map
 
 	maxSize int
 	mu      deadlock.RWMutex
@@ -134,7 +132,7 @@ type txSaltedCache struct {
 func makeSaltedCache(size int) *txSaltedCache {
 	return &txSaltedCache{
 		digestCacheData: digestCacheData{
-			cur:     map[crypto.Digest]cacheValue{},
+			cur:     map[crypto.Digest]*sync.Map{},
 			maxSize: size,
 		},
 	}
@@ -192,17 +190,17 @@ func (c *txSaltedCache) innerSwap(scheduled bool) {
 
 	if scheduled {
 		// updating by timer, the prev size is a good estimation of a current load => preallocate
-		c.cur = make(map[crypto.Digest]cacheValue, len(c.prev))
+		c.cur = make(map[crypto.Digest]*sync.Map, len(c.prev))
 	} else {
 		// otherwise start empty
-		c.cur = map[crypto.Digest]cacheValue{}
+		c.cur = map[crypto.Digest]*sync.Map{}
 	}
 	c.moreSalt()
 }
 
 // innerCheck returns true if exists, the salted hash if does not exist
 // locking semantic: read lock must be held
-func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, cacheValue, *map[crypto.Digest]cacheValue, bool) {
+func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, *sync.Map, *map[crypto.Digest]*sync.Map, bool) {
 	ptr := saltedPool.Get()
 	defer saltedPool.Put(ptr)
 
@@ -230,16 +228,7 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, cacheValue, *map
 
 // CheckAndPut adds msg into a cache if not found
 // returns a hashing key used for insertion if the message not found.
-func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Digest, cacheValue, bool) {
-	// copy vals since its owned by the cache and may be concurrently modified
-	copy := func(in cacheValue) cacheValue {
-		out := make(cacheValue, len(in))
-		for p := range in {
-			out[p] = struct{}{}
-		}
-		return out
-	}
-
+func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Digest, *sync.Map, bool) {
 	c.mu.RLock()
 	d, vals, page, found := c.innerCheck(msg)
 	salt := c.curSalt
@@ -247,8 +236,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 	// keep lock - it is needed for copying vals in defer
 	senderFound := false
 	if found {
-		if _, senderFound = vals[sender]; senderFound {
-			vals = copy(vals)
+		if _, senderFound = vals.Load(sender); senderFound {
 			c.mu.RUnlock()
 			return d, vals, true
 		}
@@ -262,9 +250,8 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 	if salt != c.curSalt {
 		d, vals, page, found = c.innerCheck(msg)
 		if found {
-			if _, senderFound = vals[sender]; senderFound {
+			if _, senderFound = vals.Load(sender); senderFound {
 				// already added to cache between RUnlock() and Lock(), return
-				vals = copy(vals)
 				return d, vals, true
 			}
 		}
@@ -276,8 +263,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 		// Only check current to save a lookup since swap is handled in the first branch
 		vals, found = c.cur[*d]
 		if found {
-			if _, senderFound = vals[sender]; senderFound {
-				vals = copy(vals)
+			if _, senderFound = vals.Load(sender); senderFound {
 				return d, vals, true
 			}
 			page = &c.cur
@@ -288,9 +274,8 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 	// 1. the message is not in the cache
 	// 2. the message is in the cache but from other senders
 	if found && !senderFound {
-		vals[sender] = struct{}{}
+		vals.Store(sender, struct{}{})
 		(*page)[*d] = vals
-		vals = copy(vals)
 		return d, vals, true
 	}
 
@@ -308,9 +293,9 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 		d = &dn
 	}
 
-	vals = cacheValue{sender: {}}
+	vals = &sync.Map{}
+	vals.Store(sender, struct{}{})
 	c.cur[*d] = vals
-	vals = copy(vals)
 	return d, vals, false
 }
 

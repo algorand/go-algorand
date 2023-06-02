@@ -1101,10 +1101,10 @@ loop:
 
 type dupMockNetwork struct {
 	mocks.MockNetwork
-	relay []map[network.Peer]struct{}
+	relay []*sync.Map
 }
 
-func (network *dupMockNetwork) RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except map[network.Peer]struct{}) error {
+func (network *dupMockNetwork) RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except *sync.Map) error {
 	network.relay = append(network.relay, except)
 	return nil
 }
@@ -1169,8 +1169,13 @@ func TestTxHandlerProcessIncomingRelayDups(t *testing.T) {
 		}
 	}
 	// there is almost no delay between tp.Remember and net.RelayArray
-	require.Len(t, net.relay, 1)    // one RelayArray call
-	require.Len(t, net.relay[0], 3) // 3 except peers
+	require.Len(t, net.relay, 1) // one RelayArray call
+	var count int
+	net.relay[0].Range(func(key, value interface{}) bool {
+		count++
+		return true
+	})
+	require.Equal(t, count, 3) // 3 except peers
 }
 
 const benchTxnNum = 25_000
