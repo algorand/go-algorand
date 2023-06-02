@@ -3949,6 +3949,108 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount)
 }
 
+func customNetworkIDGen(networkID protocol.NetworkID) *rapid.Generator {
+	return rapid.Custom(func(t *rapid.T) protocol.NetworkID {
+		// Unused/satisfying rapid requirement
+		rapid.String().Draw(t, "networkIDGen")
+		return networkID
+	})
+}
+
+// The hardcoded network IDs just make testing this function more difficult with no confidence gain (the custom logic
+// is already exercised well in the dnsbootstrap parsing tests).
+func nonHardcodedNetworkIDGen() *rapid.Generator {
+	return rapid.OneOf(customNetworkIdGen(config.Testnet), customNetworkIdGen(config.Mainnet),
+		customNetworkIdGen(config.Devtestnet))
+}
+
+/*
+Basic exercise of the refreshRelayArchivePhonebookAddresses function, uses base / expected cases, relying  on neighboring
+unit tests to cover the merge and phonebook update logic.
+*/
+func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+	var refreshRelayDNSBootstrapID = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		refreshTestConf := defaultConfig
+		refreshTestConf.DNSBootstrapID = refreshRelayDNSBootstrapID
+		netA = makeTestWebsocketNodeWithConfig(t, refreshTestConf)
+		netA.NetworkID = nonHardcodedNetworkIDGen().Draw(t1, "network").(protocol.NetworkID)
+
+		primarySRVBootstrap := strings.Replace("<network>.algorand.network", "<network>", string(netA.NetworkID), -1)
+		backupSRVBootstrap := strings.Replace("<network>.algorand.net", "<network>", string(netA.NetworkID), -1)
+		var primaryRelayResolvedRecords []string
+		var secondaryRelayResolvedRecords []string
+		var primaryArchiveResolvedRecords []string
+		var secondaryArchiveResolvedRecords []string
+
+		for _, record := range []string{"r1.algorand-<network>.network",
+			"r2.algorand-<network>.network", "r3.algorand-<network>.network"} {
+			var recordSub = strings.Replace(record, "<network>", string(netA.NetworkID), -1)
+			primaryRelayResolvedRecords = append(primaryRelayResolvedRecords, recordSub)
+			secondaryRelayResolvedRecords = append(secondaryRelayResolvedRecords, strings.Replace(recordSub, "network", "net", -1))
+		}
+
+		for _, record := range []string{"r1archive.algorand-<network>.network",
+			"r2archive.algorand-<network>.network", "r3archive.algorand-<network>.network"} {
+			var recordSub = strings.Replace(record, "<network>", string(netA.NetworkID), -1)
+			primaryArchiveResolvedRecords = append(primaryArchiveResolvedRecords, recordSub)
+			secondaryArchiveResolvedRecords = append(secondaryArchiveResolvedRecords, strings.Replace(recordSub, "network", "net", -1))
+		}
+
+		// Mock the SRV record lookup
+		netA.resolveSRVRecords = func(service string, protocol string, name string, fallbackDNSResolverAddress string,
+			secure bool) (addrs []string, err error) {
+			if service == "algobootstrap" && protocol == "tcp" && name == primarySRVBootstrap {
+				return primaryRelayResolvedRecords, nil
+			} else if service == "algobootstrap" && protocol == "tcp" && name == backupSRVBootstrap {
+				return secondaryRelayResolvedRecords, nil
+			}
+
+			if service == "archive" && protocol == "tcp" && name == primarySRVBootstrap {
+				return primaryArchiveResolvedRecords, nil
+			} else if service == "archive" && protocol == "tcp" && name == backupSRVBootstrap {
+				return secondaryArchiveResolvedRecords, nil
+			}
+
+			return
+		}
+
+		relayPeers := netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, 0, len(relayPeers))
+
+		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, 0, len(archivePeers))
+
+		netA.refreshRelayArchivePhonebookAddresses()
+
+		relayPeers = netA.GetPeers(PeersPhonebookRelays)
+
+		assert.Equal(t, 3, len(relayPeers))
+		relayAddrs := make([]string, 0, len(relayPeers))
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, primaryRelayResolvedRecords, relayAddrs)
+
+		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+
+		// For the time being, we do not dedup resolved archive nodes
+		assert.Equal(t, 6, len(archivePeers))
+
+		archiveAddrs := make([]string, 0, len(archivePeers))
+		for _, peer := range archivePeers {
+			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, append(primaryArchiveResolvedRecords, secondaryArchiveResolvedRecords...), archiveAddrs)
+
+	})
+}
+
 /*
 Exercises the updatePhonebookAddresses function, notably with different variations of valid relay and
 archival addresses.

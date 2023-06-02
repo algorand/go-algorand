@@ -465,6 +465,9 @@ type WebsocketNetwork struct {
 
 	// protocolVersion is an actual version announced as ProtocolVersionHeader
 	protocolVersion string
+
+	// resolveSRVRecords is a function that resolves SRV records for a given service, protocol and name
+	resolveSRVRecords func(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (addrs []string, err error)
 }
 
 const (
@@ -2023,7 +2026,7 @@ func (wn *WebsocketNetwork) mergePrimarySecondaryRelayAddressSlices(network prot
 
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archiverAddresses []string) {
 	var err error
-	relaysAddresses, err = tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
+	relaysAddresses, err = wn.resolveSRVRecords("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
@@ -2032,7 +2035,7 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 		relaysAddresses = nil
 	}
 	if wn.config.EnableCatchupFromArchiveServers || wn.config.EnableBlockServiceFallbackToArchiver {
-		archiverAddresses, err = tools_network.ReadFromSRV("archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
+		archiverAddresses, err = wn.resolveSRVRecords("archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 		if err != nil {
 			// only log this warning on testnet or devnet
 			if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
@@ -2433,15 +2436,15 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (wn *WebsocketNetwork, err error) {
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
-	//TODO: The config.DNSBootstrapID direct call does not handle substitution - should we just remove this entirely?
 	phonebook.ReplacePeerList(phonebookAddresses, string(networkID), PhoneBookEntryRelayRole)
 	wn = &WebsocketNetwork{
-		log:       log,
-		config:    config,
-		phonebook: phonebook,
-		GenesisID: genesisID,
-		NetworkID: networkID,
-		nodeInfo:  nodeInfo,
+		log:               log,
+		config:            config,
+		phonebook:         phonebook,
+		GenesisID:         genesisID,
+		NetworkID:         networkID,
+		nodeInfo:          nodeInfo,
+		resolveSRVRecords: tools_network.ReadFromSRV,
 	}
 
 	wn.setup()
