@@ -212,18 +212,18 @@ func transcribeSnappyLog(filePath string, output chan txGroupItem, wg *sync.Wait
 	}
 	defer file.Close()
 
-	var headerDecoder headerDecoder
+	var hdrDecoder headerDecoder
 	if strings.Contains(path.Base(filePath), "_v2") {
-		headerDecoder = decoderV2{}
+		hdrDecoder = decoderV2{}
 	} else {
-		headerDecoder = decoderV1{}
+		hdrDecoder = decoderV1{}
 	}
 
 	snappyReader := snappy.NewReader(file)
 	var n int
 
 	for {
-		headers, lenMsg, err := headerDecoder.decodeHeader(snappyReader)
+		headers, lenMsg, err := hdrDecoder.decodeHeader(snappyReader)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -395,7 +395,7 @@ func main() {
 			os.Exit(1)
 		}
 		syncRound := uint64(*roundStart) - cfg.MaxAcctLookback + 1
-		err := followerNode.SetSyncRound(syncRound)
+		err = followerNode.SetSyncRound(syncRound)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot configure catchup: %v", err)
 			os.Exit(1)
