@@ -45,12 +45,12 @@ func opFrameDig(cx *EvalContext) error {
 		return errors.New("frame_dig with empty callstack")
 	}
 
-	frame := cx.callstack[top]
+	topFrame := cx.callstack[top]
 	// If proto was used, don't allow `frame_dig` to go below specified args
-	if frame.clear && -int(i) > frame.args {
-		return fmt.Errorf("frame_dig %d in sub with %d args", i, frame.args)
+	if topFrame.clear && -int(i) > topFrame.args {
+		return fmt.Errorf("frame_dig %d in sub with %d args", i, topFrame.args)
 	}
-	idx := frame.height + int(i)
+	idx := topFrame.height + int(i)
 	if idx >= len(cx.stack) {
 		return errors.New("frame_dig above stack")
 	}
@@ -70,12 +70,12 @@ func opFrameBury(cx *EvalContext) error {
 		return errors.New("frame_bury with empty callstack")
 	}
 
-	frame := cx.callstack[top]
+	topFrame := cx.callstack[top]
 	// If proto was used, don't allow `frame_bury` to go below specified args
-	if frame.clear && -int(i) > frame.args {
-		return fmt.Errorf("frame_bury %d in sub with %d args", i, frame.args)
+	if topFrame.clear && -int(i) > topFrame.args {
+		return fmt.Errorf("frame_bury %d in sub with %d args", i, topFrame.args)
 	}
-	idx := frame.height + int(i)
+	idx := topFrame.height + int(i)
 	if idx >= last {
 		return errors.New("frame_bury above stack")
 	}

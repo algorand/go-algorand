@@ -37,6 +37,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+
+	"pgregory.net/rapid"
 )
 
 // Note that most of the tests use makeTestProto/defaultEvalParams as evaluator version so that
@@ -369,6 +371,33 @@ func TestSimpleMath(t *testing.T) {
 	testAccepts(t, "int 21; int 7; / ; int  3; ==", 1)
 
 	testPanics(t, "int 1; int 2; - ; int 0; ==", 1)
+}
+
+// TestRapidMath uses rapid.Check to be a bit more exhaustive
+func TestRapidMath(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rapid.Check(t, func(r *rapid.T) {
+		a := rapid.Uint64().Draw(r, "a").(uint64)
+		b := rapid.Uint64().Draw(r, "b").(uint64)
+		sum := a + b
+		test := fmt.Sprintf("int %d; int %d; +; int %d; ==", a, b, sum)
+		if sum < a {
+			testPanics(t, test, 1)
+		} else {
+			testAccepts(t, test, 1)
+		}
+
+		diff := a - b
+		test = fmt.Sprintf("int %d; int %d; -; int %d; ==", a, b, diff)
+		if a < b {
+			testPanics(t, test, 1)
+		} else {
+			testAccepts(t, test, 1)
+		}
+
+	})
 }
 
 func TestSha256EqArg(t *testing.T) {
