@@ -218,7 +218,7 @@ func initializeConfigFile(configFile string) (config GenerationConfig, err error
 }
 
 // validateWithDefaults validates the config parameters. When defaults is true
-// certain missing parameters are defaulted to easonable values.
+// certain missing parameters are defaulted to reasonable values.
 // When defaults is false, validate only without attempting to set defaults.
 func (cfg *GenerationConfig) validateWithDefaults(defaults bool) error {
 	if cfg.Name == "" {
