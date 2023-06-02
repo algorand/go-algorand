@@ -517,7 +517,7 @@ type Local struct {
 	// - pebbledb (experimental, in development)
 	StorageEngine string `version[28]:"sqlite"`
 
- 	// TxIncomingFilterMaxSize sets the maximum size for the de-duplication cache used by the incoming tx filter
+	// TxIncomingFilterMaxSize sets the maximum size for the de-duplication cache used by the incoming tx filter
 	// only relevant if TxIncomingFilteringFlags is non-zero
 	TxIncomingFilterMaxSize uint64 `version[28]:"500000"`
 }
