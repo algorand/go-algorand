@@ -398,7 +398,7 @@ func TestOtherTxSharing(t *testing.T) {
 	pop; pop; int 1
 `
 
-	t.Run("keyreg", func(t *testing.T) {
+	t.Run("keyreg", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		appl.ApplicationArgs = [][]byte{senderAcct[:], {200}}
 		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&keyreg, &appl), 9, ledger,
 			logic.Exp(1, "unavailable Asset 200"))
@@ -407,7 +407,7 @@ func TestOtherTxSharing(t *testing.T) {
 		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&keyreg, &withRef), 9, ledger,
 			logic.Exp(1, "unavailable Holding "+senderAcct.String()))
 	})
-	t.Run("pay", func(t *testing.T) {
+	t.Run("pay", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		// The receiver is available for algo balance reading
 		appl.ApplicationArgs = [][]byte{receiverAcct[:]}
 		logic.TestApps(t, []string{"", receiverBalance}, txntest.Group(&pay, &appl), 9, ledger)
@@ -423,14 +423,14 @@ func TestOtherTxSharing(t *testing.T) {
 		logic.TestApps(t, []string{"", otherBalance}, txntest.Group(&withClose, &appl), 9, ledger)
 	})
 
-	t.Run("acfg", func(t *testing.T) {
+	t.Run("acfg", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		// The other account is not available even though it's all the extra addresses
 		appl.ApplicationArgs = [][]byte{otherAcct[:]}
 		logic.TestApps(t, []string{"", otherBalance}, txntest.Group(&acfg, &appl), 9, ledger,
 			logic.Exp(1, "invalid Account reference "+otherAcct.String()))
 	})
 
-	t.Run("axfer", func(t *testing.T) {
+	t.Run("axfer", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		// The receiver is also available for algo balance reading
 		appl.ApplicationArgs = [][]byte{receiverAcct[:]}
 		logic.TestApps(t, []string{"", receiverBalance}, txntest.Group(&axfer, &appl), 9, ledger)
@@ -465,7 +465,7 @@ func TestOtherTxSharing(t *testing.T) {
 		logic.TestApps(t, []string{"", holdingAccess}, txntest.Group(&withClose, &appl), 9, ledger)
 	})
 
-	t.Run("afrz", func(t *testing.T) {
+	t.Run("afrz", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		// The other account is available (for algo and asset)
 		appl.ApplicationArgs = [][]byte{otherAcct[:], {byte(afrz.FreezeAsset)}}
 		logic.TestApps(t, []string{"", otherBalance}, txntest.Group(&afrz, &appl), 9, ledger)
@@ -540,7 +540,7 @@ int 1
 	// And needs some ASAs for inner axfer testing
 	ledger.NewHolding(appAcct, asa1, 1_000_000, false)
 
-	t.Run("keyreg", func(t *testing.T) {
+	t.Run("keyreg", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		keyreg := txntest.Txn{
 			Type:   protocol.KeyRegistrationTx,
 			Sender: senderAcct,
@@ -558,7 +558,7 @@ int 1
 			logic.Exp(1, "unavailable Account "+receiverAcct.String()))
 	})
 
-	t.Run("pay", func(t *testing.T) {
+	t.Run("pay", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		pay := txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   senderAcct,
@@ -582,7 +582,7 @@ int 1
 			logic.Exp(1, "unavailable Account "+otherAcct.String()))
 	})
 
-	t.Run("axfer", func(t *testing.T) {
+	t.Run("axfer", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		axfer := txntest.Txn{
 			Type:          protocol.AssetTransferTx,
 			XferAsset:     asa1,
@@ -658,7 +658,7 @@ int 1
 			logic.Exp(2, "unavailable Holding "+payAcct.String()))
 	})
 
-	t.Run("afrz", func(t *testing.T) {
+	t.Run("afrz", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		appl.ForeignAssets = []basics.AssetIndex{} // reset after previous tests
 		afrz := txntest.Txn{
 			Type:          protocol.AssetFreezeTx,
@@ -714,7 +714,7 @@ int 1
 
 	})
 
-	t.Run("appl", func(t *testing.T) {
+	t.Run("appl", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		appl.ForeignAssets = []basics.AssetIndex{} // reset after previous test
 		appl.Accounts = []basics.Address{}         // reset after previous tests
 		appl0 := txntest.Txn{
