@@ -1133,6 +1133,16 @@ func TestGetPeers(t *testing.T) {
 	expectAddrs := []string{addrA, "a", "b", "c"}
 	sort.Strings(expectAddrs)
 	assert.Equal(t, expectAddrs, peerAddrs)
+
+	// For now, PeersPhonebookArchivalNodes and PeersPhonebookRelays will return the same set of nodes
+	bPeers2 := netB.GetPeers(PeersPhonebookArchivalNodes)
+	peerAddrs2 := make([]string, len(bPeers2))
+	for pi2, peer2 := range bPeers2 {
+		peerAddrs2[pi2] = peer2.(HTTPPeer).GetAddress()
+	}
+	sort.Strings(peerAddrs2)
+	assert.Equal(t, expectAddrs, peerAddrs2)
+
 }
 
 // confirms that if the config PublicAddress is set to "testing",
