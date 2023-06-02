@@ -127,6 +127,7 @@ func getLatestConfigVersion() uint32 {
 	}
 }
 
+// GetVersionedDefaultLocalConfig returns the default config for the given version.
 func GetVersionedDefaultLocalConfig(version uint32) (local Local) {
 	if version > 0 {
 		local = GetVersionedDefaultLocalConfig(version - 1)
