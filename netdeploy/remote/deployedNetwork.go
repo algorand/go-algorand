@@ -462,7 +462,13 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet, params, log)
 		// don't allow the ledger to fall more than 10 rounds behind before adding more
-		l.WaitForCommit(bootstrappedNet.round - 10)
+		lastCommit := l.LatestTrackerCommitted()
+		diff := int(bootstrappedNet.round) - int(lastCommit)
+		for diff > 10 {
+			lastCommit = l.LatestTrackerCommitted()
+			diff = int(bootstrappedNet.round) - int(lastCommit)
+			time.Sleep(100 * time.Millisecond)
+		}
 		err = l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
 			fmt.Printf("Error  %v\n", err)
@@ -590,7 +596,13 @@ func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.B
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, roundTxnCnt, bootstrappedNet, csParams, log)
 		// don't allow the ledger to fall more than 10 rounds behind before adding more
-		l.WaitForCommit(bootstrappedNet.round - 10)
+		lastCommit := l.LatestTrackerCommitted()
+		diff := int(bootstrappedNet.round) - int(lastCommit)
+		for diff > 10 {
+			lastCommit = l.LatestTrackerCommitted()
+			diff = int(bootstrappedNet.round) - int(lastCommit)
+			time.Sleep(100 * time.Millisecond)
+		}
 		err := l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
 			fmt.Printf("Error %v\n", err)
