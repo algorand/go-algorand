@@ -354,7 +354,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 //GenerateDatabaseFiles generates database files according to the configurations
 func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, genesisFolder string) error {
 
-	accounts := make(map[basics.Address]basics.AccountData)
+	accounts := make(map[basics.Address]basics.GenesisAccountData)
 
 	genesis, err := bookkeeping.LoadGenesisFromFile(filepath.Join(genesisFolder, "genesis.json"))
 	if err != nil {
@@ -493,7 +493,7 @@ func keypair() *crypto.SignatureSecrets {
 	return s
 }
 
-func generateInitState(accounts map[basics.Address]basics.AccountData, bootstrappedNet *netState) (ledgercore.InitState, error) {
+func generateInitState(accounts map[basics.Address]basics.GenesisAccountData, bootstrappedNet *netState) (ledgercore.InitState, error) {
 
 	var initState ledgercore.InitState
 

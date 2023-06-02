@@ -70,7 +70,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 	}
 
 	// generate accounts
-	genesis := make(map[basics.Address]basics.AccountData)
+	genesis := make(map[basics.Address]basics.GenesisAccountData)
 	gen := rand.New(rand.NewSource(2))
 	roots := make([]account.Root, P)
 	parts := make([]account.PersistedParticipation, P)
@@ -104,16 +104,16 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 		short := root.Address()
 
 		if offlineAccounts && i > P/2 {
-			genesis[short] = basics_testing.MakeAccountData(basics.Offline, startamt)
+			genesis[short] = basics_testing.MakeAccountData(basics.Offline, startamt).GenesisAccountData
 		} else {
-			data := basics_testing.MakeAccountData(basics.Online, startamt)
+			data := basics_testing.MakeAccountData(basics.Online, startamt).GenesisAccountData
 			data.SelectionID = parts[i].VRFSecrets().PK
 			data.VoteID = parts[i].VotingSecrets().OneTimeSignatureVerifier
 			genesis[short] = data
 		}
 	}
 
-	genesis[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
+	genesis[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)}).GenesisAccountData
 
 	bootstrap := bookkeeping.MakeGenesisBalances(genesis, poolAddr, sinkAddr)
 

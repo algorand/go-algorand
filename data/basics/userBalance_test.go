@@ -44,8 +44,10 @@ func TestRewards(t *testing.T) {
 	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
 	for _, accountAlgo := range accountAlgos {
 		ad := AccountData{
-			Status:             Online,
-			MicroAlgos:         accountAlgo,
+			GenesisAccountData: GenesisAccountData{
+				Status:     Online,
+				MicroAlgos: accountAlgo,
+			},
 			RewardsBase:        100,
 			RewardedMicroAlgos: MicroAlgos{Raw: 25},
 		}
@@ -76,8 +78,10 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 				}
 			}()
 			a := AccountData{
-				Status:             Online,
-				MicroAlgos:         MicroAlgos{Raw: ^uint64(0)},
+				GenesisAccountData: GenesisAccountData{
+					Status:     Online,
+					MicroAlgos: MicroAlgos{Raw: ^uint64(0)},
+				},
 				RewardedMicroAlgos: MicroAlgos{Raw: 0},
 				RewardsBase:        0,
 			}
@@ -88,8 +92,10 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 
 	t.Run("RewardsOverflow", func(t *testing.T) {
 		a := AccountData{
-			Status:             Online,
-			MicroAlgos:         MicroAlgos{Raw: 80000000},
+			GenesisAccountData: GenesisAccountData{
+				Status:     Online,
+				MicroAlgos: MicroAlgos{Raw: 80000000},
+			},
 			RewardedMicroAlgos: MicroAlgos{Raw: ^uint64(0)},
 			RewardsBase:        0,
 		}
@@ -113,16 +119,18 @@ func getSampleAccountData() AccountData {
 	crypto.RandBytes(stateProofID[:])
 
 	return AccountData{
-		Status:             NotParticipating,
-		MicroAlgos:         MicroAlgos{},
+		GenesisAccountData: GenesisAccountData{
+			Status:          NotParticipating,
+			MicroAlgos:      MicroAlgos{},
+			VoteID:          oneTimeSecrets.OneTimeSignatureVerifier,
+			SelectionID:     vrfSecrets.PK,
+			StateProofID:    stateProofID,
+			VoteFirstValid:  Round(0x1234123412341234),
+			VoteLastValid:   Round(0x1234123412341234),
+			VoteKeyDilution: 0x1234123412341234,
+		},
 		RewardsBase:        0x1234123412341234,
 		RewardedMicroAlgos: MicroAlgos{},
-		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
-		SelectionID:        vrfSecrets.PK,
-		StateProofID:       stateProofID,
-		VoteFirstValid:     Round(0x1234123412341234),
-		VoteLastValid:      Round(0x1234123412341234),
-		VoteKeyDilution:    0x1234123412341234,
 		AssetParams:        make(map[AssetIndex]AssetParams),
 		Assets:             make(map[AssetIndex]AssetHolding),
 		AppLocalStates:     make(map[AppIndex]AppLocalState),

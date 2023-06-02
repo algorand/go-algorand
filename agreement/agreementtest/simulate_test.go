@@ -320,10 +320,12 @@ func TestSimulate(t *testing.T) {
 	for _, account := range accs {
 		amount := basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
 		genesis[account.Address()] = basics.AccountData{
-			Status:      basics.Online,
-			MicroAlgos:  amount,
-			SelectionID: account.VRFSecrets().PK,
-			VoteID:      account.VotingSecrets().OneTimeSignatureVerifier,
+			GenesisAccountData: basics.GenesisAccountData{
+				Status:      basics.Online,
+				MicroAlgos:  amount,
+				SelectionID: account.VRFSecrets().PK,
+				VoteID:      account.VotingSecrets().OneTimeSignatureVerifier,
+			},
 		}
 	}
 

@@ -96,7 +96,7 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 		}
 	}
 	// generate accounts
-	genesis := make(map[basics.Address]basics.AccountData)
+	genesis := make(map[basics.Address]basics.GenesisAccountData)
 	gen := rand.New(rand.NewSource(2))
 	parts := make([]account.Participation, P)
 	for i := 0; i < P; i++ {
@@ -121,7 +121,7 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 			panic(err)
 		}
 
-		startamt := basics.AccountData{
+		startamt := basics.GenesisAccountData{
 			Status:      basics.Online,
 			MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Uint64() % (maxMoneyAtStart - minMoneyAtStart)))},
 			SelectionID: part.VRFSecrets().PK,
@@ -134,11 +134,11 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 		part.Close()
 	}
 
-	genesis[basics.Address(sinkAddr)] = basics.AccountData{
+	genesis[basics.Address(sinkAddr)] = basics.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: uint64(1e3 * minMoneyAtStart)},
 	}
-	genesis[basics.Address(poolAddr)] = basics.AccountData{
+	genesis[basics.Address(poolAddr)] = basics.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: uint64(1e3 * minMoneyAtStart)},
 	}

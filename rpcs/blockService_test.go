@@ -334,12 +334,12 @@ var sinkAddr = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb
 
 func makeLedger(t *testing.T, namePostfix string) *data.Ledger {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesis := make(map[basics.Address]basics.AccountData)
-	genesis[sinkAddr] = basics.AccountData{
+	genesis := make(map[basics.Address]basics.GenesisAccountData)
+	genesis[sinkAddr] = basics.GenesisAccountData{
 		Status:     basics.Online,
 		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
-	genesis[poolAddr] = basics.AccountData{
+	genesis[poolAddr] = basics.GenesisAccountData{
 		Status:     basics.Online,
 		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}

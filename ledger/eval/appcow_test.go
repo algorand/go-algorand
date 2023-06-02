@@ -1089,7 +1089,11 @@ func TestCowGet(t *testing.T) {
 	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 
 	addr1 := ledgertesting.RandomAddress()
-	bre := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}}
+	bre := basics.AccountData{
+		GenesisAccountData: basics.GenesisAccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: 100},
+		},
+	}
 	c.mods.Accts.Upsert(addr1, ledgercore.ToAccountData(bre))
 
 	bra, err := c.Get(addr1, true)

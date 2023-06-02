@@ -291,7 +291,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 	}
 
 	// generate accounts
-	genesis := make(map[basics.Address]basics.AccountData)
+	genesis := make(map[basics.Address]basics.GenesisAccountData)
 	gen := rand.New(rand.NewSource(2))
 	roots := make([]account.Root, P)
 	parts := make([]account.Participation, P)
@@ -325,9 +325,9 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 		short := root.Address()
 
 		if offlineAccounts && i > P/2 {
-			genesis[short] = basics_testing.MakeAccountData(basics.Offline, startamt)
+			genesis[short] = basics_testing.MakeAccountData(basics.Offline, startamt).GenesisAccountData
 		} else {
-			data := basics_testing.MakeAccountData(basics.Online, startamt)
+			data := basics_testing.MakeAccountData(basics.Online, startamt).GenesisAccountData
 			data.SelectionID = parts[i].VRFSecrets().PK
 			data.VoteID = parts[i].VotingSecrets().OneTimeSignatureVerifier
 			genesis[short] = data
@@ -335,7 +335,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 		part.Close()
 	}
 
-	genesis[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
+	genesis[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)}).GenesisAccountData
 
 	program := logic.Program(retOneProgram)
 	lhash := crypto.HashObj(&program)
@@ -343,7 +343,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 	copy(addr[:], lhash[:])
 	ad := basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 	ad.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{1: {}}
-	genesis[addr] = ad
+	genesis[addr] = ad.GenesisAccountData
 
 	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 

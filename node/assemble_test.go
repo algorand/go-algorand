@@ -60,19 +60,19 @@ func BenchmarkAssembleBlock(b *testing.B) {
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	addresses := make([]basics.Address, numUsers)
 
-	genesis := make(map[basics.Address]basics.AccountData)
+	genesis := make(map[basics.Address]basics.GenesisAccountData)
 	for i := 0; i < numUsers; i++ {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
 		addresses[i] = addr
-		genesis[addr] = basics.AccountData{
+		genesis[addr] = basics.GenesisAccountData{
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
 
-	genesis[poolAddr] = basics.AccountData{
+	genesis[poolAddr] = basics.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 	}
@@ -190,19 +190,19 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	addresses := make([]basics.Address, numUsers)
 
-	genesis := make(map[basics.Address]basics.AccountData)
+	genesis := make(map[basics.Address]basics.GenesisAccountData)
 	for i := 0; i < numUsers; i++ {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
 		addresses[i] = addr
-		genesis[addr] = basics.AccountData{
+		genesis[addr] = basics.GenesisAccountData{
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
 
-	genesis[poolAddr] = basics.AccountData{
+	genesis[poolAddr] = basics.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 	}

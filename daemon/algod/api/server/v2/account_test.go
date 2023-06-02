@@ -74,8 +74,10 @@ func TestAccount(t *testing.T) {
 	}
 	copy(assetParams2.MetadataHash[:], []byte("test2"))
 	a := basics.AccountData{
-		Status:             basics.Online,
-		MicroAlgos:         basics.MicroAlgos{Raw: 80000000},
+		GenesisAccountData: basics.GenesisAccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: 80000000},
+		},
 		RewardedMicroAlgos: basics.MicroAlgos{Raw: ^uint64(0)},
 		RewardsBase:        0,
 		AppParams:          map[basics.AppIndex]basics.AppParams{appIdx1: appParams1, appIdx2: appParams2},

@@ -67,6 +67,24 @@ type OnlineAccountData struct {
 	VotingData
 }
 
+// ToAccountDataFromGenesisAccountData returns ledgercore.AccountData from basics.GenesisAccountData
+func ToAccountDataFromGenesisAccountData(gad basics.GenesisAccountData) AccountData {
+	return AccountData{
+		AccountBaseData: AccountBaseData{
+			Status:     gad.Status,
+			MicroAlgos: gad.MicroAlgos,
+		},
+		VotingData: VotingData{
+			VoteID:          gad.VoteID,
+			SelectionID:     gad.SelectionID,
+			StateProofID:    gad.StateProofID,
+			VoteFirstValid:  gad.VoteFirstValid,
+			VoteLastValid:   gad.VoteLastValid,
+			VoteKeyDilution: gad.VoteKeyDilution,
+		},
+	}
+}
+
 // ToAccountData returns ledgercore.AccountData from basics.AccountData
 func ToAccountData(acct basics.AccountData) AccountData {
 	return AccountData{

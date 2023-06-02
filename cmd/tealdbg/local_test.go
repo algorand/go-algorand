@@ -1237,7 +1237,9 @@ int 1`
 	br := basics.BalanceRecord{
 		Addr: sender,
 		AccountData: basics.AccountData{
-			MicroAlgos: basics.MicroAlgos{Raw: 5000000},
+			GenesisAccountData: basics.GenesisAccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 5000000},
+			},
 			AppParams: map[basics.AppIndex]basics.AppParams{
 				appIdx: {
 					ApprovalProgram:   prog,
@@ -1361,7 +1363,9 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 	br := basics.BalanceRecord{
 		Addr: sender,
 		AccountData: basics.AccountData{
-			MicroAlgos: basics.MicroAlgos{Raw: 5000000},
+			GenesisAccountData: basics.GenesisAccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: 5000000},
+			},
 			AppParams: map[basics.AppIndex]basics.AppParams{
 				appIdx: {
 					ApprovalProgram:   prog,

@@ -346,13 +346,17 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 	}
 
 	records["FeeSink"] = basics.AccountData{
-		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: protoParams.MinBalance},
+		GenesisAccountData: basics.GenesisAccountData{
+			Status:     basics.NotParticipating,
+			MicroAlgos: basics.MicroAlgos{Raw: protoParams.MinBalance},
+		},
 	}
 
 	records["RewardsPool"] = basics.AccountData{
-		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: rewardsBalance},
+		GenesisAccountData: basics.GenesisAccountData{
+			Status:     basics.NotParticipating,
+			MicroAlgos: basics.MicroAlgos{Raw: rewardsBalance},
+		},
 	}
 
 	// Add FeeSink and RewardsPool to allocation slice to be handled with other allocations.
@@ -385,7 +389,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		g.Allocation = append(g.Allocation, bookkeeping.GenesisAllocation{
 			Address: genesisAddrs[wallet.Name].String(),
 			Comment: wallet.Name,
-			State:   walletData,
+			State:   walletData.GenesisAccountData,
 		})
 	}
 

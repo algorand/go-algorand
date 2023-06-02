@@ -111,6 +111,23 @@ type OnlineAccountData struct {
 	VotingData
 }
 
+// GenesisAccountData contains a subset of account information that is
+// present in the genesis file.
+type GenesisAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Status     Status     `codec:"onl"`
+	MicroAlgos MicroAlgos `codec:"algo"`
+
+	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
+	SelectionID  crypto.VRFVerifier              `codec:"sel"`
+	StateProofID merklesignature.Commitment      `codec:"stprf"`
+
+	VoteFirstValid  Round  `codec:"voteFst"`
+	VoteLastValid   Round  `codec:"voteLst"`
+	VoteKeyDilution uint64 `codec:"voteKD"`
+}
+
 // AccountData contains the data associated with a given address.
 //
 // This includes the account balance, cryptographic public keys,
@@ -118,8 +135,9 @@ type OnlineAccountData struct {
 type AccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Status     Status     `codec:"onl"`
-	MicroAlgos MicroAlgos `codec:"algo"`
+	// GenesisAccountData contains a subset of account information that is
+	// relevant in the genesis file.
+	GenesisAccountData
 
 	// RewardsBase is used to implement rewards.
 	// This is not meaningful for accounts with Status=NotParticipating.
@@ -161,14 +179,6 @@ type AccountData struct {
 	// it won't answer the question "how many algos did I make in
 	// the past week".
 	RewardedMicroAlgos MicroAlgos `codec:"ern"`
-
-	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
-	SelectionID  crypto.VRFVerifier              `codec:"sel"`
-	StateProofID merklesignature.Commitment      `codec:"stprf"`
-
-	VoteFirstValid  Round  `codec:"voteFst"`
-	VoteLastValid   Round  `codec:"voteLst"`
-	VoteKeyDilution uint64 `codec:"voteKD"`
 
 	// If this account created an asset, AssetParams stores
 	// the parameters defining that asset.  The params are indexed

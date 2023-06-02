@@ -125,7 +125,7 @@ func OpenLedger(
 		log:                            log,
 		archival:                       cfg.Archival,
 		genesisHash:                    genesisInitState.GenesisHash,
-		genesisAccounts:                genesisInitState.Accounts,
+		genesisAccounts:                genesisInitState.GenesisAccountData,
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
 		genesisProtoVersion:            genesisInitState.Block.CurrentProtocol,
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),

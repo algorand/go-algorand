@@ -22,7 +22,11 @@ import (
 
 // MakeAccountData returns a AccountData with non-empty voting fields for online accounts
 func MakeAccountData(status basics.Status, algos basics.MicroAlgos) basics.AccountData {
-	ad := basics.AccountData{Status: status, MicroAlgos: algos}
+	ad := basics.AccountData{
+		GenesisAccountData: basics.GenesisAccountData{
+			Status: status, MicroAlgos: algos,
+		},
+	}
 	if status == basics.Online {
 		ad.VoteFirstValid = 1
 		ad.VoteLastValid = 100_000

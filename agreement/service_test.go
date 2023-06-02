@@ -672,10 +672,12 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 
 		// expose balances for future ledger creation
 		acctData := basics.AccountData{
-			Status:      basics.Online,
-			MicroAlgos:  basics.MicroAlgos{Raw: 1000000},
-			VoteID:      accounts[i].VotingSecrets().OneTimeSignatureVerifier,
-			SelectionID: accounts[i].VRFSecrets().PK,
+			GenesisAccountData: basics.GenesisAccountData{
+				Status:      basics.Online,
+				MicroAlgos:  basics.MicroAlgos{Raw: 1000000},
+				VoteID:      accounts[i].VotingSecrets().OneTimeSignatureVerifier,
+				SelectionID: accounts[i].VRFSecrets().PK,
+			},
 		}
 		balances[rootAddress] = acctData
 	}

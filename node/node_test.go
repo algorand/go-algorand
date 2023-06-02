@@ -70,7 +70,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	firstRound := basics.Round(0)
 	lastRound := basics.Round(200)
 
-	genesis := make(map[basics.Address]basics.AccountData)
+	genesis := make(map[basics.Address]basics.GenesisAccountData)
 	gen := rand.New(rand.NewSource(2))
 	neighbors := make([]string, numAccounts)
 	for i := range neighbors {
@@ -133,7 +133,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		}
 		access.Close()
 
-		data := basics.AccountData{
+		data := basics.GenesisAccountData{
 			Status:      basics.Online,
 			MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))},
 			SelectionID: part.VRFSecrets().PK,
@@ -142,7 +142,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		short := root.Address()
 		genesis[short] = data
 	}
-	genesis[poolAddr] = basics.AccountData{
+	genesis[poolAddr] = basics.GenesisAccountData{
 		Status:     basics.Online,
 		MicroAlgos: basics.MicroAlgos{Raw: uint64(100000)},
 	}
