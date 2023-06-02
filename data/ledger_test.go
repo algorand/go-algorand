@@ -71,7 +71,7 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 	}
 
 	initKeys = make(map[basics.Address]*crypto.SignatureSecrets)
-	initAccounts := make(map[basics.Address]basics.AccountData)
+	initAccounts := make(map[basics.Address]basics.GenesisAccountData)
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
@@ -79,12 +79,12 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 		if i%2 == 0 {
 			accountStatus = basics.NotParticipating
 		}
-		initAccounts[genaddrs[i]] = basics_testing.MakeAccountData(accountStatus, basics.MicroAlgos{Raw: uint64((i + 100) * 100000)})
+		initAccounts[genaddrs[i]] = basics_testing.MakeAccountData(accountStatus, basics.MicroAlgos{Raw: uint64((i + 100) * 100000)}).GenesisAccountData
 	}
 	initKeys[poolAddr] = poolSecret
-	initAccounts[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
+	initAccounts[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567}).GenesisAccountData
 	initKeys[sinkAddr] = sinkSecret
-	initAccounts[sinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
+	initAccounts[sinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321}).GenesisAccountData
 
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
@@ -500,9 +500,9 @@ func TestLedgerErrorValidate(t *testing.T) {
 	blk.FeeSink = testSinkAddr
 	blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 
-	accts := make(map[basics.Address]basics.AccountData)
-	accts[testPoolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
-	accts[testSinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
+	accts := make(map[basics.Address]basics.GenesisAccountData)
+	accts[testPoolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0}).GenesisAccountData
+	accts[testSinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0}).GenesisAccountData
 
 	genesisInitState := ledgercore.InitState{
 		Accounts:    accts,
@@ -615,7 +615,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 	}
 
 	for rnd := basics.Round(1); rnd <= basics.Round(2000); rnd++ {
-		blk, err := getEmptyBlock(rnd-1, l.Ledger, t.Name(), genesisInitState.Accounts)
+		blk, err := getEmptyBlock(rnd-1, l.Ledger, t.Name())
 		require.NoError(t, err)
 		blkChan3 <- blk
 		blkChan2 <- blk
@@ -644,7 +644,7 @@ func validatedBlock(l *ledger.Ledger, blk bookkeeping.Block) (vb *ledgercore.Val
 	return
 }
 
-func getEmptyBlock(afterRound basics.Round, l *ledger.Ledger, genesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block, err error) {
+func getEmptyBlock(afterRound basics.Round, l *ledger.Ledger, genesisID string) (blk bookkeeping.Block, err error) {
 	l.WaitForCommit(afterRound)
 
 	lastBlock, err := l.Block(l.Latest())

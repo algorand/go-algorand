@@ -68,22 +68,22 @@ type txHandlerConfig struct {
 	enableFilteringCanonical bool
 }
 
-func makeTestGenesisAccounts(tb testing.TB, numUsers int) ([]basics.Address, []*crypto.SignatureSecrets, map[basics.Address]basics.AccountData) {
+func makeTestGenesisAccounts(tb testing.TB, numUsers int) ([]basics.Address, []*crypto.SignatureSecrets, map[basics.Address]basics.GenesisAccountData) {
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
-	genesis := make(map[basics.Address]basics.AccountData)
+	genesis := make(map[basics.Address]basics.GenesisAccountData)
 	for i := 0; i < numUsers; i++ {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
 		addresses[i] = addr
-		genesis[addr] = basics.AccountData{
+		genesis[addr] = basics.GenesisAccountData{
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
 
-	genesis[poolAddr] = basics.AccountData{
+	genesis[poolAddr] = basics.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 	}
@@ -1603,7 +1603,7 @@ type txGenerator struct {
 
 	addresses []basics.Address
 	secrets   []*crypto.SignatureSecrets
-	genesis   map[basics.Address]basics.AccountData
+	genesis   map[basics.Address]basics.GenesisAccountData
 }
 
 type sigGenerator struct {
@@ -2153,7 +2153,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	log.SetLevel(logging.Warn)
 
 	const numAccts = 2
-	genesis := make(map[basics.Address]basics.AccountData, numAccts+1)
+	genesis := make(map[basics.Address]basics.GenesisAccountData, numAccts+1)
 	addresses := make([]basics.Address, numAccts)
 	secrets := make([]*crypto.SignatureSecrets, numAccts)
 
@@ -2162,12 +2162,12 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
 		addresses[i] = addr
-		genesis[addr] = basics.AccountData{
+		genesis[addr] = basics.GenesisAccountData{
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
-	genesis[poolAddr] = basics.AccountData{
+	genesis[poolAddr] = basics.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 	}
@@ -2392,18 +2392,18 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 	logging.Base().SetLevel(logging.Error)
 
 	// prepare the accounts
-	genesis := make(map[basics.Address]basics.AccountData)
+	genesis := make(map[basics.Address]basics.GenesisAccountData)
 	for i := 0; i < numUsers; i++ {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
 		addresses[i] = addr
-		genesis[addr] = basics.AccountData{
+		genesis[addr] = basics.GenesisAccountData{
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
 	}
-	genesis[poolAddr] = basics.AccountData{
+	genesis[poolAddr] = basics.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 	}

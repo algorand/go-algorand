@@ -145,7 +145,7 @@ type ledgerForTracker interface {
 	GenesisHash() crypto.Digest
 	GenesisProto() config.ConsensusParams
 	GenesisProtoVersion() protocol.ConsensusVersion
-	GenesisAccounts() map[basics.Address]basics.AccountData
+	GenesisAccounts() map[basics.Address]basics.GenesisAccountData
 }
 
 type trackerRegistry struct {

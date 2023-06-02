@@ -61,7 +61,7 @@ func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []b
 	const count = 10
 	addrs := make([]basics.Address, count)
 	secrets := make([]*crypto.SignatureSecrets, count)
-	accts := make(map[basics.Address]basics.AccountData)
+	accts := make(map[basics.Address]basics.GenesisAccountData)
 
 	// 10 billion microalgos, across N accounts and pool and sink
 	amount := 10 * 1000000000 * 1000000 / uint64(count+2)
@@ -73,13 +73,13 @@ func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []b
 		secrets[i] = crypto.GenerateSignatureSecrets(seed)
 		addrs[i] = basics.Address(secrets[i].SignatureVerifier)
 
-		adata := basics.AccountData{
+		adata := basics.GenesisAccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: amount},
 		}
 		accts[addrs[i]] = adata
 	}
 
-	accts[sink] = basics.AccountData{
+	accts[sink] = basics.GenesisAccountData{
 		MicroAlgos: basics.MicroAlgos{Raw: amount},
 		Status:     basics.NotParticipating,
 	}
@@ -88,7 +88,7 @@ func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []b
 	if cfg.rewardsPoolAmount.Raw > 0 {
 		poolBal = cfg.rewardsPoolAmount
 	}
-	accts[rewards] = basics.AccountData{
+	accts[rewards] = basics.GenesisAccountData{
 		MicroAlgos: poolBal,
 	}
 
@@ -113,7 +113,7 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 
 	addrs := make([]basics.Address, 0, naccts)
 	keys := make([]*crypto.SignatureSecrets, 0, naccts)
-	accts := make(map[basics.Address]basics.AccountData)
+	accts := make(map[basics.Address]basics.GenesisAccountData)
 
 	// 10 billion microalgos, across N accounts and pool and sink
 	amount := 10 * 1000000000 * 1000000 / uint64(naccts+2)
@@ -132,17 +132,17 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 		keys = append(keys, key)
 		addrs = append(addrs, addr)
 
-		adata := basics.AccountData{}
+		adata := basics.GenesisAccountData{}
 		adata.MicroAlgos.Raw = amount //1000 * 1000 * 1000 * 1000 / uint64(naccts)
 		accts[addr] = adata
 	}
 
-	pooldata := basics.AccountData{}
+	pooldata := basics.GenesisAccountData{}
 	pooldata.MicroAlgos.Raw = amount //1000 * 1000 * 1000 * 1000
 	pooldata.Status = basics.NotParticipating
 	accts[testPoolAddr] = pooldata
 
-	sinkdata := basics.AccountData{}
+	sinkdata := basics.GenesisAccountData{}
 	sinkdata.MicroAlgos.Raw = amount //1000 * 1000 * 1000 * 1000
 	sinkdata.Status = basics.NotParticipating
 	accts[testSinkAddr] = sinkdata

@@ -1389,8 +1389,10 @@ func TestAcctOnlineTop(t *testing.T) {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: ledgertesting.RandomAddress(),
 			AccountData: basics.AccountData{
-				MicroAlgos:  basics.MicroAlgos{Raw: uint64(i + 1)},
-				Status:      basics.Offline,
+				GenesisAccountData: basics.GenesisAccountData{
+					MicroAlgos: basics.MicroAlgos{Raw: uint64(i + 1)},
+					Status:     basics.Offline,
+				},
 				RewardsBase: 0},
 		}
 		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
@@ -1399,11 +1401,13 @@ func TestAcctOnlineTop(t *testing.T) {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: ledgertesting.RandomAddress(),
 			AccountData: basics.AccountData{
-				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
-				Status:         basics.Online,
-				VoteLastValid:  1000,
-				VoteFirstValid: 0,
-				RewardsBase:    0},
+				GenesisAccountData: basics.GenesisAccountData{
+					MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+					Status:         basics.Online,
+					VoteLastValid:  1000,
+					VoteFirstValid: 0,
+				},
+				RewardsBase: 0},
 		}
 		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
 	}
@@ -1411,8 +1415,10 @@ func TestAcctOnlineTop(t *testing.T) {
 	allAccts[i] = basics.BalanceRecord{
 		Addr: ledgertesting.RandomAddress(),
 		AccountData: basics.AccountData{
-			MicroAlgos:  basics.MicroAlgos{Raw: uint64(100000)},
-			Status:      basics.Offline,
+			GenesisAccountData: basics.GenesisAccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: uint64(100000)},
+				Status:     basics.Offline,
+			},
 			RewardsBase: 0},
 	}
 	genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
@@ -1512,11 +1518,13 @@ func TestAcctOnlineTopInBatches(t *testing.T) {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: intToAddress(i + 1),
 			AccountData: basics.AccountData{
-				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
-				Status:         basics.Online,
-				VoteLastValid:  basics.Round(i + 1),
-				VoteFirstValid: 0,
-				RewardsBase:    0},
+				GenesisAccountData: basics.GenesisAccountData{
+					MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+					Status:         basics.Online,
+					VoteLastValid:  basics.Round(i + 1),
+					VoteFirstValid: 0,
+				},
+				RewardsBase: 0},
 		}
 		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
 	}
@@ -1586,11 +1594,13 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: ledgertesting.RandomAddress(),
 			AccountData: basics.AccountData{
-				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
-				Status:         basics.Online,
-				VoteLastValid:  1000,
-				VoteFirstValid: 0,
-				RewardsBase:    0},
+				GenesisAccountData: basics.GenesisAccountData{
+					MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+					Status:         basics.Online,
+					VoteLastValid:  1000,
+					VoteFirstValid: 0,
+				},
+				RewardsBase: 0},
 		}
 		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
 	}
@@ -1679,11 +1689,13 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: ledgertesting.RandomAddress(),
 			AccountData: basics.AccountData{
-				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
-				Status:         basics.Online,
-				VoteLastValid:  1000,
-				VoteFirstValid: 0,
-				RewardsBase:    0},
+				GenesisAccountData: basics.GenesisAccountData{
+					MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+					Status:         basics.Online,
+					VoteLastValid:  1000,
+					VoteFirstValid: 0,
+				},
+				RewardsBase: 0},
 		}
 		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
 	}
@@ -1772,11 +1784,13 @@ func TestAcctOnlineTop_ChangeOnlineStake(t *testing.T) {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: ledgertesting.RandomAddress(),
 			AccountData: basics.AccountData{
-				MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
-				Status:         basics.Online,
-				VoteLastValid:  1000,
-				VoteFirstValid: 0,
-				RewardsBase:    0},
+				GenesisAccountData: basics.GenesisAccountData{
+					MicroAlgos:     basics.MicroAlgos{Raw: uint64(i + 1)},
+					Status:         basics.Online,
+					VoteLastValid:  1000,
+					VoteFirstValid: 0,
+				},
+				RewardsBase: 0},
 		}
 		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
 	}
@@ -1784,11 +1798,13 @@ func TestAcctOnlineTop_ChangeOnlineStake(t *testing.T) {
 	allAccts[numAccts-1] = basics.BalanceRecord{
 		Addr: ledgertesting.RandomAddress(),
 		AccountData: basics.AccountData{
-			MicroAlgos:     basics.MicroAlgos{Raw: uint64(numAccts)},
-			Status:         basics.Online,
-			VoteLastValid:  1,
-			VoteFirstValid: 0,
-			RewardsBase:    0},
+			GenesisAccountData: basics.GenesisAccountData{
+				MicroAlgos:     basics.MicroAlgos{Raw: uint64(numAccts)},
+				Status:         basics.Online,
+				VoteLastValid:  1,
+				VoteFirstValid: 0,
+			},
+			RewardsBase: 0},
 	}
 	genesisAccts[0][allAccts[numAccts-1].Addr] = allAccts[numAccts-1].AccountData
 	acctInvalidFromRnd2 := allAccts[numAccts-1]
@@ -1906,11 +1922,13 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: ledgertesting.RandomAddress(),
 			AccountData: basics.AccountData{
-				MicroAlgos:     basics.MicroAlgos{Raw: uint64(stake)},
-				Status:         basics.Online,
-				VoteLastValid:  10000,
-				VoteFirstValid: 0,
-				RewardsBase:    0},
+				GenesisAccountData: basics.GenesisAccountData{
+					MicroAlgos:     basics.MicroAlgos{Raw: uint64(stake)},
+					Status:         basics.Online,
+					VoteLastValid:  10000,
+					VoteFirstValid: 0,
+				},
+				RewardsBase: 0},
 		}
 		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
 		totalStake = algops.Add(totalStake, allAccts[i].MicroAlgos)

@@ -280,7 +280,7 @@ func (ml *mockLedgerForTracker) GenesisProtoVersion() protocol.ConsensusVersion 
 	return ml.consensusVersion
 }
 
-func (ml *mockLedgerForTracker) GenesisAccounts() map[basics.Address]basics.AccountData {
+func (ml *mockLedgerForTracker) GenesisAccounts() map[basics.Address]basics.GenesisAccountData {
 	return ml.accts
 }
 

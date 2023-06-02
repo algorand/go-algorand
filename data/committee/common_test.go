@@ -79,11 +79,15 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 
 		startamt := uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))
 		short := addr
+		// Use AccountData here so it satisfies the interface that implements
+		// OnlineAccountData()
 		genesis[short] = basics.AccountData{
-			Status:      basics.Online,
-			MicroAlgos:  basics.MicroAlgos{Raw: startamt},
-			SelectionID: vrfSec.Pubkey(),
-			VoteID:      otSec.OneTimeSignatureVerifier,
+			GenesisAccountData: basics.GenesisAccountData{
+				Status:      basics.Online,
+				MicroAlgos:  basics.MicroAlgos{Raw: startamt},
+				SelectionID: vrfSec.Pubkey(),
+				VoteID:      otSec.OneTimeSignatureVerifier,
+			},
 		}
 		total.Raw += startamt
 	}

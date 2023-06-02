@@ -84,7 +84,7 @@ func LoadLedger(
 	blockListeners []ledgercore.BlockListener, cfg config.Local,
 ) (*Ledger, error) {
 	if genesisBal.Balances == nil {
-		genesisBal.Balances = make(map[basics.Address]basics.AccountData)
+		genesisBal.Balances = make(map[basics.Address]basics.GenesisAccountData)
 	}
 	genBlock, err := bookkeeping.MakeGenesisBlock(genesisProto, genesisBal, genesisID, genesisHash)
 	if err != nil {

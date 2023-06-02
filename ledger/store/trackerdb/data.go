@@ -360,8 +360,16 @@ func (ba *BaseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
 // GetAccountData getter for account data.
 func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 	return basics.AccountData{
-		Status:             ba.Status,
-		MicroAlgos:         ba.MicroAlgos,
+		GenesisAccountData: basics.GenesisAccountData{
+			Status:          ba.Status,
+			MicroAlgos:      ba.MicroAlgos,
+			VoteID:          ba.VoteID,
+			SelectionID:     ba.SelectionID,
+			StateProofID:    ba.StateProofID,
+			VoteFirstValid:  ba.VoteFirstValid,
+			VoteLastValid:   ba.VoteLastValid,
+			VoteKeyDilution: ba.VoteKeyDilution,
+		},
 		RewardsBase:        ba.RewardsBase,
 		RewardedMicroAlgos: ba.RewardedMicroAlgos,
 		AuthAddr:           ba.AuthAddr,
@@ -372,13 +380,6 @@ func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 		TotalExtraAppPages: ba.TotalExtraAppPages,
 		TotalBoxes:         ba.TotalBoxes,
 		TotalBoxBytes:      ba.TotalBoxBytes,
-
-		VoteID:          ba.VoteID,
-		SelectionID:     ba.SelectionID,
-		StateProofID:    ba.StateProofID,
-		VoteFirstValid:  ba.VoteFirstValid,
-		VoteLastValid:   ba.VoteLastValid,
-		VoteKeyDilution: ba.VoteKeyDilution,
 	}
 }
 

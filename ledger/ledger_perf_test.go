@@ -152,7 +152,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	creator := basics.Address{}
 	_, err := rand.Read(creator[:])
 	require.NoError(b, err)
-	genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+	genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}).GenesisAccountData
 
 	// Make some accounts to opt into ASA
 	var accts []basics.Address
@@ -161,7 +161,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			acct := basics.Address{}
 			_, err = rand.Read(acct[:])
 			require.NoError(b, err)
-			genesisInitState.Accounts[acct] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+			genesisInitState.Accounts[acct] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}).GenesisAccountData
 			accts = append(accts, acct)
 		}
 	}

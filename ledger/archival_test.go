@@ -100,7 +100,7 @@ func (wl *wrappedLedger) GenesisProtoVersion() protocol.ConsensusVersion {
 	return wl.l.GenesisProtoVersion()
 }
 
-func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData {
+func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.GenesisAccountData {
 	return wl.l.GenesisAccounts()
 }
 
@@ -110,9 +110,9 @@ func getInitState() (genesisInitState ledgercore.InitState) {
 	blk.RewardsPool = testPoolAddr
 	blk.FeeSink = testSinkAddr
 
-	accts := make(map[basics.Address]basics.AccountData)
-	accts[testPoolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
-	accts[testSinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
+	accts := make(map[basics.Address]basics.GenesisAccountData)
+	accts[testPoolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890}).GenesisAccountData
+	accts[testSinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890}).GenesisAccountData
 
 	genesisInitState.Accounts = accts
 	genesisInitState.Block = blk
@@ -355,7 +355,7 @@ func TestArchivalCreatables(t *testing.T) {
 		_, err := rand.Read(creator[:])
 		require.NoError(t, err)
 		creators = append(creators, creator)
-		genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+		genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}).GenesisAccountData
 	}
 
 	// open ledger
@@ -686,7 +686,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 		_, err := rand.Read(addr[:])
 		require.NoError(t, err)
 		br := basics.BalanceRecord{AccountData: basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
-		genesisInitState.Accounts[addr] = br.AccountData
+		genesisInitState.Accounts[addr] = br.AccountData.GenesisAccountData
 		balanceRecords = append(balanceRecords, br)
 	}
 

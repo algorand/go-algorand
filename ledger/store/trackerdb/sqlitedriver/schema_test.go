@@ -69,16 +69,18 @@ func TestAccountsReencoding(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			addr := ledgertesting.RandomAddress()
 			accData := basics.AccountData{
-				MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff},
-				Status:             basics.NotParticipating,
+				GenesisAccountData: basics.GenesisAccountData{
+					MicroAlgos:      basics.MicroAlgos{Raw: 0x000ffffffffffffff},
+					Status:          basics.NotParticipating,
+					VoteID:          secrets.OneTimeSignatureVerifier,
+					SelectionID:     pubVrfKey,
+					StateProofID:    stateProofID.Commitment,
+					VoteFirstValid:  basics.Round(0x000ffffffffffffff),
+					VoteLastValid:   basics.Round(0x000ffffffffffffff),
+					VoteKeyDilution: 0x000ffffffffffffff,
+				},
 				RewardsBase:        uint64(i),
 				RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff},
-				VoteID:             secrets.OneTimeSignatureVerifier,
-				SelectionID:        pubVrfKey,
-				StateProofID:       stateProofID.Commitment,
-				VoteFirstValid:     basics.Round(0x000ffffffffffffff),
-				VoteLastValid:      basics.Round(0x000ffffffffffffff),
-				VoteKeyDilution:    0x000ffffffffffffff,
 				AssetParams: map[basics.AssetIndex]basics.AssetParams{
 					0x000ffffffffffffff: {
 						Total:         0x000ffffffffffffff,
