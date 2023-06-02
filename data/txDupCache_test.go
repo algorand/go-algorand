@@ -382,6 +382,22 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	cache.Start(context.Background(), 0)
 	require.Zero(t, cache.Len())
 
+	smapLenEqual := func(t *testing.T, smap *sync.Map, expectedLen int) {
+		t.Helper()
+		actualLen := 0
+		smap.Range(func(_, _ interface{}) bool {
+			actualLen++
+			return true
+		})
+		require.Equal(t, expectedLen, actualLen)
+	}
+
+	smapContains := func(t *testing.T, smap *sync.Map, key interface{}) {
+		t.Helper()
+		_, ok := smap.Load(key)
+		require.True(t, ok)
+	}
+
 	type snd struct {
 		id int
 	}
@@ -407,9 +423,9 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.Equal(t, p, &cache.cur)
 	require.Equal(t, *p, cache.cur)
 	require.Len(t, *p, 1)
-	require.Len(t, v, 1)
+	smapLenEqual(t, v, 1)
 	require.Equal(t, v, v1)
-	require.Contains(t, v, snd{id: 1})
+	smapContains(t, v, snd{id: 1})
 	d, v, found = cache.CheckAndPut([]byte{1}, snd{id: 1})
 	require.True(t, found)
 	require.NotNil(t, d)
@@ -417,7 +433,7 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.Equal(t, *d, *d1)
 	require.Equal(t, v, v1)
 	require.Len(t, cache.cur, 1)
-	require.Len(t, cache.cur[*d], 1)
+	smapLenEqual(t, cache.cur[*d], 1)
 	require.Nil(t, cache.prev)
 
 	// add a value with different sender
@@ -436,19 +452,19 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.Equal(t, v, vt)
 	require.Equal(t, p, &cache.cur)
 	require.Len(t, *p, 1)
-	require.Len(t, v, 2)
-	require.Contains(t, v, snd{id: 1})
-	require.Contains(t, v, snd{id: 2})
+	smapLenEqual(t, v, 2)
+	smapContains(t, v, snd{id: 1})
+	smapContains(t, v, snd{id: 2})
 
 	// add one more value to full cache.cur
 	d2, v2, found := cache.CheckAndPut([]byte{2}, snd{id: 1})
 	require.False(t, found)
 	require.NotNil(t, d2)
 	require.NotEmpty(t, d2)
-	require.Len(t, v2, 1)
+	smapLenEqual(t, v2, 1)
 	require.Len(t, cache.cur, 2)
-	require.Len(t, cache.cur[*d1], 2)
-	require.Len(t, cache.cur[*d2], 1)
+	smapLenEqual(t, cache.cur[*d1], 2)
+	smapLenEqual(t, cache.cur[*d2], 1)
 	require.Nil(t, cache.prev)
 
 	// adding new value would trigger cache swap
@@ -458,10 +474,10 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.NotNil(t, dt)
 	require.NotEmpty(t, dt)
 	require.Equal(t, *d2, *dt)
-	require.Len(t, vt, 2)
+	smapLenEqual(t, vt, 2)
 	require.Len(t, cache.cur, 2)
-	require.Len(t, cache.cur[*d1], 2)
-	require.Len(t, cache.cur[*d2], 2)
+	smapLenEqual(t, cache.cur[*d1], 2)
+	smapLenEqual(t, cache.cur[*d2], 2)
 	require.Nil(t, cache.prev)
 
 	// add a new value triggers a swap
@@ -469,12 +485,12 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.False(t, found)
 	require.NotNil(t, d2)
 	require.NotEmpty(t, d2)
-	require.Len(t, v3, 1)
+	smapLenEqual(t, v3, 1)
 	require.Len(t, cache.cur, 1)
-	require.Len(t, cache.cur[*d3], 1)
+	smapLenEqual(t, cache.cur[*d3], 1)
 	require.Len(t, cache.prev, 2)
-	require.Len(t, cache.prev[*d1], 2)
-	require.Len(t, cache.prev[*d2], 2)
+	smapLenEqual(t, cache.prev[*d1], 2)
+	smapLenEqual(t, cache.prev[*d2], 2)
 
 	// add a sender into old (prev) value
 	dt, vt, found = cache.CheckAndPut([]byte{2}, snd{id: 3})
@@ -483,10 +499,10 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.NotEmpty(t, dt)
 	require.Equal(t, *d2, *dt)
 	require.Len(t, cache.cur, 1)
-	require.Len(t, cache.cur[*d3], 1)
+	smapLenEqual(t, cache.cur[*d3], 1)
 	require.Len(t, cache.prev, 2)
-	require.Len(t, cache.prev[*d1], 2)
-	require.Len(t, cache.prev[*d2], 3)
+	smapLenEqual(t, cache.prev[*d1], 2)
+	smapLenEqual(t, cache.prev[*d2], 3)
 	d, v, p, found = cache.innerCheck([]byte{2})
 	require.True(t, found)
 	require.NotNil(t, p)
@@ -496,7 +512,7 @@ func TestTxHandlerSaltedCacheValues(t *testing.T) {
 	require.Equal(t, *d, *d2)
 	require.Equal(t, p, &cache.prev)
 	require.Len(t, *p, 2)
-	require.Len(t, v, 3)
+	smapLenEqual(t, v, 3)
 	require.Equal(t, vt, v)
-	require.Contains(t, v, snd{id: 3})
+	smapContains(t, v, snd{id: 3})
 }

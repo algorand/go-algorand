@@ -1101,12 +1101,28 @@ loop:
 
 type dupMockNetwork struct {
 	mocks.MockNetwork
+	mu    sync.Mutex
 	relay []*sync.Map
 }
 
 func (network *dupMockNetwork) RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except *sync.Map) error {
+	network.mu.Lock()
+	defer network.mu.Unlock()
 	network.relay = append(network.relay, except)
 	return nil
+}
+
+func (network *dupMockNetwork) requireRelayCount(t *testing.T, callsCount int, exceptIdx int, exceptPeersCount int) {
+	network.mu.Lock()
+	defer network.mu.Unlock()
+
+	require.Len(t, network.relay, callsCount)
+	var count int
+	network.relay[exceptIdx].Range(func(_, _ interface{}) bool {
+		count++
+		return true
+	})
+	require.Equal(t, count, exceptPeersCount)
 }
 
 // TestTxHandlerProcessIncomingRelay ensures txHandler does not relay duplicates
@@ -1168,14 +1184,11 @@ func TestTxHandlerProcessIncomingRelayDups(t *testing.T) {
 			require.Fail(t, "timed out waiting for txn to propagate")
 		}
 	}
-	// there is almost no delay between tp.Remember and net.RelayArray
-	require.Len(t, net.relay, 1) // one RelayArray call
-	var count int
-	net.relay[0].Range(func(key, value interface{}) bool {
-		count++
-		return true
-	})
-	require.Equal(t, count, 3) // 3 except peers
+	// there is almost no delay between tp.Remember and net.RelayArray but still wait until the goroutine finishes
+	handler.ctxCancel()
+	handler.backlogWg.Wait()
+
+	net.requireRelayCount(t, 1, 0, 3) // one RelayArray call and 3 except peers
 }
 
 const benchTxnNum = 25_000

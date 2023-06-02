@@ -151,11 +151,6 @@ const peerShutdownDisconnectionAckDuration = 50 * time.Millisecond
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
 
-type PeerList interface {
-	Has() bool
-	Add(Peer)
-}
-
 // PeerOption allows users to specify a subset of peers to query
 //
 //msgp:ignore PeerOption
@@ -1584,8 +1579,10 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 		if wn.config.BroadcastConnectionsLimit >= 0 && sentMessageCount >= wn.config.BroadcastConnectionsLimit {
 			break
 		}
-		if _, ok := request.except.Load(peer); ok {
-			continue
+		if request.except != nil {
+			if _, ok := request.except.Load(peer); ok {
+				continue
+			}
 		}
 		var ok bool
 		if peer.pfProposalCompressionSupported() && len(dataWithCompression) > 0 {
