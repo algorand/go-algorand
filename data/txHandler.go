@@ -171,13 +171,11 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		streamVerifierDropped: make(chan *verify.UnverifiedTxnSigJob),
 	}
 
-	// use defaultBacklogSize = approx number of txns in a full block as a parameter for the dedup cache size
-	defaultBacklogSize := config.GetDefaultLocal().TxBacklogSize
 	if opts.Config.TxFilterRawMsgEnabled() {
-		handler.msgCache = makeSaltedCache(2 * defaultBacklogSize)
+		handler.msgCache = makeSaltedCache(int(opts.Config.TxIncomingFilterMaxSize))
 	}
 	if opts.Config.TxFilterCanonicalEnabled() {
-		handler.txCanonicalCache = makeDigestCache(2 * defaultBacklogSize)
+		handler.txCanonicalCache = makeDigestCache(int(opts.Config.TxIncomingFilterMaxSize))
 	}
 
 	if opts.Config.EnableTxBacklogRateLimiting {
