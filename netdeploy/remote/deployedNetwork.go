@@ -425,6 +425,9 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	rand.Seed(time.Now().UnixNano())
 	min := fileCfgs.BalanceRange[0]
 	max := fileCfgs.BalanceRange[1]
+	// TODO: Randomly assigning target balance in a range may cause tests to behave unpredictably,
+	// if the randomly selected balance is too low for proper testing.
+	// consider inserting a hardcoded balance sufficient for your tests.
 	bal := rand.Int63n(max-min) + min
 	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bal)}
 	srcAcct := accounts[src]
@@ -1080,6 +1083,9 @@ func computeRootStorage(nodeCount, relayCount int) int {
 	// 10 per node should be good for a week (add relayCount * 0 so param is used)
 	minGB := 20 + (nodeCount * 10) + (relayCount * 50)
 	return minGB
+	// TODO: this function appears to insufficiently provision EBS nodes in some cases
+	// if your nodes have insufficient storage, consider using a reasonable hardcoded value like
+	// return 256
 }
 
 func computeSSDStorage(nodeCount, relayCount int) int {
