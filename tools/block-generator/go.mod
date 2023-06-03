@@ -5,7 +5,7 @@ replace github.com/algorand/go-algorand => ../..
 go 1.17
 
 require (
-	github.com/algorand/go-algorand v0.0.0-20230603003454-45cf9ab1946f
+	github.com/algorand/go-algorand v0.0.0-00010101000000-000000000000
 	github.com/algorand/go-codec/codec v1.1.9
 	github.com/algorand/go-deadlock v0.2.2
 	github.com/lib/pq v1.10.9
@@ -21,6 +21,7 @@ require (
 	github.com/algorand/go-sumhash v0.1.0 // indirect
 	github.com/algorand/msgp v1.1.53 // indirect
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0 // indirect
+	github.com/algorand/sortition v1.0.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
 	github.com/aws/aws-sdk-go v1.33.0 // indirect
 	github.com/consensys/gnark-crypto v0.7.0 // indirect
