@@ -5,7 +5,7 @@ replace github.com/algorand/go-algorand => ../..
 go 1.17
 
 require (
-	github.com/algorand/go-algorand v0.0.0-00010101000000-000000000000
+	github.com/algorand/go-algorand v0.0.0-20230603003454-45cf9ab1946f
 	github.com/algorand/go-codec/codec v1.1.9
 	github.com/algorand/go-deadlock v0.2.2
 	github.com/lib/pq v1.10.9

@@ -243,6 +243,9 @@ type generator struct {
 	ledger *ledger.Ledger
 
 	roundOffset uint64
+
+	// algod_importer's Init() makes an extra request at the beginning because of catchup
+	pastImporterInit bool
 }
 
 type assetData struct {
@@ -290,6 +293,7 @@ func (g *generator) WriteStatus(output io.Writer) error {
 	return json.NewEncoder(output).Encode(response)
 }
 
+// WriteGenesis writes the genesis file and advances the round.
 func (g *generator) WriteGenesis(output io.Writer) error {
 	defer g.recordData(track(genesis))
 
@@ -387,6 +391,11 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 	// return genesis block. offset round for non-empty database
 	if round-g.roundOffset == 0 {
+		if !g.pastImporterInit {
+			g.pastImporterInit = true
+			return nil
+		}
+
 		// write the msgpack bytes for a block
 		block, _, _ := g.ledger.BlockCert(basics.Round(round - g.roundOffset))
 		// return the block with the requested round number
