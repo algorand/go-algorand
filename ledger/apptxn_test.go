@@ -3101,7 +3101,7 @@ itxn_submit
 		}
 
 		if ver <= 33 {
-			dl.txgroup("invalid Account reference", &fund0, &fund1, &callTx)
+			dl.txgroup("unavailable Account", &fund0, &fund1, &callTx)
 			return
 		}
 		payset = dl.txgroup("", &fund0, &fund1, &callTx)
