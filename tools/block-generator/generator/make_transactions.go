@@ -42,6 +42,7 @@ func (g *generator) makeTxnHeader(sender basics.Address, round, intra uint64) tr
 	}
 }
 
+// makeTestTxn creates and populates the flat txntest.Txn structure with the given values.
 func (g *generator) makeTestTxn(sender basics.Address, round, intra uint64) txntest.Txn {
 	note := make([]byte, 8)
 	binary.LittleEndian.PutUint64(note, uint64(g.txnCounter+intra))
@@ -125,8 +126,7 @@ func (g *generator) makeAppCreateTxn(sender basics.Address, round, intra uint64,
 	createTxn.Type = protocol.ApplicationCallTx
 	createTxn.ApplicationID = 0
 	createTxn.ApprovalProgram = approval
-	/***
-	  `#pragma version 6
+	foo := `#pragma version 6
 	  txn ApplicationID
 	  bz create
 	  byte "app call"
@@ -137,14 +137,11 @@ func (g *generator) makeAppCreateTxn(sender basics.Address, round, intra uint64,
 	  log
 	  end:
 	  int 1
-	  `
-	  ***/
-
+`
 	createTxn.ClearStateProgram = clear
-	/***
-	  	`#pragma version 6
+	foo = `#pragma version 6
 	  int 0
-	  `
-	  ***/
+`
+	_ = foo
 	return createTxn.Txn()
 }

@@ -141,12 +141,22 @@ type assetData struct {
 type appData struct {
 	appID   uint64
 	creator uint64
+	kind    appKind
+	// Holding at index 0 is the creator.
+	holdings []*appHolding
+	// Set of holders in the holdings array for easy reference.
+	holders map[uint64]*appHolding
 	// TODO: more data, not sure yet exactly what
 }
 
 type assetHolding struct {
 	acctIndex uint64
 	balance   uint64
+}
+
+type appHolding struct {
+	appIndex uint64
+	// TODO: more data, not sure yet exactly what
 }
 
 // Report is the generation report.
@@ -195,6 +205,9 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 		gen.genesisID = bkGenesis.ID()
 		gen.genesisHash = bkGenesis.Hash()
 	}
+
+	gen.apps = make(map[appKind][]*appData)
+	gen.pendingApps = make(map[appKind][]*appData)
 
 	gen.initializeAccounting()
 	gen.initializeLedger()
@@ -646,9 +659,14 @@ func (g *generator) finishRound(txnCount uint64) {
 	// Apply pending assets...
 	g.assets = append(g.assets, g.pendingAssets...)
 	g.pendingAssets = nil
+
+	// Apply pending apps...
+	for _, kind := range []appKind{appKindSwap, appKindBoxes} {
+		g.apps[kind] = append(g.apps[kind], g.pendingApps[kind]...)
+		g.pendingApps[kind] = nil
+	}
 }
 
-// TODO: Z - this is a lot more lightweight than txn.Sign(sender.sk)
 func signTxn(txn transactions.Transaction) transactions.SignedTxn {
 	stxn := transactions.SignedTxn{
 		Sig:      crypto.Signature{},
@@ -943,9 +961,6 @@ func (g *generator) generateAppCallInternal(txType TxTypeID, round, intra, hintI
 		senderIndex = numApps % g.config.NumGenesisAccounts
 		senderAcct := indexToAccount(senderIndex)
 
-		// appID := g.txnCounter + intra + 1
-		// appName := fmt.Sprintf("app #%d", appID)
-
 		var approval, clear string
 		if kind == appKindSwap {
 			approval, clear = approvalSwap, clearSwap
@@ -954,6 +969,18 @@ func (g *generator) generateAppCallInternal(txType TxTypeID, round, intra, hintI
 		}
 
 		txn = g.makeAppCreateTxn(senderAcct, round, intra, approval, clear)
+
+		appID := g.txnCounter + intra + 1
+		// appName := fmt.Sprintf("app #%d", appID)
+		holding := &appHolding{appIndex: appID}
+		ad := &appData{
+			appID:    appID,
+			creator:  senderIndex,
+			kind:     kind,
+			holdings: []*appHolding{holding},
+			holders:  map[uint64]*appHolding{senderIndex: holding},
+		}
+		g.pendingApps[kind] = append(g.pendingApps[kind], ad)
 	}
 
 	// account := indexToAccount(senderIndex)
