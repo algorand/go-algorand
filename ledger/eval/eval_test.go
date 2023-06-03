@@ -941,7 +941,7 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 }
 
 func (ledger *evalTestLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return ledger.BlockHdrCached(rnd)
+	return ledger.BlockHdr(rnd)
 }
 
 func (ledger *evalTestLedger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
@@ -1042,7 +1042,7 @@ func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, err
 }
 
 func (l *testCowBaseLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return l.BlockHdrCached(rnd)
+	return l.BlockHdr(rnd)
 }
 
 func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
