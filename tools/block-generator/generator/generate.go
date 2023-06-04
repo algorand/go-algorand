@@ -62,7 +62,7 @@ const (
 
 	assetTotal = uint64(100000000000000000)
 
-	consensusTimeMilli int64  = 4500
+	consensusTimeMilli int64  = 3300
 	startingTxnCounter uint64 = 1000
 )
 
@@ -243,9 +243,6 @@ type generator struct {
 	ledger *ledger.Ledger
 
 	roundOffset uint64
-
-	// algod_importer's Init() makes an extra request at the beginning because of catchup
-	pastImporterInit bool
 }
 
 type assetData struct {
@@ -380,22 +377,23 @@ func (g *generator) finishRound(txnCount uint64) {
 }
 
 // WriteBlock generates a block full of new transactions and writes it to the writer.
+// There are a few constraints on the generator arising from the fact that
+// blocks must be generated sequentially and that a fixed offset between the
+// database round and the generator round is presumed:
+//   - requested round < offset ---> error
+//   - requested round == offset: the generator will provide a genesis block or offset block
+//     and be lenient in allowing g.round to be non-zero, but in that case it won't advance
+//     its round any further, as the block importer may request the genesis repeatedly
+//   - requested round != generator's round + offset ---> error:
+//     as opposed to the previous, no leniency is provided in this case.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if round < g.roundOffset {
 		return fmt.Errorf("cannot generate block for round %d, already in database", round)
 	}
-	if round-g.roundOffset != g.round {
-		return fmt.Errorf("generator only supports sequential block access. Expected %d but received request for %d", g.round+g.roundOffset, round)
-	}
 	numTxnForBlock := g.txnForRound(g.round)
 
 	// return genesis block. offset round for non-empty database
-	if round-g.roundOffset == 0 {
-		if !g.pastImporterInit {
-			g.pastImporterInit = true
-			return nil
-		}
-
+	if round == g.roundOffset {
 		// write the msgpack bytes for a block
 		block, _, _ := g.ledger.BlockCert(basics.Round(round - g.roundOffset))
 		// return the block with the requested round number
@@ -407,8 +405,18 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		if err != nil {
 			return err
 		}
-		g.finishRound(numTxnForBlock)
+
+		// only advance the round if the requestor is caught up
+		if g.round == 0 {
+			g.finishRound(numTxnForBlock)
+		} else {
+			fmt.Printf("Received round request %d == g.roundOffset but already advanced g.round=%d. Not finishing round.\n", round, g.round)
+		}
 		return nil
+	}
+
+	if round != g.round+g.roundOffset {
+		return fmt.Errorf("generator only supports sequential block access. Expected %d but received request for %d", g.round+g.roundOffset, round)
 	}
 
 	header := bookkeeping.BlockHeader{

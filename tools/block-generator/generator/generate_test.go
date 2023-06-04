@@ -238,41 +238,37 @@ func TestWriteRound(t *testing.T) {
 
 	// Initial conditions of g from makePrivateGenerator:
 	require.Equal(t, uint64(0), g.round)
-	require.False(t, g.pastImporterInit)
 
-	// The first WriteBlock is special (if g.pastImporterInit is false).
-	// WriteBlock assumes in this case that conduit is requesting a round
-	// in its Init() for catchup's sake and isn't actually saving the data
-	// and so it doesn't advance its round counter or write anything.
 	data, writer, block := prepWriter()
-	g.WriteBlock(writer, 0)
-
-	require.Equal(t, uint64(0), g.round)
-	require.True(t, g.pastImporterInit)
-	protocol.Decode(data, &block)
-	require.Equal(t, block, rpcs.EncodedBlockCert{})
-
-	// Round 0 again - now that g.pastImporterInit is true
-	data, writer, block = prepWriter()
-	g.WriteBlock(writer, 0)
+	err := g.WriteBlock(writer, 0)
+	require.NoError(t, err)
 
 	require.Equal(t, uint64(1), g.round)
-	require.True(t, g.pastImporterInit)
 	protocol.Decode(data, &block)
 	require.Equal(t, block, rpcs.EncodedBlockCert{})
 
-	// Round 1
+	// WriteBlocks at the offset are special: they only advance the round
+	// the first time when called.
 	data, writer, block = prepWriter()
-	g.WriteBlock(writer, 1)
+	err = g.WriteBlock(writer, 0)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(1), g.round)
+	protocol.Decode(data, &block)
+	require.Equal(t, block, rpcs.EncodedBlockCert{})
+
+	// Second time still at offset
+	data, writer, block = prepWriter()
+	err = g.WriteBlock(writer, 1)
+	require.NoError(t, err)
 
 	require.Equal(t, uint64(2), g.round)
-	require.True(t, g.pastImporterInit)
 	protocol.Decode(data, &block)
 	require.Len(t, block.Block.Payset, int(g.config.TxnPerBlock))
 	require.NotNil(t, g.ledger)
 	require.Equal(t, basics.Round(1), g.ledger.Latest())
 
-	_, err := g.ledger.GetStateDeltaForRound(1)
+	_, err = g.ledger.GetStateDeltaForRound(1)
 	require.NoError(t, err)
 
 	// request a block that is several rounds ahead of the current round
@@ -284,25 +280,17 @@ func TestWriteRound(t *testing.T) {
 func TestWriteRoundWithPreloadedDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var testcases = []struct {
-		name        string
-		dbround     uint64
-		round       uint64
-		genesis     bookkeeping.Genesis
-		isInitWrite bool
-		err         error
+		name    string
+		dbround uint64
+		round   uint64
+		genesis bookkeeping.Genesis
+		err     error
 	}{
 		{
 			name:    "preloaded database starting at round 1",
 			dbround: 1,
 			round:   1,
 			genesis: bookkeeping.Genesis{Network: "generator-test1"},
-		},
-		{
-			name:        "Init Write: preloaded database starting at round 1",
-			dbround:     1,
-			round:       1,
-			genesis:     bookkeeping.Genesis{Network: "generator-test1b"},
-			isInitWrite: true,
 		},
 		{
 			name:    "invalid request",
@@ -312,27 +300,11 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 			err:     fmt.Errorf("cannot generate block for round 1, already in database"),
 		},
 		{
-			name:        "Init Write: invalid request",
-			dbround:     10,
-			round:       1,
-			genesis:     bookkeeping.Genesis{Network: "generator-test2b"},
-			isInitWrite: true,
-			err:         fmt.Errorf("cannot generate block for round 1, already in database"),
-		},
-		{
 			name:    "invalid request 2",
 			dbround: 1,
 			round:   10,
 			genesis: bookkeeping.Genesis{Network: "generator-test3"},
 			err:     fmt.Errorf("generator only supports sequential block access. Expected 2 but received request for 10"),
-		},
-		{
-			name:        "Init Write: invalid request 2",
-			dbround:     1,
-			round:       10,
-			genesis:     bookkeeping.Genesis{Network: "generator-test3b"},
-			isInitWrite: true,
-			err:         fmt.Errorf("generator only supports sequential block access. Expected 1 but received request for 10"),
 		},
 		{
 			name:    "preloaded database starting at 10",
@@ -341,26 +313,10 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 			genesis: bookkeeping.Genesis{Network: "generator-test4"},
 		},
 		{
-			name:        "Init Write: preloaded database starting at 10",
-			dbround:     10,
-			round:       11,
-			genesis:     bookkeeping.Genesis{Network: "generator-test4b"},
-			isInitWrite: true,
-			err:         fmt.Errorf("generator only supports sequential block access. Expected 10 but received request for 11"),
-		},
-		{
 			name:    "preloaded database request round 20",
 			dbround: 10,
 			round:   20,
 			genesis: bookkeeping.Genesis{Network: "generator-test5"},
-		},
-		{
-			name:        "Init Write: preloaded database request round 20",
-			dbround:     10,
-			round:       20,
-			genesis:     bookkeeping.Genesis{Network: "generator-test5b"},
-			isInitWrite: true,
-			err:         fmt.Errorf("generator only supports sequential block access. Expected 10 but received request for 20"),
 		},
 	}
 	for _, tc := range testcases {
@@ -368,7 +324,6 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// No t.Parallel() here, to avoid contention in the ledger
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
-			g.pastImporterInit = !tc.isInitWrite
 
 			defer g.ledger.Close()
 			var data []byte
