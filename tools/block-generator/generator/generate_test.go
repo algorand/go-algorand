@@ -197,6 +197,7 @@ func TestAppCreate(t *testing.T) {
 
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 
+	// app call transaction creating appBoxes
 	actual, txn, err := g.generateAppCallInternal(appBoxesCreate, 1, 0, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, appBoxesCreate, actual)
@@ -214,22 +215,23 @@ func TestAppCreate(t *testing.T) {
 	require.Equal(t, ad.appID, holding.appIndex)
 	require.Equal(t, appKindBoxes, ad.kind)
 
-	actual, txn, err = g.generateAppCallInternal(appBoxesSwap, 1, 0, 0, nil)
+	// app call transaction creating appSwap
+	actual, txn, err = g.generateAppCallInternal(appSwapCreate, 1, 0, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, appSwapCreate, actual)
 	require.Equal(t, protocol.ApplicationCallTx, txn.Type)
 	require.Len(t, g.apps, 0)
-	require.Len(t, g.pendingApps, 1)
+	require.Len(t, g.pendingApps, 2)
 	require.Len(t, g.pendingApps[appKindBoxes], 1)
-	require.Len(t, g.pendingApps[appKindSwap], 0)
-	require.Len(t, g.pendingApps[appKindBoxes][0].holdings, 1)
-	require.Len(t, g.pendingApps[appKindBoxes][0].holders, 1)
-	ad := *g.pendingApps[appKindBoxes][0]
-	holding := *ad.holdings[0]
+	require.Len(t, g.pendingApps[appKindSwap], 1)
+	require.Len(t, g.pendingApps[appKindSwap][0].holdings, 1)
+	require.Len(t, g.pendingApps[appKindSwap][0].holders, 1)
+	ad = *g.pendingApps[appKindSwap][0]
+	holding = *ad.holdings[0]
 	require.Equal(t, holding, *ad.holders[0])
 	require.Equal(t, uint64(1001), holding.appIndex)
 	require.Equal(t, ad.appID, holding.appIndex)
-	require.Equal(t, appKindBoxes, ad.kind)
+	require.Equal(t, appKindSwap, ad.kind)
 }
 
 func TestWriteRoundZero(t *testing.T) {
