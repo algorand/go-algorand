@@ -649,7 +649,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	data := testMessage("hello world").IntoStateProofMessageHash()
 
 	var parts []basics.Participant
-	var partkeys []*merklesignature.Secrets
+	//var partkeys []*merklesignature.Secrets
 	var sigs []merklesignature.Signature
 	for i := 0; i < npart; i++ {
 		signer := generateTestSigner(0, stateProofIntervalForTests+1, stateProofIntervalForTests, a)
@@ -662,7 +662,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 		sig, err := signerInRound.SignBytes(data[:])
 		require.NoError(b, err, "failed to create keys")
 
-		partkeys = append(partkeys, signer)
+		//partkeys = append(partkeys, signer)
 		sigs = append(sigs, sig)
 		parts = append(parts, part)
 	}

@@ -216,7 +216,7 @@ func benchmarkOnlineAccountsCacheRead(b *testing.B, historyLength int) {
 	// preparation stage above non-negligible.
 	minN := 100
 	if b.N < minN {
-		b.N = minN
+		b.N = minN //nolint:staticcheck // intentionally setting b.N
 	}
 
 	var r cachedOnlineAccount

@@ -50,7 +50,7 @@ func Select(money uint64, totalMoney uint64, expectedSize float64, vrfOutput cry
 	ratio := big.Float{}
 	cratio, _ := ratio.Quo(&h, maxFloat).Float64()
 
-	return uint64(C.sortition_binomial_cdf_walk(C.double(binomialN), C.double(binomialP), C.double(cratio), C.uint64_t(money)))
+	return uint64(C.sortition_binomial_cdf_walk_old(C.double(binomialN), C.double(binomialP), C.double(cratio), C.uint64_t(money)))
 }
 
 func init() {
