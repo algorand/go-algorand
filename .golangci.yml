@@ -115,8 +115,12 @@ issues:
         # - nilerr
         - nolintlint
         # - revive
-        - staticcheck
+        # - staticcheck
         - typecheck
+    - path: _test\.go
+      linters:
+        - staticcheck
+      text: "SA4006: this value" # of X is never used
     # allow shadowing in test code
     - path: _test\.go
       linters:

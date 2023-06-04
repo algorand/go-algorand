@@ -71,6 +71,7 @@ type onlineAcctModelAcct struct {
 func newMapOnlineAcctModel(t *testing.T) *mapOnlineAcctModel {
 	return &mapOnlineAcctModel{
 		t:        t,
+		cur:      1,
 		accts:    make(map[basics.Address]map[basics.Round]onlineAcctModelAcct),
 		expiring: make(map[basics.Round]map[basics.Address]struct{}),
 	}
@@ -94,7 +95,7 @@ func (m *mapOnlineAcctModel) lookupAcctAsOf(rnd basics.Round, addr basics.Addres
 		return onlineAcctModelAcct{}
 	}
 	// find the acct record for the most recent round <= rnd
-	for r := rnd; r >= 0; r-- {
+	for r := rnd; r > 0; r-- {
 		if acct, ok := acctRounds[r]; ok {
 			return acct
 		}
@@ -113,7 +114,7 @@ func (m *mapOnlineAcctModel) allOnlineAsOf(rnd basics.Round) map[basics.Address]
 	accts := make(map[basics.Address]onlineAcctModelAcct)
 	for addr, acctRounds := range m.accts {
 		// find the acct record for the most recent round <= rnd
-		for r := rnd; r >= 0; r-- {
+		for r := rnd; r > 0; r-- {
 			if acct, ok := acctRounds[r]; ok {
 				if acct.Status == basics.Online {
 					accts[addr] = acct

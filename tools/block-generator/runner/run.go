@@ -19,6 +19,7 @@ package runner
 import (
 	"bytes"
 	"context"
+
 	// embed conduit template config file
 	_ "embed"
 	"encoding/json"
@@ -456,7 +457,7 @@ func startConduit(dataDir string, conduitBinary string, round uint64) (func() er
 			}
 		}
 		if err := cmd.Wait(); err != nil {
-			fmt.Printf("ignoring error while waiting for process to stop: %s\n", err)
+			fmt.Printf("exiting block generator runner: %s\n", err)
 		}
 		return nil
 	}, nil

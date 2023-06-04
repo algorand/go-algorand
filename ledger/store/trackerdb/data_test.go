@@ -1079,6 +1079,8 @@ func TestLedgercoreAccountDataRoundtripConversion(t *testing.T) {
 
 func TestBaseAccountDataIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	positiveTesting := func(t *testing.T) {
 		var ba BaseAccountData
 		require.True(t, ba.IsEmpty())
@@ -1110,11 +1112,11 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	t.Run("Positive", positiveTesting)
 	t.Run("Negative", negativeTesting)
 	t.Run("Structure", structureTesting)
-
 }
 
 func TestBaseOnlineAccountDataIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	positiveTesting := func(t *testing.T) {
 		var ba BaseOnlineAccountData
@@ -1162,6 +1164,7 @@ func TestBaseOnlineAccountDataIsEmpty(t *testing.T) {
 
 func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	addr := ledgertesting.RandomAddress()
@@ -1216,6 +1219,7 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 
 func TestBaseVotingDataGettersSetters(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	data := ledgertesting.RandomAccountData(1)
 	data.Status = basics.Online
@@ -1243,12 +1247,31 @@ func TestBaseVotingDataGettersSetters(t *testing.T) {
 
 func TestBaseOnlineAccountDataReflect(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.Equal(t, 4, reflect.TypeOf(BaseOnlineAccountData{}).NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
 }
 
 func TestBaseVotingDataReflect(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.Equal(t, 7, reflect.TypeOf(BaseVotingData{}).NumField(), "update all getters and setters for baseVotingData and change the field count")
+}
+
+// TestBaseAccountDataDecodeEmpty ensures no surprises when decoding nil/empty data.
+func TestBaseAccountDataDecodeEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var b BaseAccountData
+
+	err := protocol.Decode([]byte{}, &b)
+	require.Error(t, err)
+
+	err = protocol.Decode(nil, &b)
+	require.Error(t, err)
+
+	err = protocol.Decode([]byte{0x80}, &b)
+	require.NoError(t, err)
 }

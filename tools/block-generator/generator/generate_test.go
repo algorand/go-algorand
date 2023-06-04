@@ -273,17 +273,48 @@ func TestWriteRoundZero(t *testing.T) {
 func TestWriteRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
-	var data []byte
-	writer := bytes.NewBuffer(data)
-	g.WriteBlock(writer, 0)
-	g.WriteBlock(writer, 1)
-	var block rpcs.EncodedBlockCert
+
+	prepWriter := func() ([]byte, *bytes.Buffer, rpcs.EncodedBlockCert) {
+		var data []byte
+		writer := bytes.NewBuffer(data)
+		return data, writer, rpcs.EncodedBlockCert{}
+	}
+
+	// Initial conditions of g from makePrivateGenerator:
+	require.Equal(t, uint64(0), g.round)
+
+	data, writer, block := prepWriter()
+	err := g.WriteBlock(writer, 0)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(1), g.round)
+	protocol.Decode(data, &block)
+	require.Equal(t, block, rpcs.EncodedBlockCert{})
+
+	// WriteBlocks at the offset are special: they only advance the round
+	// the first time when called.
+	data, writer, block = prepWriter()
+	err = g.WriteBlock(writer, 0)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(1), g.round)
+	protocol.Decode(data, &block)
+	require.Equal(t, block, rpcs.EncodedBlockCert{})
+
+	// Second time still at offset
+	data, writer, block = prepWriter()
+	err = g.WriteBlock(writer, 1)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(2), g.round)
 	protocol.Decode(data, &block)
 	require.Len(t, block.Block.Payset, int(g.config.TxnPerBlock))
 	require.NotNil(t, g.ledger)
 	require.Equal(t, basics.Round(1), g.ledger.Latest())
-	_, err := g.ledger.GetStateDeltaForRound(1)
+
+	_, err = g.ledger.GetStateDeltaForRound(1)
 	require.NoError(t, err)
+
 	// request a block that is several rounds ahead of the current round
 	err = g.WriteBlock(writer, 10)
 	require.NotNil(t, err)
@@ -304,7 +335,6 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 			dbround: 1,
 			round:   1,
 			genesis: bookkeeping.Genesis{Network: "generator-test1"},
-			err:     nil,
 		},
 		{
 			name:    "invalid request",
@@ -325,14 +355,12 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 			dbround: 10,
 			round:   11,
 			genesis: bookkeeping.Genesis{Network: "generator-test4"},
-			err:     nil,
 		},
 		{
 			name:    "preloaded database request round 20",
 			dbround: 10,
 			round:   20,
 			genesis: bookkeeping.Genesis{Network: "generator-test5"},
-			err:     nil,
 		},
 	}
 	for _, tc := range testcases {
@@ -340,6 +368,7 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// No t.Parallel() here, to avoid contention in the ledger
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
+
 			defer g.ledger.Close()
 			var data []byte
 			writer := bytes.NewBuffer(data)
@@ -349,7 +378,7 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 			if tc.round != tc.dbround && tc.err != nil {
 				err = g.WriteBlock(writer, tc.round)
 				require.NotNil(t, err)
-				require.Equal(t, err.Error(), tc.err.Error())
+				require.Equal(t, tc.err.Error(), err.Error())
 				return
 			}
 			// write the rest of the blocks
