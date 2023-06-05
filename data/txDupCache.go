@@ -31,8 +31,9 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
-// digestCacheBase is a base data structure for rotating size N accepting crypto.Digest as a key
-type digestCacheBase struct {
+// digestCache is a rotating cache of size N accepting crypto.Digest as a key
+// and keeping up to 2*N elements in memory
+type digestCache struct {
 	cur  map[crypto.Digest]struct{}
 	prev map[crypto.Digest]struct{}
 
@@ -40,18 +41,10 @@ type digestCacheBase struct {
 	mu      deadlock.RWMutex
 }
 
-// digestCache is a rotating cache of size N accepting crypto.Digest as a key
-// and keeping up to 2*N elements in memory
-type digestCache struct {
-	digestCacheBase
-}
-
 func makeDigestCache(size int) *digestCache {
 	c := &digestCache{
-		digestCacheBase: digestCacheBase{
-			cur:     map[crypto.Digest]struct{}{},
-			maxSize: size,
-		},
+		cur:     map[crypto.Digest]struct{}{},
+		maxSize: size,
 	}
 	return c
 }
@@ -109,19 +102,14 @@ func (c *digestCache) Delete(d *crypto.Digest) {
 	delete(c.prev, *d)
 }
 
-// digestCacheData is a base data structure for rotating size N accepting crypto.Digest as a key
-type digestCacheData struct {
+// txSaltedCache is a cache with a rotating salt
+// uses blake2b hash function, and stores set of values per each entry
+type txSaltedCache struct {
 	cur  map[crypto.Digest]*sync.Map
 	prev map[crypto.Digest]*sync.Map
 
 	maxSize int
 	mu      deadlock.RWMutex
-}
-
-// txSaltedCache is a digest cache with a rotating salt
-// uses blake2b hash function
-type txSaltedCache struct {
-	digestCacheData
 
 	curSalt  [4]byte
 	prevSalt [4]byte
@@ -131,10 +119,8 @@ type txSaltedCache struct {
 
 func makeSaltedCache(size int) *txSaltedCache {
 	return &txSaltedCache{
-		digestCacheData: digestCacheData{
-			cur:     map[crypto.Digest]*sync.Map{},
-			maxSize: size,
-		},
+		cur:     map[crypto.Digest]*sync.Map{},
+		maxSize: size,
 	}
 }
 
