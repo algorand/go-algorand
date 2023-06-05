@@ -171,6 +171,10 @@ const disconnectBadIdentityData disconnectReason = "BadIdentityData"
 
 const lastSentRequestTimeKey string = "lsrt"
 
+// If the peer sends us a block response after this threshold
+// we should disconnect from it
+const blockResponseDisconnectThreshold = 60 * time.Second
+
 // Response is the structure holding the response from the server
 type Response struct {
 	Topics Topics
@@ -511,8 +515,13 @@ func (wp *wsPeer) readLoop() {
 		// Skip the message if it's a response to a request we didn't make or has timed out
 		if msg.Tag == protocol.TopicMsgRespTag && !wp.hasOutstandingRequests() {
 			// We never requested anything from this peer so sending a response is breach protocol -- disconnect
-			if wp.getPeerData(lastSentRequestTimeKey) == nil {
+			lastSentTime, ok := wp.getPeerData(lastSentRequestTimeKey).(time.Time)
+			if !ok {
 				wp.net.log.Errorf("wsPeer readloop: peer %s sent TS response without a request", wp.conn.RemoteAddr().String())
+				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
+				return
+			} else if time.Since(lastSentTime) > blockResponseDisconnectThreshold {
+				wp.net.log.Errorf("wsPeer readloop: peer %s sent a very stale TS response. lastRequestTime :%d", wp.conn.RemoteAddr().String(), lastSentTime.UnixNano())
 				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
 				return
 			}
