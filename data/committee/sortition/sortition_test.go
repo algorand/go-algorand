@@ -18,10 +18,16 @@ package sortition
 
 import (
 	"math/rand"
+	"os"
+	"strconv"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/sortition"
+	"pgregory.net/rapid"
 )
 
 func BenchmarkSortition(b *testing.B) {
@@ -61,4 +67,58 @@ func TestSortitionBasic(t *testing.T) {
 	if d > maxd {
 		t.Errorf("wanted %d selections but got %d, d=%d, maxd=%d", expected, hitcount, d, maxd)
 	}
+}
+
+func TestCompareSortitionImpls(tt *testing.T) {
+	partitiontest.PartitionTest(tt)
+
+	// if TOTAL_MONEY env var is set, parse uint64 from env
+	var envTotalMoney uint64
+	if tm := os.Getenv("TOTAL_MONEY"); tm != "" {
+		if val, err := strconv.ParseUint(tm, 10, 64); err == nil {
+			envTotalMoney = val
+			tt.Logf("using TOTAL_MONEY=%d from env", envTotalMoney)
+		}
+	}
+
+	rapid.Check(tt, func(t *rapid.T) {
+		// select one of the protocol committee sizes
+		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		expectedSize := rapid.OneOf(
+			rapid.Just(proto.NumProposers),
+			rapid.Just(proto.SoftCommitteeSize),
+			rapid.Just(proto.CertCommitteeSize),
+			rapid.Just(proto.NextCommitteeSize),
+			rapid.Just(proto.LateCommitteeSize),
+			rapid.Just(proto.RedoCommitteeSize),
+			rapid.Just(proto.DownCommitteeSize),
+		).Draw(t, "expectedSize").(uint64)
+		//expectedSize := rapid.Uint64Range(1, totalMoney).Draw(t, "expectedSize").(uint64) // draw random
+
+		// total online circulation (must be at least committee size)
+		var totalMoney uint64
+		if envTotalMoney != 0 {
+			totalMoney = envTotalMoney
+		} else {
+			const totalMicroAlgos = 10000000000000000
+			totalMoney = rapid.Uint64Range(expectedSize, totalMicroAlgos).Draw(t, "totalMoney").(uint64)
+		}
+
+		// participating account balance
+		money := rapid.Uint64Range(1, totalMoney-1).Draw(t, "money").(uint64)
+
+		// draw random vrf output
+		var vrfOutput crypto.Digest
+		vrfSeed := int64(rapid.Int64Min(0).Draw(t, "vrfSeed").(int64))
+		rnd := rand.New(rand.NewSource(vrfSeed))
+		rnd.Read(vrfOutput[:])
+
+		tt.Logf("money %d, totalMoney %d, expectedSize %d, vrfSeed %d, vrfOutput %x", money, totalMoney, expectedSize, vrfSeed, vrfOutput)
+		selectedLocal := Select(money, totalMoney, float64(expectedSize), vrfOutput)
+		selectedExtern := sortition.Select(money, totalMoney, float64(expectedSize), sortition.Digest(vrfOutput))
+		if selectedLocal != selectedExtern {
+			t.Fatalf("different results (money %d, totalMoney %d, expectedSize %d, vrfOutput %x): local %d, extern %d",
+				money, totalMoney, expectedSize, vrfOutput, selectedLocal, selectedExtern)
+		}
+	})
 }

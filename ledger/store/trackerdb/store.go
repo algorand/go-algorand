@@ -48,6 +48,7 @@ type TransactionScope interface {
 	MakeCatchpointReaderWriter() (CatchpointReaderWriter, error)
 	MakeAccountsReaderWriter() (AccountsReaderWriter, error)
 	MakeAccountsOptimizedWriter(hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (AccountsWriter, error)
+	MakeAccountsOptimizedReader() (AccountsReader, error)
 	MakeOnlineAccountsOptimizedWriter(hasAccounts bool) (w OnlineAccountsWriter, err error)
 	MakeMerkleCommitter(staging bool) (MerkleCommitter, error)
 	MakeOrderedAccountsIter(accountCount int) OrderedAccountsIter
