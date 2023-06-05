@@ -22,7 +22,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/eval"
 	"io"
 	"math"
 	"net/http"
@@ -46,6 +45,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
@@ -1724,7 +1724,7 @@ func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id 
 	}
 	delta, err := tracer.GetDeltaForID(idDigest)
 	if err != nil {
-		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
 	data, err := encode(handle, delta)
 	if err != nil {
@@ -1746,7 +1746,7 @@ func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Contex
 	}
 	deltas, err := tracer.GetDeltasForRound(basics.Round(round))
 	if err != nil {
-		return notFound(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
 	response := struct {
 		Deltas []eval.TxnGroupDeltaWithIds
