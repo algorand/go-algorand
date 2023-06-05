@@ -181,9 +181,9 @@ var accountsResetExprs = []string{
 //
 // accountsInit returns nil if either it has initialized the database
 // correctly, or if the database has already been initialized.
-func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
+func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
 	for _, tableCreate := range accountsSchema {
-		_, err = tx.Exec(tableCreate)
+		_, err = e.Exec(tableCreate)
 		if err != nil {
 			return
 		}
@@ -191,11 +191,11 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 
 	// Run creatables migration if it hasn't run yet
 	var creatableMigrated bool
-	err = tx.QueryRow("SELECT 1 FROM pragma_table_info('assetcreators') WHERE name='ctype'").Scan(&creatableMigrated)
+	err = e.QueryRow("SELECT 1 FROM pragma_table_info('assetcreators') WHERE name='ctype'").Scan(&creatableMigrated)
 	if err == sql.ErrNoRows {
 		// Run migration
 		for _, migrateCmd := range creatablesMigration {
-			_, err = tx.Exec(migrateCmd)
+			_, err = e.Exec(migrateCmd)
 			if err != nil {
 				return
 			}
@@ -204,13 +204,13 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		return
 	}
 
-	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
+	_, err = e.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
 		var ot basics.OverflowTracker
 		var totals ledgercore.AccountTotals
 
 		for addr, data := range initAccounts {
-			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
+			_, err = e.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
 				addr[:], protocol.Encode(&data)) //nolint:gosec // Encode does not hold on to reference
 			if err != nil {
 				return true, err
@@ -224,7 +224,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 			return true, fmt.Errorf("overflow computing totals")
 		}
 
-		arw := NewAccountsSQLReaderWriter(tx)
+		arw := NewAccountsSQLReaderWriter(e)
 		err = arw.AccountsPutTotals(totals, false)
 		if err != nil {
 			return true, err
@@ -245,9 +245,9 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 
 // accountsAddNormalizedBalance adds the normalizedonlinebalance column
 // to the accountbase table.
-func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) error {
+func accountsAddNormalizedBalance(e db.Executable, proto config.ConsensusParams) error {
 	var exists bool
-	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('accountbase') WHERE name='normalizedonlinebalance'").Scan(&exists)
+	err := e.QueryRow("SELECT 1 FROM pragma_table_info('accountbase') WHERE name='normalizedonlinebalance'").Scan(&exists)
 	if err == nil {
 		// Already exists.
 		return nil
@@ -257,13 +257,13 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 	}
 
 	for _, stmt := range createOnlineAccountIndex {
-		_, err = tx.Exec(stmt)
+		_, err = e.Exec(stmt)
 		if err != nil {
 			return err
 		}
 	}
 
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	rows, err := e.Query("SELECT address, data FROM accountbase")
 	if err != nil {
 		return err
 	}
@@ -285,7 +285,7 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 
 		normBalance := data.NormalizedOnlineBalance(proto)
 		if normBalance > 0 {
-			_, err = tx.Exec("UPDATE accountbase SET normalizedonlinebalance=? WHERE address=?", normBalance, addrbuf)
+			_, err = e.Exec("UPDATE accountbase SET normalizedonlinebalance=? WHERE address=?", normBalance, addrbuf)
 			if err != nil {
 				return err
 			}
@@ -296,9 +296,9 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 }
 
 // accountsCreateResourceTable creates the resource table in the database.
-func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
+func accountsCreateResourceTable(ctx context.Context, e db.Executable) error {
 	var exists bool
-	err := tx.QueryRowContext(ctx, "SELECT 1 FROM pragma_table_info('resources') WHERE name='addrid'").Scan(&exists)
+	err := e.QueryRowContext(ctx, "SELECT 1 FROM pragma_table_info('resources') WHERE name='addrid'").Scan(&exists)
 	if err == nil {
 		// Already exists.
 		return nil
@@ -307,7 +307,7 @@ func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	for _, stmt := range createResourcesTable {
-		_, err = tx.ExecContext(ctx, stmt)
+		_, err = e.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
 		}
@@ -315,9 +315,9 @@ func accountsCreateResourceTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
-func accountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
+func accountsCreateOnlineAccountsTable(ctx context.Context, e db.Executable) error {
 	var exists bool
-	err := tx.QueryRowContext(ctx, "SELECT 1 FROM pragma_table_info('onlineaccounts') WHERE name='address'").Scan(&exists)
+	err := e.QueryRowContext(ctx, "SELECT 1 FROM pragma_table_info('onlineaccounts') WHERE name='address'").Scan(&exists)
 	if err == nil {
 		// Already exists.
 		return nil
@@ -326,7 +326,7 @@ func accountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	for _, stmt := range createOnlineAccountsTable {
-		_, err = tx.ExecContext(ctx, stmt)
+		_, err = e.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
 		}
@@ -335,9 +335,9 @@ func accountsCreateOnlineAccountsTable(ctx context.Context, tx *sql.Tx) error {
 }
 
 // accountsCreateBoxTable creates the KVStore table for box-storage in the database.
-func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
+func accountsCreateBoxTable(ctx context.Context, e db.Executable) error {
 	var exists bool
-	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('kvstore') WHERE name='key'").Scan(&exists)
+	err := e.QueryRow("SELECT 1 FROM pragma_table_info('kvstore') WHERE name='key'").Scan(&exists)
 	if err == nil {
 		// already exists
 		return nil
@@ -346,7 +346,7 @@ func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	for _, stmt := range createBoxTable {
-		_, err = tx.ExecContext(ctx, stmt)
+		_, err = e.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
 		}
@@ -355,14 +355,14 @@ func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
 }
 
 // performKVStoreNullBlobConversion scans keys with null blob value, and convert the value to `[]byte{}`.
-func performKVStoreNullBlobConversion(ctx context.Context, tx *sql.Tx) error {
-	_, err := tx.ExecContext(ctx, "UPDATE kvstore SET value = '' WHERE value is NULL")
+func performKVStoreNullBlobConversion(ctx context.Context, e db.Executable) error {
+	_, err := e.ExecContext(ctx, "UPDATE kvstore SET value = '' WHERE value is NULL")
 	return err
 }
 
-func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
+func accountsCreateTxTailTable(ctx context.Context, e db.Executable) (err error) {
 	for _, stmt := range createTxTailTable {
-		_, err = tx.ExecContext(ctx, stmt)
+		_, err = e.ExecContext(ctx, stmt)
 		if err != nil {
 			return
 		}
@@ -370,9 +370,9 @@ func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	return nil
 }
 
-func accountsCreateOnlineRoundParamsTable(ctx context.Context, tx *sql.Tx) (err error) {
+func accountsCreateOnlineRoundParamsTable(ctx context.Context, e db.Executable) (err error) {
 	for _, stmt := range createOnlineRoundParamsTable {
-		_, err = tx.ExecContext(ctx, stmt)
+		_, err = e.ExecContext(ctx, stmt)
 		if err != nil {
 			return
 		}
@@ -396,7 +396,7 @@ func createStateProofVerificationTable(ctx context.Context, e db.Executable) err
 }
 
 // performResourceTableMigration migrate the database to use the resources table.
-func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(processed, total uint64)) (err error) {
+func performResourceTableMigration(ctx context.Context, e db.Executable, log func(processed, total uint64)) (err error) {
 	now := time.Now().UnixNano()
 	idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
 	idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
@@ -418,7 +418,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	}
 
 	for _, stmt := range createNewAcctBase {
-		_, err = tx.ExecContext(ctx, stmt)
+		_, err = e.ExecContext(ctx, stmt)
 		if err != nil {
 			return err
 		}
@@ -426,26 +426,26 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	var insertNewAcctBase *sql.Stmt
 	var insertResources *sql.Stmt
 	var insertNewAcctBaseNormBal *sql.Stmt
-	insertNewAcctBase, err = tx.PrepareContext(ctx, "INSERT INTO accountbase_resources_migration(address, data) VALUES(?, ?)")
+	insertNewAcctBase, err = e.PrepareContext(ctx, "INSERT INTO accountbase_resources_migration(address, data) VALUES(?, ?)")
 	if err != nil {
 		return err
 	}
 	defer insertNewAcctBase.Close()
 
-	insertNewAcctBaseNormBal, err = tx.PrepareContext(ctx, "INSERT INTO accountbase_resources_migration(address, data, normalizedonlinebalance) VALUES(?, ?, ?)")
+	insertNewAcctBaseNormBal, err = e.PrepareContext(ctx, "INSERT INTO accountbase_resources_migration(address, data, normalizedonlinebalance) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer insertNewAcctBaseNormBal.Close()
 
-	insertResources, err = tx.PrepareContext(ctx, "INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
+	insertResources, err = e.PrepareContext(ctx, "INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer insertResources.Close()
 
 	var rows *sql.Rows
-	rows, err = tx.QueryContext(ctx, "SELECT address, data, normalizedonlinebalance FROM accountbase ORDER BY address")
+	rows, err = e.QueryContext(ctx, "SELECT address, data, normalizedonlinebalance FROM accountbase ORDER BY address")
 	if err != nil {
 		return err
 	}
@@ -457,7 +457,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	var processedAccounts uint64
 	var totalBaseAccounts uint64
 
-	arw := NewAccountsSQLReaderWriter(tx)
+	arw := NewAccountsSQLReaderWriter(e)
 	totalBaseAccounts, err = arw.TotalAccounts(ctx)
 	if err != nil {
 		return err
@@ -524,7 +524,7 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	}
 
 	for _, stmt := range applyNewAcctBase {
-		_, err = tx.Exec(stmt)
+		_, err = e.Exec(stmt)
 		if err != nil {
 			return err
 		}
@@ -532,12 +532,12 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 	return nil
 }
 
-func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor) (err error) {
-	if tx == nil {
+func performTxTailTableMigration(ctx context.Context, e db.Executable, blockDb db.Accessor) (err error) {
+	if e == nil {
 		return nil
 	}
 
-	arw := NewAccountsSQLReaderWriter(tx)
+	arw := NewAccountsSQLReaderWriter(e)
 	dbRound, err := arw.AccountsRound()
 	if err != nil {
 		return fmt.Errorf("latest block number cannot be retrieved : %w", err)
@@ -596,8 +596,8 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	return err
 }
 
-func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, blockDb db.Accessor, newDatabase bool, initProto protocol.ConsensusVersion) (err error) {
-	arw := NewAccountsSQLReaderWriter(tx)
+func performOnlineRoundParamsTailMigration(ctx context.Context, e db.Executable, blockDb db.Accessor, newDatabase bool, initProto protocol.ConsensusVersion) (err error) {
+	arw := NewAccountsSQLReaderWriter(e)
 	totals, err := arw.AccountsTotals(ctx, false)
 	if err != nil {
 		return err
@@ -632,24 +632,24 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 	return arw.AccountsPutOnlineRoundParams(onlineRoundParams, rnd)
 }
 
-func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progress func(processed, total uint64), log logging.Logger) (err error) {
+func performOnlineAccountsTableMigration(ctx context.Context, e db.Executable, progress func(processed, total uint64), log logging.Logger) (err error) {
 
 	var insertOnlineAcct *sql.Stmt
-	insertOnlineAcct, err = tx.PrepareContext(ctx, "INSERT INTO onlineaccounts(address, data, normalizedonlinebalance, updround, votelastvalid) VALUES(?, ?, ?, ?, ?)")
+	insertOnlineAcct, err = e.PrepareContext(ctx, "INSERT INTO onlineaccounts(address, data, normalizedonlinebalance, updround, votelastvalid) VALUES(?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer insertOnlineAcct.Close()
 
 	var updateAcct *sql.Stmt
-	updateAcct, err = tx.PrepareContext(ctx, "UPDATE accountbase SET data = ? WHERE addrid = ?")
+	updateAcct, err = e.PrepareContext(ctx, "UPDATE accountbase SET data = ? WHERE addrid = ?")
 	if err != nil {
 		return err
 	}
 	defer updateAcct.Close()
 
 	var rows *sql.Rows
-	rows, err = tx.QueryContext(ctx, "SELECT addrid, address, data, normalizedonlinebalance FROM accountbase")
+	rows, err = e.QueryContext(ctx, "SELECT addrid, address, data, normalizedonlinebalance FROM accountbase")
 	if err != nil {
 		return err
 	}
@@ -661,10 +661,10 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 	var processedAccounts uint64
 	var totalOnlineBaseAccounts uint64
 
-	arw := NewAccountsSQLReaderWriter(tx)
+	arw := NewAccountsSQLReaderWriter(e)
 	totalOnlineBaseAccounts, err = arw.TotalAccounts(ctx)
 	var total uint64
-	err = tx.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
+	err = e.QueryRowContext(ctx, "SELECT count(1) FROM accountbase").Scan(&total)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return err
@@ -763,7 +763,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 	// update accounthashes for the modified accounts
 	if len(acctRehash) > 0 {
 		var count uint64
-		err := tx.QueryRow("SELECT count(1) FROM accounthashes").Scan(&count)
+		err := e.QueryRow("SELECT count(1) FROM accounthashes").Scan(&count)
 		if err != nil {
 			return err
 		}
@@ -772,7 +772,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 			return nil
 		}
 
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := MakeMerkleCommitter(e, false)
 		if err != nil {
 			return nil
 		}
@@ -811,7 +811,7 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 
 // removeEmptyAccountData removes empty AccountData msgp-encoded entries from accountbase table
 // and optionally returns list of addresses that were eliminated
-func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, addresses []basics.Address, err error) {
+func removeEmptyAccountData(tx db.Executable, queryAddresses bool) (num int64, addresses []basics.Address, err error) {
 	if queryAddresses {
 		rows, qErr := tx.Query("SELECT address FROM accountbase where length(data) = 1 and data = x'80'") // empty AccountData is 0x80
 		if qErr != nil {
@@ -856,16 +856,16 @@ func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, address
 // reencodeAccounts reads all the accounts in the accountbase table, decode and reencode the account data.
 // if the account data is found to have a different encoding, it would update the encoded account on disk.
 // on return, it returns the number of modified accounts as well as an error ( if we had any )
-func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, err error) {
+func reencodeAccounts(ctx context.Context, e db.Executable) (modifiedAccounts uint, err error) {
 	modifiedAccounts = 0
 	scannedAccounts := 0
 
-	updateStmt, err := tx.PrepareContext(ctx, "UPDATE accountbase SET data = ? WHERE address = ?")
+	updateStmt, err := e.PrepareContext(ctx, "UPDATE accountbase SET data = ? WHERE address = ?")
 	if err != nil {
 		return 0, err
 	}
 
-	rows, err := tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+	rows, err := e.QueryContext(ctx, "SELECT address, data FROM accountbase")
 	if err != nil {
 		return
 	}
@@ -880,7 +880,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		if scannedAccounts%1000 == 0 {
 			// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warning
 			// message, which would let us know that it failed anyway.
-			_, err = db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
+			_, err = db.ResetTransactionWarnDeadline(ctx, e, time.Now().Add(time.Second))
 			if err != nil {
 				return
 			}
@@ -932,8 +932,8 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	return
 }
 
-func convertOnlineRoundParamsTail(ctx context.Context, tx *sql.Tx) error {
+func convertOnlineRoundParamsTail(ctx context.Context, e db.Executable) error {
 	// create vote last index
-	_, err := tx.ExecContext(ctx, createVoteLastValidIndex)
+	_, err := e.ExecContext(ctx, createVoteLastValidIndex)
 	return err
 }

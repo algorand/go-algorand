@@ -51,7 +51,7 @@ var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
 type mockLedgerForTracker struct {
-	dbs              trackerdb.TrackerStore
+	dbs              trackerdb.Store
 	blocks           []blockEntry
 	deltas           []ledgercore.StateDelta
 	log              logging.Logger
@@ -110,8 +110,7 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 }
 
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
-	dbs, fileName := sqlitedriver.DbOpenTrackerTest(t, inMemory)
-	dbs.SetLogger(l)
+	dbs, fileName := sqlitedriver.OpenForTesting(t, inMemory)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
 	deltas := make([]ledgercore.StateDelta, initialBlocksCount)
@@ -182,7 +181,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	dbs.Rdb.SetLogger(dblogger)
 	dbs.Wdb.SetLogger(dblogger)
 
-	newLedgerTracker.dbs = sqlitedriver.CreateTrackerSQLStore(dbs)
+	newLedgerTracker.dbs = sqlitedriver.MakeStore(dbs)
 	return newLedgerTracker
 }
 
@@ -253,7 +252,7 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
 
-func (ml *mockLedgerForTracker) trackerDB() trackerdb.TrackerStore {
+func (ml *mockLedgerForTracker) trackerDB() trackerdb.Store {
 	return ml.dbs
 }
 
@@ -297,13 +296,13 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
-	err = au.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+	err = au.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 		var err0 error
-		arw, err := tx.MakeAccountsReaderWriter()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
-		bals, err0 = arw.Testing().AccountsAllTest()
+		bals, err0 = ar.Testing().AccountsAllTest()
 		return err0
 	})
 	if err != nil {
@@ -1033,64 +1032,69 @@ func TestListCreatables(t *testing.T) {
 	numElementsPerSegement := 25
 
 	// set up the database
-	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
-	dblogger := logging.TestingLog(t)
-	dbs.SetLogger(dblogger)
+	dbs, _ := sqlitedriver.OpenForTesting(t, true)
 	defer dbs.Close()
 
-	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
+	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		accts := make(map[basics.Address]basics.AccountData)
 		_ = tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
-		require.NoError(t, err)
-
-		au := &accountUpdates{}
-		au.accountsq, err = tx.MakeAccountsOptimizedReader()
-		require.NoError(t, err)
-
-		// ******* All results are obtained from the cache. Empty database *******
-		// ******* No deletes                                              *******
-		// get random data. Initial batch, no deletes
-		ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
-		expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-		ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
-		// set the cache
-		au.creatables = ctbsWithDeletes
-		listAndCompareComb(t, au, expectedDbImage)
-
-		// ******* All results are obtained from the database. Empty cache *******
-		// ******* No deletes	                                           *******
-		// sync with the database
-		var updates compactAccountDeltas
-		var resUpdates compactResourcesDeltas
-		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
-		require.NoError(t, err)
-		// nothing left in cache
-		au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-		listAndCompareComb(t, au, expectedDbImage)
-
-		// ******* Results are obtained from the database and from the cache *******
-		// ******* No deletes in the database.                               *******
-		// ******* Data in the database deleted in the cache                 *******
-		au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
-		listAndCompareComb(t, au, expectedDbImage)
-
-		// ******* Results are obtained from the database and from the cache *******
-		// ******* Deletes are in the database and in the cache              *******
-		// sync with the database. This has deletes synced to the database.
-		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
-		require.NoError(t, err)
-		// get new creatables in the cache. There will be deleted in the cache from the previous batch.
-		au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
-		listAndCompareComb(t, au, expectedDbImage)
-
 		return
 	})
 	require.NoError(t, err)
+
+	au := &accountUpdates{}
+	au.accountsq, err = dbs.MakeAccountsOptimizedReader()
+	require.NoError(t, err)
+
+	// ******* All results are obtained from the cache. Empty database *******
+	// ******* No deletes                                              *******
+	// get random data. Initial batch, no deletes
+	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
+	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+	ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	// set the cache
+	au.creatables = ctbsWithDeletes
+	listAndCompareComb(t, au, expectedDbImage)
+
+	// ******* All results are obtained from the database. Empty cache *******
+	// ******* No deletes	                                           *******
+	// sync with the database
+	var updates compactAccountDeltas
+	var resUpdates compactResourcesDeltas
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
+		require.NoError(t, err)
+		return
+	})
+	require.NoError(t, err)
+
+	// nothing left in cache
+	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
+	listAndCompareComb(t, au, expectedDbImage)
+
+	// ******* Results are obtained from the database and from the cache *******
+	// ******* No deletes in the database.                               *******
+	// ******* Data in the database deleted in the cache                 *******
+	au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	listAndCompareComb(t, au, expectedDbImage)
+
+	// ******* Results are obtained from the database and from the cache *******
+	// ******* Deletes are in the database and in the cache              *******
+	// sync with the database. This has deletes synced to the database.
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
+		require.NoError(t, err)
+		return
+	})
+	require.NoError(t, err)
+	// get new creatables in the cache. There will be deleted in the cache from the previous batch.
+	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	listAndCompareComb(t, au, expectedDbImage)
 }
 
 func TestBoxNamesByAppIDs(t *testing.T) {
@@ -2190,7 +2194,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
 				err = ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-					arw, err := tx.MakeAccountsReaderWriter()
+					aw, err := tx.MakeAccountsWriter()
 					if err != nil {
 						return err
 					}
@@ -2199,7 +2203,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 					if err != nil {
 						return err
 					}
-					err = arw.UpdateAccountsRound(newBase)
+					err = aw.UpdateAccountsRound(newBase)
 					return err
 				})
 				require.NoError(t, err)
@@ -2477,7 +2481,7 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)
 			err = ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-				arw, err := tx.MakeAccountsReaderWriter()
+				aw, err := tx.MakeAccountsWriter()
 				if err != nil {
 					return err
 				}
@@ -2486,7 +2490,7 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 				if err != nil {
 					return err
 				}
-				err = arw.UpdateAccountsRound(newBase)
+				err = aw.UpdateAccountsRound(newBase)
 				return err
 			})
 			require.NoError(t, err)

@@ -17,8 +17,13 @@
 package sqlitedriver
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
+	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -52,4 +57,27 @@ func TestKeyPrefixIntervalPreprocessing(t *testing.T) {
 		require.Equal(t, tc.outputPrefix, actualOutputPrefix)
 		require.Equal(t, tc.outputPrefixIncr, actualOutputPrefixIncr)
 	}
+}
+
+// TestAccountsDbQueriesCreateClose tests to see that we can create the accountsDbQueries and close it.
+// it also verify that double-closing it doesn't create an issue.
+func TestAccountsDbQueriesCreateClose(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
+	defer dbs.Close()
+
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		AccountsInitTest(t, tx, make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion)
+		return nil
+	})
+	require.NoError(t, err)
+	qs, err := AccountsInitDbQueries(dbs.Rdb.Handle)
+	require.NoError(t, err)
+	require.NotNil(t, qs.listCreatablesStmt)
+	qs.Close()
+	require.Nil(t, qs.listCreatablesStmt)
+	qs.Close()
+	require.Nil(t, qs.listCreatablesStmt)
 }
