@@ -222,7 +222,11 @@ func transcribeSnappyLog(filePath string, output chan txGroupItem, wg *sync.Wait
 		} else if err != nil {
 			output <- txGroupItem{err: err}
 			return
+		}
+
+		msgBuff := make([]byte, lenMsg)
 		n, err = io.ReadFull(snappyReader, msgBuff)
+		if err == io.EOF {
 			output <- txGroupItem{err: fmt.Errorf("missing body in %s", filePath)}
 			return
 		}
