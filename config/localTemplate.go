@@ -527,7 +527,24 @@ type Local struct {
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
-func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []*DNSBootstrap) {
+func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) []*DNSBootstrap {
+	// Should never return an error here, as the config has already been validated at init
+	result, _ := cfg.internalValidateDNSBootstrapArray(networkID, false)
+
+	return result
+}
+
+// ValidateDNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers or an error if any
+// one fails to parse
+func (cfg Local) ValidateDNSBootstrapArray(networkID protocol.NetworkID) ([]*DNSBootstrap, error) {
+	return cfg.internalValidateDNSBootstrapArray(networkID, true)
+}
+
+// internalValidateDNSBootstrapArray handles the base functionality of parsing the DNSBootstrapID string.
+// If stopOnError is true, the function will return an error on the first failure. Otherwise, it will silently continue
+// parsing entries.
+func (cfg Local) internalValidateDNSBootstrapArray(networkID protocol.NetworkID, stopOnError bool) (
+	bootstrapArray []*DNSBootstrap, err error) {
 
 	bootstrapStringArray := strings.Split(cfg.DNSBootstrapID, ";")
 	for _, bootstrapString := range bootstrapStringArray {
@@ -535,10 +552,12 @@ func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray
 			continue
 		}
 
-		bootstrapEntry, err := parseDNSBootstrap(bootstrapString, networkID, defaultLocal.DNSBootstrapID != cfg.DNSBootstrapID)
-		if err != nil {
-			// Full stop: our bootstrap id -must- be properly formatted to operate
-			panic(err)
+		bootstrapEntry, err1 := parseDNSBootstrap(bootstrapString, networkID, defaultLocal.DNSBootstrapID != cfg.DNSBootstrapID)
+		if err1 != nil {
+			if stopOnError {
+				return nil, err1
+			}
+			continue
 		}
 
 		bootstrapArray = append(bootstrapArray, bootstrapEntry)

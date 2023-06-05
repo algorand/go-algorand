@@ -442,8 +442,26 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 			if gotBootstrapArray := cfg.DNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
 				t.Errorf("Local.DNSBootstrapArray() = %#v, want %#v", gotBootstrapArray, tt.wantBootstrapArray)
 			}
+			// handling should be identical to DNSBootstrapArray method for all of these cases
+			if gotBootstrapArray, _ := cfg.ValidateDNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
+				t.Errorf("Local.DNSBootstrapArray() = %#v, want %#v", gotBootstrapArray, tt.wantBootstrapArray)
+			}
 		})
 	}
+}
+
+func TestLocal_ValidateDNSBootstrapArray_StopOnError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var dnsBootstrapIDWithInvalidNameMacroUsage = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.((network|net)"
+
+	cfg := Local{
+		DNSBootstrapID: dnsBootstrapIDWithInvalidNameMacroUsage,
+	}
+
+	_, err := cfg.ValidateDNSBootstrapArray(Mainnet)
+
+	assert.ErrorContains(t, err, bootstrapDedupRegexDoesNotCompile)
 }
 
 func TestLocal_StructTags(t *testing.T) {
