@@ -100,7 +100,7 @@ func (wl *wrappedLedger) GenesisProtoVersion() protocol.ConsensusVersion {
 	return wl.l.GenesisProtoVersion()
 }
 
-func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.GenesisAccountData {
+func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return wl.l.GenesisAccounts()
 }
 

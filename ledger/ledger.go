@@ -73,7 +73,7 @@ type Ledger struct {
 	// genesisHash stores the genesis hash for this ledger.
 	genesisHash crypto.Digest
 
-	genesisAccounts map[basics.Address]basics.GenesisAccountData
+	genesisAccounts map[basics.Address]basics.AccountData
 
 	genesisProto        config.ConsensusParams
 	genesisProtoVersion protocol.ConsensusVersion
@@ -121,11 +121,17 @@ func OpenLedger(
 		tracer = eval.MakeTxnGroupDeltaTracer(cfg.MaxAcctLookback)
 	}
 
+	// Convert GenesisAccountData to AccountData
+	ad := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
+	for addr, acct := range genesisInitState.Accounts {
+		ad[addr] = basics.AccountData{GenesisAccountData: acct}
+	}
+
 	l := &Ledger{
 		log:                            log,
 		archival:                       cfg.Archival,
 		genesisHash:                    genesisInitState.GenesisHash,
-		genesisAccounts:                genesisInitState.Accounts,
+		genesisAccounts:                ad,
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
 		genesisProtoVersion:            genesisInitState.Block.CurrentProtocol,
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
@@ -167,7 +173,7 @@ func OpenLedger(
 	}
 
 	if l.genesisAccounts == nil {
-		l.genesisAccounts = make(map[basics.Address]basics.GenesisAccountData)
+		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
 	l.blockQ, err = newBlockQueue(l)
@@ -763,7 +769,7 @@ func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
 }
 
 // GenesisAccounts returns initial accounts for this ledger.
-func (l *Ledger) GenesisAccounts() map[basics.Address]basics.GenesisAccountData {
+func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
 }
 
