@@ -103,7 +103,6 @@ type AccountsReaderExt interface {
 	AccountsTotals(ctx context.Context, catchpointStaging bool) (totals ledgercore.AccountTotals, err error)
 	AccountsHashRound(ctx context.Context) (hashrnd basics.Round, err error)
 	LookupAccountAddressFromAddressID(ctx context.Context, ref AccountRef) (address basics.Address, err error)
-	LookupAccountDataByAddress(basics.Address) (ref AccountRef, data []byte, err error)
 	LookupAccountRowID(basics.Address) (ref AccountRef, err error)
 	LookupResourceDataByAddrID(accountRef AccountRef, aidx basics.CreatableIndex) (data []byte, err error)
 	TotalResources(ctx context.Context) (total uint64, err error)

@@ -626,7 +626,7 @@ func TestPaysetGroups(t *testing.T) {
 
 func BenchmarkPaysetGroups(b *testing.B) {
 	if b.N < 2000 {
-		b.N = 2000
+		b.N = 2000 //nolint:staticcheck // intentionally setting b.N
 	}
 	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
@@ -1056,7 +1056,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 
 func BenchmarkTxn(b *testing.B) {
 	if b.N < 2000 {
-		b.N = 2000
+		b.N = 2000 //nolint:staticcheck // intentionally setting b.N
 	}
 	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 0, 50)
 	blk := bookkeeping.Block{BlockHeader: createDummyBlockHeader()}

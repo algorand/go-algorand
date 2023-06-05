@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    27,
+	Version:                                    28,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -30,6 +30,7 @@ var defaultLocal = Local{
 	Archival:                                   false,
 	BaseLoggerDebugLevel:                       4,
 	BlockServiceCustomFallbackEndpoints:        "",
+	BlockServiceHTTPMemCap:                     500000000,
 	BroadcastConnectionsLimit:                  -1,
 	CadaverDirectory:                           "",
 	CadaverSizeTarget:                          0,
@@ -119,6 +120,7 @@ var defaultLocal = Local{
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
+	StorageEngine:                              "sqlite",
 	SuggestedFeeBlockHistory:                   3,
 	SuggestedFeeSlidingWindowSize:              50,
 	TLSCertFile:                                "",
@@ -129,6 +131,7 @@ var defaultLocal = Local{
 	TxBacklogReservedCapacityPerPeer:           20,
 	TxBacklogServiceRateWindowSeconds:          10,
 	TxBacklogSize:                              26000,
+	TxIncomingFilterMaxSize:                    500000,
 	TxIncomingFilteringFlags:                   1,
 	TxPoolExponentialIncreaseFactor:            2,
 	TxPoolSize:                                 75000,

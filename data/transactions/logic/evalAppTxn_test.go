@@ -112,7 +112,7 @@ func TestFieldTypes(t *testing.T) {
 	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field AssetSender;"), ep, "not an address")
 	// can't really tell if it's an addres, so 32 bytes gets further
 	TestApp(t, "itxn_begin; byte \"01234567890123456789012345678901\"; itxn_field AssetReceiver; int 1",
-		ep, "invalid Account reference")
+		ep, "unavailable Account")
 	// but a b32 string rep is not an account
 	TestApp(t, NoTrack("itxn_begin; byte \"GAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYZIZD42E\"; itxn_field AssetCloseTo;"),
 		ep, "not an address")
@@ -663,18 +663,20 @@ func TestAssetCreate(t *testing.T) {
 
 	create := `
   itxn_begin
-  int acfg
-  itxn_field TypeEnum
-  int 1000000
-  itxn_field ConfigAssetTotal
-  int 3
-  itxn_field ConfigAssetDecimals
-  byte "oz"
-  itxn_field ConfigAssetUnitName
-  byte "Gold"
-  itxn_field ConfigAssetName
-  byte "https://gold.rush/"
-  itxn_field ConfigAssetURL
+   int acfg;                   itxn_field TypeEnum
+   int 1000000;                itxn_field ConfigAssetTotal
+   int 3;                      itxn_field ConfigAssetDecimals
+   byte "oz";                  itxn_field ConfigAssetUnitName
+   byte "Gold";                itxn_field ConfigAssetName
+   byte "https://gold.rush/";  itxn_field ConfigAssetURL
+
+   // set all the addresses to something checkable
+   byte 0x01; int 31; bzero; concat; itxn_field ConfigAssetManager;
+   byte 0x02; int 31; bzero; concat; itxn_field ConfigAssetClawback;
+   byte 0x03; int 31; bzero; concat; itxn_field ConfigAssetFreeze;
+   byte 0x04; int 31; bzero; concat; itxn_field ConfigAssetReserve;
+
+   byte 0x05; int 31; bzero; concat; itxn_field ConfigAssetMetadataHash;
   itxn_submit
   int 1
 `
@@ -685,6 +687,15 @@ func TestAssetCreate(t *testing.T) {
 		// Give it enough for fee.  Recall that we don't check min balance at this level.
 		ledger.NewAccount(appAddr(888), MakeTestProto().MinTxnFee)
 		TestApp(t, create, ep)
+		assetID := basics.AssetIndex(ledger.Counter() - 1)
+		app, _, err := ledger.AssetParams(assetID)
+		require.NoError(t, err)
+		require.Equal(t, app.Manager, basics.Address{0x01})
+		require.Equal(t, app.Clawback, basics.Address{0x02})
+		require.Equal(t, app.Freeze, basics.Address{0x03})
+		require.Equal(t, app.Reserve, basics.Address{0x04})
+
+		require.Equal(t, app.MetadataHash, [32]byte{0x05})
 	})
 }
 
@@ -954,6 +965,10 @@ txn Sender; itxn_field Receiver;
 	// NewAccount overwrites the existing balance
 	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee)
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
+	TestApp(t, "itxn_begin; itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
+		"itxn_begin without itxn_submit")
+	TestApp(t, "itxn_next"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
+		"itxn_next without itxn_begin")
 }
 
 func TestInnerFeePooling(t *testing.T) {
@@ -1065,7 +1080,7 @@ func TestApplCreation(t *testing.T) {
 		"too many application args")
 
 	TestApp(t, p+strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)+s, ep,
-		"invalid Account reference")
+		"unavailable Account")
 	tx.Accounts = append(tx.Accounts, basics.Address{})
 	TestApp(t, fmt.Sprintf(p+"%s"+s,
 		strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)), ep)
@@ -3161,7 +3176,7 @@ func TestForeignAppAccountAccess(t *testing.T) {
 		// app address available starting with 7
 		var problem []string
 		if v < 7 {
-			problem = []string{"invalid Account reference " + appAddr(111).String()}
+			problem = []string{"unavailable Account " + appAddr(111).String()}
 		}
 
 		TestApp(t, `
