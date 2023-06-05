@@ -4036,8 +4036,13 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	cancel()
 
 	// confirm that the request was cancelled but that we have registered that we have sent a request
-	require.NotZero(t, netC.peers[0].getPeerData(lastSentRequestTimeKey))
-	require.False(t, netC.peers[0].hasOutstandingRequests())
+	require.Eventually(
+		t,
+		func() bool { return !netC.peers[0].hasOutstandingRequests() },
+		500*time.Millisecond,
+		20*time.Millisecond,
+	)
+	require.Equal(t, atomic.LoadInt64(&netC.peers[0].outstandingTopicRequests), int64(1))
 
 	// Create a buffer to monitor log output from netC
 	logBuffer = bytes.NewBuffer(nil)
@@ -4045,7 +4050,12 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 
 	// send a late TS response from A -> C
 	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(
+		t,
+		func() bool { return atomic.LoadInt64(&netC.peers[0].outstandingTopicRequests) == int64(0) },
+		500*time.Millisecond,
+		20*time.Millisecond,
+	)
 
 	// Stop and confirm that we hit the case of disconnecting a peer for sending a stale block response
 	netC.Stop()

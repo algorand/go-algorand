@@ -171,8 +171,6 @@ const disconnectBadIdentityData disconnectReason = "BadIdentityData"
 const disconnectUnexpectedTopicResp disconnectReason = "UnexpectedTopicResp"
 const disconnectExpiredTopicResp disconnectReason = "ExpiredTopicResp"
 
-const lastSentRequestTimeKey string = "lsrt"
-
 // If the peer sends us a block response after this threshold
 // we should disconnect from it
 const blockResponseDisconnectThreshold = 60 * time.Second
@@ -192,6 +190,10 @@ type wsPeer struct {
 	// error.
 	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
 	lastPacketTime int64
+
+	// outstandingTopicRequests is an atomic counter for the number of outstanding block requests we've made out to this peer
+	// if a peer sends more blocks than we've requested, we'll disconnect from it.
+	outstandingTopicRequests int64
 
 	// intermittentOutgoingMessageEnqueueTime contains the UnixNano of the message's enqueue time that is currently being written to the
 	// peer, or zero if no message is being written.
@@ -516,17 +518,13 @@ func (wp *wsPeer) readLoop() {
 
 		// Skip the message if it's a response to a request we didn't make or has timed out
 		if msg.Tag == protocol.TopicMsgRespTag && !wp.hasOutstandingRequests() {
-			// We never requested anything from this peer so sending a response is breach protocol -- disconnect
-			lastSentTime, ok := wp.getPeerData(lastSentRequestTimeKey).(time.Time)
-			if !ok {
+			atomic.AddInt64(&wp.outstandingTopicRequests, -1)
+
+			// This peers has sent us more responses than we have requested.  This is a protocol violation and we should disconnect.
+			if atomic.LoadInt64(&wp.outstandingTopicRequests) < 0 {
 				wp.net.log.Errorf("wsPeer readloop: peer %s sent TS response without a request", wp.conn.RemoteAddr().String())
 				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
 				cleanupCloseError = disconnectUnexpectedTopicResp
-				return
-			} else if time.Since(lastSentTime) > blockResponseDisconnectThreshold {
-				wp.net.log.Errorf("wsPeer readloop: peer %s sent a very stale TS response. lastRequestTime :%d", wp.conn.RemoteAddr().String(), lastSentTime.UnixNano())
-				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
-				cleanupCloseError = disconnectExpiredTopicResp
 				return
 			}
 			var n int64
@@ -577,6 +575,7 @@ func (wp *wsPeer) readLoop() {
 			}
 			continue
 		case protocol.TopicMsgRespTag: // Handle Topic message
+			atomic.AddInt64(&wp.outstandingTopicRequests, -1)
 			topics, err := UnmarshallTopics(msg.Data)
 			if err != nil {
 				wp.net.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddr().String(), err)
@@ -977,15 +976,14 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	// Send serializedMsg
 	msg := make([]sendMessage, 1, 1)
 
-	tStart := time.Now()
 	msg[0] = sendMessage{
 		data:         append([]byte(tag), serializedMsg...),
-		enqueued:     tStart,
-		peerEnqueued: tStart,
+		enqueued:     time.Now(),
+		peerEnqueued: time.Now(),
 		ctx:          context.Background()}
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
-		wp.setPeerData(lastSentRequestTimeKey, tStart)
+		atomic.AddInt64(&wp.outstandingTopicRequests, 1)
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
