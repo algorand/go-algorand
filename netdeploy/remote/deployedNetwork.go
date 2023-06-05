@@ -92,7 +92,8 @@ type netState struct {
 	assetPerAcct int
 	appsPerAcct  int
 
-	deterministicKeys bool
+	deterministicKeys         bool
+	deterministicAccountCount uint64
 
 	genesisID   string
 	genesisHash crypto.Digest
@@ -462,11 +463,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet, params, log)
 		// don't allow the ledger to fall more than 10 rounds behind before adding more
-		lastCommit := l.LatestTrackerCommitted()
-		diff := int(bootstrappedNet.round) - int(lastCommit)
-		for diff > 10 {
-			lastCommit = l.LatestTrackerCommitted()
-			diff = int(bootstrappedNet.round) - int(lastCommit)
+		for int(bootstrappedNet.round)-int(l.LatestTrackerCommitted()) > 10 {
 			time.Sleep(100 * time.Millisecond)
 		}
 		err = l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
@@ -500,14 +497,18 @@ func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bo
 	return bookkeeping.GenesisAllocation{}
 }
 
-// keypair returns a random key, unless deterministic is true, which will set i as the seed for key generation.
-func keypair(i uint64, deterministic bool) *crypto.SignatureSecrets {
+// deterministicKeypair returns a key based on the provided index
+func deterministicKeypair(i uint64) *crypto.SignatureSecrets {
 	var seed crypto.Seed
-	if deterministic {
-		binary.LittleEndian.PutUint64(seed[:], i)
-	} else {
-		crypto.RandBytes(seed[:])
-	}
+	binary.LittleEndian.PutUint64(seed[:], i)
+	s := crypto.GenerateSignatureSecrets(seed)
+	return s
+}
+
+// keypair returns a random key
+func keypair() *crypto.SignatureSecrets {
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
 	s := crypto.GenerateSignatureSecrets(seed)
 	return s
 }
@@ -596,11 +597,7 @@ func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.B
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, roundTxnCnt, bootstrappedNet, csParams, log)
 		// don't allow the ledger to fall more than 10 rounds behind before adding more
-		lastCommit := l.LatestTrackerCommitted()
-		diff := int(bootstrappedNet.round) - int(lastCommit)
-		for diff > 10 {
-			lastCommit = l.LatestTrackerCommitted()
-			diff = int(bootstrappedNet.round) - int(lastCommit)
+		for int(bootstrappedNet.round)-int(l.LatestTrackerCommitted()) > 10 {
 			time.Sleep(100 * time.Millisecond)
 		}
 		err := l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
@@ -686,11 +683,13 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 
 		if !bootstrappedNet.accountsCreated {
 			for i := uint64(0); i < n; i++ {
-				// adjust the index to account for previous rounds of account creation.
-				// TODO: adjusting the index to account for round assumes all blocks are being used
-				// for account creation. This assumption can create (relatively small) gaps in the keypair set
-				iAdj := i + (uint64(round) * bootstrappedNet.roundTxnCnt)
-				secretDst := keypair(iAdj, bootstrappedNet.deterministicKeys)
+				var secretDst *crypto.SignatureSecrets
+				if bootstrappedNet.deterministicKeys {
+					secretDst = deterministicKeypair(bootstrappedNet.deterministicAccountCount)
+					bootstrappedNet.deterministicAccountCount++
+				} else {
+					secretDst = keypair()
+				}
 				dst := basics.Address(secretDst.SignatureVerifier)
 				bootstrappedNet.accounts = append(bootstrappedNet.accounts, dst)
 

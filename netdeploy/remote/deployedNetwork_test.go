@@ -42,7 +42,7 @@ func TestCreateSignedTxBasic(t *testing.T) {
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	secretDst := keypair(0, false)
+	secretDst := keypair()
 	src := basics.Address(secretDst.SignatureVerifier)
 
 	//	create accounts
@@ -94,7 +94,7 @@ func TestCreateSignedTxAssets(t *testing.T) {
 	t.Parallel()
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
-	secretDst := keypair(0, false)
+	secretDst := keypair()
 	src := basics.Address(secretDst.SignatureVerifier)
 
 	var networkState netState
