@@ -3971,7 +3971,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
 	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, 1, len(netA.peers))
+	require.Equal(t, 1, len(netA.peers))
 
 	// Create a buffer to monitor log output from netB
 	logBuffer := bytes.NewBuffer(nil)
@@ -3991,8 +3991,51 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	// Stop and confirm that we hit the case of disconnecting a peer for sending an unrequested block response
 	netB.Stop()
 	lg := logBuffer.String()
-	assert.Contains(t, lg, "peer sent TS response without a request", gossipB)
+	require.Contains(t, lg, "sent TS response without a request")
 
-	// TODO: add a test for the case where we receive a block response for a block we didn't request
+	netC.Start()
+	defer netC.Stop()
 
+	addrC, ok := netC.Address()
+	require.True(t, ok)
+	gossipC, err := netC.addrToGossipAddr(addrC)
+	require.NoError(t, err)
+	_ = gossipC
+
+	netA.wg.Add(1)
+	netA.tryConnect(addrC, gossipC)
+	time.Sleep(100 * time.Millisecond)
+	require.Equal(t, 1, len(netA.peers))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	topics := Topics{
+		MakeTopic("requestDataType",
+			[]byte("fake block and cert value")),
+		MakeTopic(
+			"blockData",
+			[]byte("fake round value")),
+	}
+	// Send a request for a block and cancel it immediately
+	go func() {
+		netC.peers[0].Request(ctx, protocol.UniEnsBlockReqTag, topics)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	// confirm that the request was cancelled but that we have registered that we have sent a request
+	require.NotZero(t, netC.peers[0].getPeerData(lastSentRequestTimeKey))
+	require.False(t, netC.peers[0].hasOutstandingRequests())
+
+	// Create a buffer to monitor log output from netC
+	logBuffer = bytes.NewBuffer(nil)
+	netC.log.SetOutput(logBuffer)
+
+	// send a late TS response from A -> C
+	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop and confirm that we hit the case of disconnecting a peer for sending a stale block response
+	netC.Stop()
+	lg = logBuffer.String()
+	require.Contains(t, lg, "wsPeer readLoop: received a TS response for a stale request ")
 }

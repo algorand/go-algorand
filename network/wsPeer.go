@@ -169,7 +169,7 @@ const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
 const disconnectDuplicateConnection disconnectReason = "DuplicateConnection"
 const disconnectBadIdentityData disconnectReason = "BadIdentityData"
 
-const lastSentRequestTime string = "lsrt"
+const lastSentRequestTimeKey string = "lsrt"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -511,7 +511,7 @@ func (wp *wsPeer) readLoop() {
 		// Skip the message if it's a response to a request we didn't make or has timed out
 		if msg.Tag == protocol.TopicMsgRespTag && !wp.hasOutstandingRequests() {
 			// We never requested anything from this peer so sending a response is breach protocol -- disconnect
-			if wp.getPeerData(lastSentRequestTime) == nil {
+			if wp.getPeerData(lastSentRequestTimeKey) == nil {
 				wp.net.log.Errorf("wsPeer readloop: peer %s sent TS response without a request", wp.conn.RemoteAddr().String())
 				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
 				return
@@ -971,7 +971,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 		ctx:          context.Background()}
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
-		wp.setPeerData(lastSentRequestTime, tStart)
+		wp.setPeerData(lastSentRequestTimeKey, tStart)
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
