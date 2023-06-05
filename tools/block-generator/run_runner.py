@@ -77,7 +77,7 @@ def launch_json_args(cmd: str):
     return f"[{(NL.join(newlines)).replace(BS, '')}]"
 
 
-def parse_ars():
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--conduit-binary", help="Path to conduit binary")
     parser.add_argument(
@@ -147,7 +147,7 @@ def parse_ars():
 
 
 def main():
-    args = parse_ars()
+    args = parse_args()
 
     try:
         if not args.purge:
