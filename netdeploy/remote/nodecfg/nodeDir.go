@@ -310,12 +310,8 @@ func (nd *nodeDir) configureDNSBootstrap() (err error) {
 	}
 
 	if nd.config.DNSBootstrapID == config.GetDefaultLocal().DNSBootstrapID {
-		// For this use-case, we are looking to set a custom template expression for the DNSBootstrapID
-		// Assumes network this is used for can be substituted in now..
-		bootstrapArray := nd.config.DNSBootstrapArray(nd.configurator.genesisData.Network)
-		if len(bootstrapArray) > 0 {
-			nd.config.DNSBootstrapID = bootstrapArray[0].PrimarySRVBootstrap
-		}
+		// Ensure using our testing network without fallback support
+		nd.config.DNSBootstrapID = "<network>.algodev.network"
 		err = nd.saveConfig()
 	}
 	return
