@@ -913,6 +913,7 @@ func (g *generator) generateAssetTxn(round uint64, intra uint64) (transactions.S
 	actual, txn := g.generateAssetTxnInternal(selection.(TxTypeID), round, intra)
 	defer g.recordData(actual, start)
 
+	// TODO: shouldn't we just return an error?
 	if txn.Type == "" {
 		fmt.Println("Empty asset transaction.")
 		os.Exit(1)
@@ -934,12 +935,10 @@ func (g *generator) generateAppTxn(round uint64, intra uint64) (transactions.Sig
 	if err != nil {
 		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("unexpected error received from generateAppCallInternal(): %w", err)
 	}
-	defer g.recordData(actual, start)
-
 	if txn.Type == "" {
-		fmt.Println("Missing transaction type.")
-		os.Exit(1)
+		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("missing transaction type for app transaction")
 	}
+	defer g.recordData(actual, start)
 
 	return signTxn(txn), transactions.ApplyData{}, nil
 }
@@ -952,10 +951,10 @@ func (g *generator) generateAppCallInternal(txType TxTypeID, round, intra, hintI
 		return "", transactions.Transaction{}, err
 	}
 	if !isApp {
-		return "", transactions.Transaction{}, fmt.Errorf("invalid app transaction type %v", txType)
+		return "", transactions.Transaction{}, fmt.Errorf("should be an app but not parsed that way: %v", txType)
 	}
 	if appTx != appTxTypeCreate {
-		return "", transactions.Transaction{}, fmt.Errorf("invalid app kind %v", kind)
+		return "", transactions.Transaction{}, fmt.Errorf("invalid transaction type forapp %v", appTx)
 	}
 
 	var senderIndex uint64
