@@ -511,6 +511,16 @@ type Local struct {
 	// It will store txn deltas created during block evaluation, potentially consuming much larger amounts of memory,
 	EnableTxnEvalTracer bool `version[27]:"false"`
 
+	// StorageEngine allows to control which type of storage to use for the ledger.
+	// Available options are:
+	// - sqlite (default)
+	// - pebbledb (experimental, in development)
+	StorageEngine string `version[28]:"sqlite"`
+
+	// TxIncomingFilterMaxSize sets the maximum size for the de-duplication cache used by the incoming tx filter
+	// only relevant if TxIncomingFilteringFlags is non-zero
+	TxIncomingFilterMaxSize uint64 `version[28]:"500000"`
+
 	// BlockServiceHTTPMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
 	// When it exceeds this capacity, it redirects the block requests to a different node
 	BlockServiceHTTPMemCap uint64 `version[28]:"500000000"`

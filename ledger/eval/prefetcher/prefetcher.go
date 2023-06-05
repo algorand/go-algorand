@@ -200,16 +200,16 @@ func loadAccountsAddAccountTask(addr *basics.Address, wt *groupTask, accountTask
 		return
 	}
 	if task, have := accountTasks[*addr]; !have {
-		task := &preloaderTask{
+		newTask := &preloaderTask{
 			address:           addr,
 			groupTasks:        make([]*groupTask, 1, 4),
 			groupTasksIndices: make([]int, 1, 4),
 		}
-		task.groupTasks[0] = wt
-		task.groupTasksIndices[0] = wt.balancesCount
+		newTask.groupTasks[0] = wt
+		newTask.groupTasksIndices[0] = wt.balancesCount
 
-		accountTasks[*addr] = task
-		queue.enqueue(task)
+		accountTasks[*addr] = newTask
+		queue.enqueue(newTask)
 	} else {
 		task.groupTasks = append(task.groupTasks, wt)
 		task.groupTasksIndices = append(task.groupTasksIndices, wt.balancesCount)
@@ -228,18 +228,18 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 		key.address = *addr
 	}
 	if task, have := resourceTasks[key]; !have {
-		task := &preloaderTask{
+		newTask := &preloaderTask{
 			address:           addr,
 			groupTasks:        make([]*groupTask, 1, 4),
 			groupTasksIndices: make([]int, 1, 4),
 			creatableIndex:    cidx,
 			creatableType:     ctype,
 		}
-		task.groupTasks[0] = wt
-		task.groupTasksIndices[0] = wt.resourcesCount
+		newTask.groupTasks[0] = wt
+		newTask.groupTasksIndices[0] = wt.resourcesCount
 
-		resourceTasks[key] = task
-		queue.enqueue(task)
+		resourceTasks[key] = newTask
+		queue.enqueue(newTask)
 	} else {
 		task.groupTasks = append(task.groupTasks, wt)
 		task.groupTasksIndices = append(task.groupTasksIndices, wt.resourcesCount)

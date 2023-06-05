@@ -112,7 +112,7 @@ func TestFieldTypes(t *testing.T) {
 	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field AssetSender;"), ep, "not an address")
 	// can't really tell if it's an addres, so 32 bytes gets further
 	TestApp(t, "itxn_begin; byte \"01234567890123456789012345678901\"; itxn_field AssetReceiver; int 1",
-		ep, "invalid Account reference")
+		ep, "unavailable Account")
 	// but a b32 string rep is not an account
 	TestApp(t, NoTrack("itxn_begin; byte \"GAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYZIZD42E\"; itxn_field AssetCloseTo;"),
 		ep, "not an address")
@@ -126,6 +126,71 @@ func TestFieldTypes(t *testing.T) {
 	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field ExtraProgramPages;"), ep, "not a uint64")
 	// get coverage on bool()
 	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Nonparticipation;"), ep, "not a uint64")
+}
+
+func TestFieldLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, _, _ := MakeSampleEnv()
+
+	intProgram := "itxn_begin; int %d; itxn_field %s; int 1"
+	goodInt := func(field string, value interface{}) {
+		TestApp(t, fmt.Sprintf(intProgram, value, field), ep)
+	}
+	badInt := func(field string, value interface{}) {
+		// error messages are different for different fields, just use a space
+		// to indicate there should be an error, it will surely match any error.
+		TestApp(t, NoTrack(fmt.Sprintf(intProgram, value, field)), ep, " ")
+	}
+	testInt := func(field string, max int) {
+		goodInt(field, 1)
+		goodInt(field, max)
+		badInt(field, max+1)
+	}
+	testBool := func(field string) {
+		goodInt(field, 0)
+		goodInt(field, 1)
+		badInt(field, 2)
+	}
+	bytesProgram := "itxn_begin; byte %#v; itxn_field %s; int 1"
+	goodBytes := func(field string, value string) {
+		TestApp(t, fmt.Sprintf(bytesProgram, value, field), ep)
+	}
+	badBytes := func(field string, value string) {
+		// error messages are different for different fields, just use a space
+		// to indicate there should be an error, it will surely match any error.
+		TestApp(t, NoTrack(fmt.Sprintf(bytesProgram, value, field)), ep, " ")
+	}
+	testBytes := func(field string, maxLen int) {
+		goodBytes(field, "")
+		goodBytes(field, strings.Repeat("a", maxLen))
+		badBytes(field, strings.Repeat("a", maxLen+1))
+	}
+
+	// header
+	badInt("TypeEnum", 0)
+	testInt("TypeEnum", len(TxnTypeNames)-1)
+	//keyreg
+	testBool("Nonparticipation")
+	//acfg
+	goodInt("ConfigAssetTotal", 1)
+	goodInt("ConfigAssetTotal", uint64(1<<63))
+	goodInt("ConfigAssetDecimals", 0)
+	testInt("ConfigAssetDecimals", int(ep.Proto.MaxAssetDecimals))
+	testBool("ConfigAssetDefaultFrozen")
+	testBytes("ConfigAssetUnitName", ep.Proto.MaxAssetUnitNameBytes)
+	testBytes("ConfigAssetName", ep.Proto.MaxAssetNameBytes)
+	testBytes("ConfigAssetURL", ep.Proto.MaxAssetURLBytes)
+	//afrz
+	testBool("FreezeAssetFrozen")
+	// appl
+	testInt("OnCompletion", len(OnCompletionNames)-1)
+	testInt("LocalNumUint", int(ep.Proto.MaxLocalSchemaEntries))
+	testInt("LocalNumByteSlice", int(ep.Proto.MaxLocalSchemaEntries))
+	testInt("GlobalNumUint", int(ep.Proto.MaxGlobalSchemaEntries))
+	testInt("GlobalNumByteSlice", int(ep.Proto.MaxGlobalSchemaEntries))
+	testInt("ExtraProgramPages", int(ep.Proto.MaxExtraAppProgramPages))
 }
 
 func appAddr(id int) basics.Address {
@@ -598,18 +663,20 @@ func TestAssetCreate(t *testing.T) {
 
 	create := `
   itxn_begin
-  int acfg
-  itxn_field TypeEnum
-  int 1000000
-  itxn_field ConfigAssetTotal
-  int 3
-  itxn_field ConfigAssetDecimals
-  byte "oz"
-  itxn_field ConfigAssetUnitName
-  byte "Gold"
-  itxn_field ConfigAssetName
-  byte "https://gold.rush/"
-  itxn_field ConfigAssetURL
+   int acfg;                   itxn_field TypeEnum
+   int 1000000;                itxn_field ConfigAssetTotal
+   int 3;                      itxn_field ConfigAssetDecimals
+   byte "oz";                  itxn_field ConfigAssetUnitName
+   byte "Gold";                itxn_field ConfigAssetName
+   byte "https://gold.rush/";  itxn_field ConfigAssetURL
+
+   // set all the addresses to something checkable
+   byte 0x01; int 31; bzero; concat; itxn_field ConfigAssetManager;
+   byte 0x02; int 31; bzero; concat; itxn_field ConfigAssetClawback;
+   byte 0x03; int 31; bzero; concat; itxn_field ConfigAssetFreeze;
+   byte 0x04; int 31; bzero; concat; itxn_field ConfigAssetReserve;
+
+   byte 0x05; int 31; bzero; concat; itxn_field ConfigAssetMetadataHash;
   itxn_submit
   int 1
 `
@@ -620,6 +687,15 @@ func TestAssetCreate(t *testing.T) {
 		// Give it enough for fee.  Recall that we don't check min balance at this level.
 		ledger.NewAccount(appAddr(888), MakeTestProto().MinTxnFee)
 		TestApp(t, create, ep)
+		assetID := basics.AssetIndex(ledger.Counter() - 1)
+		app, _, err := ledger.AssetParams(assetID)
+		require.NoError(t, err)
+		require.Equal(t, app.Manager, basics.Address{0x01})
+		require.Equal(t, app.Clawback, basics.Address{0x02})
+		require.Equal(t, app.Freeze, basics.Address{0x03})
+		require.Equal(t, app.Reserve, basics.Address{0x04})
+
+		require.Equal(t, app.MetadataHash, [32]byte{0x05})
 	})
 }
 
@@ -889,6 +965,10 @@ txn Sender; itxn_field Receiver;
 	// NewAccount overwrites the existing balance
 	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee)
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
+	TestApp(t, "itxn_begin; itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
+		"itxn_begin without itxn_submit")
+	TestApp(t, "itxn_next"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
+		"itxn_next without itxn_begin")
 }
 
 func TestInnerFeePooling(t *testing.T) {
@@ -1000,7 +1080,7 @@ func TestApplCreation(t *testing.T) {
 		"too many application args")
 
 	TestApp(t, p+strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)+s, ep,
-		"invalid Account reference")
+		"unavailable Account")
 	tx.Accounts = append(tx.Accounts, basics.Address{})
 	TestApp(t, fmt.Sprintf(p+"%s"+s,
 		strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)), ep)
@@ -3096,7 +3176,7 @@ func TestForeignAppAccountAccess(t *testing.T) {
 		// app address available starting with 7
 		var problem []string
 		if v < 7 {
-			problem = []string{"invalid Account reference " + appAddr(111).String()}
+			problem = []string{"unavailable Account " + appAddr(111).String()}
 		}
 
 		TestApp(t, `

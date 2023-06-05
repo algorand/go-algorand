@@ -77,7 +77,10 @@ func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) (stib *transacti
 				dl.eval = nil
 			} else {
 				vb := dl.endBlock()
-				stib = &vb.Block().Payset[0]
+				// It should have a stib, but don't panic here because of an earlier problem.
+				if len(vb.Block().Payset) > 0 {
+					stib = &vb.Block().Payset[0]
+				}
 			}
 		}()
 	}

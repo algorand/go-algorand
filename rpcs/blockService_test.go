@@ -122,7 +122,7 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 	require.Equal(t, roundNumberParseErrMsg, string(val))
 }
 
-// TestRedirectFallbackArchiver tests the case when the block service fallback to another in the absense of a given block.
+// TestRedirectFallbackArchiver tests the case when the block service fallback to another in the absence of a given block.
 func TestRedirectFallbackArchiver(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
