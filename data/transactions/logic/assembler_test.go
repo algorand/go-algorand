@@ -716,6 +716,14 @@ func testLine(t *testing.T, line string, ver uint64, expected string, col ...int
 	testProg(t, source, ver, exp(2, expected, col...))
 }
 
+func TestAssembleArg(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testLine(t, "arg", AssemblerMaxVersion, "arg expects 1 immediate argument", 3)
+	testLine(t, "arg x", AssemblerMaxVersion, "unable to parse argument...", 4)
+}
+
 func TestAssembleTxna(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -770,6 +778,12 @@ func TestAssembleTxna(t *testing.T) {
 	testLine(t, "gtxn 0 Accounts", AssemblerMaxVersion, "\"Accounts\" field of gtxn can only be used with 3 immediates")
 	testLine(t, "gtxn 0 Accounts", 1, "\"Accounts\" field of gtxn can only be used with 3 immediates")
 	testLine(t, "gtxn 0 Accounts 1", AssemblerMaxVersion, "")
+
+	testLine(t, "itxn 0 Accounts 1", AssemblerMaxVersion, "itxn expects 1 or 2 immediate arguments")
+	testLine(t, "gitxn 0", AssemblerMaxVersion, "gitxn expects 2 or 3 immediate arguments")
+	testLine(t, "itxn_field", 5, "itxn_field expects 1 ...")
+	testLine(t, "itxn_field ABC", 5, "itxn_field unknown field: \"ABC\"")
+	testLine(t, "itxn_field Accounts 0", 5, "itxn_field expects 1 ...")
 }
 
 func TestAssembleGlobal(t *testing.T) {
@@ -930,12 +944,15 @@ func TestAssembleBytes(t *testing.T) {
 		{`byte base32(MFRGGZDFMY)extrajunk`, "...must end at first closing parenthesis", 5},
 		{`byte base32(MFRGGZDFMY)x`, "...must end at first closing parenthesis", 5},
 		{`byte base32(MFRGGZDFMY`, "...lacks closing parenthesis", 5},
+		{`byte base64(YWJ#ZGVm)`, "...illegal base64 data at input byte 10", 5},
+		{`byte base64 YWJ#ZGVm`, "...illegal base64 data at input byte 3", 12},
 		{`byte b32 mfrggzdfmy`, "...illegal base32 data at input byte 0", 9},
 		{`byte b32 MFrggzdfmy`, "...illegal base32 data at input byte 2", 9},
 		{`byte b32(mfrggzdfmy)`, "...illegal base32 data at input byte 4", 5},
 		{`byte b32(MFrggzdfmy)`, "...illegal base32 data at input byte 6", 5},
 		{`byte base32(mfrggzdfmy)`, "...illegal base32 data at input byte 7", 5},
 		{`byte base32(MFrggzdfmy)`, "...illegal base32 data at input byte 9", 5},
+		{`byte 0xFFGG`, "...invalid byte...", 5},
 	}
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1019,9 +1036,9 @@ func TestManualCBlocks(t *testing.T) {
 	testProg(t, "addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4; bytecblock 0x44", 3, exp(1, "bytecblock following byte/addr/method"))
 
 	// But we can't complain precisely once backjumps are allowed, so we force
-	// compile to push*. (We don't analyze the CFG, so we don't know if we can
-	// use what is in the user defined block. Perhaps we could special case
-	// single cblocks at start of program.
+	// compile to push*. We don't analyze the CFG, so we don't know if we can
+	// use the user defined block. Perhaps we could special case single cblocks
+	// at the start of program, or any code dominated by a particular block.
 	checkSame(t, 4,
 		"intcblock 4 5 1; int 4; int 1; +; int 5; ==",
 		"intcblock 4 5 1; pushint 4; pushint 1; +; pushint 5; ==")
@@ -1759,6 +1776,8 @@ func TestConstantArgs(t *testing.T) {
 		testProg(t, "addr x", v, exp(1, "failed to decode address x ...", 5))
 		testProg(t, "method", v, exp(1, "method expects 1 immediate argument", 6))
 		testProg(t, "method xx yy", v, exp(1, "method expects 1 immediate argument", 10))
+		testProg(t, `method "x\x"`, v, exp(1, "non-terminated escape sequence", 7))
+		testProg(t, `method xx`, v, exp(1, "unable to parse method signature", 7))
 	}
 	for v := uint64(3); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "pushint", v, exp(1, "pushint expects 1 immediate argument"))
@@ -2327,12 +2346,12 @@ func TestStringLiteralParsing(t *testing.T) {
 
 	s = `"test\"`
 	result, err = parseStringLiteral(s)
-	require.EqualError(t, err, "non-terminated escape seq")
+	require.EqualError(t, err, "non-terminated escape sequence")
 	require.Nil(t, result)
 
 	s = `"test\x\"`
 	result, err = parseStringLiteral(s)
-	require.EqualError(t, err, "escape seq inside hex number")
+	require.EqualError(t, err, "escape sequence inside hex number")
 	require.Nil(t, result)
 
 	s = `"test\a"`
@@ -2342,7 +2361,7 @@ func TestStringLiteralParsing(t *testing.T) {
 
 	s = `"test\x10\x1"`
 	result, err = parseStringLiteral(s)
-	require.EqualError(t, err, "non-terminated hex seq")
+	require.EqualError(t, err, "non-terminated hex sequence")
 	require.Nil(t, result)
 }
 
@@ -2492,7 +2511,8 @@ func TestAssembleConstants(t *testing.T) {
 			testProg(t, "intcblock 1 2\nintc 1", v)
 
 			testLine(t, "bytec 1", v, "bytec 1 is not defined")
-			testProg(t, "bytecblock 0x01 0x02\nbytec 1", v)
+			testProg(t, "bytecblock 0x01 0x02; bytec 1", v)
+			testProg(t, "bytecblock 0x1 0x02; int 1", v, exp(1, "...odd length hex string", 11))
 		})
 	}
 }
@@ -2641,6 +2661,10 @@ func TestBuryAsm(t *testing.T) {
 	// Even when we are burying into unknown (seems repetitive, but is an easy bug)
 	testProg(t, "int 0; int 0; b LABEL; LABEL: int 1; int 2; int 4; bury 4; concat", AssemblerMaxVersion,
 		exp(1, "concat arg 1 wanted type []byte..."))
+
+	testProg(t, "intcblock 55; bury 1; int 1", AssemblerMaxVersion, exp(1, "bury 1 expects 2 stack arguments...", 14))
+	testProg(t, "intcblock 55; int 2; bury 1; int 1", AssemblerMaxVersion, exp(1, "bury 1 expects 2 stack arguments...", 21))
+	testProg(t, "int 3; int 2; bury 0; int 1", AssemblerMaxVersion, exp(1, "bury 0 always fails"))
 }
 
 func TestEqualsTypeCheck(t *testing.T) {
