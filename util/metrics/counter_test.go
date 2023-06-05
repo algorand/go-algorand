@@ -211,3 +211,23 @@ func TestGetValue(t *testing.T) {
 	c.Inc(nil)
 	require.Equal(t, uint64(2), c.GetUint64Value())
 }
+
+func TestGetValueForLables(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+	c.Deregister(nil)
+
+	labels := map[string]string{"a": "b"}
+	require.Equal(t, uint64(0), c.GetUint64ValueForLabels(labels))
+	c.Inc(labels)
+	require.Equal(t, uint64(1), c.GetUint64ValueForLabels(labels))
+	c.Inc(labels)
+	require.Equal(t, uint64(2), c.GetUint64ValueForLabels(labels))
+	// confirm that the value is not shared between labels
+	c.Inc(nil)
+	require.Equal(t, uint64(2), c.GetUint64ValueForLabels(labels))
+	labels2 := map[string]string{"a": "c"}
+	c.Inc(labels2)
+	require.Equal(t, uint64(1), c.GetUint64ValueForLabels(labels2))
+}
