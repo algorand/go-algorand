@@ -520,6 +520,10 @@ type Local struct {
 	// TxIncomingFilterMaxSize sets the maximum size for the de-duplication cache used by the incoming tx filter
 	// only relevant if TxIncomingFilteringFlags is non-zero
 	TxIncomingFilterMaxSize uint64 `version[28]:"500000"`
+
+	// BlockServiceHTTPMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
+	// When it exceeds this capacity, it redirects the block requests to a different node
+	BlockServiceHTTPMemCap uint64 `version[28]:"500000000"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
