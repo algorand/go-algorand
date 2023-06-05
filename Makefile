@@ -80,9 +80,6 @@ endif
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
-COVER_PROFILE  := $(SRCPATH)/coverage.txt
-COVER_OUT      := $(SRCPATH)/cover.out
-
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
 		 -X github.com/algorand/go-algorand/config.Branch=$(BUILDBRANCH) \
@@ -92,22 +89,10 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
-GOMOD_DIRS := $(sort $(shell find . -name 'go.mod' -not -path './cmd/partitiontest_linter/*' -exec dirname {} \;))
-GOMOD_DIRS_ALL := $(sort $(shell find . -name 'go.mod' -exec dirname {} \;))
-
-# Template for running tests on eligible sub go modules.
-# USAGE:
-# $(call SUBMODULE_TESTER, <test command>)
-define SUBMODULE_TESTER
-for dir in $(GOMOD_DIRS); do \
-	pushd $$dir && \
-	units=$$(go list ./... | grep -v /go-algorand/test/ ) && \
-	$(1) $$units && \
-	popd ; \
-done
-endef
-
+UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
+
+GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types
 
 MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
 
@@ -131,13 +116,12 @@ check_go_version:
 		exit 1; \
 	fi
 
-# for compatibility with codegen_verification.sh on CI, use cd instead of pushd/popd
 tidy: check_go_version
-	for dir in $(GOMOD_DIRS_ALL); do \
-		cd $$dir && \
-		pwd && \
-		go mod tidy -compat=$(GOLANG_VERSION_SUPPORT) && \
-		cd - ; \
+	@echo "Tidying go-algorand"
+	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
+	@for dir in $(GOMOD_DIRS); do \
+		echo "Tidying $$dir" && \
+		(cd $$dir && go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)); \
 	done
 
 check_shell:
@@ -145,15 +129,12 @@ check_shell:
 
 sanity: fix lint fmt tidy
 
-# cover all eligible sub go modules:
 cover:
-	$(call SUBMODULE_TESTER,go test $(GOTAGS) -coverprofile=$(COVER_OUT))
+	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
 
-# profile only the top-level go module:
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
 
-# generate only the top-level go module:
 generate: deps
 	PATH=$(GOPATH1)/bin:$$PATH go generate ./...
 
@@ -270,21 +251,17 @@ $(GOPATH1)/bin/ddconfig.sh: scripts/ddconfig.sh
 $(GOPATH1)/bin/%:
 	cp -f $< $@
 
-# run-test on all eligible sub go modules:
-run-test:
-	$(call SUBMODULE_TESTER,$(GOTESTCOMMAND) $(GOTAGS) -race -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic)
+test: build
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
-test: build run-test
-
-# benchmark all eligible sub go modules:
 benchcheck: build
-	$(call SUBMODULE_TESTER,$(GOTESTCOMMAND) -race -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h)
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h
 
-fulltest: build-race run-test
+fulltest: build-race
+	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
-# shorttest all eligible sub go modules:
 shorttest: build-race
-	$(call SUBMODULE_TESTER,$(GOTESTCOMMAND) $(GOTAGS) -short -race -timeout 1h -coverprofile=$(COVER_PROFILE) -covermode=atomic)
+	$(GOTESTCOMMAND) $(GOTAGS) -short -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
