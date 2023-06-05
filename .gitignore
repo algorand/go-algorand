@@ -74,7 +74,5 @@ tools/block-generator/block-generator
 
 # cross repo types tool binary
 tools/x-repo-types/x-repo-types
-
-# ZZZZ
 # python virtual environment
 .venv
