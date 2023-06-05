@@ -3946,6 +3946,8 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount)
 }
 
+// Test functionality that allows a node to discard a block response that it did not request or that arrived too late.
+// Both cases are tested here by having A send unexpected, late responses to nodes B and C respectively.
 func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -3970,7 +3972,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 	require.Equal(t, 1, len(netA.peers))
 
 	// Create a buffer to monitor log output from netB
@@ -3986,7 +3988,13 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 		ctx:          context.Background(),
 	}
 	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(t,
+		func() bool {
+			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "protocol"}) == 1
+		},
+		1*time.Second,
+		50*time.Millisecond,
+	)
 
 	// Stop and confirm that we hit the case of disconnecting a peer for sending an unrequested block response
 	netB.Stop()
@@ -4004,7 +4012,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 
 	netA.wg.Add(1)
 	netA.tryConnect(addrC, gossipC)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 	require.Equal(t, 1, len(netA.peers))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -4015,11 +4023,16 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 			"blockData",
 			[]byte("fake round value")),
 	}
-	// Send a request for a block and cancel it immediately
+	// Send a request for a block and cancel it after the handler has been registered
 	go func() {
 		netC.peers[0].Request(ctx, protocol.UniEnsBlockReqTag, topics)
 	}()
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(
+		t,
+		func() bool { return netC.peers[0].hasOutstandingRequests() },
+		1*time.Second,
+		50*time.Millisecond,
+	)
 	cancel()
 
 	// confirm that the request was cancelled but that we have registered that we have sent a request

@@ -168,6 +168,8 @@ const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
 const disconnectDuplicateConnection disconnectReason = "DuplicateConnection"
 const disconnectBadIdentityData disconnectReason = "BadIdentityData"
+const disconnectUnexpectedTopicResp disconnectReason = "UnexpectedTopicResp"
+const disconnectExpiredTopicResp disconnectReason = "ExpiredTopicResp"
 
 const lastSentRequestTimeKey string = "lsrt"
 
@@ -519,14 +521,17 @@ func (wp *wsPeer) readLoop() {
 			if !ok {
 				wp.net.log.Errorf("wsPeer readloop: peer %s sent TS response without a request", wp.conn.RemoteAddr().String())
 				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
+				cleanupCloseError = disconnectUnexpectedTopicResp
 				return
 			} else if time.Since(lastSentTime) > blockResponseDisconnectThreshold {
 				wp.net.log.Errorf("wsPeer readloop: peer %s sent a very stale TS response. lastRequestTime :%d", wp.conn.RemoteAddr().String(), lastSentTime.UnixNano())
 				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
+				cleanupCloseError = disconnectExpiredTopicResp
 				return
 			}
+			var n int64
 			// Peer sent us a response to a request we made but we've already timed out	-- discard
-			n, err := io.Copy(io.Discard, reader)
+			n, err = io.Copy(io.Discard, reader)
 			if err != nil {
 				wp.net.log.Warnf("wsPeer readloop: could not discard timed-out TS message from %s : %s", wp.conn.RemoteAddr().String(), err)
 				continue
