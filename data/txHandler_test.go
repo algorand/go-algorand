@@ -1175,15 +1175,10 @@ func TestTxHandlerProcessIncomingRelayDups(t *testing.T) {
 	}
 
 	// wait until txn propagates in handler
-	var timeout time.Duration
-	waitTime := 10 * time.Millisecond
-	for tp.PendingCount() < 1 {
-		time.Sleep(waitTime)
-		timeout += waitTime
-		if timeout >= time.Second {
-			require.Fail(t, "timed out waiting for txn to propagate")
-		}
-	}
+	require.Eventually(t, func() bool {
+		return tp.PendingCount() >= 1
+	}, time.Second, 10*time.Millisecond)
+
 	// there is almost no delay between tp.Remember and net.RelayArray but still wait until the goroutine finishes
 	handler.ctxCancel()
 	handler.backlogWg.Wait()
