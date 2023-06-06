@@ -142,6 +142,8 @@ var networkPrioBatchesPPWithoutCompression = metrics.MakeCounter(metrics.MetricN
 var networkPrioPPCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_compressed_size_total", Description: "cumulative size of all compressed PP"})
 var networkPrioPPNonCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_non_compressed_size_total", Description: "cumulative size of all non-compressed PP"})
 
+var networkCatchupMessagesDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_ue_messages_dropped", Description: "number of (UE) block catchup reuqest messages dropped due to being at byte limit"})
+
 // peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to complete.
 const peerDisconnectionAckDuration = 5 * time.Second
 
@@ -468,6 +470,13 @@ type WebsocketNetwork struct {
 
 	// resolveSRVRecords is a function that resolves SRV records for a given service, protocol and name
 	resolveSRVRecords func(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (addrs []string, err error)
+
+	// topicBytesUsed is the number of bytes of topic responses (currently only blocks) currently in memory being served to peers. This is used to limit the number of blocks that websocket
+	// peers can request at once.
+	topicBytesUsed int64
+
+	// topicBytesCap is the max number of topic response bytes (currently only blocks) we can serve to peers at once.
+	topicBytesCap int64
 }
 
 const (
@@ -816,6 +825,10 @@ func (wn *WebsocketNetwork) setup() {
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
 		wn.RegisterMessageInterest(protocol.StateProofSigTag)
+	}
+
+	if wn.config.BlockServiceWSMemCap > 0 {
+		wn.topicBytesCap = wn.config.BlockServiceWSMemCap
 	}
 }
 

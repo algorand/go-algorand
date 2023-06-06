@@ -409,6 +409,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
+		atomic.AddInt64(&wp.net.topicBytesUsed, int64(len(msg[0].data)))
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
@@ -577,9 +578,14 @@ func (wp *wsPeer) readLoop() {
 			atomic.AddUint64(&wp.avMessageCount, 1)
 		case protocol.ProposalPayloadTag:
 			atomic.AddUint64(&wp.ppMessageCount, 1)
+		case protocol.UniEnsBlockReqTag:
+			if atomic.LoadInt64(&wp.net.topicBytesUsed) > wp.net.topicBytesCap {
+				networkCatchupMessagesDropped.Inc(nil)
+				continue // drop message, since we are over capacity for blocks we are currently serving
+			}
 		// the remaining valid tags: no special handling here
 		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
-			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
+			protocol.StateProofSigTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
 		default: // unrecognized tag
 			unknownProtocolTagMessagesTotal.Inc(nil)
 			atomic.AddUint64(&wp.unkMessageCount, 1)
@@ -700,6 +706,11 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 }
 
 func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
+	// the tags are always 2 char long; note that this is safe since it's only being used for messages that we have generated locally.
+	tag := protocol.Tag(msg.data[:2])
+	if tag == protocol.TopicMsgRespTag {
+		defer atomic.AddInt64(&wp.net.topicBytesUsed, -int64(len(msg.data)))
+	}
 	if len(msg.data) > maxMessageLength {
 		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
@@ -711,8 +722,6 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		wp.sendMessageTag = msg.msgTags
 		return disconnectReasonNone
 	}
-	// the tags are always 2 char long; note that this is safe since it's only being used for messages that we have generated locally.
-	tag := protocol.Tag(msg.data[:2])
 	if !wp.sendMessageTag[tag] {
 		// the peer isn't interested in this message.
 		return disconnectReasonNone
@@ -888,6 +897,14 @@ func (wp *wsPeer) Close(deadline time.Time) {
 		err = wp.conn.CloseWithoutFlush()
 		if err != nil {
 			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
+		}
+	}
+
+	for msgs := range wp.sendBufferBulk {
+		for _, msg := range msgs.msgs {
+			if protocol.Tag(msg.data[:2]) == protocol.TopicMsgRespTag {
+				atomic.AddInt64(&wp.net.topicBytesUsed, -int64(len(msg.data)))
+			}
 		}
 	}
 	// now call all registered closers
