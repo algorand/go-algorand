@@ -119,3 +119,7 @@ func TestCrossRepoTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestPleaseFail(t *testing.T) {
+	require.Fail(t, "This is a test failure")
+}
