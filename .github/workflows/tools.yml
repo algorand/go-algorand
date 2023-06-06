@@ -29,13 +29,17 @@ jobs:
         run: |
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
-      - name: Save go version to ENV's
-        run: |
-          echo "go_version=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      # - name: Save go version to ENV's
+      #   run: |
+      #     echo "go_version=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      # - name: Install go version
+      #   uses: actions/setup-go@v3
+      #   with:
+      #     go-version: ${{ env.go_version }}
       - name: Install go version
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ env.go_version }}
+          go-version: $(./scripts/get_golang_version.sh)"
       - name: Test tools/block-generator
         run: |
           cd tools/block-generator
