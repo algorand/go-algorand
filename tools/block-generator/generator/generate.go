@@ -438,8 +438,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	var cert rpcs.EncodedBlockCert
 	if g.round == 0 {
 		// we'll write genesis block / offset round for non-empty database
-		block, _, _ := g.ledger.BlockCert(basics.Round(round - g.roundOffset))
-		cert.Block = block
+		cert.Block, _, _ = g.ledger.BlockCert(basics.Round(round - g.roundOffset))
 	} else {
 		// generate a block
 		cert.Block.BlockHeader = bookkeeping.BlockHeader{
