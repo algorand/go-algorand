@@ -165,12 +165,12 @@ func (c *txSaltedCache) moreSalt() {
 func (c *txSaltedCache) Remix() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.innerSwap(true)
+	c.innerSwap()
 }
 
 // innerSwap rotates cache pages and update the salt used.
 // locking semantic: write lock must be held
-func (c *txSaltedCache) innerSwap(scheduled bool) {
+func (c *txSaltedCache) innerSwap() {
 	c.prevSalt = c.curSalt
 	c.prev = c.cur
 
@@ -207,9 +207,9 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, *sync.Map, *map[
 	return &d, nil, nil, false
 }
 
-// CheckAndPut adds msg into a cache if not found
-// returns a hashing key used for insertion if the message not found.
-func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Digest, *sync.Map, bool) {
+// CheckAndPut adds (msg, sender) pair into a cache. The sender is appended into values if msg is already in the cache.
+// Returns a hashing key used for insertion and its associated map of values. The boolean flag `found` is false if the msg not in the cache.
+func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (d *crypto.Digest, vals *sync.Map, found bool) {
 	c.mu.RLock()
 	d, vals, page, found := c.innerCheck(msg)
 	salt := c.curSalt
@@ -252,16 +252,16 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (*crypto.Di
 	}
 
 	// at this point we know that either:
-	// 1. the message is not in the cache
+	// 1. the message is not in the cache so do not check senderFound again
 	// 2. the message is in the cache but from other senders
-	if found && !senderFound {
+	if found {
 		vals.Store(sender, struct{}{})
 		(*page)[*d] = vals
 		return d, vals, true
 	}
 
 	if len(c.cur) >= c.maxSize {
-		c.innerSwap(false)
+		c.innerSwap()
 		ptr := saltedPool.Get()
 		defer saltedPool.Put(ptr)
 
