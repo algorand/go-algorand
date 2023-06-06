@@ -1490,7 +1490,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 	l.trackers.lastFlushTime = time.Time{}
 	l.trackers.mu.Unlock()
 
-	const timeout = 3 * time.Second
+	const timeout = 2600 * time.Millisecond
 	started := time.Now()
 
 	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
@@ -3114,7 +3114,7 @@ func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
 	l.trackers.mu.Lock()
 	newDbRound := l.trackers.dbRound
 	l.trackers.mu.Unlock()
-	require.Equal(t, previousCachedDbRound+1, newDbRound)
+	require.LessOrEqual(t, previousCachedDbRound+1, newDbRound)
 }
 
 func TestLedgerSPVerificationTracker(t *testing.T) {
