@@ -418,7 +418,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		fmt.Printf(
 			"Received round request %d, but already at virtual round %d (== nextRound == %d + %d). Not finishing round.\n",
 			round,
-			g.round+g.roundOffset,
+			nextRound,
 			g.round,
 			g.roundOffset,
 		)
@@ -433,7 +433,6 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	}
 	// round == nextRound case
 
-	// advance the round at the end
 	numTxnForBlock := g.txnForRound(g.round)
 
 	var cert rpcs.EncodedBlockCert
