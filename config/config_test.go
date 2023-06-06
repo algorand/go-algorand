@@ -450,7 +450,7 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 	}
 }
 
-func TestLocal_ValidateDNSBootstrapArray_StopOnError(t *testing.T) {
+func TestLocal_ValidateDNSBootstrapArray_StopsOnError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var dnsBootstrapIDWithInvalidNameMacroUsage = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.((network|net)"
