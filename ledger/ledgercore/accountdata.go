@@ -68,6 +68,7 @@ type OnlineAccountData struct {
 }
 
 // ToAccountDataFromGenesisAccountData returns ledgercore.AccountData from basics.GenesisAccountData
+// This is currently only used in testing utilities in ledger/eval_test.
 func ToAccountDataFromGenesisAccountData(gad basics.GenesisAccountData) AccountData {
 	return AccountData{
 		AccountBaseData: AccountBaseData{
