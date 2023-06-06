@@ -401,7 +401,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if round+1 < virtualRound || virtualRound < round {
 		return fmt.Errorf("generator only supports sequential block access. Expected %d or %d but received request for %d", virtualRound-1, virtualRound, round)
 	}
-	if round == virtualRound-1 {
+	if round + 1 == virtualRound {
 		fmt.Printf(
 			"Received round request %d, but already at virtualRound %d (== g.round + g.roundOffset == %d + %d). Not finishing round.\n",
 			round,
