@@ -415,13 +415,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 	if round == cachedRound {
 		// one round behind, so write the cached block (if non-empty)
-		fmt.Printf(
-			"Received round request %d, but already at virtual round %d (== nextRound == %d + %d). Not finishing round.\n",
-			round,
-			nextRound,
-			g.round,
-			g.roundOffset,
-		)
+		fmt.Printf("Received round request %d, but nextRound=%d. Not finishing round.\n", round, nextRound)
 		if len(g.latestBlockMsgp) != 0 {
 			// write the msgpack bytes for a block
 			_, err := output.Write(g.latestBlockMsgp)
