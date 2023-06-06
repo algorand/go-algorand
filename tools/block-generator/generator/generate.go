@@ -379,8 +379,8 @@ func (g *generator) finishRound(txnCount uint64) {
 	g.pendingAssets = nil
 }
 
-// WriteBlock usually generates a block full of new transactions and writes it to the writer.
-// It also caches one round to allow the caller to request the same round multiple times.
+// WriteBlock generates a block full of new transactions and writes it to the writer.
+// The most recent round is cached, allowing requests to the same round multiple times.
 // This is motivated by the fact that Conduit's logic requests the initial round during
 // its Init() for catchup purposes, and once again when it starts ingesting blocks.
 // There are a few constraints on the generator arising from the fact that
