@@ -169,11 +169,6 @@ const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
 const disconnectDuplicateConnection disconnectReason = "DuplicateConnection"
 const disconnectBadIdentityData disconnectReason = "BadIdentityData"
 const disconnectUnexpectedTopicResp disconnectReason = "UnexpectedTopicResp"
-const disconnectExpiredTopicResp disconnectReason = "ExpiredTopicResp"
-
-// If the peer sends us a block response after this threshold
-// we should disconnect from it
-const blockResponseDisconnectThreshold = 60 * time.Second
 
 // Response is the structure holding the response from the server
 type Response struct {
