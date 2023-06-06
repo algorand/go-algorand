@@ -631,7 +631,7 @@ var OpSpecs = []OpSpec{
 
 	// AVM "effects"
 	{0xb0, "log", opLog, proto("b:"), 5, only(ModeApp)},
-	{0xb1, "itxn_begin", opTxBegin, proto(":"), 5, only(ModeApp)},
+	{0xb1, "itxn_begin", opItxnBegin, proto(":"), 5, only(ModeApp)},
 	{0xb2, "itxn_field", opItxnField, proto("a:"), 5, immediates("f").typed(typeTxField).field("f", &TxnFields).only(ModeApp).assembler(asmItxnField)},
 	{0xb3, "itxn_submit", opItxnSubmit, proto(":"), 5, only(ModeApp)},
 	{0xb4, "itxn", opItxn, proto(":a"), 5, field("f", &TxnScalarFields).only(ModeApp).assembler(asmItxn)},

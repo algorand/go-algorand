@@ -690,7 +690,7 @@ func TestStreamToBatchCtxCancelPoolQueue(t *testing.T) { //nolint:paralleltest /
 	// cancel the ctx as the sig is not yet sent to the exec pool
 	// the test might sporadically fail if between sending the txn above
 	// and the cancelation, 2 x waitForNextTxnDuration elapses (10ms)
-	time.Sleep(12)
+	time.Sleep(12 * time.Millisecond)
 	go func() {
 		// wait a bit before releasing the tasks, so that the verificationPool ctx first gets canceled
 		time.Sleep(20 * time.Millisecond)
