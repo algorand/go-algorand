@@ -31,7 +31,7 @@ jobs:
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
       - name: Determine Go version
         id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV      
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Install go version
         uses: actions/setup-go@v3
         with:
