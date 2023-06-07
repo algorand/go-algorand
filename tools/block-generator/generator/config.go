@@ -78,7 +78,7 @@ const (
 
 	assetTotal uint64 = 100000000000000000
 
-	consensusTimeMilli int64  = 4500
+	consensusTimeMilli int64  = 3300
 	startingTxnCounter uint64 = 1000
 )
 

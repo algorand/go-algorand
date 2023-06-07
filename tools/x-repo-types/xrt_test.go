@@ -31,6 +31,8 @@ type testCase struct {
 }
 
 func TestCrossRepoTypes(t *testing.T) {
+	// NOTE: the heavy lifting is done by the first test case, so it's better to apply PartitionTest to the
+	// entire test as opposed to partitioning each test case.
 	partitiontest.PartitionTest(t)
 
 	testCases := []testCase{
@@ -62,6 +64,22 @@ func TestCrossRepoTypes(t *testing.T) {
 			yType:      "Block",
 			skip:       true,
 			skipReason: `Several issues. For example: LEVEL 5 of goal bookkeeping.Block is EvalDelta with field [SharedAccts](codec:"sa,allocbound=config.MaxEvalDeltaAccounts") VS SDK types.EvalDelta is missing SharedAccts field`,
+		},
+		{
+			name:    "goal-v-sdk-eval-delta",
+			xPkg:    "github.com/algorand/go-algorand/data/transactions",
+			xType:   "EvalDelta",
+			yPkg:    "github.com/algorand/go-algorand-sdk/v2/types",
+			yBranch: "develop",
+			yType:   "EvalDelta",
+		},
+		{
+			name:    "goal-v-sdk-consensus",
+			xPkg:    "github.com/algorand/go-algorand/config",
+			xType:   "ConsensusParams",
+			yPkg:    "github.com/algorand/go-algorand-sdk/v2/protocol/config",
+			yBranch: "develop",
+			yType:   "ConsensusParams",
 		},
 		{
 			name:    "goal-v-sdk-blockheader",

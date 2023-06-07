@@ -125,6 +125,9 @@ type generator struct {
 	// ledger
 	ledger *ledger.Ledger
 
+	// cache the latest written block
+	latestBlockMsgp []byte
+
 	roundOffset uint64
 }
 
@@ -501,114 +504,120 @@ func (g *generator) WriteAccount(output io.Writer, accountString string) error {
 // ---- transaction generation ----
 
 // WriteBlock generates a block full of new transactions and writes it to the writer.
+// The most recent round is cached, allowing requests to the same round multiple times.
+// This is motivated by the fact that Conduit's logic requests the initial round during
+// its Init() for catchup purposes, and once again when it starts ingesting blocks.
 // There are a few constraints on the generator arising from the fact that
 // blocks must be generated sequentially and that a fixed offset between the
 // database round and the generator round is presumed:
 //   - requested round < offset ---> error
 //   - requested round == offset: the generator will provide a genesis block or offset block
-//     and be lenient in allowing g.round to be non-zero, but in that case it won't advance
-//     its round any further, as the block importer may request the genesis repeatedly
-//   - requested round != generator's round + offset ---> error:
-//     as opposed to the previous, no leniency is provided in this case.
+//   - requested round == generator's round + offset ---> generate a block,
+//		advance the round, and cache the block in case of repeated requests.
+//   - requested round == generator's round + offset - 1 ---> write the cached block
+//		but do not advance the round.
+//   - requested round < generator's round + offset - 1 ---> error
+//
+// NOTE: nextRound represents the generator's expectations about the next database round.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if round < g.roundOffset {
 		return fmt.Errorf("cannot generate block for round %d, already in database", round)
 	}
-	numTxnForBlock := g.txnForRound(g.round)
 
-	// return genesis block. offset round for non-empty database
-	if round == g.roundOffset {
-		// write the msgpack bytes for a block
-		block, _, _ := g.ledger.BlockCert(basics.Round(round - g.roundOffset))
-		// return the block with the requested round number
-		block.BlockHeader.Round = basics.Round(round)
-		encodedblock := rpcs.EncodedBlockCert{Block: block}
-		blk := protocol.EncodeMsgp(&encodedblock)
-		// write the msgpack bytes for a block
-		_, err := output.Write(blk)
-		if err != nil {
-			return err
-		}
+	nextRound := g.round + g.roundOffset
+	cachedRound := nextRound - 1
 
-		// only advance the round if the requestor is caught up
-		if g.round == 0 {
-			g.finishRound(numTxnForBlock)
-		} else {
-			fmt.Printf("Received round request %d == g.roundOffset but already advanced g.round=%d. Not finishing round.\n", round, g.round)
+	if round != nextRound && round != cachedRound {
+		return fmt.Errorf(
+			"generator only supports sequential block access. Expected %d or %d but received request for %d",
+			cachedRound,
+			nextRound,
+			round,
+		)
+	}
+	// round must either be nextRound or cachedRound
+
+	if round == cachedRound {
+		// one round behind, so write the cached block (if non-empty)
+		fmt.Printf("Received round request %d, but nextRound=%d. Not finishing round.\n", round, nextRound)
+		if len(g.latestBlockMsgp) != 0 {
+			// write the msgpack bytes for a block
+			_, err := output.Write(g.latestBlockMsgp)
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}
+	// round == nextRound case
 
-	if round != g.round+g.roundOffset {
-		return fmt.Errorf("generator only supports sequential block access. Expected %d but received request for %d", g.round+g.roundOffset, round)
-	}
+	numTxnForBlock := g.txnForRound(g.round)
 
-	header := bookkeeping.BlockHeader{
-		Round:          basics.Round(g.round),
-		Branch:         bookkeeping.BlockHash{},
-		Seed:           committee.Seed{},
-		TxnCommitments: bookkeeping.TxnCommitments{NativeSha512_256Commitment: crypto.Digest{}},
-		TimeStamp:      g.timestamp,
-		GenesisID:      g.genesisID,
-		GenesisHash:    g.genesisHash,
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:                   g.feeSink,
-			RewardsPool:               g.rewardsPool,
-			RewardsLevel:              0,
-			RewardsRate:               0,
-			RewardsResidue:            0,
-			RewardsRecalculationRound: 0,
-		},
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: g.protocol,
-		},
-		UpgradeVote:        bookkeeping.UpgradeVote{},
-		TxnCounter:         g.txnCounter + numTxnForBlock,
-		StateProofTracking: nil,
-	}
-
-	// Generate the transactions
-	transactions := make([]transactions.SignedTxnInBlock, 0, numTxnForBlock)
-
-	for i := uint64(0); i < numTxnForBlock; i++ {
-		txn, ad, err := g.generateTransaction(g.round, i)
-		if err != nil {
-			panic(fmt.Sprintf("failed to generate transaction: %v\n", err))
+	var cert rpcs.EncodedBlockCert
+	if g.round == 0 {
+		// we'll write genesis block / offset round for non-empty database
+		cert.Block, _, _ = g.ledger.BlockCert(basics.Round(round - g.roundOffset))
+	} else {
+		// generate a block
+		cert.Block.BlockHeader = bookkeeping.BlockHeader{
+			Round:          basics.Round(g.round),
+			Branch:         bookkeeping.BlockHash{},
+			Seed:           committee.Seed{},
+			TxnCommitments: bookkeeping.TxnCommitments{NativeSha512_256Commitment: crypto.Digest{}},
+			TimeStamp:      g.timestamp,
+			GenesisID:      g.genesisID,
+			GenesisHash:    g.genesisHash,
+			RewardsState: bookkeeping.RewardsState{
+				FeeSink:                   g.feeSink,
+				RewardsPool:               g.rewardsPool,
+				RewardsLevel:              0,
+				RewardsRate:               0,
+				RewardsResidue:            0,
+				RewardsRecalculationRound: 0,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: g.protocol,
+			},
+			UpgradeVote:        bookkeeping.UpgradeVote{},
+			TxnCounter:         g.txnCounter + numTxnForBlock,
+			StateProofTracking: nil,
 		}
-		stib, err := header.EncodeSignedTxn(txn, ad)
-		if err != nil {
-			panic(fmt.Sprintf("failed to encode transaction: %v\n", err))
+
+		// Generate the transactions
+		transactions := make([]transactions.SignedTxnInBlock, 0, numTxnForBlock)
+		for i := uint64(0); i < numTxnForBlock; i++ {
+			txn, ad, err := g.generateTransaction(g.round, i)
+			if err != nil {
+				panic(fmt.Sprintf("failed to generate transaction: %v\n", err))
+			}
+			stib, err := cert.Block.BlockHeader.EncodeSignedTxn(txn, ad)
+			if err != nil {
+				panic(fmt.Sprintf("failed to encode transaction: %v\n", err))
+			}
+			transactions = append(transactions, stib)
 		}
-		transactions = append(transactions, stib)
-	}
 
-	if numTxnForBlock != uint64(len(transactions)) {
-		panic("Unexpected number of transactions.")
-	}
+		if numTxnForBlock != uint64(len(transactions)) {
+			panic("Unexpected number of transactions.")
+		}
 
-	cert := rpcs.EncodedBlockCert{
-		Block: bookkeeping.Block{
-			BlockHeader: header,
-			Payset:      transactions,
-		},
-		Certificate: agreement.Certificate{},
-	}
+		cert.Block.Payset = transactions
+		cert.Certificate = agreement.Certificate{} // empty certificate for clarity
 
-	err := g.ledger.AddBlock(cert.Block, cert.Certificate)
-	if err != nil {
-		return err
+		err := g.ledger.AddBlock(cert.Block, cert.Certificate)
+		if err != nil {
+			return err
+		}
 	}
-	// return the block with the requested round number
 	cert.Block.BlockHeader.Round = basics.Round(round)
-	block := protocol.EncodeMsgp(&cert)
-	if err != nil {
-		return err
-	}
+
 	// write the msgpack bytes for a block
-	_, err = output.Write(block)
+	g.latestBlockMsgp = protocol.EncodeMsgp(&cert)
+	_, err := output.Write(g.latestBlockMsgp)
 	if err != nil {
 		return err
 	}
+
 	g.finishRound(numTxnForBlock)
 	return nil
 }

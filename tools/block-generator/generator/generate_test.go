@@ -276,51 +276,74 @@ func TestWriteRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 
-	prepWriter := func() ([]byte, *bytes.Buffer, rpcs.EncodedBlockCert) {
-		var data []byte
-		writer := bytes.NewBuffer(data)
-		return data, writer, rpcs.EncodedBlockCert{}
+	prepBuffer := func() (*bytes.Buffer, rpcs.EncodedBlockCert) {
+		return bytes.NewBuffer([]byte{}), rpcs.EncodedBlockCert{}
 	}
 
 	// Initial conditions of g from makePrivateGenerator:
 	require.Equal(t, uint64(0), g.round)
 
-	data, writer, block := prepWriter()
-	err := g.WriteBlock(writer, 0)
+	// Round 0:
+	blockBuff, block0_1 := prepBuffer()
+	err := g.WriteBlock(blockBuff, 0)
 	require.NoError(t, err)
 
 	require.Equal(t, uint64(1), g.round)
-	protocol.Decode(data, &block)
-	require.Equal(t, block, rpcs.EncodedBlockCert{})
+	protocol.Decode(blockBuff.Bytes(), &block0_1)
+	require.Equal(t, "blockgen-test", block0_1.Block.BlockHeader.GenesisID)
+	require.Equal(t, basics.Round(0), block0_1.Block.BlockHeader.Round)
+	require.NotNil(t, g.ledger)
+	require.Equal(t, basics.Round(0), g.ledger.Latest())
 
-	// WriteBlocks at the offset are special: they only advance the round
-	// the first time when called.
-	data, writer, block = prepWriter()
-	err = g.WriteBlock(writer, 0)
+	// WriteBlocks only advances the _internal_ round
+	// the first time called for a particular _given_ round
+	blockBuff, block0_2 := prepBuffer()
+	err = g.WriteBlock(blockBuff, 0)
 	require.NoError(t, err)
-
 	require.Equal(t, uint64(1), g.round)
-	protocol.Decode(data, &block)
-	require.Equal(t, block, rpcs.EncodedBlockCert{})
+	protocol.Decode(blockBuff.Bytes(), &block0_2)
+	require.Equal(t, block0_1, block0_2)
+	require.NotNil(t, g.ledger)
+	require.Equal(t, basics.Round(0), g.ledger.Latest())
 
-	// Second time still at offset
-	data, writer, block = prepWriter()
-	err = g.WriteBlock(writer, 1)
+	blockBuff, block0_3 := prepBuffer()
+	err = g.WriteBlock(blockBuff, 0)
 	require.NoError(t, err)
+	require.Equal(t, uint64(1), g.round)
+	protocol.Decode(blockBuff.Bytes(), &block0_3)
+	require.Equal(t, block0_1, block0_3)
+	require.NotNil(t, g.ledger)
+	require.Equal(t, basics.Round(0), g.ledger.Latest())
 
+	// Round 1:
+	blockBuff, block1_1 := prepBuffer()
+	err = g.WriteBlock(blockBuff, 1)
+	require.NoError(t, err)
 	require.Equal(t, uint64(2), g.round)
-	protocol.Decode(data, &block)
-	require.Len(t, block.Block.Payset, int(g.config.TxnPerBlock))
+	protocol.Decode(blockBuff.Bytes(), &block1_1)
+	require.Equal(t, "blockgen-test", block1_1.Block.BlockHeader.GenesisID)
+	require.Equal(t, basics.Round(1), block1_1.Block.BlockHeader.Round)
+	require.Len(t, block1_1.Block.Payset, int(g.config.TxnPerBlock))
 	require.NotNil(t, g.ledger)
 	require.Equal(t, basics.Round(1), g.ledger.Latest())
+	_, err = g.ledger.GetStateDeltaForRound(1)
+	require.NoError(t, err)
 
+	blockBuff, block1_2 := prepBuffer()
+	err = g.WriteBlock(blockBuff, 1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), g.round)
+	protocol.Decode(blockBuff.Bytes(), &block1_2)
+	require.Equal(t, block1_1, block1_2)
+	require.NotNil(t, g.ledger)
+	require.Equal(t, basics.Round(1), g.ledger.Latest())
 	_, err = g.ledger.GetStateDeltaForRound(1)
 	require.NoError(t, err)
 
 	// request a block that is several rounds ahead of the current round
-	err = g.WriteBlock(writer, 10)
+	err = g.WriteBlock(blockBuff, 10)
 	require.NotNil(t, err)
-	require.Equal(t, err.Error(), "generator only supports sequential block access. Expected 2 but received request for 10")
+	require.Equal(t, err.Error(), "generator only supports sequential block access. Expected 1 or 2 but received request for 10")
 }
 
 func TestWriteRoundWithPreloadedDB(t *testing.T) {
@@ -350,7 +373,7 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 			dbround: 1,
 			round:   10,
 			genesis: bookkeeping.Genesis{Network: "generator-test3"},
-			err:     fmt.Errorf("generator only supports sequential block access. Expected 2 but received request for 10"),
+			err:     fmt.Errorf("generator only supports sequential block access. Expected 1 or 2 but received request for 10"),
 		},
 		{
 			name:    "preloaded database starting at 10",
