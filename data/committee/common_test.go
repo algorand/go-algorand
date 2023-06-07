@@ -79,8 +79,6 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 
 		startamt := uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))
 		short := addr
-		// Use AccountData here so it satisfies the interface that implements
-		// OnlineAccountData()
 		genesis[short] = basics.AccountData{
 			GenesisAccountData: basics.GenesisAccountData{
 				Status:      basics.Online,
