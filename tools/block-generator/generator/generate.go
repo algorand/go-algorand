@@ -592,6 +592,25 @@ func (g *generator) generatePaymentTxnInternal(selection TxTypeID, round uint64,
 
 // ---- 2. Asset Transactions ----
 
+func (g *generator) generateAssetTxn(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
+	start := time.Now()
+	selection, err := weightedSelection(g.assetTxWeights, getAssetTxOptions(), assetXfer)
+	if err != nil {
+		return transactions.SignedTxn{}, transactions.ApplyData{}, err
+	}
+
+	actual, txn := g.generateAssetTxnInternal(selection.(TxTypeID), round, intra)
+	defer g.recordData(actual, start)
+
+	// TODO: shouldn't we just return an error?
+	if txn.Type == "" {
+		fmt.Println("Empty asset transaction.")
+		os.Exit(1)
+	}
+
+	return signTxn(txn), transactions.ApplyData{}, nil
+}
+
 func (g *generator) generateAssetTxnInternal(txType TxTypeID, round uint64, intra uint64) (actual TxTypeID, txn transactions.Transaction) {
 	return g.generateAssetTxnInternalHint(txType, round, intra, 0, nil)
 }
@@ -744,25 +763,6 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 	}
 	g.balances[senderIndex] -= txn.Fee.ToUint64()
 	return
-}
-
-func (g *generator) generateAssetTxn(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
-	start := time.Now()
-	selection, err := weightedSelection(g.assetTxWeights, getAssetTxOptions(), assetXfer)
-	if err != nil {
-		return transactions.SignedTxn{}, transactions.ApplyData{}, err
-	}
-
-	actual, txn := g.generateAssetTxnInternal(selection.(TxTypeID), round, intra)
-	defer g.recordData(actual, start)
-
-	// TODO: shouldn't we just return an error?
-	if txn.Type == "" {
-		fmt.Println("Empty asset transaction.")
-		os.Exit(1)
-	}
-
-	return signTxn(txn), transactions.ApplyData{}, nil
 }
 
 // ---- 3. App Transactions ----
