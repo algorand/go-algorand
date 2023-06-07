@@ -476,6 +476,9 @@ func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data trackerdb.
 				data.Ref = sqlRowRef{rowid.Int64}
 				err = protocol.Decode(buf, &data.AccountData)
 				return err
+			} else if len(buf) == 0 && rowid.Valid {
+				// we are sure empty valid accounts do not exist in the database.
+				return fmt.Errorf("account %v exists but has no data in the database", addr)
 			}
 			// we don't have that account, just return the database round.
 			return nil
