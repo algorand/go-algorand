@@ -869,6 +869,156 @@ func TestInnerRekey(t *testing.T) {
 	})
 }
 
+// TestInnerAppCreateAndOptin tests a weird way to create an app and opt it into
+// an ASA all from one top-level transaction. Part of the trick is to use an
+// inner helper app.  The app being created rekeys itself to the inner app,
+// which funds the outer app and opts it into the ASA. It could have worked
+// differently - the inner app could have just funded the outer app, and then
+// the outer app could have opted-in.  But this technique tests something
+// interesting, that the inner app can perform an opt-in on the outer app, which
+// tests that the newly created app's holdings are available. In practice, the
+// helper shold rekey it back, but we don't bother here.
+func TestInnerAppCreateAndOptin(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	// v31 allows inner appl and inner rekey
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		createasa := txntest.Txn{
+			Type:        "acfg",
+			Sender:      addrs[0],
+			AssetParams: basics.AssetParams{Total: 2, UnitName: "$"},
+		}
+		asaID := dl.txn(&createasa).ApplyData.ConfigAsset
+		require.NotZero(t, asaID)
+
+		// helper app, is called during the creation of an app.  When such an
+		// app is created, it rekeys itself to this helper and calls it. The
+		// helpers opts the caller into an ASA, and funds the MBR the caller
+		// needs for that optin.
+		helper := dl.fundedApp(addrs[0], 1_000_000,
+			main(`
+  itxn_begin
+   int axfer; itxn_field TypeEnum
+   int `+strconv.Itoa(int(asaID))+`; itxn_field XferAsset
+   txn Sender; itxn_field Sender // call as the caller! (works because of rekey by caller)
+   txn Sender; itxn_field AssetReceiver // 0 to self == opt-in
+  itxn_next
+   int pay;	   itxn_field TypeEnum // pay 200kmAlgo to the caller, for MBR
+   int 200000; itxn_field Amount
+   txn Sender; itxn_field Receiver
+  itxn_submit
+`))
+		// Don't use `main` here, we want to do the work during creation. Rekey
+		// to the helper and invoke it, trusting it to opt us into the ASA.
+		createapp := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			Fee:    3 * 1000, // to pay for self, call to helper, and helper's axfer
+			ApprovalProgram: `
+  itxn_begin
+   int appl;      itxn_field TypeEnum
+   addr ` + helper.Address().String() + `; itxn_field RekeyTo
+   int ` + strconv.Itoa(int(helper)) + `; itxn_field ApplicationID
+   txn Assets 0; itxn_field Assets
+  itxn_submit
+  int 1
+`,
+			ForeignApps:   []basics.AppIndex{helper},
+			ForeignAssets: []basics.AssetIndex{asaID},
+		}
+		appID := dl.txn(&createapp).ApplyData.ApplicationID
+		require.NotZero(t, appID)
+	})
+}
+
+// TestParentGlobals tests that a newly created app can call an inner app, and
+// the inner app will have access to the parent globals, even if the originally
+// created app ID isn't passed down, because the rule is that "pending" created
+// apps are available, starting from v38
+func TestParentGlobals(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+
+	// v38 allows parent access, but we start with v31 to make sure we don't mistakenly change it
+	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// helper app, is called during the creation of an app.  this app tries
+		// to access its parent's globals, by using `global CallerApplicationID`
+		helper := dl.fundedApp(addrs[0], 1_000_000,
+			main(`
+  global CallerApplicationID
+  byte "X"
+  app_global_get_ex; pop; pop;	// we only care that it didn't panic
+`))
+
+		// Don't use `main` here, we want to do the work during creation.
+		createProgram := `
+  itxn_begin
+   int appl;      itxn_field TypeEnum
+   int ` + strconv.Itoa(int(helper)) + `; itxn_field ApplicationID
+  itxn_submit
+  int 1
+`
+		createapp := txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			Fee:             2 * 1000, // to pay for self and call to helper
+			ApprovalProgram: createProgram,
+			ForeignApps:     []basics.AppIndex{helper},
+		}
+		var creator basics.AppIndex
+		if ver >= 38 {
+			creator = dl.txn(&createapp).ApplyData.ApplicationID
+			require.NotZero(t, creator)
+		} else {
+			dl.txn(&createapp, "unavailable App")
+		}
+
+		// Now, test the same pattern, but do it all inside of yet another outer
+		// app, to show that the parent is available even if it was, itself
+		// created as an inner.  To do so, we also need to get 0.2 MBR to the
+		// outer app, since it will be creating the "middle" app.
+
+		outerAppAddress := (creator + 3).Address() // creator called an inner, so next is creator+2, then fund
+		outer := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			Fee:    3 * 1000, // to pay for self, call to inner create, and its call to helper
+			ApprovalProgram: `
+  itxn_begin
+   int appl;      itxn_field TypeEnum
+   byte 0x` + hex.EncodeToString(createapp.SignedTxn().Txn.ApprovalProgram) + `; itxn_field ApprovalProgram
+   byte 0x` + hex.EncodeToString(createapp.SignedTxn().Txn.ClearStateProgram) + `; itxn_field ClearStateProgram
+  itxn_submit
+  int 1
+`,
+			ForeignApps: []basics.AppIndex{creator, helper},
+		}
+		fund := txntest.Txn{
+			Type:     "pay",
+			Amount:   200_000,
+			Sender:   addrs[0],
+			Receiver: outerAppAddress,
+		}
+		if ver >= 38 {
+			dl.txgroup("", &fund, &outer)
+		} else {
+			dl.txn(&createapp, "unavailable App")
+		}
+
+	})
+}
+
 func TestNote(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -2951,7 +3101,7 @@ itxn_submit
 		}
 
 		if ver <= 33 {
-			dl.txgroup("invalid Account reference", &fund0, &fund1, &callTx)
+			dl.txgroup("unavailable Account", &fund0, &fund1, &callTx)
 			return
 		}
 		payset = dl.txgroup("", &fund0, &fund1, &callTx)

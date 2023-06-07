@@ -61,15 +61,15 @@ func (r *accountsV2Reader) Testing() trackerdb.TestAccountsReaderExt {
 	return r
 }
 
-func (r *accountsV2Reader) getOrPrepare(queryString string) (stmt *sql.Stmt, err error) {
+func (r *accountsV2Reader) getOrPrepare(queryString string) (*sql.Stmt, error) {
 	// fetch statement (use the query as the key)
 	if stmt, ok := r.preparedStatements[queryString]; ok {
 		return stmt, nil
 	}
 	// we do not have it, prepare it
-	stmt, err = r.q.Prepare(queryString)
+	stmt, err := r.q.Prepare(queryString)
 	if err != nil {
-		return
+		return nil, err
 	}
 	// cache the statement
 	r.preparedStatements[queryString] = stmt
@@ -431,21 +431,6 @@ func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context
 	}
 	copy(address[:], addrbuf)
 	return
-}
-
-func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (ref trackerdb.AccountRef, data []byte, err error) {
-	// optimize this query for repeated usage
-	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM accountbase WHERE address=?")
-	if err != nil {
-		return
-	}
-
-	var rowid int64
-	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
-	if err != nil {
-		return
-	}
-	return sqlRowRef{rowid}, data, err
 }
 
 // LookupOnlineAccountDataByAddress looks up online account data by address.
