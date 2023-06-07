@@ -389,7 +389,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		g.Allocation = append(g.Allocation, bookkeeping.GenesisAllocation{
 			Address: genesisAddrs[wallet.Name].String(),
 			Comment: wallet.Name,
-			State:   walletData.GenesisAccountData,
+			State:   walletData,
 		})
 	}
 

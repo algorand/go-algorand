@@ -45,18 +45,24 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	user[0] = 123
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesis := make(map[basics.Address]basics.GenesisAccountData)
-	genesis[user] = basics.GenesisAccountData{
-		Status:     basics.Online,
-		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
+	genesis := make(map[basics.Address]basics.AccountData)
+	genesis[user] = basics.AccountData{
+		GenesisAccountData: basics.GenesisAccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
+		},
 	}
-	genesis[sinkAddr] = basics.GenesisAccountData{
-		Status:     basics.Online,
-		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
+	genesis[sinkAddr] = basics.AccountData{
+		GenesisAccountData: basics.GenesisAccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
+		},
 	}
-	genesis[poolAddr] = basics.GenesisAccountData{
-		Status:     basics.Online,
-		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
+	genesis[poolAddr] = basics.AccountData{
+		GenesisAccountData: basics.GenesisAccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
+		},
 	}
 
 	log := logging.TestingLog(t)

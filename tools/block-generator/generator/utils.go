@@ -59,11 +59,13 @@ func accountToIndex(a basics.Address) (addr uint64) {
 	return binary.LittleEndian.Uint64(a[:]) - 1
 }
 
-func convertToGenesisBalances(balances []uint64) map[basics.Address]basics.GenesisAccountData {
-	genesisBalances := make(map[basics.Address]basics.GenesisAccountData)
+func convertToGenesisBalances(balances []uint64) map[basics.Address]basics.AccountData {
+	genesisBalances := make(map[basics.Address]basics.AccountData)
 	for i, balance := range balances {
-		genesisBalances[indexToAccount(uint64(i))] = basics.GenesisAccountData{
-			MicroAlgos: basics.MicroAlgos{Raw: balance},
+		genesisBalances[indexToAccount(uint64(i))] = basics.AccountData{
+			GenesisAccountData: basics.GenesisAccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: balance},
+			},
 		}
 	}
 	return genesisBalances

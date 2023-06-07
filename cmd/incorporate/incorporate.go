@@ -175,7 +175,7 @@ func parseInput() (genesis bookkeeping.Genesis) {
 		alloc := bookkeeping.GenesisAllocation{
 			Address: record.Address,
 			Comment: record.Comment,
-			State: basics.GenesisAccountData{
+			State: basics.AccountData{GenesisAccountData: basics.GenesisAccountData{
 				Status:          record.Status,
 				MicroAlgos:      basics.MicroAlgos{Raw: record.Algos * 1e6},
 				VoteID:          record.VoteID,
@@ -183,7 +183,7 @@ func parseInput() (genesis bookkeeping.Genesis) {
 				VoteFirstValid:  basics.Round(record.VoteFirstValid),
 				VoteLastValid:   basics.Round(record.VoteLastValid),
 				VoteKeyDilution: record.VoteKeyDilution,
-			},
+			}},
 		}
 		genesis.Allocation = append(genesis.Allocation, alloc)
 	}

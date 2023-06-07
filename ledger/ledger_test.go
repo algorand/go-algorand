@@ -77,7 +77,7 @@ func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 	return l.AddValidatedBlock(*vb, agreement.Certificate{})
 }
 
-func (l *Ledger) appendUnvalidatedTx(t *testing.T, initAccounts map[basics.Address]basics.GenesisAccountData, initSecrets map[basics.Address]*crypto.SignatureSecrets, tx transactions.Transaction, ad transactions.ApplyData) error {
+func (l *Ledger) appendUnvalidatedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, initSecrets map[basics.Address]*crypto.SignatureSecrets, tx transactions.Transaction, ad transactions.ApplyData) error {
 	stx := sign(initSecrets, tx)
 	return l.appendUnvalidatedSignedTx(t, initAccounts, stx, ad)
 }
@@ -100,7 +100,7 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 	}
 }
 
-func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts map[basics.Address]basics.GenesisAccountData) (blk bookkeeping.Block) {
+func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
 	a := require.New(t)
 
 	lastBlock, err := l.Block(l.Latest())
@@ -163,7 +163,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	return
 }
 
-func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.GenesisAccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
+func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
 	blk := makeNewEmptyBlock(t, l, t.Name(), initAccounts)
 	proto := config.Consensus[blk.CurrentProtocol]
 	txib, err := blk.EncodeSignedTxn(stx, ad)
@@ -179,7 +179,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	return l.appendUnvalidated(blk)
 }
 
-func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.GenesisAccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
+func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.AccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
 	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)
 	proto := config.Consensus[blk.CurrentProtocol]
 	for _, stx := range stxns {
@@ -724,7 +724,7 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCall, ad))
 }
 
-func addEmptyValidatedBlock(t *testing.T, l *Ledger, initAccounts map[basics.Address]basics.GenesisAccountData) {
+func addEmptyValidatedBlock(t *testing.T, l *Ledger, initAccounts map[basics.Address]basics.AccountData) {
 	a := require.New(t)
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
@@ -1700,7 +1700,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 10000000000)
 
 	// place real values on the participation period, so we would create a commitment with some stake.
-	accountsWithValid := make(map[basics.Address]basics.GenesisAccountData)
+	accountsWithValid := make(map[basics.Address]basics.AccountData)
 	for addr, elem := range genesisInitState.Accounts {
 		newAccount := elem
 		newAccount.Status = basics.Online
@@ -1730,7 +1730,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	lastBlock, err := l.Block(l.Latest())
 	require.NoError(t, err)
 	proto := config.Consensus[lastBlock.CurrentProtocol]
-	accounts := make(map[basics.Address]basics.GenesisAccountData, len(genesisInitState.Accounts)+maxBlocks)
+	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts)+maxBlocks)
 	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys)+maxBlocks)
 	// regular addresses: all init accounts minus pools
 
@@ -1788,7 +1788,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	require.ErrorContains(t, err, "state proof crypto error")
 }
 
-func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.GenesisAccountData) bookkeeping.Block {
+func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, l *Ledger, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
 	sp := stateproof.StateProof{SignedWeight: 5000000000000000}
 	var stxn transactions.SignedTxn
 	stxn.Txn.Type = protocol.StateProofTx
@@ -1869,7 +1869,7 @@ func TestLedgerMemoryLeak(t *testing.T) {
 	lastBlock, err := l.Block(l.Latest())
 	require.NoError(t, err)
 	proto := config.Consensus[lastBlock.CurrentProtocol]
-	accounts := make(map[basics.Address]basics.GenesisAccountData, len(genesisInitState.Accounts)+maxBlocks)
+	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts)+maxBlocks)
 	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys)+maxBlocks)
 	// regular addresses: all init accounts minus pools
 	addresses := make([]basics.Address, len(genesisInitState.Accounts)-2, len(genesisInitState.Accounts)+maxBlocks)
@@ -1956,7 +1956,7 @@ func TestLedgerMemoryLeak(t *testing.T) {
 
 					addresses = append(addresses, addr)
 					keys[addr] = x
-					accounts[addr] = ad.GenesisAccountData
+					accounts[addr] = ad
 				}
 				curAddressIdx++
 			}
@@ -2093,7 +2093,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	}()
 
 	maxBlocks := int(proto.MaxBalLookback * 2)
-	accounts := make(map[basics.Address]basics.GenesisAccountData, len(genesisInitState.Accounts))
+	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
 	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys))
 	// regular addresses: all init accounts minus pools
 	addresses := make([]basics.Address, len(genesisInitState.Accounts)-2, len(genesisInitState.Accounts))
@@ -2477,7 +2477,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	l.acctsOnline = onlineAccounts{}
 
 	maxBlocks := 1000
-	accounts := make(map[basics.Address]basics.GenesisAccountData, len(genesisInitState.Accounts))
+	accounts := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
 	keys := make(map[basics.Address]*crypto.SignatureSecrets, len(initKeys))
 	// regular addresses: all init accounts minus pools
 	addresses := make([]basics.Address, len(genesisInitState.Accounts)-2, len(genesisInitState.Accounts))

@@ -25,7 +25,7 @@ import (
 // InitState structure defines blockchain init params
 type InitState struct {
 	Block       bookkeeping.Block
-	Accounts    map[basics.Address]basics.GenesisAccountData
+	Accounts    map[basics.Address]basics.AccountData
 	GenesisHash crypto.Digest
 }
 

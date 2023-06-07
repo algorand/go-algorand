@@ -122,16 +122,25 @@ func OpenLedger(
 	}
 
 	// Convert GenesisAccountData to AccountData
-	ad := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
-	for addr, acct := range genesisInitState.Accounts {
-		ad[addr] = basics.AccountData{GenesisAccountData: acct}
-	}
+	// ad := make(map[basics.Address]basics.AccountData, len(genesisInitState.Accounts))
+	// for addr, acct := range genesisInitState.Accounts {
+	// 	ad[addr] = basics.AccountData{GenesisAccountData: basics.GenesisAccountData{
+	// 		Status:          acct.Status,
+	// 		MicroAlgos:      acct.MicroAlgos,
+	// 		VoteID:          acct.VoteID,
+	// 		SelectionID:     acct.SelectionID,
+	// 		StateProofID:    acct.StateProofID,
+	// 		VoteFirstValid:  acct.VoteFirstValid,
+	// 		VoteLastValid:   acct.VoteLastValid,
+	// 		VoteKeyDilution: acct.VoteKeyDilution,
+	// 	}}
+	// }
 
 	l := &Ledger{
 		log:                            log,
 		archival:                       cfg.Archival,
 		genesisHash:                    genesisInitState.GenesisHash,
-		genesisAccounts:                ad,
+		genesisAccounts:                genesisInitState.Accounts,
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
 		genesisProtoVersion:            genesisInitState.Block.CurrentProtocol,
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),

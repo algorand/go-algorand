@@ -60,19 +60,19 @@ func GenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoP
 	}
 
 	initKeys = make(map[basics.Address]*crypto.SignatureSecrets, len(genaddrs)+2) // + pool and sink
-	initAccounts := make(map[basics.Address]basics.GenesisAccountData, len(genaddrs)+2)
+	initAccounts := make(map[basics.Address]basics.AccountData, len(genaddrs)+2)
 	for i := range genaddrs {
 		initKeys[genaddrs[i]] = gensecrets[i]
 		// Give each account quite a bit more balance than MinFee or MinBalance
-		ad := basics_testing.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + baseAlgoPerAccount) * 100000)}).GenesisAccountData
+		ad := basics_testing.MakeAccountData(basics.Online, basics.MicroAlgos{Raw: uint64((i + baseAlgoPerAccount) * 100000)})
 		ad.VoteFirstValid = 1
 		ad.VoteLastValid = 100_000
 		initAccounts[genaddrs[i]] = ad
 	}
 	initKeys[poolAddr] = poolSecret
-	initAccounts[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567}).GenesisAccountData
+	initAccounts[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
 	initKeys[sinkAddr] = sinkSecret
-	initAccounts[sinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321}).GenesisAccountData
+	initAccounts[sinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
 
 	genesisBalances := bookkeeping.MakeTimestampedGenesisBalances(initAccounts, sinkAddr, poolAddr, 0)
 	genesisID := tb.Name()

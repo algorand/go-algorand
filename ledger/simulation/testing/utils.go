@@ -115,7 +115,7 @@ func PrepareSimulatorTest(t *testing.T) Environment {
 		account := Account{
 			Addr:     addr,
 			Sk:       key,
-			AcctData: basics.AccountData{GenesisAccountData: genesisInitState.Accounts[addr]},
+			AcctData: genesisInitState.Accounts[addr],
 		}
 
 		if addr == ledgertesting.SinkAddr() {

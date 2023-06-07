@@ -50,8 +50,10 @@ func TestGenesis_Balances(t *testing.T) {
 			_struct: struct{}{},
 			Address: addr,
 			Comment: "",
-			State: basics.GenesisAccountData{
-				MicroAlgos: basics.MicroAlgos{Raw: algos},
+			State: basics.AccountData{
+				GenesisAccountData: basics.GenesisAccountData{
+					MicroAlgos: basics.MicroAlgos{Raw: algos},
+				},
 			},
 		}
 	}
@@ -78,7 +80,7 @@ func TestGenesis_Balances(t *testing.T) {
 				RewardsPool: goodAddr.String(),
 			},
 			want: GenesisBalances{
-				Balances: map[basics.Address]basics.GenesisAccountData{
+				Balances: map[basics.Address]basics.AccountData{
 					mustAddr(allocation1.Address): allocation1.State,
 				},
 				FeeSink:     goodAddr,
@@ -95,7 +97,7 @@ func TestGenesis_Balances(t *testing.T) {
 				RewardsPool: goodAddr.String(),
 			},
 			want: GenesisBalances{
-				Balances: map[basics.Address]basics.GenesisAccountData{
+				Balances: map[basics.Address]basics.AccountData{
 					mustAddr(allocation1.Address): allocation1.State,
 					mustAddr(allocation2.Address): allocation2.State,
 				},

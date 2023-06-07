@@ -81,8 +81,8 @@ func TestTransactionGroupWithDeltaTracer(t *testing.T) {
 			innerBoxAppID := basics.AppIndex(7) + offset
 			innerBoxAppAddress := innerBoxAppID.Address()
 			balances := genesisInitState.Accounts
-			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000}).GenesisAccountData
-			balances[appAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000}).GenesisAccountData
+			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
+			balances[appAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
 
 			genesisBalances := bookkeeping.GenesisBalances{
 				Balances:    genesisInitState.Accounts,

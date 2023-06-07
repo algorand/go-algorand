@@ -279,7 +279,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			innerAppID := basics.AppIndex(1003)
 			innerAppAddress := innerAppID.Address()
 			balances := genesisInitState.Accounts
-			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000}).GenesisAccountData
+			balances[innerAppAddress] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1_000_000})
 
 			genesisBalances := bookkeeping.GenesisBalances{
 				Balances:    balances,
@@ -354,7 +354,7 @@ int 1`,
 				GenesisHash: genHash,
 			}
 
-			expectedFeeSinkDataForScenario := ledgercore.ToAccountDataFromGenesisAccountData(balances[testSinkAddr])
+			expectedFeeSinkDataForScenario := ledgercore.ToAccountData(balances[testSinkAddr])
 			expectedFeeSinkDataForScenario.MicroAlgos.Raw += basicAppCallTxn.Txn().Fee.Raw
 			if testCase.firstTxnBehavior == "approve" {
 				expectedFeeSinkDataForScenario.MicroAlgos.Raw += payTxn.Txn().Fee.Raw
@@ -362,8 +362,8 @@ int 1`,
 
 			scenario := testCase.innerAppCallScenario(mocktracer.TestScenarioInfo{
 				CallingTxn:     innerAppCallTxn.Txn(),
-				SenderData:     ledgercore.ToAccountDataFromGenesisAccountData(balances[addrs[4]]),
-				AppAccountData: ledgercore.ToAccountDataFromGenesisAccountData(balances[innerAppAddress]),
+				SenderData:     ledgercore.ToAccountData(balances[addrs[4]]),
+				AppAccountData: ledgercore.ToAccountData(balances[innerAppAddress]),
 				FeeSinkData:    expectedFeeSinkDataForScenario,
 				FeeSinkAddr:    testSinkAddr,
 				MinFee:         minFee,
@@ -434,9 +434,9 @@ int 1`,
 					},
 				}
 
-			expectedFeeSinkData := ledgercore.ToAccountDataFromGenesisAccountData(balances[testSinkAddr])
+			expectedFeeSinkData := ledgercore.ToAccountData(balances[testSinkAddr])
 			expectedFeeSinkData.MicroAlgos.Raw += txgroup[0].Txn.Fee.Raw
-			expectedAcct0Data := ledgercore.ToAccountDataFromGenesisAccountData(balances[addrs[0]])
+			expectedAcct0Data := ledgercore.ToAccountData(balances[addrs[0]])
 			expectedAcct0Data.MicroAlgos.Raw -= txgroup[0].Txn.Fee.Raw
 			expectedAcct0Data.TotalAppParams = 1
 
@@ -490,9 +490,9 @@ int 1`,
 				require.NoError(t, err)
 
 				expectedAcct1Data := ledgercore.AccountData{}
-				expectedAcct2Data := ledgercore.ToAccountDataFromGenesisAccountData(balances[addrs[2]])
+				expectedAcct2Data := ledgercore.ToAccountData(balances[addrs[2]])
 				expectedAcct2Data.MicroAlgos.Raw += payTxn.Amount
-				expectedAcct3Data := ledgercore.ToAccountDataFromGenesisAccountData(balances[addrs[3]])
+				expectedAcct3Data := ledgercore.ToAccountData(balances[addrs[3]])
 				expectedAcct3Data.MicroAlgos.Raw += expectedPayTxnAD.ClosingAmount.Raw
 				expectedFeeSinkData.MicroAlgos.Raw += txgroup[1].Txn.Fee.Raw
 
@@ -624,7 +624,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	genesisInitState.Block.BlockHeader.GenesisID = "testnet"
 	genesisInitState.GenesisHash = testnetGenesisHash
 
-	rewardPoolBalance := ledgercore.ToAccountDataFromGenesisAccountData(genesisInitState.Accounts[testPoolAddr])
+	rewardPoolBalance := ledgercore.ToAccountData(genesisInitState.Accounts[testPoolAddr])
 	nextPoolBalance := rewardPoolBalance.MicroAlgos.Raw + poolBonus
 
 	l := newTestLedger(t, bookkeeping.GenesisBalances{
@@ -689,7 +689,7 @@ func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 	const count = 10
 	addrs := make([]basics.Address, count)
 	secrets := make([]*crypto.SignatureSecrets, count)
-	accts := make(map[basics.Address]basics.GenesisAccountData)
+	accts := make(map[basics.Address]basics.AccountData)
 
 	// 10 billion microalgos, across N accounts and pool and sink
 	amount := 10 * 1000000000 * 1000000 / uint64(count+2)
@@ -701,19 +701,25 @@ func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 		secrets[i] = crypto.GenerateSignatureSecrets(seed)
 		addrs[i] = basics.Address(secrets[i].SignatureVerifier)
 
-		adata := basics.GenesisAccountData{
-			MicroAlgos: basics.MicroAlgos{Raw: amount},
+		adata := basics.AccountData{
+			GenesisAccountData: basics.GenesisAccountData{
+				MicroAlgos: basics.MicroAlgos{Raw: amount},
+			},
 		}
 		accts[addrs[i]] = adata
 	}
 
-	accts[sink] = basics.GenesisAccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
-		Status:     basics.NotParticipating,
+	accts[sink] = basics.AccountData{
+		GenesisAccountData: basics.GenesisAccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: amount},
+			Status:     basics.NotParticipating,
+		},
 	}
 
-	accts[rewards] = basics.GenesisAccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
+	accts[rewards] = basics.AccountData{
+		GenesisAccountData: basics.GenesisAccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: amount},
+		},
 	}
 
 	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)
@@ -732,21 +738,6 @@ type evalTestLedger struct {
 	latestTotals        ledgercore.AccountTotals
 	tracer              logic.EvalTracer
 	boxes               map[string][]byte
-}
-
-// convertGenesisAccountDataMapToAccountDataMap converts a map of
-// GenesisAccountData to AccountData
-func convertGenesisAccountDataMapToAccountDataMap(mgad map[basics.Address]basics.GenesisAccountData) map[basics.Address]basics.AccountData {
-	mad := make(map[basics.Address]basics.AccountData)
-	for addr, data := range mgad {
-		mad[addr] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
-				MicroAlgos: data.MicroAlgos,
-				Status:     data.Status,
-			},
-		}
-	}
-	return mad
 }
 
 // newTestLedger creates a in memory Ledger that is as realistic as
@@ -768,13 +759,13 @@ func newTestLedger(t testing.TB, balances bookkeeping.GenesisBalances) *evalTest
 	genBlock, err := bookkeeping.MakeGenesisBlock(protoVersion,
 		balances, "test", l.genesisHash)
 	require.NoError(t, err)
-	l.roundBalances[0] = convertGenesisAccountDataMapToAccountDataMap(balances.Balances)
+	l.roundBalances[0] = balances.Balances
 	l.blocks[0] = genBlock
 
 	// calculate the accounts totals.
 	var ot basics.OverflowTracker
 	for _, acctData := range balances.Balances {
-		l.latestTotals.AddAccount(proto, ledgercore.ToAccountDataFromGenesisAccountData(acctData), &ot)
+		l.latestTotals.AddAccount(proto, ledgercore.ToAccountData(acctData), &ot)
 	}
 	l.genesisProto = proto
 	l.genesisProtoVersion = protoVersion

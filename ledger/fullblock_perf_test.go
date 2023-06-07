@@ -82,7 +82,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	creator := basics.Address{}
 	_, err := rand.Read(creator[:])
 	require.NoError(b, err)
-	genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000000000}).GenesisAccountData
+	genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890000000000})
 
 	logger := logging.TestingLog(b)
 	logger.SetLevel(logging.Warn)

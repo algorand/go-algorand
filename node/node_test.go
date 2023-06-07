@@ -70,7 +70,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	firstRound := basics.Round(0)
 	lastRound := basics.Round(200)
 
-	genesis := make(map[basics.Address]basics.GenesisAccountData)
+	genesis := make(map[basics.Address]basics.AccountData)
 	gen := rand.New(rand.NewSource(2))
 	neighbors := make([]string, numAccounts)
 	for i := range neighbors {
@@ -133,18 +133,23 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		}
 		access.Close()
 
-		data := basics.GenesisAccountData{
-			Status:      basics.Online,
-			MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))},
-			SelectionID: part.VRFSecrets().PK,
-			VoteID:      part.VotingSecrets().OneTimeSignatureVerifier,
+		data := basics.AccountData{
+			GenesisAccountData: basics.GenesisAccountData{
+				Status:      basics.Online,
+				MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))},
+				SelectionID: part.VRFSecrets().PK,
+				VoteID:      part.VotingSecrets().OneTimeSignatureVerifier,
+			},
 		}
+
 		short := root.Address()
 		genesis[short] = data
 	}
-	genesis[poolAddr] = basics.GenesisAccountData{
-		Status:     basics.Online,
-		MicroAlgos: basics.MicroAlgos{Raw: uint64(100000)},
+	genesis[poolAddr] = basics.AccountData{
+		GenesisAccountData: basics.GenesisAccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: uint64(100000)},
+		},
 	}
 
 	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)

@@ -345,13 +345,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 	ad.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{1: {}}
 	genesis[addr] = ad
 
-	// Convert map[basics.Address]basics.AccountData to map[basics.Address]basics.GenesisAccountData
-	genesisAccountData := make(map[basics.Address]basics.GenesisAccountData)
-	for addr, data := range genesis {
-		genesisAccountData[addr] = data.GenesisAccountData
-	}
-
-	bootstrap := bookkeeping.MakeGenesisBalances(genesisAccountData, sinkAddr, poolAddr)
+	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 
 	// generate test transactions
 	const inMem = true

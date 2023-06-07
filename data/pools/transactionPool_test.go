@@ -67,13 +67,13 @@ type TestingT interface {
 
 var minBalance = config.Consensus[protocol.ConsensusCurrentVersion].MinBalance
 
-func mockLedger(t TestingT, initAccounts map[basics.Address]basics.GenesisAccountData, proto protocol.ConsensusVersion) *ledger.Ledger {
+func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) *ledger.Ledger {
 	var hash crypto.Digest
 	crypto.RandBytes(hash[:])
 
 	var pool basics.Address
 	crypto.RandBytes(pool[:])
-	var poolData basics.GenesisAccountData
+	var poolData basics.AccountData
 	poolData.MicroAlgos.Raw = 1 << 32
 	initAccounts[pool] = poolData
 
@@ -105,11 +105,11 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.GenesisAccoun
 	return l
 }
 
-func makeMockLedger(t TestingT, initAccounts map[basics.Address]basics.GenesisAccountData) *ledger.Ledger {
+func makeMockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData) *ledger.Ledger {
 	return mockLedger(t, initAccounts, protocol.ConsensusCurrentVersion)
 }
 
-func makeMockLedgerFuture(t TestingT, initAccounts map[basics.Address]basics.GenesisAccountData) *ledger.Ledger {
+func makeMockLedgerFuture(t TestingT, initAccounts map[basics.Address]basics.AccountData) *ledger.Ledger {
 	return mockLedger(t, initAccounts, protocol.ConsensusFuture)
 }
 
@@ -125,20 +125,20 @@ func newBlockEvaluator(t TestingT, l *ledger.Ledger) BlockEvaluator {
 	return eval
 }
 
-func initAcc(initBalances map[basics.Address]uint64) map[basics.Address]basics.GenesisAccountData {
-	res := make(map[basics.Address]basics.GenesisAccountData)
+func initAcc(initBalances map[basics.Address]uint64) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
 	for addr, bal := range initBalances {
-		var data basics.GenesisAccountData
+		var data basics.AccountData
 		data.MicroAlgos.Raw = bal
 		res[addr] = data
 	}
 	return res
 }
 
-func initAccFixed(initAddrs []basics.Address, bal uint64) map[basics.Address]basics.GenesisAccountData {
-	res := make(map[basics.Address]basics.GenesisAccountData)
+func initAccFixed(initAddrs []basics.Address, bal uint64) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
 	for _, addr := range initAddrs {
-		var data basics.GenesisAccountData
+		var data basics.AccountData
 		data.MicroAlgos.Raw = bal
 		res[addr] = data
 	}

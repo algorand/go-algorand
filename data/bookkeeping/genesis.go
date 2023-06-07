@@ -108,7 +108,7 @@ func (genesis Genesis) Hash() crypto.Digest {
 
 // Balances returns the genesis account balances.
 func (genesis Genesis) Balances() (GenesisBalances, error) {
-	genalloc := make(map[basics.Address]basics.GenesisAccountData)
+	genalloc := make(map[basics.Address]basics.AccountData)
 	for _, entry := range genesis.Allocation {
 		addr, err := basics.UnmarshalChecksumAddress(entry.Address)
 		if err != nil {
@@ -157,9 +157,9 @@ type GenesisAllocation struct {
 	// Address, Comment, and State fields..
 	_struct struct{} `codec:""`
 
-	Address string                    `codec:"addr"`
-	Comment string                    `codec:"comment"`
-	State   basics.GenesisAccountData `codec:"state"`
+	Address string             `codec:"addr"`
+	Comment string             `codec:"comment"`
+	State   basics.AccountData `codec:"state"`
 }
 
 // ToBeHashed impements the crypto.Hashable interface.
@@ -169,19 +169,19 @@ func (genesis Genesis) ToBeHashed() (protocol.HashID, []byte) {
 
 // GenesisBalances contains the information needed to generate a new ledger
 type GenesisBalances struct {
-	Balances    map[basics.Address]basics.GenesisAccountData
+	Balances    map[basics.Address]basics.AccountData
 	FeeSink     basics.Address
 	RewardsPool basics.Address
 	Timestamp   int64
 }
 
 // MakeGenesisBalances returns the information needed to bootstrap the ledger based on the current time
-func MakeGenesisBalances(balances map[basics.Address]basics.GenesisAccountData, feeSink, rewardsPool basics.Address) GenesisBalances {
+func MakeGenesisBalances(balances map[basics.Address]basics.AccountData, feeSink, rewardsPool basics.Address) GenesisBalances {
 	return MakeTimestampedGenesisBalances(balances, feeSink, rewardsPool, time.Now().Unix())
 }
 
 // MakeTimestampedGenesisBalances returns the information needed to bootstrap the ledger based on a given time
-func MakeTimestampedGenesisBalances(balances map[basics.Address]basics.GenesisAccountData, feeSink, rewardsPool basics.Address, timestamp int64) GenesisBalances {
+func MakeTimestampedGenesisBalances(balances map[basics.Address]basics.AccountData, feeSink, rewardsPool basics.Address, timestamp int64) GenesisBalances {
 	return GenesisBalances{Balances: balances, FeeSink: feeSink, RewardsPool: rewardsPool, Timestamp: timestamp}
 }
 
