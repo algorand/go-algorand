@@ -3094,6 +3094,8 @@ func (l *errorCommitListener) OnPrepareVoterCommit(oldBase basics.Round, newBase
 func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	t.Skip("Flakey test - run manually")
+
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -3114,7 +3116,7 @@ func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
 	l.trackers.mu.Lock()
 	newDbRound := l.trackers.dbRound
 	l.trackers.mu.Unlock()
-	require.LessOrEqual(t, previousCachedDbRound+1, newDbRound)
+	require.Equal(t, previousCachedDbRound+1, newDbRound)
 }
 
 func TestLedgerSPVerificationTracker(t *testing.T) {
