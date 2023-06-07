@@ -164,6 +164,12 @@ func run() int {
 		log.Fatalf("Cannot load config: %v", err)
 	}
 
+	_, err = cfg.ValidateDNSBootstrapArray(genesis.Network)
+	if err != nil {
+		// log is not setup yet, this will log to stderr
+		log.Fatalf("Error validating DNSBootstrap input: %v", err)
+	}
+
 	err = config.LoadConfigurableConsensusProtocols(absolutePath)
 	if err != nil {
 		// log is not setup yet, this will log to stderr
