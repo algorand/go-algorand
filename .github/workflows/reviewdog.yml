@@ -46,10 +46,13 @@ jobs:
         run: |
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
+      - name: Determine Go version
+        id: go_version
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Install specific golang
         uses: actions/setup-go@v3
         with:
-          go-version: '1.17.13'
+          go-version: ${{ env.GO_VERSION }}
       - name: Create folders for golangci-lint
         run: mkdir -p cicdtmp/golangci-lint
       - name: Check if custom golangci-lint is already built
