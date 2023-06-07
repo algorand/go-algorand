@@ -1323,8 +1323,30 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if !eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
 			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, expectedVoters)
 		}
-		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
-			return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
+		if eval.proto.ExcludeExpiredCirculation {
+			if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
+				return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
+			}
+		} else {
+			if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
+				actualVotersWeight := eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
+				var highWeight, lowWeight basics.MicroAlgos
+				if expectedVotersWeight.LessThan(actualVotersWeight) {
+					highWeight = actualVotersWeight
+					lowWeight = expectedVotersWeight
+				} else {
+					highWeight = expectedVotersWeight
+					lowWeight = actualVotersWeight
+				}
+				const stakeDiffusionFactor = 5
+				allowedDelta, overflowed := basics.Muldiv(expectedVotersWeight.Raw, stakeDiffusionFactor, 100)
+				if overflowed {
+					return fmt.Errorf("StateProofOnlineTotalWeight overflow: %v != %v", actualVotersWeight, expectedVotersWeight)
+				}
+				if (highWeight.Raw - lowWeight.Raw) > allowedDelta {
+					return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v greater than %d", actualVotersWeight, expectedVotersWeight, allowedDelta)
+				}
+			}
 		}
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.GetStateProofNextRound() {
 			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.GetStateProofNextRound())

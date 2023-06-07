@@ -72,7 +72,7 @@ func (v Version) AsUInt64() (versionInfo uint64) {
 	versionInfo = uint64(v.Major)
 	versionInfo <<= 16
 	versionInfo |= uint64(v.Minor)
-	versionInfo <<= 16
+	versionInfo <<= 24
 	versionInfo |= uint64(v.BuildNumber)
 	return
 }
