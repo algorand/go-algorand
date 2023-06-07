@@ -21,11 +21,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/msgp/msgp"
 )
 
 func TestEncoding(t *testing.T) {
@@ -86,17 +84,6 @@ func TestSignedTxnInBlockHash(t *testing.T) {
 	var stib SignedTxnInBlock
 	crypto.RandBytes(stib.Txn.Sender[:])
 	require.Equal(t, crypto.HashObj(&stib), stib.Hash())
-}
-
-// If this breaks it means that the size of the SignedTxnWithAD struct has changed and the MaxInnerSignedTxnWithADSize
-// constant needs to be updated.
-func TestSignedTxnWithADMaxSizeConstant(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	require.Equal(t, MaxInnerSignedTxnWithADSize, SignedTxnWithADNoInnersMaxSize())
-	maxInnerTransactionsSize := config.MaxInnerTransactionsPerDelta * MaxInnerSignedTxnWithADSize
-	expectedOuterSize := SignedTxnWithADNoInnersMaxSize() + maxInnerTransactionsSize + msgp.ArrayHeaderSize + StateProofTxnFieldsMaxSize() - 1
-	require.Equal(t, SignedTxnWithADMaxSize(), expectedOuterSize)
 }
 
 //TODO: test multisig

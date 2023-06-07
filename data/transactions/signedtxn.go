@@ -23,7 +23,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/msgp/msgp"
 )
 
 // SignedTxn wraps a transaction and a signature.
@@ -69,19 +68,6 @@ func (s SignedTxn) ID() Txid {
 // compile-time.
 func (s SignedTxnInBlock) ID() {
 }
-
-// SignedTxnWithADNoInnersMaxSize returns the maximum size of SignedTxnWithAD with no inner transactions.
-// It is used to compute totalallocbound constant for outer SignedTxnWithAD.
-func SignedTxnWithADNoInnersMaxSize() (s int) {
-	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3
-	// Inner transactions will have no stateproofs, -1 is for the difference between standalone struct and embedded fields
-	s -= (StateProofTxnFieldsMaxSize() - 1)
-	s += EvalDeltaNoInnersMaxSize()
-	s += 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize()
-	return
-}
-
-const MaxInnerSignedTxnWithADSize = 965735023
 
 // GetEncodedLength returns the length in bytes of the encoded transaction
 func (s SignedTxn) GetEncodedLength() int {
