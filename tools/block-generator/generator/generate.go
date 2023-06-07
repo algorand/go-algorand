@@ -498,15 +498,15 @@ func (g *generator) Accounts() <-chan basics.Address {
 // ---- transaction options vectors ----
 
 func getTransactionOptions() []interface{} {
-	return []interface{}{paymentTx, assetTx}
+	return []interface{}{paymentTx, assetTx, applicationTx}
 }
 
 func getPaymentTxOptions() []interface{} {
-	return []interface{}{paymentTx, paymentAcctCreateTx}
+	return []interface{}{paymentAcctCreateTx, paymentPayTx}
 }
 
 func getAssetTxOptions() []interface{} {
-	return []interface{}{assetCreate, assetDestroy, assetOptin, assetXfer, assetClose}
+	return []interface{}{assetCreate, assetDestroy, assetOptin, assetClose, assetXfer}
 }
 
 func getAppTxOptions() []interface{} {
