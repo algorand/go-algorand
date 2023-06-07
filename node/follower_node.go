@@ -352,7 +352,7 @@ func (node *AlgorandFollowerNode) StartCatchup(catchpoint string) error {
 	err = node.catchpointCatchupService.Start(node.ctx)
 	if err != nil {
 		node.log.Warnf(err.Error())
-		return MakeStartCatchpointError(catchpoint)
+		return MakeStartCatchpointError(catchpoint, err)
 	}
 	node.log.Infof("starting catching up toward catchpoint %s", catchpoint)
 	return nil

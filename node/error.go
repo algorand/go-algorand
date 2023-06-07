@@ -66,19 +66,22 @@ func (e *CatchpointUnableToStartError) Error() string {
 // StartCatchpointError is returned when the catchpoint service cannot start up.
 type StartCatchpointError struct {
 	catchpointRequested string
+	err                 error
 }
 
 // MakeStartCatchpointError creates a StartCatchpointError for a given catchpoint
-func MakeStartCatchpointError(catchpointRequested string) *StartCatchpointError {
+func MakeStartCatchpointError(catchpointRequested string, err error) *StartCatchpointError {
 	return &StartCatchpointError{
 		catchpointRequested: catchpointRequested,
+		err:                 err,
 	}
 }
 
 // Error satisfies the builtin interface `error`
 func (e *StartCatchpointError) Error() string {
 	return fmt.Sprintf(
-		"unable to start catchpoint service for requested catchpoint %s",
+		"unable to start catchpoint service for requested catchpoint %s: %s",
 		e.catchpointRequested,
+		e.err,
 	)
 }

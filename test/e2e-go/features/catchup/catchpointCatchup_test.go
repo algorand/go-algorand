@@ -322,7 +322,7 @@ func TestCatchpointCatchupFailure(t *testing.T) {
 	a.NoError(err)
 
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
-	a.ErrorContains(err, node.MakeStartCatchpointError(catchpointLabel).Error())
+	a.ErrorContains(err, node.MakeStartCatchpointError(catchpointLabel, fmt.Errorf("")).Error())
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
