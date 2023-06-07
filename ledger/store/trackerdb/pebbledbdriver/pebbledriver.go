@@ -53,8 +53,8 @@ type trackerStore struct {
 
 // Open opens a Pebble db database
 func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Logger) (trackerdb.Store, error) {
-	cache := 100
-	handles := 64
+	cache := 1024 // this divided by 2 and by memTableLimit = 1GB /(2 * 16) = 32MB per memtable
+	handles := 1000
 
 	// Ensure we have some minimal caching and file guarantees
 	if cache < minCache {
@@ -69,7 +69,7 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/open.go#L38
 	maxMemTableSize := 4<<30 - 1 // Capped by 4 GB
 
-	memTableLimit := 2
+	memTableLimit := 16 // default: 2
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
 	if memTableSize > maxMemTableSize {
 		memTableSize = maxMemTableSize
@@ -83,39 +83,112 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 		// Pebble has a single combined cache area and the write
 		// buffers are taken from this too. Assign all available
 		// memory allowance for cache.
-		Cache:        pebble.NewCache(int64(cache * 1024 * 1024)),
-		MaxOpenFiles: handles,
+		Cache:        pebble.NewCache(int64(cache * 1024 * 1024)), // default: 8 MB
+		MaxOpenFiles: handles,                                     // deafult: 1000
 
 		// The size of memory table(as well as the write buffer).
 		// Note, there may have more than two memory tables in the system.
-		MemTableSize: memTableSize,
+		MemTableSize: memTableSize, // default: 4MB
 
 		// MemTableStopWritesThreshold places a hard limit on the size
 		// of the existent MemTables(including the frozen one).
 		// Note, this must be the number of tables not the size of all memtables
 		// according to https://github.com/cockroachdb/pebble/blob/master/options.go#L738-L742
 		// and to https://github.com/cockroachdb/pebble/blob/master/db.go#L1892-L1903.
-		MemTableStopWritesThreshold: memTableLimit,
+		MemTableStopWritesThreshold: memTableLimit, // default: 2
+
+		// Sync sstables periodically in order to smooth out writes to disk. This
+		// option does not provide any persistency guarantee, but is used to avoid
+		// latency spikes if the OS automatically decides to write out a large chunk
+		// of dirty filesystem buffers. This option only controls SSTable syncs; WAL
+		// syncs are controlled by WALBytesPerSync.
+		BytesPerSync: 512 * 1024, // default: 512 KB
+
+		// WALBytesPerSync sets the number of bytes to write to a WAL before calling
+		// Sync on it in the background. Just like with BytesPerSync above, this
+		// helps smooth out disk write latencies, and avoids cases where the OS
+		// writes a lot of buffered data to disk at once. However, this is less
+		// necessary with WALs, as many write operations already pass in
+		// Sync = true.
+		//
+		// The default value is 0, i.e. no background syncing. This matches the
+		// default behaviour in RocksDB.
+		WALBytesPerSync: 512 * 1024, // default: 0
 
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.
-		MaxConcurrentCompactions: func() int { return runtime.NumCPU() },
+		MaxConcurrentCompactions: func() int { return runtime.NumCPU() }, // default: 1
+
+		// The count of L0 files necessary to trigger an L0 compaction.
+		L0CompactionFileThreshold: 10, // default: 500
+
+		// The amount of L0 read-amplification necessary to trigger an L0 compaction
+		L0CompactionThreshold: 4, // default: 4
+
+		// Hard limit on L0 read-amplification, computed as the number of L0
+		// sublevels. Writes are stopped when this threshold is reached.
+		L0StopWritesThreshold: 24, // default: 12
+
+		// The maximum number of bytes for LBase. The base level is the level which
+		// L0 is compacted into. The base level is determined dynamically based on
+		// the existing data in the LSM. The maximum number of bytes for other levels
+		// is computed dynamically based on the base level's maximum size. When the
+		// maximum number of bytes for a level is exceeded, compaction is requested.
+		LBaseMaxBytes: 64 * 1024 * 1024, // default: 64 MB
 
 		// Per-level options. Options for at least one level must be specified. The
 		// options for the last level are used for all subsequent levels.
-		Levels: []pebble.LevelOptions{
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 2 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-		},
+		Levels: make([]pebble.LevelOptions, 7),
 	}
+
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
 	opts.Experimental.ReadSamplingMultiplier = -1
+
+	// The target file size for the level.
+	opts.Levels[0].TargetFileSize = 8 * 1024 * 1024 // default: 4 MB
+
+	// configure the levels
+	for i := 0; i < len(opts.Levels); i++ {
+		l := &opts.Levels[i]
+		// BlockSize is the target uncompressed size in bytes of each table block.
+		l.BlockSize = 8 * 1024 // default: 4 KB
+
+		// IndexBlockSize is the target uncompressed size in bytes of each index
+		// block. When the index block size is larger than this target, two-level
+		// indexes are automatically enabled. Setting this option to a large value
+		// (such as math.MaxInt32) disables the automatic creation of two-level
+		// indexes.
+		//
+		// The default value is the value of BlockSize.
+		l.IndexBlockSize = l.BlockSize
+
+		// FilterPolicy defines a filter algorithm (such as a Bloom filter) that can
+		// reduce disk reads for Get calls.
+		//
+		// One such implementation is bloom.FilterPolicy(10) from the pebble/bloom
+		// package.
+		//
+		// The default value means to use no filter.
+		l.FilterPolicy = bloom.FilterPolicy(10)
+
+		// FilterType defines whether an existing filter policy is applied at a
+		// block-level or table-level. Block-level filters use less memory to create,
+		// but are slower to access as a check for the key in the index must first be
+		// performed to locate the filter block. A table-level filter will require
+		// memory proportional to the number of keys in an sstable to create, but
+		// avoids the index lookup when determining if a key is present. Table-level
+		// filters should be preferred except under constrained memory situations.
+		l.FilterType = pebble.TableFilter
+
+		// Compression defines the per-block compression to use.
+		l.Compression = pebble.NoCompression // default: SnappyCompression
+
+		if i > 0 {
+			// The target file size for the level.
+			l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
+		}
+	}
 
 	if inMem {
 		opts.FS = vfs.NewMem()
