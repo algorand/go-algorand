@@ -46,7 +46,7 @@ var defaultLocal = Local{
 	CatchupParallelBlocks:                      16,
 	ConnectionsRateLimitingCount:               60,
 	ConnectionsRateLimitingWindowSeconds:       1,
-	DNSBootstrapID:                             "<network>.algorand.network",
+	DNSBootstrapID:                             "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)",
 	DNSSecurityFlags:                           1,
 	DeadlockDetection:                          0,
 	DeadlockDetectionThreshold:                 30,
