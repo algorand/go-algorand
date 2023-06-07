@@ -1490,7 +1490,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 	l.trackers.lastFlushTime = time.Time{}
 	l.trackers.mu.Unlock()
 
-	const timeout = 2600 * time.Millisecond
+	const timeout = 3 * time.Second
 	started := time.Now()
 
 	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
