@@ -2851,7 +2851,7 @@ func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.AppendBytes(o, ((*z).SK)[:])
 	// string "SignatureVerifier"
 	o = append(o, 0xb1, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o = (*z).SignatureVerifier.MarshalMsg(o)
+	o = msgp.AppendBytes(o, ((*z).SignatureVerifier)[:])
 	return
 }
 
@@ -2864,33 +2864,33 @@ func (_ *SignatureSecrets) CanMarshalMsg(z interface{}) bool {
 func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0002 int
-	var zb0003 bool
-	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 int
+	var zb0004 bool
+	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
-			bts, err = (*z).SignatureVerifier.UnmarshalMsg(bts)
+		if zb0003 > 0 {
+			zb0003--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).SignatureVerifier)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SignatureVerifier")
 				return
 			}
 		}
-		if zb0002 > 0 {
-			zb0002--
+		if zb0003 > 0 {
+			zb0003--
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SK")
 				return
 			}
 		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
+		if zb0003 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0003)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -2901,11 +2901,11 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 {
+		if zb0004 {
 			(*z) = SignatureSecrets{}
 		}
-		for zb0002 > 0 {
-			zb0002--
+		for zb0003 > 0 {
+			zb0003--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -2913,7 +2913,7 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "SignatureVerifier":
-				bts, err = (*z).SignatureVerifier.UnmarshalMsg(bts)
+				bts, err = msgp.ReadExactBytes(bts, ((*z).SignatureVerifier)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "SignatureVerifier")
 					return
@@ -2944,18 +2944,21 @@ func (_ *SignatureSecrets) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignatureSecrets) Msgsize() (s int) {
-	s = 1 + 18 + (*z).SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
+	s = 1 + 18 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignatureSecrets) MsgIsZero() bool {
-	return ((*z).SignatureVerifier.MsgIsZero()) && ((*z).SK == (ed25519PrivateKey{}))
+	return ((*z).SignatureVerifier == (PublicKey{})) && ((*z).SK == (ed25519PrivateKey{}))
 }
 
 // MaxSize returns a maximum valid message size for this message type
 func SignatureSecretsMaxSize() (s int) {
-	s = 1 + 18 + SignatureVerifierMaxSize() + 3
+	s = 1 + 18
+	// Calculating size of array: z.SignatureVerifier
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
 	// Calculating size of array: z.SK
 	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return

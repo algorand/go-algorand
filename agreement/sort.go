@@ -51,9 +51,10 @@ func (a SortPeriod) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortPeriod) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortRound defines SortInterface used by msgp to consistently sort maps with this type as key.
+// note, for type aliases the base type is used for the interface
 //msgp:ignore SortRound
-//msgp:sort round SortRound
-type SortRound []round
+//msgp:sort basics.Round SortRound
+type SortRound []basics.Round
 
 func (a SortRound) Len() int           { return len(a) }
 func (a SortRound) Less(i, j int) bool { return a[i] < a[j] }

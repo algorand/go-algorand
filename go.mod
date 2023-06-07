@@ -38,7 +38,7 @@ require (
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 )
 
-replace github.com/algorand/msgp => /Users/iansuvak/Code/msgp
+replace github.com/algorand/msgp => /Users/pzbitskiy/projects/msgp
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
