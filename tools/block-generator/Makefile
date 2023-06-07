@@ -2,6 +2,7 @@ SCENARIO = scenarios/config.app.create.yml # test_config.yml
 SKIP = --skip-runner
 RESETDB = # --reset-db
 REPORTS = RUN_RUNNER_OUTPUTS
+
 debug-blockgen:
 	python run_runner.py \
 	--conduit-binary ./conduit \

@@ -500,5 +500,46 @@ localsfill:
 	byte "7777777777777777777777777777777777777777777777777777777777777777"
 	uncover 2
 	app_local_put
+
+	int 1337
+	txn Sender
+	byte "8888888888888888888888888888888888888888888888888888888888888888"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "9999999999999999999999999999999999999999999999999999999999999999"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	uncover 2
+	app_local_put
 	b label13
 
