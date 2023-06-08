@@ -534,6 +534,10 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
+	// force a prefetch before remembering
+	// Note: this mostly a metrics accounting issue, not to skew things from the expected behaviour from gossip
+	node.transactionPool.Prefetch(txgroup)
+
 	err = node.transactionPool.Remember(txgroup)
 	if err != nil {
 		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)

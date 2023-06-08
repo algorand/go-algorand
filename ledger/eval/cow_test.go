@@ -43,6 +43,10 @@ func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error
 	return ledgercore.ToAccountData(ml.balanceMap[addr]), nil
 }
 
+func (ml *mockLedger) prefetch(addr basics.Address) error {
+	return nil
+}
+
 func (ml *mockLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
 	params, ok := ml.balanceMap[addr].AppParams[aidx]
 	return ledgercore.AppParamsDelta{Params: &params}, ok, nil // XXX make a copy?

@@ -117,6 +117,7 @@ type TxHandler struct {
 	genesisHash           crypto.Digest
 	txVerificationPool    execpool.BacklogPool
 	backlogQueue          chan *txBacklogMsg
+	prefetcher            chan *txBacklogMsg
 	postVerificationQueue chan *verify.VerificationResult
 	backlogWg             sync.WaitGroup
 	net                   network.GossipNode
@@ -165,6 +166,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		ledger:                opts.Ledger,
 		txVerificationPool:    opts.ExecutionPool,
 		backlogQueue:          make(chan *txBacklogMsg, txBacklogSize),
+		prefetcher:            make(chan *txBacklogMsg, txBacklogSize),
 		postVerificationQueue: make(chan *verify.VerificationResult, txBacklogSize),
 		net:                   opts.Net,
 		streamVerifierChan:    make(chan execpool.InputJob),
@@ -225,6 +227,9 @@ func (handler *TxHandler) Start() {
 	handler.backlogWg.Add(2)
 	go handler.backlogWorker()
 	go handler.backlogGaugeThread()
+	for i := 0; i < 64; i++ {
+		go handler.prefetcherWorker()
+	}
 	handler.streamVerifier.Start(handler.ctx)
 	if handler.erl != nil {
 		handler.erl.Start()
@@ -260,6 +265,38 @@ func (handler *TxHandler) backlogGaugeThread() {
 		select {
 		case <-ticker.C:
 			transactionMessagesBacklogSizeGauge.Set(uint64(len(handler.backlogQueue)))
+		case <-handler.ctx.Done():
+			return
+		}
+	}
+}
+
+// prefetcherWorker is the worker go routine that prefetches accounts, resources, etc from the DB.
+func (handler *TxHandler) prefetcherWorker() {
+	for {
+		select {
+		// TODO: consider taking works from the backlog and requeing? this is to force a prefetch happening first
+		case wi, ok := <-handler.prefetcher:
+			if !ok {
+				// this is never happening since handler.backlogQueue is never closed
+				return
+			}
+			// TODO: consider perf of wasting time on this..
+			// // nothing to prefetch if the txn is already in
+			// if handler.checkAlreadyCommitted(wi) {
+			// 	continue
+			// }
+			// prefetch
+			txGroup := wi.unverifiedTxGroup
+			handler.txPool.Prefetch(txGroup)
+
+			// queue the transaction for evaluation into the block
+			select {
+			case handler.backlogQueue <- wi:
+				// default:
+				// TODO: might not want to drop here and just wait?
+				// the prefetching wont work too well on full queues..
+			}
 		case <-handler.ctx.Done():
 			return
 		}
@@ -640,8 +677,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		}
 	}
 
+	// queue the addreses needed to evaluate the transaction for prefetching
 	select {
-	case handler.backlogQueue <- &txBacklogMsg{
+	case handler.prefetcher <- &txBacklogMsg{
 		rawmsg:                &rawmsg,
 		unverifiedTxGroup:     unverifiedTxGroup,
 		rawmsgDataHash:        msgKey,

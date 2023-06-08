@@ -1467,13 +1467,17 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		// check baseAccoiunts again to see if it does not exist
 		if au.baseAccounts.readNotFound(addr) {
 			// it seems the account doesnt exist
-			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
+			return ledgercore.AccountData{CacheMiss: false}, rnd, rewardsVersion, rewardsLevel, nil
 		}
 
 		if synchronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
 		}
+
+		// at this point, we do not have the account on any of our caches
+		ledgerCacheMissAccountsCount.Inc(nil)
+
 		// No updates of this account in the in-memory deltas; use on-disk DB.
 		// The check in roundOffset() made sure the round is exactly the one
 		// present in the on-disk DB.  As an optimization, we avoid creating
@@ -1487,11 +1491,13 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			if persistedData.Ref != nil {
 				// if we read actual data return it
 				au.baseAccounts.writePending(persistedData)
-				return persistedData.AccountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
+				ad := persistedData.AccountData.GetLedgerCoreAccountData()
+				ad.CacheMiss = true
+				return ad, rnd, rewardsVersion, rewardsLevel, nil
 			}
 			au.baseAccounts.writeNotFoundPending(addr)
 			// otherwise return empty
-			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
+			return ledgercore.AccountData{CacheMiss: true}, rnd, rewardsVersion, rewardsLevel, nil
 		}
 		if synchronized {
 			if persistedData.Round < currentDbRound {

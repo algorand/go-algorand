@@ -30,6 +30,8 @@ import (
 type AccountData struct {
 	AccountBaseData
 	VotingData
+	// CacheMiss is true if the data came from disk
+	CacheMiss bool
 }
 
 // AccountBaseData contains base account info like balance, status and total number of resources

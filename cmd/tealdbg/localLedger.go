@@ -336,6 +336,8 @@ func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
+func (l *localLedger) FlushCaches() {}
+
 func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	switch ctype {
 	case basics.AssetCreatable:

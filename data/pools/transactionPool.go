@@ -103,6 +103,7 @@ type BlockEvaluator interface {
 	TestTransactionGroup(txgroup []transactions.SignedTxn) error
 	Round() basics.Round
 	PaySetSize() int
+	PrefetchTransactionGroup(txgroup []transactions.SignedTxnWithAD)
 	TransactionGroup(txads []transactions.SignedTxnWithAD) error
 	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
 	GenerateBlock() (*ledgercore.ValidatedBlock, error)
@@ -472,6 +473,29 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 
 	pool.rememberCommit(false)
 	return nil
+}
+
+// Prefetch attempts to load all things needed to remember the transaction.
+// It does not actually remember the transaction.
+func (pool *TransactionPool) Prefetch(txgroup []transactions.SignedTxn) {
+	// guard against the `pendingBlockEvaluator` being nil'ed
+	// we just take the current value and use it, we dont particularly mind if its swapped
+	// the prefetch will excercise code all the way down on the ledger regardless
+	// Note: alternatively we could change the pool lock to be a RW and take RLock here
+	evaluator := pool.pendingBlockEvaluator
+	if evaluator == nil {
+		// take a lock and check if we have the evaluator now
+		// Note: some races can happen on the block boundry when the evaluator is reset
+		pool.mu.Lock()
+		evaluator = pool.pendingBlockEvaluator
+		pool.mu.Unlock()
+		if evaluator == nil {
+			// if its still nil, then don't prefetch anything
+			return
+		}
+	}
+	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
+	evaluator.PrefetchTransactionGroup(txgroupad)
 }
 
 // Lookup returns the error associated with a transaction that used

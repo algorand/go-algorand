@@ -1065,6 +1065,8 @@ func (l *testCowBaseLedger) LookupKv(rnd basics.Round, key string) ([]byte, erro
 	return nil, errors.New("not implemented")
 }
 
+func (l *testCowBaseLedger) FlushCaches() {}
+
 func (l *testCowBaseLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	return nil, errors.New("testCowBaseLedger does not implement GetStateProofVerificationContext")
 }

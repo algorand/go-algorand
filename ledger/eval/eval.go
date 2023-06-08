@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // LedgerForCowBase represents subset of Ledger functionality needed for cow business
@@ -46,6 +47,7 @@ type LedgerForCowBase interface {
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
+	FlushCaches()
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 }
@@ -180,14 +182,34 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, erro
 	if accountData, found := x.accounts[addr]; found {
 		return accountData, nil
 	}
-
 	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err != nil {
 		return ledgercore.AccountData{}, err
 	}
+	// track the cache misses account lookup
+	// Note: this indicates how well the prefetcher is working
+	if ad.CacheMiss {
+		evalCacheMissAccounts.Inc(nil)
+	}
+	// reset the cache miss flag
+	ad.CacheMiss = false
 
 	x.accounts[addr] = ad
 	return ad, err
+}
+
+func (x *roundCowBase) prefetch(addr basics.Address) error {
+	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err != nil {
+		return err
+	}
+	if ad.CacheMiss {
+		// make the new data available immedietly
+		x.l.FlushCaches()
+		evalPrefetchMissAccounts.Inc(nil)
+	}
+	// TODO: consider adding a counter to when prefetch doesnt prefetch anything
+	return nil
 }
 
 func (x *roundCowBase) updateAssetResourceCache(aa ledgercore.AccountAsset, r ledgercore.AssetResource) {
@@ -921,6 +943,27 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 	}
 
 	return nil
+}
+
+// PrefetchTransactionGroup loads all related data needed by the transactions in the group
+func (eval *BlockEvaluator) PrefetchTransactionGroup(txgroup []transactions.SignedTxnWithAD) {
+	cow := eval.state.child(len(txgroup))
+	defer cow.recycle()
+
+	for i := range txgroup {
+		txn := txgroup[i].Txn
+		// fetch sender
+		cow.prefetch(txn.Sender)
+
+		switch txn.Type {
+		case protocol.PaymentTx:
+			cow.prefetch(txn.Receiver)
+			cow.prefetch(txn.CloseRemainderTo)
+		// TODO: write the rest
+		default:
+			// unknown txn type, lets not error here
+		}
+	}
 }
 
 // Transaction tentatively adds a new transaction as part of this block evaluation.
@@ -1710,3 +1753,6 @@ transactionGroupLoop:
 
 	return eval.state.deltas(), nil
 }
+
+var evalCacheMissAccounts = metrics.NewCounter("eval_cache_miss_accounts", "missed accounts")
+var evalPrefetchMissAccounts = metrics.NewCounter("eval_prefetch_miss_accounts", "missed accounts")

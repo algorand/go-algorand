@@ -99,7 +99,7 @@ outer2:
 	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
 		select {
 		case addr := <-m.pendingNotFound:
-			m.notFound[addr] = struct{}{}
+			m.writeNotFound(addr)
 		default:
 			break outer2
 		}
@@ -146,6 +146,12 @@ func (m *lruAccounts) write(acctData trackerdb.PersistedAccountData) {
 		// new entry.
 		m.accounts[acctData.Addr] = m.accountsList.pushFront(&acctData)
 	}
+}
+
+// write a single account as not found on the db
+// thread locking semantics : write lock
+func (m *lruAccounts) writeNotFound(addr basics.Address) {
+	m.notFound[addr] = struct{}{}
 }
 
 // prune adjust the current size of the lruAccounts cache, by dropping the least

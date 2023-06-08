@@ -41,6 +41,8 @@ import (
 type roundCowParent interface {
 	// lookup retrieves data about an address, eventually querying the ledger if the address was not found in cache.
 	lookup(basics.Address) (ledgercore.AccountData, error)
+	// prefetch retrieves data about an address and populates the cache, it will make a subsequent lookup faster.
+	prefetch(basics.Address) error
 
 	// lookupAppParams, lookupAssetParams, lookupAppLocalState, and lookupAssetHolding retrieve data for a given address and ID.
 	// If cacheOnly is set, the ledger DB will not be queried, and only the cache will be consulted.
@@ -176,6 +178,10 @@ func (cb *roundCowState) lookup(addr basics.Address) (data ledgercore.AccountDat
 	}
 
 	return cb.lookupParent.lookup(addr)
+}
+
+func (cb *roundCowState) prefetch(addr basics.Address) error {
+	return cb.lookupParent.prefetch(addr)
 }
 
 func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
