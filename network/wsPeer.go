@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
+// MaxMessageLength is the maximum length of a message that can be sent or received, exported to be used in the node.TestMaxSizesCorrect test
 const MaxMessageLength = 6 * 1024 * 1024 // Currently the biggest message is VB vote bundles.
 const averageMessageLength = 2 * 1024    // Most of the messages are smaller than this size, which makes it into a good base allocation.
 
@@ -833,6 +834,7 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	return false
 }
 
+// PingLength is the fixed length of ping message, exported to be used in the node.TestMaxSizesCorrect test
 const PingLength = 8
 const maxPingWait = 60 * time.Second
 
