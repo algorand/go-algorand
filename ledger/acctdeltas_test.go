@@ -59,7 +59,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aor, err := tx.Testing().MakeAccountsOptimizedReader()
+	aor, err := tx.MakeAccountsOptimizedReader()
 	require.NoError(t, err)
 
 	var totalOnline, totalOffline, totalNotPart uint64
@@ -793,6 +793,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 	b.ReportMetric(float64(b.N)/float64((time.Since(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")
 }
 
+//nolint:staticcheck // intentionally setting b.N
 func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 	benchSizes := []int{1024 * 100, 1024 * 200, 1024 * 400}
 	for _, size := range benchSizes {
@@ -1131,10 +1132,10 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 
 	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err0 error) {
 		writer, err0 := sqlitedriver.MakeAccountsSQLWriter(tx, false, false, true, false)
-		defer writer.Close()
 		if err0 != nil {
 			return
 		}
+		defer writer.Close()
 		for i := 0; i < len(kvPairDBPrepareSet); i++ {
 			err0 = writer.UpsertKvPair(string(kvPairDBPrepareSet[i].key), nil)
 			if err0 != nil {

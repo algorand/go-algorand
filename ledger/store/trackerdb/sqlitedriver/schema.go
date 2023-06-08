@@ -257,7 +257,7 @@ func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) erro
 	}
 
 	for _, stmt := range createOnlineAccountIndex {
-		_, err := tx.Exec(stmt)
+		_, err = tx.Exec(stmt)
 		if err != nil {
 			return err
 		}
@@ -501,12 +501,12 @@ func performResourceTableMigration(ctx context.Context, tx *sql.Tx, log func(pro
 			return err
 		}
 		insertResourceCallback := func(ctx context.Context, rowID int64, cidx basics.CreatableIndex, rd *trackerdb.ResourcesData) error {
-			var err error
+			var err0 error
 			if rd != nil {
 				encodedData := protocol.Encode(rd)
-				_, err = insertResources.ExecContext(ctx, rowID, cidx, encodedData)
+				_, err0 = insertResources.ExecContext(ctx, rowID, cidx, encodedData)
 			}
-			return err
+			return err0
 		}
 		err = trackerdb.AccountDataResources(ctx, &accountData, rowID, insertResourceCallback)
 		if err != nil {
@@ -547,13 +547,13 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 	// when migrating there is only MaxTxnLife blocks in the block DB
 	// since the original txTail.commmittedUpTo preserved only (rnd+1)-MaxTxnLife = 1000 blocks back
 	err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-		latestBlockRound, err := blockdb.BlockLatest(blockTx)
-		if err != nil {
-			return fmt.Errorf("latest block number cannot be retrieved : %w", err)
+		latestBlockRound, blockErr := blockdb.BlockLatest(blockTx)
+		if blockErr != nil {
+			return fmt.Errorf("latest block number cannot be retrieved : %w", blockErr)
 		}
-		latestHdr, err := blockdb.BlockGetHdr(blockTx, dbRound)
-		if err != nil {
-			return fmt.Errorf("latest block header %d cannot be retrieved : %w", dbRound, err)
+		latestHdr, hdrErr := blockdb.BlockGetHdr(blockTx, dbRound)
+		if hdrErr != nil {
+			return fmt.Errorf("latest block header %d cannot be retrieved : %w", dbRound, hdrErr)
 		}
 
 		proto := config.Consensus[latestHdr.CurrentProtocol]
@@ -567,7 +567,7 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		if firstRound == basics.Round(0) {
 			firstRound++
 		}
-		if _, err := blockdb.BlockGet(blockTx, firstRound); err != nil {
+		if _, getErr := blockdb.BlockGet(blockTx, firstRound); getErr != nil {
 			// looks like not catchpoint but a regular migration, start from maxTxnLife + deeperBlockHistory back
 			firstRound = (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
 			if firstRound == basics.Round(0) {
@@ -576,14 +576,14 @@ func performTxTailTableMigration(ctx context.Context, tx *sql.Tx, blockDb db.Acc
 		}
 		tailRounds := make([][]byte, 0, maxTxnLife)
 		for rnd := firstRound; rnd <= dbRound; rnd++ {
-			blk, err := blockdb.BlockGet(blockTx, rnd)
-			if err != nil {
-				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, err)
+			blk, getErr := blockdb.BlockGet(blockTx, rnd)
+			if getErr != nil {
+				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, getErr)
 			}
 
-			tail, err := trackerdb.TxTailRoundFromBlock(blk)
-			if err != nil {
-				return err
+			tail, tErr := trackerdb.TxTailRoundFromBlock(blk)
+			if tErr != nil {
+				return tErr
 			}
 
 			encodedTail, _ := tail.Encode()
@@ -611,9 +611,9 @@ func performOnlineRoundParamsTailMigration(ctx context.Context, tx *sql.Tx, bloc
 		currentProto = initProto
 	} else {
 		err = blockDb.Atomic(func(ctx context.Context, blockTx *sql.Tx) error {
-			hdr, err := blockdb.BlockGetHdr(blockTx, rnd)
-			if err != nil {
-				return err
+			hdr, hdrErr := blockdb.BlockGetHdr(blockTx, rnd)
+			if hdrErr != nil {
+				return hdrErr
 			}
 			currentProto = hdr.CurrentProtocol
 			return nil
@@ -783,18 +783,18 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 		}
 		for addr, state := range acctRehash {
 			deleteHash := trackerdb.AccountHashBuilderV6(addr, &state.old, state.oldEnc)
-			deleted, err := trie.Delete(deleteHash)
-			if err != nil {
-				return fmt.Errorf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, err)
+			deleted, delErr := trie.Delete(deleteHash)
+			if delErr != nil {
+				return fmt.Errorf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v: %w", hex.EncodeToString(deleteHash), addr, delErr)
 			}
 			if !deleted && log != nil {
 				log.Warnf("performOnlineAccountsTableMigration failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
 			}
 
 			addHash := trackerdb.AccountHashBuilderV6(addr, &state.new, state.newEnc)
-			added, err := trie.Add(addHash)
-			if err != nil {
-				return fmt.Errorf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, err)
+			added, addErr := trie.Add(addHash)
+			if addErr != nil {
+				return fmt.Errorf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v: %w", hex.EncodeToString(addHash), addr, addErr)
 			}
 			if !added && log != nil {
 				log.Warnf("performOnlineAccountsTableMigration attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
@@ -813,9 +813,9 @@ func performOnlineAccountsTableMigration(ctx context.Context, tx *sql.Tx, progre
 // and optionally returns list of addresses that were eliminated
 func removeEmptyAccountData(tx *sql.Tx, queryAddresses bool) (num int64, addresses []basics.Address, err error) {
 	if queryAddresses {
-		rows, err := tx.Query("SELECT address FROM accountbase where length(data) = 1 and data = x'80'") // empty AccountData is 0x80
-		if err != nil {
-			return 0, nil, err
+		rows, qErr := tx.Query("SELECT address FROM accountbase where length(data) = 1 and data = x'80'") // empty AccountData is 0x80
+		if qErr != nil {
+			return 0, nil, qErr
 		}
 		defer rows.Close()
 
@@ -913,13 +913,13 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		}
 
 		// we need to update the encoded data.
-		result, err := updateStmt.ExecContext(ctx, reencodedAccountData, addrbuf)
-		if err != nil {
-			return 0, err
+		result, rowsErr := updateStmt.ExecContext(ctx, reencodedAccountData, addrbuf)
+		if rowsErr != nil {
+			return 0, rowsErr
 		}
-		rowsUpdated, err := result.RowsAffected()
-		if err != nil {
-			return 0, err
+		rowsUpdated, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return 0, rowsErr
 		}
 		if rowsUpdated != 1 {
 			return 0, fmt.Errorf("failed to update account %v, number of rows updated was %d instead of 1", addr, rowsUpdated)

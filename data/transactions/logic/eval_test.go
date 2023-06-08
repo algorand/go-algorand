@@ -37,6 +37,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+
+	"pgregory.net/rapid"
 )
 
 // Note that most of the tests use makeTestProto/defaultEvalParams as evaluator version so that
@@ -369,6 +371,33 @@ func TestSimpleMath(t *testing.T) {
 	testAccepts(t, "int 21; int 7; / ; int  3; ==", 1)
 
 	testPanics(t, "int 1; int 2; - ; int 0; ==", 1)
+}
+
+// TestRapidMath uses rapid.Check to be a bit more exhaustive
+func TestRapidMath(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rapid.Check(t, func(r *rapid.T) {
+		a := rapid.Uint64().Draw(r, "a").(uint64)
+		b := rapid.Uint64().Draw(r, "b").(uint64)
+		sum := a + b
+		test := fmt.Sprintf("int %d; int %d; +; int %d; ==", a, b, sum)
+		if sum < a {
+			testPanics(t, test, 1)
+		} else {
+			testAccepts(t, test, 1)
+		}
+
+		diff := a - b
+		test = fmt.Sprintf("int %d; int %d; -; int %d; ==", a, b, diff)
+		if a < b {
+			testPanics(t, test, 1)
+		} else {
+			testAccepts(t, test, 1)
+		}
+
+	})
 }
 
 func TestSha256EqArg(t *testing.T) {
@@ -950,16 +979,16 @@ func TestIntcTooFar(t *testing.T) {
 
 	t.Parallel()
 	// Want to be super clear that intc_1 fails, whether an intcblock exists (but small) or not
-	testPanics(t, "intc_1", 1)
-	testPanics(t, "int 1; intc_1; pop", 1)
+	testPanics(t, "intc_1", 1, "intc 1 beyond 0 constants")
+	testPanics(t, "intcblock 7; intc_1; pop", 1, "intc 1 beyond 1 constants")
 }
 
 func TestBytecTooFar(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
-	testPanics(t, "bytec_1; btoi", 1)
-	testPanics(t, "byte 0x23; bytec_1; btoi", 1)
+	testPanics(t, "bytec_1; btoi", 1, "bytec 1 beyond 0 constants")
+	testPanics(t, "bytecblock 0x23 0x45; bytec_2; btoi", 1, "bytec 2 beyond 2 constants")
 }
 
 func TestManualCBlockEval(t *testing.T) {
@@ -967,7 +996,7 @@ func TestManualCBlockEval(t *testing.T) {
 	t.Parallel()
 
 	// TestManualCBlock in assembler_test.go demonstrates that these will use
-	// an inserted constant block.
+	// an inserted constant block because the blocks given are in dead code.
 	testAccepts(t, "int 4; int 4; +; int 8; ==; return; intcblock 10", 2)
 	testAccepts(t, "b skip; intcblock 10; skip: int 4; int 4; +; int 8; ==;", 2)
 	testAccepts(t, "byte 0x2222; byte 0x2222; concat; len; int 4; ==; return; bytecblock 0x11", 2)

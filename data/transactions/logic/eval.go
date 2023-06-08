@@ -626,6 +626,9 @@ func (cx *EvalContext) RunMode() RunMode {
 	return cx.runModeFlags
 }
 
+// PC returns the program counter of the current application being evaluated
+func (cx *EvalContext) PC() int { return cx.pc }
+
 // avmType describes the type of a value on the operand stack
 // avmTypes are a subset of StackTypes
 type avmType byte
@@ -656,23 +659,6 @@ func (at avmType) String() string {
 		return "[]byte"
 	}
 	return "internal error, unknown type"
-}
-
-// stackType lifts the avmType to a StackType
-// it can do this because the base StackTypes
-// are a superset of avmType
-func (at avmType) stackType() StackType {
-	switch at {
-	case avmNone:
-		return StackNone
-	case avmAny:
-		return StackAny
-	case avmUint64:
-		return StackUint64
-	case avmBytes:
-		return StackBytes
-	}
-	return StackNone
 }
 
 var (
@@ -857,29 +843,6 @@ func (st StackType) Typed() bool {
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
-
-// Reversed returns the StackTypes in reverse order
-// useful for displaying the stack as an op sees it
-func (st StackTypes) Reversed() StackTypes {
-	nst := make(StackTypes, len(st))
-	for idx := 0; idx < len(st); idx++ {
-		nst[idx] = st[len(st)-1-idx]
-	}
-	return nst
-}
-
-func (st StackTypes) String() string {
-	// Note this reverses the stack so top appears first
-	return fmt.Sprintf("(%s)", strings.Join(st.strings(), ", "))
-}
-
-func (st StackTypes) strings() []string {
-	var strs = make([]string, len(st))
-	for idx, s := range st {
-		strs[idx] = s.String()
-	}
-	return strs
-}
 
 func parseStackTypes(spec string) StackTypes {
 	if spec == "" {
@@ -2285,7 +2248,7 @@ func opIntConstBlock(cx *EvalContext) error {
 
 func opIntConstN(cx *EvalContext, n byte) error {
 	if int(n) >= len(cx.intc) {
-		return fmt.Errorf("intc [%d] beyond %d constants", n, len(cx.intc))
+		return fmt.Errorf("intc %d beyond %d constants", n, len(cx.intc))
 	}
 	cx.stack = append(cx.stack, stackValue{Uint: cx.intc[n]})
 	return nil
@@ -2342,7 +2305,7 @@ func opByteConstBlock(cx *EvalContext) error {
 
 func opByteConstN(cx *EvalContext, n uint) error {
 	if n >= uint(len(cx.bytec)) {
-		return fmt.Errorf("bytec [%d] beyond %d constants", n, len(cx.bytec))
+		return fmt.Errorf("bytec %d beyond %d constants", n, len(cx.bytec))
 	}
 	cx.stack = append(cx.stack, stackValue{Bytes: cx.bytec[n]})
 	return nil
@@ -2638,26 +2601,26 @@ func opRetSub(cx *EvalContext) error {
 	if top < 0 {
 		return errors.New("retsub with empty callstack")
 	}
-	frame := cx.callstack[top]
-	if frame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
-		expect := frame.height + frame.returns
+	topFrame := cx.callstack[top]
+	if topFrame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
+		expect := topFrame.height + topFrame.returns
 		if len(cx.stack) < expect { // Check general error case first, only diffentiate when error is assured
 			switch {
-			case len(cx.stack) < frame.height:
+			case len(cx.stack) < topFrame.height:
 				return fmt.Errorf("retsub executed with stack below frame. Did you pop args?")
-			case len(cx.stack) == frame.height:
-				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", frame.returns)
+			case len(cx.stack) == topFrame.height:
+				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", topFrame.returns)
 			default:
 				return fmt.Errorf("retsub executed with %d return values on stack. proto declared %d",
-					len(cx.stack)-frame.height, frame.returns)
+					len(cx.stack)-topFrame.height, topFrame.returns)
 			}
 		}
-		argstart := frame.height - frame.args
-		copy(cx.stack[argstart:], cx.stack[frame.height:expect])
-		cx.stack = cx.stack[:argstart+frame.returns]
+		argstart := topFrame.height - topFrame.args
+		copy(cx.stack[argstart:], cx.stack[topFrame.height:expect])
+		cx.stack = cx.stack[:argstart+topFrame.returns]
 	}
 	cx.callstack = cx.callstack[:top]
-	cx.nextpc = frame.retpc
+	cx.nextpc = topFrame.retpc
 	return nil
 }
 
@@ -3781,13 +3744,13 @@ func opEcdsaPkDecompress(cx *EvalContext) error {
 	cx.stack[last].Uint = 0
 	cx.stack[last].Bytes, err = leadingZeros(32, x)
 	if err != nil {
-		return fmt.Errorf("x component zeroing failed: %s", err.Error())
+		return fmt.Errorf("x component zeroing failed: %w", err)
 	}
 
 	var sv stackValue
 	sv.Bytes, err = leadingZeros(32, y)
 	if err != nil {
-		return fmt.Errorf("y component zeroing failed: %s", err.Error())
+		return fmt.Errorf("y component zeroing failed: %w", err)
 	}
 
 	cx.stack = append(cx.stack, sv)
@@ -4269,7 +4232,7 @@ func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
 	if cx.availableAccount(addr) {
 		return addr, nil
 	}
-	return basics.Address{}, fmt.Errorf("invalid Account reference %s", addr)
+	return basics.Address{}, fmt.Errorf("unavailable Account %s", addr)
 }
 
 // accountReference yields the address and Accounts offset designated by a
@@ -4680,9 +4643,9 @@ func opAppLocalDel(cx *EvalContext) error {
 
 	// if deleting a non-existent value, don't record in EvalDelta, matching
 	// ledger behavior with previous BuildEvalDelta mechanism
-	if _, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
-		if err != nil {
-			return err
+	if _, ok, getErr := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
+		if getErr != nil {
+			return getErr
 		}
 		accountIdx = cx.ensureLocalDelta(accountIdx, addr)
 		cx.txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
@@ -5165,7 +5128,7 @@ func addInnerTxn(cx *EvalContext) error {
 	return nil
 }
 
-func opTxBegin(cx *EvalContext) error {
+func opItxnBegin(cx *EvalContext) error {
 	if len(cx.subtxns) > 0 {
 		return errors.New("itxn_begin without itxn_submit")
 	}
@@ -5377,14 +5340,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		txn.AssetParams.Total, err = sv.uint()
 	case ConfigAssetDecimals:
 		var decimals uint64
-		decimals, err = sv.uint()
-		if err == nil {
-			if decimals > uint64(cx.Proto.MaxAssetDecimals) {
-				err = fmt.Errorf("too many decimals (%d)", decimals)
-			} else {
-				txn.AssetParams.Decimals = uint32(decimals)
-			}
-		}
+		decimals, err = sv.uintMaxed(uint64(cx.Proto.MaxAssetDecimals))
+		txn.AssetParams.Decimals = uint32(decimals)
 	case ConfigAssetDefaultFrozen:
 		txn.AssetParams.DefaultFrozen, err = sv.bool()
 	case ConfigAssetUnitName:
@@ -5583,16 +5540,16 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		// transaction pool. Namely that any transaction that makes it
 		// to Perform (which is equivalent to eval.applyTransaction)
 		// is authorized, and WellFormed.
-		err := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
-		if err != nil {
-			return err
+		txnErr := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
+		if txnErr != nil {
+			return txnErr
 		}
 
 		// Recall that WellFormed does not care about individual
 		// transaction fees because of fee pooling. Checked above.
-		err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
-		if err != nil {
-			return err
+		txnErr = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		if txnErr != nil {
+			return txnErr
 		}
 
 		var calledVersion uint64
@@ -5616,9 +5573,9 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			// Set program by txn, approval, or clear state
 			program := cx.subtxns[itx].Txn.ApprovalProgram
 			if cx.subtxns[itx].Txn.ApplicationID != 0 {
-				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
-				if err != nil {
-					return err
+				app, _, paramsErr := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+				if paramsErr != nil {
+					return paramsErr
 				}
 				program = app.ApprovalProgram
 				if cx.subtxns[itx].Txn.OnCompletion == transactions.ClearStateOC {
@@ -5642,15 +5599,15 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			if cx.subtxns[itx].Txn.OnCompletion == transactions.OptInOC {
 				csp := cx.subtxns[itx].Txn.ClearStateProgram
 				if cx.subtxns[itx].Txn.ApplicationID != 0 {
-					app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
-					if err != nil {
-						return err
+					app, _, paramsErr := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+					if paramsErr != nil {
+						return paramsErr
 					}
 					csp = app.ClearStateProgram
 				}
-				csv, _, err := transactions.ProgramVersion(csp)
-				if err != nil {
-					return err
+				csv, _, verErr := transactions.ProgramVersion(csp)
+				if verErr != nil {
+					return verErr
 				}
 				if csv < cx.Proto.MinInnerApplVersion {
 					return fmt.Errorf("inner app call opt-in with CSP v%d < v%d",

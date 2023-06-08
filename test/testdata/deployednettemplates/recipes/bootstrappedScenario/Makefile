@@ -1,6 +1,6 @@
 # bootstrappedScenario is scenario1s but with pre-built 30_000_000 accountdb
-PARAMS=-w 20 -R 8 -N 20 -n 20 --npn-algod-nodes 10 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json
-FILEPARAMS=--rounds 1600 --ntxns 20000 --naccounts 30000000 --nassets 20000 --napps 20000 --wallet-name "wallet1" --bal 100000 --bal 1000000
+PARAMS=-w 20 -R 8 -N 20 -n 20 --npn-algod-nodes 10 --node-template node.json --relay-template relay.json --non-participating-node-template nonPartNode.json --last-part-key-round 50000
+FILEPARAMS=--rounds 1600 --ntxns 20000 --naccounts 30000000 --nassets 20000 --napps 20000 --wallet-name "wallet1" --bal 50000000 --bal 50000001 --deterministic
 
 all:	net.json genesis.json topology.json boostrappedFile.json
 
