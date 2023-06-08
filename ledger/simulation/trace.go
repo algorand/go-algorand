@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -188,25 +189,27 @@ type OpcodeTraceUnit struct {
 	// Opcode line (source?)
 	TEALSource string `codec:"-"`
 
-	// deleted elements from stack, help backwards debugging
-	Deleted []basics.TealValue `codec:"-"`
-
 	// what has been added to stack
-	Added []basics.TealValue `codec:"-"`
+	Added []model.TealValue `codec:"additions,omitempty"`
+
+	// deleted elements from stack, help backwards debugging
+	Deleted []model.TealValue `codec:"deletions,omitempty"`
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
 type TransactionTrace struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	// ApprovalProgramTrace stands for a slice of OpcodeTraceUnit over application call on approval program
-	ApprovalProgramTrace []OpcodeTraceUnit `codec:"approval-program-trace,omitempty"`
+	ApprovalProgramTrace []OpcodeTraceUnit `codec:"approval-program-trace"`
 	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
-	ClearStateProgramTrace []OpcodeTraceUnit `codec:"clear-state-program-trace,omitempty"`
+	ClearStateProgramTrace []OpcodeTraceUnit `codec:"clear-state-program-trace"`
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
-	LogicSigTrace []OpcodeTraceUnit `codec:"logic-sig-trace,omitempty"`
+	LogicSigTrace []OpcodeTraceUnit `codec:"logic-sig-trace"`
 	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
 	programTraceRef *[]OpcodeTraceUnit `codec:"-"`
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.
-	InnerTraces []TransactionTrace `codec:"inner-trace,omitempty"`
+	InnerTraces []TransactionTrace `codec:"inner-trace"`
 }

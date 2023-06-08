@@ -713,6 +713,12 @@ type SimulationEvalOverrides struct {
 
 // SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
 type SimulationOpcodeTraceUnit struct {
+	// Additions The added values to the stack by this opcode.
+	Additions *[]TealValue `json:"additions,omitempty"`
+
+	// Deletions The deleted values from the stack by this opcode.
+	Deletions *[]TealValue `json:"deletions,omitempty"`
+
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`
 
