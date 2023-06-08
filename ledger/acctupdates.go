@@ -771,6 +771,10 @@ func (au *accountUpdates) consecutiveVersion(offset uint64) uint64 {
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	au.accountsMu.Lock()
 	au.newBlockImpl(blk, delta)
+
+	// gauge the number of round deltas kept in memory
+	ledgerDeltasInMemory.Set(uint64(len(au.deltas) + 1))
+
 	au.accountsMu.Unlock()
 	au.accountsReadCond.Broadcast()
 }
@@ -1834,6 +1838,12 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	au.roundTotals = au.roundTotals[offset:]
 	au.cachedDBRound = newBase
 
+	// update the deltas metrics
+	ledgerDeltasInMemory.Set(uint64(len(au.deltas)))
+	// Note: technically we wrote it during `commitRound`
+	//       this might make the number missreport total disk deltas written if transactions fail
+	ledgerDeltasCommited.AddUint64(offset, nil)
+
 	au.accountsMu.Unlock()
 
 	if dcc.updateStats {
@@ -1989,3 +1999,6 @@ var ledgerGeneratecatchpointCount = metrics.NewCounter("ledger_generatecatchpoin
 var ledgerGeneratecatchpointMicros = metrics.NewCounter("ledger_generatecatchpoint_micros", "µs spent")
 var ledgerVacuumCount = metrics.NewCounter("ledger_vacuum_count", "calls")
 var ledgerVacuumMicros = metrics.NewCounter("ledger_vacuum_micros", "µs spent")
+var ledgerCacheMissAccountsCount = metrics.NewCounter("ledger_cache_miss_accounts", "misses")
+var ledgerDeltasInMemory = metrics.MakeGauge(metrics.MetricName{Name: "ledger_deltas_memory", Description: "deltas"})
+var ledgerDeltasCommited = metrics.NewCounter("ledger_deltas_commited", "deltas")

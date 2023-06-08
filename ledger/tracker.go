@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-deadlock"
 )
 
@@ -590,6 +591,9 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 		lt.postCommitUnlocked(tr.ctx, dcc)
 	}
 
+	// flush size
+	ledgerCommitFlushSize.Set(uint64(dcc.offset))
+
 	return nil
 }
 
@@ -777,3 +781,5 @@ func (tr *trackerRegistry) getDbRound() basics.Round {
 	tr.mu.RUnlock()
 	return dbRound
 }
+
+var ledgerCommitFlushSize = metrics.MakeGauge(metrics.MetricName{Name: "ledger_commit_flush_size", Description: "deltas"})
