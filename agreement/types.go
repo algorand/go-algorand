@@ -54,11 +54,6 @@ type (
 	period uint64
 )
 
-// RoundMaxSize is defined manually since it is expected by the msgp generated MaxSize methods.
-func RoundMaxSize() int {
-	return basics.RoundMaxSize()
-}
-
 // Algorand 2.0 steps
 const (
 	propose step = iota
