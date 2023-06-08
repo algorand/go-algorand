@@ -77,7 +77,7 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 			continue
 		}
 		// according to the SRV spec, each target need to end with a dot. While this would make a valid host name, including the
-		// last dot could lead to a non-canonical domain name representation, which would better get avoided.
+		// last dot could lead to a non-canonical domain name representation, which is better avoided.
 		if srv.Target[len(srv.Target)-1:] == "." {
 			srv.Target = srv.Target[:len(srv.Target)-1]
 		}
