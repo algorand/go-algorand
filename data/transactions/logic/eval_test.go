@@ -379,8 +379,8 @@ func TestRapidMath(t *testing.T) {
 	t.Parallel()
 
 	rapid.Check(t, func(r *rapid.T) {
-		a := rapid.Uint64().Draw(r, "a").(uint64)
-		b := rapid.Uint64().Draw(r, "b").(uint64)
+		a := rapid.Uint64().Draw(r, "a")
+		b := rapid.Uint64().Draw(r, "b")
 		sum := a + b
 		test := fmt.Sprintf("int %d; int %d; +; int %d; ==", a, b, sum)
 		if sum < a {
