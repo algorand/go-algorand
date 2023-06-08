@@ -908,7 +908,7 @@ func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.Accou
 		return basics.AccountData{}, fmt.Errorf("no account %s", addr)
 	}
 	return basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: br.balance},
 		},
 		AssetParams:    map[basics.AssetIndex]basics.AssetParams{},

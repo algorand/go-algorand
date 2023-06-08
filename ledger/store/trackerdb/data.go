@@ -360,7 +360,7 @@ func (ba *BaseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
 // GetAccountData getter for account data.
 func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 	return basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:          ba.Status,
 			MicroAlgos:      ba.MicroAlgos,
 			VoteID:          ba.VoteID,

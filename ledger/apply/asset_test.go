@@ -66,7 +66,7 @@ func TestAssetTransfer(t *testing.T) {
 	// prepare data
 	var addrs = map[basics.Address]basics.AccountData{
 		src: {
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: 10000000},
 			},
 			AssetParams: map[basics.AssetIndex]basics.AssetParams{
@@ -77,7 +77,7 @@ func TestAssetTransfer(t *testing.T) {
 			},
 		},
 		dst: {
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: 10000000},
 			},
 			Assets: map[basics.AssetIndex]basics.AssetHolding{
@@ -85,7 +85,7 @@ func TestAssetTransfer(t *testing.T) {
 			},
 		},
 		cls: {
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: 10000000},
 			},
 			Assets: map[basics.AssetIndex]basics.AssetHolding{

@@ -345,7 +345,7 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 	}
 
 	ad := basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:          status,
 			MicroAlgos:      basics.MicroAlgos{Raw: a.Amount},
 			VoteID:          voteID,

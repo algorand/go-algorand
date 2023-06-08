@@ -48,7 +48,7 @@ func followNodeDefaultGenesis() bookkeeping.Genesis {
 			{
 				Address: poolAddr.String(),
 				State: basics.AccountData{
-					GenesisAccountData: basics.GenesisAccountData{
+					ConsensusAccountData: basics.ConsensusAccountData{
 						MicroAlgos: basics.MicroAlgos{Raw: 1000000000},
 					},
 				},
@@ -56,7 +56,7 @@ func followNodeDefaultGenesis() bookkeeping.Genesis {
 			{
 				Address: sinkAddr.String(),
 				State: basics.AccountData{
-					GenesisAccountData: basics.GenesisAccountData{
+					ConsensusAccountData: basics.ConsensusAccountData{
 						MicroAlgos: basics.MicroAlgos{Raw: 1000000},
 					},
 				},

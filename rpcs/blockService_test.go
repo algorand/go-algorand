@@ -466,14 +466,14 @@ func makeLedger(t *testing.T, namePostfix string) *data.Ledger {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	genesis := make(map[basics.Address]basics.AccountData)
 	genesis[sinkAddr] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 		},
 	}
 
 	genesis[poolAddr] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 		},

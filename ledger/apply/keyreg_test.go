@@ -136,7 +136,7 @@ func TestKeyregApply(t *testing.T) {
 
 	// Going from offline to online should be okay
 	mockBal.addrs[src] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{Status: basics.Offline},
+		ConsensusAccountData: basics.ConsensusAccountData{Status: basics.Offline},
 	}
 	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 	require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestKeyregApply(t *testing.T) {
 
 		// Nonparticipatory accounts should not be able to change status
 		mockBal.addrs[src] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{Status: basics.NotParticipating},
+			ConsensusAccountData: basics.ConsensusAccountData{Status: basics.NotParticipating},
 		}
 		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
 		require.Error(t, err)
@@ -175,7 +175,7 @@ func TestKeyregApply(t *testing.T) {
 			},
 		}
 		mockBal.addrs[src] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{Status: basics.Offline},
+			ConsensusAccountData: basics.ConsensusAccountData{Status: basics.Offline},
 		}
 		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(999))
 		require.NoError(t, err)

@@ -111,9 +111,9 @@ type OnlineAccountData struct {
 	VotingData
 }
 
-// GenesisAccountData contains a subset of account information that is
+// ConsensusAccountData contains a subset of account information that is
 // present in the genesis file.
-type GenesisAccountData struct {
+type ConsensusAccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Status     Status     `codec:"onl"`
@@ -135,9 +135,9 @@ type GenesisAccountData struct {
 type AccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// GenesisAccountData contains a subset of account information that is
+	// ConsensusAccountData contains a subset of account information that is
 	// relevant in the genesis file.
-	GenesisAccountData
+	ConsensusAccountData
 
 	// RewardsBase is used to implement rewards.
 	// This is not meaningful for accounts with Status=NotParticipating.

@@ -74,7 +74,7 @@ func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []b
 		addrs[i] = basics.Address(secrets[i].SignatureVerifier)
 
 		adata := basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: amount},
 			},
 		}
@@ -82,7 +82,7 @@ func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []b
 	}
 
 	accts[sink] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: amount},
 			Status:     basics.NotParticipating,
 		},
@@ -93,7 +93,7 @@ func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []b
 		poolBal = cfg.rewardsPoolAmount
 	}
 	accts[rewards] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			MicroAlgos: poolBal,
 		},
 	}

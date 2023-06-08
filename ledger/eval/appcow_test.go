@@ -1090,7 +1090,7 @@ func TestCowGet(t *testing.T) {
 
 	addr1 := ledgertesting.RandomAddress()
 	bre := basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: 100},
 		},
 	}

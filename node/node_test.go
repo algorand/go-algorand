@@ -134,7 +134,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		access.Close()
 
 		data := basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:      basics.Online,
 				MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))},
 				SelectionID: part.VRFSecrets().PK,
@@ -146,7 +146,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		genesis[short] = data
 	}
 	genesis[poolAddr] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: uint64(100000)},
 		},

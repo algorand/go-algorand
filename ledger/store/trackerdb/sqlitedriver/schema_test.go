@@ -69,7 +69,7 @@ func TestAccountsReencoding(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			addr := ledgertesting.RandomAddress()
 			accData := basics.AccountData{
-				GenesisAccountData: basics.GenesisAccountData{
+				ConsensusAccountData: basics.ConsensusAccountData{
 					MicroAlgos:      basics.MicroAlgos{Raw: 0x000ffffffffffffff},
 					Status:          basics.NotParticipating,
 					VoteID:          secrets.OneTimeSignatureVerifier,

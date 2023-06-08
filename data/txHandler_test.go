@@ -78,7 +78,7 @@ func makeTestGenesisAccounts(tb testing.TB, numUsers int) ([]basics.Address, []*
 		secrets[i] = secret
 		addresses[i] = addr
 		genesis[addr] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:     basics.Online,
 				MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 			},
@@ -86,7 +86,7 @@ func makeTestGenesisAccounts(tb testing.TB, numUsers int) ([]basics.Address, []*
 	}
 
 	genesis[poolAddr] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.NotParticipating,
 			MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 		},
@@ -2167,14 +2167,14 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 		secrets[i] = secret
 		addresses[i] = addr
 		genesis[addr] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:     basics.Online,
 				MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 			},
 		}
 	}
 	genesis[poolAddr] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.NotParticipating,
 			MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 		},
@@ -2407,14 +2407,14 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 		secrets[i] = secret
 		addresses[i] = addr
 		genesis[addr] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:     basics.Online,
 				MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 			},
 		}
 	}
 	genesis[poolAddr] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.NotParticipating,
 			MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 		},

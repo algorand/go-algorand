@@ -672,7 +672,7 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 
 		// expose balances for future ledger creation
 		acctData := basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:      basics.Online,
 				MicroAlgos:  basics.MicroAlgos{Raw: 1000000},
 				VoteID:      accounts[i].VotingSecrets().OneTimeSignatureVerifier,

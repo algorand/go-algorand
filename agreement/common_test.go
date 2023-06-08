@@ -107,7 +107,7 @@ func generateEnvironment(numAccounts int) (map[basics.Address]basics.AccountData
 
 		startamt := uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))
 		genesis[addr] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:      basics.Online,
 				MicroAlgos:  basics.MicroAlgos{Raw: startamt},
 				SelectionID: vrfSec.PK,

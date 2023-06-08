@@ -44,7 +44,7 @@ func TestRewards(t *testing.T) {
 	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
 	for _, accountAlgo := range accountAlgos {
 		ad := AccountData{
-			GenesisAccountData: GenesisAccountData{
+			ConsensusAccountData: ConsensusAccountData{
 				Status:     Online,
 				MicroAlgos: accountAlgo,
 			},
@@ -78,7 +78,7 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 				}
 			}()
 			a := AccountData{
-				GenesisAccountData: GenesisAccountData{
+				ConsensusAccountData: ConsensusAccountData{
 					Status:     Online,
 					MicroAlgos: MicroAlgos{Raw: ^uint64(0)},
 				},
@@ -92,7 +92,7 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 
 	t.Run("RewardsOverflow", func(t *testing.T) {
 		a := AccountData{
-			GenesisAccountData: GenesisAccountData{
+			ConsensusAccountData: ConsensusAccountData{
 				Status:     Online,
 				MicroAlgos: MicroAlgos{Raw: 80000000},
 			},
@@ -119,7 +119,7 @@ func getSampleAccountData() AccountData {
 	crypto.RandBytes(stateProofID[:])
 
 	return AccountData{
-		GenesisAccountData: GenesisAccountData{
+		ConsensusAccountData: ConsensusAccountData{
 			Status:          NotParticipating,
 			MicroAlgos:      MicroAlgos{},
 			VoteID:          oneTimeSecrets.OneTimeSignatureVerifier,

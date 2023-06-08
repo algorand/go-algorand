@@ -63,7 +63,7 @@ func convertToGenesisBalances(balances []uint64) map[basics.Address]basics.Accou
 	genesisBalances := make(map[basics.Address]basics.AccountData)
 	for i, balance := range balances {
 		genesisBalances[indexToAccount(uint64(i))] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: balance},
 			},
 		}

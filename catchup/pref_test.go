@@ -122,7 +122,7 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 		}
 
 		startamt := basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:      basics.Online,
 				MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Uint64() % (maxMoneyAtStart - minMoneyAtStart)))},
 				SelectionID: part.VRFSecrets().PK,
@@ -137,14 +137,14 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 	}
 
 	genesis[basics.Address(sinkAddr)] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.NotParticipating,
 			MicroAlgos: basics.MicroAlgos{Raw: uint64(1e3 * minMoneyAtStart)},
 		},
 	}
 
 	genesis[basics.Address(poolAddr)] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.NotParticipating,
 			MicroAlgos: basics.MicroAlgos{Raw: uint64(1e3 * minMoneyAtStart)},
 		},

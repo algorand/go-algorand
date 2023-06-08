@@ -74,7 +74,7 @@ func TestAccount(t *testing.T) {
 	}
 	copy(assetParams2.MetadataHash[:], []byte("test2"))
 	a := basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 80000000},
 		},

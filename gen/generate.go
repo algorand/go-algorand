@@ -346,14 +346,14 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 	}
 
 	records["FeeSink"] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.NotParticipating,
 			MicroAlgos: basics.MicroAlgos{Raw: protoParams.MinBalance},
 		},
 	}
 
 	records["RewardsPool"] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.NotParticipating,
 			MicroAlgos: basics.MicroAlgos{Raw: rewardsBalance},
 		},

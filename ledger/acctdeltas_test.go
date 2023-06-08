@@ -562,7 +562,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 	for i := 0; i < numAccounts; i++ {
 		addr := ledgertesting.RandomAddress()
 		updates[addr] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				MicroAlgos:      basics.MicroAlgos{Raw: 0x000ffffffffffffff / uint64(numAccounts)},
 				Status:          basics.NotParticipating,
 				VoteID:          secrets.OneTimeSignatureVerifier,

@@ -218,7 +218,7 @@ func (n *Fuzzer) initAccountsAndBalances(rootSeed []byte, onlineNodes []bool) er
 		}
 
 		acctData := basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:      basics.Online,
 				MicroAlgos:  stake,
 				VoteID:      n.accounts[i].VotingSecrets().OneTimeSignatureVerifier,

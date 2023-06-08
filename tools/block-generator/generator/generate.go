@@ -306,7 +306,7 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 		allocations = append(allocations, bookkeeping.GenesisAllocation{
 			Address: addr.String(),
 			State: basics.AccountData{
-				GenesisAccountData: basics.GenesisAccountData{
+				ConsensusAccountData: basics.ConsensusAccountData{
 					MicroAlgos: basics.MicroAlgos{Raw: g.config.GenesisAccountInitialBalance},
 				},
 			},
@@ -318,7 +318,7 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 		Address: g.rewardsPool.String(),
 		Comment: "RewardsPool",
 		State: basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
 				Status:     basics.NotParticipating,
 			},
@@ -764,7 +764,7 @@ func (g *generator) initializeLedger() {
 	genBal := convertToGenesisBalances(g.balances)
 	// add rewards pool with min balance
 	genBal[g.rewardsPool] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
 		},
 	}

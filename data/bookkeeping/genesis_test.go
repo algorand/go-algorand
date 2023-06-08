@@ -51,7 +51,7 @@ func TestGenesis_Balances(t *testing.T) {
 			Address: addr,
 			Comment: "",
 			State: basics.AccountData{
-				GenesisAccountData: basics.GenesisAccountData{
+				ConsensusAccountData: basics.ConsensusAccountData{
 					MicroAlgos: basics.MicroAlgos{Raw: algos},
 				},
 			},

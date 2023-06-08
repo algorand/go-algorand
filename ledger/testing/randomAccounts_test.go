@@ -85,7 +85,7 @@ func TestAccounts(t *testing.T) {
 	// could be because the field is non-optional, or the zero value of the field is an unachievable
 	// or invalid value.
 	zeroValueExceptions := []reflectionhelpers.TypePath{
-		reflectionhelpers.TypePath{}.AddField("GenesisAccountData").AddField("MicroAlgos").AddField("Raw"),
+		reflectionhelpers.TypePath{}.AddField("ConsensusAccountData").AddField("MicroAlgos").AddField("Raw"),
 		reflectionhelpers.TypePath{}.AddField("AssetParams").AddMapKey(),
 		reflectionhelpers.TypePath{}.AddField("AssetParams").AddValue().AddField("Total"),
 		reflectionhelpers.TypePath{}.AddField("Assets").AddMapKey(),

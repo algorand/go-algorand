@@ -374,9 +374,9 @@ func BenchmarkUnmarshalBalanceRecord(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalGenesisAccountData(t *testing.T) {
+func TestMarshalUnmarshalConsensusAccountData(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	v := GenesisAccountData{}
+	v := ConsensusAccountData{}
 	bts := v.MarshalMsg(nil)
 	left, err := v.UnmarshalMsg(bts)
 	if err != nil {
@@ -395,12 +395,12 @@ func TestMarshalUnmarshalGenesisAccountData(t *testing.T) {
 	}
 }
 
-func TestRandomizedEncodingGenesisAccountData(t *testing.T) {
-	protocol.RunEncodingTest(t, &GenesisAccountData{})
+func TestRandomizedEncodingConsensusAccountData(t *testing.T) {
+	protocol.RunEncodingTest(t, &ConsensusAccountData{})
 }
 
-func BenchmarkMarshalMsgGenesisAccountData(b *testing.B) {
-	v := GenesisAccountData{}
+func BenchmarkMarshalMsgConsensusAccountData(b *testing.B) {
+	v := ConsensusAccountData{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -408,8 +408,8 @@ func BenchmarkMarshalMsgGenesisAccountData(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgGenesisAccountData(b *testing.B) {
-	v := GenesisAccountData{}
+func BenchmarkAppendMsgConsensusAccountData(b *testing.B) {
+	v := ConsensusAccountData{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -420,8 +420,8 @@ func BenchmarkAppendMsgGenesisAccountData(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalGenesisAccountData(b *testing.B) {
-	v := GenesisAccountData{}
+func BenchmarkUnmarshalConsensusAccountData(b *testing.B) {
+	v := ConsensusAccountData{}
 	bts := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))

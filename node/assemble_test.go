@@ -67,7 +67,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		secrets[i] = secret
 		addresses[i] = addr
 		genesis[addr] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:     basics.Online,
 				MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 			},
@@ -75,7 +75,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 	}
 
 	genesis[poolAddr] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.NotParticipating,
 			MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 		},
@@ -201,7 +201,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 		secrets[i] = secret
 		addresses[i] = addr
 		genesis[addr] = basics.AccountData{
-			GenesisAccountData: basics.GenesisAccountData{
+			ConsensusAccountData: basics.ConsensusAccountData{
 				Status:     basics.Online,
 				MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 			},
@@ -209,7 +209,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	}
 
 	genesis[poolAddr] = basics.AccountData{
-		GenesisAccountData: basics.GenesisAccountData{
+		ConsensusAccountData: basics.ConsensusAccountData{
 			Status:     basics.NotParticipating,
 			MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
 		},
