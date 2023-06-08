@@ -172,3 +172,40 @@ func TestMaxSizesTested(t *testing.T) {
 		require.Truef(t, tagsFound[tag], "Tag %s does not have a corresponding test in TestMaxSizesCorrect", tag)
 	}
 }
+
+// Switch vs Map justification
+// BenchmarkTagsMaxMessageSizeSwitch-8   	11358924	       104.0 ns/op
+// BenchmarkTagsMaxMessageSizeMap-8      	10242530	       117.4 ns/op
+func BenchmarkTagsMaxMessageSizeSwitch(b *testing.B) {
+	// warmup like the Map benchmark below
+	tagsmap := make(map[Tag]uint64, len(TagList))
+	for _, tag := range TagList {
+		tagsmap[tag] = tag.MaxMessageSize()
+	}
+
+	b.ResetTimer()
+
+	var total uint64
+	for i := 0; i < b.N; i++ {
+		for _, tag := range TagList {
+			total += tag.MaxMessageSize()
+		}
+	}
+	require.Greater(b, total, uint64(0))
+}
+
+func BenchmarkTagsMaxMessageSizeMap(b *testing.B) {
+	tagsmap := make(map[Tag]uint64, len(TagList))
+	for _, tag := range TagList {
+		tagsmap[tag] = tag.MaxMessageSize()
+	}
+
+	b.ResetTimer()
+	var total uint64
+	for i := 0; i < b.N; i++ {
+		for _, tag := range TagList {
+			total += tagsmap[tag]
+		}
+	}
+	require.Greater(b, total, uint64(0))
+}
