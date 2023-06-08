@@ -512,7 +512,7 @@ func (wp *wsPeer) readLoop() {
 		msg.Tag = Tag(string(tag[:]))
 
 		// Skip the message if it's a response to a request we didn't make or has timed out
-		if msg.Tag == protocol.TopicMsgRespTag && !wp.hasOutstandingRequests() {
+		if msg.Tag == protocol.TopicMsgRespTag && wp.lenResponseChannels() == 0 {
 			atomic.AddInt64(&wp.outstandingTopicRequests, -1)
 
 			// This peers has sent us more responses than we have requested.  This is a protocol violation and we should disconnect.
@@ -1005,10 +1005,10 @@ func (wp *wsPeer) makeResponseChannel(key uint64) (responseChannel chan *Respons
 	return newChan
 }
 
-func (wp *wsPeer) hasOutstandingRequests() bool {
+func (wp *wsPeer) lenResponseChannels() int {
 	wp.responseChannelsMutex.Lock()
 	defer wp.responseChannelsMutex.Unlock()
-	return len(wp.responseChannels) > 0
+	return len(wp.responseChannels)
 }
 
 // getAndRemoveResponseChannel returns the channel and deletes the channel from the map

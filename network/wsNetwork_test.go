@@ -4033,7 +4033,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	}()
 	require.Eventually(
 		t,
-		func() bool { return netC.peers[0].hasOutstandingRequests() },
+		func() bool { return netC.peers[0].lenResponseChannels() > 0 },
 		1*time.Second,
 		50*time.Millisecond,
 	)
@@ -4042,7 +4042,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	// confirm that the request was cancelled but that we have registered that we have sent a request
 	require.Eventually(
 		t,
-		func() bool { return !netC.peers[0].hasOutstandingRequests() },
+		func() bool { return netC.peers[0].lenResponseChannels() == 0 },
 		500*time.Millisecond,
 		20*time.Millisecond,
 	)
