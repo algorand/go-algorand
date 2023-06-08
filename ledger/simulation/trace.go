@@ -177,36 +177,36 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
-	PC uint64
+	PC uint64 `codec:"pc"`
 
 	// SpawnedInners contains the indexes of traces for inner transactions spawned by this opcode,
 	// if any. These indexes refer to the InnerTraces array of the TransactionTrace object containing
 	// this OpcodeTraceUnit.
-	SpawnedInners []int
+	SpawnedInners []int `codec:"spawned-inners,omitempty"`
 
 	// Below are fields exposed with stack-change option activated
 	// Opcode line (source?)
-	TEALSource string
+	TEALSource string `codec:"-"`
 
 	// deleted elements from stack, help backwards debugging
-	Deleted []basics.TealValue
+	Deleted []basics.TealValue `codec:"-"`
 
 	// what has been added to stack
-	Added []basics.TealValue
+	Added []basics.TealValue `codec:"-"`
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
 type TransactionTrace struct {
 	// ApprovalProgramTrace stands for a slice of OpcodeTraceUnit over application call on approval program
-	ApprovalProgramTrace []OpcodeTraceUnit
+	ApprovalProgramTrace []OpcodeTraceUnit `codec:"approval-program-trace,omitempty"`
 	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
-	ClearStateProgramTrace []OpcodeTraceUnit
+	ClearStateProgramTrace []OpcodeTraceUnit `codec:"clear-state-program-trace,omitempty"`
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
-	LogicSigTrace []OpcodeTraceUnit
+	LogicSigTrace []OpcodeTraceUnit `codec:"logic-sig-trace,omitempty"`
 	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
-	programTraceRef *[]OpcodeTraceUnit
+	programTraceRef *[]OpcodeTraceUnit `codec:"-"`
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.
-	InnerTraces []TransactionTrace
+	InnerTraces []TransactionTrace `codec:"inner-trace,omitempty"`
 }

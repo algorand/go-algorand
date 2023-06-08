@@ -360,60 +360,12 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.SimulationOpcodeTraceUnit {
-	if len(programTrace) == 0 {
-		return nil
-	}
-
-	modelProgramTrace := make([]model.SimulationOpcodeTraceUnit, len(programTrace))
-	for i := range programTrace {
-		var spawnedInnersPtr *[]uint64
-		if len(programTrace[i].SpawnedInners) > 0 {
-			spawnedInners := make([]uint64, len(programTrace[i].SpawnedInners))
-			for j, innerIndex := range programTrace[i].SpawnedInners {
-				spawnedInners[j] = uint64(innerIndex)
-			}
-			spawnedInnersPtr = &spawnedInners
-		}
-		modelProgramTrace[i] = model.SimulationOpcodeTraceUnit{
-			Pc:            programTrace[i].PC,
-			SpawnedInners: spawnedInnersPtr,
-		}
-	}
-
-	return &modelProgramTrace
-}
-
-func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTransactionExecTrace {
-	if txnTrace == nil {
-		return nil
-	}
-
-	var execTraceModel model.SimulationTransactionExecTrace
-
-	execTraceModel.LogicSigTrace = convertProgramTrace(txnTrace.LogicSigTrace)
-	execTraceModel.ClearStateProgramTrace = convertProgramTrace(txnTrace.ClearStateProgramTrace)
-	execTraceModel.ApprovalProgramTrace = convertProgramTrace(txnTrace.ApprovalProgramTrace)
-
-	if len(txnTrace.InnerTraces) > 0 {
-		innerTrace := make([]model.SimulationTransactionExecTrace, len(txnTrace.InnerTraces))
-
-		for i := range txnTrace.InnerTraces {
-			innerTrace[i] = *convertTxnTrace(&txnTrace.InnerTraces[i])
-		}
-
-		execTraceModel.InnerTrace = &innerTrace
-	}
-
-	return &execTraceModel
-}
-
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
 		Txn:                    ConvertInnerTxn(&txnResult.Txn),
 		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed: numOrNil(txnResult.LogicSigBudgetConsumed),
-		TransactionTrace:       convertTxnTrace(txnResult.Trace),
+		TransactionTrace:       txnResult.Trace,
 	}
 }
 
