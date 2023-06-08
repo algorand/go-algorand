@@ -212,7 +212,7 @@ func TestGetValue(t *testing.T) {
 	require.Equal(t, uint64(2), c.GetUint64Value())
 }
 
-func TestGetValueForLables(t *testing.T) {
+func TestGetValueForLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})

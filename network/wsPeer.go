@@ -523,7 +523,7 @@ func (wp *wsPeer) readLoop() {
 				return
 			}
 			var n int64
-			// Peer sent us a response to a request we made but we've already timed out	-- discard
+			// Peer sent us a response to a request we made but we've already timed out -- discard
 			n, err = io.Copy(io.Discard, reader)
 			if err != nil {
 				wp.net.log.Warnf("wsPeer readloop: could not discard timed-out TS message from %s : %s", wp.conn.RemoteAddr().String(), err)
@@ -970,7 +970,6 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 
 	// Send serializedMsg
 	msg := make([]sendMessage, 1, 1)
-
 	msg[0] = sendMessage{
 		data:         append([]byte(tag), serializedMsg...),
 		enqueued:     time.Now(),
