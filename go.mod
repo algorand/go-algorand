@@ -10,7 +10,7 @@ require (
 	github.com/algorand/go-deadlock v0.2.2
 	github.com/algorand/go-sumhash v0.1.0
 	github.com/algorand/graphtrace v0.1.0
-	github.com/algorand/msgp v1.1.53
+	github.com/algorand/msgp v1.1.54-0.20230608162320-45ad6fb53703
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0
 	github.com/algorand/websocket v1.4.6
 	github.com/aws/aws-sdk-go v1.33.0
@@ -37,8 +37,6 @@ require (
 	golang.org/x/text v0.9.0
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 )
-
-replace github.com/algorand/msgp => /Users/pzbitskiy/projects/msgp
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
