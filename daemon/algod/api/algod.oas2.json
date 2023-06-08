@@ -3870,14 +3870,14 @@
           }
         },
         "deletions": {
-          "description": "The deleted values from the stack by this opcode.",
+          "description": "The TEAL values deleted by this opcode from the stack.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/TealValue"
           }
         },
         "additions": {
-          "description": "The added values to the stack by this opcode.",
+          "description": "The TEAL values added by this opcode to the stack.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/TealValue"

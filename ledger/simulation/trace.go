@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -107,8 +106,10 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 
 // ExecTraceConfig gathers all execution trace related configs for simulation result
 type ExecTraceConfig struct {
-	Enable bool `codec:"enable,omitempty"`
-	Stack  bool `codec:"stack-change,omitempty"`
+	_struct struct{} `codec:",omitempty"`
+
+	Enable bool `codec:"enable"`
+	Stack  bool `codec:"stack-change"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -175,6 +176,15 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 	}, nil
 }
 
+// TealValue Represents a TEAL value.
+type TealValue struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Type  basics.TealType `codec:"type"`
+	Bytes string          `codec:"bytes"`
+	Uint  uint64          `codec:"uint"`
+}
+
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
@@ -190,10 +200,10 @@ type OpcodeTraceUnit struct {
 	TEALSource string `codec:"-"`
 
 	// what has been added to stack
-	Added []model.TealValue `codec:"additions,omitempty"`
+	Added []TealValue `codec:"additions,omitempty"`
 
 	// deleted elements from stack, help backwards debugging
-	Deleted []model.TealValue `codec:"deletions,omitempty"`
+	Deleted []TealValue `codec:"deletions,omitempty"`
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

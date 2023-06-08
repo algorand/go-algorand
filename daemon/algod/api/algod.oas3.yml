@@ -2058,14 +2058,14 @@
         "description": "The set of trace information and effect from evaluating a single opcode.",
         "properties": {
           "additions": {
-            "description": "The added values to the stack by this opcode.",
+            "description": "The TEAL values added by this opcode to the stack.",
             "items": {
               "$ref": "#/components/schemas/TealValue"
             },
             "type": "array"
           },
           "deletions": {
-            "description": "The deleted values from the stack by this opcode.",
+            "description": "The TEAL values deleted by this opcode from the stack.",
             "items": {
               "$ref": "#/components/schemas/TealValue"
             },
