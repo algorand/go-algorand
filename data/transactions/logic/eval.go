@@ -89,6 +89,14 @@ func (sv stackValue) avmType() avmType {
 	return avmUint64
 }
 
+// TEALType converts stackValue's avmType into basic.TealType
+func (sv stackValue) TEALType() basics.TealType {
+	if sv.Bytes != nil {
+		return basics.TealBytesType
+	}
+	return basics.TealUintType
+}
+
 func (sv stackValue) stackType() StackType {
 	if sv.Bytes != nil {
 		return NewStackType(sv.avmType(), static(uint64(len(sv.Bytes))))
@@ -628,6 +636,9 @@ func (cx *EvalContext) RunMode() RunMode {
 
 // PC returns the program counter of the current application being evaluated
 func (cx *EvalContext) PC() int { return cx.pc }
+
+// Stack returns the stack of current cx
+func (cx *EvalContext) Stack() []stackValue { return cx.stack }
 
 // avmType describes the type of a value on the operand stack
 // avmTypes are a subset of StackTypes

@@ -204,6 +204,9 @@ type OpcodeTraceUnit struct {
 
 	// deleted elements from stack, help backwards debugging
 	Deleted []TealValue `codec:"deletions,omitempty"`
+
+	stackChangeExplanation   logic.StackChangeExplanation `codec:"-"`
+	stackHeightAfterDeletion int                          `codec:"-"`
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

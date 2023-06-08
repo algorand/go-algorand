@@ -247,6 +247,31 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 	return OpcodeTraceUnit{PC: uint64(cx.PC())}
 }
 
+func appendDeletedStackValue(cx *logic.EvalContext, programTraceRef *[]OpcodeTraceUnit) {
+	topIndex := len(*programTraceRef) - 1
+	nextStackChange := cx.NextStackChange()
+	(*programTraceRef)[topIndex].stackChangeExplanation = nextStackChange
+
+	// stack height starting from 0
+	stackHeight := len(cx.Stack())
+	stackHeightAfterDeletion := stackHeight - nextStackChange.Deletions
+	(*programTraceRef)[topIndex].stackHeightAfterDeletion = stackHeightAfterDeletion
+
+	// keep adding stuffs to deleted slice
+	if nextStackChange.Deletions == 0 {
+		return
+	}
+	stackCopy := cx.Stack()
+	for i := stackHeightAfterDeletion; i < stackHeight; i++ {
+		(*programTraceRef)[topIndex].Deleted =
+			append((*programTraceRef)[topIndex].Deleted, TealValue{
+				Type:  stackCopy[i].TEALType(),
+				Bytes: string(stackCopy[i].Bytes),
+				Uint:  stackCopy[i].Uint,
+			})
+	}
+}
+
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 	groupIndex := cx.GroupIndex()
 
@@ -269,18 +294,44 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
 		}
 		*txnTrace.programTraceRef = append(*txnTrace.programTraceRef, tracer.makeOpcodeTraceUnit(cx))
-	}
 
-	if tracer.result.ReturnStackChange() {
-		tracer.nextStackChangeDescription = cx.NextStackChange()
-		// TODO probably store to-be-deleted stack elements for reporting
+		if tracer.result.ReturnStackChange() {
+			appendDeletedStackValue(cx, txnTrace.programTraceRef)
+		}
+	}
+}
+
+func appendAddedStackValue(cx *logic.EvalContext, programTraceRef *[]OpcodeTraceUnit) {
+	topIndex := len(*programTraceRef) - 1
+	stackHeightAfterDeletion := (*programTraceRef)[topIndex].stackHeightAfterDeletion
+
+	// keep adding stuffs to added slice
+	if (*programTraceRef)[topIndex].stackChangeExplanation.Additions == 0 {
+		return
+	}
+	stackCopy := cx.Stack()
+	for i := stackHeightAfterDeletion; i < len(stackCopy); i++ {
+		(*programTraceRef)[topIndex].Added =
+			append((*programTraceRef)[topIndex].Added, TealValue{
+				Type:  stackCopy[i].TEALType(),
+				Bytes: string(stackCopy[i].Bytes),
+				Uint:  stackCopy[i].Uint,
+			})
 	}
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
-	if tracer.result.ReturnStackChange() { // XX
-		// TODO store added stack elements for reporting, before that, handle errors tho.
-		tracer.nextStackChangeDescription = cx.NextStackChange() // non-empty branch
+	groupIndex := cx.GroupIndex()
+
+	if tracer.result.ReturnStackChange() {
+		var txnTrace *TransactionTrace
+		if cx.RunMode() == logic.ModeSig {
+			txnTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+		} else {
+			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
+		}
+
+		appendAddedStackValue(cx, txnTrace.programTraceRef)
 	}
 
 	if cx.RunMode() != logic.ModeApp {
