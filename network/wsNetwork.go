@@ -163,6 +163,8 @@ const (
 	PeersConnectedIn PeerOption = iota
 	// PeersPhonebookRelays specifies all relays in the phonebook
 	PeersPhonebookRelays PeerOption = iota
+	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
+	PeersPhonebookArchivalNodes PeerOption = iota
 	// PeersPhonebookArchivers specifies all archivers in the phonebook
 	PeersPhonebookArchivers PeerOption = iota
 )
@@ -465,6 +467,9 @@ type WebsocketNetwork struct {
 
 	// protocolVersion is an actual version announced as ProtocolVersionHeader
 	protocolVersion string
+
+	// resolveSRVRecords is a function that resolves SRV records for a given service, protocol and name
+	resolveSRVRecords func(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (addrs []string, err error)
 }
 
 const (
@@ -679,6 +684,13 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			wn.peersLock.RUnlock()
 		case PeersPhonebookRelays:
 			// return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
+			var addrs []string
+			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
+			for _, addr := range addrs {
+				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
+				outPeers = append(outPeers, &peerCore)
+			}
+		case PeersPhonebookArchivalNodes:
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
@@ -1712,20 +1724,7 @@ func (wn *WebsocketNetwork) meshThread() {
 			wn.DisconnectPeers()
 		}
 
-		// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
-		dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
-		for _, dnsBootstrap := range dnsBootstrapArray {
-			relayAddrs, archiveAddrs := wn.getDNSAddrs(dnsBootstrap)
-			if len(relayAddrs) > 0 {
-				wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:imin(5, len(relayAddrs))])
-				wn.phonebook.ReplacePeerList(relayAddrs, dnsBootstrap, PhoneBookEntryRelayRole)
-			} else {
-				wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
-			}
-			if len(archiveAddrs) > 0 {
-				wn.phonebook.ReplacePeerList(archiveAddrs, dnsBootstrap, PhoneBookEntryArchiverRole)
-			}
-		}
+		wn.refreshRelayArchivePhonebookAddresses()
 
 		// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
 		// kick off the creation of new connections.
@@ -1748,6 +1747,36 @@ func (wn *WebsocketNetwork) meshThread() {
 		// telemetry server; that would allow the telemetry server
 		// to construct a cross-node map of all the nodes interconnections.
 		wn.sendPeerConnectionsTelemetryStatus()
+	}
+}
+
+func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
+	// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
+	dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
+
+	for _, dnsBootstrap := range dnsBootstrapArray {
+		primaryRelayAddrs, primaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrap.PrimarySRVBootstrap)
+
+		if dnsBootstrap.BackupSRVBootstrap != "" {
+			backupRelayAddrs, backupArchiveAddrs := wn.getDNSAddrs(dnsBootstrap.BackupSRVBootstrap)
+			dedupedRelayAddresses := wn.mergePrimarySecondaryRelayAddressSlices(wn.NetworkID, primaryRelayAddrs,
+				backupRelayAddrs, dnsBootstrap.DedupExp)
+			wn.updatePhonebookAddresses(dedupedRelayAddresses, append(primaryArchiveAddrs, backupArchiveAddrs...))
+		} else {
+			wn.updatePhonebookAddresses(primaryRelayAddrs, primaryArchiveAddrs)
+		}
+	}
+}
+
+func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiveAddrs []string) {
+	if len(relayAddrs) > 0 {
+		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:imin(5, len(relayAddrs))])
+		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.NetworkID), PhoneBookEntryRelayRole)
+	} else {
+		wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
+	}
+	if len(archiveAddrs) > 0 {
+		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), PhoneBookEntryArchiverRole)
 	}
 }
 
@@ -1965,9 +1994,48 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 	}
 }
 
+// This logic assumes that the relay address suffixes
+// correspond to the primary/backup network conventions. If this proves to be false, i.e. one network's
+// suffix is a substring of another network's suffix, then duplicates can end up in the merged slice.
+func (wn *WebsocketNetwork) mergePrimarySecondaryRelayAddressSlices(network protocol.NetworkID,
+	primaryRelayAddresses []string, secondaryRelayAddresses []string, dedupExp *regexp.Regexp) (dedupedRelayAddresses []string) {
+
+	if dedupExp == nil {
+		// No expression provided, so just append the slices without deduping
+		return append(primaryRelayAddresses, secondaryRelayAddresses...)
+	}
+
+	var relayAddressPrefixToValue = make(map[string]string, 2*len(primaryRelayAddresses))
+
+	for _, pra := range primaryRelayAddresses {
+		var normalizedPra = strings.ToLower(pra)
+
+		var pfxKey = dedupExp.ReplaceAllString(normalizedPra, "")
+		if _, exists := relayAddressPrefixToValue[pfxKey]; !exists {
+			relayAddressPrefixToValue[pfxKey] = normalizedPra
+		}
+	}
+
+	for _, sra := range secondaryRelayAddresses {
+		var normalizedSra = strings.ToLower(sra)
+		var pfxKey = dedupExp.ReplaceAllString(normalizedSra, "")
+
+		if _, exists := relayAddressPrefixToValue[pfxKey]; !exists {
+			relayAddressPrefixToValue[pfxKey] = normalizedSra
+		}
+	}
+
+	dedupedRelayAddresses = make([]string, 0, len(relayAddressPrefixToValue))
+	for _, value := range relayAddressPrefixToValue {
+		dedupedRelayAddresses = append(dedupedRelayAddresses, value)
+	}
+
+	return
+}
+
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archiverAddresses []string) {
 	var err error
-	relaysAddresses, err = tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
+	relaysAddresses, err = wn.resolveSRVRecords("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
@@ -1976,7 +2044,7 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 		relaysAddresses = nil
 	}
 	if wn.config.EnableCatchupFromArchiveServers || wn.config.EnableBlockServiceFallbackToArchiver {
-		archiverAddresses, err = tools_network.ReadFromSRV("archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
+		archiverAddresses, err = wn.resolveSRVRecords("archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 		if err != nil {
 			// only log this warning on testnet or devnet
 			if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
@@ -2377,14 +2445,15 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (wn *WebsocketNetwork, err error) {
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
-	phonebook.ReplacePeerList(phonebookAddresses, config.DNSBootstrapID, PhoneBookEntryRelayRole)
+	phonebook.ReplacePeerList(phonebookAddresses, string(networkID), PhoneBookEntryRelayRole)
 	wn = &WebsocketNetwork{
-		log:       log,
-		config:    config,
-		phonebook: phonebook,
-		GenesisID: genesisID,
-		NetworkID: networkID,
-		nodeInfo:  nodeInfo,
+		log:               log,
+		config:            config,
+		phonebook:         phonebook,
+		GenesisID:         genesisID,
+		NetworkID:         networkID,
+		nodeInfo:          nodeInfo,
+		resolveSRVRecords: tools_network.ReadFromSRV,
 	}
 
 	wn.setup()
