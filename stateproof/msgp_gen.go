@@ -225,7 +225,7 @@ func (z *spProver) MarshalMsg(b []byte) (o []byte) {
 			} else {
 				o = msgp.AppendMapHeader(o, uint32(len((*z).AddrToPos)))
 			}
-			zb0001_keys := make([]Address, 0, len((*z).AddrToPos))
+			zb0001_keys := make([]basics.Address, 0, len((*z).AddrToPos))
 			for zb0001 := range (*z).AddrToPos {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
@@ -317,7 +317,7 @@ func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).AddrToPos = make(map[Address]uint64, zb0005)
 			}
 			for zb0005 > 0 {
-				var zb0001 Address
+				var zb0001 basics.Address
 				var zb0002 uint64
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
@@ -408,7 +408,7 @@ func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).AddrToPos = make(map[Address]uint64, zb0007)
 				}
 				for zb0007 > 0 {
-					var zb0001 Address
+					var zb0001 basics.Address
 					var zb0002 uint64
 					zb0007--
 					bts, err = zb0001.UnmarshalMsg(bts)
@@ -485,7 +485,7 @@ func SpProverMaxSize() (s int) {
 	s += 5
 	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.AddrToPos
-	s += stateproof.VotersAllocBound * (AddressMaxSize())
+	s += stateproof.VotersAllocBound * (basics.AddressMaxSize())
 	// Adding size of map values for z.AddrToPos
 	s += stateproof.VotersAllocBound * (msgp.Uint64Size)
 	s += 4 + bookkeeping.BlockHeaderMaxSize() + 4 + stateproofmsg.MessageMaxSize()

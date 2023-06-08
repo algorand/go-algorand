@@ -2655,7 +2655,7 @@ func (z *freshnessData) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func FreshnessDataMaxSize() (s int) {
-	s = 1 + 12 + RoundMaxSize() + 13 + msgp.Uint64Size + 11 + msgp.Uint64Size + 21 + msgp.Uint64Size
+	s = 1 + 12 + basics.RoundMaxSize() + 13 + msgp.Uint64Size + 11 + msgp.Uint64Size + 21 + msgp.Uint64Size
 	return
 }
 
@@ -3977,7 +3977,7 @@ func (z *player) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func PlayerMaxSize() (s int) {
-	s = 1 + 6 + RoundMaxSize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + ProposalTableMaxSize()
+	s = 1 + 6 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + ProposalTableMaxSize()
 	return
 }
 
@@ -6722,7 +6722,7 @@ func (z *rootRouter) MarshalMsg(b []byte) (o []byte) {
 	} else {
 		o = msgp.AppendMapHeader(o, uint32(len((*z).Children)))
 	}
-	zb0001_keys := make([]round, 0, len((*z).Children))
+	zb0001_keys := make([]basics.Round, 0, len((*z).Children))
 	for zb0001 := range (*z).Children {
 		zb0001_keys = append(zb0001_keys, zb0001)
 	}
@@ -6869,7 +6869,7 @@ func (z *rootRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Children = make(map[round]*roundRouter, zb0009)
 			}
 			for zb0009 > 0 {
-				var zb0001 round
+				var zb0001 basics.Round
 				var zb0002 *roundRouter
 				zb0009--
 				bts, err = zb0001.UnmarshalMsg(bts)
@@ -7017,7 +7017,7 @@ func (z *rootRouter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Children = make(map[round]*roundRouter, zb0015)
 				}
 				for zb0015 > 0 {
-					var zb0001 round
+					var zb0001 basics.Round
 					var zb0002 *roundRouter
 					zb0015--
 					bts, err = zb0001.UnmarshalMsg(bts)
@@ -8188,7 +8188,7 @@ func (z *thresholdEvent) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func ThresholdEventMaxSize() (s int) {
-	s = 1 + 2 + msgp.Uint8Size + 6 + RoundMaxSize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 9 + ProposalValueMaxSize() + 7 + UnauthenticatedBundleMaxSize() + 6 + protocol.ConsensusVersionMaxSize()
+	s = 1 + 2 + msgp.Uint8Size + 6 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 9 + ProposalValueMaxSize() + 7 + UnauthenticatedBundleMaxSize() + 6 + protocol.ConsensusVersionMaxSize()
 	return
 }
 
