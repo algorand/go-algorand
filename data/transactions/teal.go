@@ -19,10 +19,8 @@ package transactions
 import (
 	"bytes"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/msgp/msgp"
 )
 
 // EvalDelta stores StateDeltas for an application's global key/value store, as
@@ -102,18 +100,6 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 	}
 
 	return true
-}
-
-// EvalDeltaNoInnersMaxSize returns the maximum size of an EvalDelta with no inner transactions.
-// It is used to compute totalallocbound for EvalDelta that does contain inner transactions.
-func EvalDeltaNoInnersMaxSize() (s int) {
-	s = 1 + 3 + basics.StateDeltaMaxSize() + 3 + msgp.MapHeaderSize
-	// Adding size of map keys for z.LocalDeltas
-	s += config.MaxEvalDeltaAccounts * (msgp.Uint64Size)
-	// Adding size of map values for z.LocalDeltas
-	s += config.MaxEvalDeltaAccounts * (basics.StateDeltaMaxSize())
-	s += 3 + msgp.ArrayHeaderSize + ((config.MaxEvalDeltaAccounts) * (basics.AddressMaxSize())) + 3 + msgp.ArrayHeaderSize + (config.MaxLogCalls * msgp.StringPrefixSize) + config.MaxEvalDeltaTotalLogSize + 4
-	return
 }
 
 // equal compares two SignedTransactions for equality.  It's not
