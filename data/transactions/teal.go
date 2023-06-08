@@ -46,7 +46,7 @@ type EvalDelta struct {
 	// with the legnth of all of them summing up to config.MaxEvalDeltaTotalLogSize which is the limit for the sum of individual log lengths
 	Logs []string `codec:"lg,allocbound=config.MaxLogCalls,totalallocbound=(config.MaxLogCalls*msgp.StringPrefixSize) + config.MaxEvalDeltaTotalLogSize"`
 
-	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactionsPerDelta,totalallocbound=(config.MaxInnerTransactionsPerDelta * MaxInnerSignedTxnWithADSize)"`
+	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactionsPerDelta"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are

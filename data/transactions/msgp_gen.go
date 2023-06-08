@@ -2457,7 +2457,7 @@ func EvalDeltaMaxSize() (s int) {
 	// Calculating size of slice: z.Logs
 	s += msgp.ArrayHeaderSize + (config.MaxLogCalls * msgp.StringPrefixSize) + config.MaxEvalDeltaTotalLogSize + 4
 	// Calculating size of slice: z.InnerTxns
-	s += msgp.ArrayHeaderSize + (config.MaxInnerTransactionsPerDelta * MaxInnerSignedTxnWithADSize)
+	s += msgp.ArrayHeaderSize + ((config.MaxInnerTransactionsPerDelta) * (SignedTxnWithADMaxSize()))
 	return
 }
 
