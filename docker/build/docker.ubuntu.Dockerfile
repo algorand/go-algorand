@@ -14,7 +14,7 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python2.7 1 &&
     update-alternatives --set python /usr/bin/python3.7 && \
     pip3 install mulecli
 
-RUN apt-get update && apt-get install -y autoconf bsdmainutils git libboost-all-dev && \
+RUN apt-get update && apt-get install -y autoconf bsdmainutils git && \
     curl https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz | tar -xzf - && \
     mv go /usr/local
 
