@@ -830,7 +830,6 @@ func (g *generator) generateAppCallInternal(txType TxTypeID, round, intra, hintI
 		txn = g.makeAppCreateTxn(senderAcct, round, intra, approval, clear)
 
 		appID := g.txnCounter + intra + 1
-		// appName := fmt.Sprintf("app #%d", appID)
 		holding := &appHolding{appIndex: appID}
 		ad := &appData{
 			appID:    appID,
