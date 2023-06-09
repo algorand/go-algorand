@@ -17,7 +17,7 @@ jobs:
       - name: Make libsodium.a
         run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: reviewdog-golangci-lint
-        uses: reviewdog/action-golangci-lint@v3.5.0
+        uses: reviewdog/action-golangci-lint@v2.3.1
         with:
           go_version_file: go.mod
           golangci_lint_version: "v1.53.2"
