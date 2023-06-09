@@ -70,7 +70,7 @@ const PingReplyTagMaxSize = 8
 
 // ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
 // This value is dominated by the MaxTxnBytesPerBlock
-const ProposalPayloadTagMaxSize = 5247896
+const ProposalPayloadTagMaxSize = 5247980
 
 // StateProofSigTagMaxSize is the maximum size of a StateProofSigTag message
 const StateProofSigTagMaxSize = 6378
