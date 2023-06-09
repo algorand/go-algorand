@@ -260,11 +260,17 @@ func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer 
 		return
 	}
 	for i := stackHeightAfterDeletion; i < stackHeight; i++ {
-		o.Deleted = append(o.Deleted, TealValue{
-			Type:  stackCopy[i].TEALType(),
-			Bytes: string(stackCopy[i].Bytes),
-			Uint:  stackCopy[i].Uint,
-		})
+		if stackCopy[i].TEALType() == basics.TealBytesType {
+			o.Deleted = append(o.Deleted, TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: string(stackCopy[i].Bytes),
+			})
+		} else {
+			o.Deleted = append(o.Deleted, TealValue{
+				Type: basics.TealUintType,
+				Uint: stackCopy[i].Uint,
+			})
+		}
 	}
 }
 
@@ -305,11 +311,17 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 	}
 	stackCopy := cx.Stack()
 	for i := tracer.stackHeightAfterDeletion; i < len(stackCopy); i++ {
-		o.Added = append(o.Added, TealValue{
-			Type:  stackCopy[i].TEALType(),
-			Bytes: string(stackCopy[i].Bytes),
-			Uint:  stackCopy[i].Uint,
-		})
+		if stackCopy[i].TEALType() == basics.TealBytesType {
+			o.Added = append(o.Added, TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: string(stackCopy[i].Bytes),
+			})
+		} else {
+			o.Added = append(o.Added, TealValue{
+				Type: basics.TealUintType,
+				Uint: stackCopy[i].Uint,
+			})
+		}
 	}
 }
 
