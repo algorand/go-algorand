@@ -69,6 +69,7 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 
 // StateDelta is a map from key/value store keys to ValueDeltas, indicating
 // what should happen for that key
+//
 //msgp:allocbound StateDelta config.MaxStateDeltaKeys
 type StateDelta map[string]ValueDelta
 
@@ -178,10 +179,10 @@ func (sm StateSchema) MinBalance(proto *config.ConsensusParams) (res MicroAlgos)
 type TealType uint64
 
 const (
-	// TealBytesType represents the type of a byte slice in a TEAL program
+	// TealBytesType represents the type of byte slice in a TEAL program
 	TealBytesType TealType = 1
 
-	// TealUintType represents the type of a uint in a TEAL program
+	// TealUintType represents the type of uint in a TEAL program
 	TealUintType TealType = 2
 )
 
@@ -226,6 +227,7 @@ func (tv *TealValue) String() string {
 
 // TealKeyValue represents a key/value store for use in an application's
 // LocalState or GlobalState
+//
 //msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries
 type TealKeyValue map[string]TealValue
 

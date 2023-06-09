@@ -267,6 +267,59 @@ func TestPayTxn(t *testing.T) {
 	})
 }
 
+func TestIllFormedStackRequest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	futureAppID := basics.AppIndex(1001)
+
+	createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: 0,
+		ApprovalProgram: `#pragma version 6
+txn ApplicationID
+bz create
+byte "app call"
+log
+b end
+create:
+byte "app creation"
+log
+end:
+int 1`,
+		ClearStateProgram: `#pragma version 6
+int 0`,
+	})
+	callTxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: futureAppID,
+	})
+
+	txntest.Group(&createTxn, &callTxn)
+
+	signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+	signedCallTxn := callTxn.Txn().Sign(sender.Sk)
+
+	simRequest := simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{
+			{signedCreateTxn, signedCallTxn},
+		},
+		TraceConfig: simulation.ExecTraceConfig{
+			Enable: false,
+			Stack:  true,
+		},
+	}
+
+	_, err := simulation.MakeSimulator(env.Ledger, true).Simulate(simRequest)
+	require.ErrorContains(t, err, "the request didn't ask for enabling returning basic trace, but ask for returning stack change")
+}
+
 func TestWrongAuthorizerTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

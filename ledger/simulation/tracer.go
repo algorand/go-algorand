@@ -89,7 +89,8 @@ type evalTracer struct {
 	// NOTE: execTraceStack is used only for PC/Stack/Storage exposure.
 	execTraceStack []*TransactionTrace
 
-	nextStackChangeDescription logic.StackChangeExplanation
+	stackChangeExplanation   logic.StackChangeExplanation
+	stackHeightAfterDeletion int
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
@@ -247,14 +248,14 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 	return OpcodeTraceUnit{PC: uint64(cx.PC())}
 }
 
-func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext) {
-	o.stackChangeExplanation = cx.NextStackChange()
+func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
+	tracer.stackChangeExplanation = cx.NextStackChange()
 
 	stackHeight := len(cx.Stack())
-	stackHeightAfterDeletion := stackHeight - o.stackChangeExplanation.Deletions
-	o.stackHeightAfterDeletion = stackHeightAfterDeletion
+	stackHeightAfterDeletion := stackHeight - tracer.stackChangeExplanation.Deletions
+	tracer.stackHeightAfterDeletion = stackHeightAfterDeletion
 
-	if o.stackChangeExplanation.Deletions == 0 {
+	if tracer.stackChangeExplanation.Deletions == 0 {
 		return
 	}
 	stackCopy := cx.Stack()
@@ -292,18 +293,16 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 
 		if tracer.result.ReturnStackChange() {
 			latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
-			latestOpcodeTraceUnit.appendDeletedStackValue(cx)
+			latestOpcodeTraceUnit.appendDeletedStackValue(cx, tracer)
 		}
 	}
 }
 
-func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext) {
-	defer func() { o.stackChangeExplanation = logic.StackChangeExplanation{} }()
-
-	stackHeightAfterDeletion := o.stackHeightAfterDeletion
+func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
+	stackHeightAfterDeletion := tracer.stackHeightAfterDeletion
 
 	// keep adding stuffs to added slice
-	if o.stackChangeExplanation.Additions == 0 {
+	if tracer.stackChangeExplanation.Additions == 0 {
 		return
 	}
 	stackCopy := cx.Stack()
@@ -327,9 +326,8 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
 		}
 
-		//appendAddedStackValue(cx, txnTrace.programTraceRef)
 		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
-		latestOpcodeTraceUnit.appendAddedStackValue(cx)
+		latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
 	}
 
 	if cx.RunMode() != logic.ModeApp {

@@ -4208,6 +4208,19 @@ func TestArgType(t *testing.T) {
 	require.Equal(t, avmUint64, sv.avmType())
 }
 
+func TestAVMTypeEquivTEALType(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var sv stackValue
+	require.Equal(t, avmUint64, sv.avmType())
+	require.Equal(t, basics.TealUintType, sv.TEALType())
+
+	sv.Bytes = []byte("")
+	require.Equal(t, avmBytes, sv.avmType())
+	require.Equal(t, basics.TealBytesType, sv.TEALType())
+}
+
 func TestApplicationsDisallowOldTeal(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
