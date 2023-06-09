@@ -3868,8 +3868,7 @@ func TestMaxHeaderSize(t *testing.T) {
 	netA.wsMaxHeaderBytes = wsMaxHeaderBytes
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
-	time.Sleep(250 * time.Millisecond)
-	assert.Equal(t, 1, len(netA.peers))
+	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 
 	netA.removePeer(netA.peers[0], disconnectReasonNone)
 	assert.Zero(t, len(netA.peers))
@@ -3891,8 +3890,7 @@ func TestMaxHeaderSize(t *testing.T) {
 	netA.wsMaxHeaderBytes = 0
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
-	time.Sleep(250 * time.Millisecond)
-	assert.Equal(t, 1, len(netA.peers))
+	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 }
 
 func TestTryConnectEarlyWrite(t *testing.T) {
@@ -3976,12 +3974,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
-	time.Sleep(250 * time.Millisecond)
-	require.Equal(t, 1, len(netA.peers))
-
-	// Create a buffer to monitor log output from netB
-	logBuffer := bytes.NewBuffer(nil)
-	netB.log.SetOutput(logBuffer)
+	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 
 	// send an unrequested block response
 	msg := make([]sendMessage, 1, 1)
@@ -3994,16 +3987,14 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
 	require.Eventually(t,
 		func() bool {
-			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "protocol"}) == 1
+			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) == 1
 		},
 		1*time.Second,
 		50*time.Millisecond,
 	)
 
 	// Stop and confirm that we hit the case of disconnecting a peer for sending an unrequested block response
-	netB.Stop()
-	lg := logBuffer.String()
-	require.Contains(t, lg, "sent TS response without a request")
+	require.Zero(t, netB.NumPeers())
 
 	netC.Start()
 	defer netC.Stop()
@@ -4012,12 +4003,10 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	require.True(t, ok)
 	gossipC, err := netC.addrToGossipAddr(addrC)
 	require.NoError(t, err)
-	_ = gossipC
 
 	netA.wg.Add(1)
 	netA.tryConnect(addrC, gossipC)
-	time.Sleep(250 * time.Millisecond)
-	require.Equal(t, 1, len(netA.peers))
+	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	topics := Topics{
@@ -4049,7 +4038,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	require.Equal(t, atomic.LoadInt64(&netC.peers[0].outstandingTopicRequests), int64(1))
 
 	// Create a buffer to monitor log output from netC
-	logBuffer = bytes.NewBuffer(nil)
+	logBuffer := bytes.NewBuffer(nil)
 	netC.log.SetOutput(logBuffer)
 
 	// send a late TS response from A -> C
@@ -4063,7 +4052,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 
 	// Stop and confirm that we hit the case of disconnecting a peer for sending a stale block response
 	netC.Stop()
-	lg = logBuffer.String()
+	lg := logBuffer.String()
 	require.Contains(t, lg, "wsPeer readLoop: received a TS response for a stale request ")
 }
 

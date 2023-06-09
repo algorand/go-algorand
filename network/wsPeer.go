@@ -518,7 +518,7 @@ func (wp *wsPeer) readLoop() {
 			// This peers has sent us more responses than we have requested.  This is a protocol violation and we should disconnect.
 			if atomic.LoadInt64(&wp.outstandingTopicRequests) < 0 {
 				wp.net.log.Errorf("wsPeer readloop: peer %s sent TS response without a request", wp.conn.RemoteAddr().String())
-				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
+				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "unrequestedTS"})
 				cleanupCloseError = disconnectUnexpectedTopicResp
 				return
 			}
@@ -526,8 +526,9 @@ func (wp *wsPeer) readLoop() {
 			// Peer sent us a response to a request we made but we've already timed out -- discard
 			n, err = io.Copy(io.Discard, reader)
 			if err != nil {
-				wp.net.log.Warnf("wsPeer readloop: could not discard timed-out TS message from %s : %s", wp.conn.RemoteAddr().String(), err)
-				continue
+				wp.net.log.Infof("wsPeer readloop: could not discard timed-out TS message from %s : %s", wp.conn.RemoteAddr().String(), err)
+				wp.reportReadErr(err)
+				return
 			}
 			wp.net.log.Warnf("wsPeer readLoop: received a TS response for a stale request from %s. %d bytes discarded", wp.conn.RemoteAddr().String(), n)
 			continue
