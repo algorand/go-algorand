@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
+        uses: actions/checkout@v3.5.3
       # move go out of the way temporarily to avoid "go list ./..." from installing modules
       - name: Make libsodium.a
         run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
@@ -31,7 +31,7 @@ jobs:
         id: go_version
         run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Install go version
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4.0.1
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Test tools/block-generator
