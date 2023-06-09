@@ -84,8 +84,7 @@ const defaultRelayGossipFanout = 8
 // MaxGenesisIDLen is the maximum length of the genesis ID set for purpose of setting
 // allocbounds on structs containing GenesisID and for purposes of calculating MaxSize functions
 // on those types. Current value is larger than the existing network IDs and the ones used in testing
-// TODO: Make this smaller and override for tests that need it?
-const MaxGenesisIDLen = 50
+const MaxGenesisIDLen = 128
 
 // MaxEvalDeltaTotalLogSize is the maximum size of the sum of all log sizes in a single eval delta.
 const MaxEvalDeltaTotalLogSize = 1024

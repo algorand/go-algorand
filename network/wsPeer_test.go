@@ -270,7 +270,9 @@ func getProtocolTags(t *testing.T) []string {
 		for _, spec := range genDecl.Specs {
 			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 				for _, n := range valueSpec.Names {
-					declaredTags = append(declaredTags, n.Name)
+					if !strings.HasSuffix(n.Name, "MaxSize") {
+						declaredTags = append(declaredTags, n.Name)
+					}
 				}
 			}
 		}

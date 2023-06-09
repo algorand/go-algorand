@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/internal/rapidgen"
 	"io"
 	"math/rand"
 	"net"
@@ -31,7 +30,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"pgregory.net/rapid"
 	"regexp"
 	"runtime"
 	"sort"
@@ -40,6 +38,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/internal/rapidgen"
+	"pgregory.net/rapid"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1036,8 +1037,14 @@ func TestDupFilter(t *testing.T) {
 	netC.Start()
 	defer netC.Stop()
 
-	msg := make([]byte, messageFilterSize+1)
-	rand.Read(msg)
+	makeMsg := func(n int) []byte {
+		if messageFilterSize+1 < n {
+			n = messageFilterSize + 1
+		}
+		msg := make([]byte, n)
+		rand.Read(msg)
+		return msg
+	}
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -1053,9 +1060,10 @@ func TestDupFilter(t *testing.T) {
 	// Maybe we should just .Set(0) those counters and use them in this test?
 
 	// This exercise inbound dup detection.
-	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
-	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
-	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
+	avMsg := makeMsg(int(protocol.AgreementVoteTag.MaxMessageSize()))
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, avMsg, true, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, avMsg, true, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, avMsg, true, nil)
 	t.Log("A dup send done")
 
 	select {
@@ -1068,15 +1076,16 @@ func TestDupFilter(t *testing.T) {
 	counter.lock.Unlock()
 
 	// new message
-	rand.Read(msg)
+	debugTag2Msg := makeMsg(int(debugTag2.MaxMessageSize()))
+	t.Logf("debugTag2Msg len %d", len(debugTag2Msg))
 	t.Log("A send, C non-dup-send")
-	netA.Broadcast(context.Background(), debugTag2, msg, true, nil)
+	netA.Broadcast(context.Background(), debugTag2, debugTag2Msg, true, nil)
 	// B should broadcast its non-desire to receive the message again
 	time.Sleep(500 * time.Millisecond)
 
 	// C should now not send these
-	netC.Broadcast(context.Background(), debugTag2, msg, true, nil)
-	netC.Broadcast(context.Background(), debugTag2, msg, true, nil)
+	netC.Broadcast(context.Background(), debugTag2, debugTag2Msg, true, nil)
+	netC.Broadcast(context.Background(), debugTag2, debugTag2Msg, true, nil)
 
 	select {
 	case <-counter2.done:
