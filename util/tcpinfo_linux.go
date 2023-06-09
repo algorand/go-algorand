@@ -55,6 +55,7 @@ func getConnTCPInfo(raw syscall.RawConn) (*TCPInfo, error) {
 }
 
 // linuxTCPInfo is based on linux include/uapi/linux/tcp.h struct tcp_info
+//
 //revive:disable:var-naming
 //nolint:structcheck // complains about unused fields that are rqeuired to match C tcp_info struct
 type linuxTCPInfo struct {

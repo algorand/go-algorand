@@ -183,7 +183,7 @@ func rowsToPendingSigs(rows *sql.Rows) (map[basics.Round][]pendingSig, error) {
 
 //#endregion
 
-//#region Prover Operations
+// #region Prover Operations
 func persistProver(tx *sql.Tx, rnd basics.Round, b *spProver) error {
 	_, err := tx.Exec(insertOrReplaceProverForRound, rnd, protocol.Encode(b))
 	return err
