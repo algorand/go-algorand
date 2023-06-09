@@ -216,11 +216,8 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (d *crypto.
 	c.mu.RUnlock()
 	// fast read-only path: assuming most messages are duplicates, hash msg and check cache
 	// keep lock - it is needed for copying vals in defer
-	senderFound := false
 	if found {
-		if _, senderFound = vals.Load(sender); !senderFound {
-			vals.Store(sender, struct{}{})
-		}
+		vals.LoadOrStore(sender, struct{}{})
 		return d, vals, true
 	}
 
@@ -231,9 +228,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (d *crypto.
 		d, vals, found = c.innerCheck(msg)
 		if found {
 			c.mu.Unlock()
-			if _, senderFound = vals.Load(sender); !senderFound {
-				vals.Store(sender, struct{}{})
-			}
+			vals.LoadOrStore(sender, struct{}{})
 			return d, vals, true
 		}
 	} else { // not found or found in cur page
@@ -242,9 +237,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (d *crypto.
 		vals, found = c.cur[*d]
 		if found {
 			c.mu.Unlock()
-			if _, senderFound = vals.Load(sender); !senderFound {
-				vals.Store(sender, struct{}{})
-			}
+			vals.LoadOrStore(sender, struct{}{})
 			return d, vals, true
 		}
 	}
