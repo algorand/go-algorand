@@ -115,6 +115,7 @@ var networkIncomingBufferMicros = metrics.MakeCounter(metrics.MetricName{Name: "
 var networkHandleMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_rx_handle_micros_total", Description: "microseconds spent by protocol handlers in the receive thread"})
 
 var networkBroadcasts = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcasts_total", Description: "number of broadcast operations"})
+var networkBroadcastsIgnored = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcasts_ignored_total", Description: "number of broadcasts ignored"})
 var networkBroadcastQueueMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcast_queue_micros_total", Description: "microseconds broadcast requests sit on queue"})
 var networkBroadcastSendMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcast_send_micros_total", Description: "microseconds spent broadcasting"})
 var networkBroadcastsDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_broadcasts_dropped_total", Description: "number of broadcast messages not sent to any peer"})
@@ -1587,12 +1588,14 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
+	peersIgnored := uint64(0)
 	for _, peer := range peers {
 		if wn.config.BroadcastConnectionsLimit >= 0 && sentMessageCount >= wn.config.BroadcastConnectionsLimit {
 			break
 		}
 		if request.except != nil {
-			if _, ok := request.except.Load(peer); ok {
+			if _, ok := request.except.Load(Peer(peer)); ok {
+				peersIgnored++
 				continue
 			}
 		}
@@ -1622,6 +1625,7 @@ func (wn *WebsocketNetwork) innerBroadcast(request broadcastRequest, prio bool, 
 
 	dt := time.Since(start)
 	networkBroadcasts.Inc(nil)
+	networkBroadcastsIgnored.AddUint64(peersIgnored, nil)
 	networkBroadcastSendMicros.AddUint64(uint64(dt.Nanoseconds()/1000), nil)
 }
 
