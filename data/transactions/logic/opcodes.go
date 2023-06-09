@@ -365,10 +365,10 @@ type Proto struct {
 	Arg    typedList // what gets popped from the stack
 	Return typedList // what gets pushed to the stack
 
-	// Explain is the function used in debugging process during simulation:
+	// Explain is the pointer to the function used in debugging process during simulation:
 	// - on default construction, Explain relies on Arg and Return count.
 	// - otherwise, we need to explicitly infer from EvalContext, by registering through explain function
-	Explain debugExplain
+	Explain *debugExplain
 }
 
 func proto(signature string, effects ...string) Proto {
@@ -390,10 +390,11 @@ func proto(signature string, effects ...string) Proto {
 	}
 	argTypes := parseStackTypes(parts[0])
 	retTypes := parseStackTypes(parts[1])
+	debugExplainFunc := defaultDebugExplain(len(filterNoneTypes(argTypes)), len(filterNoneTypes(retTypes)))
 	return Proto{
 		Arg:     typedList{argTypes, argEffect},
 		Return:  typedList{retTypes, retEffect},
-		Explain: defaultDebugExplain(len(filterNoneTypes(argTypes)), len(filterNoneTypes(retTypes))),
+		Explain: &debugExplainFunc,
 	}
 }
 

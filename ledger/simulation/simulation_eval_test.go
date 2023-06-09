@@ -2027,7 +2027,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	})
 }
 
-func TestLogicSigPCExposure(t *testing.T) {
+func TestLogicSigPCandStackExposure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2068,6 +2068,7 @@ byte "hello"; log; int 1`,
 				},
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
+					Stack:  true,
 				},
 			},
 			developerAPI: true,
@@ -2076,6 +2077,7 @@ byte "hello"; log; int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
+					Stack:  true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2094,19 +2096,113 @@ byte "hello"; log; int 1`,
 								LogicSigBudgetConsumed: 266,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
-										{PC: 8},
-										{PC: 9},
+										{
+											PC: 1,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "hello",
+												},
+											},
+										},
+										{
+											PC: 8,
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "hello",
+												},
+											},
+										},
+										{
+											PC: 9,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
 									},
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
-										{PC: 5},
-										{PC: 6},
-										{PC: 7},
-										{PC: 8},
-										{PC: 9},
-										{PC: 10},
-										{PC: 11},
+										{
+											PC: 1,
+										},
+										{
+											PC: 5,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC: 6,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb",
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC: 7,
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb",
+												},
+											},
+										},
+										{
+											PC: 8,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC: 9,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb",
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC: 10,
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb",
+												},
+											},
+										},
+										{
+											PC: 11,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
 									},
 								},
 							},

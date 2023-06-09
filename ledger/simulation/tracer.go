@@ -248,13 +248,13 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext) {
-	nextStackChange := cx.NextStackChange()
+	o.stackChangeExplanation = cx.NextStackChange()
 
 	stackHeight := len(cx.Stack())
-	stackHeightAfterDeletion := stackHeight - nextStackChange.Deletions
+	stackHeightAfterDeletion := stackHeight - o.stackChangeExplanation.Deletions
 	o.stackHeightAfterDeletion = stackHeightAfterDeletion
 
-	if nextStackChange.Deletions == 0 {
+	if o.stackChangeExplanation.Deletions == 0 {
 		return
 	}
 	stackCopy := cx.Stack()
@@ -298,6 +298,8 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 }
 
 func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext) {
+	defer func() { o.stackChangeExplanation = logic.StackChangeExplanation{} }()
+
 	stackHeightAfterDeletion := o.stackHeightAfterDeletion
 
 	// keep adding stuffs to added slice

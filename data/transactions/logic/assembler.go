@@ -1778,10 +1778,11 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 		}
 		i++
 	}
+	debugExplainFunc := defaultDebugExplain(len(filterNoneTypes(args)), len(filterNoneTypes(returns)))
 	return Proto{
 		Arg:     typedList{args, ""},
 		Return:  typedList{returns, ""},
-		Explain: defaultDebugExplain(len(filterNoneTypes(args)), len(filterNoneTypes(returns))),
+		Explain: &debugExplainFunc,
 	}, minVersion, true
 }
 
