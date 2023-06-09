@@ -190,6 +190,7 @@ type GenesisAccountData struct {
 	VoteKeyDilution uint64                          `codec:"voteKD"`
 }
 
+// AccountData returns a basics.AccountData type for this genesis account.
 func (ga *GenesisAccountData) AccountData() basics.AccountData {
 	return basics.AccountData{
 		Status:          ga.Status,
