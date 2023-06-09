@@ -364,10 +364,11 @@ func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest
 	partitiontest.PartitionTest(t)
 	// disallow custom tags for this test
 	allowCustomTags = false
-	defaultSendMessageTags["XX"] = true
+	defaultSendMessageTagsOriginal := defaultSendMessageTags
+	defaultSendMessageTags = map[protocol.Tag]bool{"XX": true, "TX": true}
 	defer func() {
 		allowCustomTags = true
-		delete(defaultSendMessageTags, "XX")
+		defaultSendMessageTags = defaultSendMessageTagsOriginal
 	}()
 
 	netA, netB, counter, closeFunc := setupWebsocketNetworkAB(t, 2)

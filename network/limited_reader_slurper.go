@@ -128,9 +128,7 @@ func (s *LimitedReaderSlurper) Reset(n uint64) {
 		s.remainedUnallocatedSpace += uint64(cap(s.buffers[i]))
 		s.buffers[i] = nil
 	}
-	if n > 0 {
-		s.currentMessageMaxSize = n
-	}
+	s.currentMessageMaxSize = n
 	s.currentMessageBytesRead = 0
 	s.buffers[0] = s.buffers[0][:0]
 	s.lastBuffer = 0
