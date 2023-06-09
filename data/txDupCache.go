@@ -211,54 +211,44 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, *sync.Map, *map[
 // Returns a hashing key used for insertion and its associated map of values. The boolean flag `found` is false if the msg not in the cache.
 func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (d *crypto.Digest, vals *sync.Map, found bool) {
 	c.mu.RLock()
-	d, vals, page, found := c.innerCheck(msg)
+	d, vals, _, found = c.innerCheck(msg)
 	salt := c.curSalt
+	c.mu.RUnlock()
 	// fast read-only path: assuming most messages are duplicates, hash msg and check cache
 	// keep lock - it is needed for copying vals in defer
 	senderFound := false
 	if found {
-		if _, senderFound = vals.Load(sender); senderFound {
-			c.mu.RUnlock()
-			return d, vals, true
+		if _, senderFound = vals.Load(sender); !senderFound {
+			vals.Store(sender, struct{}{})
 		}
+		return d, vals, true
 	}
-	c.mu.RUnlock()
 
 	// not found: acquire write lock to add this msg hash to cache
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	// salt may have changed between RUnlock() and Lock(), rehash if needed
 	if salt != c.curSalt {
-		d, vals, page, found = c.innerCheck(msg)
+		d, vals, _, found = c.innerCheck(msg)
 		if found {
-			if _, senderFound = vals.Load(sender); senderFound {
-				// already added to cache between RUnlock() and Lock(), return
-				return d, vals, true
+			c.mu.Unlock()
+			if _, senderFound = vals.Load(sender); !senderFound {
+				vals.Store(sender, struct{}{})
 			}
+			return d, vals, true
 		}
-	} else if found && page == &c.prev {
-		// there is match with prev page, update the value with data possible added in between locks
-		vals, found = c.prev[*d]
 	} else { // not found or found in cur page
 		// Do another check to see if another copy of the transaction won the race to write it to the cache
 		// Only check current to save a lookup since swap is handled in the first branch
 		vals, found = c.cur[*d]
 		if found {
-			if _, senderFound = vals.Load(sender); senderFound {
-				return d, vals, true
+			c.mu.Unlock()
+			if _, senderFound = vals.Load(sender); !senderFound {
+				vals.Store(sender, struct{}{})
 			}
-			page = &c.cur
+			return d, vals, true
 		}
 	}
-
-	// at this point we know that either:
-	// 1. the message is not in the cache so do not check senderFound again
-	// 2. the message is in the cache but from other senders
-	if found {
-		vals.Store(sender, struct{}{})
-		(*page)[*d] = vals
-		return d, vals, true
-	}
+	defer c.mu.Unlock()
 
 	if len(c.cur) >= c.maxSize {
 		c.innerSwap()
