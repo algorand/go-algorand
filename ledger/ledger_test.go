@@ -3086,11 +3086,6 @@ func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
 	require.Equal(t, listenerBeforeReload, listenerAfterReload)
 }
 
-type errorCommitListener struct{}
-
-func (l *errorCommitListener) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, _ ledgercore.LedgerForSPBuilder) {
-}
-
 func TestLedgerSPVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
