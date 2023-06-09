@@ -247,28 +247,23 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 	return OpcodeTraceUnit{PC: uint64(cx.PC())}
 }
 
-func appendDeletedStackValue(cx *logic.EvalContext, programTraceRef *[]OpcodeTraceUnit) {
-	topIndex := len(*programTraceRef) - 1
+func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext) {
 	nextStackChange := cx.NextStackChange()
-	(*programTraceRef)[topIndex].stackChangeExplanation = nextStackChange
 
-	// stack height starting from 0
 	stackHeight := len(cx.Stack())
 	stackHeightAfterDeletion := stackHeight - nextStackChange.Deletions
-	(*programTraceRef)[topIndex].stackHeightAfterDeletion = stackHeightAfterDeletion
+	o.stackHeightAfterDeletion = stackHeightAfterDeletion
 
-	// keep adding stuffs to deleted slice
 	if nextStackChange.Deletions == 0 {
 		return
 	}
 	stackCopy := cx.Stack()
 	for i := stackHeightAfterDeletion; i < stackHeight; i++ {
-		(*programTraceRef)[topIndex].Deleted =
-			append((*programTraceRef)[topIndex].Deleted, TealValue{
-				Type:  stackCopy[i].TEALType(),
-				Bytes: string(stackCopy[i].Bytes),
-				Uint:  stackCopy[i].Uint,
-			})
+		o.Deleted = append(o.Deleted, TealValue{
+			Type:  stackCopy[i].TEALType(),
+			Bytes: string(stackCopy[i].Bytes),
+			Uint:  stackCopy[i].Uint,
+		})
 	}
 }
 
@@ -296,27 +291,26 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		*txnTrace.programTraceRef = append(*txnTrace.programTraceRef, tracer.makeOpcodeTraceUnit(cx))
 
 		if tracer.result.ReturnStackChange() {
-			appendDeletedStackValue(cx, txnTrace.programTraceRef)
+			latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
+			latestOpcodeTraceUnit.appendDeletedStackValue(cx)
 		}
 	}
 }
 
-func appendAddedStackValue(cx *logic.EvalContext, programTraceRef *[]OpcodeTraceUnit) {
-	topIndex := len(*programTraceRef) - 1
-	stackHeightAfterDeletion := (*programTraceRef)[topIndex].stackHeightAfterDeletion
+func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext) {
+	stackHeightAfterDeletion := o.stackHeightAfterDeletion
 
 	// keep adding stuffs to added slice
-	if (*programTraceRef)[topIndex].stackChangeExplanation.Additions == 0 {
+	if o.stackChangeExplanation.Additions == 0 {
 		return
 	}
 	stackCopy := cx.Stack()
 	for i := stackHeightAfterDeletion; i < len(stackCopy); i++ {
-		(*programTraceRef)[topIndex].Added =
-			append((*programTraceRef)[topIndex].Added, TealValue{
-				Type:  stackCopy[i].TEALType(),
-				Bytes: string(stackCopy[i].Bytes),
-				Uint:  stackCopy[i].Uint,
-			})
+		o.Added = append(o.Added, TealValue{
+			Type:  stackCopy[i].TEALType(),
+			Bytes: string(stackCopy[i].Bytes),
+			Uint:  stackCopy[i].Uint,
+		})
 	}
 }
 
@@ -331,7 +325,9 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
 		}
 
-		appendAddedStackValue(cx, txnTrace.programTraceRef)
+		//appendAddedStackValue(cx, txnTrace.programTraceRef)
+		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
+		latestOpcodeTraceUnit.appendAddedStackValue(cx)
 	}
 
 	if cx.RunMode() != logic.ModeApp {
