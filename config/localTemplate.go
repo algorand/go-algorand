@@ -120,7 +120,7 @@ type Local struct {
 	RestWriteTimeoutSeconds int `version[4]:"120"`
 
 	// SRV-based phonebook
-	DNSBootstrapID string `version[0]:"<network>.algorand.network"`
+	DNSBootstrapID string `version[0]:"<network>.algorand.network" version[28]:"<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"`
 
 	// Log file size limit in bytes. When set to 0 logs will be written to stdout.
 	LogSizeLimit uint64 `version[0]:"1073741824"`
@@ -527,33 +527,38 @@ type Local struct {
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
-func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
-	dnsBootstrapString := cfg.DNSBootstrap(networkID)
-	bootstrapArray = strings.Split(dnsBootstrapString, ";")
-	// omit zero length entries from the result set.
-	for i := len(bootstrapArray) - 1; i >= 0; i-- {
-		if len(bootstrapArray[i]) == 0 {
-			bootstrapArray = append(bootstrapArray[:i], bootstrapArray[i+1:]...)
-		}
-	}
-	return
+func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) []*DNSBootstrap {
+	// Should never return an error here, as the config has already been validated at init
+	result, _ := cfg.internalValidateDNSBootstrapArray(networkID)
+
+	return result
 }
 
-// DNSBootstrap returns the network-specific DNSBootstrap identifier
-func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
-	// if user hasn't modified the default DNSBootstrapID in the configuration
-	// file and we're targeting a devnet ( via genesis file ), we the
-	// explicit devnet network bootstrap.
-	if defaultLocal.DNSBootstrapID == cfg.DNSBootstrapID {
-		if network == Devnet {
-			return "devnet.algodev.network"
-		} else if network == Betanet {
-			return "betanet.algodev.network"
-		} else if network == Alphanet {
-			return "alphanet.algodev.network"
+// ValidateDNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers or an error if any
+// one fails to parse
+func (cfg Local) ValidateDNSBootstrapArray(networkID protocol.NetworkID) ([]*DNSBootstrap, error) {
+	return cfg.internalValidateDNSBootstrapArray(networkID)
+}
+
+// internalValidateDNSBootstrapArray handles the base functionality of parsing the DNSBootstrapID string.
+// The function will return an error on the first failure encountered, or an array of DNSBootstrap entries.
+func (cfg Local) internalValidateDNSBootstrapArray(networkID protocol.NetworkID) (
+	bootstrapArray []*DNSBootstrap, err error) {
+
+	bootstrapStringArray := strings.Split(cfg.DNSBootstrapID, ";")
+	for _, bootstrapString := range bootstrapStringArray {
+		if len(strings.TrimSpace(bootstrapString)) == 0 {
+			continue
 		}
+
+		bootstrapEntry, err1 := parseDNSBootstrap(bootstrapString, networkID, defaultLocal.DNSBootstrapID != cfg.DNSBootstrapID)
+		if err1 != nil {
+			return nil, err1
+		}
+
+		bootstrapArray = append(bootstrapArray, bootstrapEntry)
 	}
-	return strings.Replace(cfg.DNSBootstrapID, "<network>", string(network), -1)
+	return
 }
 
 // SaveToDisk writes the non-default Local settings into a root/ConfigFilename file

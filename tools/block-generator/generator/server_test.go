@@ -18,7 +18,6 @@ package generator
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
@@ -26,24 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestInitConfigFile(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	config, err := initializeConfigFile("../test_config.yml")
-	require.NoError(t, err)
-	require.Equal(t, uint64(10), config.NumGenesisAccounts)
-	require.Equal(t, float32(0.25), config.AssetCloseFraction)
-	require.Equal(t, float32(0.0), config.AssetDestroyFraction)
-}
-
-func TestInitConfigFileNotExist(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	_, err := initializeConfigFile("this_is_not_a_config_file")
-
-	if _, ok := err.(*os.PathError); !ok {
-		require.Fail(t, "This should generate a path error")
-	}
-}
 
 func TestParseURL(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -112,17 +93,19 @@ func TestParseURL(t *testing.T) {
 		},
 	}
 
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			round, err := parseURL(testcase.url)
-			if len(testcase.err) == 0 {
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			round, err := parseURL(tc.url)
+			if len(tc.err) == 0 {
 				msg := fmt.Sprintf("Unexpected error parsing '%s', expected round '%s' received error: %v",
-					testcase.url, testcase.expectedParam, err)
+					tc.url, tc.expectedParam, err)
 				require.NoError(t, err, msg)
-				assert.Equal(t, testcase.expectedParam, round)
+				assert.Equal(t, tc.expectedParam, round)
 			} else {
-				require.Error(t, err, fmt.Sprintf("Expected an error containing: %s", testcase.err))
-				require.True(t, strings.Contains(err.Error(), testcase.err))
+				require.Error(t, err, fmt.Sprintf("Expected an error containing: %s", tc.err))
+				require.True(t, strings.Contains(err.Error(), tc.err))
 			}
 		})
 	}
