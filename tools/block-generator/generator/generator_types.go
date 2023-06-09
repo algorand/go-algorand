@@ -101,7 +101,6 @@ type generator struct {
 
 	roundOffset uint64
 }
-
 type assetData struct {
 	assetID uint64
 	creator uint64
