@@ -1038,6 +1038,8 @@ func TestDupFilter(t *testing.T) {
 	defer netC.Stop()
 
 	makeMsg := func(n int) []byte {
+		// We cannot harcode the msgSize to messageFilterSize + 1 because max allowed AV message is smaller  than that.
+		// We also cannot use maxSize for PP since it's a compressible tag but trying to compress random data will expand it.
 		if messageFilterSize+1 < n {
 			n = messageFilterSize + 1
 		}

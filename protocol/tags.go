@@ -70,7 +70,7 @@ const PingReplyTagMaxSize = 8
 
 // ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
 // This value is dominated by the MaxTxnBytesPerBlock
-const ProposalPayloadTagMaxSize = 5247818
+const ProposalPayloadTagMaxSize = 5247896
 
 // StateProofSigTagMaxSize is the maximum size of a StateProofSigTag message
 const StateProofSigTagMaxSize = 6378
@@ -84,7 +84,7 @@ const TopicMsgRespTagMaxSize = 6 * 1024 * 1024
 // TxnTagMaxSize is the maximum size of a TxnTag message. This is equal to SignedTxnMaxSize()
 // which is size of just a single message containing maximum Stateproof. Since Stateproof
 // transactions can't be batched we don't need to multiply by MaxTxnBatchSize.
-const TxnTagMaxSize = 4619953
+const TxnTagMaxSize = 4620031
 
 // UniEnsBlockReqTagMaxSize is the maximum size of a UniEnsBlockReqTag message
 const UniEnsBlockReqTagMaxSize = 67
