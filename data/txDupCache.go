@@ -181,7 +181,7 @@ func (c *txSaltedCache) innerSwap() {
 
 // innerCheck returns true if exists, the salted hash if does not exist
 // locking semantic: read lock must be held
-func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, *sync.Map, *map[crypto.Digest]*sync.Map, bool) {
+func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, *sync.Map, bool) {
 	ptr := saltedPool.Get()
 	defer saltedPool.Put(ptr)
 
@@ -194,7 +194,7 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, *sync.Map, *map[
 
 	v, found := c.cur[d]
 	if found {
-		return &d, v, &c.cur, true
+		return &d, v, true
 	}
 
 	toBeHashed = append(toBeHashed[:len(msg)], c.prevSalt[:]...)
@@ -202,16 +202,16 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, *sync.Map, *map[
 	pd := crypto.Digest(blake2b.Sum256(toBeHashed))
 	v, found = c.prev[pd]
 	if found {
-		return &pd, v, &c.prev, true
+		return &pd, v, true
 	}
-	return &d, nil, nil, false
+	return &d, nil, false
 }
 
 // CheckAndPut adds (msg, sender) pair into a cache. The sender is appended into values if msg is already in the cache.
 // Returns a hashing key used for insertion and its associated map of values. The boolean flag `found` is false if the msg not in the cache.
 func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (d *crypto.Digest, vals *sync.Map, found bool) {
 	c.mu.RLock()
-	d, vals, _, found = c.innerCheck(msg)
+	d, vals, found = c.innerCheck(msg)
 	salt := c.curSalt
 	c.mu.RUnlock()
 	// fast read-only path: assuming most messages are duplicates, hash msg and check cache
@@ -228,7 +228,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte, sender network.Peer) (d *crypto.
 	c.mu.Lock()
 	// salt may have changed between RUnlock() and Lock(), rehash if needed
 	if salt != c.curSalt {
-		d, vals, _, found = c.innerCheck(msg)
+		d, vals, found = c.innerCheck(msg)
 		if found {
 			c.mu.Unlock()
 			if _, senderFound = vals.Load(sender); !senderFound {
