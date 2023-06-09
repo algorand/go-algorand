@@ -1,7 +1,7 @@
 SCENARIO = scenarios/config.app.create.yml # test_config.yml
 SKIP = --skip-runner
-RESETDB = # --reset-db
-REPORTS = RUN_RUNNER_OUTPUTS
+RESETDB = --reset-db
+REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 
 debug-blockgen:
 	python run_runner.py \
