@@ -123,25 +123,6 @@ func (g *generator) makeAssetAcceptanceTxn(header txn.Header, index uint64) txn.
 
 func (g *generator) makeAppCreateTxn(sender basics.Address, round, intra uint64, approval, clear string) txn.Transaction {
 
-	// TODO: don't merge with these examples
-	approve_deleteme := `#pragma version 6
-	  txn ApplicationID
-	  bz create
-	  byte "app call"
-	  log
-	  b end
-	  create:
-	  byte "app creation"
-	  log
-	  end:
-	  int 1
-`
-	clear_deleteme := `#pragma version 6
-int 0
-`
-	_ = approve_deleteme
-	_ = clear_deleteme
-
 	createTxn := g.makeTestTxn(sender, round, intra)
 
 	/* all 0 values but keep around for reference
