@@ -2,6 +2,7 @@ SCENARIO = scenarios/config.app.create.yml # test_config.yml
 SKIP = --skip-runner
 RESETDB = --reset-db
 REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
+DURATION = 30s
 
 debug-blockgen:
 	python run_runner.py \
@@ -9,11 +10,11 @@ debug-blockgen:
 	--scenario $(SCENARIO) \
 	--report-directory $(REPORTS) \
 	--keep-alive $(SKIP) \
-	--test-duration 30s \
+	--test-duration $(DURATION) \
 	$(RESETDB)
 
 clean-reports:
-	rm -rf reports 
+	rm -rf $(REPORTS) 
 
 cleanup: clean-reports
 	python run_runner.py --purge
@@ -25,8 +26,11 @@ run-runner:
 	./block-generator runner --conduit-binary ./conduit \
 	--log-level trace \
 	--keep-data-dir \
-	--report-directory $(REPORTS) \
-	--test-duration 30s --log-level trace \
+	--test-duration $(DURATION) \
+	--log-level trace \
 	--postgres-connection-string "host=localhost user=algorand password=algorand dbname=generator_db port=15432 sslmode=disable" \
 	--scenario $(SCENARIO) \
-	$(RESETDB)
+	$(RESETDB) \
+	--report-directory $(REPORTS)
+
+
