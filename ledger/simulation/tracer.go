@@ -251,14 +251,14 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
 	tracer.stackChangeExplanation = cx.NextStackChange()
 
-	stackHeight := len(cx.Stack())
+	stackCopy := cx.Stack()
+	stackHeight := len(stackCopy)
 	stackHeightAfterDeletion := stackHeight - tracer.stackChangeExplanation.Deletions
 	tracer.stackHeightAfterDeletion = stackHeightAfterDeletion
 
 	if tracer.stackChangeExplanation.Deletions == 0 {
 		return
 	}
-	stackCopy := cx.Stack()
 	for i := stackHeightAfterDeletion; i < stackHeight; i++ {
 		o.Deleted = append(o.Deleted, TealValue{
 			Type:  stackCopy[i].TEALType(),
@@ -299,14 +299,12 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 }
 
 func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
-	stackHeightAfterDeletion := tracer.stackHeightAfterDeletion
-
 	// keep adding stuffs to added slice
 	if tracer.stackChangeExplanation.Additions == 0 {
 		return
 	}
 	stackCopy := cx.Stack()
-	for i := stackHeightAfterDeletion; i < len(stackCopy); i++ {
+	for i := tracer.stackHeightAfterDeletion; i < len(stackCopy); i++ {
 		o.Added = append(o.Added, TealValue{
 			Type:  stackCopy[i].TEALType(),
 			Bytes: string(stackCopy[i].Bytes),
