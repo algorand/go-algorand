@@ -797,7 +797,7 @@ func (g *generator) generateAppCallInternal(txType TxTypeID, round, intra, hintI
 		return "", transactions.Transaction{}, fmt.Errorf("should be an app but not parsed that way: %v", txType)
 	}
 	if appTx != appTxTypeCreate {
-		return "", transactions.Transaction{}, fmt.Errorf("invalid transaction type forapp %v", appTx)
+		return "", transactions.Transaction{}, fmt.Errorf("invalid transaction type for app %v", appTx)
 	}
 
 	var senderIndex uint64
