@@ -181,7 +181,9 @@ func (g *generator) initializeLedger() {
 	genBal := convertToGenesisBalances(g.balances)
 	// add rewards pool with min balance
 	genBal[g.rewardsPool] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
+		ConsensusAccountData: basics.ConsensusAccountData{
+			MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
+		},
 	}
 	bal := bookkeeping.MakeGenesisBalances(genBal, g.feeSink, g.rewardsPool)
 	block, err := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)
