@@ -144,8 +144,9 @@ func (nd *nodeDir) configureNetAddress() (err error) {
 	nd.config.NetAddress = nd.NetAddress
 	if nd.IsRelay() && nd.NetAddress[0] == ':' {
 		fmt.Fprintf(os.Stdout, " - adding to relay addresses\n")
-		domainName := strings.Replace(nd.config.DNSBootstrapID, "<network>", string(nd.configurator.genesisData.Network), -1)
-		nd.configurator.addRelaySrv(domainName, nd.NetAddress)
+		for _, bootstrapRecord := range nd.config.DNSBootstrapArray(nd.configurator.genesisData.Network) {
+			nd.configurator.addRelaySrv(bootstrapRecord.PrimarySRVBootstrap, nd.NetAddress)
+		}
 	}
 	err = nd.saveConfig()
 	return
@@ -309,7 +310,8 @@ func (nd *nodeDir) configureDNSBootstrap() (err error) {
 	}
 
 	if nd.config.DNSBootstrapID == config.GetDefaultLocal().DNSBootstrapID {
-		nd.config.DNSBootstrapID = strings.Replace(nd.config.DNSBootstrapID, "algorand", "algodev", -1)
+		// Ensure using our testing network without fallback support
+		nd.config.DNSBootstrapID = "<network>.algodev.network"
 		err = nd.saveConfig()
 	}
 	return

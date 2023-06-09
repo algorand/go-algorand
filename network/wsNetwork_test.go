@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/algorand/go-algorand/internal/rapidgen"
 	"io"
 	"math/rand"
 	"net"
@@ -30,6 +31,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"pgregory.net/rapid"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -126,7 +129,7 @@ func init() {
 
 func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...testWebsocketOption) *WebsocketNetwork {
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Level(conf.BaseLoggerDebugLevel))
+	log.SetLevel(logging.Warn)
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    conf,
@@ -1133,6 +1136,16 @@ func TestGetPeers(t *testing.T) {
 	expectAddrs := []string{addrA, "a", "b", "c"}
 	sort.Strings(expectAddrs)
 	assert.Equal(t, expectAddrs, peerAddrs)
+
+	// For now, PeersPhonebookArchivalNodes and PeersPhonebookRelays will return the same set of nodes
+	bPeers2 := netB.GetPeers(PeersPhonebookArchivalNodes)
+	peerAddrs2 := make([]string, len(bPeers2))
+	for pi2, peer2 := range bPeers2 {
+		peerAddrs2[pi2] = peer2.(HTTPPeer).GetAddress()
+	}
+	sort.Strings(peerAddrs2)
+	assert.Equal(t, expectAddrs, peerAddrs2)
+
 }
 
 // confirms that if the config PublicAddress is set to "testing",
@@ -3944,4 +3957,404 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 	assert.Len(t, netA.peers, 1)
 	fmt.Printf("MI Message Count: %v\n", netA.peers[0].miMessageCount)
 	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount)
+}
+
+func customNetworkIDGen(networkID protocol.NetworkID) *rapid.Generator {
+	return rapid.Custom(func(t *rapid.T) protocol.NetworkID {
+		// Unused/satisfying rapid requirement
+		rapid.String().Draw(t, "networkIDGen")
+		return networkID
+	})
+}
+
+// The hardcoded network IDs just make testing this function more difficult with no confidence gain (the custom logic
+// is already exercised well in the dnsbootstrap parsing tests).
+func nonHardcodedNetworkIDGen() *rapid.Generator {
+	return rapid.OneOf(customNetworkIDGen(config.Testnet), customNetworkIDGen(config.Mainnet),
+		customNetworkIDGen(config.Devtestnet))
+}
+
+/*
+Basic exercise of the refreshRelayArchivePhonebookAddresses function, uses base / expected cases, relying  on neighboring
+unit tests to cover the merge and phonebook update logic.
+*/
+func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+	var refreshRelayDNSBootstrapID = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		refreshTestConf := defaultConfig
+		refreshTestConf.DNSBootstrapID = refreshRelayDNSBootstrapID
+		netA = makeTestWebsocketNodeWithConfig(t, refreshTestConf)
+		netA.NetworkID = nonHardcodedNetworkIDGen().Draw(t1, "network").(protocol.NetworkID)
+
+		primarySRVBootstrap := strings.Replace("<network>.algorand.network", "<network>", string(netA.NetworkID), -1)
+		backupSRVBootstrap := strings.Replace("<network>.algorand.net", "<network>", string(netA.NetworkID), -1)
+		var primaryRelayResolvedRecords []string
+		var secondaryRelayResolvedRecords []string
+		var primaryArchiveResolvedRecords []string
+		var secondaryArchiveResolvedRecords []string
+
+		for _, record := range []string{"r1.algorand-<network>.network",
+			"r2.algorand-<network>.network", "r3.algorand-<network>.network"} {
+			var recordSub = strings.Replace(record, "<network>", string(netA.NetworkID), -1)
+			primaryRelayResolvedRecords = append(primaryRelayResolvedRecords, recordSub)
+			secondaryRelayResolvedRecords = append(secondaryRelayResolvedRecords, strings.Replace(recordSub, "network", "net", -1))
+		}
+
+		for _, record := range []string{"r1archive.algorand-<network>.network",
+			"r2archive.algorand-<network>.network", "r3archive.algorand-<network>.network"} {
+			var recordSub = strings.Replace(record, "<network>", string(netA.NetworkID), -1)
+			primaryArchiveResolvedRecords = append(primaryArchiveResolvedRecords, recordSub)
+			secondaryArchiveResolvedRecords = append(secondaryArchiveResolvedRecords, strings.Replace(recordSub, "network", "net", -1))
+		}
+
+		// Mock the SRV record lookup
+		netA.resolveSRVRecords = func(service string, protocol string, name string, fallbackDNSResolverAddress string,
+			secure bool) (addrs []string, err error) {
+			if service == "algobootstrap" && protocol == "tcp" && name == primarySRVBootstrap {
+				return primaryRelayResolvedRecords, nil
+			} else if service == "algobootstrap" && protocol == "tcp" && name == backupSRVBootstrap {
+				return secondaryRelayResolvedRecords, nil
+			}
+
+			if service == "archive" && protocol == "tcp" && name == primarySRVBootstrap {
+				return primaryArchiveResolvedRecords, nil
+			} else if service == "archive" && protocol == "tcp" && name == backupSRVBootstrap {
+				return secondaryArchiveResolvedRecords, nil
+			}
+
+			return
+		}
+
+		relayPeers := netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, 0, len(relayPeers))
+
+		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, 0, len(archivePeers))
+
+		netA.refreshRelayArchivePhonebookAddresses()
+
+		relayPeers = netA.GetPeers(PeersPhonebookRelays)
+
+		assert.Equal(t, 3, len(relayPeers))
+		relayAddrs := make([]string, 0, len(relayPeers))
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, primaryRelayResolvedRecords, relayAddrs)
+
+		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+
+		// For the time being, we do not dedup resolved archive nodes
+		assert.Equal(t, 6, len(archivePeers))
+
+		archiveAddrs := make([]string, 0, len(archivePeers))
+		for _, peer := range archivePeers {
+			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, append(primaryArchiveResolvedRecords, secondaryArchiveResolvedRecords...), archiveAddrs)
+
+	})
+}
+
+/*
+Exercises the updatePhonebookAddresses function, notably with different variations of valid relay and
+archival addresses.
+*/
+func TestUpdatePhonebookAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+		relayPeers := netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, 0, len(relayPeers))
+
+		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, 0, len(archivePeers))
+
+		domainGen := rapidgen.Domain()
+
+		// Generate between 0 and N examples - if no dups, should end up in phonebook
+		relayDomainsGen := rapid.SliceOfN(domainGen, 0, 200)
+
+		relayDomains := relayDomainsGen.Draw(t1, "relayDomains").([]string)
+
+		// Dont overlap with relays, duplicates between them not stored in phonebook as of this writing
+		archiveDomainsGen := rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", relayDomains), 0, 200)
+		archiveDomains := archiveDomainsGen.Draw(t1, "archiveDomains").([]string)
+		netA.updatePhonebookAddresses(relayDomains, archiveDomains)
+
+		// Check that entries are in fact in phonebook less any duplicates
+		dedupedRelayDomains := removeDuplicateStr(relayDomains, false)
+		dedupedArchiveDomains := removeDuplicateStr(archiveDomains, false)
+
+		relayPeers = netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
+
+		relayAddrs := make([]string, 0, len(relayPeers))
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
+
+		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
+
+		archiveAddrs := make([]string, 0, len(archivePeers))
+		for _, peer := range archivePeers {
+			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
+
+		// Generate fresh set of addresses with a duplicate from original batch if warranted,
+		// assert phonebook reflects fresh list / prior peers other than selected duplicate
+		// are not present
+		var priorRelayDomains = relayDomains
+
+		// Dont overlap with archive nodes previously specified, duplicates between them not stored in phonebook as of this writing
+		relayDomainsGen = rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", archiveDomains), 0, 200)
+		relayDomains = relayDomainsGen.Draw(t1, "relayDomains").([]string)
+
+		// Randomly select a prior relay domain
+		if len(priorRelayDomains) > 0 {
+			priorIdx := rapid.IntRange(0, len(priorRelayDomains)-1).Draw(t1, "").(int)
+			relayDomains = append(relayDomains, priorRelayDomains[priorIdx])
+		}
+
+		netA.updatePhonebookAddresses(relayDomains, nil)
+
+		// Check that entries are in fact in phonebook less any duplicates
+		dedupedRelayDomains = removeDuplicateStr(relayDomains, false)
+
+		relayPeers = netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
+
+		relayAddrs = nil
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
+
+		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
+
+		archiveAddrs = nil
+		for _, peer := range archivePeers {
+			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
+	})
+}
+
+func removeDuplicateStr(strSlice []string, lowerCase bool) []string {
+	allKeys := make(map[string]bool)
+	var dedupStrSlice = make([]string, 0)
+	for _, item := range strSlice {
+		if lowerCase {
+			item = strings.ToLower(item)
+		}
+		if _, exists := allKeys[item]; !exists {
+			allKeys[item] = true
+			dedupStrSlice = append(dedupStrSlice, item)
+		}
+	}
+	return dedupStrSlice
+}
+
+func replaceAllIn(strSlice []string, strToReplace string, newStr string) []string {
+	var subbedStrSlice = make([]string, 0)
+	for _, item := range strSlice {
+		item = strings.ReplaceAll(item, strToReplace, newStr)
+		subbedStrSlice = append(subbedStrSlice, item)
+	}
+
+	return subbedStrSlice
+}
+
+func supportedNetworkGen() *rapid.Generator {
+	return rapid.OneOf(rapid.StringMatching(string(config.Testnet)), rapid.StringMatching(string(config.Mainnet)),
+		rapid.StringMatching(string(config.Devnet)), rapid.StringMatching(string(config.Betanet)),
+		rapid.StringMatching(string(config.Alphanet)), rapid.StringMatching(string(config.Devtestnet)))
+}
+
+func TestMergePrimarySecondaryRelayAddressListsMinOverlap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+
+		network := supportedNetworkGen().Draw(t1, "network").(string)
+		dedupExp := regexp.MustCompile(strings.Replace(
+			`(algorand-<network>.(network|net))`, "<network>", network, -1))
+		domainPortGen := rapidgen.DomainWithPort()
+
+		// Generate between 0 and N examples - if no dups, should end up in phonebook
+		domainsGen := rapid.SliceOfN(domainPortGen, 0, 200)
+
+		primaryRelayAddresses := domainsGen.Draw(t1, "primaryRelayAddresses").([]string)
+		secondaryRelayAddresses := domainsGen.Draw(t1, "secondaryRelayAddresses").([]string)
+
+		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
+
+		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, secondaryRelayAddresses...), true)
+
+		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
+	})
+}
+
+type MergeTestDNSInputs struct {
+	dedupExpStr string
+
+	primaryDomainSuffix string
+
+	secondaryDomainSuffix string
+}
+
+func mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen() *rapid.Generator {
+
+	algorand0Base := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
+		//unused/satisfying rapid expectation
+		rapid.String().Draw(t, "algorand0Base")
+		// <network>.algorand.network?backup=<network>.algorand0.network&
+		//		dedup=<name>.(algorand-<network>|n-<network>.algorand0).network
+		return &MergeTestDNSInputs{
+			dedupExpStr:           "((algorand-<network>|n-<network>.algorand0).network)",
+			primaryDomainSuffix:   "algorand-<network>.network",
+			secondaryDomainSuffix: "n-<network>.algorand0.network",
+		}
+	})
+
+	algorand0Inverse := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
+		//unused/satisfying rapid expectation
+		rapid.String().Draw(t, "algorand0Inverse")
+		// <network>.algorand0.network?backup=<network>.algorand.network&
+		//		dedup=<name>.(algorand-<network>|n-<network>.algorand0).network
+		return &MergeTestDNSInputs{
+			dedupExpStr:           "((algorand-<network>|n-<network>.algorand0).network)",
+			primaryDomainSuffix:   "n-<network>.algorand0.network",
+			secondaryDomainSuffix: "algorand-<network>.network",
+		}
+	})
+
+	algorandNetBase := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
+		//unused/satisfying rapid expectation
+		rapid.String().Draw(t, "algorandNetBase")
+		//<network>.algorand.network?backup=<network>.algorand.net
+		//			dedup=<name>.algorand-<network>.(network|net)
+		return &MergeTestDNSInputs{
+			dedupExpStr:           "(algorand-<network>.(network|net))",
+			primaryDomainSuffix:   "algorand-<network>.network",
+			secondaryDomainSuffix: "algorand-<network>.net",
+		}
+	})
+
+	algorandNetInverse := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
+		//unused/satisfying rapid expectation
+		rapid.String().Draw(t, "algorandNetInverse")
+		//<network>.algorand.net?backup=<network>.algorand.network" +
+		//			"&dedup=<name>.algorand-<network>.(network|net)
+		return &MergeTestDNSInputs{
+			dedupExpStr:           "(algorand-<network>.(network|net))",
+			primaryDomainSuffix:   "algorand-<network>.net",
+			secondaryDomainSuffix: "algorand-<network>.network",
+		}
+	})
+
+	return rapid.OneOf(algorand0Base, algorand0Inverse, algorandNetBase, algorandNetInverse)
+}
+
+func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+
+		network := supportedNetworkGen().Draw(t1, "network").(string)
+		mergeTestInputs := mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen().Draw(t1, "mergeTestInputs").(*MergeTestDNSInputs)
+
+		dedupExp := regexp.MustCompile(strings.Replace(
+			mergeTestInputs.dedupExpStr, "<network>", network, -1))
+		primaryDomainSuffix := strings.Replace(
+			mergeTestInputs.primaryDomainSuffix, "<network>", network, -1)
+
+		// Generate hosts for a primary network domain
+		primaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(primaryDomainSuffix, nil)
+		primaryDomainsGen := rapid.SliceOfN(primaryNetworkDomainGen, 0, 200)
+
+		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses").([]string)
+
+		secondaryDomainSuffix := strings.Replace(
+			mergeTestInputs.secondaryDomainSuffix, "<network>", network, -1)
+		// Generate these addresses from primary ones, find/replace domain suffix appropriately
+		secondaryRelayAddresses := replaceAllIn(primaryRelayAddresses, primaryDomainSuffix, secondaryDomainSuffix)
+		// Add some generated addresses to secondary list - to simplify verification further down
+		// (substituting suffixes, etc), we dont want the generated addresses to duplicate any of
+		// the replaced secondary ones
+		secondaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(secondaryDomainSuffix, secondaryRelayAddresses)
+		secondaryDomainsGen := rapid.SliceOfN(secondaryNetworkDomainGen, 0, 200)
+		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses").([]string)
+		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
+
+		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
+
+		// We expect the primary addresses to take precedence over a "matching" secondary address, randomly generated
+		// secondary addresses should be present in the merged slice
+		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, generatedSecondaryRelayAddresses...), true)
+
+		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
+	})
+}
+
+// Case where a "backup" network is specified, but no dedup expression is provided. Technically possible,
+// but there is little benefit vs specifying them as separate `;` separated addresses in DNSBootrstrapID.
+func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+
+		network := supportedNetworkGen().Draw(t1, "network").(string)
+		primaryDomainSuffix := strings.Replace(
+			`n-<network>.algorand0.network`, "<network>", network, -1)
+
+		// Generate hosts for a primary network domain
+		primaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(primaryDomainSuffix, nil)
+		primaryDomainsGen := rapid.SliceOfN(primaryNetworkDomainGen, 0, 200)
+
+		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses").([]string)
+
+		secondaryDomainSuffix := strings.Replace(
+			`algorand-<network>.network`, "<network>", network, -1)
+		// Generate these addresses from primary ones, find/replace domain suffix appropriately
+		secondaryRelayAddresses := replaceAllIn(primaryRelayAddresses, primaryDomainSuffix, secondaryDomainSuffix)
+		// Add some generated addresses to secondary list - to simplify verification further down
+		// (substituting suffixes, etc), we don't want the generated addresses to duplicate any of
+		// the replaced secondary ones
+		secondaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(secondaryDomainSuffix, secondaryRelayAddresses)
+		secondaryDomainsGen := rapid.SliceOfN(secondaryNetworkDomainGen, 0, 200)
+		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses").([]string)
+		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
+
+		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+			primaryRelayAddresses, secondaryRelayAddresses, nil)
+
+		// We expect non deduplication, so all addresses _should_ be present (note that no lower casing happens either)
+		expectedRelayAddresses := append(primaryRelayAddresses, secondaryRelayAddresses...)
+
+		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
+	})
 }
