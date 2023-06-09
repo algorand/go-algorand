@@ -2447,10 +2447,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
-		if err := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
-			return err
-		}
-		return nil
+		return tx.Testing().AccountsUpdateSchemaTest(ctx)
 	})
 	require.NoError(t, err)
 

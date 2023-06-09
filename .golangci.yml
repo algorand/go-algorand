@@ -70,6 +70,60 @@ linters-settings:
           - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnRawln
           - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorf
           - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorln
+  revive:
+    # When set to false, ignores files with "GENERATED" header, similar to golint.
+    # See https://github.com/mgechev/revive#available-rules for details.
+    # Default: false
+    ignore-generated-header: false
+
+    # Sets the default severity.
+    # See https://github.com/mgechev/revive#configuration
+    # Default: warning
+    severity: warning
+
+    # Enable all available rules.
+    # Default: false
+    enable-all-rules: false
+
+    # Sets the default failure confidence.
+    # This means that linting errors with less than 0.8 confidence will be ignored.
+    # Default: 0.8
+    confidence: 0.8
+
+    # In order to disable any default rules, you have to list out all rules you would like enabled.
+    # We explicitly disable (vs omitting) rules to make it clear how we are diverging.
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+        disabled: true
+      - name: package-comments
+        disabled: true
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+        disabled: true
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+        disabled: true
+      - name: superfluous-else
+        disabled: true
+      - name: unused-parameter
+        disabled: true
+      - name: unreachable-code
+      - name: redefines-builtin-id
+        disabled: true
 
 issues:
   # Work our way back over time to be clean against all these
@@ -121,6 +175,9 @@ issues:
       linters:
         - staticcheck
       text: "SA4006: this value" # of X is never used
+    - linters:
+        - staticcheck
+      text: "SA1019: rand*"
     # allow shadowing in test code
     - path: _test\.go
       linters:
