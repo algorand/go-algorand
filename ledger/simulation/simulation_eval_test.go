@@ -2061,6 +2061,8 @@ byte "hello"; log; int 1`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
+		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
+
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -2142,7 +2144,7 @@ byte "hello"; log; int 1`,
 											Added: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb",
+													Bytes: keccakBytes,
 												},
 											},
 											Deleted: []simulation.TealValue{
@@ -2157,7 +2159,7 @@ byte "hello"; log; int 1`,
 											Deleted: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb",
+													Bytes: keccakBytes,
 												},
 											},
 										},
@@ -2175,7 +2177,7 @@ byte "hello"; log; int 1`,
 											Added: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb",
+													Bytes: keccakBytes,
 												},
 											},
 											Deleted: []simulation.TealValue{
@@ -2190,7 +2192,7 @@ byte "hello"; log; int 1`,
 											Deleted: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb",
+													Bytes: keccakBytes,
 												},
 											},
 										},
@@ -2216,7 +2218,7 @@ byte "hello"; log; int 1`,
 	})
 }
 
-func TestFailingLogicSig(t *testing.T) {
+func TestFailingLogicSigPCandStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2250,6 +2252,8 @@ byte "hello"; log; int 1`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
+		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
+
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -2257,6 +2261,7 @@ byte "hello"; log; int 1`,
 				},
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
+					Stack:  true,
 				},
 			},
 			developerAPI:  true,
@@ -2266,6 +2271,7 @@ byte "hello"; log; int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
+					Stack:  true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2280,13 +2286,81 @@ byte "hello"; log; int 1`,
 								Trace: &simulation.TransactionTrace{
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
 										{PC: 1},
-										{PC: 5},
-										{PC: 6},
-										{PC: 7},
-										{PC: 8},
-										{PC: 9},
-										{PC: 10},
-										{PC: 11},
+										{
+											PC: 5,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC: 6,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: keccakBytes,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC: 7,
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: keccakBytes,
+												},
+											},
+										},
+										{
+											PC: 8,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC: 9,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: keccakBytes,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC: 10,
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: keccakBytes,
+												},
+											},
+										},
+										{
+											PC: 11,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
 									},
 								},
 							},
