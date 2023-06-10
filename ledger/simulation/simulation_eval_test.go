@@ -2520,6 +2520,13 @@ byte "hello"; log; int 0`,
 	})
 }
 
+func TestFrameBuryDigStackTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// XXX: implement me
+}
+
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
 // within a subsequent app call
 func TestBalanceChangesWithApp(t *testing.T) {

@@ -2057,7 +2057,7 @@ main_l6:
 int 1
 return`
 
-func TestMaxDepthAppWithPCTrace(t *testing.T) {
+func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
