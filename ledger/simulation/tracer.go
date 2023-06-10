@@ -89,7 +89,10 @@ type evalTracer struct {
 	// NOTE: execTraceStack is used only for PC/Stack/Storage exposure.
 	execTraceStack []*TransactionTrace
 
-	stackChangeExplanation   logic.StackChangeExplanation
+	// stackChangeExplanation keep tracks of the latest opcode change explanation from opcode.
+	stackChangeExplanation logic.StackChangeExplanation
+	// stackHeightAfterDeletion is calculated by stack height before opcode - stack element deletion number.
+	// NOTE: both stackChangeExplanation and stackHeightAfterDeletion are used only for Stack exposure.
 	stackHeightAfterDeletion int
 }
 

@@ -195,10 +195,6 @@ type OpcodeTraceUnit struct {
 	// this OpcodeTraceUnit.
 	SpawnedInners []int `codec:"spawned-inners,omitempty"`
 
-	// Below are fields exposed with stack-change option activated
-	// Opcode line (source?)
-	TEALSource string `codec:"-"`
-
 	// what has been added to stack
 	Added []TealValue `codec:"additions,omitempty"`
 
