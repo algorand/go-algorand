@@ -781,8 +781,8 @@ func (g *generator) generateAppTxn(round uint64, intra uint64) (transactions.Sig
 	if txn.Type == "" {
 		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("missing transaction type for app transaction")
 	}
-	defer g.recordData(actual, start)
 
+	g.recordData(actual, start)
 	return signTxn(txn), transactions.ApplyData{}, nil
 }
 
