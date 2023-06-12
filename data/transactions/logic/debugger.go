@@ -133,7 +133,7 @@ func (cx *EvalContext) NextStackChange() StackChangeExplanation {
 
 func opBuryStackChange(cx *EvalContext) StackChangeExplanation {
 	depth := int(cx.program[cx.pc+1])
-	return StackChangeExplanation{Deletions: depth + 2, Additions: depth + 1}
+	return StackChangeExplanation{Deletions: depth + 1, Additions: depth}
 }
 
 func opPopNStackChange(cx *EvalContext) StackChangeExplanation {

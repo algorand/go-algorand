@@ -2520,11 +2520,920 @@ byte "hello"; log; int 0`,
 	})
 }
 
+const FrameBuryDigProgram = `#pragma version 8
+txn ApplicationID      // on creation, always approve
+bz end
+
+txn NumAppArgs
+int 1
+==
+assert
+
+txn ApplicationArgs 0
+btoi
+callsub subroutine_manipulating_stack
+itob
+log
+b end
+
+subroutine_manipulating_stack:
+  proto 1 1
+  int 0               // [0]
+  dup                 // [0, 0]
+  dupn 4              // [0, 0, 0, 0, 0, 0]
+  frame_dig -1        // [0, 0, 0, 0, 0, 0, arg_0]
+  frame_bury 0        // [arg_0, 0, 0, 0, 0, 0]
+  dig 5               // [arg_0, 0, 0, 0, 0, 0, arg_0]
+  cover 5             // [arg_0, arg_0, 0, 0, 0, 0, 0]
+  frame_dig 0         // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0]
+  frame_dig 1         // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0, arg_0]
+  +                   // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0 * 2]
+  bury 7              // [arg_0 * 2, arg_0, 0, 0, 0, 0, 0]
+  popn 5              // [arg_0 * 2, arg_0]
+  uncover 1           // [arg_0, arg_0 * 2]
+  +                   // [arg_0 * 3]
+  retsub
+
+end:
+  int 1
+`
+
 func TestFrameBuryDigStackTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// XXX: implement me
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		applicationArg := 10
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   0,
+			ApprovalProgram: FrameBuryDigProgram,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+		payment := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance,
+		})
+		callTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{{byte(applicationArg)}},
+			Fee:             basics.MicroAlgos{Raw: env.TxnInfo.CurrentProtocolParams().MinTxnFee},
+		})
+		txntest.Group(&createTxn, &payment, &callTxn)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedPay := payment.Txn().Sign(sender.Sk)
+		signedAppCall := callTxn.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedPay, signedAppCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					Stack:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					Stack:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{
+											PC: 4,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
+										{
+											PC: 6,
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
+										{
+											PC: 55,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											Logs: []string{
+												string([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, byte(applicationArg * 3)}),
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 30,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{
+											PC: 4,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC: 6,
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC: 9,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 11,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 12,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 13,
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 14,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string([]byte{byte(applicationArg)}),
+												},
+											},
+										},
+										{
+											PC: 17,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string([]byte{byte(applicationArg)}),
+												},
+											},
+										},
+										// call sub
+										{PC: 18},
+										// proto
+										{PC: 26},
+										{
+											PC: 29,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
+										// dup
+										{
+											PC: 31,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
+										// dupn 4
+										{
+											PC: 32,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
+										// frame_dig -1
+										{
+											PC: 34,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
+										// frame_bury 0
+										{
+											PC: 36,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+										},
+										// dig 5
+										{
+											PC: 38,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
+										// cover 5
+										{
+											PC: 40,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+										},
+										// frame_dig 0
+										{
+											PC: 42,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
+										// frame_dig 1
+										{
+											PC: 44,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+										},
+										// +
+										{
+											PC: 46,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 2),
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+										},
+										// bury 7
+										{
+											PC: 47,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 2),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 2),
+												},
+											},
+										},
+										// popn 5
+										{
+											PC: 49,
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+											},
+										},
+										// uncover 1
+										{
+											PC: 51,
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 2),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 2),
+												},
+											},
+										},
+										// +
+										{
+											PC: 53,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 3),
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 2),
+												},
+											},
+										},
+										// retsub
+										{
+											PC: 54,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 3),
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 3),
+												},
+											},
+										},
+										// itob
+										{
+											PC: 21,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 3),
+												},
+											},
+										},
+										// log
+										{
+											PC: 22,
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
+												},
+											},
+										},
+										// b end
+										{PC: 23},
+										// int 1
+										{
+											PC: 55,
+											Added: []simulation.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 34,
+					},
+				},
+			},
+		}
+	})
 }
 
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
