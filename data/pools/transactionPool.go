@@ -700,7 +700,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0, nil)
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
 		// we want to remove the interface itself rather then keeping an interface
@@ -805,21 +805,13 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 	}
 
 	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
-	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
+	verificationCtx, err := pool.ledger.GetStateProofVerificationContext(lastSPRound)
 	if err != nil {
 		return stateProofStats
 	}
 
-	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
-	votersRound := lastSPRound.SubSaturate(basics.Round(proto.StateProofInterval))
-	votersRoundHdr, err := pool.ledger.BlockHdr(votersRound)
-	if err != nil {
-		return stateProofStats
-	}
-
-	totalWeight := votersRoundHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw
-	stateProofStats.ProvenWeight, _ = basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
-
+	totalWeight := verificationCtx.OnlineTotalWeight.Raw
+	stateProofStats.ProvenWeight, _ = basics.Muldiv(totalWeight, uint64(config.Consensus[verificationCtx.Version].StateProofWeightThreshold), 1<<32)
 	return stateProofStats
 }
 
@@ -976,7 +968,7 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 		return nil, err
 	}
 	next := bookkeeping.MakeBlock(prev)
-	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0, 0)
+	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0, 0, nil)
 	if err != nil {
 		var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
 		if errors.As(err, &nonSeqBlockEval) {

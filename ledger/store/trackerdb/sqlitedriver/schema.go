@@ -149,6 +149,15 @@ const createUnfinishedCatchpointsTable = `
 	round integer primary key NOT NULL,
 	blockhash blob NOT NULL)`
 
+const createStateProofVerificationTableQuery = `
+	CREATE TABLE IF NOT EXISTS stateproofverification (
+	lastattestedround integer primary key NOT NULL,
+	verificationcontext blob NOT NULL)`
+
+const createVoteLastValidIndex = `
+	CREATE INDEX IF NOT EXISTS onlineaccounts_votelastvalid_idx
+	ON onlineaccounts ( votelastvalid )`
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -164,6 +173,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS onlineroundparamstail`,
 	`DROP TABLE IF EXISTS catchpointfirststageinfo`,
 	`DROP TABLE IF EXISTS unfinishedcatchpoints`,
+	`DROP TABLE IF EXISTS stateproofverification`,
 }
 
 // accountsInit fills the database using tx with initAccounts if the
@@ -344,6 +354,12 @@ func accountsCreateBoxTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+// performKVStoreNullBlobConversion scans keys with null blob value, and convert the value to `[]byte{}`.
+func performKVStoreNullBlobConversion(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, "UPDATE kvstore SET value = '' WHERE value is NULL")
+	return err
+}
+
 func accountsCreateTxTailTable(ctx context.Context, tx *sql.Tx) (err error) {
 	for _, stmt := range createTxTailTable {
 		_, err = tx.ExecContext(ctx, stmt)
@@ -371,6 +387,11 @@ func accountsCreateCatchpointFirstStageInfoTable(ctx context.Context, e db.Execu
 
 func accountsCreateUnfinishedCatchpointsTable(ctx context.Context, e db.Executable) error {
 	_, err := e.ExecContext(ctx, createUnfinishedCatchpointsTable)
+	return err
+}
+
+func createStateProofVerificationTable(ctx context.Context, e db.Executable) error {
+	_, err := e.ExecContext(ctx, createStateProofVerificationTableQuery)
 	return err
 }
 
@@ -909,4 +930,10 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	err = rows.Err()
 	updateStmt.Close()
 	return
+}
+
+func convertOnlineRoundParamsTail(ctx context.Context, tx *sql.Tx) error {
+	// create vote last index
+	_, err := tx.ExecContext(ctx, createVoteLastValidIndex)
+	return err
 }

@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
@@ -44,6 +44,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-deadlock"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -60,8 +61,24 @@ type mockLedgerForTracker struct {
 	consensusVersion protocol.ConsensusVersion
 	accts            map[basics.Address]basics.AccountData
 
+	mu deadlock.RWMutex
+
 	// trackerRegistry manages persistence into DB so we have to have it here even for a single tracker test
 	trackers trackerRegistry
+}
+
+// onlineTotals returns the online totals of all accounts at the end of round rnd.
+// used in tests only
+func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+
+	totals := au.roundTotals[offset]
+	return totals.Online.Money, nil
 }
 
 func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]ledgercore.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
@@ -182,17 +199,29 @@ func (ml *mockLedgerForTracker) Close() {
 }
 
 func (ml *mockLedgerForTracker) Latest() basics.Round {
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
 	return basics.Round(len(ml.blocks)) - 1
 }
 
-func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta ledgercore.StateDelta) error {
-	ml.blocks = append(ml.blocks, be)
-	ml.deltas = append(ml.deltas, delta)
-	return nil
+func (ml *mockLedgerForTracker) addBlock(be blockEntry, delta ledgercore.StateDelta) {
+	ml.addToBlockQueue(be, delta)
+	ml.trackers.newBlock(be.block, delta)
 }
 
-func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
-	// support returning the deltas if the client explicitly provided them by calling addMockBlock, otherwise,
+func (ml *mockLedgerForTracker) addToBlockQueue(be blockEntry, delta ledgercore.StateDelta) {
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
+	ml.blocks = append(ml.blocks, be)
+	ml.deltas = append(ml.deltas, delta)
+}
+
+func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eval.LedgerForEvaluator) (ledgercore.StateDelta, error) {
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
+
+	// support returning the deltas if the client explicitly provided them by calling addToBlockQueue, otherwise,
 	// just return an empty state delta ( since the client clearly didn't care about these )
 	if len(ml.deltas) > int(blk.Round()) {
 		return ml.deltas[uint64(blk.Round())], nil
@@ -207,6 +236,9 @@ func (ml *mockLedgerForTracker) Block(rnd basics.Round) (bookkeeping.Block, erro
 		return bookkeeping.Block{}, fmt.Errorf("rnd %d out of bounds", rnd)
 	}
 
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+
 	return ml.blocks[int(rnd)].block, nil
 }
 
@@ -214,6 +246,9 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	if rnd > ml.Latest() {
 		return bookkeeping.BlockHeader{}, fmt.Errorf("rnd %d out of bounds", rnd)
 	}
+
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
 
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
@@ -304,7 +339,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, latestRnd, latest)
 
 	// the log has "onlineAccounts failed to fetch online totals for rnd" warning that is expected
-	_, err := ao.onlineTotals(latest + 1)
+	_, err := ao.onlineCirculation(latest+1, latest+1+basics.Round(ao.maxBalLookback()))
 	require.Error(t, err)
 
 	var validThrough basics.Round
@@ -313,7 +348,8 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
-		_, err := ao.onlineTotals(base - basics.Round(ao.maxBalLookback()))
+		rnd := base - basics.Round(ao.maxBalLookback())
+		_, err := ao.onlineCirculation(rnd, base)
 		require.Error(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
@@ -376,7 +412,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			bll := accts[rnd]
 			require.Equal(t, all, bll)
 
-			totals, err := ao.onlineTotals(rnd)
+			totals, err := ao.onlineCirculation(rnd, rnd+basics.Round(ao.maxBalLookback()))
 			require.NoError(t, err)
 			require.Equal(t, totals.Raw, totalOnline)
 
@@ -547,7 +583,7 @@ func testAcctUpdates(t *testing.T, conf config.Local) {
 				delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 
 				delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-				ml.trackers.newBlock(blk, delta)
+				ml.addBlock(blockEntry{block: blk}, delta)
 				accts = append(accts, newAccts)
 				rewardsLevels = append(rewardsLevels, rewardLevel)
 
@@ -667,7 +703,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -854,7 +890,7 @@ func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 			for addr, ad := range updates {
 				delta.Accts.Upsert(addr, ad)
 			}
-			ml.trackers.newBlock(blk, delta)
+			ml.addBlock(blockEntry{block: blk}, delta)
 			ml.trackers.committedUpTo(i)
 		}
 		lastRound := i - 1
@@ -1735,8 +1771,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		ml.trackers.committedUpTo(basics.Round(i))
 		ml.trackers.waitAccountsWriting()
 		accts = append(accts, newAccts)
@@ -1825,8 +1860,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1863,8 +1897,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1932,8 +1965,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1969,8 +2001,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -2007,8 +2038,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -2137,7 +2167,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 
 		// commit changes synchroniously
 		_, maxLookback := au.committedUpTo(i)
@@ -2320,7 +2350,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = accumulateTotals(t, testProtocolVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 

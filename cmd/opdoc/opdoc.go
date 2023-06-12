@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
@@ -28,7 +29,39 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var docVersion = 8
+var docVersion = 9
+
+// OpImmediateNote returns a short string about immediate data which follows the op byte
+func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails) string {
+	if len(oids) == 0 {
+		return ""
+	}
+
+	argNames := make([]string, len(oids))
+	argDocs := make([]string, len(oids))
+	for idx, oid := range oids {
+		argNote := oid.Comment
+		if oid.Reference != "" {
+			argNote = fmt.Sprintf("[%s](#field-group-%s)", oid.Reference, strings.ToLower(oid.Reference))
+		}
+		argNames[idx] = oid.Name
+		argDocs[idx] = fmt.Sprintf("%s: %s", oid.Name, argNote)
+	}
+
+	return fmt.Sprintf("`%s %s` ∋ %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
+}
+
+func opImmediateNoteEncoding(opcode byte, oids []logic.OpImmediateDetails) string {
+	if len(oids) == 0 {
+		return fmt.Sprintf("0x%02x", opcode)
+	}
+
+	notes := make([]string, len(oids))
+	for idx, oid := range oids {
+		notes[idx] = oid.Encoding
+	}
+	return fmt.Sprintf("0x%02x {%s}", opcode, strings.Join(notes, "}, {"))
+}
 
 func opGroupMarkdownTable(names []string, out io.Writer) {
 	fmt.Fprint(out, `| Opcode | Description |
@@ -48,6 +81,17 @@ func opGroupMarkdownTable(names []string, out io.Writer) {
 
 func markdownTableEscape(x string) string {
 	return strings.ReplaceAll(x, "|", "\\|")
+}
+
+func namedStackTypesMarkdown(out io.Writer, stackTypes []namedType) {
+	fmt.Fprintf(out, "#### Definitions\n\n")
+	fmt.Fprintf(out, "| Name | Bound | AVM Type |\n")
+	fmt.Fprintf(out, "| ---- | ---- | -------- |\n")
+
+	for _, st := range stackTypes {
+		fmt.Fprintf(out, "| %s | %s | %s |\n", st.Name, st.boundString(), st.AVMType)
+	}
+	fmt.Fprintf(out, "\n")
 }
 
 func integerConstantsTableMarkdown(out io.Writer) {
@@ -169,14 +213,22 @@ func stackMarkdown(op *logic.OpSpec) string {
 }
 
 func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bool) (err error) {
-	ws := ""
-	opextra := logic.OpImmediateNote(op.Name)
-	if opextra != "" {
-		ws = " "
+
+	deets := logic.OpImmediateDetailsFromSpec(*op)
+
+	// Only need syntax line if there are immediates
+	// so it carries its own newline
+	syntax := ""
+	if opSyntax := opImmediateNoteSyntaxMarkdown(op.Name, deets); opSyntax != "" {
+		syntax = fmt.Sprintf("- Syntax: %s\n", opSyntax)
 	}
+
+	encoding := fmt.Sprintf("- Bytecode: %s", opImmediateNoteEncoding(op.Opcode, deets))
+
 	stackEffects := stackMarkdown(op)
-	fmt.Fprintf(out, "\n## %s%s\n\n- Opcode: 0x%02x%s%s\n%s",
-		op.Name, immediateMarkdown(op), op.Opcode, ws, opextra, stackEffects)
+
+	fmt.Fprintf(out, "\n## %s\n\n%s%s\n%s", op.Name, syntax, encoding, stackEffects)
+
 	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
 	// if cost changed with versions print all of them
 	costs := logic.OpAllCosts(op.Name)
@@ -209,7 +261,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 	for i := range op.OpDetails.Immediates {
 		group := op.OpDetails.Immediates[i].Group
 		if group != nil && group.Doc != "" && !groupDocWritten[group.Name] {
-			fmt.Fprintf(out, "\n`%s` %s:\n\n", group.Name, group.Doc)
+			fmt.Fprintf(out, "\n### %s\n\n%s\n\n", group.Name, group.Doc)
 			fieldGroupMarkdown(out, group)
 			groupDocWritten[group.Name] = true
 		}
@@ -238,56 +290,86 @@ func opsToMarkdown(out io.Writer) (err error) {
 type OpRecord struct {
 	Opcode  byte
 	Name    string
-	Args    string `json:",omitempty"`
-	Returns string `json:",omitempty"`
+	Args    []string `json:",omitempty"`
+	Returns []string `json:",omitempty"`
 	Size    int
 
 	ArgEnum      []string `json:",omitempty"`
-	ArgEnumTypes string   `json:",omitempty"`
+	ArgEnumTypes []string `json:",omitempty"`
 
 	Doc               string
-	DocExtra          string `json:",omitempty"`
-	ImmediateNote     string `json:",omitempty"`
+	DocExtra          string                     `json:",omitempty"`
+	ImmediateNote     []logic.OpImmediateDetails `json:",omitempty"`
 	IntroducedVersion uint64
 	Groups            []string
+}
+
+type namedType struct {
+	Name         string
+	Abbreviation string
+	Bound        []uint64
+	AVMType      string
+}
+
+func (nt namedType) boundString() string {
+	if nt.Bound[0] == 0 && nt.Bound[1] == 0 {
+		return ""
+	}
+
+	val := "x"
+	// if its bytes, the length is bounded
+	if nt.AVMType == "[]byte" {
+		val = "len(x)"
+	}
+
+	// If they're equal, the val should match exactly
+	if nt.Bound[0] > 0 && nt.Bound[0] == nt.Bound[1] {
+		return fmt.Sprintf("%s == %d", val, nt.Bound[0])
+	}
+
+	// otherwise, provide min/max bounds as lte expression
+	minBound, maxBound := "", ""
+	if nt.Bound[0] > 0 {
+		minBound = fmt.Sprintf("%d <= ", nt.Bound[0])
+	}
+	if nt.Bound[1] > 0 {
+		maxBound = fmt.Sprintf(" <= %d", nt.Bound[1])
+	}
+
+	return fmt.Sprintf("%s%s%s", minBound, val, maxBound)
+
 }
 
 // LanguageSpec records the ops of the language at some version
 type LanguageSpec struct {
 	EvalMaxVersion  int
 	LogicSigVersion uint64
+	NamedTypes      []namedType
 	Ops             []OpRecord
 }
 
-func typeString(types []logic.StackType) string {
-	out := make([]byte, len(types))
-	for i, t := range types {
-		switch t {
-		case logic.StackUint64:
-			out[i] = 'U'
-		case logic.StackBytes:
-			out[i] = 'B'
-		case logic.StackAny:
-			out[i] = '.'
-		case logic.StackNone:
-			out[i] = '_'
-		default:
-			panic("unexpected type in opdoc typeString")
+func typeStrings(types logic.StackTypes) []string {
+	out := make([]string, len(types))
+	allNones := true
+	for idx, t := range types {
+		out[idx] = t.String()
+		if out[idx] != "none" {
+			allNones = false
 		}
 	}
 
-	// Cant return None and !None from same op
-	if strings.Contains(string(out), "_") {
-		if strings.ContainsAny(string(out), "UB.") {
-			panic("unexpected StackNone in opdoc typeString")
-		}
-		return ""
+	// If all the types are none, we just return
+	// an empty array, otherwise leave the nones
+	// in so we don't break the indices by omitting
+	// a valid none in a fields array
+	if allNones {
+		return nil
 	}
 
-	return string(out)
+	return out
 }
 
-func fieldsAndTypes(group logic.FieldGroup) ([]string, string) {
+func fieldsAndTypes(group logic.FieldGroup) ([]string, []string) {
 	// reminder: group.Names can be "sparse" See: logic.TxnaFields
 	fields := make([]string, 0, len(group.Names))
 	types := make([]logic.StackType, 0, len(group.Names))
@@ -297,10 +379,10 @@ func fieldsAndTypes(group logic.FieldGroup) ([]string, string) {
 			types = append(types, spec.Type())
 		}
 	}
-	return fields, typeString(types)
+	return fields, typeStrings(types)
 }
 
-func argEnums(name string) ([]string, string) {
+func argEnums(name string) ([]string, []string) {
 	// reminder: this needs to be manually updated every time
 	// a new opcode is added with an associated FieldGroup
 	// it'd be nice to have this auto-update
@@ -334,29 +416,31 @@ func argEnums(name string) ([]string, string) {
 	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
 		return fieldsAndTypes(logic.EcdsaCurves)
 	default:
-		return nil, ""
+		return nil, nil
 	}
 }
 
-func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
+func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType) *LanguageSpec {
 	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
 	records := make([]OpRecord, len(opSpecs))
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
-		records[i].Args = typeString(spec.Arg.Types)
-		records[i].Returns = typeString(spec.Return.Types)
+		records[i].Args = typeStrings(spec.Arg.Types)
+		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name)
 		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
-		records[i].ImmediateNote = logic.OpImmediateNote(spec.Name)
+		records[i].ImmediateNote = logic.OpImmediateDetailsFromSpec(spec)
 		records[i].Groups = opGroups[spec.Name]
 		records[i].IntroducedVersion = spec.Version
 	}
+
 	return &LanguageSpec{
 		EvalMaxVersion:  docVersion,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
+		NamedTypes:      namedTypes,
 		Ops:             records,
 	}
 }
@@ -389,6 +473,21 @@ func main() {
 	integerConstantsTableMarkdown(constants)
 	constants.Close()
 
+	named := make([]namedType, 0, len(logic.AllStackTypes))
+	for abbr, t := range logic.AllStackTypes {
+		named = append(named, namedType{
+			Name:         t.String(),
+			Bound:        []uint64{t.Bound[0], t.Bound[1]},
+			Abbreviation: string(abbr),
+			AVMType:      t.AVMType.String(),
+		})
+	}
+	sort.Slice(named, func(i, j int) bool { return strings.Compare(named[i].Name, named[j].Name) > 0 })
+
+	namedStackTypes := create("named_stack_types.md")
+	namedStackTypesMarkdown(namedStackTypes, named)
+	namedStackTypes.Close()
+
 	written := make(map[string]bool)
 	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
 	for _, spec := range opSpecs {
@@ -405,7 +504,10 @@ func main() {
 	langspecjs := create("langspec.json")
 	enc := json.NewEncoder(langspecjs)
 	enc.SetIndent("", "  ")
-	enc.Encode(buildLanguageSpec(opGroups))
+	err := enc.Encode(buildLanguageSpec(opGroups, named))
+	if err != nil {
+		panic(err.Error())
+	}
 	langspecjs.Close()
 
 	tealtm := create("teal.tmLanguage.json")

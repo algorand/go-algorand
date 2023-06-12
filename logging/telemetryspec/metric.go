@@ -80,7 +80,7 @@ type StateProofStats struct {
 // AssembleBlockTimeout represents AssembleBlock exiting due to timeout
 const AssembleBlockTimeout = "timeout"
 
-// AssembleBlockTimeout represents AssembleBlock giving up after a timeout and returning an empty block
+// AssembleBlockTimeoutEmpty represents AssembleBlock giving up after a timeout and returning an empty block
 const AssembleBlockTimeoutEmpty = "timeout-empty"
 
 // AssembleBlockFull represents AssembleBlock exiting due to block being full

@@ -506,6 +506,10 @@ type Local struct {
 	// and APIs related to broadcasting transactions, and enables APIs which can retrieve detailed information
 	// from ledger caches and can control the ledger round.
 	EnableFollowMode bool `version[27]:"false"`
+
+	// EnableTxnEvalTracer turns on features in the BlockEvaluator which collect data on transactions, exposing them via algod APIs.
+	// It will store txn deltas created during block evaluation, potentially consuming much larger amounts of memory,
+	EnableTxnEvalTracer bool `version[27]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

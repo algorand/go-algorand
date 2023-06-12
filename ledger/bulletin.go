@@ -81,10 +81,7 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 }
 
 func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
-	// We want to keep existing notification requests in memory if this flow is triggered by reloadLedger.
-	if b.pendingNotificationRequests == nil {
-		b.pendingNotificationRequests = make(map[basics.Round]notifier)
-	}
+	b.pendingNotificationRequests = make(map[basics.Round]notifier)
 	b.latestRound = l.Latest()
 	return nil
 }
@@ -126,7 +123,7 @@ func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 func (b *bulletin) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-func (b *bulletin) handleUnorderedCommit(*deferredCommitContext) {
+func (b *bulletin) handleUnorderedCommitOrError(*deferredCommitContext) {
 }
 
 func (b *bulletin) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

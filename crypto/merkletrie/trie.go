@@ -24,16 +24,16 @@ import (
 )
 
 const (
-	// MerkleTreeVersion is the version of the encoded trie. If we ever want to make changes and want to have upgrade path,
+	// merkleTreeVersion is the version of the encoded trie. If we ever want to make changes and want to have upgrade path,
 	// this would give us the ability to do so.
-	MerkleTreeVersion = uint64(0x1000000010000000)
-	// NodePageVersion is the version of the encoded node. If we ever want to make changes and want to have upgrade path,
+	merkleTreeVersion = uint64(0x1000000010000000)
+	// nodePageVersion is the version of the encoded node. If we ever want to make changes and want to have upgrade path,
 	// this would give us the ability to do so.
-	NodePageVersion = uint64(0x1000000010000000)
+	nodePageVersion = uint64(0x1000000010000000)
 )
 
-// ErrRootPageDecodingFailuire is returned if the decoding the root page has failed.
-var ErrRootPageDecodingFailuire = errors.New("error encountered while decoding root page")
+// ErrRootPageDecodingFailure is returned if the decoding the root page has failed.
+var ErrRootPageDecodingFailure = errors.New("error encountered while decoding root page")
 
 // ErrMismatchingElementLength is returned when an element is being added/removed from the trie that doesn't align with the trie's previous elements length
 var ErrMismatchingElementLength = errors.New("mismatching element length")
@@ -63,7 +63,7 @@ type Trie struct {
 	root                storedNodeIdentifier
 	nextNodeID          storedNodeIdentifier
 	lastCommittedNodeID storedNodeIdentifier
-	cache               *merkleTrieCache
+	cache               merkleTrieCache
 	elementLength       int
 }
 
@@ -79,7 +79,7 @@ type Stats struct {
 func MakeTrie(committer Committer, memoryConfig MemoryConfig) (*Trie, error) {
 	mt := &Trie{
 		root:                storedNodeIdentifierNull,
-		cache:               &merkleTrieCache{},
+		cache:               merkleTrieCache{},
 		nextNodeID:          storedNodeIdentifierBase,
 		lastCommittedNodeID: storedNodeIdentifierBase,
 	}
@@ -106,11 +106,9 @@ func MakeTrie(committer Committer, memoryConfig MemoryConfig) (*Trie, error) {
 	return mt, nil
 }
 
-// SetCommitter set the provided committter as the current committer, and return the old one.
-func (mt *Trie) SetCommitter(committer Committer) (prevCommitter Committer) {
-	prevCommitter = mt.cache.committer
+// SetCommitter sets the provided committer as the current committer
+func (mt *Trie) SetCommitter(committer Committer) {
 	mt.cache.committer = committer
-	return
 }
 
 // RootHash returns the root hash of all the elements in the trie
@@ -154,13 +152,13 @@ func (mt *Trie) Add(d []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	found, err := pnode.find(mt.cache, d[:])
+	found, err := pnode.find(&mt.cache, d[:])
 	if found || (err != nil) {
 		return false, err
 	}
 	mt.cache.beginTransaction()
 	var updatedRoot storedNodeIdentifier
-	updatedRoot, err = pnode.add(mt.cache, d[:], make([]byte, 0, len(d)))
+	updatedRoot, err = pnode.add(&mt.cache, d[:], make([]byte, 0, len(d)))
 	if err != nil {
 		mt.cache.rollbackTransaction()
 		return false, err
@@ -184,7 +182,7 @@ func (mt *Trie) Delete(d []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	found, err := pnode.find(mt.cache, d[:])
+	found, err := pnode.find(&mt.cache, d[:])
 	if !found || err != nil {
 		return false, err
 	}
@@ -198,7 +196,7 @@ func (mt *Trie) Delete(d []byte) (bool, error) {
 		return true, nil
 	}
 	var updatedRoot storedNodeIdentifier
-	updatedRoot, err = pnode.remove(mt.cache, d[:], make([]byte, 0, len(d)))
+	updatedRoot, err = pnode.remove(&mt.cache, d[:], make([]byte, 0, len(d)))
 	if err != nil {
 		mt.cache.rollbackTransaction()
 		return false, err
@@ -218,7 +216,7 @@ func (mt *Trie) GetStats() (stats Stats, err error) {
 	if err != nil {
 		return Stats{}, err
 	}
-	err = pnode.stats(mt.cache, &stats, 1)
+	err = pnode.stats(&mt.cache, &stats, 1)
 	return
 }
 
@@ -252,7 +250,7 @@ func (mt *Trie) Evict(commit bool) (int, error) {
 // serialize serializes the trie root
 func (mt *Trie) serialize() []byte {
 	serializedBuffer := make([]byte, 5*binary.MaxVarintLen64) // allocate the worst-case scenario for the trie header.
-	version := binary.PutUvarint(serializedBuffer[:], MerkleTreeVersion)
+	version := binary.PutUvarint(serializedBuffer[:], merkleTreeVersion)
 	root := binary.PutUvarint(serializedBuffer[version:], uint64(mt.root))
 	next := binary.PutUvarint(serializedBuffer[version+root:], uint64(mt.nextNodeID))
 	elementLength := binary.PutUvarint(serializedBuffer[version+root+next:], uint64(mt.elementLength))
@@ -260,30 +258,30 @@ func (mt *Trie) serialize() []byte {
 	return serializedBuffer[:version+root+next+elementLength+pageSizeLength]
 }
 
-// serialize serializes the trie root
+// deserialize deserializes the trie root
 func (mt *Trie) deserialize(bytes []byte) (int64, error) {
 	version, versionLen := binary.Uvarint(bytes[:])
 	if versionLen <= 0 {
-		return 0, ErrRootPageDecodingFailuire
+		return 0, ErrRootPageDecodingFailure
 	}
-	if version != MerkleTreeVersion {
-		return 0, ErrRootPageDecodingFailuire
+	if version != merkleTreeVersion {
+		return 0, ErrRootPageDecodingFailure
 	}
 	root, rootLen := binary.Uvarint(bytes[versionLen:])
 	if rootLen <= 0 {
-		return 0, ErrRootPageDecodingFailuire
+		return 0, ErrRootPageDecodingFailure
 	}
 	nextNodeID, nextNodeIDLen := binary.Uvarint(bytes[versionLen+rootLen:])
 	if nextNodeIDLen <= 0 {
-		return 0, ErrRootPageDecodingFailuire
+		return 0, ErrRootPageDecodingFailure
 	}
 	elemLength, elemLengthLength := binary.Uvarint(bytes[versionLen+rootLen+nextNodeIDLen:])
 	if elemLengthLength <= 0 {
-		return 0, ErrRootPageDecodingFailuire
+		return 0, ErrRootPageDecodingFailure
 	}
 	pageSize, pageSizeLength := binary.Uvarint(bytes[versionLen+rootLen+nextNodeIDLen+elemLengthLength:])
 	if pageSizeLength <= 0 {
-		return 0, ErrRootPageDecodingFailuire
+		return 0, ErrRootPageDecodingFailure
 	}
 	mt.root = storedNodeIdentifier(root)
 	mt.nextNodeID = storedNodeIdentifier(nextNodeID)

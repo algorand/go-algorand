@@ -24,10 +24,6 @@ import "github.com/algorand/go-algorand/data/basics"
 // we export some extra things to make testing easier there. But we do it in a
 // _test.go file, so they are only exported during testing.
 
-func NewExpect(l int, s string) Expect {
-	return Expect{l, s}
-}
-
 func (ep *EvalParams) Reset() {
 	ep.reset()
 }
@@ -45,6 +41,7 @@ func (l *Ledger) DelBoxes(app basics.AppIndex, names ...string) {
 }
 
 var DefaultEvalParams = defaultEvalParams
+var Exp = exp
 var MakeSampleEnv = makeSampleEnv
 var MakeSampleEnvWithVersion = makeSampleEnvWithVersion
 var MakeSampleTxn = makeSampleTxn
@@ -56,6 +53,7 @@ var TestLogic = testLogic
 var TestApp = testApp
 var TestAppBytes = testAppBytes
 var TestApps = testApps
+var TestLogicRange = testLogicRange
 var TestProg = testProg
 var WithPanicOpcode = withPanicOpcode
 

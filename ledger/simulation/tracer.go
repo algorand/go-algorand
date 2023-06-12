@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // cursorEvalTracer is responsible for maintaining a TxnPath that points to the currently executing
@@ -47,7 +48,7 @@ func (tracer *cursorEvalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, a
 	tracer.previousInnerTxns = tracer.previousInnerTxns[:len(tracer.previousInnerTxns)-1]
 }
 
-func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	top := len(tracer.relativeCursor) - 1
 	if len(tracer.previousInnerTxns) != 0 {
 		tracer.previousInnerTxns[len(tracer.previousInnerTxns)-1] += tracer.relativeCursor[top] + 1
@@ -83,8 +84,8 @@ type evalTracer struct {
 	failedAt TxnPath
 }
 
-func makeEvalTracer(lastRound basics.Round, txgroup []transactions.SignedTxn) *evalTracer {
-	result := makeSimulationResult(lastRound, [][]transactions.SignedTxn{txgroup})
+func makeEvalTracer(lastRound basics.Round, request Request) *evalTracer {
+	result := makeSimulationResult(lastRound, request)
 	return &evalTracer{result: &result}
 }
 
@@ -130,13 +131,28 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.GetCaller() != nil {
 		// If this is an inner txn group, save the txns
 		tracer.populateInnerTransactions(ep.TxnGroup)
+		tracer.result.TxnGroups[0].AppBudgetAdded += uint64(ep.Proto.MaxAppProgramCost)
 	}
 	tracer.cursorEvalTracer.BeforeTxnGroup(ep)
+
+	// Currently only supports one (first) txn group
+	if ep.PooledApplicationBudget != nil && tracer.result.TxnGroups[0].AppBudgetAdded == 0 {
+		tracer.result.TxnGroups[0].AppBudgetAdded = uint64(*ep.PooledApplicationBudget)
+	}
+
+	// Override transaction group budget if specified in request, retrieve from tracer.result
+	if ep.PooledApplicationBudget != nil {
+		tracer.result.TxnGroups[0].AppBudgetAdded += tracer.result.EvalOverrides.ExtraOpcodeBudget
+		*ep.PooledApplicationBudget += int(tracer.result.EvalOverrides.ExtraOpcodeBudget)
+	}
+
+	// Override runtime related constraints against ep, before entering txn group
+	ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
 }
 
-func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, evalError error) {
+func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	tracer.handleError(evalError)
-	tracer.cursorEvalTracer.AfterTxnGroup(ep, evalError)
+	tracer.cursorEvalTracer.AfterTxnGroup(ep, deltas, evalError)
 }
 
 func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
@@ -186,8 +202,14 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	if cx.RunMode() != logic.ModeApp {
-		// do nothing for LogicSig programs
+		// Report cost for LogicSig program and exit
+		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigBudgetConsumed = uint64(cx.Cost())
 		return
 	}
+
+	// Report cost of this program.
+	// If it is an inner app call, roll up its cost to the top level transaction.
+	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetConsumed += uint64(cx.Cost())
+
 	tracer.handleError(evalError)
 }

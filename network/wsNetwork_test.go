@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"runtime"
@@ -41,6 +42,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/algorand/websocket"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -53,6 +55,8 @@ import (
 )
 
 const sendBufferLength = 1000
+
+const genesisID = "go-test-network-genesis"
 
 func init() {
 	// this allows test code to use out-of-protocol message tags and have them go through
@@ -127,7 +131,7 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...te
 		log:       log,
 		config:    conf,
 		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
+		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
 	// apply options to newly-created WebsocketNetwork, if provided
@@ -990,7 +994,7 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 		log:       logging.TestingLog(t).With("node", nodename),
 		config:    dc,
 		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
+		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
 	require.True(t, wn.config.EnableIncomingMessageFilter)
@@ -1131,25 +1135,25 @@ func TestGetPeers(t *testing.T) {
 	assert.Equal(t, expectAddrs, peerAddrs)
 }
 
-// confirms that if the config PublicAddress is set to "auto",
+// confirms that if the config PublicAddress is set to "testing",
 // PublicAddress is loaded when possible with the value of Address()
-func TestAutoPublicAddress(t *testing.T) {
+func TestTestingPublicAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	netA := makeTestWebsocketNode(t)
-	netA.config.PublicAddress = "auto"
+	netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netA.Start()
 
 	time.Sleep(100 * time.Millisecond)
 
-	// check that "auto" has been overloaded
+	// check that "testing" has been overloaded
 	addr, ok := netA.Address()
 	addr = hostAndPort(addr)
 	require.True(t, ok)
-	require.NotEqual(t, "auto", netA.PublicAddress())
+	require.NotEqual(t, "testing", netA.PublicAddress())
 	require.Equal(t, addr, netA.PublicAddress())
 }
 
@@ -1231,12 +1235,12 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-	netA.config.PublicAddress = "auto"
+	netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-	netB.config.PublicAddress = "auto"
+	netB.config.PublicAddress = "testing"
 	netB.config.GossipFanout = 1
 
 	netA.Start()
@@ -1380,12 +1384,12 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-	netA.config.PublicAddress = "auto"
+	netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-	//netB.config.PublicAddress = "auto"
+	//netB.config.PublicAddress = "testing"
 	netB.config.GossipFanout = 1
 
 	netA.Start()
@@ -1445,12 +1449,12 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-	//netA.config.PublicAddress = "auto"
+	//netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 	netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-	netB.config.PublicAddress = "auto"
+	netB.config.PublicAddress = "testing"
 	netB.config.GossipFanout = 1
 
 	netA.Start()
@@ -1512,7 +1516,7 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 
 	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 	netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-	netA.config.PublicAddress = "auto"
+	netA.config.PublicAddress = "testing"
 	netA.config.GossipFanout = 1
 
 	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
@@ -1701,7 +1705,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		t.Logf("Running Peering with Identity Challenge Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-		netA.config.PublicAddress = "auto"
+		netA.config.PublicAddress = "testing"
 		netA.config.GossipFanout = 1
 
 		scheme := newMockIdentityScheme(t)
@@ -1710,7 +1714,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 
 		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-		netB.config.PublicAddress = "auto"
+		netB.config.PublicAddress = "testing"
 		netB.config.GossipFanout = 1
 
 		netA.Start()
@@ -1844,12 +1848,12 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		t.Logf("Running Peering with Identity Challenge Response Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-		netA.config.PublicAddress = "auto"
+		netA.config.PublicAddress = "testing"
 		netA.config.GossipFanout = 1
 
 		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-		netB.config.PublicAddress = "auto"
+		netB.config.PublicAddress = "testing"
 		netB.config.GossipFanout = 1
 
 		scheme := newMockIdentityScheme(t)
@@ -1997,7 +2001,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 		t.Logf("Running Peering with Identity Verification Test: %s", tc.name)
 		netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
 		netA.identityTracker = newMockIdentityTracker(netA.identityTracker)
-		netA.config.PublicAddress = "auto"
+		netA.config.PublicAddress = "testing"
 		netA.config.GossipFanout = 1
 
 		scheme := newMockIdentityScheme(t)
@@ -2006,7 +2010,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 
 		netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
 		netB.identityTracker = newMockIdentityTracker(netB.identityTracker)
-		netB.config.PublicAddress = "auto"
+		netB.config.PublicAddress = "testing"
 		netB.config.GossipFanout = 1
 		// if the key is occupied, make the tracker fail to insert the peer
 		if tc.occupied {
@@ -2462,7 +2466,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 		log:                            log,
 		config:                         defaultConfig,
 		phonebook:                      MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:                      "go-test-network-genesis",
+		GenesisID:                      genesisID,
 		NetworkID:                      config.Devtestnet,
 		slowWritingPeerMonitorInterval: time.Millisecond * 50,
 	}
@@ -2537,7 +2541,7 @@ func TestForceMessageRelaying(t *testing.T) {
 		log:       log,
 		config:    defaultConfig,
 		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
+		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
@@ -2631,7 +2635,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 		log:       log,
 		config:    defaultConfig,
 		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
+		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
 	wn.setup()
@@ -3756,4 +3760,188 @@ func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
 	assert.NoError(t, err)
 	t.Log("closed detailsA", string(pcdA))
 	t.Log("closed detailsB", string(pcdB))
+}
+
+type mockServer struct {
+	*httptest.Server
+	URL string
+	t   *testing.T
+
+	waitForClientClose bool
+}
+
+type mockHandler struct {
+	*testing.T
+	s *mockServer
+}
+
+var mockUpgrader = websocket.Upgrader{
+	ReadBufferSize:    1024,
+	WriteBufferSize:   1024,
+	EnableCompression: true,
+	Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
+		http.Error(w, reason.Error(), status)
+	},
+}
+
+func buildWsResponseHeader() http.Header {
+	h := http.Header{}
+	h.Add(ProtocolVersionHeader, ProtocolVersion)
+	h.Add(GenesisHeader, genesisID)
+	h.Add(NodeRandomHeader, "randomHeader")
+	return h
+}
+
+func (t mockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Set the required headers to successfully establish a connection
+	ws, err := mockUpgrader.Upgrade(w, r, buildWsResponseHeader())
+	if err != nil {
+		t.Logf("Upgrade: %v", err)
+		return
+	}
+	defer ws.Close()
+	// Send a message of interest immediately after the connection is established
+	wr, err := ws.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		t.Logf("NextWriter: %v", err)
+		return
+	}
+
+	bytes := MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
+	msgBytes := append([]byte(protocol.MsgOfInterestTag), bytes...)
+	_, err = wr.Write(msgBytes)
+	if err != nil {
+		t.Logf("Error writing MessageOfInterest: %v", err)
+		return
+	}
+	wr.Close()
+
+	for true {
+		// echo a message back to the client
+		_, _, err := ws.NextReader()
+		if err != nil {
+			if _, ok := err.(*websocket.CloseError); ok && t.s.waitForClientClose {
+				t.Log("got client close")
+				return
+			}
+			return
+		}
+	}
+}
+
+func makeWsProto(s string) string {
+	return "ws" + strings.TrimPrefix(s, "http")
+}
+
+func newServer(t *testing.T) *mockServer {
+	var s mockServer
+	s.Server = httptest.NewServer(mockHandler{t, &s})
+	s.Server.URL += ""
+	s.URL = makeWsProto(s.Server.URL)
+	return &s
+}
+
+func TestMaxHeaderSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.config.GossipFanout = 1
+
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.config.GossipFanout = 1
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+
+	// First make sure that the regular connection with default max header size works
+	netA.wsMaxHeaderBytes = wsMaxHeaderBytes
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+	time.Sleep(250 * time.Millisecond)
+	assert.Equal(t, 1, len(netA.peers))
+
+	netA.removePeer(netA.peers[0], disconnectReasonNone)
+	assert.Zero(t, len(netA.peers))
+
+	// Now try to connect with a max header size that is too small
+	logBuffer := bytes.NewBuffer(nil)
+	netA.log.SetOutput(logBuffer)
+
+	netA.wsMaxHeaderBytes = 128
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+	lg := logBuffer.String()
+	logBuffer.Reset()
+	time.Sleep(250 * time.Millisecond)
+	assert.Contains(t, lg, fmt.Sprintf("ws connect(%s) fail:", gossipB))
+	assert.Zero(t, len(netA.peers))
+
+	// Test that setting 0 disables the max header size check
+	netA.wsMaxHeaderBytes = 0
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+	time.Sleep(250 * time.Millisecond)
+	assert.Equal(t, 1, len(netA.peers))
+}
+
+func TestTryConnectEarlyWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.config.GossipFanout = 1
+
+	s := newServer(t)
+	s.waitForClientClose = true
+	defer s.Close()
+
+	netA.Start()
+	defer netA.Stop()
+
+	dialer := websocket.Dialer{}
+	mconn, resp, _ := dialer.Dial(s.URL, nil)
+	expectedHeader := buildWsResponseHeader()
+	for k, v := range expectedHeader {
+		assert.Equal(t, v[0], resp.Header.Get(k))
+	}
+
+	// Fixed overhead of the full status line "HTTP/1.1 101 Switching Protocols" (32) + 4 bytes for two instance of CRLF
+	// one after the status line and one to separate headers from the body
+	minValidHeaderSize := 36
+	for k, v := range resp.Header {
+		minValidHeaderSize += len(k) + len(v[0]) + 4 // + 4 is for the ": " and CRLF
+	}
+	mconn.Close()
+
+	// Setting the max header size to 1 byte less than the minimum header size should fail
+	netA.wsMaxHeaderBytes = int64(minValidHeaderSize) - 1
+	netA.wg.Add(1)
+	netA.tryConnect(s.URL, s.URL)
+	time.Sleep(250 * time.Millisecond)
+	assert.Len(t, netA.peers, 0)
+
+	// Now set the max header size to the minimum header size and it should succeed
+	netA.wsMaxHeaderBytes = int64(minValidHeaderSize)
+	netA.wg.Add(1)
+	netA.tryConnect(s.URL, s.URL)
+	p := netA.peers[0]
+	var messageCount uint64
+	for x := 0; x < 1000; x++ {
+		messageCount = atomic.LoadUint64(&p.miMessageCount)
+		if messageCount == 1 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	// Confirm that we successfuly received a message of interest
+	assert.Len(t, netA.peers, 1)
+	fmt.Printf("MI Message Count: %v\n", netA.peers[0].miMessageCount)
+	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount)
 }

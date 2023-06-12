@@ -101,8 +101,12 @@ const slowWritingPeerMonitorInterval = 5 * time.Second
 // to the log file. Note that the log file itself would also json-encode these before placing them in the log file.
 const unprintableCharacterGlyph = "▯"
 
-// match config.PublicAddress to this string to automatically set PublicAddress from Address()
-const autoconfigPublicAddress = "auto"
+// testingPublicAddress is used in identity exchange tests for a predictable
+// PublicAddress (which will match HTTP Listener's Address) in tests only.
+const testingPublicAddress = "testing"
+
+// Maximum number of bytes to read from a header when trying to establish a websocket connection.
+const wsMaxHeaderBytes = 4096
 
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
@@ -394,6 +398,9 @@ type WebsocketNetwork struct {
 
 	// outgoingMessagesBufferSize is the size used for outgoing messages.
 	outgoingMessagesBufferSize int
+
+	// wsMaxHeaderBytes is the maximum accepted size of the header prior to upgrading to websocket connection.
+	wsMaxHeaderBytes int64
 
 	// slowWritingPeerMonitorInterval defines the interval between two consecutive tests for slow peer writing
 	slowWritingPeerMonitorInterval time.Duration
@@ -757,6 +764,8 @@ func (wn *WebsocketNetwork) setup() {
 				config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize),
 	)
 
+	wn.wsMaxHeaderBytes = wsMaxHeaderBytes
+
 	wn.identityTracker = NewIdentityTracker()
 
 	wn.broadcastQueueHighPrio = make(chan broadcastRequest, wn.outgoingMessagesBufferSize)
@@ -842,8 +851,8 @@ func (wn *WebsocketNetwork) Start() {
 		wn.scheme = "http"
 	}
 
-	// if PublicAddress set to automatic, pull the name from Address()
-	if wn.config.PublicAddress == autoconfigPublicAddress {
+	// if PublicAddress set to testing, pull the name from Address()
+	if wn.config.PublicAddress == testingPublicAddress {
 		addr, ok := wn.Address()
 		if ok {
 			url, err := url.Parse(addr)
@@ -2192,9 +2201,11 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		EnableCompression: false,
 		NetDialContext:    wn.dialer.DialContext,
 		NetDial:           wn.dialer.Dial,
+		MaxHeaderSize:     wn.wsMaxHeaderBytes,
 	}
 
 	conn, response, err := websocketDialer.DialContext(wn.ctx, gossipAddr, requestHeader)
+
 	if err != nil {
 		if err == websocket.ErrBadHandshake {
 			// reading here from ioutil is safe only because it came from DialContext above, which already finished reading all the data from the network

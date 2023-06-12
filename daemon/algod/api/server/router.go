@@ -51,6 +51,8 @@ const (
 	apiV1Tag = "/v1"
 	// TokenHeader is the header where we put the token.
 	TokenHeader = "X-Algo-API-Token"
+	// maxRequestBodyBytes is the maximum request body size that we allow in our APIs.
+	maxRequestBodyBytes = "10MB"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -90,7 +92,9 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 		middleware.RemoveTrailingSlash())
 	e.Use(
 		middlewares.MakeLogger(logger),
-		middlewares.MakeCORS(TokenHeader))
+		middlewares.MakeCORS(TokenHeader),
+		middleware.BodyLimit(maxRequestBodyBytes),
+	)
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}

@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
@@ -118,10 +118,11 @@ type ledgerTracker interface {
 	// An optional context is provided for long-running operations.
 	postCommitUnlocked(context.Context, *deferredCommitContext)
 
-	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
+	// handleUnorderedCommitOrError is a special method for handling deferred commits that are out of order
+	// or to handle errors reported by other trackers while committing a batch.
 	// Tracker might update own state in this case. For example, account updates tracker cancels
-	// scheduled catchpoint writing that deferred commit.
-	handleUnorderedCommit(*deferredCommitContext)
+	// scheduled catchpoint writing flag for this batch.
+	handleUnorderedCommitOrError(*deferredCommitContext)
 
 	// close terminates the tracker, reclaiming any resources
 	// like open database connections or goroutines.  close may
@@ -136,7 +137,7 @@ type ledgerForTracker interface {
 	trackerDB() trackerdb.TrackerStore
 	blockDB() db.Pair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, internal.LedgerForEvaluator) (ledgercore.StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block, eval.LedgerForEvaluator) (ledgercore.StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
@@ -214,12 +215,6 @@ type deferredCommitRange struct {
 	// a catchpoint data file, in this commit cycle iteration.
 	catchpointFirstStage bool
 
-	// catchpointDataWriting is a pointer to a variable with the same name in the
-	// catchpointTracker. It's used in order to reset the catchpointDataWriting flag from
-	// the acctupdates's prepareCommit/commitRound (which is called before the
-	// corresponding catchpoint tracker method.
-	catchpointDataWriting *int32
-
 	// enableGeneratingCatchpointFiles controls whether the node produces catchpoint files or not.
 	enableGeneratingCatchpointFiles bool
 
@@ -269,6 +264,15 @@ type deferredCommitContext struct {
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
+
+	spVerification struct {
+		// state proof verification deletion information
+		lastDeleteIndex           int
+		earliestLastAttestedRound basics.Round
+
+		// state proof verification commit information
+		commitContext []verificationCommitContext
+	}
 }
 
 func (dcc deferredCommitContext) newBase() basics.Round {
@@ -402,14 +406,40 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
 	flushTime := time.Now()
-	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && !dcc.catchpointSecondStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
-		dcc = nil
+
+	// Some tracker want to flush
+	if dcc != nil {
+		// skip this flush if none of these conditions met:
+		// - has it been at least balancesFlushInterval since the last flush?
+		flushIntervalPassed := flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval))
+		// - does this commit task also include catchpoint file creation activity for the dcc.oldBase+dcc.offset?
+		flushForCatchpoint := dcc.catchpointFirstStage || dcc.catchpointSecondStage
+		// - have more than pendingDeltasFlushThreshold accounts been modified since the last flush?
+		flushAccounts := dcc.pendingDeltas >= pendingDeltasFlushThreshold
+		if !(flushIntervalPassed || flushForCatchpoint || flushAccounts) {
+			dcc = nil
+		}
 	}
 	tr.mu.RUnlock()
 
 	if dcc != nil {
+		// Increment the waitgroup first, otherwise this goroutine can be interrupted
+		// and commitSyncer attempts calling Done() on empty wait group.
 		tr.accountsWriting.Add(1)
-		tr.deferredCommits <- dcc
+		select {
+		case tr.deferredCommits <- dcc:
+		default:
+			// Do NOT block if deferredCommits cannot accept this task, skip it.
+			// Note: the next attempt will include these rounds plus some extra rounds.
+			// The main reason for slow commits is catchpoint file creation (when commitSyncer calls
+			// commitRound, which calls postCommitUnlocked). This producer thread is called by
+			// blockQueue.syncer() upon successful block DB flush, which calls ledger.notifyCommit()
+			// and trackerRegistry.committedUpTo() after taking the trackerMu.Lock().
+			// This means a blocking write to deferredCommits will block Ledger reads (TODO use more fine-grained locks).
+			// Dropping this dcc allows the blockqueue syncer to continue persisting other blocks
+			// and ledger reads to proceed without being blocked by trackerMu lock.
+			tr.accountsWriting.Done()
+		}
 	}
 }
 
@@ -479,7 +509,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
 		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
 		for _, lt := range tr.trackers {
-			lt.handleUnorderedCommit(dcc)
+			lt.handleUnorderedCommitOrError(dcc)
 		}
 		tr.mu.RUnlock()
 		return nil
@@ -503,19 +533,27 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	dcc.oldBase = dbRound
 	dcc.flushTime = time.Now()
 
+	var err error
 	for _, lt := range tr.trackers {
-		err := lt.prepareCommit(dcc)
+		err = lt.prepareCommit(dcc)
 		if err != nil {
 			tr.log.Errorf(err.Error())
-			tr.mu.RUnlock()
-			return err
+			break
 		}
 	}
+	if err != nil {
+		for _, lt := range tr.trackers {
+			lt.handleUnorderedCommitOrError(dcc)
+		}
+		tr.mu.RUnlock()
+		return err
+	}
+
 	tr.mu.RUnlock()
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err = tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		arw, err := tx.MakeAccountsReaderWriter()
 		if err != nil {
 			return err
@@ -533,6 +571,9 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
 	if err != nil {
+		for _, lt := range tr.trackers {
+			lt.handleUnorderedCommitOrError(dcc)
+		}
 		tr.log.Warnf("unable to advance tracker db snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
 		return err
 	}
@@ -692,8 +733,8 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 			roundsBehind = blk.Round() - tr.dbRound
 			tr.mu.RUnlock()
 
-			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
-			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(catchpointInterval) {
+			// are we farther behind than we need to be? Consider: catchpoint interval, flush interval and max acct lookback.
+			if roundsBehind > basics.Round(maxAcctLookback) && roundsBehind > initializeCachesRoundFlushInterval+basics.Round(catchpointInterval) {
 				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any further changes
 				// would just accumulate in memory.
 				close(blockEvalFailed)

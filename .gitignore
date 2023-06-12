@@ -68,3 +68,9 @@ index.html
 
 # test summary
 testresults.json
+
+# block generator binary
+tools/block-generator/block-generator
+
+# cross repo types tool binary
+tools/x-repo-types/x-repo-types

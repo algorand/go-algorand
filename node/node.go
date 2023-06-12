@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,10 +130,11 @@ type AlgorandFullNode struct {
 
 	indexer *indexer.Indexer
 
-	rootDir     string
-	genesisID   string
-	genesisHash crypto.Digest
-	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
+	rootDir         string
+	genesisID       string
+	genesisHash     crypto.Digest
+	devMode         bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
+	timestampOffset *int64
 
 	log logging.Logger
 
@@ -326,17 +328,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
-	// Delete the deprecated database file if it exists. This can be removed in future updates since this file should not exist by then.
-	oldCompactCertPath := filepath.Join(genesisDir, "compactcert.sqlite")
-	os.Remove(oldCompactCertPath)
-
-	stateProofPathname := filepath.Join(genesisDir, config.StateProofFileName)
-	stateProofAccess, err := db.MakeAccessor(stateProofPathname, false, false)
-	if err != nil {
-		log.Errorf("Cannot load state proof data: %v", err)
-		return nil, err
-	}
-	node.stateProofWorker = stateproof.NewWorker(stateProofAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	node.stateProofWorker = stateproof.NewWorker(genesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }
@@ -428,8 +420,6 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
-		node.stateProofWorker.Shutdown()
-		node.stateProofWorker = nil
 	}()
 
 	node.net.ClearHandlers()
@@ -439,6 +429,7 @@ func (node *AlgorandFullNode) Stop() {
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
+		node.stateProofWorker.Stop()
 		node.txHandler.Stop()
 		node.agreementService.Shutdown()
 		node.catchupService.Stop()
@@ -479,6 +470,24 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	if err != nil || vb == nil {
 		return
 	}
+
+	// Make a new validated block.
+	prevRound := vb.Block().Round() - 1
+	prev, err := node.ledger.BlockHdr(prevRound)
+	if err != nil {
+		return err
+	}
+
+	blk := vb.Block()
+
+	// Set block timestamp based on offset, if set.
+	// Make sure block timestamp is not greater than MaxInt64.
+	if node.timestampOffset != nil && *node.timestampOffset < math.MaxInt64-prev.TimeStamp {
+		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
+	}
+	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
+	vb2 := ledgercore.MakeValidatedBlock(blk, vb.Delta())
+	vb = &vb2
 
 	// add the newly generated block to the ledger
 	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{Round: vb.Block().Round()})
@@ -556,9 +565,9 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFullNode) Simulate(txgroup []transactions.SignedTxn) (result simulation.Result, err error) {
+func (node *AlgorandFullNode) Simulate(request simulation.Request) (result simulation.Result, err error) {
 	simulator := simulation.MakeSimulator(node.ledger)
-	return simulator.Simulate(txgroup)
+	return simulator.Simulate(request)
 }
 
 // ListTxns returns SignedTxns associated with a specific account in a range of Rounds (inclusive).
@@ -658,6 +667,18 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	// Since we're using uint64, if the minRound is 0, we need to check for an underflow.
 	if minRound == 0 {
 		minRound++
+	}
+
+	// If we did find the transaction, we know there is no point
+	// checking rounds earlier or later than validity rounds
+	if found {
+		if tx.Txn.FirstValid > minRound {
+			minRound = tx.Txn.FirstValid
+		}
+
+		if tx.Txn.LastValid < maxRound {
+			maxRound = tx.Txn.LastValid
+		}
 	}
 
 	for r := maxRound; r >= minRound; r-- {
@@ -1208,6 +1229,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
+			node.stateProofWorker.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()
 			node.catchupService.Stop()
@@ -1233,6 +1255,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.blockService.Start()
 		node.ledgerService.Start()
 		node.txHandler.Start()
+		node.stateProofWorker.Start()
 
 		// start indexer
 		if idx, err := node.Indexer(); err == nil {
@@ -1426,4 +1449,23 @@ func (node *AlgorandFullNode) GetSyncRound() uint64 {
 
 // UnsetSyncRound no-ops
 func (node *AlgorandFullNode) UnsetSyncRound() {
+}
+
+// SetBlockTimeStampOffset sets a timestamp offset in the block header.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
+	if node.devMode {
+		node.timestampOffset = &offset
+		return nil
+	}
+	return fmt.Errorf("cannot set block timestamp offset when not in dev mode")
+}
+
+// GetBlockTimeStampOffset gets a timestamp offset.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) GetBlockTimeStampOffset() (*int64, error) {
+	if node.devMode {
+		return node.timestampOffset, nil
+	}
+	return nil, fmt.Errorf("cannot get block timestamp offset when not in dev mode")
 }

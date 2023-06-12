@@ -54,6 +54,7 @@
     "EnableRuntimeMetrics": false,
     "EnableTopAccountsReporting": false,
     "EnableTxBacklogRateLimiting": false,
+    "EnableTxnEvalTracer": false,
     "EnableUsageLog": false,
     "EnableVerbosedTransactionSyncLogging": false,
     "EndpointAddress": "127.0.0.1:0",
