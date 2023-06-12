@@ -651,9 +651,11 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 		var assetIndex uint64
 		var asset *assetData
 		if hint != nil {
-			assetIndex, asset = hintIndex, hint
+			assetIndex = hintIndex
+			asset = hint
 		} else {
-			assetIndex, asset = rand.Uint64()%numAssets, g.assets[assetIndex]
+			assetIndex = rand.Uint64()%numAssets
+			asset = g.assets[assetIndex]
 		}
 
 		switch actual {
