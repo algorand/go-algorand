@@ -2180,6 +2180,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	// Check expected == actual
 	creationOpcodeTrace := []simulation.OpcodeTraceUnit{
 		{PC: 1},
+		// txn ApplicationID
 		{
 			PC: 6,
 			Added: []simulation.TealValue{
@@ -2189,6 +2190,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				},
 			},
 		},
+		// int 0
 		{
 			PC: 8,
 			Added: []simulation.TealValue{
@@ -2198,6 +2200,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				},
 			},
 		},
+		// ==
 		{
 			PC: 9,
 			Deleted: []simulation.TealValue{
@@ -2217,6 +2220,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				},
 			},
 		},
+		// bnz main_l6
 		{
 			PC: 10,
 			Deleted: []simulation.TealValue{
@@ -2226,6 +2230,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				},
 			},
 		},
+		// int 1
 		{
 			PC: 149,
 			Added: []simulation.TealValue{
@@ -2235,6 +2240,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				},
 			},
 		},
+		// return
 		{
 			PC: 150,
 			Deleted: []simulation.TealValue{
@@ -2258,6 +2264,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	recursiveLongOpcodeTrace := func(appID basics.AppIndex, layer int) []simulation.OpcodeTraceUnit {
 		return []simulation.OpcodeTraceUnit{
 			{PC: 1},
+			// txn ApplicationID
 			{
 				PC: 6,
 				Added: []simulation.TealValue{
@@ -2267,6 +2274,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 0
 			{
 				PC: 8,
 				Added: []simulation.TealValue{
@@ -2276,6 +2284,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// ==
 			{
 				PC: 9,
 				Deleted: []simulation.TealValue{
@@ -2295,6 +2304,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// bnz main_l6
 			{
 				PC: 10,
 				Deleted: []simulation.TealValue{
@@ -2304,6 +2314,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// txn NumAppArgs
 			{
 				PC: 13,
 				Added: []simulation.TealValue{
@@ -2313,6 +2324,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 1
 			{
 				PC: 15,
 				Added: []simulation.TealValue{
@@ -2322,6 +2334,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// ==
 			{
 				PC: 16,
 				Deleted: []simulation.TealValue{
@@ -2341,6 +2354,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// bnz main_l3
 			{
 				PC: 17,
 				Deleted: []simulation.TealValue{
@@ -2350,6 +2364,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// global CurrentApplicationID
 			{
 				PC: 21,
 				Added: []simulation.TealValue{
@@ -2359,6 +2374,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// app_params_get AppApprovalProgram
 			{
 				PC: 23,
 				Added: []simulation.TealValue{
@@ -2378,6 +2394,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 1
 			{
 				PC: 25,
 				Deleted: []simulation.TealValue{
@@ -2387,6 +2404,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 0
 			{
 				PC: 27,
 				Deleted: []simulation.TealValue{
@@ -2396,6 +2414,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// global CurrentApplicationID
 			{
 				PC: 29,
 				Added: []simulation.TealValue{
@@ -2405,6 +2424,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// app_params_get AppClearStateProgram
 			{
 				PC: 31,
 				Added: []simulation.TealValue{
@@ -2424,6 +2444,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 3
 			{
 				PC: 33,
 				Deleted: []simulation.TealValue{
@@ -2433,6 +2454,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 2
 			{
 				PC: 35,
 				Deleted: []simulation.TealValue{
@@ -2442,6 +2464,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// global CurrentApplicationAddress
 			{
 				PC: 37,
 				Added: []simulation.TealValue{
@@ -2451,6 +2474,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// acct_params_get AcctBalance
 			{
 				PC: 39,
 				Added: []simulation.TealValue{
@@ -2470,6 +2494,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 5
 			{
 				PC: 41,
 				Deleted: []simulation.TealValue{
@@ -2479,6 +2504,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 4
 			{
 				PC: 43,
 				Deleted: []simulation.TealValue{
@@ -2488,6 +2514,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// load 1
 			{
 				PC: 45,
 				Added: []simulation.TealValue{
@@ -2497,6 +2524,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// assert
 			{
 				PC: 47,
 				Deleted: []simulation.TealValue{
@@ -2506,6 +2534,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// load 3
 			{
 				PC: 48,
 				Added: []simulation.TealValue{
@@ -2515,6 +2544,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// assert
 			{
 				PC: 50,
 				Deleted: []simulation.TealValue{
@@ -2524,6 +2554,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// load 5
 			{
 				PC: 51,
 				Added: []simulation.TealValue{
@@ -2533,6 +2564,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// assert
 			{
 				PC: 53,
 				Deleted: []simulation.TealValue{
@@ -2542,6 +2574,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 2
 			{
 				PC: 54,
 				Added: []simulation.TealValue{
@@ -2551,6 +2584,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// txna ApplicationArgs 0
 			{
 				PC: 56,
 				Added: []simulation.TealValue{
@@ -2560,6 +2594,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// btoi
 			{
 				PC: 59,
 				Added: []simulation.TealValue{
@@ -2575,6 +2610,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// exp
 			{
 				PC: 60,
 				Added: []simulation.TealValue{
@@ -2594,6 +2630,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itob
 			{
 				PC: 61,
 				Added: []simulation.TealValue{
@@ -2609,6 +2646,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// log
 			{
 				PC: 62,
 				Deleted: []simulation.TealValue{
@@ -2618,6 +2656,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// txna ApplicationArgs 0
 			{
 				PC: 63,
 				Added: []simulation.TealValue{
@@ -2627,6 +2666,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// btoi
 			{
 				PC: 66,
 				Added: []simulation.TealValue{
@@ -2642,6 +2682,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 0
 			{
 				PC: 67,
 				Added: []simulation.TealValue{
@@ -2651,6 +2692,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// >
 			{
 				PC: 68,
 				Added: []simulation.TealValue{
@@ -2670,6 +2712,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// bnz main_l5
 			{
 				PC: 69,
 				Deleted: []simulation.TealValue{
@@ -2679,7 +2722,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_begin
 			{PC: 74},
+			// int appl
 			{
 				PC: 75,
 				Added: []simulation.TealValue{
@@ -2689,6 +2734,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field TypeEnum
 			{
 				PC: 76,
 				Deleted: []simulation.TealValue{
@@ -2698,6 +2744,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 0
 			{
 				PC: 78,
 				Added: []simulation.TealValue{
@@ -2707,6 +2754,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field Fee
 			{
 				PC: 79,
 				Deleted: []simulation.TealValue{
@@ -2716,6 +2764,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// load 0
 			{
 				PC: 81,
 				Added: []simulation.TealValue{
@@ -2725,6 +2774,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field ApprovalProgram
 			{
 				PC: 83,
 				Deleted: []simulation.TealValue{
@@ -2734,6 +2784,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// load 2
 			{
 				PC: 85,
 				Added: []simulation.TealValue{
@@ -2743,6 +2794,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field ClearStateProgram
 			{
 				PC: 87,
 				Deleted: []simulation.TealValue{
@@ -2752,8 +2804,11 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_submit
 			{PC: 89, SpawnedInners: []int{0}},
+			// itxn_begin
 			{PC: 90},
+			// int pay
 			{
 				PC: 91,
 				Added: []simulation.TealValue{
@@ -2763,6 +2818,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field TypeEnum
 			{
 				PC: 92,
 				Deleted: []simulation.TealValue{
@@ -2772,6 +2828,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 0
 			{
 				PC: 94,
 				Added: []simulation.TealValue{
@@ -2781,6 +2838,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field Fee
 			{
 				PC: 95,
 				Deleted: []simulation.TealValue{
@@ -2790,6 +2848,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// load 4
 			{
 				PC: 97,
 				Added: []simulation.TealValue{
@@ -2799,6 +2858,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 100000
 			{
 				PC: 99,
 				Added: []simulation.TealValue{
@@ -2808,6 +2868,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// -
 			{
 				PC: 103,
 				Deleted: []simulation.TealValue{
@@ -2827,6 +2888,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field Amount
 			{
 				PC: 104,
 				Deleted: []simulation.TealValue{
@@ -2836,6 +2898,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// byte "appID"
 			{
 				PC: 106,
 				Added: []simulation.TealValue{
@@ -2845,6 +2908,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// gitxn 0 CreatedApplicationID
 			{
 				PC: 113,
 				Added: []simulation.TealValue{
@@ -2854,6 +2918,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itob
 			{
 				PC: 116,
 				Added: []simulation.TealValue{
@@ -2869,6 +2934,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// concat
 			{
 				PC: 117,
 				Added: []simulation.TealValue{
@@ -2888,6 +2954,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// sha512_256
 			{
 				PC: 118,
 				Added: []simulation.TealValue{
@@ -2903,6 +2970,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field Receiver
 			{
 				PC: 119,
 				Deleted: []simulation.TealValue{
@@ -2913,6 +2981,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				},
 			},
 			{PC: 121},
+			// int appl
 			{
 				PC: 122,
 				Added: []simulation.TealValue{
@@ -2922,6 +2991,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field TypeEnum
 			{
 				PC: 123,
 				Deleted: []simulation.TealValue{
@@ -2931,6 +3001,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// txna ApplicationArgs 0
 			{
 				PC: 125,
 				Added: []simulation.TealValue{
@@ -2940,6 +3011,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// btoi
 			{
 				PC: 128,
 				Added: []simulation.TealValue{
@@ -2955,6 +3027,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 1
 			{
 				PC: 129,
 				Added: []simulation.TealValue{
@@ -2964,6 +3037,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// -
 			{
 				PC: 130,
 				Added: []simulation.TealValue{
@@ -2983,6 +3057,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itob
 			{
 				PC: 131,
 				Added: []simulation.TealValue{
@@ -2998,6 +3073,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field ApplicationArgs
 			{
 				PC: 132,
 				Deleted: []simulation.TealValue{
@@ -3007,6 +3083,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn CreatedApplicationID
 			{
 				PC: 134,
 				Added: []simulation.TealValue{
@@ -3016,6 +3093,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field ApplicationID
 			{
 				PC: 136,
 				Deleted: []simulation.TealValue{
@@ -3025,6 +3103,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 0
 			{
 				PC: 138,
 				Added: []simulation.TealValue{
@@ -3034,6 +3113,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field Fee
 			{
 				PC: 139,
 				Deleted: []simulation.TealValue{
@@ -3043,6 +3123,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int DeleteApplication
 			{
 				PC: 141,
 				Added: []simulation.TealValue{
@@ -3052,6 +3133,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_field OnCompletion
 			{
 				PC: 143,
 				Deleted: []simulation.TealValue{
@@ -3061,8 +3143,11 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itxn_submit
 			{PC: 145, SpawnedInners: []int{1, 2}},
+			// b main_l4
 			{PC: 146},
+			// int 1
 			{
 				PC: 72,
 				Added: []simulation.TealValue{
@@ -3072,6 +3157,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// return
 			{
 				PC: 73,
 				Deleted: []simulation.TealValue{
@@ -3087,6 +3173,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	finalDepthTrace := func(appID basics.AppIndex, layer int) []simulation.OpcodeTraceUnit {
 		return []simulation.OpcodeTraceUnit{
 			{PC: 1},
+			// txn ApplicationID
 			{
 				PC: 6,
 				Added: []simulation.TealValue{
@@ -3096,6 +3183,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 0
 			{
 				PC: 8,
 				Added: []simulation.TealValue{
@@ -3105,6 +3193,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// ==
 			{
 				PC: 9,
 				Deleted: []simulation.TealValue{
@@ -3124,6 +3213,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// bnz main_l6
 			{
 				PC: 10,
 				Deleted: []simulation.TealValue{
@@ -3133,6 +3223,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// txn NumAppArgs
 			{
 				PC: 13,
 				Added: []simulation.TealValue{
@@ -3142,6 +3233,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 1
 			{
 				PC: 15,
 				Added: []simulation.TealValue{
@@ -3151,6 +3243,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// ==
 			{
 				PC: 16,
 				Deleted: []simulation.TealValue{
@@ -3170,6 +3263,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// bnz main_l3
 			{
 				PC: 17,
 				Deleted: []simulation.TealValue{
@@ -3179,6 +3273,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// global CurrentApplicationID
 			{
 				PC: 21,
 				Added: []simulation.TealValue{
@@ -3188,6 +3283,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// app_params_get AppApprovalProgram
 			{
 				PC: 23,
 				Added: []simulation.TealValue{
@@ -3207,6 +3303,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 1
 			{
 				PC: 25,
 				Deleted: []simulation.TealValue{
@@ -3216,6 +3313,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 0
 			{
 				PC: 27,
 				Deleted: []simulation.TealValue{
@@ -3225,6 +3323,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// global CurrentApplicationID
 			{
 				PC: 29,
 				Added: []simulation.TealValue{
@@ -3234,6 +3333,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// app_params_get AppClearStateProgram
 			{
 				PC: 31,
 				Added: []simulation.TealValue{
@@ -3253,6 +3353,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 3
 			{
 				PC: 33,
 				Deleted: []simulation.TealValue{
@@ -3262,6 +3363,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 2
 			{
 				PC: 35,
 				Deleted: []simulation.TealValue{
@@ -3271,6 +3373,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// global CurrentApplicationAddress
 			{
 				PC: 37,
 				Added: []simulation.TealValue{
@@ -3280,6 +3383,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// acct_params_get AcctBalance
 			{
 				PC: 39,
 				Added: []simulation.TealValue{
@@ -3299,6 +3403,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 5
 			{
 				PC: 41,
 				Deleted: []simulation.TealValue{
@@ -3308,6 +3413,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// store 4
 			{
 				PC: 43,
 				Deleted: []simulation.TealValue{
@@ -3317,6 +3423,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// load 1
 			{
 				PC: 45,
 				Added: []simulation.TealValue{
@@ -3326,6 +3433,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// assert
 			{
 				PC: 47,
 				Deleted: []simulation.TealValue{
@@ -3335,6 +3443,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// load 3
 			{
 				PC: 48,
 				Added: []simulation.TealValue{
@@ -3344,6 +3453,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// assert
 			{
 				PC: 50,
 				Deleted: []simulation.TealValue{
@@ -3353,6 +3463,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// load 5
 			{
 				PC: 51,
 				Added: []simulation.TealValue{
@@ -3362,6 +3473,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// assert
 			{
 				PC: 53,
 				Deleted: []simulation.TealValue{
@@ -3371,6 +3483,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 2
 			{
 				PC: 54,
 				Added: []simulation.TealValue{
@@ -3380,6 +3493,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// txna ApplicationArgs 0
 			{
 				PC: 56,
 				Added: []simulation.TealValue{
@@ -3389,6 +3503,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// btoi
 			{
 				PC: 59,
 				Added: []simulation.TealValue{
@@ -3404,6 +3519,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// exp
 			{
 				PC: 60,
 				Added: []simulation.TealValue{
@@ -3423,6 +3539,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// itob
 			{
 				PC: 61,
 				Added: []simulation.TealValue{
@@ -3438,6 +3555,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// log
 			{
 				PC: 62,
 				Deleted: []simulation.TealValue{
@@ -3447,6 +3565,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// txna ApplicationArgs 0
 			{
 				PC: 63,
 				Added: []simulation.TealValue{
@@ -3456,6 +3575,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// btoi
 			{
 				PC: 66,
 				Added: []simulation.TealValue{
@@ -3471,6 +3591,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 0
 			{
 				PC: 67,
 				Added: []simulation.TealValue{
@@ -3480,6 +3601,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// >
 			{
 				PC: 68,
 				Added: []simulation.TealValue{
@@ -3499,6 +3621,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// bnz main_l5
 			{
 				PC: 69,
 				Deleted: []simulation.TealValue{
@@ -3508,6 +3631,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// int 1
 			{
 				PC: 72,
 				Added: []simulation.TealValue{
@@ -3517,6 +3641,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 					},
 				},
 			},
+			// return
 			{
 				PC: 73,
 				Deleted: []simulation.TealValue{
