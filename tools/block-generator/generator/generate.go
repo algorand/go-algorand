@@ -229,7 +229,7 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 		addr := indexToAccount(i)
 		allocations = append(allocations, bookkeeping.GenesisAllocation{
 			Address: addr.String(),
-			State: basics.AccountData{
+			State: bookkeeping.GenesisAccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: g.config.GenesisAccountInitialBalance},
 			},
 		})
@@ -239,7 +239,7 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 	allocations = append(allocations, bookkeeping.GenesisAllocation{
 		Address: g.rewardsPool.String(),
 		Comment: "RewardsPool",
-		State: basics.AccountData{
+		State: bookkeeping.GenesisAccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
 			Status:     basics.NotParticipating,
 		},
