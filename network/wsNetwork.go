@@ -165,6 +165,8 @@ const (
 	PeersConnectedIn PeerOption = iota
 	// PeersPhonebookRelays specifies all relays in the phonebook
 	PeersPhonebookRelays PeerOption = iota
+	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
+	PeersPhonebookArchivalNodes PeerOption = iota
 	// PeersPhonebookArchivers specifies all archivers in the phonebook
 	PeersPhonebookArchivers PeerOption = iota
 )
@@ -691,6 +693,13 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			wn.peersLock.RUnlock()
 		case PeersPhonebookRelays:
 			// return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
+			var addrs []string
+			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
+			for _, addr := range addrs {
+				peerCore := makePeerCore(wn, addr, wn.GetRoundTripper(), "" /*origin address*/)
+				outPeers = append(outPeers, &peerCore)
+			}
+		case PeersPhonebookArchivalNodes:
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
