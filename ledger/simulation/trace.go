@@ -195,6 +195,9 @@ type OpcodeTraceUnit struct {
 	// this OpcodeTraceUnit.
 	SpawnedInners []int `codec:"spawned-inners,omitempty"`
 
+	// the line disassembled from program byte code
+	DisassembledLine string `codec:"disassembled-line,omitempty"`
+
 	// what has been added to stack
 	Added []TealValue `codec:"additions,omitempty"`
 

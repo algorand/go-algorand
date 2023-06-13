@@ -2152,7 +2152,8 @@ byte "hello"; log; int 1`,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
-											PC: 1,
+											PC:               1,
+											DisassembledLine: `pushbytes 0x68656c6c6f // "hello"`,
 											Added: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -2161,7 +2162,8 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC: 8,
+											PC:               8,
+											DisassembledLine: "log",
 											Deleted: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -2170,7 +2172,8 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC: 9,
+											PC:               9,
+											DisassembledLine: "pushint 1",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2181,10 +2184,12 @@ byte "hello"; log; int 1`,
 									},
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
 										{
-											PC: 1,
+											PC:               1,
+											DisassembledLine: "bytecblock 0x61",
 										},
 										{
-											PC: 5,
+											PC:               5,
+											DisassembledLine: `bytec_0 // "a"`,
 											Added: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -2193,40 +2198,8 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC: 6,
-											Added: []simulation.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: keccakBytes,
-												},
-											},
-											Deleted: []simulation.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "a",
-												},
-											},
-										},
-										{
-											PC: 7,
-											Deleted: []simulation.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: keccakBytes,
-												},
-											},
-										},
-										{
-											PC: 8,
-											Added: []simulation.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "a",
-												},
-											},
-										},
-										{
-											PC: 9,
+											PC:               6,
+											DisassembledLine: "keccak256",
 											Added: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -2241,7 +2214,8 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC: 10,
+											PC:               7,
+											DisassembledLine: "pop",
 											Deleted: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -2250,7 +2224,44 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC: 11,
+											PC:               8,
+											DisassembledLine: `bytec_0 // "a"`,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC:               9,
+											DisassembledLine: "keccak256",
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: keccakBytes,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC:               10,
+											DisassembledLine: "pop",
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: keccakBytes,
+												},
+											},
+										},
+										{
+											PC:               11,
+											DisassembledLine: "pushint 1",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2338,9 +2349,13 @@ byte "hello"; log; int 1`,
 								LogicSigBudgetConsumed: 266,
 								Trace: &simulation.TransactionTrace{
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
 										{
-											PC: 5,
+											PC:               1,
+											DisassembledLine: "bytecblock 0x61",
+										},
+										{
+											PC:               5,
+											DisassembledLine: `bytec_0 // "a"`,
 											Added: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -2349,40 +2364,8 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC: 6,
-											Added: []simulation.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: keccakBytes,
-												},
-											},
-											Deleted: []simulation.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "a",
-												},
-											},
-										},
-										{
-											PC: 7,
-											Deleted: []simulation.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: keccakBytes,
-												},
-											},
-										},
-										{
-											PC: 8,
-											Added: []simulation.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "a",
-												},
-											},
-										},
-										{
-											PC: 9,
+											PC:               6,
+											DisassembledLine: "keccak256",
 											Added: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -2397,7 +2380,8 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC: 10,
+											PC:               7,
+											DisassembledLine: "pop",
 											Deleted: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -2406,7 +2390,44 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC: 11,
+											PC:               8,
+											DisassembledLine: `bytec_0 // "a"`,
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC:               9,
+											DisassembledLine: "keccak256",
+											Added: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: keccakBytes,
+												},
+											},
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "a",
+												},
+											},
+										},
+										{
+											PC:               10,
+											DisassembledLine: "pop",
+											Deleted: []simulation.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: keccakBytes,
+												},
+											},
+										},
+										{
+											PC:               11,
+											DisassembledLine: "pushint 0",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2626,9 +2647,13 @@ int 1`,
 								AppBudgetConsumed: 4,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
 										{
-											PC: 4,
+											PC:               1,
+											DisassembledLine: "intcblock 1",
+										},
+										{
+											PC:               4,
+											DisassembledLine: "txn ApplicationID",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2637,7 +2662,8 @@ int 1`,
 											},
 										},
 										{
-											PC: 6,
+											PC:               6,
+											DisassembledLine: "bz 55",
 											Deleted: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2646,7 +2672,8 @@ int 1`,
 											},
 										},
 										{
-											PC: 55,
+											PC:               55,
+											DisassembledLine: "intc_0 // 1",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2673,9 +2700,13 @@ int 1`,
 								AppBudgetConsumed: 30,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
 										{
-											PC: 4,
+											PC:               1,
+											DisassembledLine: "intcblock 1",
+										},
+										{
+											PC:               4,
+											DisassembledLine: "txn ApplicationID",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2684,7 +2715,8 @@ int 1`,
 											},
 										},
 										{
-											PC: 6,
+											PC:               6,
+											DisassembledLine: "bz 55",
 											Deleted: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2693,7 +2725,8 @@ int 1`,
 											},
 										},
 										{
-											PC: 9,
+											PC:               9,
+											DisassembledLine: "txn NumAppArgs",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2702,7 +2735,8 @@ int 1`,
 											},
 										},
 										{
-											PC: 11,
+											PC:               11,
+											DisassembledLine: "intc_0 // 1",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2711,7 +2745,8 @@ int 1`,
 											},
 										},
 										{
-											PC: 12,
+											PC:               12,
+											DisassembledLine: "==",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2730,7 +2765,8 @@ int 1`,
 											},
 										},
 										{
-											PC: 13,
+											PC:               13,
+											DisassembledLine: "assert",
 											Deleted: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2739,7 +2775,8 @@ int 1`,
 											},
 										},
 										{
-											PC: 14,
+											PC:               14,
+											DisassembledLine: "txna ApplicationArgs 0",
 											Added: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -2748,7 +2785,8 @@ int 1`,
 											},
 										},
 										{
-											PC: 17,
+											PC:               17,
+											DisassembledLine: "btoi",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2763,11 +2801,18 @@ int 1`,
 											},
 										},
 										// call sub
-										{PC: 18},
-										// proto
-										{PC: 26},
 										{
-											PC: 29,
+											PC:               18,
+											DisassembledLine: "callsub 26",
+										},
+										// proto
+										{
+											PC:               26,
+											DisassembledLine: "proto 1 1",
+										},
+										{
+											PC:               29,
+											DisassembledLine: "pushint 0",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2777,7 +2822,8 @@ int 1`,
 										},
 										// dup
 										{
-											PC: 31,
+											PC:               31,
+											DisassembledLine: "dup",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2797,7 +2843,8 @@ int 1`,
 										},
 										// dupn 4
 										{
-											PC: 32,
+											PC:               32,
+											DisassembledLine: "dupn 4",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2829,7 +2876,8 @@ int 1`,
 										},
 										// frame_dig -1
 										{
-											PC: 34,
+											PC:               34,
+											DisassembledLine: "frame_dig -1",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2897,7 +2945,8 @@ int 1`,
 										},
 										// frame_bury 0
 										{
-											PC: 36,
+											PC:               36,
+											DisassembledLine: "frame_bury 0",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -2957,7 +3006,8 @@ int 1`,
 										},
 										// dig 5
 										{
-											PC: 38,
+											PC:               38,
+											DisassembledLine: "dig 5",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3017,7 +3067,8 @@ int 1`,
 										},
 										// cover 5
 										{
-											PC: 40,
+											PC:               40,
+											DisassembledLine: "cover 5",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3073,7 +3124,8 @@ int 1`,
 										},
 										// frame_dig 0
 										{
-											PC: 42,
+											PC:               42,
+											DisassembledLine: "frame_dig 0",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3141,7 +3193,8 @@ int 1`,
 										},
 										// frame_dig 1
 										{
-											PC: 44,
+											PC:               44,
+											DisassembledLine: "frame_dig 1",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3209,7 +3262,8 @@ int 1`,
 										},
 										// +
 										{
-											PC: 46,
+											PC:               46,
+											DisassembledLine: "+",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3229,7 +3283,8 @@ int 1`,
 										},
 										// bury 7
 										{
-											PC: 47,
+											PC:               47,
+											DisassembledLine: "bury 7",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3297,7 +3352,8 @@ int 1`,
 										},
 										// popn 5
 										{
-											PC: 49,
+											PC:               49,
+											DisassembledLine: "popn 5",
 											Deleted: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3323,7 +3379,8 @@ int 1`,
 										},
 										// uncover 1
 										{
-											PC: 51,
+											PC:               51,
+											DisassembledLine: "uncover 1",
 											Deleted: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3347,7 +3404,8 @@ int 1`,
 										},
 										// +
 										{
-											PC: 53,
+											PC:               53,
+											DisassembledLine: "+",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3367,7 +3425,8 @@ int 1`,
 										},
 										// retsub
 										{
-											PC: 54,
+											PC:               54,
+											DisassembledLine: "retsub",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3387,7 +3446,8 @@ int 1`,
 										},
 										// itob
 										{
-											PC: 21,
+											PC:               21,
+											DisassembledLine: "itob",
 											Added: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3403,7 +3463,8 @@ int 1`,
 										},
 										// log
 										{
-											PC: 22,
+											PC:               22,
+											DisassembledLine: "log",
 											Deleted: []simulation.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3412,10 +3473,14 @@ int 1`,
 											},
 										},
 										// b end
-										{PC: 23},
+										{
+											PC:               23,
+											DisassembledLine: "b 55",
+										},
 										// int 1
 										{
-											PC: 55,
+											PC:               55,
+											DisassembledLine: "intc_0 // 1",
 											Added: []simulation.TealValue{
 												{
 													Type: basics.TealUintType,

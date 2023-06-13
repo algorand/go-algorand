@@ -719,6 +719,9 @@ type SimulationOpcodeTraceUnit struct {
 	// Deletions The TEAL values deleted by this opcode from the stack.
 	Deletions *[]TealValue `json:"deletions,omitempty"`
 
+	// DisassembledLine The line disassembled from program byte code.
+	DisassembledLine *string `json:"disassembled-line,omitempty"`
+
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`
 

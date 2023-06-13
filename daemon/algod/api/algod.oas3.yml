@@ -2071,6 +2071,10 @@
             },
             "type": "array"
           },
+          "disassembled-line": {
+            "description": "The line disassembled from program byte code.",
+            "type": "string"
+          },
           "pc": {
             "description": "The program counter of the current opcode being evaluated.",
             "type": "integer"
