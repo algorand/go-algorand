@@ -72,6 +72,8 @@ type ResultEvalOverrides struct {
 	MaxLogCalls           *uint64
 	MaxLogSize            *uint64
 	ExtraOpcodeBudget     uint64
+
+	UnnamedResourceAssignment GroupResourceAssignment
 }
 
 // LogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
@@ -102,7 +104,6 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 	if eo.MaxLogCalls != nil {
 		logicEvalConstants.MaxLogCalls = *eo.MaxLogCalls
 	}
-	logicEvalConstants.UnlimitedResourceAccess = eo.AllowUnnamedResources
 	return logicEvalConstants
 }
 

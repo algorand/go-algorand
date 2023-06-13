@@ -86,6 +86,7 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		EnableFeePooling:      true,
 
 		// Chosen to be different from one another and from normal proto
+		MaxAppBoxReferences:      2,
 		MaxAppTxnAccounts:        3,
 		MaxAppTxnForeignApps:     5,
 		MaxAppTxnForeignAssets:   6,

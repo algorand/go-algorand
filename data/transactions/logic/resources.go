@@ -182,8 +182,8 @@ func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) 
 	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
 		return cx.availableAsset(ai)
 	}
-	if cx.UnlimitedResourceAccess {
-		return true
+	if cx.UnnamedResources != nil {
+		return cx.availableAccount(addr) && cx.availableAsset(ai) && cx.UnnamedResources.AllowsHolding(addr, ai)
 	}
 	return false
 }
@@ -211,8 +211,8 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
 		return cx.availableApp(ai)
 	}
-	if cx.UnlimitedResourceAccess {
-		return true
+	if cx.UnnamedResources != nil {
+		return cx.availableApp(ai) && cx.availableAccount(addr) && cx.UnnamedResources.AllowsLocal(addr, ai)
 	}
 	return false
 }

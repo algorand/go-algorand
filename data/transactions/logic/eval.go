@@ -255,6 +255,15 @@ type boxRef struct {
 	name string
 }
 
+type UnnamedResourcePolicy interface {
+	AvailableAccount(addr basics.Address) bool
+	AvailableAsset(asset basics.AssetIndex) bool
+	AvailableApp(app basics.AppIndex) bool
+	AllowsHolding(addr basics.Address, asset basics.AssetIndex) bool
+	AllowsLocal(addr basics.Address, app basics.AppIndex) bool
+	AvailableBox(app basics.AppIndex, name string) bool
+}
+
 // EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
 type EvalConstants struct {
 	// MaxLogSize is the limit of total log size from n log calls in a program
@@ -263,8 +272,8 @@ type EvalConstants struct {
 	// MaxLogCalls is the limit of total log calls during a program execution
 	MaxLogCalls uint64
 
-	// UnlimitedResourceAccess removes resource access limitations
-	UnlimitedResourceAccess bool
+	// UnnamedResources allows resources to be used without being named
+	UnnamedResources UnnamedResourcePolicy
 }
 
 // RuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
@@ -325,6 +334,7 @@ type EvalParams struct {
 
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
+	SurplusReadBudget uint64
 
 	EvalConstants
 
@@ -345,6 +355,14 @@ type EvalParams struct {
 // this returns nil.
 func (ep *EvalParams) GetCaller() *EvalContext {
 	return ep.caller
+}
+
+func (ep *EvalParams) GetIOBudget() uint64 {
+	return ep.ioBudget
+}
+
+func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
+	ep.ioBudget = ioBudget
 }
 
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
@@ -627,6 +645,10 @@ func (cx *EvalContext) GroupIndex() int {
 // RunMode returns the evaluation context's mode (signature or application)
 func (cx *EvalContext) RunMode() RunMode {
 	return cx.runModeFlags
+}
+
+func (cx *EvalContext) ProgramVersion() uint64 {
+	return cx.version
 }
 
 // PC returns the program counter of the current application being evaluated
@@ -1001,6 +1023,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 		}
 		cx.readBudgetChecked = true
+		cx.SurplusReadBudget = cx.ioBudget - used
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
@@ -3499,6 +3522,10 @@ func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
 	return uint64(ts), nil
 }
 
+func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address {
+	return ep.getApplicationAddress(app)
+}
+
 // getApplicationAddress memoizes app.Address() across a tx group's evaluation
 func (ep *EvalParams) getApplicationAddress(app basics.AppIndex) basics.Address {
 	/* Do not instantiate the cache here, that would mask a programming error.
@@ -4356,7 +4383,7 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 		return true
 	}
 
-	if cx.UnlimitedResourceAccess {
+	if cx.UnnamedResources != nil && cx.UnnamedResources.AvailableAccount(addr) {
 		return true
 	}
 
@@ -5221,7 +5248,7 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 		}
 	}
 
-	if cx.UnlimitedResourceAccess && aid > lastForbiddenResource {
+	if aid > lastForbiddenResource && cx.UnnamedResources != nil && cx.UnnamedResources.AvailableAsset(aid) {
 		return true
 	}
 
@@ -5269,7 +5296,7 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 		}
 	}
 
-	if cx.UnlimitedResourceAccess && aid > lastForbiddenResource {
+	if aid > lastForbiddenResource && cx.UnnamedResources != nil && cx.UnnamedResources.AvailableApp(aid) {
 		return true
 	}
 

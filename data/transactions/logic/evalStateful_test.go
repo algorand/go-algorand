@@ -1200,16 +1200,18 @@ func TestAssetDisambiguation(t *testing.T) {
 	t.Parallel()
 
 	// Make sure we don't treat slot indexes as asset IDs when
-	// ep.UnlimitedResourceAccess is true.
-	for _, unlimitedResourceAccess := range []bool{false, true} {
-		unlimitedResourceAccess := unlimitedResourceAccess
-		t.Run(fmt.Sprintf("unlimitedResourceAccess=%v", unlimitedResourceAccess), func(t *testing.T) {
+	// ep.UnnamedResources is not nil.
+	for _, unnamedResources := range []bool{false, true} {
+		unnamedResources := unnamedResources
+		t.Run(fmt.Sprintf("unnamedResources=%v", unnamedResources), func(t *testing.T) {
 			t.Parallel()
 			// It would be nice to start at 2, when apps were added, but `assert` is
 			// very convenient for testing, and nothing important changed from 2 to
 			// 3. (Between directRefEnabledVersion=4, so that change is a big deal.)
 			testLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-				ep.UnlimitedResourceAccess = unlimitedResourceAccess
+				if unnamedResources {
+					ep.UnnamedResources = &mockUnnamedResourcePolicy{allowEverything: true}
+				}
 				ledger.NewAsset(tx.Sender, 1, basics.AssetParams{AssetName: "one", Total: 1})
 				ledger.NewAsset(tx.Sender, 255, basics.AssetParams{AssetName: "twenty", Total: 255})
 				ledger.NewAsset(tx.Sender, 256, basics.AssetParams{AssetName: "thirty", Total: 256})
@@ -1285,16 +1287,18 @@ func TestAppDisambiguation(t *testing.T) {
 	t.Parallel()
 
 	// Make sure we don't treat slot indexes as app IDs when
-	// ep.UnlimitedResourceAccess is true.
-	for _, unlimitedResourceAccess := range []bool{false, true} {
-		unlimitedResourceAccess := unlimitedResourceAccess
-		t.Run(fmt.Sprintf("unlimitedResourceAccess=%v", unlimitedResourceAccess), func(t *testing.T) {
+	// ep.UnnamedResources is true.
+	for _, unnamedResources := range []bool{false, true} {
+		unnamedResources := unnamedResources
+		t.Run(fmt.Sprintf("unnamedResources=%v", unnamedResources), func(t *testing.T) {
 			t.Parallel()
 			// It would be nice to start at 2, when apps were added, but `assert` is
 			// very convenient for testing, and nothing important changed from 2 to
 			// 3. (But directRefEnabledVersion=4, so that change is a big deal.)
 			testLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-				ep.UnlimitedResourceAccess = unlimitedResourceAccess
+				if unnamedResources {
+					ep.UnnamedResources = &mockUnnamedResourcePolicy{allowEverything: true}
+				}
 				// make apps with identifiable properties, so we can tell what we get
 				makeIdentifiableApp := func(appID uint64) {
 					ledger.NewApp(tx.Sender, basics.AppIndex(appID), basics.AppParams{
@@ -2564,15 +2568,123 @@ int 1
 	})
 }
 
-func TestUnlimitedResourceAccess(t *testing.T) {
+type unnamedResourcePolicyEvent struct {
+	eventType string
+	args      []interface{}
+}
+
+func availableAccountEvent(addr basics.Address) unnamedResourcePolicyEvent {
+	return unnamedResourcePolicyEvent{
+		eventType: "AvailableAccount",
+		args:      []interface{}{addr},
+	}
+}
+
+func availableAssetEvent(aid basics.AssetIndex) unnamedResourcePolicyEvent {
+	return unnamedResourcePolicyEvent{
+		eventType: "AvailableAsset",
+		args:      []interface{}{aid},
+	}
+}
+
+func availableAppEvent(aid basics.AppIndex) unnamedResourcePolicyEvent {
+	return unnamedResourcePolicyEvent{
+		eventType: "AvailableApp",
+		args:      []interface{}{aid},
+	}
+}
+
+func allowsHoldingEvent(addr basics.Address, aid basics.AssetIndex) unnamedResourcePolicyEvent {
+	return unnamedResourcePolicyEvent{
+		eventType: "AllowsHolding",
+		args:      []interface{}{addr, aid},
+	}
+}
+
+func allowsLocalsEvent(addr basics.Address, aid basics.AppIndex) unnamedResourcePolicyEvent {
+	return unnamedResourcePolicyEvent{
+		eventType: "AllowsLocals",
+		args:      []interface{}{addr, aid},
+	}
+}
+
+func availableBoxEvent(app basics.AppIndex, name string) unnamedResourcePolicyEvent {
+	return unnamedResourcePolicyEvent{
+		eventType: "AvailableBox",
+		args:      []interface{}{app, name},
+	}
+}
+
+type mockUnnamedResourcePolicy struct {
+	allowEverything bool
+	events          []unnamedResourcePolicyEvent
+}
+
+func (p *mockUnnamedResourcePolicy) String() string {
+	if p == nil {
+		return "no policy"
+	}
+	return fmt.Sprintf("allowEverything=%t", p.allowEverything)
+}
+
+func (p *mockUnnamedResourcePolicy) AvailableAccount(addr basics.Address) bool {
+	p.events = append(p.events, availableAccountEvent(addr))
+	return p.allowEverything
+}
+
+func (p *mockUnnamedResourcePolicy) AvailableAsset(aid basics.AssetIndex) bool {
+	p.events = append(p.events, availableAssetEvent(aid))
+	return p.allowEverything
+}
+
+func (p *mockUnnamedResourcePolicy) AvailableApp(aid basics.AppIndex) bool {
+	p.events = append(p.events, availableAppEvent(aid))
+	return p.allowEverything
+}
+
+func (p *mockUnnamedResourcePolicy) AllowsHolding(addr basics.Address, aid basics.AssetIndex) bool {
+	p.events = append(p.events, allowsHoldingEvent(addr, aid))
+	return p.allowEverything
+}
+
+func (p *mockUnnamedResourcePolicy) AllowsLocal(addr basics.Address, aid basics.AppIndex) bool {
+	p.events = append(p.events, allowsLocalsEvent(addr, aid))
+	return p.allowEverything
+}
+
+func (p *mockUnnamedResourcePolicy) AvailableBox(app basics.AppIndex, name string) bool {
+	p.events = append(p.events, availableBoxEvent(app, name))
+	return p.allowEverything
+}
+
+func TestUnnamedResourceAccess(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	for _, unlimitedResourceAccess := range []bool{false, true} {
-		unlimitedResourceAccess := unlimitedResourceAccess
-		t.Run(fmt.Sprintf("unlimitedResourceAccess=%v", unlimitedResourceAccess), func(t *testing.T) {
+
+	testcases := []struct {
+		policy                 *mockUnnamedResourcePolicy
+		allowsUnnamedResources bool
+	}{
+		{nil, false},
+		{&mockUnnamedResourcePolicy{allowEverything: false}, false},
+		{&mockUnnamedResourcePolicy{allowEverything: true}, true},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.policy.String(), func(t *testing.T) {
+			t.Parallel()
 			// start at 4 for directRefEnabledVersion
 			testLogicRange(t, 4, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-				ep.UnlimitedResourceAccess = unlimitedResourceAccess
+				tx.Accounts = nil
+				tx.ForeignApps = nil
+				tx.ForeignAssets = nil
+				tx.Boxes = []transactions.BoxRef{{}} // provide write budget, but not access
+
+				if tc.policy != nil {
+					tc.policy.events = nil
+					ep.UnnamedResources = tc.policy
+				}
 
 				var otherAccount basics.Address
 				crypto.RandBytes(otherAccount[:])
@@ -2597,18 +2709,41 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 				err := ledger.NewBox(tx.ApplicationID, "box key", []byte("box value"), tx.ApplicationID.Address())
 				require.NoError(t, err)
 
-				// Unaccessible app
-				source := `int 500; byte "global key"; app_global_get_ex; assert; byte "global value"; ==`
-				if unlimitedResourceAccess {
+				// Unaccessible account
+				source := fmt.Sprintf("addr %s; balance; int 1; ==", otherAccount)
+				if tc.allowsUnnamedResources {
 					testApp(t, source, ep)
+					if tc.policy != nil {
+						expectedEvents := []unnamedResourcePolicyEvent{availableAccountEvent(otherAccount)}
+						assert.Equal(t, expectedEvents, tc.policy.events)
+						tc.policy.events = nil
+					}
+				} else {
+					testApp(t, source, ep, fmt.Sprintf("invalid Account reference %s", otherAccount))
+				}
+
+				// Unaccessible app
+				source = `int 500; byte "global key"; app_global_get_ex; assert; byte "global value"; ==`
+				if tc.allowsUnnamedResources {
+					testApp(t, source, ep)
+					if tc.policy != nil {
+						expectedEvents := []unnamedResourcePolicyEvent{availableAppEvent(500)}
+						assert.Equal(t, expectedEvents, tc.policy.events)
+						tc.policy.events = nil
+					}
 				} else {
 					testApp(t, source, ep, "unavailable App 500")
 				}
 				if ep.Proto.LogicSigVersion >= 5 {
 					// app_params_get introduced
 					source = "int 500; app_params_get AppCreator; assert; txn Sender; =="
-					if unlimitedResourceAccess {
+					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
+						if tc.policy != nil {
+							expectedEvents := []unnamedResourcePolicyEvent{availableAppEvent(500)}
+							assert.Equal(t, expectedEvents, tc.policy.events)
+							tc.policy.events = nil
+						}
 					} else {
 						testApp(t, source, ep, "unavailable App 500")
 					}
@@ -2616,8 +2751,13 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 				if ep.Proto.LogicSigVersion >= 6 {
 					// inner app calls introduced
 					source = "itxn_begin; int 500; itxn_field ApplicationID; int 1"
-					if unlimitedResourceAccess {
+					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
+						if tc.policy != nil {
+							expectedEvents := []unnamedResourcePolicyEvent{availableAppEvent(500)}
+							assert.Equal(t, expectedEvents, tc.policy.events)
+							tc.policy.events = nil
+						}
 					} else {
 						testApp(t, source, ep, "unavailable App 500")
 					}
@@ -2625,8 +2765,26 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 
 				// Unaccessible app local
 				source = fmt.Sprintf(`addr %s; int 500; byte "local key"; app_local_get_ex; assert; byte "local value"; ==`, otherAccount)
-				if unlimitedResourceAccess {
+				if tc.allowsUnnamedResources {
 					testApp(t, source, ep)
+					if tc.policy != nil {
+						var expectedEvents []unnamedResourcePolicyEvent
+						if ep.Proto.LogicSigVersion < 9 {
+							// before resource sharing
+							expectedEvents = []unnamedResourcePolicyEvent{
+								availableAccountEvent(otherAccount),
+								availableAppEvent(500),
+							}
+						} else {
+							// after resource sharing
+							expectedEvents = []unnamedResourcePolicyEvent{
+								availableAppEvent(500),
+								allowsLocalsEvent(otherAccount, 500),
+							}
+						}
+						assert.Equal(t, expectedEvents, tc.policy.events)
+						tc.policy.events = nil
+					}
 				} else {
 					problem := "unavailable Account %s"
 					if ep.Proto.LogicSigVersion < 9 {
@@ -2638,16 +2796,26 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 
 				// Unaccessible asset
 				source = "int 501; asset_params_get AssetTotal; assert; int 501; =="
-				if unlimitedResourceAccess {
+				if tc.allowsUnnamedResources {
 					testApp(t, source, ep)
+					if tc.policy != nil {
+						expectedEvents := []unnamedResourcePolicyEvent{availableAssetEvent(501)}
+						assert.Equal(t, expectedEvents, tc.policy.events)
+						tc.policy.events = nil
+					}
 				} else {
 					testApp(t, source, ep, "unavailable Asset 501")
 				}
 				if ep.Proto.LogicSigVersion >= 5 {
 					// inner calls introduced
 					source = "itxn_begin; int 501; itxn_field XferAsset; int 1"
-					if unlimitedResourceAccess {
+					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
+						if tc.policy != nil {
+							expectedEvents := []unnamedResourcePolicyEvent{availableAssetEvent(501)}
+							assert.Equal(t, expectedEvents, tc.policy.events)
+							tc.policy.events = nil
+						}
 					} else {
 						testApp(t, source, ep, "unavailable Asset 501")
 					}
@@ -2655,12 +2823,30 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 
 				// Unaccessible asset holding
 				source = fmt.Sprintf(`addr %s; int 501; asset_holding_get AssetBalance; assert; int 2; ==`, otherAccount)
-				if unlimitedResourceAccess {
+				if tc.allowsUnnamedResources {
 					testApp(t, source, ep)
+					if tc.policy != nil {
+						var expectedEvents []unnamedResourcePolicyEvent
+						if ep.Proto.LogicSigVersion < 9 {
+							// before resource sharing
+							expectedEvents = []unnamedResourcePolicyEvent{
+								availableAccountEvent(otherAccount),
+								availableAssetEvent(501),
+							}
+						} else {
+							// after resource sharing
+							expectedEvents = []unnamedResourcePolicyEvent{
+								availableAssetEvent(501),
+								allowsHoldingEvent(otherAccount, 501),
+							}
+						}
+						assert.Equal(t, expectedEvents, tc.policy.events)
+						tc.policy.events = nil
+					}
 				} else {
 					problem := "unavailable Account %s"
 					if ep.Proto.LogicSigVersion < 9 {
-						// Message is difference before sharedResourcesVersion
+						// Message is different before sharedResourcesVersion
 						problem = "invalid Account reference %s"
 					}
 					testApp(t, source, ep, fmt.Sprintf(problem, otherAccount))
@@ -2670,14 +2856,24 @@ func TestUnlimitedResourceAccess(t *testing.T) {
 				if ep.Proto.LogicSigVersion >= 8 {
 					// Boxes introduced
 					source = `byte "box key"; box_get; assert; byte "box value"; ==`
-					if unlimitedResourceAccess {
+					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
+						if tc.policy != nil {
+							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "box key")}
+							assert.Equal(t, expectedEvents, tc.policy.events)
+							tc.policy.events = nil
+						}
 					} else {
 						testApp(t, source, ep, fmt.Sprintf("invalid Box reference %#x", "box key"))
 					}
-					source = `byte "new box"; int 1000; box_create`
-					if unlimitedResourceAccess {
+					source = `byte "new box"; int 1; box_create`
+					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
+						if tc.policy != nil {
+							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "new box")}
+							assert.Equal(t, expectedEvents, tc.policy.events)
+							tc.policy.events = nil
+						}
 					} else {
 						testApp(t, source, ep, fmt.Sprintf("invalid Box reference %#x", "new box"))
 					}

@@ -244,6 +244,10 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
+	if simulatorTracer.unnamedResourcePolicy != nil {
+		simulatorTracer.result.EvalOverrides.UnnamedResourceAssignment = simulatorTracer.unnamedResourcePolicy.assignment
+	}
+
 	simulatorTracer.result.Block = block
 
 	// Update total cost by aggregating individual txn costs
