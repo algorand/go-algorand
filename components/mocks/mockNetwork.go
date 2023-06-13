@@ -37,7 +37,7 @@ func (network *MockNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 }
 
 // BroadcastArray - unused function
-func (network *MockNetwork) BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except *sync.Map) error {
+func (network *MockNetwork) BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except network.Peer, exceptMany *sync.Map) error {
 	return nil
 }
 
