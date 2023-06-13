@@ -706,21 +706,21 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 }
 
 func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
-	// the tags are always 2 char long; note that this is safe since it's only being used for messages that we have generated locally.
-	tag := protocol.Tag(msg.data[:2])
-	if tag == protocol.TopicMsgRespTag {
-		defer atomic.AddInt64(&wp.net.topicBytesUsed, -int64(len(msg.data)))
+	if msg.msgTags != nil {
+		// when msg.msgTags is non-nil, the read loop has received a message-of-interest message that we want to apply.
+		// in order to avoid any locking, it sent it to this queue so that we could set it as the new outgoing message tag filter.
+		wp.sendMessageTag = msg.msgTags
+		return disconnectReasonNone
 	}
 	if len(msg.data) > maxMessageLength {
 		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
 		return disconnectReasonNone
 	}
-	if msg.msgTags != nil {
-		// when msg.msgTags is non-nil, the read loop has received a message-of-interest message that we want to apply.
-		// in order to avoid any locking, it sent it to this queue so that we could set it as the new outgoing message tag filter.
-		wp.sendMessageTag = msg.msgTags
-		return disconnectReasonNone
+	// the tags are always 2 char long; note that this is safe since it's only being used for messages that we have generated locally.
+	tag := protocol.Tag(msg.data[:2])
+	if tag == protocol.TopicMsgRespTag {
+		defer atomic.AddInt64(&wp.net.topicBytesUsed, -int64(len(msg.data)))
 	}
 	if !wp.sendMessageTag[tag] {
 		// the peer isn't interested in this message.
@@ -900,12 +900,21 @@ func (wp *wsPeer) Close(deadline time.Time) {
 		}
 	}
 
-	for msgs := range wp.sendBufferBulk {
-		for _, msg := range msgs.msgs {
-			if protocol.Tag(msg.data[:2]) == protocol.TopicMsgRespTag {
-				atomic.AddInt64(&wp.net.topicBytesUsed, -int64(len(msg.data)))
+	// We need to loop through all of the messages in the sendBufferBulk (sendBufferPrio never contains TS messages)
+	// and remove their sizes from the topicBytesUsed counter.
+L:
+	for {
+		select {
+		case msgs := <-wp.sendBufferBulk:
+			for _, msg := range msgs.msgs {
+				if protocol.Tag(msg.data[:2]) == protocol.TopicMsgRespTag {
+					atomic.AddInt64(&wp.net.topicBytesUsed, -int64(len(msg.data)))
+				}
 			}
+		default:
+			break L
 		}
+
 	}
 	// now call all registered closers
 	for _, f := range wp.closers {

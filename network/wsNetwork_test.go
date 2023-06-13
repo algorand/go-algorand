@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/internal/rapidgen"
 	"io"
 	"math/rand"
 	"net"
@@ -31,7 +30,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"pgregory.net/rapid"
 	"regexp"
 	"runtime"
 	"sort"
@@ -40,6 +38,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/internal/rapidgen"
+	"pgregory.net/rapid"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -3878,7 +3879,7 @@ func TestMaxHeaderSize(t *testing.T) {
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
 	time.Sleep(250 * time.Millisecond)
-	assert.Equal(t, 1, len(netA.peers))
+	require.Equal(t, 1, netA.NumPeers())
 
 	netA.removePeer(netA.peers[0], disconnectReasonNone)
 	assert.Zero(t, len(netA.peers))
@@ -3901,7 +3902,7 @@ func TestMaxHeaderSize(t *testing.T) {
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
 	time.Sleep(250 * time.Millisecond)
-	assert.Equal(t, 1, len(netA.peers))
+	require.Equal(t, 1, netA.NumPeers())
 }
 
 func TestTryConnectEarlyWrite(t *testing.T) {
