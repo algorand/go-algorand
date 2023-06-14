@@ -280,6 +280,15 @@ type Application struct {
 	Params ApplicationParams `json:"params"`
 }
 
+// ApplicationLocalReference References an account's local state for an application.
+type ApplicationLocalReference struct {
+	// Account Address of the account with the local state.
+	Account string `json:"account"`
+
+	// App Application ID of the local state application.
+	App uint64 `json:"app"`
+}
+
 // ApplicationLocalState Stores local state associated with an application.
 type ApplicationLocalState struct {
 	// Id The application which this local state is for.
@@ -354,6 +363,15 @@ type AssetHolding struct {
 	IsFrozen bool `json:"is-frozen"`
 }
 
+// AssetHoldingReference References an asset held by an account.
+type AssetHoldingReference struct {
+	// Account Address of the account holding the asset.
+	Account string `json:"account"`
+
+	// Asset Asset ID of the holding.
+	Asset uint64 `json:"asset"`
+}
+
 // AssetParams AssetParams specifies the parameters for an asset.
 //
 // \[apar\] when part of an AssetConfig transaction.
@@ -421,6 +439,15 @@ type Box struct {
 
 // BoxDescriptor Box descriptor describes a Box.
 type BoxDescriptor struct {
+	// Name Base64 encoded box name
+	Name []byte `json:"name"`
+}
+
+// BoxReference Box descriptor describes a Box.
+type BoxReference struct {
+	// App App ID which this box belongs to
+	App uint64 `json:"app"`
+
 	// Name Base64 encoded box name
 	Name []byte `json:"name"`
 }
@@ -679,6 +706,9 @@ type SimulateTransactionGroupResult struct {
 
 	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulateTransactionResult `json:"txn-results"`
+
+	// UnnamedResources If unnamed resource access is allowed, this is the set of unnamed resources that were accessed.
+	UnnamedResources *SimulationUnnamedGroupResources `json:"unnamed-resources,omitempty"`
 }
 
 // SimulateTransactionResult Simulation result for an individual transaction
@@ -736,6 +766,51 @@ type SimulationTransactionExecTrace struct {
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
+}
+
+// SimulationUnnamedGroupResources If unnamed resource access is allowed, this is the set of unnamed resources that were accessed.
+type SimulationUnnamedGroupResources struct {
+	// GlobalAppLocals The unnamed app local states that were referenced. The order of this array is arbitrary.
+	GlobalAppLocals *[]ApplicationLocalReference `json:"global-app-locals,omitempty"`
+
+	// GlobalAssetHoldings The unnamed asset holdings that were referenced. The order of this array is arbitrary.
+	GlobalAssetHoldings *[]AssetHoldingReference `json:"global-asset-holdings,omitempty"`
+
+	// GlobalResources This object contains a set of unnamed resources that were accessed during a simulation call.
+	GlobalResources SimulationUnnamedResourceAssignment `json:"global-resources"`
+
+	// TxnLocalResources For applications that cannot use group resource sharing (available starting in AVM v9), this array tracks the individual transaction-level unnamed resources that were accessed during a simulation call.
+	TxnLocalResources []SimulationUnnamedResourceAssignment `json:"txn-local-resources"`
+}
+
+// SimulationUnnamedResourceAssignment This object contains a set of unnamed resources that were accessed during a simulation call.
+type SimulationUnnamedResourceAssignment struct {
+	// Accounts The unnamed accounts that were referenced. The order of this array is arbitrary.
+	Accounts *[]string `json:"accounts,omitempty"`
+
+	// Apps The unnamed applications that were referenced. The order of this array is arbitrary.
+	Apps *[]uint64 `json:"apps,omitempty"`
+
+	// Assets The unnamed assets that were referenced. The order of this array is arbitrary.
+	Assets *[]uint64 `json:"assets,omitempty"`
+
+	// Boxes The unnamed boxes that were referenced. The order of this array is arbitrary.
+	Boxes *[]BoxReference `json:"boxes,omitempty"`
+
+	// MaxAccounts The maximum allowed number of unnamed account references.
+	MaxAccounts uint64 `json:"max-accounts"`
+
+	// MaxApps The maximum allowed number of unnamed app references.
+	MaxApps uint64 `json:"max-apps"`
+
+	// MaxAssets The maximum allowed number of unnamed asset references.
+	MaxAssets uint64 `json:"max-assets"`
+
+	// MaxBoxes The maximum allowed number of unnamed boxes references.
+	MaxBoxes uint64 `json:"max-boxes"`
+
+	// MaxTotalRefs The maximum allowed number of all unnamed references.
+	MaxTotalRefs uint64 `json:"max-total-refs"`
 }
 
 // StateDelta Application state delta.

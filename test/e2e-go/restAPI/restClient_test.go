@@ -2346,6 +2346,8 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 
 	testClient := localFixture.LibGoalClient
 
+	proto := config.Consensus[protocol.ConsensusFuture]
+
 	_, err := testClient.WaitForRound(1)
 	a.NoError(err)
 
@@ -2550,6 +2552,35 @@ int 1
 	})
 	a.NoError(err)
 
+	expectedUnnamedResources := model.SimulationUnnamedGroupResources{
+		GlobalResources: model.SimulationUnnamedResourceAssignment{
+			MaxTotalRefs: uint64(proto.MaxAppTotalTxnReferences),
+			Accounts:     &[]string{otherAddress},
+			MaxAccounts:  uint64(proto.MaxAppTxnAccounts),
+			Assets:       &[]uint64{assetID},
+			MaxAssets:    uint64(proto.MaxAppTxnForeignAssets),
+			Apps:         &[]uint64{uint64(otherAppID)},
+			MaxApps:      uint64(proto.MaxAppTxnForeignApps),
+			Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
+			MaxBoxes:     uint64(proto.MaxAppBoxReferences),
+		},
+		GlobalAssetHoldings: &[]model.AssetHoldingReference{
+			{Account: otherAddress, Asset: assetID},
+		},
+		GlobalAppLocals: &[]model.ApplicationLocalReference{
+			{Account: otherAddress, App: uint64(otherAppID)},
+		},
+		TxnLocalResources: []model.SimulationUnnamedResourceAssignment{
+			{
+				MaxTotalRefs: uint64(proto.MaxAppTotalTxnReferences),
+				MaxAccounts:  uint64(proto.MaxAppTxnAccounts),
+				MaxAssets:    uint64(proto.MaxAppTxnForeignAssets),
+				MaxApps:      uint64(proto.MaxAppTxnForeignApps),
+				MaxBoxes:     uint64(proto.MaxAppBoxReferences),
+			},
+		},
+	}
+
 	budgetAdded, budgetUsed := uint64(700), uint64(40)
 	allowUnnamedResources := true
 
@@ -2569,6 +2600,7 @@ int 1
 				},
 				AppBudgetAdded:    &budgetAdded,
 				AppBudgetConsumed: &budgetUsed,
+				UnnamedResources:  &expectedUnnamedResources,
 			},
 		},
 	}

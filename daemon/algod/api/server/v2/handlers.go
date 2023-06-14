@@ -937,11 +937,12 @@ type PreEncodedSimulateTxnResult struct {
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
 type PreEncodedSimulateTxnGroupResult struct {
-	AppBudgetAdded    *uint64                       `codec:"app-budget-added,omitempty"`
-	AppBudgetConsumed *uint64                       `codec:"app-budget-consumed,omitempty"`
-	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
-	FailureMessage    *string                       `codec:"failure-message,omitempty"`
-	Txns              []PreEncodedSimulateTxnResult `codec:"txn-results"`
+	AppBudgetAdded    *uint64                                `codec:"app-budget-added,omitempty"`
+	AppBudgetConsumed *uint64                                `codec:"app-budget-consumed,omitempty"`
+	FailedAt          *[]uint64                              `codec:"failed-at,omitempty"`
+	FailureMessage    *string                                `codec:"failure-message,omitempty"`
+	UnnamedResources  *model.SimulationUnnamedGroupResources `codec:"unnamed-resources,omitempty"`
+	Txns              []PreEncodedSimulateTxnResult          `codec:"txn-results"`
 }
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse

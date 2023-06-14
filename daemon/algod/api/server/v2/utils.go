@@ -417,6 +417,86 @@ func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResul
 	}
 }
 
+func convertUnnamedResourceAssignment(assignment simulation.ResourceAssignment) model.SimulationUnnamedResourceAssignment {
+	converted := model.SimulationUnnamedResourceAssignment{
+		MaxTotalRefs: uint64(assignment.MaxTotalRefs),
+		MaxAccounts:  uint64(assignment.MaxAccounts),
+		MaxAssets:    uint64(assignment.MaxAssets),
+		MaxApps:      uint64(assignment.MaxApps),
+		MaxBoxes:     uint64(assignment.MaxBoxes),
+	}
+	if len(assignment.Accounts) != 0 {
+		accountStrings := make([]string, 0, len(assignment.Accounts))
+		for account := range assignment.Accounts {
+			accountStrings = append(accountStrings, account.String())
+		}
+		converted.Accounts = &accountStrings
+	}
+	if len(assignment.Assets) != 0 {
+		assets := make([]uint64, 0, len(assignment.Assets))
+		for asset := range assignment.Assets {
+			assets = append(assets, uint64(asset))
+		}
+		converted.Assets = &assets
+	}
+	if len(assignment.Apps) != 0 {
+		apps := make([]uint64, 0, len(assignment.Apps))
+		for app := range assignment.Apps {
+			apps = append(apps, uint64(app))
+		}
+		converted.Apps = &apps
+	}
+	if len(assignment.Boxes) != 0 {
+		boxes := make([]model.BoxReference, 0, len(assignment.Boxes))
+		for box := range assignment.Boxes {
+			convertedBoxRef := model.BoxReference{
+				App:  uint64(box.App),
+				Name: []byte(box.Name),
+			}
+			boxes = append(boxes, convertedBoxRef)
+		}
+		converted.Boxes = &boxes
+	}
+	return converted
+}
+
+func convertUnnamedGroupResources(resources *simulation.GroupResourceAssignment) *model.SimulationUnnamedGroupResources {
+	if resources == nil {
+		return nil
+	}
+	txnLocalResources := make([]model.SimulationUnnamedResourceAssignment, len(resources.PerTxnResources))
+	for i := range resources.PerTxnResources {
+		txnLocalResources[i] = convertUnnamedResourceAssignment(resources.PerTxnResources[i])
+	}
+	converted := model.SimulationUnnamedGroupResources{
+		GlobalResources:   convertUnnamedResourceAssignment(resources.GlobalResources),
+		TxnLocalResources: txnLocalResources,
+	}
+	if len(resources.GlobalAssetHoldings) != 0 {
+		convertedHoldings := make([]model.AssetHoldingReference, 0, len(resources.GlobalAssetHoldings))
+		for holding := range resources.GlobalAssetHoldings {
+			convertedHolding := model.AssetHoldingReference{
+				Account: holding.Address.String(),
+				Asset:   uint64(holding.Asset),
+			}
+			convertedHoldings = append(convertedHoldings, convertedHolding)
+		}
+		converted.GlobalAssetHoldings = &convertedHoldings
+	}
+	if len(resources.GlobalAppLocals) != 0 {
+		convertedLocals := make([]model.ApplicationLocalReference, 0, len(resources.GlobalAppLocals))
+		for local := range resources.GlobalAppLocals {
+			convertedLocal := model.ApplicationLocalReference{
+				Account: local.Address.String(),
+				App:     uint64(local.App),
+			}
+			convertedLocals = append(convertedLocals, convertedLocal)
+		}
+		converted.GlobalAppLocals = &convertedLocals
+	}
+	return &converted
+}
+
 func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
 	txnResults := make([]PreEncodedSimulateTxnResult, len(txnGroupResult.Txns))
 	for i, txnResult := range txnGroupResult.Txns {
@@ -428,6 +508,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 		FailureMessage:    strOrNil(txnGroupResult.FailureMessage),
 		AppBudgetAdded:    numOrNil(txnGroupResult.AppBudgetAdded),
 		AppBudgetConsumed: numOrNil(txnGroupResult.AppBudgetConsumed),
+		UnnamedResources:  convertUnnamedGroupResources(txnGroupResult.UnnamedResources),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {

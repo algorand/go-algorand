@@ -2969,6 +2969,42 @@
         }
       }
     },
+    "AssetHoldingReference": {
+      "description": "References an asset held by an account.",
+      "type": "object",
+      "required": [
+        "account",
+        "asset"
+      ],
+      "properties": {
+        "account": {
+          "description": "Address of the account holding the asset.",
+          "type": "string"
+        },
+        "asset": {
+          "description": "Asset ID of the holding.",
+          "type": "integer"
+        }
+      }
+    },
+    "ApplicationLocalReference": {
+      "description": "References an account's local state for an application.",
+      "type": "object",
+      "required": [
+        "account",
+        "app"
+      ],
+      "properties": {
+        "account": {
+          "description": "Address of the account with the local state.",
+          "type": "string"
+        },
+        "app": {
+          "description": "Application ID of the local state application.",
+          "type": "integer"
+        }
+      }
+    },
     "ApplicationStateSchema": {
       "description": "Specifies maximums on the number of each type that may be stored.",
       "type": "object",
@@ -3531,6 +3567,25 @@
         }
       }
     },
+    "BoxReference": {
+      "description": "Box descriptor describes a Box.",
+      "type": "object",
+      "required": [
+        "app",
+        "name"
+      ],
+      "properties": {
+        "app": {
+          "description": "App ID which this box belongs to",
+          "type": "integer"
+        },
+        "name": {
+          "description": "Base64 encoded box name",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
     "KvDelta": {
       "description": "A single Delta containing the key, the previous value and the current value for a single round.",
       "type": "object",
@@ -3723,6 +3778,9 @@
         "app-budget-consumed": {
           "description": "Total budget consumed during execution of app calls in the transaction group.",
           "type": "integer"
+        },
+        "unnamed-resources": {
+          "$ref": "#/definitions/SimulationUnnamedGroupResources"
         }
       }
     },
@@ -3906,6 +3964,101 @@
           "items": {
             "$ref": "#/definitions/SimulationTransactionExecTrace"
           }
+        }
+      }
+    },
+    "SimulationUnnamedGroupResources": {
+      "description": "If unnamed resource access is allowed, this is the set of unnamed resources that were accessed.",
+      "type": "object",
+      "required": [
+        "global-resources",
+        "txn-local-resources"
+      ],
+      "properties": {
+        "global-resources": {
+          "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
+        },
+        "global-asset-holdings": {
+          "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AssetHoldingReference"
+          }
+        },
+        "global-app-locals": {
+          "description": "The unnamed app local states that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationLocalReference"
+          }
+        },
+        "txn-local-resources": {
+          "description": "For applications that cannot use group resource sharing (available starting in AVM v9), this array tracks the individual transaction-level unnamed resources that were accessed during a simulation call.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
+          }
+        }
+      }
+    },
+    "SimulationUnnamedResourceAssignment": {
+      "description": "This object contains a set of unnamed resources that were accessed during a simulation call.",
+      "type": "object",
+      "required": [
+        "max-total-refs",
+        "max-accounts",
+        "max-assets",
+        "max-apps",
+        "max-boxes"
+      ],
+      "properties": {
+        "max-total-refs": {
+          "description": "The maximum allowed number of all unnamed references.",
+          "type": "integer"
+        },
+        "accounts": {
+          "description": "The unnamed accounts that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "max-accounts": {
+          "description": "The maximum allowed number of unnamed account references.",
+          "type": "integer"
+        },
+        "assets": {
+          "description": "The unnamed assets that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "max-assets": {
+          "description": "The maximum allowed number of unnamed asset references.",
+          "type": "integer"
+        },
+        "apps": {
+          "description": "The unnamed applications that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "max-apps": {
+          "description": "The maximum allowed number of unnamed app references.",
+          "type": "integer"
+        },
+        "boxes": {
+          "description": "The unnamed boxes that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BoxReference"
+          }
+        },
+        "max-boxes": {
+          "description": "The maximum allowed number of unnamed boxes references.",
+          "type": "integer"
         }
       }
     }
