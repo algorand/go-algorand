@@ -3266,11 +3266,11 @@ func TestUnnamedResources(t *testing.T) {
 								},
 								AppBudgetAdded:    700 + 700*uint64(innerCount),
 								AppBudgetConsumed: ignoreAppBudgetConsumed,
+								UnnamedResources:  &expectedUnnamedResourceAssignment,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
-							AllowUnnamedResources:     true,
-							UnnamedResourceAssignment: expectedUnnamedResourceAssignment,
+							AllowUnnamedResources: true,
 						},
 					},
 				}
@@ -3402,11 +3402,11 @@ int 1
 								FailedAt:          expectedFailedAt,
 								AppBudgetAdded:    700,
 								AppBudgetConsumed: ignoreAppBudgetConsumed,
+								UnnamedResources:  &expectedUnnamedResourceAssignment,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
-							AllowUnnamedResources:     true,
-							UnnamedResourceAssignment: expectedUnnamedResourceAssignment,
+							AllowUnnamedResources: true,
 						},
 					},
 				}

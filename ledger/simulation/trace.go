@@ -50,6 +50,10 @@ type TxnGroupResult struct {
 	AppBudgetAdded uint64
 	// AppBudgetConsumed is the total opcode cost used for this group
 	AppBudgetConsumed uint64
+
+	// UnnamedResources contains all of the unnamed resources that were accessed by this group
+	// if AllowUnnamedResources is true. Otherwise this will be nil.
+	UnnamedResources *GroupResourceAssignment
 }
 
 func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
@@ -72,8 +76,6 @@ type ResultEvalOverrides struct {
 	MaxLogCalls           *uint64
 	MaxLogSize            *uint64
 	ExtraOpcodeBudget     uint64
-
-	UnnamedResourceAssignment GroupResourceAssignment
 }
 
 // LogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)

@@ -28,8 +28,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/go-algorand/ledger/eval"
-
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/avm-abi/apps"
