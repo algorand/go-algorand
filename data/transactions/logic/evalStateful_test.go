@@ -2605,9 +2605,9 @@ func allowsHoldingEvent(addr basics.Address, aid basics.AssetIndex) unnamedResou
 	}
 }
 
-func allowsLocalsEvent(addr basics.Address, aid basics.AppIndex) unnamedResourcePolicyEvent {
+func allowsLocalEvent(addr basics.Address, aid basics.AppIndex) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
-		eventType: "AllowsLocals",
+		eventType: "AllowsLocal",
 		args:      []interface{}{addr, aid},
 	}
 }
@@ -2652,7 +2652,7 @@ func (p *mockUnnamedResourcePolicy) AllowsHolding(addr basics.Address, aid basic
 }
 
 func (p *mockUnnamedResourcePolicy) AllowsLocal(addr basics.Address, aid basics.AppIndex) bool {
-	p.events = append(p.events, allowsLocalsEvent(addr, aid))
+	p.events = append(p.events, allowsLocalEvent(addr, aid))
 	return p.allowEverything
 }
 
@@ -2785,7 +2785,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 								availableAppEvent(500),
 								availableAppEvent(500),
 								availableAccountEvent(otherAccount),
-								allowsLocalsEvent(otherAccount, 500),
+								allowsLocalEvent(otherAccount, 500),
 							}
 							// The duplicate app events above are actually expected. This is because
 							// EvalContext.localsReference calls resolveApp, then allowsLocals,

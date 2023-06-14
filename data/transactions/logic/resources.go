@@ -183,6 +183,9 @@ func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) 
 		return cx.availableAsset(ai)
 	}
 	if cx.UnnamedResources != nil {
+		// Ensure that the account and asset are available before consulting cx.UnnamedResources.AllowsHolding.
+		// This way cx.UnnamedResources.AllowsHolding only needs to make a decision about the asset holding
+		// being available, not about the component resources.
 		return cx.availableAccount(addr) && cx.availableAsset(ai) && cx.UnnamedResources.AllowsHolding(addr, ai)
 	}
 	return false
@@ -212,6 +215,9 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 		return cx.availableApp(ai)
 	}
 	if cx.UnnamedResources != nil {
+		// Ensure that the account and app are available before consulting cx.UnnamedResources.AllowsLocal.
+		// This way cx.UnnamedResources.AllowsLocal only needs to make a decision about the app local
+		// being available, not about the component resources.
 		return cx.availableApp(ai) && cx.availableAccount(addr) && cx.UnnamedResources.AllowsLocal(addr, ai)
 	}
 	return false
