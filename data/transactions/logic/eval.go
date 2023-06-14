@@ -4553,7 +4553,10 @@ func opAppLocalPut(cx *EvalContext) error {
 		return err
 	}
 
-	if !cx.allowsLocals(addr, cx.appID) {
+	// The version check is overkill, but makes very clear we don't change old
+	// programs. The test here is to ensure that we didn't get access to the
+	// address from another txn, but don't have access to the local state.
+	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
 		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
 	}
 
@@ -4645,7 +4648,10 @@ func opAppLocalDel(cx *EvalContext) error {
 		return err
 	}
 
-	if !cx.allowsLocals(addr, cx.appID) {
+	// The version check is overkill, but makes very clear we don't change old
+	// programs. The test here is to ensure that we didn't get access to the
+	// address from another txn, but don't have access to the local state.
+	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
 		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
 	}
 
