@@ -3086,37 +3086,6 @@ func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
 	require.Equal(t, listenerBeforeReload, listenerAfterReload)
 }
 
-type errorCommitListener struct{}
-
-func (l *errorCommitListener) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, _ ledgercore.LedgerForSPBuilder) {
-}
-
-func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
-	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.MaxAcctLookback = 0
-	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
-	defer l.Close()
-
-	commitListener := errorCommitListener{}
-	l.RegisterVotersCommitListener(&commitListener)
-
-	previousCachedDbRound := l.trackers.dbRound
-	triggerTrackerFlush(t, l, genesisInitState)
-	l.trackers.mu.Lock()
-	newDbRound := l.trackers.dbRound
-	l.trackers.mu.Unlock()
-	require.Equal(t, previousCachedDbRound+1, newDbRound)
-}
-
 func TestLedgerSPVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]

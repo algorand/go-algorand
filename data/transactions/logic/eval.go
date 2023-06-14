@@ -869,29 +869,6 @@ func (st StackType) Typed() bool {
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
 
-// Reversed returns the StackTypes in reverse order
-// useful for displaying the stack as an op sees it
-func (st StackTypes) Reversed() StackTypes {
-	nst := make(StackTypes, len(st))
-	for idx := 0; idx < len(st); idx++ {
-		nst[idx] = st[len(st)-1-idx]
-	}
-	return nst
-}
-
-func (st StackTypes) String() string {
-	// Note this reverses the stack so top appears first
-	return fmt.Sprintf("(%s)", strings.Join(st.strings(), ", "))
-}
-
-func (st StackTypes) strings() []string {
-	var strs = make([]string, len(st))
-	for idx, s := range st {
-		strs[idx] = s.String()
-	}
-	return strs
-}
-
 func parseStackTypes(spec string) StackTypes {
 	if spec == "" {
 		return nil
@@ -2297,7 +2274,7 @@ func opIntConstBlock(cx *EvalContext) error {
 
 func opIntConstN(cx *EvalContext, n byte) error {
 	if int(n) >= len(cx.intc) {
-		return fmt.Errorf("intc [%d] beyond %d constants", n, len(cx.intc))
+		return fmt.Errorf("intc %d beyond %d constants", n, len(cx.intc))
 	}
 	cx.stack = append(cx.stack, stackValue{Uint: cx.intc[n]})
 	return nil
@@ -2354,7 +2331,7 @@ func opByteConstBlock(cx *EvalContext) error {
 
 func opByteConstN(cx *EvalContext, n uint) error {
 	if n >= uint(len(cx.bytec)) {
-		return fmt.Errorf("bytec [%d] beyond %d constants", n, len(cx.bytec))
+		return fmt.Errorf("bytec %d beyond %d constants", n, len(cx.bytec))
 	}
 	cx.stack = append(cx.stack, stackValue{Bytes: cx.bytec[n]})
 	return nil
@@ -3797,13 +3774,13 @@ func opEcdsaPkDecompress(cx *EvalContext) error {
 	cx.stack[last].Uint = 0
 	cx.stack[last].Bytes, err = leadingZeros(32, x)
 	if err != nil {
-		return fmt.Errorf("x component zeroing failed: %s", err.Error())
+		return fmt.Errorf("x component zeroing failed: %w", err)
 	}
 
 	var sv stackValue
 	sv.Bytes, err = leadingZeros(32, y)
 	if err != nil {
-		return fmt.Errorf("y component zeroing failed: %s", err.Error())
+		return fmt.Errorf("y component zeroing failed: %w", err)
 	}
 
 	cx.stack = append(cx.stack, sv)
@@ -4285,7 +4262,7 @@ func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
 	if cx.availableAccount(addr) {
 		return addr, nil
 	}
-	return basics.Address{}, fmt.Errorf("invalid Account reference %s", addr)
+	return basics.Address{}, fmt.Errorf("unavailable Account %s", addr)
 }
 
 // accountReference yields the address and Accounts offset designated by a
@@ -4610,6 +4587,13 @@ func opAppLocalPut(cx *EvalContext) error {
 		return err
 	}
 
+	// The version check is overkill, but makes very clear we don't change old
+	// programs. The test here is to ensure that we didn't get access to the
+	// address from another txn, but don't have access to the local state.
+	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
+		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
+	}
+
 	// if writing the same value, don't record in EvalDelta, matching ledger
 	// behavior with previous BuildEvalDelta mechanism
 	etv, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx)
@@ -4696,6 +4680,13 @@ func opAppLocalDel(cx *EvalContext) error {
 	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[prev])
 	if err != nil {
 		return err
+	}
+
+	// The version check is overkill, but makes very clear we don't change old
+	// programs. The test here is to ensure that we didn't get access to the
+	// address from another txn, but don't have access to the local state.
+	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
+		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
 	}
 
 	// if deleting a non-existent value, don't record in EvalDelta, matching
@@ -4813,7 +4804,7 @@ func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 // and the App, taking access rules into account.  It has the funny side job of
 // also reporting which "slot" the address appears in, if it is in txn.Accounts
 // (or is the Sender, which yields 0). But it only needs to do this funny side
-// job in certainly old versions that need the slot index while doing a lookup.
+// job in certain old versions that need the slot index while doing a lookup.
 func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.Address, basics.AppIndex, uint64, error) {
 	if cx.version >= sharedResourcesVersion {
 		addr, _, err := cx.resolveAccount(account)
@@ -5187,7 +5178,7 @@ func addInnerTxn(cx *EvalContext) error {
 	return nil
 }
 
-func opTxBegin(cx *EvalContext) error {
+func opItxnBegin(cx *EvalContext) error {
 	if len(cx.subtxns) > 0 {
 		return errors.New("itxn_begin without itxn_submit")
 	}

@@ -47,13 +47,13 @@ func followNodeDefaultGenesis() bookkeeping.Genesis {
 		Allocation: []bookkeeping.GenesisAllocation{
 			{
 				Address: poolAddr.String(),
-				State: basics.AccountData{
+				State: bookkeeping.GenesisAccountData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000000000},
 				},
 			},
 			{
 				Address: sinkAddr.String(),
-				State: basics.AccountData{
+				State: bookkeeping.GenesisAccountData{
 					MicroAlgos: basics.MicroAlgos{Raw: 1000000},
 				},
 			},

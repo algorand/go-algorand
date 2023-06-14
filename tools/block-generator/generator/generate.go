@@ -24,93 +24,28 @@ import (
 	"os"
 	"time"
 
+	"github.com/algorand/go-algorand/agreement"
 	cconfig "github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 
-	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/rpcs"
 )
 
-// TxTypeID is the transaction type.
-type TxTypeID string
-
-const (
-	genesis TxTypeID = "genesis"
-
-	// Payment Tx IDs
-	paymentTx           TxTypeID = "pay"
-	paymentAcctCreateTx TxTypeID = "pay_create"
-	assetTx             TxTypeID = "asset"
-	//keyRegistrationTx TxTypeID = "keyreg"
-	//applicationCallTx TxTypeID = "appl"
-
-	// Asset Tx IDs
-	assetCreate  TxTypeID = "asset_create"
-	assetOptin   TxTypeID = "asset_optin"
-	assetXfer    TxTypeID = "asset_xfer"
-	assetClose   TxTypeID = "asset_close"
-	assetDestroy TxTypeID = "asset_destroy"
-
-	assetTotal = uint64(100000000000000000)
-
-	consensusTimeMilli int64  = 4500
-	startingTxnCounter uint64 = 1000
-)
-
-// GenerationConfig defines the tunable parameters for block generation.
-type GenerationConfig struct {
-	Name                         string `yaml:"name"`
-	NumGenesisAccounts           uint64 `yaml:"genesis_accounts"`
-	GenesisAccountInitialBalance uint64 `yaml:"genesis_account_balance"`
-
-	// Block generation
-	TxnPerBlock uint64 `yaml:"tx_per_block"`
-
-	// TX Distribution
-	PaymentTransactionFraction float32 `yaml:"tx_pay_fraction"`
-	AssetTransactionFraction   float32 `yaml:"tx_asset_fraction"`
-
-	// Payment configuration
-	PaymentNewAccountFraction float32 `yaml:"pay_acct_create_fraction"`
-	PaymentFraction           float32 `yaml:"pay_xfer_fraction"`
-
-	// Asset configuration
-	AssetCreateFraction  float32 `yaml:"asset_create_fraction"`
-	AssetDestroyFraction float32 `yaml:"asset_destroy_fraction"`
-	AssetOptinFraction   float32 `yaml:"asset_optin_fraction"`
-	AssetCloseFraction   float32 `yaml:"asset_close_fraction"`
-	AssetXferFraction    float32 `yaml:"asset_xfer_fraction"`
-}
-
-func sumIsCloseToOne(numbers ...float32) bool {
-	var sum float32
-	for _, num := range numbers {
-		sum += num
-	}
-	return sum > 0.99 && sum < 1.01
-}
+// ---- constructors ----
 
 // MakeGenerator initializes the Generator object.
 func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig) (Generator, error) {
-	if !sumIsCloseToOne(config.PaymentTransactionFraction, config.AssetTransactionFraction) {
-		return nil, fmt.Errorf("transaction distribution ratios should equal 1")
-	}
-
-	if !sumIsCloseToOne(config.PaymentNewAccountFraction, config.PaymentFraction) {
-		return nil, fmt.Errorf("payment configuration ratios should equal 1")
-	}
-
-	if !sumIsCloseToOne(config.AssetCreateFraction, config.AssetDestroyFraction, config.AssetOptinFraction, config.AssetCloseFraction, config.AssetXferFraction) {
-		return nil, fmt.Errorf("asset configuration ratios should equal 1")
+	if err := config.validateWithDefaults(false); err != nil {
+		return nil, fmt.Errorf("invalid generator configuration: %w", err)
 	}
 
 	var proto protocol.ConsensusVersion = "future"
@@ -151,16 +86,25 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 			gen.transactionWeights = append(gen.transactionWeights, config.PaymentTransactionFraction)
 		case assetTx:
 			gen.transactionWeights = append(gen.transactionWeights, config.AssetTransactionFraction)
+		case applicationTx:
+			gen.transactionWeights = append(gen.transactionWeights, config.AppTransactionFraction)
+
 		}
+	}
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.transactionWeights)); err != nil || !valid {
+		return gen, fmt.Errorf("invalid transaction config - bad txn distribution valid=%t: %w", valid, err)
 	}
 
 	for _, val := range getPaymentTxOptions() {
 		switch val {
-		case paymentTx:
-			gen.payTxWeights = append(gen.payTxWeights, config.PaymentFraction)
 		case paymentAcctCreateTx:
 			gen.payTxWeights = append(gen.payTxWeights, config.PaymentNewAccountFraction)
+		case paymentPayTx:
+			gen.payTxWeights = append(gen.payTxWeights, config.PaymentFraction)
 		}
+	}
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.payTxWeights)); err != nil || !valid {
+		return gen, fmt.Errorf("invalid payment config - bad txn distribution valid=%t: %w", valid, err)
 	}
 
 	for _, val := range getAssetTxOptions() {
@@ -177,119 +121,99 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetCloseFraction)
 		}
 	}
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.assetTxWeights)); err != nil || !valid {
+		return gen, fmt.Errorf("invalid asset config - bad txn distribution valid=%t: %w", valid, err)
+	}
+
+	for _, val := range getAppTxOptions() {
+		switch val {
+		case appSwapCreate:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapCreateFraction)
+		case appSwapUpdate:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapUpdateFraction)
+		case appSwapDelete:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapDeleteFraction)
+		case appSwapOptin:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapOptinFraction)
+		case appSwapCall:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapCallFraction)
+		case appSwapClose:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapCloseFraction)
+		case appSwapClear:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapClearFraction)
+		case appBoxesCreate:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesCreateFraction)
+		case appBoxesUpdate:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesUpdateFraction)
+		case appBoxesDelete:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesDeleteFraction)
+		case appBoxesOptin:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesOptinFraction)
+		case appBoxesCall:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesCallFraction)
+		case appBoxesClose:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesCloseFraction)
+		case appBoxesClear:
+			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesClearFraction)
+		}
+	}
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.appTxWeights)); err != nil || !valid {
+		return gen, fmt.Errorf("invalid app config - bad txn distribution valid=%t: %w", valid, err)
+	}
 
 	return gen, nil
 }
 
-// Generator is the interface needed to generate blocks.
-type Generator interface {
-	WriteReport(output io.Writer) error
-	WriteGenesis(output io.Writer) error
-	WriteBlock(output io.Writer, round uint64) error
-	WriteAccount(output io.Writer, accountString string) error
-	WriteStatus(output io.Writer) error
-	WriteDeltas(output io.Writer, round uint64) error
-	Accounts() <-chan basics.Address
-	Stop()
+// initializeAccounting creates the genesis accounts.
+func (g *generator) initializeAccounting() {
+	if g.config.NumGenesisAccounts == 0 {
+		panic("Number of genesis accounts must be > 0.")
+	}
+
+	g.numPayments = 0
+	g.numAccounts = g.config.NumGenesisAccounts
+	for i := uint64(0); i < g.config.NumGenesisAccounts; i++ {
+		g.balances = append(g.balances, g.config.GenesisAccountInitialBalance)
+	}
 }
 
-type generator struct {
-	config GenerationConfig
-
-	// payment transaction metadata
-	numPayments uint64
-
-	// Number of algorand accounts
-	numAccounts uint64
-
-	// Block stuff
-	round         uint64
-	txnCounter    uint64
-	prevBlockHash string
-	timestamp     int64
-	protocol      protocol.ConsensusVersion
-	params        cconfig.ConsensusParams
-	genesis       bookkeeping.Genesis
-	genesisID     string
-	genesisHash   crypto.Digest
-
-	// Rewards stuff
-	feeSink                   basics.Address
-	rewardsPool               basics.Address
-	rewardsLevel              uint64
-	rewardsResidue            uint64
-	rewardsRate               uint64
-	rewardsRecalculationRound uint64
-
-	// balances for all accounts. To avoid crypto and reduce storage, accounts are faked.
-	// The account is based on the index into the balances array.
-	balances []uint64
-
-	// assets is a minimal representation of the asset holdings, it doesn't
-	// include the frozen state.
-	assets []*assetData
-	// pendingAssets is used to hold newly created assets so that they are not used before
-	// being created.
-	pendingAssets []*assetData
-
-	transactionWeights []float32
-	payTxWeights       []float32
-	assetTxWeights     []float32
-
-	// Reporting information from transaction type to data
-	reportData Report
-
-	// ledger
-	ledger *ledger.Ledger
-
-	roundOffset uint64
+func (g *generator) initializeLedger() {
+	genBal := convertToGenesisBalances(g.balances)
+	// add rewards pool with min balance
+	genBal[g.rewardsPool] = basics.AccountData{
+		MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
+	}
+	bal := bookkeeping.MakeGenesisBalances(genBal, g.feeSink, g.rewardsPool)
+	block, err := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)
+	if err != nil {
+		fmt.Printf("error making genesis: %v\n.", err)
+		os.Exit(1)
+	}
+	var prefix string
+	if g.genesisID == "" {
+		prefix = "block-generator"
+	} else {
+		prefix = g.genesisID
+	}
+	l, err := ledger.OpenLedger(logging.Base(), prefix, true, ledgercore.InitState{
+		Block:       block,
+		Accounts:    bal.Balances,
+		GenesisHash: g.genesisHash,
+	}, cconfig.GetDefaultLocal())
+	if err != nil {
+		fmt.Printf("error initializing ledger: %v\n.", err)
+		os.Exit(1)
+	}
+	g.ledger = l
 }
 
-type assetData struct {
-	assetID uint64
-	creator uint64
-	name    string
-	// Holding at index 0 is the creator.
-	holdings []*assetHolding
-	// Set of holders in the holdings array for easy reference.
-	holders map[uint64]*assetHolding
-}
-
-type assetHolding struct {
-	acctIndex uint64
-	balance   uint64
-}
-
-// Report is the generation report.
-type Report map[TxTypeID]TxData
-
-// TxData is the generator report data.
-type TxData struct {
-	GenerationTime  time.Duration `json:"generation_time_milli"`
-	GenerationCount uint64        `json:"num_generated"`
-}
-
-func track(id TxTypeID) (TxTypeID, time.Time) {
-	return id, time.Now()
-}
-func (g *generator) recordData(id TxTypeID, start time.Time) {
-	data := g.reportData[id]
-	data.GenerationCount++
-	data.GenerationTime += time.Since(start)
-	g.reportData[id] = data
-}
+// ---- implement Generator interface ----
 
 func (g *generator) WriteReport(output io.Writer) error {
 	return json.NewEncoder(output).Encode(g.reportData)
 }
 
-func (g *generator) WriteStatus(output io.Writer) error {
-	response := model.NodeStatusResponse{
-		LastRound: g.round + g.roundOffset,
-	}
-	return json.NewEncoder(output).Encode(response)
-}
-
+// WriteGenesis writes the genesis file and advances the round.
 func (g *generator) WriteGenesis(output io.Writer) error {
 	defer g.recordData(track(genesis))
 
@@ -305,7 +229,7 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 		addr := indexToAccount(i)
 		allocations = append(allocations, bookkeeping.GenesisAllocation{
 			Address: addr.String(),
-			State: basics.AccountData{
+			State: bookkeeping.GenesisAccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: g.config.GenesisAccountInitialBalance},
 			},
 		})
@@ -315,7 +239,7 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 	allocations = append(allocations, bookkeeping.GenesisAllocation{
 		Address: g.rewardsPool.String(),
 		Comment: "RewardsPool",
-		State: basics.AccountData{
+		State: bookkeeping.GenesisAccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
 			Status:     basics.NotParticipating,
 		},
@@ -335,141 +259,189 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 	return err
 }
 
-func getTransactionOptions() []interface{} {
-	return []interface{}{paymentTx, assetTx}
-}
-
-func (g *generator) generateTransaction(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
-	selection, err := weightedSelection(g.transactionWeights, getTransactionOptions(), paymentTx)
-	if err != nil {
-		return transactions.SignedTxn{}, transactions.ApplyData{}, err
-	}
-
-	switch selection {
-	case paymentTx:
-		return g.generatePaymentTxn(round, intra)
-	case assetTx:
-		return g.generateAssetTxn(round, intra)
-	default:
-		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("no generator available for %s", selection)
-	}
-}
-
-func (g *generator) txnForRound(round uint64) uint64 {
-	// There are no transactions in the 0th round
-	if round == 0 {
-		return 0
-	}
-	return g.config.TxnPerBlock
-}
-
-// finishRound tells the generator it can apply any pending state.
-func (g *generator) finishRound(txnCount uint64) {
-	g.txnCounter += txnCount
-
-	g.timestamp += consensusTimeMilli
-	g.round++
-
-	// Apply pending assets...
-	g.assets = append(g.assets, g.pendingAssets...)
-	g.pendingAssets = nil
-}
-
 // WriteBlock generates a block full of new transactions and writes it to the writer.
+// The most recent round is cached, allowing requests to the same round multiple times.
+// This is motivated by the fact that Conduit's logic requests the initial round during
+// its Init() for catchup purposes, and once again when it starts ingesting blocks.
+// There are a few constraints on the generator arising from the fact that
+// blocks must be generated sequentially and that a fixed offset between the
+// database round and the generator round is presumed:
+//   - requested round < offset ---> error
+//   - requested round == offset: the generator will provide a genesis block or offset block
+//   - requested round == generator's round + offset ---> generate a block,
+//		advance the round, and cache the block in case of repeated requests.
+//   - requested round == generator's round + offset - 1 ---> write the cached block
+//		but do not advance the round.
+//   - requested round < generator's round + offset - 1 ---> error
+//
+// NOTE: nextRound represents the generator's expectations about the next database round.
 func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if round < g.roundOffset {
 		return fmt.Errorf("cannot generate block for round %d, already in database", round)
 	}
-	if round-g.roundOffset != g.round {
-		return fmt.Errorf("generator only supports sequential block access. Expected %d but received request for %d", g.round+g.roundOffset, round)
+
+	nextRound := g.round + g.roundOffset
+	cachedRound := nextRound - 1
+
+	if round != nextRound && round != cachedRound {
+		return fmt.Errorf(
+			"generator only supports sequential block access. Expected %d or %d but received request for %d",
+			cachedRound,
+			nextRound,
+			round,
+		)
 	}
+	// round must either be nextRound or cachedRound
+
+	if round == cachedRound {
+		// one round behind, so write the cached block (if non-empty)
+		fmt.Printf("Received round request %d, but nextRound=%d. Not finishing round.\n", round, nextRound)
+		if len(g.latestBlockMsgp) != 0 {
+			// write the msgpack bytes for a block
+			_, err := output.Write(g.latestBlockMsgp)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	// round == nextRound case
+
 	numTxnForBlock := g.txnForRound(g.round)
 
-	// return genesis block. offset round for non-empty database
-	if round-g.roundOffset == 0 {
-		// write the msgpack bytes for a block
-		block, _, _ := g.ledger.BlockCert(basics.Round(round - g.roundOffset))
-		// return the block with the requested round number
-		block.BlockHeader.Round = basics.Round(round)
-		encodedblock := rpcs.EncodedBlockCert{Block: block}
-		blk := protocol.EncodeMsgp(&encodedblock)
-		// write the msgpack bytes for a block
-		_, err := output.Write(blk)
+	var cert rpcs.EncodedBlockCert
+	if g.round == 0 {
+		// we'll write genesis block / offset round for non-empty database
+		cert.Block, _, _ = g.ledger.BlockCert(basics.Round(round - g.roundOffset))
+	} else {
+		// generate a block
+		cert.Block.BlockHeader = bookkeeping.BlockHeader{
+			Round:          basics.Round(g.round),
+			Branch:         bookkeeping.BlockHash{},
+			Seed:           committee.Seed{},
+			TxnCommitments: bookkeeping.TxnCommitments{NativeSha512_256Commitment: crypto.Digest{}},
+			TimeStamp:      g.timestamp,
+			GenesisID:      g.genesisID,
+			GenesisHash:    g.genesisHash,
+			RewardsState: bookkeeping.RewardsState{
+				FeeSink:                   g.feeSink,
+				RewardsPool:               g.rewardsPool,
+				RewardsLevel:              0,
+				RewardsRate:               0,
+				RewardsResidue:            0,
+				RewardsRecalculationRound: 0,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: g.protocol,
+			},
+			UpgradeVote:        bookkeeping.UpgradeVote{},
+			TxnCounter:         g.txnCounter + numTxnForBlock,
+			StateProofTracking: nil,
+		}
+
+		// Generate the transactions
+		transactions := make([]transactions.SignedTxnInBlock, 0, numTxnForBlock)
+		for i := uint64(0); i < numTxnForBlock; i++ {
+			txn, ad, err := g.generateTransaction(g.round, i)
+			if err != nil {
+				panic(fmt.Sprintf("failed to generate transaction: %v\n", err))
+			}
+			stib, err := cert.Block.BlockHeader.EncodeSignedTxn(txn, ad)
+			if err != nil {
+				panic(fmt.Sprintf("failed to encode transaction: %v\n", err))
+			}
+			transactions = append(transactions, stib)
+		}
+
+		if numTxnForBlock != uint64(len(transactions)) {
+			panic("Unexpected number of transactions.")
+		}
+
+		cert.Block.Payset = transactions
+		cert.Certificate = agreement.Certificate{} // empty certificate for clarity
+
+		err := g.ledger.AddBlock(cert.Block, cert.Certificate)
 		if err != nil {
 			return err
 		}
-		g.finishRound(numTxnForBlock)
-		return nil
 	}
-
-	header := bookkeeping.BlockHeader{
-		Round:          basics.Round(g.round),
-		Branch:         bookkeeping.BlockHash{},
-		Seed:           committee.Seed{},
-		TxnCommitments: bookkeeping.TxnCommitments{NativeSha512_256Commitment: crypto.Digest{}},
-		TimeStamp:      g.timestamp,
-		GenesisID:      g.genesisID,
-		GenesisHash:    g.genesisHash,
-		RewardsState: bookkeeping.RewardsState{
-			FeeSink:                   g.feeSink,
-			RewardsPool:               g.rewardsPool,
-			RewardsLevel:              0,
-			RewardsRate:               0,
-			RewardsResidue:            0,
-			RewardsRecalculationRound: 0,
-		},
-		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: g.protocol,
-		},
-		UpgradeVote:        bookkeeping.UpgradeVote{},
-		TxnCounter:         g.txnCounter + numTxnForBlock,
-		StateProofTracking: nil,
-	}
-
-	// Generate the transactions
-	transactions := make([]transactions.SignedTxnInBlock, 0, numTxnForBlock)
-
-	for i := uint64(0); i < numTxnForBlock; i++ {
-		txn, ad, err := g.generateTransaction(g.round, i)
-		if err != nil {
-			panic(fmt.Sprintf("failed to generate transaction: %v\n", err))
-		}
-		stib, err := header.EncodeSignedTxn(txn, ad)
-		if err != nil {
-			panic(fmt.Sprintf("failed to encode transaction: %v\n", err))
-		}
-		transactions = append(transactions, stib)
-	}
-
-	if numTxnForBlock != uint64(len(transactions)) {
-		panic("Unexpected number of transactions.")
-	}
-
-	cert := rpcs.EncodedBlockCert{
-		Block: bookkeeping.Block{
-			BlockHeader: header,
-			Payset:      transactions,
-		},
-		Certificate: agreement.Certificate{},
-	}
-
-	err := g.ledger.AddBlock(cert.Block, cert.Certificate)
-	if err != nil {
-		return err
-	}
-	// return the block with the requested round number
 	cert.Block.BlockHeader.Round = basics.Round(round)
-	block := protocol.EncodeMsgp(&cert)
-	if err != nil {
-		return err
-	}
+
 	// write the msgpack bytes for a block
-	_, err = output.Write(block)
+	g.latestBlockMsgp = protocol.EncodeMsgp(&cert)
+	_, err := output.Write(g.latestBlockMsgp)
 	if err != nil {
 		return err
 	}
+
 	g.finishRound(numTxnForBlock)
 	return nil
+}
+
+func (g *generator) WriteAccount(output io.Writer, accountString string) error {
+	addr, err := basics.UnmarshalChecksumAddress(accountString)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal address: %w", err)
+	}
+
+	idx := accountToIndex(addr)
+
+	// Asset Holdings
+	assets := make([]model.AssetHolding, 0)
+	createdAssets := make([]model.Asset, 0)
+	for _, a := range g.assets {
+		// holdings
+		if holding := a.holders[idx]; holding != nil {
+			assets = append(assets, model.AssetHolding{
+				Amount:   holding.balance,
+				AssetID:  a.assetID,
+				IsFrozen: false,
+			})
+		}
+		// creator
+		if len(a.holdings) > 0 && a.holdings[0].acctIndex == idx {
+			nameBytes := []byte(a.name)
+			asset := model.Asset{
+				Index: a.assetID,
+				Params: model.AssetParams{
+					Creator:  accountString,
+					Decimals: 0,
+					Clawback: &accountString,
+					Freeze:   &accountString,
+					Manager:  &accountString,
+					Reserve:  &accountString,
+					Name:     &a.name,
+					NameB64:  &nameBytes,
+					Total:    assetTotal,
+				},
+			}
+			asset.Params.DefaultFrozen = new(bool)
+			*(asset.Params.DefaultFrozen) = false
+			createdAssets = append(createdAssets, asset)
+		}
+	}
+
+	data := model.Account{
+		Address:                     accountString,
+		Amount:                      g.balances[idx],
+		AmountWithoutPendingRewards: g.balances[idx],
+		AppsLocalState:              nil,
+		AppsTotalExtraPages:         nil,
+		AppsTotalSchema:             nil,
+		Assets:                      &assets,
+		AuthAddr:                    nil,
+		CreatedApps:                 nil,
+		CreatedAssets:               &createdAssets,
+		Participation:               nil,
+		PendingRewards:              0,
+		RewardBase:                  nil,
+		Rewards:                     0,
+		Round:                       g.round - 1,
+		SigType:                     nil,
+		Status:                      "Offline",
+	}
+
+	return json.NewEncoder(output).Encode(data)
 }
 
 // WriteDeltas generates returns the deltas for payset.
@@ -499,37 +471,70 @@ func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
 	return nil
 }
 
-// initializeAccounting creates the genesis accounts.
-func (g *generator) initializeAccounting() {
-	if g.config.NumGenesisAccounts == 0 {
-		panic("Number of genesis accounts must be > 0.")
+func (g *generator) WriteStatus(output io.Writer) error {
+	response := model.NodeStatusResponse{
+		LastRound: g.round + g.roundOffset,
 	}
-
-	g.numPayments = 0
-	g.numAccounts = g.config.NumGenesisAccounts
-	for i := uint64(0); i < g.config.NumGenesisAccounts; i++ {
-		g.balances = append(g.balances, g.config.GenesisAccountInitialBalance)
-	}
+	return json.NewEncoder(output).Encode(response)
 }
 
-func signTxn(txn transactions.Transaction) transactions.SignedTxn {
-	stxn := transactions.SignedTxn{
-		Sig:      crypto.Signature{},
-		Msig:     crypto.MultisigSig{},
-		Lsig:     transactions.LogicSig{},
-		Txn:      txn,
-		AuthAddr: basics.Address{},
-	}
+// Stop cleans up allocated resources.
+func (g *generator) Stop() {
+	g.ledger.Close()
+}
 
-	// TODO: Would it be useful to generate a random signature?
-	stxn.Sig[32] = 50
+// Accounts is used in the runner to generate a list of addresses.
+func (g *generator) Accounts() <-chan basics.Address {
+	results := make(chan basics.Address, 10)
+	go func() {
+		defer close(results)
+		for i := uint64(0); i < g.numAccounts; i++ {
+			results <- indexToAccount(i)
+		}
+	}()
+	return results
+}
 
-	return stxn
+// ---- transaction options vectors ----
+
+func getTransactionOptions() []interface{} {
+	return []interface{}{paymentTx, assetTx, applicationTx}
 }
 
 func getPaymentTxOptions() []interface{} {
-	return []interface{}{paymentTx, paymentAcctCreateTx}
+	return []interface{}{paymentAcctCreateTx, paymentPayTx}
 }
+
+func getAssetTxOptions() []interface{} {
+	return []interface{}{assetCreate, assetDestroy, assetOptin, assetClose, assetXfer}
+}
+
+func getAppTxOptions() []interface{} {
+	return []interface{}{
+		appSwapCreate, appSwapUpdate, appSwapDelete, appSwapOptin, appSwapCall, appSwapClose, appSwapClear,
+		appBoxesCreate, appBoxesUpdate, appBoxesDelete, appBoxesOptin, appBoxesCall, appBoxesClose, appBoxesClear,
+	}
+}
+
+// ---- Transaction Generation (Pay/Asset/Apps) ----
+
+func (g *generator) generateTransaction(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
+	selection, err := weightedSelection(g.transactionWeights, getTransactionOptions(), paymentTx)
+	if err != nil {
+		return transactions.SignedTxn{}, transactions.ApplyData{}, err
+	}
+
+	switch selection {
+	case paymentTx:
+		return g.generatePaymentTxn(round, intra)
+	case assetTx:
+		return g.generateAssetTxn(round, intra)
+	default:
+		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("no generator available for %s", selection)
+	}
+}
+
+// ---- 1. Pay Transactions ----
 
 // generatePaymentTxn creates a new payment transaction. The sender is always a genesis account, the receiver is random,
 // or a new account.
@@ -581,8 +586,24 @@ func (g *generator) generatePaymentTxnInternal(selection TxTypeID, round uint64,
 	return signTxn(txn), transactions.ApplyData{}, nil
 }
 
-func getAssetTxOptions() []interface{} {
-	return []interface{}{assetCreate, assetDestroy, assetOptin, assetXfer, assetClose}
+// ---- 2. Asset Transactions ----
+
+func (g *generator) generateAssetTxn(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
+	start := time.Now()
+	selection, err := weightedSelection(g.assetTxWeights, getAssetTxOptions(), assetXfer)
+	if err != nil {
+		return transactions.SignedTxn{}, transactions.ApplyData{}, err
+	}
+
+	actual, txn := g.generateAssetTxnInternal(selection.(TxTypeID), round, intra)
+	defer g.recordData(actual, start)
+
+	if txn.Type == "" {
+		fmt.Println("Empty asset transaction.")
+		os.Exit(1)
+	}
+
+	return signTxn(txn), transactions.ApplyData{}, nil
 }
 
 func (g *generator) generateAssetTxnInternal(txType TxTypeID, round uint64, intra uint64) (actual TxTypeID, txn transactions.Transaction) {
@@ -738,133 +759,50 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 	return
 }
 
-func (g *generator) generateAssetTxn(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
-	start := time.Now()
-	selection, err := weightedSelection(g.assetTxWeights, getAssetTxOptions(), assetXfer)
-	if err != nil {
-		return transactions.SignedTxn{}, transactions.ApplyData{}, err
-	}
+// ---- miscellaneous ----
 
-	actual, txn := g.generateAssetTxnInternal(selection.(TxTypeID), round, intra)
-	defer g.recordData(actual, start)
-
-	if txn.Type == "" {
-		fmt.Println("Empty asset transaction.")
-		os.Exit(1)
-	}
-
-	return signTxn(txn), transactions.ApplyData{}, nil
+func track(id TxTypeID) (TxTypeID, time.Time) {
+	return id, time.Now()
 }
 
-func (g *generator) initializeLedger() {
-	genBal := convertToGenesisBalances(g.balances)
-	// add rewards pool with min balance
-	genBal[g.rewardsPool] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: g.params.MinBalance},
-	}
-	bal := bookkeeping.MakeGenesisBalances(genBal, g.feeSink, g.rewardsPool)
-	block, err := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)
-	if err != nil {
-		fmt.Printf("error making genesis: %v\n.", err)
-		os.Exit(1)
-	}
-	var prefix string
-	if g.genesisID == "" {
-		prefix = "block-generator"
-	} else {
-		prefix = g.genesisID
-	}
-	l, err := ledger.OpenLedger(logging.Base(), prefix, true, ledgercore.InitState{
-		Block:       block,
-		Accounts:    bal.Balances,
-		GenesisHash: g.genesisHash,
-	}, cconfig.GetDefaultLocal())
-	if err != nil {
-		fmt.Printf("error initializing ledger: %v\n.", err)
-		os.Exit(1)
-	}
-	g.ledger = l
+func (g *generator) recordData(id TxTypeID, start time.Time) {
+	data := g.reportData[id]
+	data.GenerationCount++
+	data.GenerationTime += time.Since(start)
+	g.reportData[id] = data
 }
 
-// Stop cleans up allocated resources.
-func (g *generator) Stop() {
-	g.ledger.Close()
+func (g *generator) txnForRound(round uint64) uint64 {
+	// There are no transactions in the 0th round
+	if round == 0 {
+		return 0
+	}
+	return g.config.TxnPerBlock
 }
 
-func (g *generator) WriteAccount(output io.Writer, accountString string) error {
-	addr, err := basics.UnmarshalChecksumAddress(accountString)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal address: %w", err)
-	}
+// finishRound tells the generator it can apply any pending state.
+func (g *generator) finishRound(txnCount uint64) {
+	g.txnCounter += txnCount
 
-	idx := accountToIndex(addr)
+	g.timestamp += consensusTimeMilli
+	g.round++
 
-	// Asset Holdings
-	assets := make([]model.AssetHolding, 0)
-	createdAssets := make([]model.Asset, 0)
-	for _, a := range g.assets {
-		// holdings
-		if holding := a.holders[idx]; holding != nil {
-			assets = append(assets, model.AssetHolding{
-				Amount:   holding.balance,
-				AssetID:  a.assetID,
-				IsFrozen: false,
-			})
-		}
-		// creator
-		if len(a.holdings) > 0 && a.holdings[0].acctIndex == idx {
-			nameBytes := []byte(a.name)
-			asset := model.Asset{
-				Index: a.assetID,
-				Params: model.AssetParams{
-					Creator:  accountString,
-					Decimals: 0,
-					Clawback: &accountString,
-					Freeze:   &accountString,
-					Manager:  &accountString,
-					Reserve:  &accountString,
-					Name:     &a.name,
-					NameB64:  &nameBytes,
-					Total:    assetTotal,
-				},
-			}
-			asset.Params.DefaultFrozen = new(bool)
-			*(asset.Params.DefaultFrozen) = false
-			createdAssets = append(createdAssets, asset)
-		}
-	}
-
-	data := model.Account{
-		Address:                     accountString,
-		Amount:                      g.balances[idx],
-		AmountWithoutPendingRewards: g.balances[idx],
-		AppsLocalState:              nil,
-		AppsTotalExtraPages:         nil,
-		AppsTotalSchema:             nil,
-		Assets:                      &assets,
-		AuthAddr:                    nil,
-		CreatedApps:                 nil,
-		CreatedAssets:               &createdAssets,
-		Participation:               nil,
-		PendingRewards:              0,
-		RewardBase:                  nil,
-		Rewards:                     0,
-		Round:                       g.round - 1,
-		SigType:                     nil,
-		Status:                      "Offline",
-	}
-
-	return json.NewEncoder(output).Encode(data)
+	// Apply pending assets...
+	g.assets = append(g.assets, g.pendingAssets...)
+	g.pendingAssets = nil
 }
 
-// Accounts is used in the runner to generate a list of addresses.
-func (g *generator) Accounts() <-chan basics.Address {
-	results := make(chan basics.Address, 10)
-	go func() {
-		defer close(results)
-		for i := uint64(0); i < g.numAccounts; i++ {
-			results <- indexToAccount(i)
-		}
-	}()
-	return results
+func signTxn(txn transactions.Transaction) transactions.SignedTxn {
+	stxn := transactions.SignedTxn{
+		Sig:      crypto.Signature{},
+		Msig:     crypto.MultisigSig{},
+		Lsig:     transactions.LogicSig{},
+		Txn:      txn,
+		AuthAddr: basics.Address{},
+	}
+
+	// TODO: Would it be useful to generate a random signature?
+	stxn.Sig[32] = 50
+
+	return stxn
 }
