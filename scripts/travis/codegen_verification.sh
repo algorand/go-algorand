@@ -4,7 +4,7 @@
 #
 # Syntax:   codegen_verification.sh
 #
-# Usage:    Can be used by either Travis or an ephermal build machine
+# Usage:    Can be used by either Travis or an ephemeral build machine
 #
 # Examples: scripts/travis/codegen_verification.sh
 set -e
