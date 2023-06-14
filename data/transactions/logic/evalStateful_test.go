@@ -447,6 +447,10 @@ func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...
 			} else {
 				testAppFull(t, program, i, appID, ep)
 			}
+		} else {
+			if len(expected) > 0 && expected[0].l == i {
+				require.Failf(t, "testAppsBytes used incorrectly.", "No error can happen in txn %d. Not an app.", i)
+			}
 		}
 	}
 }

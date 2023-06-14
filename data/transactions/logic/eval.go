@@ -4553,6 +4553,13 @@ func opAppLocalPut(cx *EvalContext) error {
 		return err
 	}
 
+	// The version check is overkill, but makes very clear we don't change old
+	// programs. The test here is to ensure that we didn't get access to the
+	// address from another txn, but don't have access to the local state.
+	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
+		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
+	}
+
 	// if writing the same value, don't record in EvalDelta, matching ledger
 	// behavior with previous BuildEvalDelta mechanism
 	etv, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx)
@@ -4639,6 +4646,13 @@ func opAppLocalDel(cx *EvalContext) error {
 	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[prev])
 	if err != nil {
 		return err
+	}
+
+	// The version check is overkill, but makes very clear we don't change old
+	// programs. The test here is to ensure that we didn't get access to the
+	// address from another txn, but don't have access to the local state.
+	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
+		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
 	}
 
 	// if deleting a non-existent value, don't record in EvalDelta, matching
@@ -4755,7 +4769,7 @@ func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 // and the App, taking access rules into account.  It has the funny side job of
 // also reporting which "slot" the address appears in, if it is in txn.Accounts
 // (or is the Sender, which yields 0). But it only needs to do this funny side
-// job in certainly old versions that need the slot index while doing a lookup.
+// job in certain old versions that need the slot index while doing a lookup.
 func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.Address, basics.AppIndex, uint64, error) {
 	if cx.version >= sharedResourcesVersion {
 		addr, _, err := cx.resolveAccount(account)
