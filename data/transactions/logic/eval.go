@@ -255,6 +255,8 @@ type boxRef struct {
 	name string
 }
 
+// UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
+// This should only be used during simulation or debugging.
 type UnnamedResourcePolicy interface {
 	AvailableAccount(addr basics.Address) bool
 	AvailableAsset(asset basics.AssetIndex) bool
@@ -272,7 +274,8 @@ type EvalConstants struct {
 	// MaxLogCalls is the limit of total log calls during a program execution
 	MaxLogCalls uint64
 
-	// UnnamedResources allows resources to be used without being named
+	// UnnamedResources, if provided, allows resources to be used without being named according to
+	// this policy.
 	UnnamedResources UnnamedResourcePolicy
 }
 
@@ -357,10 +360,12 @@ func (ep *EvalParams) GetCaller() *EvalContext {
 	return ep.caller
 }
 
+// GetIOBudget returns the current IO budget for the group.
 func (ep *EvalParams) GetIOBudget() uint64 {
 	return ep.ioBudget
 }
 
+// SetIOBudget sets the IO budget for the group.
 func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
 	ep.ioBudget = ioBudget
 }
@@ -647,6 +652,7 @@ func (cx *EvalContext) RunMode() RunMode {
 	return cx.runModeFlags
 }
 
+// ProgramVersion returns the AVM version of the current program.
 func (cx *EvalContext) ProgramVersion() uint64 {
 	return cx.version
 }
@@ -3499,6 +3505,7 @@ func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
 	return uint64(ts), nil
 }
 
+// GetApplicationAddress memoizes app.Address() across a tx group's evaluation
 func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address {
 	return ep.getApplicationAddress(app)
 }

@@ -25,11 +25,16 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// BoxRef is a reference to an application's box.
 type BoxRef struct {
-	App  basics.AppIndex
+	// The actual ID of the app that owns the box.
+	App basics.AppIndex
+	// The name of the box.
 	Name string
 }
 
+// ResourceAssignment calculates the additional resources that a transaction or group could use, and
+// it tracks any referenced unnamed resources that fit withing those limits.
 type ResourceAssignment struct {
 	Accounts    map[basics.Address]struct{}
 	MaxAccounts int
@@ -171,6 +176,8 @@ func (a *ResourceAssignment) maxPossibleBoxes() int {
 	return numBoxes
 }
 
+// GroupResourceAssignment calculates the additional resources that a transaction group could use,
+// and it tracks any referenced unnamed resources that fit withing those limits.
 type GroupResourceAssignment struct {
 	// GlobalResources specifies global resources for the entire group.
 	GlobalResources     ResourceAssignment
