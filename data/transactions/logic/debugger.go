@@ -169,7 +169,7 @@ func opRetSubStackChange(cx *EvalContext) StackChangeExplanation {
 	}
 
 	argStart := topFrame.height - topFrame.args
-	topStackIdx := len(cx.stack) - 1
+	topStackIdx := len(cx.Stack) - 1
 
 	diff := topStackIdx - argStart + 1
 
@@ -181,7 +181,7 @@ func opFrameBuryStackChange(cx *EvalContext) StackChangeExplanation {
 
 	immIndex := int8(cx.program[cx.pc+1])
 	idx := topFrame.height + int(immIndex)
-	topStackIdx := len(cx.stack) - 1
+	topStackIdx := len(cx.Stack) - 1
 
 	diff := topStackIdx - idx + 1
 	return StackChangeExplanation{Deletions: diff, Additions: diff - 1}
@@ -192,7 +192,7 @@ func opFrameDigStackChange(cx *EvalContext) StackChangeExplanation {
 
 	immIndex := int8(cx.program[cx.pc+1])
 	idx := topFrame.height + int(immIndex)
-	topStackIdx := len(cx.stack) - 1
+	topStackIdx := len(cx.Stack) - 1
 
 	diff := topStackIdx - idx + 1
 	return StackChangeExplanation{Deletions: diff, Additions: diff + 1}
@@ -382,8 +382,8 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 		ds.Error = evalError.Error()
 	}
 
-	stack := make([]basics.TealValue, len(cx.stack))
-	for i, sv := range cx.stack {
+	stack := make([]basics.TealValue, len(cx.Stack))
+	for i, sv := range cx.Stack {
 		stack[i] = sv.toEncodedTealValue()
 	}
 

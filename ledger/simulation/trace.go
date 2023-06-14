@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -199,10 +200,10 @@ type OpcodeTraceUnit struct {
 	DisassembledLine string `codec:"disassembled-line,omitempty"`
 
 	// what has been added to stack
-	Added []TealValue `codec:"additions,omitempty"`
+	Added []model.TealValue `codec:"additions,omitempty"`
 
 	// deleted elements from stack, help backwards debugging
-	Deleted []TealValue `codec:"deletions,omitempty"`
+	Deleted []model.TealValue `codec:"deletions,omitempty"`
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

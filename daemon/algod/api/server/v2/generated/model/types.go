@@ -713,10 +713,10 @@ type SimulationEvalOverrides struct {
 
 // SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
 type SimulationOpcodeTraceUnit struct {
-	// Additions The TEAL values added by this opcode to the stack.
+	// Additions The values added by this opcode to the stack.
 	Additions *[]TealValue `json:"additions,omitempty"`
 
-	// Deletions The TEAL values deleted by this opcode from the stack.
+	// Deletions The values deleted by this opcode from the stack.
 	Deletions *[]TealValue `json:"deletions,omitempty"`
 
 	// DisassembledLine The line disassembled from program byte code.

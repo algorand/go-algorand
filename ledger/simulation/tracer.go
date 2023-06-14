@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -254,8 +255,7 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
 	tracer.stackChangeExplanation = cx.NextStackChange()
 
-	stackCopy := cx.Stack()
-	stackHeight := len(stackCopy)
+	stackHeight := len(cx.Stack)
 	stackHeightAfterDeletion := stackHeight - tracer.stackChangeExplanation.Deletions
 	tracer.stackHeightAfterDeletion = stackHeightAfterDeletion
 
@@ -263,17 +263,12 @@ func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer 
 		return
 	}
 	for i := stackHeightAfterDeletion; i < stackHeight; i++ {
-		if stackCopy[i].TEALType() == basics.TealBytesType {
-			o.Deleted = append(o.Deleted, TealValue{
-				Type:  basics.TealBytesType,
-				Bytes: string(stackCopy[i].Bytes),
-			})
-		} else {
-			o.Deleted = append(o.Deleted, TealValue{
-				Type: basics.TealUintType,
-				Uint: stackCopy[i].Uint,
-			})
-		}
+		tealValue := cx.Stack[i].ToTealValue()
+		o.Deleted = append(o.Deleted, model.TealValue{
+			Type:  uint64(tealValue.Type),
+			Uint:  tealValue.Uint,
+			Bytes: tealValue.Bytes,
+		})
 	}
 }
 
@@ -313,19 +308,13 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 	if tracer.stackChangeExplanation.Additions == 0 {
 		return
 	}
-	stackCopy := cx.Stack()
-	for i := tracer.stackHeightAfterDeletion; i < len(stackCopy); i++ {
-		if stackCopy[i].TEALType() == basics.TealBytesType {
-			o.Added = append(o.Added, TealValue{
-				Type:  basics.TealBytesType,
-				Bytes: string(stackCopy[i].Bytes),
-			})
-		} else {
-			o.Added = append(o.Added, TealValue{
-				Type: basics.TealUintType,
-				Uint: stackCopy[i].Uint,
-			})
-		}
+	for i := tracer.stackHeightAfterDeletion; i < len(cx.Stack); i++ {
+		tealValue := cx.Stack[i].ToTealValue()
+		o.Added = append(o.Added, model.TealValue{
+			Type:  uint64(tealValue.Type),
+			Uint:  tealValue.Uint,
+			Bytes: tealValue.Bytes,
+		})
 	}
 }
 

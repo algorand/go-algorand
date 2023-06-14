@@ -3874,14 +3874,14 @@
           "type": "string"
         },
         "deletions": {
-          "description": "The TEAL values deleted by this opcode from the stack.",
+          "description": "The values deleted by this opcode from the stack.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/TealValue"
           }
         },
         "additions": {
-          "description": "The TEAL values added by this opcode to the stack.",
+          "description": "The values added by this opcode to the stack.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/TealValue"

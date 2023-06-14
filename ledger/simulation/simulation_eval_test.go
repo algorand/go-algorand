@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -2154,9 +2155,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               1,
 											DisassembledLine: `pushbytes 0x68656c6c6f // "hello"`,
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "hello",
 												},
 											},
@@ -2164,9 +2165,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               8,
 											DisassembledLine: "log",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "hello",
 												},
 											},
@@ -2174,9 +2175,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               9,
 											DisassembledLine: "pushint 1",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 											},
@@ -2190,9 +2191,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               5,
 											DisassembledLine: `bytec_0 // "a"`,
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "a",
 												},
 											},
@@ -2200,15 +2201,15 @@ byte "hello"; log; int 1`,
 										{
 											PC:               6,
 											DisassembledLine: "keccak256",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: keccakBytes,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "a",
 												},
 											},
@@ -2216,9 +2217,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               7,
 											DisassembledLine: "pop",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: keccakBytes,
 												},
 											},
@@ -2226,9 +2227,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               8,
 											DisassembledLine: `bytec_0 // "a"`,
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "a",
 												},
 											},
@@ -2236,15 +2237,15 @@ byte "hello"; log; int 1`,
 										{
 											PC:               9,
 											DisassembledLine: "keccak256",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: keccakBytes,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "a",
 												},
 											},
@@ -2252,9 +2253,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               10,
 											DisassembledLine: "pop",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: keccakBytes,
 												},
 											},
@@ -2262,9 +2263,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               11,
 											DisassembledLine: "pushint 1",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 											},
@@ -2356,9 +2357,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               5,
 											DisassembledLine: `bytec_0 // "a"`,
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "a",
 												},
 											},
@@ -2366,15 +2367,15 @@ byte "hello"; log; int 1`,
 										{
 											PC:               6,
 											DisassembledLine: "keccak256",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: keccakBytes,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "a",
 												},
 											},
@@ -2382,9 +2383,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               7,
 											DisassembledLine: "pop",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: keccakBytes,
 												},
 											},
@@ -2392,9 +2393,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               8,
 											DisassembledLine: `bytec_0 // "a"`,
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "a",
 												},
 											},
@@ -2402,15 +2403,15 @@ byte "hello"; log; int 1`,
 										{
 											PC:               9,
 											DisassembledLine: "keccak256",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: keccakBytes,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: "a",
 												},
 											},
@@ -2418,9 +2419,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               10,
 											DisassembledLine: "pop",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: keccakBytes,
 												},
 											},
@@ -2428,9 +2429,9 @@ byte "hello"; log; int 1`,
 										{
 											PC:               11,
 											DisassembledLine: "pushint 0",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -2654,9 +2655,9 @@ int 1`,
 										{
 											PC:               4,
 											DisassembledLine: "txn ApplicationID",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -2664,9 +2665,9 @@ int 1`,
 										{
 											PC:               6,
 											DisassembledLine: "bz 55",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -2674,9 +2675,9 @@ int 1`,
 										{
 											PC:               55,
 											DisassembledLine: "intc_0 // 1",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 											},
@@ -2707,9 +2708,9 @@ int 1`,
 										{
 											PC:               4,
 											DisassembledLine: "txn ApplicationID",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(futureAppID),
 												},
 											},
@@ -2717,9 +2718,9 @@ int 1`,
 										{
 											PC:               6,
 											DisassembledLine: "bz 55",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(futureAppID),
 												},
 											},
@@ -2727,9 +2728,9 @@ int 1`,
 										{
 											PC:               9,
 											DisassembledLine: "txn NumAppArgs",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 											},
@@ -2737,9 +2738,9 @@ int 1`,
 										{
 											PC:               11,
 											DisassembledLine: "intc_0 // 1",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 											},
@@ -2747,19 +2748,19 @@ int 1`,
 										{
 											PC:               12,
 											DisassembledLine: "==",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 											},
@@ -2767,9 +2768,9 @@ int 1`,
 										{
 											PC:               13,
 											DisassembledLine: "assert",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 											},
@@ -2777,9 +2778,9 @@ int 1`,
 										{
 											PC:               14,
 											DisassembledLine: "txna ApplicationArgs 0",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: string([]byte{byte(applicationArg)}),
 												},
 											},
@@ -2787,15 +2788,15 @@ int 1`,
 										{
 											PC:               17,
 											DisassembledLine: "btoi",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: string([]byte{byte(applicationArg)}),
 												},
 											},
@@ -2813,9 +2814,9 @@ int 1`,
 										{
 											PC:               29,
 											DisassembledLine: "pushint 0",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -2824,19 +2825,19 @@ int 1`,
 										{
 											PC:               31,
 											DisassembledLine: "dup",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -2845,31 +2846,31 @@ int 1`,
 										{
 											PC:               32,
 											DisassembledLine: "dupn 4",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -2878,67 +2879,67 @@ int 1`,
 										{
 											PC:               34,
 											DisassembledLine: "frame_dig -1",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -2947,59 +2948,59 @@ int 1`,
 										{
 											PC:               36,
 											DisassembledLine: "frame_bury 0",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
@@ -3008,59 +3009,59 @@ int 1`,
 										{
 											PC:               38,
 											DisassembledLine: "dig 5",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -3069,55 +3070,55 @@ int 1`,
 										{
 											PC:               40,
 											DisassembledLine: "cover 5",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
@@ -3126,67 +3127,67 @@ int 1`,
 										{
 											PC:               42,
 											DisassembledLine: "frame_dig 0",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -3195,67 +3196,67 @@ int 1`,
 										{
 											PC:               44,
 											DisassembledLine: "frame_dig 1",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
@@ -3264,19 +3265,19 @@ int 1`,
 										{
 											PC:               46,
 											DisassembledLine: "+",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 2),
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
@@ -3285,67 +3286,67 @@ int 1`,
 										{
 											PC:               47,
 											DisassembledLine: "bury 7",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 2),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 2),
 												},
 											},
@@ -3354,25 +3355,25 @@ int 1`,
 										{
 											PC:               49,
 											DisassembledLine: "popn 5",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 0,
 												},
 											},
@@ -3381,23 +3382,23 @@ int 1`,
 										{
 											PC:               51,
 											DisassembledLine: "uncover 1",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 2),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 											},
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 2),
 												},
 											},
@@ -3406,19 +3407,19 @@ int 1`,
 										{
 											PC:               53,
 											DisassembledLine: "+",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 3),
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 2),
 												},
 											},
@@ -3427,19 +3428,19 @@ int 1`,
 										{
 											PC:               54,
 											DisassembledLine: "retsub",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 3),
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg),
 												},
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 3),
 												},
 											},
@@ -3448,15 +3449,15 @@ int 1`,
 										{
 											PC:               21,
 											DisassembledLine: "itob",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: string([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
 												},
 											},
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: uint64(applicationArg * 3),
 												},
 											},
@@ -3465,9 +3466,9 @@ int 1`,
 										{
 											PC:               22,
 											DisassembledLine: "log",
-											Deleted: []simulation.TealValue{
+											Deleted: []model.TealValue{
 												{
-													Type:  basics.TealBytesType,
+													Type:  uint64(basics.TealBytesType),
 													Bytes: string([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
 												},
 											},
@@ -3481,9 +3482,9 @@ int 1`,
 										{
 											PC:               55,
 											DisassembledLine: "intc_0 // 1",
-											Added: []simulation.TealValue{
+											Added: []model.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type: uint64(basics.TealUintType),
 													Uint: 1,
 												},
 											},

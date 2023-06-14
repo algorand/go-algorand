@@ -2187,9 +2187,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		{
 			PC:               6,
 			DisassembledLine: "txn ApplicationID",
-			Added: []simulation.TealValue{
+			Added: []model.TealValue{
 				{
-					Type: basics.TealUintType,
+					Type: uint64(basics.TealUintType),
 					Uint: 0,
 				},
 			},
@@ -2198,9 +2198,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		{
 			PC:               8,
 			DisassembledLine: "intc_0 // 0",
-			Added: []simulation.TealValue{
+			Added: []model.TealValue{
 				{
-					Type: basics.TealUintType,
+					Type: uint64(basics.TealUintType),
 					Uint: 0,
 				},
 			},
@@ -2209,19 +2209,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		{
 			PC:               9,
 			DisassembledLine: "==",
-			Deleted: []simulation.TealValue{
+			Deleted: []model.TealValue{
 				{
-					Type: basics.TealUintType,
+					Type: uint64(basics.TealUintType),
 					Uint: 0,
 				},
 				{
-					Type: basics.TealUintType,
+					Type: uint64(basics.TealUintType),
 					Uint: 0,
 				},
 			},
-			Added: []simulation.TealValue{
+			Added: []model.TealValue{
 				{
-					Type: basics.TealUintType,
+					Type: uint64(basics.TealUintType),
 					Uint: 1,
 				},
 			},
@@ -2230,9 +2230,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		{
 			PC:               10,
 			DisassembledLine: "bnz 149",
-			Deleted: []simulation.TealValue{
+			Deleted: []model.TealValue{
 				{
-					Type: basics.TealUintType,
+					Type: uint64(basics.TealUintType),
 					Uint: 1,
 				},
 			},
@@ -2241,9 +2241,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		{
 			PC:               149,
 			DisassembledLine: "intc_1 // 1",
-			Added: []simulation.TealValue{
+			Added: []model.TealValue{
 				{
-					Type: basics.TealUintType,
+					Type: uint64(basics.TealUintType),
 					Uint: 1,
 				},
 			},
@@ -2252,9 +2252,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		{
 			PC:               150,
 			DisassembledLine: "return",
-			Deleted: []simulation.TealValue{
+			Deleted: []model.TealValue{
 				{
-					Type: basics.TealUintType,
+					Type: uint64(basics.TealUintType),
 					Uint: 1,
 				},
 			},
@@ -2280,9 +2280,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               6,
 				DisassembledLine: "txn ApplicationID",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -2291,9 +2291,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               8,
 				DisassembledLine: "intc_0 // 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -2302,19 +2302,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               9,
 				DisassembledLine: "==",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(appID == 0),
 					},
 				},
@@ -2323,9 +2323,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               10,
 				DisassembledLine: "bnz 149",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(appID == 0),
 					},
 				},
@@ -2334,9 +2334,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               13,
 				DisassembledLine: "txn NumAppArgs",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: NumArgs,
 					},
 				},
@@ -2345,9 +2345,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               15,
 				DisassembledLine: "intc_1 // 1",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2356,19 +2356,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               16,
 				DisassembledLine: "==",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: NumArgs,
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(NumArgs == 1),
 					},
 				},
@@ -2377,9 +2377,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               17,
 				DisassembledLine: "bnz 21",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(NumArgs == 1),
 					},
 				},
@@ -2388,9 +2388,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               21,
 				DisassembledLine: "global CurrentApplicationID",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -2399,19 +2399,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               23,
 				DisassembledLine: "app_params_get AppApprovalProgram",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(approval),
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -2420,9 +2420,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               25,
 				DisassembledLine: "store 1",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2431,9 +2431,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               27,
 				DisassembledLine: "store 0",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(approval),
 					},
 				},
@@ -2442,9 +2442,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               29,
 				DisassembledLine: "global CurrentApplicationID",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -2453,19 +2453,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               31,
 				DisassembledLine: "app_params_get AppClearStateProgram",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(clearState),
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -2474,9 +2474,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               33,
 				DisassembledLine: "store 3",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2485,9 +2485,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               35,
 				DisassembledLine: "store 2",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(clearState),
 					},
 				},
@@ -2496,9 +2496,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               37,
 				DisassembledLine: "global CurrentApplicationAddress",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
@@ -2507,19 +2507,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               39,
 				DisassembledLine: "acct_params_get AcctBalance",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(3-layer) * MinBalance,
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
@@ -2528,9 +2528,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               41,
 				DisassembledLine: "store 5",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2539,9 +2539,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               43,
 				DisassembledLine: "store 4",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(3-layer) * MinBalance,
 					},
 				},
@@ -2550,9 +2550,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               45,
 				DisassembledLine: "load 1",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2561,9 +2561,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               47,
 				DisassembledLine: "assert",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2572,9 +2572,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               48,
 				DisassembledLine: "load 3",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2583,9 +2583,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               50,
 				DisassembledLine: "assert",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2594,9 +2594,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               51,
 				DisassembledLine: "load 5",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2605,9 +2605,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               53,
 				DisassembledLine: "assert",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2616,9 +2616,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               54,
 				DisassembledLine: "pushint 2",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 2,
 					},
 				},
@@ -2627,9 +2627,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               56,
 				DisassembledLine: "txna ApplicationArgs 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -2638,15 +2638,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               59,
 				DisassembledLine: "btoi",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -2655,19 +2655,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               60,
 				DisassembledLine: "exp",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1 << uint64(MaxDepth-layer),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 2,
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 				},
@@ -2676,15 +2676,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               61,
 				DisassembledLine: "itob",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1 << uint64(MaxDepth-layer),
 					},
 				},
@@ -2693,9 +2693,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               62,
 				DisassembledLine: "log",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
@@ -2704,9 +2704,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               63,
 				DisassembledLine: "txna ApplicationArgs 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -2715,15 +2715,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               66,
 				DisassembledLine: "btoi",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -2732,9 +2732,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               67,
 				DisassembledLine: "intc_0 // 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -2743,19 +2743,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               68,
 				DisassembledLine: ">",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(MaxDepth-layer > 0),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -2764,9 +2764,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               69,
 				DisassembledLine: "bnz 74",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(MaxDepth-layer > 0),
 					},
 				},
@@ -2780,9 +2780,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               75,
 				DisassembledLine: "intc_2 // 6",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 6,
 					},
 				},
@@ -2791,9 +2791,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               76,
 				DisassembledLine: "itxn_field TypeEnum",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 6,
 					},
 				},
@@ -2802,9 +2802,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               78,
 				DisassembledLine: "intc_0 // 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -2813,9 +2813,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               79,
 				DisassembledLine: "itxn_field Fee",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -2824,9 +2824,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               81,
 				DisassembledLine: "load 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(approval),
 					},
 				},
@@ -2835,9 +2835,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               83,
 				DisassembledLine: "itxn_field ApprovalProgram",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(approval),
 					},
 				},
@@ -2846,9 +2846,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               85,
 				DisassembledLine: "load 2",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(clearState),
 					},
 				},
@@ -2857,9 +2857,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               87,
 				DisassembledLine: "itxn_field ClearStateProgram",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(clearState),
 					},
 				},
@@ -2879,9 +2879,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               91,
 				DisassembledLine: "intc_1 // 1",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2890,9 +2890,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               92,
 				DisassembledLine: "itxn_field TypeEnum",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -2901,9 +2901,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               94,
 				DisassembledLine: "intc_0 // 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -2912,9 +2912,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               95,
 				DisassembledLine: "itxn_field Fee",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -2923,9 +2923,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               97,
 				DisassembledLine: "load 4",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(3-layer) * MinBalance,
 					},
 				},
@@ -2934,9 +2934,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               99,
 				DisassembledLine: "pushint 100000",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: MinBalance,
 					},
 				},
@@ -2945,19 +2945,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               103,
 				DisassembledLine: "-",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(3-layer) * MinBalance,
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: MinBalance,
 					},
 				},
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(2-layer) * MinBalance,
 					},
 				},
@@ -2966,9 +2966,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               104,
 				DisassembledLine: "itxn_field Amount",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(2-layer) * MinBalance,
 					},
 				},
@@ -2977,9 +2977,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               106,
 				DisassembledLine: `pushbytes 0x6170704944 // "appID"`,
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: "appID",
 					},
 				},
@@ -2988,9 +2988,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               113,
 				DisassembledLine: "gitxn 0 CreatedApplicationID",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID) + 3,
 					},
 				},
@@ -2999,15 +2999,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               116,
 				DisassembledLine: "itob",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(appID) + 3)),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID) + 3,
 					},
 				},
@@ -3016,19 +3016,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               117,
 				DisassembledLine: "concat",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: "appID" + string(uint64ToBytes(uint64(appID)+3)),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: "appID",
 					},
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(appID) + 3)),
 					},
 				},
@@ -3037,15 +3037,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               118,
 				DisassembledLine: "sha512_256",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: "appID" + string(uint64ToBytes(uint64(appID)+3)),
 					},
 				},
@@ -3054,9 +3054,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               119,
 				DisassembledLine: "itxn_field Receiver",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
 					},
 				},
@@ -3069,9 +3069,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               122,
 				DisassembledLine: "intc_2 // 6",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 6,
 					},
 				},
@@ -3080,9 +3080,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               123,
 				DisassembledLine: "itxn_field TypeEnum",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 6,
 					},
 				},
@@ -3091,9 +3091,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               125,
 				DisassembledLine: "txna ApplicationArgs 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -3102,15 +3102,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               128,
 				DisassembledLine: "btoi",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -3119,9 +3119,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               129,
 				DisassembledLine: "intc_1 // 1",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3130,19 +3130,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               130,
 				DisassembledLine: "-",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer - 1),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3151,15 +3151,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               131,
 				DisassembledLine: "itob",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer - 1))),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer - 1),
 					},
 				},
@@ -3168,9 +3168,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               132,
 				DisassembledLine: "itxn_field ApplicationArgs",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer - 1))),
 					},
 				},
@@ -3179,9 +3179,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               134,
 				DisassembledLine: "itxn CreatedApplicationID",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID) + 3,
 					},
 				},
@@ -3190,9 +3190,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               136,
 				DisassembledLine: "itxn_field ApplicationID",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID) + 3,
 					},
 				},
@@ -3201,9 +3201,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               138,
 				DisassembledLine: "intc_0 // 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -3212,9 +3212,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               139,
 				DisassembledLine: "itxn_field Fee",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -3223,9 +3223,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               141,
 				DisassembledLine: "pushint 5",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 5,
 					},
 				},
@@ -3234,9 +3234,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               143,
 				DisassembledLine: "itxn_field OnCompletion",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 5,
 					},
 				},
@@ -3256,9 +3256,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               72,
 				DisassembledLine: "intc_1 // 1",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3267,9 +3267,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               73,
 				DisassembledLine: "return",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3287,9 +3287,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               6,
 				DisassembledLine: "txn ApplicationID",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -3298,9 +3298,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               8,
 				DisassembledLine: "intc_0 // 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -3309,19 +3309,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               9,
 				DisassembledLine: "==",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(appID == 0),
 					},
 				},
@@ -3330,9 +3330,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               10,
 				DisassembledLine: "bnz 149",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(appID == 0),
 					},
 				},
@@ -3341,9 +3341,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               13,
 				DisassembledLine: "txn NumAppArgs",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: NumArgs,
 					},
 				},
@@ -3352,9 +3352,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               15,
 				DisassembledLine: "intc_1 // 1",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3363,19 +3363,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               16,
 				DisassembledLine: "==",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: NumArgs,
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(NumArgs == 1),
 					},
 				},
@@ -3384,9 +3384,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               17,
 				DisassembledLine: "bnz 21",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(NumArgs == 1),
 					},
 				},
@@ -3395,9 +3395,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               21,
 				DisassembledLine: "global CurrentApplicationID",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -3406,19 +3406,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               23,
 				DisassembledLine: "app_params_get AppApprovalProgram",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(approval),
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -3427,9 +3427,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               25,
 				DisassembledLine: "store 1",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3438,9 +3438,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               27,
 				DisassembledLine: "store 0",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(approval),
 					},
 				},
@@ -3449,9 +3449,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               29,
 				DisassembledLine: "global CurrentApplicationID",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -3460,19 +3460,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               31,
 				DisassembledLine: "app_params_get AppClearStateProgram",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(clearState),
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(appID),
 					},
 				},
@@ -3481,9 +3481,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               33,
 				DisassembledLine: "store 3",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3492,9 +3492,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               35,
 				DisassembledLine: "store 2",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(clearState),
 					},
 				},
@@ -3503,9 +3503,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               37,
 				DisassembledLine: "global CurrentApplicationAddress",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
@@ -3514,19 +3514,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               39,
 				DisassembledLine: "acct_params_get AcctBalance",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(3-layer) * MinBalance,
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
@@ -3535,9 +3535,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               41,
 				DisassembledLine: "store 5",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3546,9 +3546,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               43,
 				DisassembledLine: "store 4",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(3-layer) * MinBalance,
 					},
 				},
@@ -3557,9 +3557,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               45,
 				DisassembledLine: "load 1",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3568,9 +3568,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               47,
 				DisassembledLine: "assert",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3579,9 +3579,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               48,
 				DisassembledLine: "load 3",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3590,9 +3590,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               50,
 				DisassembledLine: "assert",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3601,9 +3601,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               51,
 				DisassembledLine: "load 5",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3612,9 +3612,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               53,
 				DisassembledLine: "assert",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3623,9 +3623,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               54,
 				DisassembledLine: "pushint 2",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 2,
 					},
 				},
@@ -3634,9 +3634,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               56,
 				DisassembledLine: "txna ApplicationArgs 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -3645,15 +3645,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               59,
 				DisassembledLine: "btoi",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -3662,19 +3662,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               60,
 				DisassembledLine: "exp",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1 << uint64(MaxDepth-layer),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 2,
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 				},
@@ -3683,15 +3683,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               61,
 				DisassembledLine: "itob",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1 << uint64(MaxDepth-layer),
 					},
 				},
@@ -3700,9 +3700,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               62,
 				DisassembledLine: "log",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
@@ -3711,9 +3711,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               63,
 				DisassembledLine: "txna ApplicationArgs 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -3722,15 +3722,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               66,
 				DisassembledLine: "btoi",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type:  basics.TealBytesType,
+						Type:  uint64(basics.TealBytesType),
 						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
@@ -3739,9 +3739,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               67,
 				DisassembledLine: "intc_0 // 0",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -3750,19 +3750,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               68,
 				DisassembledLine: ">",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(MaxDepth-layer > 0),
 					},
 				},
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: uint64(MaxDepth - layer),
 					},
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 0,
 					},
 				},
@@ -3771,9 +3771,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               69,
 				DisassembledLine: "bnz 74",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: boolToUint64(MaxDepth-layer > 0),
 					},
 				},
@@ -3782,9 +3782,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               72,
 				DisassembledLine: "intc_1 // 1",
-				Added: []simulation.TealValue{
+				Added: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
@@ -3793,9 +3793,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               73,
 				DisassembledLine: "return",
-				Deleted: []simulation.TealValue{
+				Deleted: []model.TealValue{
 					{
-						Type: basics.TealUintType,
+						Type: uint64(basics.TealUintType),
 						Uint: 1,
 					},
 				},
