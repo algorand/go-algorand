@@ -34,7 +34,7 @@ type BoxRef struct {
 }
 
 // ResourceAssignment calculates the additional resources that a transaction or group could use, and
-// it tracks any referenced unnamed resources that fit withing those limits.
+// it tracks any referenced unnamed resources that fit within those limits.
 type ResourceAssignment struct {
 	Accounts    map[basics.Address]struct{}
 	MaxAccounts int
@@ -177,7 +177,7 @@ func (a *ResourceAssignment) maxPossibleBoxes() int {
 }
 
 // GroupResourceAssignment calculates the additional resources that a transaction group could use,
-// and it tracks any referenced unnamed resources that fit withing those limits.
+// and it tracks any referenced unnamed resources that fit within those limits.
 type GroupResourceAssignment struct {
 	// GlobalResources specifies global resources for the entire group.
 	GlobalResources     ResourceAssignment
