@@ -58,6 +58,12 @@ func TestAppSharing(t *testing.T) {
 		Sender:        basics.Address{1, 2, 3, 4},
 	}
 
+	pay1 := txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   basics.Address{5, 5, 5, 5},
+		Receiver: basics.Address{6, 6, 6, 6},
+	}
+
 	getSchema := "int 500; app_params_get AppGlobalNumByteSlice; !; assert; pop; int 1"
 	// In v8, the first tx can read app params of 500, because it's in its
 	// foreign array, but the second can't
@@ -127,6 +133,11 @@ func TestAppSharing(t *testing.T) {
 	noop := `int 1`
 	sources := []string{noop, putLocal}
 	appl1.ApplicationArgs = [][]byte{appl0.Sender[:]} // tx1 will try to modify local state exposed in tx0
+	// appl0.Sender is available, but 901's local state for it isn't (only 900 is, since 900 was called in tx0)
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
+		logic.Exp(1, "unavailable Local State "+appl0.Sender.String()))
+	// Add 901 to tx0's ForeignApps, and it works
+	appl0.ForeignApps = append(appl0.ForeignApps, 901) // well, it will after we opt in
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
 		logic.Exp(1, "account "+appl0.Sender.String()+" is not opted into 901"))
 	ledger.NewLocals(appl0.Sender, 901) // opt in
@@ -153,6 +164,31 @@ func TestAppSharing(t *testing.T) {
 	sources = []string{"", "", "gtxn 1 Accounts 1; gtxn 0 Applications 0; byte 0xAA; app_local_get_ex"}
 	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1, &appl2), 9, nil,
 		logic.Exp(2, "unavailable Local State")) // note that the error message is for Locals, not specialized
+
+	// try to do a put on local state of the account in tx1, but tx0 ought not have access to that local state
+	ledger.NewAccount(pay1.Receiver, 200_000)
+	ledger.NewLocals(pay1.Receiver, 900) // opt in
+	sources = []string{`gtxn 1 Receiver; byte "key"; byte "val"; app_local_put; int 1`}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
+		logic.Exp(0, "unavailable Local State "+pay1.Receiver.String()))
+
+	// same for app_local_del
+	sources = []string{`gtxn 1 Receiver; byte "key"; app_local_del; int 1`}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
+		logic.Exp(0, "unavailable Local State "+pay1.Receiver.String()))
+
+	// now, use an app call in tx1, with 900 in the foreign apps, so the local state is available
+	appl1.ForeignApps = append(appl1.ForeignApps, 900)
+	ledger.NewLocals(appl1.Sender, 900) // opt in
+	sources = []string{`gtxn 1 Sender; byte "key"; byte "val"; app_local_put; int 1`}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
+		logic.Exp(0, "invalid Account reference "+appl1.Sender.String()))
+	// same for app_local_del
+	sources = []string{`gtxn 1 Sender; byte "key"; app_local_del; int 1`}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
+		logic.Exp(0, "invalid Account reference "+appl1.Sender.String()))
 }
 
 // TestBetterLocalErrors confirms that we get specific errors about the missing
