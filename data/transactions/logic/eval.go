@@ -89,14 +89,6 @@ func (sv stackValue) avmType() avmType {
 	return avmUint64
 }
 
-// TEALType converts stackValue's avmType into basic.TealType
-func (sv stackValue) TEALType() basics.TealType {
-	if sv.Bytes != nil {
-		return basics.TealBytesType
-	}
-	return basics.TealUintType
-}
-
 func (sv stackValue) stackType() StackType {
 	if sv.Bytes != nil {
 		return NewStackType(sv.avmType(), static(uint64(len(sv.Bytes))))

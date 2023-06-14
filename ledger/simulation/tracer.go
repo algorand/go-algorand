@@ -18,8 +18,8 @@ package simulation
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
