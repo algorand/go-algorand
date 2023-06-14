@@ -3367,10 +3367,9 @@ int 1
 					expectedUnnamedResourceAssignment.GlobalResources.Accounts = map[basics.Address]struct{}{
 						testAppUser: {},
 					}
-					// I'd expect this to be there too, but it's not
-					// expectedUnnamedResourceAssignment.GlobalAppLocals = map[ledgercore.AccountApp]struct{}{
-					// 	{Address: testAppUser, App: testAppID}: {},
-					// }
+					expectedUnnamedResourceAssignment.GlobalAppLocals = map[ledgercore.AccountApp]struct{}{
+						{Address: testAppUser, App: testAppID}: {},
+					}
 				} else {
 					expectedError = fmt.Sprintf("logic eval error: invalid Account reference for mutation %s", testAppUser)
 					expectedFailedAt = simulation.TxnPath{0}

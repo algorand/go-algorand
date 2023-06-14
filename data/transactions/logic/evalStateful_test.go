@@ -2783,8 +2783,13 @@ func TestUnnamedResourceAccess(t *testing.T) {
 							// after resource sharing
 							expectedEvents = []unnamedResourcePolicyEvent{
 								availableAppEvent(500),
+								availableAppEvent(500),
+								availableAccountEvent(otherAccount),
 								allowsLocalsEvent(otherAccount, 500),
 							}
+							// The duplicate app events above are actually expected. This is because
+							// EvalContext.localsReference calls resolveApp, then allowsLocals,
+							// which calls resolveApp again.
 						}
 						assert.Equal(t, expectedEvents, tc.policy.events)
 						tc.policy.events = nil
@@ -2841,8 +2846,13 @@ func TestUnnamedResourceAccess(t *testing.T) {
 							// after resource sharing
 							expectedEvents = []unnamedResourcePolicyEvent{
 								availableAssetEvent(501),
+								availableAccountEvent(otherAccount),
+								availableAssetEvent(501),
 								allowsHoldingEvent(otherAccount, 501),
 							}
+							// The duplicate asset events above are actually expected. This is
+							// because EvalContext.holdingReference calls resolveAsset, then
+							// allowsHolding, which calls resolveAsset again.
 						}
 						assert.Equal(t, expectedEvents, tc.policy.events)
 						tc.policy.events = nil
