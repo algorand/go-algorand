@@ -161,9 +161,12 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 
 // Start starts the catchpoint catchup service ( continue in the process )
 func (cs *CatchpointCatchupService) Start(ctx context.Context) error {
-	err := cs.checkLedgerDownload()
-	if err != nil {
-		return fmt.Errorf("aborting catchup Start(): %s", err)
+	// Only check catchpoint ledger validity if we're starting new
+	if cs.stage == ledger.CatchpointCatchupStateInactive {
+		err := cs.checkLedgerDownload()
+		if err != nil {
+			return fmt.Errorf("aborting catchup Start(): %s", err)
+		}
 	}
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(ctx)
 	cs.abortCtx, cs.abortCtxFunc = context.WithCancel(context.Background())
