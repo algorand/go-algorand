@@ -172,10 +172,23 @@ func TestAppSharing(t *testing.T) {
 	logic.TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
 		logic.Exp(0, "unavailable Local State "+pay1.Sender.String()))
 
-	// same, do app_local_del
+	// same for app_local_del
 	sources = []string{`gtxn 1 Sender; byte "key"; app_local_del; int 1`}
 	logic.TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
 		logic.Exp(0, "unavailable Local State "+pay1.Sender.String()))
+
+	// now, use an app call in tx1, with 900 in the foreign apps, so the local state is available
+	appl1.ForeignApps = append(appl1.ForeignApps, 900)
+	ledger.NewLocals(appl1.Sender, 900) // opt in
+	sources = []string{`gtxn 1 Sender; byte "key"; byte "val"; app_local_put; int 1`}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
+		logic.Exp(0, "invalid Account reference "+appl1.Sender.String()))
+	// same for app_local_del
+	sources = []string{`gtxn 1 Sender; byte "key"; app_local_del; int 1`}
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
+	logic.TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
+		logic.Exp(0, "invalid Account reference "+appl1.Sender.String()))
 }
 
 // TestBetterLocalErrors confirms that we get specific errors about the missing
