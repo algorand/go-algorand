@@ -156,6 +156,7 @@ func replaceTokens(original string, buildConfig BuildConfig) (expanded string, e
 	tokenPairs = append(tokenPairs, "{{APIEndpoint3}}", buildConfig.APIEndpoint3)
 	tokenPairs = append(tokenPairs, "{{APIEndpoint4}}", buildConfig.APIEndpoint4)
 	tokenPairs = append(tokenPairs, "{{APIToken}}", buildConfig.APIToken)
+	tokenPairs = append(tokenPairs, "{{AdminAPIToken}}", buildConfig.AdminAPIToken)
 	tokenPairs = append(tokenPairs, "{{EnableTelemetry}}", strconv.FormatBool(buildConfig.EnableTelemetry))
 	tokenPairs = append(tokenPairs, "{{TelemetryURI}}", buildConfig.TelemetryURI)
 	tokenPairs = append(tokenPairs, "{{MetricsURI}}", buildConfig.MetricsURI)
