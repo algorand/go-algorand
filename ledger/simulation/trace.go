@@ -177,16 +177,8 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 	}, nil
 }
 
-// TealValue Represents a TEAL value.
-type TealValue struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Type  basics.TealType `codec:"type"`
-	Bytes string          `codec:"bytes"`
-	Uint  uint64          `codec:"uint"`
-}
-
-// OpcodeTraceUnit contains the trace effects of a single opcode evaluation
+// OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
+// NOTE: we are introducing model.TealValue here, to avoid declare again conversion subroutines in daemon/handlers.go
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
 	PC uint64 `codec:"pc"`
