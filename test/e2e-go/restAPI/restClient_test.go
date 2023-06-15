@@ -2554,15 +2554,15 @@ int 1
 
 	expectedUnnamedGroupResources := model.SimulationUnnamedGroupResources{
 		Resources: model.SimulationUnnamedResourceAssignment{
-			MaxTotalRefs: uint64(proto.MaxAppTotalTxnReferences),
+			MaxTotalRefs: uint64(proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences),
 			Accounts:     &[]string{otherAddress},
-			MaxAccounts:  uint64(proto.MaxAppTxnAccounts),
+			MaxAccounts:  uint64(proto.MaxTxGroupSize * proto.MaxAppTxnAccounts),
 			Assets:       &[]uint64{assetID},
-			MaxAssets:    uint64(proto.MaxAppTxnForeignAssets),
+			MaxAssets:    uint64(proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets),
 			Apps:         &[]uint64{uint64(otherAppID)},
-			MaxApps:      uint64(proto.MaxAppTxnForeignApps),
+			MaxApps:      uint64(proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps),
 			Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
-			MaxBoxes:     uint64(proto.MaxAppBoxReferences),
+			MaxBoxes:     uint64(proto.MaxTxGroupSize * proto.MaxAppBoxReferences),
 		},
 		AssetHoldings: &[]model.AssetHoldingReference{
 			{Account: otherAddress, Asset: assetID},

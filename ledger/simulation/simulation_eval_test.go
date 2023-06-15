@@ -3081,11 +3081,11 @@ func TestUnnamedResources(t *testing.T) {
 				proto := env.TxnInfo.CurrentProtocolParams()
 				expectedUnnamedResourceGroupAssignment := simulation.GroupResourceAssignment{
 					Resources: simulation.ResourceAssignment{
-						MaxAccounts:  proto.MaxAppTxnAccounts,
-						MaxAssets:    proto.MaxAppTxnForeignAssets,
-						MaxApps:      proto.MaxAppTxnForeignApps,
-						MaxBoxes:     proto.MaxAppBoxReferences,
-						MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+						MaxAccounts:  proto.MaxTxGroupSize * proto.MaxAppTxnAccounts,
+						MaxAssets:    proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
+						MaxApps:      proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
+						MaxBoxes:     proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
+						MaxTotalRefs: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
 					},
 				}
 				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment
@@ -3335,11 +3335,11 @@ int 1
 				proto := env.TxnInfo.CurrentProtocolParams()
 				expectedUnnamedResourceAssignment := simulation.GroupResourceAssignment{
 					Resources: simulation.ResourceAssignment{
-						MaxAccounts:  proto.MaxAppTxnAccounts,
-						MaxAssets:    proto.MaxAppTxnForeignAssets,
-						MaxApps:      proto.MaxAppTxnForeignApps,
-						MaxBoxes:     proto.MaxAppBoxReferences,
-						MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+						MaxAccounts:  proto.MaxTxGroupSize * proto.MaxAppTxnAccounts,
+						MaxAssets:    proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
+						MaxApps:      proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
+						MaxBoxes:     proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
+						MaxTotalRefs: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
 					},
 				}
 				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment

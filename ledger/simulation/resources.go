@@ -64,8 +64,17 @@ func makeTxnResourceAssignment(txn *transactions.Transaction, proto *config.Cons
 	}
 }
 
-func makeGlobalResourceAssignment(perTxnResources []ResourceAssignment) ResourceAssignment {
-	var globalResources ResourceAssignment
+func makeGlobalResourceAssignment(perTxnResources []ResourceAssignment, proto *config.ConsensusParams) ResourceAssignment {
+	unusedTxns := proto.MaxTxGroupSize - len(perTxnResources)
+	globalResources := ResourceAssignment{
+		// If there are fewer than MaxTxGroupSize transactions, then we can make more resources
+		// available as if the remaining transactions were empty app calls.
+		MaxAccounts:  unusedTxns * proto.MaxAppTxnAccounts,
+		MaxAssets:    unusedTxns * proto.MaxAppTxnForeignAssets,
+		MaxApps:      unusedTxns * proto.MaxAppTxnForeignApps,
+		MaxBoxes:     unusedTxns * proto.MaxAppBoxReferences,
+		MaxTotalRefs: unusedTxns * proto.MaxAppTotalTxnReferences,
+	}
 	for i := range perTxnResources {
 		globalResources.MaxAccounts += perTxnResources[i].MaxAccounts
 		globalResources.MaxAssets += perTxnResources[i].MaxAssets
@@ -206,7 +215,7 @@ func makeGroupResourceAssignment(txns []*transactions.Transaction, proto *config
 		startingBoxes += len(txn.Boxes)
 	}
 	return GroupResourceAssignment{
-		Resources:         makeGlobalResourceAssignment(localTxnResources),
+		Resources:         makeGlobalResourceAssignment(localTxnResources, proto),
 		localTxnResources: localTxnResources,
 		startingBoxes:     startingBoxes,
 	}
