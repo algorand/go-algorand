@@ -53,7 +53,7 @@ type resources struct {
 	// of the box - has it been modified in this txngroup? If yes, the size of
 	// the box counts against the group writeBudget. So delete is NOT a dirtying
 	// operation.
-	boxes map[boxRef]bool
+	boxes map[BoxRef]bool
 
 	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
 	dirtyBytes uint64
@@ -329,7 +329,7 @@ func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header
 			// now than after returning a nil.
 			app = tx.ForeignApps[br.Index-1] // shift for the 0=this convention
 		}
-		r.boxes[boxRef{app, string(br.Name)}] = false
+		r.boxes[BoxRef{app, string(br.Name)}] = false
 	}
 }
 

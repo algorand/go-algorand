@@ -3183,7 +3183,7 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 8 { // boxes introduced
 					program += `byte "A"; int 64; box_create; assert;`
 					program += `byte "B"; box_len; !; assert; !; assert;`
-					expectedUnnamedResourceGroupAssignment.Resources.Boxes = map[simulation.BoxRef]struct{}{
+					expectedUnnamedResourceGroupAssignment.Resources.Boxes = map[logic.BoxRef]struct{}{
 						{App: 0, Name: "A"}: {},
 						{App: 0, Name: "B"}: {},
 					}
@@ -3223,7 +3223,7 @@ func TestUnnamedResources(t *testing.T) {
 					local.Address = testAppID.Address()
 					expectedUnnamedResourceGroupAssignment.AppLocals[local] = struct{}{}
 				}
-				var boxesToFix []simulation.BoxRef
+				var boxesToFix []logic.BoxRef
 				for box := range expectedUnnamedResourceGroupAssignment.Resources.Boxes {
 					if box.App == 0 {
 						// replace with app ID

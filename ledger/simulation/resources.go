@@ -25,14 +25,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// BoxRef is a reference to an application's box.
-type BoxRef struct {
-	// The actual ID of the app that owns the box.
-	App basics.AppIndex
-	// The name of the box.
-	Name string
-}
-
 // ResourceAssignment calculates the additional resources that a transaction or group could use, and
 // it tracks any referenced unnamed resources that fit within those limits.
 type ResourceAssignment struct {
@@ -45,7 +37,7 @@ type ResourceAssignment struct {
 	Apps    map[basics.AppIndex]struct{}
 	MaxApps int
 
-	Boxes    map[BoxRef]struct{}
+	Boxes    map[logic.BoxRef]struct{}
 	MaxBoxes int
 
 	MaxTotalRefs int
@@ -167,7 +159,7 @@ func (a *ResourceAssignment) addApp(aid basics.AppIndex, ep *logic.EvalParams, p
 
 func (a *ResourceAssignment) hasBox(app basics.AppIndex, name string) bool {
 	// nil map lookup is ok
-	_, ok := a.Boxes[BoxRef{app, name}]
+	_, ok := a.Boxes[logic.BoxRef{App: app, Name: name}]
 	return ok
 }
 
@@ -176,9 +168,9 @@ func (a *ResourceAssignment) addBox(app basics.AppIndex, name string) bool {
 		return false
 	}
 	if a.Boxes == nil {
-		a.Boxes = make(map[BoxRef]struct{})
+		a.Boxes = make(map[logic.BoxRef]struct{})
 	}
-	a.Boxes[BoxRef{app, name}] = struct{}{}
+	a.Boxes[logic.BoxRef{App: app, Name: name}] = struct{}{}
 	return true
 }
 

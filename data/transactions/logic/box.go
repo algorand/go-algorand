@@ -35,7 +35,7 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 		return nil, false, fmt.Errorf("boxes may not be accessed from ClearState program")
 	}
 
-	dirty, ok := cx.available.boxes[boxRef{cx.appID, name}]
+	dirty, ok := cx.available.boxes[BoxRef{cx.appID, name}]
 	if !ok && cx.UnnamedResources != nil && cx.UnnamedResources.AvailableBox(cx.appID, name) {
 		ok = true
 	}
@@ -82,7 +82,7 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 	case boxRead:
 		/* nothing to do */
 	}
-	cx.available.boxes[boxRef{cx.appID, name}] = dirty
+	cx.available.boxes[BoxRef{cx.appID, name}] = dirty
 
 	if cx.available.dirtyBytes > cx.ioBudget {
 		return nil, false, fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)

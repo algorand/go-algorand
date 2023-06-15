@@ -249,10 +249,10 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// boxRef is the "hydrated" form of a BoxRef - it has the actual app id, not an index
-type boxRef struct {
-	app  basics.AppIndex
-	name string
+// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual app id, not an index
+type BoxRef struct {
+	App  basics.AppIndex
+	Name string
 }
 
 // UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
@@ -441,7 +441,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedApps:     make(map[basics.AppIndex]struct{}),
 		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
 		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
-		boxes:          make(map[boxRef]bool),
+		boxes:          make(map[BoxRef]bool),
 	}
 	for i := range ep.TxnGroup {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
@@ -959,7 +959,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		// make any "0 index" box refs available now that we have an appID.
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
-				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = false
+				cx.EvalParams.available.boxes[BoxRef{cx.appID, string(br.Name)}] = false
 			}
 		}
 		// and add the appID to `createdApps`
@@ -981,12 +981,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 		used := uint64(0)
 		for br := range cx.available.boxes {
-			if len(br.name) == 0 {
+			if len(br.Name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
 				// may have been used to add I/O budget.
 				continue
 			}
-			box, ok, err := cx.Ledger.GetBox(br.app, br.name)
+			box, ok, err := cx.Ledger.GetBox(br.App, br.Name)
 			if err != nil {
 				return false, nil, err
 			}
