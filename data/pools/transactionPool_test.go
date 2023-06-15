@@ -585,7 +585,7 @@ func TestRememberForget(t *testing.T) {
 	require.Len(t, pending, 0)
 }
 
-//	Test that clean up works
+// Test that clean up works
 func TestCleanUp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

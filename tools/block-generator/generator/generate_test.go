@@ -33,13 +33,16 @@ import (
 )
 
 func makePrivateGenerator(t *testing.T, round uint64, genesis bookkeeping.Genesis) *generator {
-	publicGenerator, err := MakeGenerator(round, genesis, GenerationConfig{
+	cfg := GenerationConfig{
+		Name:                         "test",
 		NumGenesisAccounts:           10,
 		GenesisAccountInitialBalance: 1000000000000,
 		PaymentTransactionFraction:   1.0,
 		PaymentNewAccountFraction:    1.0,
 		AssetCreateFraction:          1.0,
-	})
+	}
+	cfg.validateWithDefaults(true)
+	publicGenerator, err := MakeGenerator(round, genesis, cfg)
 	require.NoError(t, err)
 	return publicGenerator.(*generator)
 }

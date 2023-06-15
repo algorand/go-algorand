@@ -151,10 +151,7 @@ func MakeCatchpointFilePath(round basics.Round) string {
 func RemoveSingleCatchpointFileFromDisk(dbDirectory, fileToDelete string) (err error) {
 	absCatchpointFileName := filepath.Join(dbDirectory, fileToDelete)
 	err = os.Remove(absCatchpointFileName)
-	if err == nil || os.IsNotExist(err) {
-		// it's ok if the file doesn't exist.
-		err = nil
-	} else {
+	if err != nil && !os.IsNotExist(err) {
 		// we can't delete the file, abort -
 		return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 	}

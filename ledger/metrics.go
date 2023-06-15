@@ -30,12 +30,14 @@ type metricsTracker struct {
 	ledgerTransactionsTotal *metrics.Counter
 	ledgerRewardClaimsTotal *metrics.Counter
 	ledgerRound             *metrics.Gauge
+	ledgerDBRound           *metrics.Gauge
 }
 
 func (mt *metricsTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	mt.ledgerTransactionsTotal = metrics.MakeCounter(metrics.LedgerTransactionsTotal)
 	mt.ledgerRewardClaimsTotal = metrics.MakeCounter(metrics.LedgerRewardClaimsTotal)
 	mt.ledgerRound = metrics.MakeGauge(metrics.LedgerRound)
+	mt.ledgerDBRound = metrics.MakeGauge(metrics.LedgerDBRound)
 	return nil
 }
 
@@ -51,6 +53,10 @@ func (mt *metricsTracker) close() {
 	if mt.ledgerRound != nil {
 		mt.ledgerRound.Deregister(nil)
 		mt.ledgerRound = nil
+	}
+	if mt.ledgerDBRound != nil {
+		mt.ledgerDBRound.Deregister(nil)
+		mt.ledgerDBRound = nil
 	}
 }
 
@@ -75,6 +81,7 @@ func (mt *metricsTracker) commitRound(context.Context, trackerdb.TransactionScop
 }
 
 func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+	mt.ledgerDBRound.Set(uint64(dcc.newBase()))
 }
 
 func (mt *metricsTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {

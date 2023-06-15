@@ -32,13 +32,13 @@ TODOs:
 * Consider a test with random dedup TLDs?
 */
 
-func bootstrapParsingNetworkGen() *rapid.Generator {
+func bootstrapParsingNetworkGen() *rapid.Generator[string] {
 	return rapid.OneOf(rapid.StringMatching(string(Testnet)), rapid.StringMatching(string(Mainnet)),
 		rapid.StringMatching(string(Devtestnet)), rapid.StringMatching(string(Devnet)),
 		rapid.StringMatching(string(Betanet)), rapid.StringMatching(string(Alphanet)))
 }
 
-func bootstrapHardCodedNetworkGen() *rapid.Generator {
+func bootstrapHardCodedNetworkGen() *rapid.Generator[string] {
 	return rapid.OneOf(rapid.StringMatching(string(Devnet)), rapid.StringMatching(string(Betanet)),
 		rapid.StringMatching(string(Alphanet)))
 }
@@ -47,7 +47,7 @@ func TestParseDNSBootstrapIDBackupWithExpectedDefaultTemplate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	rapid.Check(t, func(t1 *rapid.T) {
-		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network").(string))
+		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network"))
 
 		var expectedDefaultTemplate = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"
 
@@ -69,7 +69,7 @@ func TestParseDNSBootstrapIDBackupWithHardCodedNetworkBootstraps(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	rapid.Check(t, func(t1 *rapid.T) {
-		network := protocol.NetworkID(bootstrapHardCodedNetworkGen().Draw(t1, "network").(string))
+		network := protocol.NetworkID(bootstrapHardCodedNetworkGen().Draw(t1, "network"))
 
 		var expectedDefaultTemplate = "<network>.algorand.network?backup=<network>.algorand.net" +
 			"&dedup=<name>.algorand-<network>.(network|net)"
@@ -89,7 +89,7 @@ func TestParseDNSBootstrapIDWithLegacyTemplate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	rapid.Check(t, func(t1 *rapid.T) {
-		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network").(string))
+		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network"))
 
 		var expectedDefaultTemplate = "<network>.algorand.network"
 
@@ -108,11 +108,11 @@ func TestParseDNSBootstrapIDNoBackup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	rapid.Check(t, func(t1 *rapid.T) {
-		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network").(string))
+		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network"))
 		domainGen := rapidgen.Domain()
-		primaryDomain := domainGen.Draw(t1, "domain").(string)
-		includeDedup := rapid.Bool().Draw(t1, "with Dedup").(bool)
-		includeHTTPS := rapid.Bool().Draw(t1, "with HTTPS").(bool)
+		primaryDomain := domainGen.Draw(t1, "domain")
+		includeDedup := rapid.Bool().Draw(t1, "with Dedup")
+		includeHTTPS := rapid.Bool().Draw(t1, "with HTTPS")
 
 		primaryDomainInput := primaryDomain
 		// Should be ignored without backup parameter being set
@@ -138,10 +138,10 @@ func TestParseDNSBootstrapIDBackupNoDedup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	rapid.Check(t, func(t1 *rapid.T) {
-		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network").(string))
+		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network"))
 		domainGen := rapidgen.Domain()
-		primaryDomain := domainGen.Draw(t1, "domain").(string)
-		backupDomain := domainGen.Draw(t1, "backupDomain").(string)
+		primaryDomain := domainGen.Draw(t1, "domain")
+		backupDomain := domainGen.Draw(t1, "backupDomain")
 
 		dnsBootstrap, err := parseDNSBootstrap(primaryDomain+"?backup="+backupDomain, network, true)
 
@@ -157,10 +157,10 @@ func TestParseDNSBootstrapIDBackupWithSingleDomainDedup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	rapid.Check(t, func(t1 *rapid.T) {
-		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network").(string))
+		network := protocol.NetworkID(bootstrapParsingNetworkGen().Draw(t1, "network"))
 		domainGen := rapidgen.Domain()
-		primaryDomain := domainGen.Draw(t1, "domain").(string)
-		backupDomain := domainGen.Draw(t1, "backupDomain").(string)
+		primaryDomain := domainGen.Draw(t1, "domain")
+		backupDomain := domainGen.Draw(t1, "backupDomain")
 
 		var defaultExpectedDedup = "<name>.algorand-<network>.network"
 		dnsBootstrap, err := parseDNSBootstrap(primaryDomain+"?backup="+backupDomain+"&dedup="+defaultExpectedDedup,
