@@ -76,6 +76,8 @@ func makeGlobalResourceAssignment(perTxnResources []ResourceAssignment) Resource
 	return globalResources
 }
 
+// IsEmpty returns true if the assignment has no resources.
+// NOTE: this is different from the traditional Go idiom of checking if the object is the zero value.
 func (a *ResourceAssignment) IsEmpty() bool {
 	return len(a.Accounts) == 0 && len(a.Assets) == 0 && len(a.Apps) == 0 && len(a.Boxes) == 0
 }
