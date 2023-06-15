@@ -40,7 +40,6 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
@@ -520,51 +519,7 @@ func (node *AlgorandFullNode) BroadcastInternalSignedTxGroup(txgroup []transacti
 
 // broadcastSignedTxGroup broadcasts a transaction group that has already been signed.
 func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
-	lastRound := node.ledger.Latest()
-	var b bookkeeping.BlockHeader
-	b, err = node.ledger.BlockHdr(lastRound)
-	if err != nil {
-		node.log.Errorf("could not get block header from last round %v: %v", lastRound, err)
-		return err
-	}
-
-	_, err = verify.TxnGroup(txgroup, &b, node.ledger.VerifiedTransactionCache(), node.ledger)
-	if err != nil {
-		node.log.Warnf("malformed transaction: %v", err)
-		return err
-	}
-
-	// force a prefetch before remembering
-	// Note: this mostly a metrics accounting issue, not to skew things from the expected behaviour from gossip
-	node.transactionPool.Prefetch(txgroup)
-
-	err = node.transactionPool.Remember(txgroup)
-	if err != nil {
-		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
-		return err
-	}
-
-	err = node.ledger.VerifiedTransactionCache().Pin(txgroup)
-	if err != nil {
-		logging.Base().Infof("unable to pin transaction: %v", err)
-	}
-	// DevMode nodes do not broadcast txns to the network
-	if node.devMode {
-		return nil
-	}
-	var enc []byte
-	var txids []transactions.Txid
-	for _, tx := range txgroup {
-		enc = append(enc, protocol.Encode(&tx)...)
-		txids = append(txids, tx.ID())
-	}
-	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, false, nil)
-	if err != nil {
-		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
-		return err
-	}
-	node.log.Infof("Sent signed tx group with IDs %v", txids)
-	return nil
+	return node.txHandler.LocalTransaction(txgroup)
 }
 
 // Simulate speculatively runs a transaction group against the current

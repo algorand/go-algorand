@@ -530,8 +530,14 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
 
+	var sender network.Peer
+	if wi.rawmsg != nil {
+		// if we have a message, it means that it come from someone else
+		// Note: rawmsg == nil means that the transaction originated locally
+		sender = wi.rawmsg.Sender
+	}
 	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
-	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, wi.rawmsg.Sender)
+	handler.net.Relay(handler.ctx, protocol.TxnTag, reencode(verifiedTxGroup), false, sender)
 }
 
 func (handler *TxHandler) deleteFromCaches(msgKey *crypto.Digest, canonicalKey *crypto.Digest) {
@@ -774,6 +780,22 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 	}
 
 	return network.OutgoingMessage{}, false
+
+}
+
+func (handler *TxHandler) LocalTransaction(txgroup []transactions.SignedTxn) error {
+	select {
+	case handler.prefetcher <- &txBacklogMsg{
+		rawmsg:                nil,
+		unverifiedTxGroup:     txgroup,
+		rawmsgDataHash:        nil,
+		unverifiedTxGroupHash: nil,
+		capguard:              nil,
+	}:
+	default:
+		// TODO: we are busy?
+	}
+	return nil
 }
 
 // SolicitedTxHandler handles messages received through channels other than the gossip network.
