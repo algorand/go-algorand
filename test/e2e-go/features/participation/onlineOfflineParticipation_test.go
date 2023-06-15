@@ -104,9 +104,9 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 }
 
 // TestNewAccountCanGoOnlineAndParticipate tests two behaviors:
-// - When the account does not have enough stake, or after receivning algos, but before the lookback rounds,
-//   it should not be proposing blocks
-// - When the account balance receives enough stake, it should be proposing after lookback rounds
+//   - When the account does not have enough stake, or after receivning algos, but before the lookback rounds,
+//     it should not be proposing blocks
+//   - When the account balance receives enough stake, it should be proposing after lookback rounds
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)

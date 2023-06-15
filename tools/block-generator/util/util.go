@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
 	// import postgres driver
 	_ "github.com/lib/pq"
 )
@@ -70,7 +71,7 @@ func EmptyDB(postgresConnectionString string) error {
 		return fmt.Errorf("postgres connection string did not work: %w", err)
 	}
 	defer conn.Close()
-	query := `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`
+	query := `DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;`
 	if _, err = conn.Exec(query); err != nil {
 		return fmt.Errorf("unable to reset postgres DB: %w", err)
 	}

@@ -170,7 +170,7 @@ func (tr *VotersForRound) BroadcastError(err error) {
 	tr.mu.Unlock()
 }
 
-//Wait waits for the tree to get constructed.
+// Wait waits for the tree to get constructed.
 func (tr *VotersForRound) Wait() error {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()

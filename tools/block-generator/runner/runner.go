@@ -36,6 +36,7 @@ func init() {
 		Short: "Run test suite and collect results.",
 		Long:  "Run an automated test suite using the block-generator daemon and a provided conduit binary. Results are captured to a specified output directory.",
 		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("starting block-generator runner with args: %+v\n", runnerArgs)
 			if err := Run(runnerArgs); err != nil {
 				fmt.Println(err)
 			}
