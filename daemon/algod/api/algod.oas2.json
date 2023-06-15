@@ -2979,7 +2979,8 @@
       "properties": {
         "account": {
           "description": "Address of the account holding the asset.",
-          "type": "string"
+          "type": "string",
+          "x-algorand-format": "Address"
         },
         "asset": {
           "description": "Asset ID of the holding.",
@@ -2997,7 +2998,8 @@
       "properties": {
         "account": {
           "description": "Address of the account with the local state.",
-          "type": "string"
+          "type": "string",
+          "x-algorand-format": "Address"
         },
         "app": {
           "description": "Application ID of the local state application.",
@@ -4015,7 +4017,8 @@
           "description": "The unnamed accounts that were referenced. The order of this array is arbitrary.",
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "x-algorand-format": "Address"
           }
         },
         "max-accounts": {

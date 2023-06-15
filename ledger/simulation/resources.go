@@ -85,10 +85,9 @@ func makeGlobalResourceAssignment(perTxnResources []ResourceAssignment, proto *c
 	return globalResources
 }
 
-// IsEmpty returns true if the assignment has no resources.
-// NOTE: this is different from the traditional Go idiom of checking if the object is the zero value.
-func (a *ResourceAssignment) IsEmpty() bool {
-	return len(a.Accounts) == 0 && len(a.Assets) == 0 && len(a.Apps) == 0 && len(a.Boxes) == 0
+// HasResources returns true if the assignment has any resources.
+func (a *ResourceAssignment) HasResources() bool {
+	return len(a.Accounts) != 0 || len(a.Assets) != 0 || len(a.Apps) != 0 || len(a.Boxes) != 0
 }
 
 func (a *ResourceAssignment) hasAccount(addr basics.Address, ep *logic.EvalParams, programVersion uint64) bool {
@@ -207,12 +206,12 @@ type GroupResourceAssignment struct {
 	startingBoxes int
 }
 
-func makeGroupResourceAssignment(txns []*transactions.Transaction, proto *config.ConsensusParams) GroupResourceAssignment {
+func makeGroupResourceAssignment(txns []transactions.SignedTxnWithAD, proto *config.ConsensusParams) GroupResourceAssignment {
 	var startingBoxes int
 	localTxnResources := make([]ResourceAssignment, len(txns))
-	for i, txn := range txns {
-		localTxnResources[i] = makeTxnResourceAssignment(txn, proto)
-		startingBoxes += len(txn.Boxes)
+	for i := range txns {
+		localTxnResources[i] = makeTxnResourceAssignment(&txns[i].Txn, proto)
+		startingBoxes += len(txns[i].Txn.Boxes)
 	}
 	return GroupResourceAssignment{
 		Resources:         makeGlobalResourceAssignment(localTxnResources, proto),
@@ -328,12 +327,8 @@ type resourcePolicy struct {
 }
 
 func newResourcePolicy(ep *logic.EvalParams, groupResult *TxnGroupResult) *resourcePolicy {
-	txns := make([]*transactions.Transaction, len(ep.TxnGroup))
-	for i := range ep.TxnGroup {
-		txns[i] = &ep.TxnGroup[i].SignedTxn.Txn
-	}
 	policy := resourcePolicy{
-		assignment: makeGroupResourceAssignment(txns, ep.Proto),
+		assignment: makeGroupResourceAssignment(ep.TxnGroup, ep.Proto),
 		ep:         ep,
 	}
 	groupResult.UnnamedResources = &policy.assignment

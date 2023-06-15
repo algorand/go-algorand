@@ -249,7 +249,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		simulatorTracer.result.TxnGroups[0].UnnamedResources.removePrivateFields()
 		for i := range simulatorTracer.result.TxnGroups[0].Txns {
 			txnResult := &simulatorTracer.result.TxnGroups[0].Txns[i]
-			if txnResult.UnnamedResources.IsEmpty() {
+			if !txnResult.UnnamedResources.HasResources() {
 				// Clean up any unused local resource assignments
 				txnResult.UnnamedResources = nil
 			}
