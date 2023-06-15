@@ -36,6 +36,8 @@ type TxnResult struct {
 	AppBudgetConsumed      uint64
 	LogicSigBudgetConsumed uint64
 	Trace                  *TransactionTrace
+
+	UnnamedResources *ResourceAssignment
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group

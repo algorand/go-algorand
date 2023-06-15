@@ -157,7 +157,7 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 		// Override runtime related constraints against ep, before entering txn group
 		ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
 		if tracer.result.EvalOverrides.AllowUnnamedResources {
-			tracer.unnamedResourcePolicy = newResourcePolicy(ep)
+			tracer.unnamedResourcePolicy = newResourcePolicy(ep, &tracer.result.TxnGroups[0])
 			ep.EvalConstants.UnnamedResources = tracer.unnamedResourcePolicy
 		}
 	}

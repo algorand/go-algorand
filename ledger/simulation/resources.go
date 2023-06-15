@@ -76,6 +76,10 @@ func makeGlobalResourceAssignment(perTxnResources []ResourceAssignment) Resource
 	return globalResources
 }
 
+func (a *ResourceAssignment) IsEmpty() bool {
+	return len(a.Accounts) == 0 && len(a.Assets) == 0 && len(a.Apps) == 0 && len(a.Boxes) == 0
+}
+
 func (a *ResourceAssignment) hasAccount(addr basics.Address, ep *logic.EvalParams, programVersion uint64) bool {
 	// nil map lookup is ok
 	_, ok := a.Accounts[addr]
@@ -179,97 +183,102 @@ func (a *ResourceAssignment) maxPossibleBoxes() int {
 // GroupResourceAssignment calculates the additional resources that a transaction group could use,
 // and it tracks any referenced unnamed resources that fit within those limits.
 type GroupResourceAssignment struct {
-	// GlobalResources specifies global resources for the entire group.
-	GlobalResources     ResourceAssignment
-	GlobalAssetHoldings map[ledgercore.AccountAsset]struct{}
-	GlobalAppLocals     map[ledgercore.AccountApp]struct{}
+	// Resources specifies global resources for the entire group.
+	Resources     ResourceAssignment
+	AssetHoldings map[ledgercore.AccountAsset]struct{}
+	AppLocals     map[ledgercore.AccountApp]struct{}
 
-	// PerTxnResources specifies local resources for each transaction in the group. This will only
+	// localTxnResources specifies local resources for each transaction in the group. This will only
 	// be populated if a top-level transaction executes AVM programs prior to v9 (when resource
 	// sharing was added).
-	PerTxnResources []ResourceAssignment
+	localTxnResources []ResourceAssignment
 
 	startingBoxes int
 }
 
 func makeGroupResourceAssignment(txns []*transactions.Transaction, proto *config.ConsensusParams) GroupResourceAssignment {
 	var startingBoxes int
-	perTxnResources := make([]ResourceAssignment, len(txns))
+	localTxnResources := make([]ResourceAssignment, len(txns))
 	for i, txn := range txns {
-		perTxnResources[i] = makeTxnResourceAssignment(txn, proto)
+		localTxnResources[i] = makeTxnResourceAssignment(txn, proto)
 		startingBoxes += len(txn.Boxes)
 	}
 	return GroupResourceAssignment{
-		GlobalResources: makeGlobalResourceAssignment(perTxnResources),
-		PerTxnResources: perTxnResources,
-		startingBoxes:   startingBoxes,
+		Resources:         makeGlobalResourceAssignment(localTxnResources),
+		localTxnResources: localTxnResources,
+		startingBoxes:     startingBoxes,
 	}
+}
+
+func (a *GroupResourceAssignment) removePrivateFields() {
+	a.startingBoxes = 0
+	a.localTxnResources = nil
 }
 
 func (a *GroupResourceAssignment) hasAccount(addr basics.Address, ep *logic.EvalParams, programVersion uint64, globalSharing bool, txnIndex int) bool {
 	if globalSharing {
-		return a.GlobalResources.hasAccount(addr, ep, programVersion)
+		return a.Resources.hasAccount(addr, ep, programVersion)
 	}
-	return a.PerTxnResources[txnIndex].hasAccount(addr, ep, programVersion)
+	return a.localTxnResources[txnIndex].hasAccount(addr, ep, programVersion)
 }
 
 func (a *GroupResourceAssignment) addAccount(addr basics.Address, globalSharing bool, txnIndex int) bool {
 	if globalSharing {
-		return a.GlobalResources.addAccount(addr)
+		return a.Resources.addAccount(addr)
 	}
-	return a.PerTxnResources[txnIndex].addAccount(addr)
+	return a.localTxnResources[txnIndex].addAccount(addr)
 }
 
 func (a *GroupResourceAssignment) hasAsset(aid basics.AssetIndex, globalSharing bool, txnIndex int) bool {
 	if globalSharing {
-		return a.GlobalResources.hasAsset(aid)
+		return a.Resources.hasAsset(aid)
 	}
-	return a.PerTxnResources[txnIndex].hasAsset(aid)
+	return a.localTxnResources[txnIndex].hasAsset(aid)
 }
 
 func (a *GroupResourceAssignment) addAsset(aid basics.AssetIndex, globalSharing bool, txnIndex int) bool {
 	if globalSharing {
-		return a.GlobalResources.addAsset(aid)
+		return a.Resources.addAsset(aid)
 	}
-	return a.PerTxnResources[txnIndex].addAsset(aid)
+	return a.localTxnResources[txnIndex].addAsset(aid)
 }
 
 func (a *GroupResourceAssignment) hasApp(aid basics.AppIndex, globalSharing bool, txnIndex int) bool {
 	if globalSharing {
-		return a.GlobalResources.hasApp(aid)
+		return a.Resources.hasApp(aid)
 	}
-	return a.PerTxnResources[txnIndex].hasApp(aid)
+	return a.localTxnResources[txnIndex].hasApp(aid)
 }
 
 func (a *GroupResourceAssignment) addApp(aid basics.AppIndex, ep *logic.EvalParams, programVersion uint64, globalSharing bool, txnIndex int) bool {
 	if globalSharing {
-		return a.GlobalResources.addApp(aid, ep, programVersion)
+		return a.Resources.addApp(aid, ep, programVersion)
 	}
-	return a.PerTxnResources[txnIndex].addApp(aid, ep, programVersion)
+	return a.localTxnResources[txnIndex].addApp(aid, ep, programVersion)
 }
 
 func (a *GroupResourceAssignment) hasBox(app basics.AppIndex, name string) bool {
 	// all boxes are global, never consult PerTxnResources
-	return a.GlobalResources.hasBox(app, name)
+	return a.Resources.hasBox(app, name)
 }
 
 func (a *GroupResourceAssignment) addBox(app basics.AppIndex, name string) bool {
 	// all boxes are global, never consult PerTxnResources
-	return a.GlobalResources.addBox(app, name)
+	return a.Resources.addBox(app, name)
 }
 
 func (a *GroupResourceAssignment) hasHolding(addr basics.Address, aid basics.AssetIndex) bool {
 	// nil map lookup is ok
-	_, ok := a.GlobalAssetHoldings[ledgercore.AccountAsset{Address: addr, Asset: aid}]
+	_, ok := a.AssetHoldings[ledgercore.AccountAsset{Address: addr, Asset: aid}]
 	return ok
 }
 
 func (a *GroupResourceAssignment) addHolding(addr basics.Address, aid basics.AssetIndex) bool {
 	// TODO: limit cross-product usage
-	if a.GlobalAssetHoldings == nil {
-		a.GlobalAssetHoldings = make(map[ledgercore.AccountAsset]struct{})
+	if a.AssetHoldings == nil {
+		a.AssetHoldings = make(map[ledgercore.AccountAsset]struct{})
 	}
-	a.GlobalAssetHoldings[ledgercore.AccountAsset{Address: addr, Asset: aid}] = struct{}{}
+	a.AssetHoldings[ledgercore.AccountAsset{Address: addr, Asset: aid}] = struct{}{}
 	return true
 }
 
@@ -279,21 +288,21 @@ func (a *GroupResourceAssignment) hasLocal(addr basics.Address, aid basics.AppIn
 		return true
 	}
 	// nil map lookup is ok
-	_, ok := a.GlobalAppLocals[ledgercore.AccountApp{Address: addr, App: aid}]
+	_, ok := a.AppLocals[ledgercore.AccountApp{Address: addr, App: aid}]
 	return ok
 }
 
 func (a *GroupResourceAssignment) addLocal(addr basics.Address, aid basics.AppIndex) bool {
 	// TODO: limit cross-product usage
-	if a.GlobalAppLocals == nil {
-		a.GlobalAppLocals = make(map[ledgercore.AccountApp]struct{})
+	if a.AppLocals == nil {
+		a.AppLocals = make(map[ledgercore.AccountApp]struct{})
 	}
-	a.GlobalAppLocals[ledgercore.AccountApp{Address: addr, App: aid}] = struct{}{}
+	a.AppLocals[ledgercore.AccountApp{Address: addr, App: aid}] = struct{}{}
 	return true
 }
 
 func (a *GroupResourceAssignment) boxIOBudget(bytesPerBoxRef uint64) uint64 {
-	return uint64(a.startingBoxes+a.GlobalResources.maxPossibleBoxes()) * bytesPerBoxRef
+	return uint64(a.startingBoxes+a.Resources.maxPossibleBoxes()) * bytesPerBoxRef
 }
 
 type resourcePolicy struct {
@@ -307,15 +316,20 @@ type resourcePolicy struct {
 	globalSharing  bool
 }
 
-func newResourcePolicy(ep *logic.EvalParams) *resourcePolicy {
+func newResourcePolicy(ep *logic.EvalParams, groupResult *TxnGroupResult) *resourcePolicy {
 	txns := make([]*transactions.Transaction, len(ep.TxnGroup))
 	for i := range ep.TxnGroup {
 		txns[i] = &ep.TxnGroup[i].SignedTxn.Txn
 	}
-	return &resourcePolicy{
+	policy := resourcePolicy{
 		assignment: makeGroupResourceAssignment(txns, ep.Proto),
 		ep:         ep,
 	}
+	groupResult.UnnamedResources = &policy.assignment
+	for i := range groupResult.Txns {
+		groupResult.Txns[i].UnnamedResources = &policy.assignment.localTxnResources[i]
+	}
+	return &policy
 }
 
 func (p *resourcePolicy) AvailableAccount(addr basics.Address) bool {
@@ -367,7 +381,7 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string) bool {
 		size := uint64(len(box))
 		newUsedReadBudget := basics.AddSaturate(p.unnamedBoxUsedReadBudget, size)
 
-		unnamedReadBudget := basics.AddSaturate(*p.initialBoxSurplusReadBudget, basics.MulSaturate(uint64(p.assignment.GlobalResources.maxPossibleBoxes()), p.ep.Proto.BytesPerBoxReference))
+		unnamedReadBudget := basics.AddSaturate(*p.initialBoxSurplusReadBudget, basics.MulSaturate(uint64(p.assignment.Resources.maxPossibleBoxes()), p.ep.Proto.BytesPerBoxReference))
 		if newUsedReadBudget < unnamedReadBudget {
 			p.unnamedBoxUsedReadBudget = newUsedReadBudget
 		} else {

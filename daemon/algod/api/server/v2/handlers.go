@@ -929,10 +929,11 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type PreEncodedSimulateTxnResult struct {
-	Txn                    PreEncodedTxInfo                      `codec:"txn-result"`
-	AppBudgetConsumed      *uint64                               `codec:"app-budget-consumed,omitempty"`
-	LogicSigBudgetConsumed *uint64                               `codec:"logic-sig-budget-consumed,omitempty"`
-	TransactionTrace       *model.SimulationTransactionExecTrace `codec:"exec-trace,omitempty"`
+	Txn                    PreEncodedTxInfo                           `codec:"txn-result"`
+	AppBudgetConsumed      *uint64                                    `codec:"app-budget-consumed,omitempty"`
+	LogicSigBudgetConsumed *uint64                                    `codec:"logic-sig-budget-consumed,omitempty"`
+	TransactionTrace       *model.SimulationTransactionExecTrace      `codec:"exec-trace,omitempty"`
+	UnnamedResources       *model.SimulationUnnamedResourceAssignment `codec:"unnamed-resources,omitempty"`
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult

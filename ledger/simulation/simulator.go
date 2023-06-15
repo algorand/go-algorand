@@ -244,8 +244,16 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
-	if simulatorTracer.unnamedResourcePolicy != nil {
-		simulatorTracer.result.TxnGroups[0].UnnamedResources = &simulatorTracer.unnamedResourcePolicy.assignment
+	if simulatorTracer.result.EvalOverrides.AllowUnnamedResources {
+		// Remove private fields for easier test comparison
+		simulatorTracer.result.TxnGroups[0].UnnamedResources.removePrivateFields()
+		for i := range simulatorTracer.result.TxnGroups[0].Txns {
+			txnResult := &simulatorTracer.result.TxnGroups[0].Txns[i]
+			if txnResult.UnnamedResources.IsEmpty() {
+				// Clean up any unused local resource assignments
+				txnResult.UnnamedResources = nil
+			}
+		}
 	}
 
 	simulatorTracer.result.Block = block

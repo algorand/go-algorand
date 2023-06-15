@@ -3079,29 +3079,30 @@ func TestUnnamedResources(t *testing.T) {
 				env.OptIntoApp(otherAppUser, otherAppID)
 
 				proto := env.TxnInfo.CurrentProtocolParams()
-				expectedUnnamedResourceAssignment := simulation.GroupResourceAssignment{
-					GlobalResources: simulation.ResourceAssignment{
+				expectedUnnamedResourceGroupAssignment := simulation.GroupResourceAssignment{
+					Resources: simulation.ResourceAssignment{
 						MaxAccounts:  proto.MaxAppTxnAccounts,
 						MaxAssets:    proto.MaxAppTxnForeignAssets,
 						MaxApps:      proto.MaxAppTxnForeignApps,
 						MaxBoxes:     proto.MaxAppBoxReferences,
 						MaxTotalRefs: proto.MaxAppTotalTxnReferences,
 					},
-					PerTxnResources: []simulation.ResourceAssignment{{
+				}
+				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment
+				var expectedResources *simulation.ResourceAssignment
+				if v < 9 {
+					// no shared resources
+					expectedUnnamedResourceTxnAssignment = &simulation.ResourceAssignment{
 						MaxAccounts:  proto.MaxAppTxnAccounts,
 						MaxAssets:    proto.MaxAppTxnForeignAssets,
 						MaxApps:      proto.MaxAppTxnForeignApps,
 						MaxBoxes:     proto.MaxAppBoxReferences,
 						MaxTotalRefs: proto.MaxAppTotalTxnReferences,
-					}},
-				}
-				var expectedResources *simulation.ResourceAssignment
-				if v < 9 {
-					// no shared resources
-					expectedResources = &expectedUnnamedResourceAssignment.PerTxnResources[0]
+					}
+					expectedResources = expectedUnnamedResourceTxnAssignment
 				} else {
 					// shared resources
-					expectedResources = &expectedUnnamedResourceAssignment.GlobalResources
+					expectedResources = &expectedUnnamedResourceGroupAssignment.Resources
 				}
 
 				var innerCount int
@@ -3144,7 +3145,7 @@ func TestUnnamedResources(t *testing.T) {
 				expectedResources.Accounts[assetCreator] = struct{}{}
 				expectedResources.Accounts[assetHolder] = struct{}{}
 				if v >= 9 {
-					expectedUnnamedResourceAssignment.GlobalAssetHoldings = map[ledgercore.AccountAsset]struct{}{
+					expectedUnnamedResourceGroupAssignment.AssetHoldings = map[ledgercore.AccountAsset]struct{}{
 						{Address: sender.Addr, Asset: assetID}:      {},
 						{Address: assetCreator, Asset: assetID}:     {},
 						{Address: assetHolder, Asset: assetID}:      {},
@@ -3171,7 +3172,7 @@ func TestUnnamedResources(t *testing.T) {
 				}
 				expectedResources.Accounts[otherAppUser] = struct{}{}
 				if v >= 9 {
-					expectedUnnamedResourceAssignment.GlobalAppLocals = map[ledgercore.AccountApp]struct{}{
+					expectedUnnamedResourceGroupAssignment.AppLocals = map[ledgercore.AccountApp]struct{}{
 						{Address: sender.Addr, App: otherAppID}:      {},
 						{Address: otherAppUser, App: otherAppID}:     {},
 						{Address: basics.Address{}, App: otherAppID}: {},
@@ -3182,7 +3183,7 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 8 { // boxes introduced
 					program += `byte "A"; int 64; box_create; assert;`
 					program += `byte "B"; box_len; !; assert; !; assert;`
-					expectedUnnamedResourceAssignment.GlobalResources.Boxes = map[simulation.BoxRef]struct{}{
+					expectedUnnamedResourceGroupAssignment.Resources.Boxes = map[simulation.BoxRef]struct{}{
 						{App: 0, Name: "A"}: {},
 						{App: 0, Name: "B"}: {},
 					}
@@ -3199,40 +3200,40 @@ func TestUnnamedResources(t *testing.T) {
 				env.TransferAlgos(sender.Addr, testAppID.Address(), 1_000_000)
 
 				var holdingsToFix []ledgercore.AccountAsset
-				for holding := range expectedUnnamedResourceAssignment.GlobalAssetHoldings {
+				for holding := range expectedUnnamedResourceGroupAssignment.AssetHoldings {
 					if holding.Address.IsZero() {
 						// replace with app address
 						holdingsToFix = append(holdingsToFix, holding)
 					}
 				}
 				for _, holding := range holdingsToFix {
-					delete(expectedUnnamedResourceAssignment.GlobalAssetHoldings, holding)
+					delete(expectedUnnamedResourceGroupAssignment.AssetHoldings, holding)
 					holding.Address = testAppID.Address()
-					expectedUnnamedResourceAssignment.GlobalAssetHoldings[holding] = struct{}{}
+					expectedUnnamedResourceGroupAssignment.AssetHoldings[holding] = struct{}{}
 				}
 				var localsToFix []ledgercore.AccountApp
-				for local := range expectedUnnamedResourceAssignment.GlobalAppLocals {
+				for local := range expectedUnnamedResourceGroupAssignment.AppLocals {
 					if local.Address.IsZero() {
 						// replace with app address
 						localsToFix = append(localsToFix, local)
 					}
 				}
 				for _, local := range localsToFix {
-					delete(expectedUnnamedResourceAssignment.GlobalAppLocals, local)
+					delete(expectedUnnamedResourceGroupAssignment.AppLocals, local)
 					local.Address = testAppID.Address()
-					expectedUnnamedResourceAssignment.GlobalAppLocals[local] = struct{}{}
+					expectedUnnamedResourceGroupAssignment.AppLocals[local] = struct{}{}
 				}
 				var boxesToFix []simulation.BoxRef
-				for box := range expectedUnnamedResourceAssignment.GlobalResources.Boxes {
+				for box := range expectedUnnamedResourceGroupAssignment.Resources.Boxes {
 					if box.App == 0 {
 						// replace with app ID
 						boxesToFix = append(boxesToFix, box)
 					}
 				}
 				for _, box := range boxesToFix {
-					delete(expectedUnnamedResourceAssignment.GlobalResources.Boxes, box)
+					delete(expectedUnnamedResourceGroupAssignment.Resources.Boxes, box)
 					box.App = testAppID
-					expectedUnnamedResourceAssignment.GlobalResources.Boxes[box] = struct{}{}
+					expectedUnnamedResourceGroupAssignment.Resources.Boxes[box] = struct{}{}
 				}
 
 				txn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -3262,11 +3263,12 @@ func TestUnnamedResources(t *testing.T) {
 											},
 										},
 										AppBudgetConsumed: ignoreAppBudgetConsumed,
+										UnnamedResources:  expectedUnnamedResourceTxnAssignment,
 									},
 								},
 								AppBudgetAdded:    700 + 700*uint64(innerCount),
 								AppBudgetConsumed: ignoreAppBudgetConsumed,
-								UnnamedResources:  &expectedUnnamedResourceAssignment,
+								UnnamedResources:  &expectedUnnamedResourceGroupAssignment,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -3332,21 +3334,15 @@ int 1
 
 				proto := env.TxnInfo.CurrentProtocolParams()
 				expectedUnnamedResourceAssignment := simulation.GroupResourceAssignment{
-					GlobalResources: simulation.ResourceAssignment{
+					Resources: simulation.ResourceAssignment{
 						MaxAccounts:  proto.MaxAppTxnAccounts,
 						MaxAssets:    proto.MaxAppTxnForeignAssets,
 						MaxApps:      proto.MaxAppTxnForeignApps,
 						MaxBoxes:     proto.MaxAppBoxReferences,
 						MaxTotalRefs: proto.MaxAppTotalTxnReferences,
 					},
-					PerTxnResources: []simulation.ResourceAssignment{{
-						MaxAccounts:  proto.MaxAppTxnAccounts,
-						MaxAssets:    proto.MaxAppTxnForeignAssets,
-						MaxApps:      proto.MaxAppTxnForeignApps,
-						MaxBoxes:     proto.MaxAppBoxReferences,
-						MaxTotalRefs: proto.MaxAppTotalTxnReferences,
-					}},
 				}
+				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment
 
 				var expectedEvalDelta transactions.EvalDelta
 				var expectedError string
@@ -3364,17 +3360,24 @@ int 1
 							},
 						},
 					}
-					expectedUnnamedResourceAssignment.GlobalResources.Accounts = map[basics.Address]struct{}{
+					expectedUnnamedResourceAssignment.Resources.Accounts = map[basics.Address]struct{}{
 						testAppUser: {},
 					}
-					expectedUnnamedResourceAssignment.GlobalAppLocals = map[ledgercore.AccountApp]struct{}{
+					expectedUnnamedResourceAssignment.AppLocals = map[ledgercore.AccountApp]struct{}{
 						{Address: testAppUser, App: testAppID}: {},
 					}
 				} else {
 					expectedError = fmt.Sprintf("logic eval error: invalid Account reference for mutation %s", testAppUser)
 					expectedFailedAt = simulation.TxnPath{0}
-					expectedUnnamedResourceAssignment.PerTxnResources[0].Accounts = map[basics.Address]struct{}{
-						testAppUser: {},
+					expectedUnnamedResourceTxnAssignment = &simulation.ResourceAssignment{
+						MaxAccounts:  proto.MaxAppTxnAccounts,
+						MaxAssets:    proto.MaxAppTxnForeignAssets,
+						MaxApps:      proto.MaxAppTxnForeignApps,
+						MaxBoxes:     proto.MaxAppBoxReferences,
+						MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+						Accounts: map[basics.Address]struct{}{
+							testAppUser: {},
+						},
 					}
 				}
 
@@ -3397,6 +3400,7 @@ int 1
 											},
 										},
 										AppBudgetConsumed: ignoreAppBudgetConsumed,
+										UnnamedResources:  expectedUnnamedResourceTxnAssignment,
 									},
 								},
 								FailedAt:          expectedFailedAt,

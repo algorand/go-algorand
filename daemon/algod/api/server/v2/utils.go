@@ -414,10 +414,14 @@ func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResul
 		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed: numOrNil(txnResult.LogicSigBudgetConsumed),
 		TransactionTrace:       convertTxnTrace(txnResult.Trace),
+		UnnamedResources:       convertUnnamedResourceAssignment(txnResult.UnnamedResources),
 	}
 }
 
-func convertUnnamedResourceAssignment(assignment simulation.ResourceAssignment) model.SimulationUnnamedResourceAssignment {
+func convertUnnamedResourceAssignment(assignment *simulation.ResourceAssignment) *model.SimulationUnnamedResourceAssignment {
+	if assignment == nil {
+		return nil
+	}
 	converted := model.SimulationUnnamedResourceAssignment{
 		MaxTotalRefs: uint64(assignment.MaxTotalRefs),
 		MaxAccounts:  uint64(assignment.MaxAccounts),
@@ -457,42 +461,37 @@ func convertUnnamedResourceAssignment(assignment simulation.ResourceAssignment) 
 		}
 		converted.Boxes = &boxes
 	}
-	return converted
+	return &converted
 }
 
 func convertUnnamedGroupResources(resources *simulation.GroupResourceAssignment) *model.SimulationUnnamedGroupResources {
 	if resources == nil {
 		return nil
 	}
-	txnLocalResources := make([]model.SimulationUnnamedResourceAssignment, len(resources.PerTxnResources))
-	for i := range resources.PerTxnResources {
-		txnLocalResources[i] = convertUnnamedResourceAssignment(resources.PerTxnResources[i])
-	}
 	converted := model.SimulationUnnamedGroupResources{
-		GlobalResources:   convertUnnamedResourceAssignment(resources.GlobalResources),
-		TxnLocalResources: txnLocalResources,
+		Resources: *convertUnnamedResourceAssignment(&resources.Resources),
 	}
-	if len(resources.GlobalAssetHoldings) != 0 {
-		convertedHoldings := make([]model.AssetHoldingReference, 0, len(resources.GlobalAssetHoldings))
-		for holding := range resources.GlobalAssetHoldings {
+	if len(resources.AssetHoldings) != 0 {
+		convertedHoldings := make([]model.AssetHoldingReference, 0, len(resources.AssetHoldings))
+		for holding := range resources.AssetHoldings {
 			convertedHolding := model.AssetHoldingReference{
 				Account: holding.Address.String(),
 				Asset:   uint64(holding.Asset),
 			}
 			convertedHoldings = append(convertedHoldings, convertedHolding)
 		}
-		converted.GlobalAssetHoldings = &convertedHoldings
+		converted.AssetHoldings = &convertedHoldings
 	}
-	if len(resources.GlobalAppLocals) != 0 {
-		convertedLocals := make([]model.ApplicationLocalReference, 0, len(resources.GlobalAppLocals))
-		for local := range resources.GlobalAppLocals {
+	if len(resources.AppLocals) != 0 {
+		convertedLocals := make([]model.ApplicationLocalReference, 0, len(resources.AppLocals))
+		for local := range resources.AppLocals {
 			convertedLocal := model.ApplicationLocalReference{
 				Account: local.Address.String(),
 				App:     uint64(local.App),
 			}
 			convertedLocals = append(convertedLocals, convertedLocal)
 		}
-		converted.GlobalAppLocals = &convertedLocals
+		converted.AppLocals = &convertedLocals
 	}
 	return &converted
 }

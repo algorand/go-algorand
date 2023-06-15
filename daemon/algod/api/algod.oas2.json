@@ -3804,6 +3804,9 @@
         },
         "exec-trace": {
           "$ref": "#/definitions/SimulationTransactionExecTrace"
+        },
+        "unnamed-resources": {
+          "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
         }
       }
     },
@@ -3968,35 +3971,27 @@
       }
     },
     "SimulationUnnamedGroupResources": {
-      "description": "If unnamed resource access is allowed, this is the set of unnamed resources that were accessed.",
+      "description": "If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and benefit from group resource sharing. Also see property 'unnamed-resources' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing.",
       "type": "object",
       "required": [
-        "global-resources",
-        "txn-local-resources"
+        "resources"
       ],
       "properties": {
-        "global-resources": {
+        "resources": {
           "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
         },
-        "global-asset-holdings": {
+        "asset-holdings": {
           "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/AssetHoldingReference"
           }
         },
-        "global-app-locals": {
+        "app-locals": {
           "description": "The unnamed app local states that were referenced. The order of this array is arbitrary.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/ApplicationLocalReference"
-          }
-        },
-        "txn-local-resources": {
-          "description": "For applications that cannot use group resource sharing (available starting in AVM v9), this array tracks the individual transaction-level unnamed resources that were accessed during a simulation call.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
           }
         }
       }

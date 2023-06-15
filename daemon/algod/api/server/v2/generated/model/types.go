@@ -707,7 +707,7 @@ type SimulateTransactionGroupResult struct {
 	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulateTransactionResult `json:"txn-results"`
 
-	// UnnamedResources If unnamed resource access is allowed, this is the set of unnamed resources that were accessed.
+	// UnnamedResources If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and benefit from group resource sharing. Also see property 'unnamed-resources' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing.
 	UnnamedResources *SimulationUnnamedGroupResources `json:"unnamed-resources,omitempty"`
 }
 
@@ -724,6 +724,9 @@ type SimulateTransactionResult struct {
 
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`
+
+	// UnnamedResources This object contains a set of unnamed resources that were accessed during a simulation call.
+	UnnamedResources *SimulationUnnamedResourceAssignment `json:"unnamed-resources,omitempty"`
 }
 
 // SimulationEvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
@@ -768,19 +771,16 @@ type SimulationTransactionExecTrace struct {
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
 }
 
-// SimulationUnnamedGroupResources If unnamed resource access is allowed, this is the set of unnamed resources that were accessed.
+// SimulationUnnamedGroupResources If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and benefit from group resource sharing. Also see property 'unnamed-resources' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing.
 type SimulationUnnamedGroupResources struct {
-	// GlobalAppLocals The unnamed app local states that were referenced. The order of this array is arbitrary.
-	GlobalAppLocals *[]ApplicationLocalReference `json:"global-app-locals,omitempty"`
+	// AppLocals The unnamed app local states that were referenced. The order of this array is arbitrary.
+	AppLocals *[]ApplicationLocalReference `json:"app-locals,omitempty"`
 
-	// GlobalAssetHoldings The unnamed asset holdings that were referenced. The order of this array is arbitrary.
-	GlobalAssetHoldings *[]AssetHoldingReference `json:"global-asset-holdings,omitempty"`
+	// AssetHoldings The unnamed asset holdings that were referenced. The order of this array is arbitrary.
+	AssetHoldings *[]AssetHoldingReference `json:"asset-holdings,omitempty"`
 
-	// GlobalResources This object contains a set of unnamed resources that were accessed during a simulation call.
-	GlobalResources SimulationUnnamedResourceAssignment `json:"global-resources"`
-
-	// TxnLocalResources For applications that cannot use group resource sharing (available starting in AVM v9), this array tracks the individual transaction-level unnamed resources that were accessed during a simulation call.
-	TxnLocalResources []SimulationUnnamedResourceAssignment `json:"txn-local-resources"`
+	// Resources This object contains a set of unnamed resources that were accessed during a simulation call.
+	Resources SimulationUnnamedResourceAssignment `json:"resources"`
 }
 
 // SimulationUnnamedResourceAssignment This object contains a set of unnamed resources that were accessed during a simulation call.

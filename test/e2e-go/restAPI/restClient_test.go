@@ -2552,8 +2552,8 @@ int 1
 	})
 	a.NoError(err)
 
-	expectedUnnamedResources := model.SimulationUnnamedGroupResources{
-		GlobalResources: model.SimulationUnnamedResourceAssignment{
+	expectedUnnamedGroupResources := model.SimulationUnnamedGroupResources{
+		Resources: model.SimulationUnnamedResourceAssignment{
 			MaxTotalRefs: uint64(proto.MaxAppTotalTxnReferences),
 			Accounts:     &[]string{otherAddress},
 			MaxAccounts:  uint64(proto.MaxAppTxnAccounts),
@@ -2564,20 +2564,11 @@ int 1
 			Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
 			MaxBoxes:     uint64(proto.MaxAppBoxReferences),
 		},
-		GlobalAssetHoldings: &[]model.AssetHoldingReference{
+		AssetHoldings: &[]model.AssetHoldingReference{
 			{Account: otherAddress, Asset: assetID},
 		},
-		GlobalAppLocals: &[]model.ApplicationLocalReference{
+		AppLocals: &[]model.ApplicationLocalReference{
 			{Account: otherAddress, App: uint64(otherAppID)},
-		},
-		TxnLocalResources: []model.SimulationUnnamedResourceAssignment{
-			{
-				MaxTotalRefs: uint64(proto.MaxAppTotalTxnReferences),
-				MaxAccounts:  uint64(proto.MaxAppTxnAccounts),
-				MaxAssets:    uint64(proto.MaxAppTxnForeignAssets),
-				MaxApps:      uint64(proto.MaxAppTxnForeignApps),
-				MaxBoxes:     uint64(proto.MaxAppBoxReferences),
-			},
 		},
 	}
 
@@ -2600,7 +2591,7 @@ int 1
 				},
 				AppBudgetAdded:    &budgetAdded,
 				AppBudgetConsumed: &budgetUsed,
-				UnnamedResources:  &expectedUnnamedResources,
+				UnnamedResources:  &expectedUnnamedGroupResources,
 			},
 		},
 	}
