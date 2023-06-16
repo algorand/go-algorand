@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/condvar"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // A TransactionPool prepares valid blocks for proposal and caches
@@ -522,6 +523,11 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
+	start := time.Now()
+	defer func() {
+		txpoolNewBlockDurationMicros.AddMicrosecondsSince(start, nil)
+	}()
+
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint
@@ -1021,3 +1027,5 @@ func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.Valid
 	assembled, err = pool.AssembleBlock(pool.pendingBlockEvaluator.Round(), time.Now().Add(pool.proposalAssemblyTime))
 	return
 }
+
+var txpoolNewBlockDurationMicros = metrics.NewCounter("txpool_newblock_duration_micros", "µs spent")
