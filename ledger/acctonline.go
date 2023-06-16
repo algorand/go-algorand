@@ -60,7 +60,7 @@ type cachedOnlineAccount struct {
 // onlineAccounts tracks history of online accounts
 type onlineAccounts struct {
 	// Connection to the database.
-	dbs trackerdb.TrackerStore
+	dbs trackerdb.Store
 
 	// Prepared SQL statements for fast accounts DB lookups.
 	accountsq trackerdb.OnlineAccountsReader
@@ -433,23 +433,23 @@ func (ao *onlineAccounts) commitRound(ctx context.Context, tx trackerdb.Transact
 		return err
 	}
 
-	arw, err := tx.MakeAccountsReaderWriter()
+	aw, err := tx.MakeAccountsWriter()
 	if err != nil {
 		return err
 	}
 
-	err = arw.OnlineAccountsDelete(dcc.onlineAccountsForgetBefore)
+	err = aw.OnlineAccountsDelete(dcc.onlineAccountsForgetBefore)
 	if err != nil {
 		return err
 	}
 
-	err = arw.AccountsPutOnlineRoundParams(dcc.onlineRoundParams, dcc.oldBase+1)
+	err = aw.AccountsPutOnlineRoundParams(dcc.onlineRoundParams, dcc.oldBase+1)
 	if err != nil {
 		return err
 	}
 
 	// delete all entries all older than maxBalLookback (or votersLookback) rounds ago
-	err = arw.AccountsPruneOnlineRoundParams(dcc.onlineAccountsForgetBefore)
+	err = aw.AccountsPruneOnlineRoundParams(dcc.onlineAccountsForgetBefore)
 
 	return
 }
