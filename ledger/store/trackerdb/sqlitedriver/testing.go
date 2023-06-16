@@ -123,8 +123,5 @@ func AccountsUpdateSchemaTest(ctx context.Context, e db.Executable) (err error) 
 	if err := accountsCreateBoxTable(ctx, e); err != nil {
 		return err
 	}
-	if err := createStateProofVerificationTable(ctx, e); err != nil {
-		return err
-	}
-	return nil
+	return createStateProofVerificationTable(ctx, e)
 }
