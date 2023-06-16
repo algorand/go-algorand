@@ -790,7 +790,7 @@ func (z *identityChallengeValue) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func IdentityChallengeValueMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 

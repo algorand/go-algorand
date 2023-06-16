@@ -9,6 +9,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
@@ -57,6 +58,7 @@ import (
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
+//          |-----> GenesisAccountDataMaxSize()
 //
 // GenesisAllocation
 //         |-----> (*) MarshalMsg
@@ -2458,6 +2460,12 @@ func (z *GenesisAccountData) MsgIsZero() bool {
 	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).StateProofID.MsgIsZero()) && ((*z).SelectionID.MsgIsZero()) && ((*z).VoteFirstValid.MsgIsZero()) && ((*z).VoteLastValid.MsgIsZero()) && ((*z).VoteKeyDilution == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func GenesisAccountDataMaxSize() (s int) {
+	s = 1 + 4 + basics.StatusMaxSize() + 5 + basics.MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 8 + basics.RoundMaxSize() + 8 + basics.RoundMaxSize() + 7 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *GenesisAllocation) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2592,7 +2600,7 @@ func GenesisAllocationMaxSize() (s int) {
 	panic("Unable to determine max size: String type z.Address is unbounded")
 	s += 8
 	panic("Unable to determine max size: String type z.Comment is unbounded")
-	s += 6 + basics.AccountDataMaxSize()
+	s += 6 + GenesisAccountDataMaxSize()
 	return
 }
 

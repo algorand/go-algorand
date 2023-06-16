@@ -360,7 +360,7 @@ func (z *Digest) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func DigestMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((DigestSize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((DigestSize) * (msgp.ByteSize))
 	return
 }
 
@@ -406,7 +406,7 @@ func (z *FalconPrivateKey) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func FalconPrivateKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -452,7 +452,7 @@ func (z *FalconPublicKey) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func FalconPublicKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
 	return
 }
 
@@ -498,7 +498,7 @@ func (z *FalconSeed) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func FalconSeedMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((FalconSeedSize) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((FalconSeedSize) * (msgp.ByteSize))
 	return
 }
 
@@ -1097,7 +1097,7 @@ func (z *MasterDerivationKey) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func MasterDerivationKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((masterDerivationKeyLenBytes) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((masterDerivationKeyLenBytes) * (msgp.ByteSize))
 	return
 }
 
@@ -2654,7 +2654,7 @@ func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func OneTimeSignatureVerifierMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -2700,7 +2700,7 @@ func (z *PrivateKey) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func PrivateKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -2746,7 +2746,7 @@ func (z *PublicKey) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func PublicKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -2792,7 +2792,7 @@ func (z *Seed) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func SeedMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -2838,7 +2838,7 @@ func (z *Signature) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func SignatureMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3128,7 +3128,7 @@ func (z *VrfOutput) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func VrfOutputMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3174,7 +3174,7 @@ func (z *VrfPrivkey) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func VrfPrivkeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3220,7 +3220,7 @@ func (z *VrfProof) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func VrfProofMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((80) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((80) * (msgp.ByteSize))
 	return
 }
 
@@ -3266,7 +3266,7 @@ func (z *VrfPubkey) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func VrfPubkeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -3312,7 +3312,7 @@ func (z *ed25519PrivateKey) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519PrivateKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 
@@ -3358,7 +3358,7 @@ func (z *ed25519PublicKey) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519PublicKeyMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -3404,7 +3404,7 @@ func (z *ed25519Seed) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519SeedMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
@@ -3450,7 +3450,7 @@ func (z *ed25519Signature) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func Ed25519SignatureMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 

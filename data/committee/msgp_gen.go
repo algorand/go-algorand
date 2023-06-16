@@ -293,7 +293,7 @@ func (z *Seed) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func SeedMaxSize() (s int) {
 	// Calculating size of array: z
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
 	return
 }
 
