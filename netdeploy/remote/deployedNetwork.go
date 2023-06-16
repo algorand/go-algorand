@@ -387,7 +387,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		default:
 		}
 
-		accounts[addr] = alloc.State
+		accounts[addr] = alloc.State.AccountData()
 	}
 
 	//initial state

@@ -1,6 +1,6 @@
 FROM ubuntu:18.04 as builder
 
-ARG GO_VERSION="1.17.13"
+ARG GO_VERSION="1.20.5"
 
 ARG CHANNEL
 ARG URL

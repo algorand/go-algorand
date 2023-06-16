@@ -144,8 +144,9 @@ func getStateProofConsensus() config.ConsensusProtocols {
 	return consensus
 }
 
-//TODO: copied code from other test: onlineOfflineParticipation_test.go.
-//  consider how to avoid duplication
+// TODO: copied code from other test: onlineOfflineParticipation_test.go.
+//
+//	consider how to avoid duplication
 func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestClientFixture, account string, window int) bool {
 	client := fixture.AlgodClient
 
@@ -172,7 +173,8 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 }
 
 // This test starts with participation keys in Version30, then attempts to let the richest user participate even after
-//  consensus upgrade.
+//
+//	consensus upgrade.
 func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)

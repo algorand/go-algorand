@@ -33,14 +33,15 @@ type Dialer struct {
 // DialContext connects to the address on the named network using the provided context.
 // It waits if needed not to exceed connectionsRateLimitingCount.
 // Idea:
-//   net.Dialer.DialContext calls net.Dialer.resolver().resolveAddrList
-//   that calls net.Resolver.internetAddrList
-//   that ends up in LookupIPAddr -> lookupIPAddr -> parseIPZone -> return
-//   So this DialContext:
-//   1. Parses address to host and port
-//   2. If the host is not IPv4/IPv6 address then resolves it with DNSSEC
-//   3. Calls original net.DialContext knowing that the name already resolved
-//   and the control flow would be as described above
+//
+//	net.Dialer.DialContext calls net.Dialer.resolver().resolveAddrList
+//	that calls net.Resolver.internetAddrList
+//	that ends up in LookupIPAddr -> lookupIPAddr -> parseIPZone -> return
+//	So this DialContext:
+//	1. Parses address to host and port
+//	2. If the host is not IPv4/IPv6 address then resolves it with DNSSEC
+//	3. Calls original net.DialContext knowing that the name already resolved
+//	and the control flow would be as described above
 func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 
 	// snipped below is from net.Resolver.internetAddrList

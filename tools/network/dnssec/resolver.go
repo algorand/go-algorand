@@ -33,7 +33,6 @@ References
 5. DNSSEC clarifications https://tools.ietf.org/html/rfc6840
 6. DNSSEC keys management https://tools.ietf.org/html/rfc6781
 7. DNS SRV https://tools.ietf.org/html/rfc2782
-
 */
 package dnssec
 

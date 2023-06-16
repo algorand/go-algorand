@@ -5,11 +5,8 @@ run:
 linters:
   disable-all: true
   enable:
-    - deadcode
     - gosec
     - partitiontest
-    - structcheck
-    - varcheck
     - unused
 
 linters-settings:

@@ -25,6 +25,7 @@ import (
 // These types are defined to satisfy SortInterface used by
 
 // SortAddress is re-exported from basics.Address since the interface is already defined there
+//
 //msgp:sort basics.Address SortAddress
 type SortAddress = basics.SortAddress
 
@@ -33,6 +34,7 @@ type SortAddress = basics.SortAddress
 type SortUint64 = basics.SortUint64
 
 // SortStep defines SortInterface used by msgp to consistently sort maps with this type as key.
+//
 //msgp:ignore SortStep
 //msgp:sort step SortStep
 type SortStep []step
@@ -42,6 +44,7 @@ func (a SortStep) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortStep) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortPeriod defines SortInterface used by msgp to consistently sort maps with this type as key.
+//
 //msgp:ignore SortPeriod
 //msgp:sort period SortPeriod
 type SortPeriod []period
@@ -52,6 +55,7 @@ func (a SortPeriod) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortRound defines SortInterface used by msgp to consistently sort maps with this type as key.
 // note, for type aliases the base type is used for the interface
+//
 //msgp:ignore SortRound
 //msgp:sort basics.Round SortRound
 type SortRound []basics.Round
@@ -61,6 +65,7 @@ func (a SortRound) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortRound) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortProposalValue defines SortInterface used by msgp to consistently sort maps with this type as key.
+//
 //msgp:ignore SortProposalValue
 //msgp:sort proposalValue SortProposalValue
 type SortProposalValue []proposalValue
