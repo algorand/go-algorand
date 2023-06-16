@@ -96,3 +96,52 @@ func TestTagList(t *testing.T) {
 	}
 	require.Empty(t, tagListMap, "Unseen tags remain in TagList")
 }
+
+// TestLockdownTagList locks down the list of tags in the code.
+//
+// The node will drop the connection when the connecting node requests
+// a message of interest which is not in this list. This is a backward
+// compatibility problem. When a new tag is introduced, the nodes with
+// older version will not connect to the nodes running the new
+// version.
+//
+// It is necessary to check the version of the other node before
+// sending a request for a newly added tag. Currently, version
+// checking is not implemented.
+//
+// Similarly, When removing a tag, it is important to support requests
+// for the removed tag from nodes running an older version.
+func TestLockdownTagList(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	/************************************************
+	 * ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! *
+	 *  Read the comment before touching this test!  *
+	 * ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! *
+	 *************************************************
+	 */ ////////////////////////////////////////////////
+	var tagList = []Tag{
+		AgreementVoteTag,
+		MsgOfInterestTag,
+		MsgDigestSkipTag,
+		NetIDVerificationTag,
+		NetPrioResponseTag,
+		PingTag,
+		PingReplyTag,
+		ProposalPayloadTag,
+		StateProofSigTag,
+		TopicMsgRespTag,
+		TxnTag,
+		UniEnsBlockReqTag,
+		VoteBundleTag,
+	}
+	require.Equal(t, len(tagList), len(TagList))
+	tagMap := make(map[Tag]bool)
+	for _, tag := range tagList {
+		tagMap[tag] = true
+		_, has := TagMap[tag]
+		require.True(t, has)
+	}
+	for _, tag := range TagList {
+		require.True(t, tagMap[tag])
+	}
+}
