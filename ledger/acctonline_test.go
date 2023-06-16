@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"sort"
 	"strconv"
@@ -80,7 +79,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 				require.NoError(t, err)
 			}
 			err := ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-				arw, err := tx.MakeAccountsReaderWriter()
+				aw, err := tx.MakeAccountsWriter()
 				if err != nil {
 					return err
 				}
@@ -92,7 +91,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 					}
 				}
 
-				return arw.UpdateAccountsRound(newBase)
+				return aw.UpdateAccountsRound(newBase)
 			})
 			require.NoError(t, err)
 		}()
@@ -1316,7 +1315,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = oa.onlineTotalsEx(lowest - 1)
-	require.ErrorIs(t, err, sql.ErrNoRows)
+	require.ErrorIs(t, err, trackerdb.ErrNotFound)
 
 	// ensure the cache size for addrA does not have more entries than maxBalLookback + 1
 	// +1 comes from the deletion before X without checking account state at X

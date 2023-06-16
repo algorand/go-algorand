@@ -150,7 +150,7 @@ func (t *txTailTestLedger) initialize(ts *testing.T, protoVersion protocol.Conse
 	// create a corresponding blockdb.
 	inMemory := true
 	t.blockDBs, _ = storetesting.DbOpenTest(ts, inMemory)
-	t.trackerDBs, _ = sqlitedriver.DbOpenTrackerTest(ts, inMemory)
+	t.trackerDBs, _ = sqlitedriver.OpenForTesting(ts, inMemory)
 	t.protoVersion = protoVersion
 
 	err := t.trackerDBs.Batch(func(transactionCtx context.Context, tx trackerdb.BatchScope) (err error) {
