@@ -39,7 +39,6 @@ func MultisigSigPrint(sig MultisigSig) {
 
 // test cases for address generation
 // detect invalid threshold and versions
-//
 func TestMultisigAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var s Seed

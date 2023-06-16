@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net/http"
 	"path"
 	"strconv"
@@ -47,6 +48,7 @@ import (
 const BlockResponseContentType = "application/x-algorand-block-v1"
 const blockResponseHasBlockCacheControl = "public, max-age=31536000, immutable"    // 31536000 seconds are one year.
 const blockResponseMissingBlockCacheControl = "public, max-age=1, must-revalidate" // cache for 1 second, and force revalidation afterward
+const blockResponseRetryAfter = "3"                                                // retry after 3 seconds
 const blockServerMaxBodyLength = 512                                               // we don't really pass meaningful content here, so 512 bytes should be a safe limit
 const blockServerCatchupRequestBufferSize = 10
 
@@ -64,6 +66,12 @@ const (
 )
 
 var errBlockServiceClosed = errors.New("block service is shutting down")
+
+type errMemoryAtCapacity struct{ capacity, used uint64 }
+
+func (err errMemoryAtCapacity) Error() string {
+	return fmt.Sprintf("block service memory over capacity: %d / %d", err.used, err.capacity)
+}
 
 // LedgerForBlockService describes the Ledger methods used by BlockService.
 type LedgerForBlockService interface {
@@ -84,6 +92,8 @@ type BlockService struct {
 	log                     logging.Logger
 	closeWaitGroup          sync.WaitGroup
 	mu                      deadlock.Mutex
+	memoryUsed              uint64
+	memoryCap               uint64
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -96,6 +106,7 @@ type EncodedBlockCert struct {
 
 // PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
 // using a pre-encoded Block and Certificate in msgpack format.
+//
 //msgp:ignore PreEncodedBlockCert
 type PreEncodedBlockCert struct {
 	Block       codec.Raw `codec:"block"`
@@ -119,6 +130,7 @@ func MakeBlockService(log logging.Logger, config config.Local, ledger LedgerForB
 		fallbackEndpoints:       makeFallbackEndpoints(log, config.BlockServiceCustomFallbackEndpoints),
 		enableArchiverFallback:  config.EnableBlockServiceFallbackToArchiver,
 		log:                     log,
+		memoryCap:               config.BlockServiceHTTPMemCap,
 	}
 	if service.enableService {
 		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
@@ -224,6 +236,15 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 				response.WriteHeader(http.StatusNotFound)
 			}
 			return
+		case errMemoryAtCapacity:
+			// memory used by HTTP block requests is over the cap
+			ok := bs.redirectRequest(round, response, request)
+			if !ok {
+				response.Header().Set("Retry-After", blockResponseRetryAfter)
+				response.WriteHeader(http.StatusServiceUnavailable)
+				bs.log.Debugf("ServeHTTP: returned retry-after: %v", err)
+			}
+			return
 		default:
 			// unexpected error.
 			bs.log.Warnf("ServeHTTP : failed to retrieve block %d %v", round, err)
@@ -240,6 +261,9 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	if err != nil {
 		bs.log.Warn("http block write failed ", err)
 	}
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	bs.memoryUsed = bs.memoryUsed - uint64(len(encodedBlockCert))
 }
 
 func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
@@ -382,7 +406,14 @@ func (bs *BlockService) rawBlockBytes(round basics.Round) ([]byte, error) {
 		}
 	default:
 	}
-	return RawBlockBytes(bs.ledger, round)
+	if bs.memoryUsed > bs.memoryCap {
+		return nil, errMemoryAtCapacity{used: bs.memoryUsed, capacity: bs.memoryCap}
+	}
+	data, err := RawBlockBytes(bs.ledger, round)
+	if err == nil {
+		bs.memoryUsed = bs.memoryUsed + uint64(len(data))
+	}
+	return data, err
 }
 
 func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) network.Topics {

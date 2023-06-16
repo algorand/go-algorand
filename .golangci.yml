@@ -100,7 +100,15 @@ issues:
     # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
     - ineffective break statement. Did you mean to break out of the outer loop
     # revive: irrelevant error about naming
-    - "var-naming: don't use leading k in Go names"
+    - "^var-naming: don't use leading k in Go names"
+    # revive: ignore unused-paramter, package-comments, unexported-return, redefines-builtin-id, var-declaration, empty-block, superfluous-else
+    - "^unused-parameter: parameter"
+    - "^package-comments: should have a package comment"
+    - "^unexported-return: "
+    - "^redefines-builtin-id: redefinition of"
+    - "^var-declaration: should"
+    - "^empty-block: this block is empty, you can remove it"
+    - "^superfluous-else: if block ends with"
 
   exclude-rules:
     - path: _test\.go
@@ -121,6 +129,9 @@ issues:
       linters:
         - staticcheck
       text: "SA4006: this value" # of X is never used
+    - linters:
+        - staticcheck
+      text: "SA1019: rand*"
     # allow shadowing in test code
     - path: _test\.go
       linters:

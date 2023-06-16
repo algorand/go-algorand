@@ -33,13 +33,16 @@ import (
 )
 
 func makePrivateGenerator(t *testing.T, round uint64, genesis bookkeeping.Genesis) *generator {
-	publicGenerator, err := MakeGenerator(round, genesis, GenerationConfig{
+	cfg := GenerationConfig{
+		Name:                         "test",
 		NumGenesisAccounts:           10,
 		GenesisAccountInitialBalance: 1000000000000,
 		PaymentTransactionFraction:   1.0,
 		PaymentNewAccountFraction:    1.0,
 		AssetCreateFraction:          1.0,
-	})
+	}
+	cfg.validateWithDefaults(true)
+	publicGenerator, err := MakeGenerator(round, genesis, cfg)
 	require.NoError(t, err)
 	return publicGenerator.(*generator)
 }
@@ -188,6 +191,49 @@ func TestAssetDestroy(t *testing.T) {
 	require.Len(t, g.assets, 0)
 }
 
+func TestAppCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+
+	// app call transaction creating appBoxes
+	actual, txn, err := g.generateAppCallInternal(appBoxesCreate, 1, 0, 0, nil)
+	require.NoError(t, err)
+	require.Equal(t, appBoxesCreate, actual)
+	require.Equal(t, protocol.ApplicationCallTx, txn.Type)
+	require.Len(t, g.apps, 0)
+	require.Len(t, g.pendingApps, 1)
+	require.Len(t, g.pendingApps[appKindBoxes], 1)
+	require.Len(t, g.pendingApps[appKindSwap], 0)
+	require.Len(t, g.pendingApps[appKindBoxes][0].holdings, 1)
+	require.Len(t, g.pendingApps[appKindBoxes][0].holders, 1)
+	ad := *g.pendingApps[appKindBoxes][0]
+	holding := *ad.holdings[0]
+	require.Equal(t, holding, *ad.holders[0])
+	require.Equal(t, uint64(1001), holding.appIndex)
+	require.Equal(t, ad.appID, holding.appIndex)
+	require.Equal(t, appKindBoxes, ad.kind)
+
+	// app call transaction creating appSwap
+	actual, txn, err = g.generateAppCallInternal(appSwapCreate, 1, 0, 0, nil)
+	require.NoError(t, err)
+	require.Equal(t, appSwapCreate, actual)
+	require.Equal(t, protocol.ApplicationCallTx, txn.Type)
+	require.Len(t, g.apps, 0)
+	require.Len(t, g.pendingApps, 2)
+	require.Len(t, g.pendingApps[appKindBoxes], 1)
+	require.Len(t, g.pendingApps[appKindSwap], 1)
+	require.Len(t, g.pendingApps[appKindSwap][0].holdings, 1)
+	require.Len(t, g.pendingApps[appKindSwap][0].holders, 1)
+	ad = *g.pendingApps[appKindSwap][0]
+	holding = *ad.holdings[0]
+	require.Equal(t, holding, *ad.holders[0])
+	require.Equal(t, uint64(1001), holding.appIndex)
+	require.Equal(t, ad.appID, holding.appIndex)
+	require.Equal(t, appKindSwap, ad.kind)
+}
+
 func TestWriteRoundZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var testcases = []struct {
@@ -211,7 +257,7 @@ func TestWriteRoundZero(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		tc := tc
-		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
 			var data []byte
@@ -229,21 +275,75 @@ func TestWriteRoundZero(t *testing.T) {
 func TestWriteRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
-	var data []byte
-	writer := bytes.NewBuffer(data)
-	g.WriteBlock(writer, 0)
-	g.WriteBlock(writer, 1)
-	var block rpcs.EncodedBlockCert
-	protocol.Decode(data, &block)
-	require.Len(t, block.Block.Payset, int(g.config.TxnPerBlock))
+
+	prepBuffer := func() (*bytes.Buffer, rpcs.EncodedBlockCert) {
+		return bytes.NewBuffer([]byte{}), rpcs.EncodedBlockCert{}
+	}
+
+	// Initial conditions of g from makePrivateGenerator:
+	require.Equal(t, uint64(0), g.round)
+
+	// Round 0:
+	blockBuff, block0_1 := prepBuffer()
+	err := g.WriteBlock(blockBuff, 0)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(1), g.round)
+	protocol.Decode(blockBuff.Bytes(), &block0_1)
+	require.Equal(t, "blockgen-test", block0_1.Block.BlockHeader.GenesisID)
+	require.Equal(t, basics.Round(0), block0_1.Block.BlockHeader.Round)
+	require.NotNil(t, g.ledger)
+	require.Equal(t, basics.Round(0), g.ledger.Latest())
+
+	// WriteBlocks only advances the _internal_ round
+	// the first time called for a particular _given_ round
+	blockBuff, block0_2 := prepBuffer()
+	err = g.WriteBlock(blockBuff, 0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), g.round)
+	protocol.Decode(blockBuff.Bytes(), &block0_2)
+	require.Equal(t, block0_1, block0_2)
+	require.NotNil(t, g.ledger)
+	require.Equal(t, basics.Round(0), g.ledger.Latest())
+
+	blockBuff, block0_3 := prepBuffer()
+	err = g.WriteBlock(blockBuff, 0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), g.round)
+	protocol.Decode(blockBuff.Bytes(), &block0_3)
+	require.Equal(t, block0_1, block0_3)
+	require.NotNil(t, g.ledger)
+	require.Equal(t, basics.Round(0), g.ledger.Latest())
+
+	// Round 1:
+	blockBuff, block1_1 := prepBuffer()
+	err = g.WriteBlock(blockBuff, 1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), g.round)
+	protocol.Decode(blockBuff.Bytes(), &block1_1)
+	require.Equal(t, "blockgen-test", block1_1.Block.BlockHeader.GenesisID)
+	require.Equal(t, basics.Round(1), block1_1.Block.BlockHeader.Round)
+	require.Len(t, block1_1.Block.Payset, int(g.config.TxnPerBlock))
 	require.NotNil(t, g.ledger)
 	require.Equal(t, basics.Round(1), g.ledger.Latest())
-	_, err := g.ledger.GetStateDeltaForRound(1)
+	_, err = g.ledger.GetStateDeltaForRound(1)
 	require.NoError(t, err)
+
+	blockBuff, block1_2 := prepBuffer()
+	err = g.WriteBlock(blockBuff, 1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), g.round)
+	protocol.Decode(blockBuff.Bytes(), &block1_2)
+	require.Equal(t, block1_1, block1_2)
+	require.NotNil(t, g.ledger)
+	require.Equal(t, basics.Round(1), g.ledger.Latest())
+	_, err = g.ledger.GetStateDeltaForRound(1)
+	require.NoError(t, err)
+
 	// request a block that is several rounds ahead of the current round
-	err = g.WriteBlock(writer, 10)
+	err = g.WriteBlock(blockBuff, 10)
 	require.NotNil(t, err)
-	require.Equal(t, err.Error(), "generator only supports sequential block access. Expected 2 but received request for 10")
+	require.Equal(t, err.Error(), "generator only supports sequential block access. Expected 1 or 2 but received request for 10")
 }
 
 func TestWriteRoundWithPreloadedDB(t *testing.T) {
@@ -260,7 +360,6 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 			dbround: 1,
 			round:   1,
 			genesis: bookkeeping.Genesis{Network: "generator-test1"},
-			err:     nil,
 		},
 		{
 			name:    "invalid request",
@@ -274,28 +373,27 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 			dbround: 1,
 			round:   10,
 			genesis: bookkeeping.Genesis{Network: "generator-test3"},
-			err:     fmt.Errorf("generator only supports sequential block access. Expected 2 but received request for 10"),
+			err:     fmt.Errorf("generator only supports sequential block access. Expected 1 or 2 but received request for 10"),
 		},
 		{
 			name:    "preloaded database starting at 10",
 			dbround: 10,
 			round:   11,
 			genesis: bookkeeping.Genesis{Network: "generator-test4"},
-			err:     nil,
 		},
 		{
 			name:    "preloaded database request round 20",
 			dbround: 10,
 			round:   20,
 			genesis: bookkeeping.Genesis{Network: "generator-test5"},
-			err:     nil,
 		},
 	}
 	for _, tc := range testcases {
 		tc := tc
-		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
-			t.Parallel()
+		t.Run(tc.name, func(t *testing.T) {
+			// No t.Parallel() here, to avoid contention in the ledger
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
+
 			defer g.ledger.Close()
 			var data []byte
 			writer := bytes.NewBuffer(data)
@@ -305,7 +403,7 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 			if tc.round != tc.dbround && tc.err != nil {
 				err = g.WriteBlock(writer, tc.round)
 				require.NotNil(t, err)
-				require.Equal(t, err.Error(), tc.err.Error())
+				require.Equal(t, tc.err.Error(), err.Error())
 				return
 			}
 			// write the rest of the blocks
@@ -353,7 +451,9 @@ func TestHandlers(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
+		testcase := testcase
 		t.Run(testcase.name, func(t *testing.T) {
+			t.Parallel()
 			req := httptest.NewRequest("GET", testcase.url, nil)
 			w := httptest.NewRecorder()
 			handler(w, req)

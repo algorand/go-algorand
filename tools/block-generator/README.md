@@ -10,19 +10,20 @@ Block generator uses a YAML config file to describe the composition of each rand
 2. Transaction type distribution
 3. Transaction type specific configuration
 
-At the time of writing, the block generator supports **payment** and **asset** transactions. The settings are hopefully, more or less, obvious. Distributions are specified as fractions of 1.0, and the sum of all options must add up to 1.0.
+The block generator supports **payment**, **asset**, and **application** transactions. The settings are hopefully, more or less, obvious. Distributions are specified as fractions of 1.0, and the sum of all options must add up to ~1.0.
 
-Here is an example which uses all of the current options. Notice that the synthetic blocks are not required to follow algod limits, in this case the block size is specified as 19999:
+Here is an example which uses all of the current options. Notice that the synthetic blocks are not required to follow algod limits, in this case the block size is specified as 99,999:
 
 ```yml
-name: "Mixed (19,999)"
+name: "Mixed (99,999)"
 genesis_accounts: 10000
 genesis_account_balance: 1000000000000
-tx_per_block: 19999
+tx_per_block: 99999
 
 # transaction distribution
-tx_pay_fraction: 0.3
-tx_asset_fraction: 0.7
+tx_pay_fraction: 0.5
+tx_asset_fraction: 0.3
+tx_app_fraction: 0.2
 
 # payment config
 pay_acct_create_fraction: 0.02
@@ -34,6 +35,28 @@ asset_optin_fraction: 0.1
 asset_close_fraction: 0.05
 asset_xfer_fraction: 0.849
 asset_delete_fraction: 0
+
+# app choice config
+app_swap_fraction: 0.5
+app_boxes_fraction: 0.5
+
+# app_swap config
+app_swap_create_fraction: 0.001
+app_swap_update_fraction: 0.001
+app_swap_delete_fraction: 0
+app_swap_optin_fraction: 0.1
+app_swap_call_fraction: 0.98
+app_swap_close_fraction: 0.005
+app_swap_clear_fraction: 0.003
+
+# app_boxes config
+app_boxes_create_fraction: 0.001
+app_boxes_update_fraction: 0.001
+app_boxes_delete_fraction: 0
+app_boxes_optin_fraction: 0.1
+app_boxes_call_fraction: 0.98
+app_boxes_close_fraction: 0.005
+app_boxes_clear_fraction: 0.003
 ```
 
 ## Modes
@@ -77,7 +100,7 @@ transaction_pay_total:30024226
 transaction_pay_create_total:614242
 early_average_import_time_sec:2.13
 early_cumulative_import_time_sec:1083.26
-early_average_imported_tx_per_block:19999.00
+early_average_imported_tx_per_block:99999.00
 early_cumulative_imported_tx_per_block:10179491
 early_average_block_upload_time_sec:NaN
 early_cumulative_block_upload_time_sec:0.00
@@ -88,7 +111,7 @@ early_overall_transactions_per_second:9397.09
 early_uptime_seconds:3600.06
 final_average_import_time_sec:2.35
 final_cumulative_import_time_sec:3602.62
-final_average_imported_tx_per_block:19999.00
+final_average_imported_tx_per_block:99999.00
 final_cumulative_imported_tx_per_block:30598470
 final_average_block_upload_time_sec:NaN
 final_cumulative_block_upload_time_sec:0.00
@@ -143,7 +166,7 @@ A typical **runner** scenario involves:
 
 First you'll need to get a `conduit` binary. For example you can follow the [developer portal's instructions](https://developer.algorand.org/docs/get-details/conduit/GettingStarted/#installation) or run `go build .` inside of the directory `cmd/conduit` after downloading the `conduit` repo.
 
-Assume you've navigated to the `tools/block-generator` directory of 
+Assume you've navigated to the `tools/block-generator` directory of
 the `go-algorand` repo, and:
 
 * saved the conduit binary to `tools/block-generator/conduit`
@@ -158,4 +181,4 @@ Then you can execute the following command to run the scenario:
 ### Scenario Report
 
 If all goes well, the run will generate a directory `tmp/OUTPUT_RUN_RUNNER_TEST`
-and in that directory you can see the statisticsn of the run in `scenario.report`.
+and in that directory you can see the statistics of the run in `scenario.report`.

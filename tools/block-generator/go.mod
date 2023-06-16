@@ -2,11 +2,11 @@ module github.com/algorand/go-algorand/tools/block-generator
 
 replace github.com/algorand/go-algorand => ../..
 
-go 1.17
+go 1.20
 
 require (
 	github.com/algorand/go-algorand v0.0.0-00010101000000-000000000000
-	github.com/algorand/go-codec/codec v1.1.9
+	github.com/algorand/go-codec/codec v1.1.10
 	github.com/algorand/go-deadlock v0.2.2
 	github.com/lib/pq v1.10.9
 	github.com/spf13/cobra v1.7.0
@@ -17,9 +17,9 @@ require (
 require (
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/algorand/avm-abi v0.2.0 // indirect
-	github.com/algorand/falcon v0.0.0-20220727072124-02a2a64c4414 // indirect
+	github.com/algorand/falcon v0.1.0 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
-	github.com/algorand/msgp v1.1.53 // indirect
+	github.com/algorand/msgp v1.1.54 // indirect
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0 // indirect
 	github.com/algorand/sortition v1.0.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
