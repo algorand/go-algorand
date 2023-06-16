@@ -56,7 +56,7 @@ func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	}
 }
 
-// NewAccountsSQLReader creates an SQL reader+writer
+// NewAccountsSQLReader creates an SQL reader
 func NewAccountsSQLReader(q db.Queryable) *accountsV2Reader {
 	return &accountsV2Reader{q: q, preparedStatements: make(map[string]*sql.Stmt)}
 }

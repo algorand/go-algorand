@@ -90,7 +90,7 @@ func (s *trackerSQLStore) SnapshotContext(ctx context.Context, fn trackerdb.Snap
 }
 
 func (s *trackerSQLStore) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {
-	handle, err := s.pair.Wdb.Handle.BeginTx(ctx, nil)
+	handle, err := s.pair.Rdb.Handle.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
