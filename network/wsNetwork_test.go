@@ -585,7 +585,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	msgs[50].ctx = ctx
 
 	for _, peer := range peers {
-		peer.sendBufferHighPrio <- sendMessages{msgs}
+		peer.sendBufferHighPrio <- sendMessages{msgs: msgs}
 	}
 
 	select {
