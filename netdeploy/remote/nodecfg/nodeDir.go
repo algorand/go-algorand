@@ -66,6 +66,10 @@ func (nd *nodeDir) configure() (err error) {
 		fmt.Fprintf(os.Stdout, "Error during configureAPIToken: %s\n", err)
 		return
 	}
+	if err = nd.configureAdminAPIToken(nd.AdminAPIToken); err != nil {
+		fmt.Fprintf(os.Stdout, "Error during configureAdminAPIToken: %s\n", err)
+		return
+	}
 	if err = nd.configureTelemetry(nd.EnableTelemetry); err != nil {
 		fmt.Fprintf(os.Stdout, "Error during configureTelemetry: %s\n", err)
 		return
@@ -175,6 +179,21 @@ func (nd *nodeDir) configureAPIToken(token string) (err error) {
 	}
 	fmt.Fprintf(os.Stdout, " - Assigning APIToken: %s\n", token)
 	err = os.WriteFile(filepath.Join(nd.dataDir, tokens.AlgodTokenFilename), []byte(token), 0600)
+	if err != nil {
+		return err
+	}
+	return nd.saveConfig()
+}
+
+func (nd *nodeDir) configureAdminAPIToken(token string) (err error) {
+	if token == "" {
+		return
+	}
+	if err = nd.ensureConfig(); err != nil {
+		return
+	}
+	fmt.Fprintf(os.Stdout, " - Assigning AdminAPIToken: %s\n", token)
+	err = os.WriteFile(filepath.Join(nd.dataDir, tokens.AlgodAdminTokenFilename), []byte(token), 0600)
 	if err != nil {
 		return err
 	}
