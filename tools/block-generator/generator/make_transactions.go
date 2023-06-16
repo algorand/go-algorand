@@ -20,15 +20,18 @@ import (
 	"encoding/binary"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
+	txn "github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func (g *generator) makeTxnHeader(sender basics.Address, round, intra uint64) transactions.Header {
-	note := make([]byte, 8)
-	binary.LittleEndian.PutUint64(note, uint64(g.txnCounter+intra))
+// ---- header / boilerplate ----
 
-	return transactions.Header{
+func (g *generator) makeTxnHeader(sender basics.Address, round, intra uint64) txn.Header {
+	note := make([]byte, 8)
+	binary.LittleEndian.PutUint64(note, g.txnCounter+intra)
+
+	return txn.Header{
 		Sender:      sender,
 		Fee:         basics.MicroAlgos{Raw: g.params.MinTxnFee},
 		FirstValid:  basics.Round(round),
@@ -39,11 +42,29 @@ func (g *generator) makeTxnHeader(sender basics.Address, round, intra uint64) tr
 	}
 }
 
-func (g *generator) makePaymentTxn(header transactions.Header, receiver basics.Address, amount uint64, closeRemainderTo basics.Address) transactions.Transaction {
-	return transactions.Transaction{
+// makeTestTxn creates and populates the flat txntest.Txn structure with the given values.
+func (g *generator) makeTestTxn(sender basics.Address, round, intra uint64) txntest.Txn {
+	note := make([]byte, 8)
+	binary.LittleEndian.PutUint64(note, g.txnCounter+intra)
+
+	return txntest.Txn{
+		Sender:      sender,
+		Fee:         basics.MicroAlgos{Raw: g.params.MinTxnFee},
+		FirstValid:  basics.Round(round),
+		LastValid:   basics.Round(round + 1000),
+		GenesisID:   g.genesisID,
+		GenesisHash: g.genesisHash,
+		Note:        note,
+	}
+}
+
+// ---- payments ----
+
+func (g *generator) makePaymentTxn(header txn.Header, receiver basics.Address, amount uint64, closeRemainderTo basics.Address) txn.Transaction {
+	return txn.Transaction{
 		Type:   protocol.PaymentTx,
 		Header: header,
-		PaymentTxnFields: transactions.PaymentTxnFields{
+		PaymentTxnFields: txn.PaymentTxnFields{
 			Receiver:         receiver,
 			Amount:           basics.MicroAlgos{Raw: amount},
 			CloseRemainderTo: closeRemainderTo,
@@ -51,11 +72,13 @@ func (g *generator) makePaymentTxn(header transactions.Header, receiver basics.A
 	}
 }
 
-func (g *generator) makeAssetCreateTxn(header transactions.Header, total uint64, defaultFrozen bool, assetName string) transactions.Transaction {
-	return transactions.Transaction{
+// ---- asset transactions ----
+
+func (g *generator) makeAssetCreateTxn(header txn.Header, total uint64, defaultFrozen bool, assetName string) txn.Transaction {
+	return txn.Transaction{
 		Type:   protocol.AssetConfigTx,
 		Header: header,
-		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
+		AssetConfigTxnFields: txn.AssetConfigTxnFields{
 			AssetParams: basics.AssetParams{
 				Total:         total,
 				DefaultFrozen: defaultFrozen,
@@ -69,21 +92,21 @@ func (g *generator) makeAssetCreateTxn(header transactions.Header, total uint64,
 	}
 }
 
-func (g *generator) makeAssetDestroyTxn(header transactions.Header, index uint64) transactions.Transaction {
-	return transactions.Transaction{
+func (g *generator) makeAssetDestroyTxn(header txn.Header, index uint64) txn.Transaction {
+	return txn.Transaction{
 		Type:   protocol.AssetConfigTx,
 		Header: header,
-		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
+		AssetConfigTxnFields: txn.AssetConfigTxnFields{
 			ConfigAsset: basics.AssetIndex(index),
 		},
 	}
 }
 
-func (g *generator) makeAssetTransferTxn(header transactions.Header, receiver basics.Address, amount uint64, closeAssetsTo basics.Address, index uint64) transactions.Transaction {
-	return transactions.Transaction{
+func (g *generator) makeAssetTransferTxn(header txn.Header, receiver basics.Address, amount uint64, closeAssetsTo basics.Address, index uint64) txn.Transaction {
+	return txn.Transaction{
 		Type:   protocol.AssetTransferTx,
 		Header: header,
-		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+		AssetTransferTxnFields: txn.AssetTransferTxnFields{
 			XferAsset:     basics.AssetIndex(index),
 			AssetAmount:   amount,
 			AssetReceiver: receiver,
@@ -92,6 +115,43 @@ func (g *generator) makeAssetTransferTxn(header transactions.Header, receiver ba
 	}
 }
 
-func (g *generator) makeAssetAcceptanceTxn(header transactions.Header, index uint64) transactions.Transaction {
+func (g *generator) makeAssetAcceptanceTxn(header txn.Header, index uint64) txn.Transaction {
 	return g.makeAssetTransferTxn(header, header.Sender, 0, basics.Address{}, index)
+}
+
+// ---- application transactions ----
+
+func (g *generator) makeAppCreateTxn(sender basics.Address, round, intra uint64, approval, clear string) txn.Transaction {
+
+	createTxn := g.makeTestTxn(sender, round, intra)
+
+	/* all 0 values but keep around for reference
+	createTxn.ApplicationID = 0
+	createTxn.ApplicationArgs = nil
+	createTxn.Accounts = nil
+	createTxn.ForeignApps = nil
+	createTxn.ForeignAssets = nil
+	createTxn.Boxes = nil
+	createTxn.ExtraProgramPages = 0
+	*/
+
+	createTxn.Type = protocol.ApplicationCallTx
+	createTxn.ApprovalProgram = approval
+	createTxn.ClearStateProgram = clear
+
+	// sender opts-in to their own created app
+	createTxn.OnCompletion = txn.OptInOC
+
+	// max out local/global state usage but split
+	// 50% between bytes/uint64
+	createTxn.LocalStateSchema = basics.StateSchema{
+		NumUint:      8,
+		NumByteSlice: 8,
+	}
+	createTxn.GlobalStateSchema = basics.StateSchema{
+		NumUint:      32,
+		NumByteSlice: 32,
+	}
+
+	return createTxn.Txn()
 }
