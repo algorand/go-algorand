@@ -173,13 +173,13 @@ func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) 
 	}
 	// If the address was "created" by making its app in this group, then allow for available assets.
 	for created := range r.createdApps {
-		if cx.getApplicationAddress(created) == addr {
+		if cx.GetApplicationAddress(created) == addr {
 			return cx.availableAsset(ai)
 		}
 	}
 	// If the current txn is a creation, the new appID won't be in r.createdApps
 	// yet, but it should get the same special treatment.
-	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
+	if cx.txn.Txn.ApplicationID == 0 && cx.GetApplicationAddress(cx.appID) == addr {
 		return cx.availableAsset(ai)
 	}
 	if cx.UnnamedResources != nil {
@@ -207,11 +207,11 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 
 	// All locals of created app accounts are available
 	for created := range r.createdApps {
-		if cx.getApplicationAddress(created) == addr {
+		if cx.GetApplicationAddress(created) == addr {
 			return cx.availableApp(ai)
 		}
 	}
-	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
+	if cx.txn.Txn.ApplicationID == 0 && cx.GetApplicationAddress(cx.appID) == addr {
 		return cx.availableApp(ai)
 	}
 	if cx.UnnamedResources != nil {
@@ -291,11 +291,11 @@ func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header
 	// apps available, because that is already handled by looking at
 	// `createdApps`.
 	if id := tx.ApplicationID; id != 0 {
-		txAccounts = append(txAccounts, ep.getApplicationAddress(id))
+		txAccounts = append(txAccounts, ep.GetApplicationAddress(id))
 		r.sharedApps[id] = struct{}{}
 	}
 	for _, id := range tx.ForeignApps {
-		txAccounts = append(txAccounts, ep.getApplicationAddress(id))
+		txAccounts = append(txAccounts, ep.GetApplicationAddress(id))
 		r.sharedApps[id] = struct{}{}
 	}
 	for _, address := range txAccounts {
@@ -347,10 +347,10 @@ func (cx *EvalContext) allowsApplicationCall(hdr *transactions.Header, tx *trans
 	txAccounts = append(txAccounts, hdr.Sender)
 	txAccounts = append(txAccounts, tx.Accounts...)
 	if id := tx.ApplicationID; id != 0 {
-		txAccounts = append(txAccounts, cx.getApplicationAddress(id))
+		txAccounts = append(txAccounts, cx.GetApplicationAddress(id))
 	}
 	for _, id := range tx.ForeignApps {
-		txAccounts = append(txAccounts, cx.getApplicationAddress(id))
+		txAccounts = append(txAccounts, cx.GetApplicationAddress(id))
 	}
 	for _, address := range txAccounts {
 		for _, id := range tx.ForeignAssets {

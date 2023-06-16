@@ -123,7 +123,7 @@ func opBoxCreate(cx *EvalContext) error {
 		return err
 	}
 	if !exists {
-		appAddr := cx.getApplicationAddress(cx.appID)
+		appAddr := cx.GetApplicationAddress(cx.appID)
 		err = cx.Ledger.NewBox(cx.appID, name, make([]byte, size), appAddr)
 		if err != nil {
 			return err
@@ -205,7 +205,7 @@ func opBoxDel(cx *EvalContext) error {
 		return err
 	}
 	if exists {
-		appAddr := cx.getApplicationAddress(cx.appID)
+		appAddr := cx.GetApplicationAddress(cx.appID)
 		_, err := cx.Ledger.DelBox(cx.appID, name, appAddr)
 		if err != nil {
 			return err
@@ -282,6 +282,6 @@ func opBoxPut(cx *EvalContext) error {
 	}
 
 	/* The box did not exist, so create it. */
-	appAddr := cx.getApplicationAddress(cx.appID)
+	appAddr := cx.GetApplicationAddress(cx.appID)
 	return cx.Ledger.NewBox(cx.appID, name, value, appAddr)
 }

@@ -3507,11 +3507,6 @@ func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
 
 // GetApplicationAddress memoizes app.Address() across a tx group's evaluation
 func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address {
-	return ep.getApplicationAddress(app)
-}
-
-// getApplicationAddress memoizes app.Address() across a tx group's evaluation
-func (ep *EvalParams) getApplicationAddress(app basics.AppIndex) basics.Address {
 	/* Do not instantiate the cache here, that would mask a programming error.
 	   The cache must be instantiated at EvalParams construction time, so that
 	   proper sharing with inner EvalParams can work. */
@@ -3555,7 +3550,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case CurrentApplicationID:
 		sv.Uint = uint64(cx.appID)
 	case CurrentApplicationAddress:
-		addr := cx.getApplicationAddress(cx.appID)
+		addr := cx.GetApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
@@ -3571,7 +3566,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		}
 	case CallerApplicationAddress:
 		if cx.caller != nil {
-			addr := cx.caller.getApplicationAddress(cx.caller.appID)
+			addr := cx.caller.GetApplicationAddress(cx.caller.appID)
 			sv.Bytes = addr[:]
 		} else {
 			sv.Bytes = zeroAddress[:]
@@ -4339,7 +4334,7 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
 		for appID := range cx.available.createdApps {
-			createdAddress := cx.getApplicationAddress(appID)
+			createdAddress := cx.GetApplicationAddress(appID)
 			if addr == createdAddress {
 				return true
 			}
@@ -4356,14 +4351,14 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	// Allow an address for an app that was provided in the foreign apps array.
 	if cx.version >= appAddressAvailableVersion {
 		for _, appID := range cx.txn.Txn.ForeignApps {
-			foreignAddress := cx.getApplicationAddress(appID)
+			foreignAddress := cx.GetApplicationAddress(appID)
 			if addr == foreignAddress {
 				return true
 			}
 		}
 	}
 
-	if cx.getApplicationAddress(cx.appID) == addr {
+	if cx.GetApplicationAddress(cx.appID) == addr {
 		return true
 	}
 
@@ -5133,8 +5128,8 @@ func authorizedSender(cx *EvalContext, addr basics.Address) error {
 	if err != nil {
 		return err
 	}
-	if cx.getApplicationAddress(cx.appID) != authorizer {
-		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.getApplicationAddress(cx.appID), authorizer)
+	if cx.GetApplicationAddress(cx.appID) != authorizer {
+		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.GetApplicationAddress(cx.appID), authorizer)
 	}
 	return nil
 }
@@ -5142,7 +5137,7 @@ func authorizedSender(cx *EvalContext, addr basics.Address) error {
 // addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
 // defaults.
 func addInnerTxn(cx *EvalContext) error {
-	addr := cx.getApplicationAddress(cx.appID)
+	addr := cx.GetApplicationAddress(cx.appID)
 
 	// For compatibility with v5, in which failures only occurred in the submit,
 	// we only fail here if we are already over the max inner limit.  Thus this
