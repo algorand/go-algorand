@@ -20,6 +20,9 @@ package protocol
 // e.g., the agreement service can register to handle agreements with the Agreement tag.
 type Tag string
 
+// TagLength specifies the length of protocol tags.
+const TagLength = 2
+
 // Tags, in lexicographic sort order of tag values to avoid duplicates.
 // These tags must not contain a comma character because lists of tags
 // are encoded using a comma separator (see network/msgOfInterest.go).
@@ -58,4 +61,14 @@ var TagList = []Tag{
 	TxnTag,
 	UniEnsBlockReqTag,
 	VoteBundleTag,
+}
+
+// TagMap is a map of all currently used protocol tags.
+var TagMap map[Tag]struct{}
+
+func init() {
+	TagMap = make(map[Tag]struct{})
+	for _, tag := range TagList {
+		TagMap[tag] = struct{}{}
+	}
 }
