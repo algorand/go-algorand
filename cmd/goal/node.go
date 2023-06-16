@@ -99,9 +99,8 @@ func init() {
 	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
 
 	// The flag for enabling an internal indexer is now deprecated, but we keep it for backwards compatibility for now.
-	var noopNodeIndexer bool
 	indexerFlagName := "indexer"
-	createCmd.Flags().BoolVarP(&noopNodeIndexer, indexerFlagName, "i", false, "")
+	_ = createCmd.Flags().BoolP(indexerFlagName, "i", false, "")
 	createCmd.Flags().MarkDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
 	createCmd.Flags().MarkShorthandDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
 
