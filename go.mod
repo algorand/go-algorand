@@ -15,7 +15,7 @@ require (
 	github.com/algorand/sortition v1.0.0
 	github.com/algorand/websocket v1.4.6
 	github.com/aws/aws-sdk-go v1.33.0
-	github.com/cockroachdb/pebble v0.0.0-20230605022253-ec5ff92b741d
+	github.com/cockroachdb/pebble v0.0.0-20230123220951-b418e86f4cd4
 	github.com/consensys/gnark-crypto v0.7.0
 	github.com/davidlazar/go-crypto v0.0.0-20170701192655-dcfb0a7ac018
 	github.com/dchest/siphash v1.2.1
