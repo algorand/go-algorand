@@ -126,8 +126,8 @@ func runBuildNetwork() error {
 		return fmt.Errorf("error loading Build Config file: %v", err)
 	}
 	for _, kev := range miscStringStringTokens {
-		ab := strings.SplitN(kev, "=", 2)
-		buildConfig.MiscStringString = append(buildConfig.MiscStringString, "{{"+ab[0]+"}}", ab[1])
+		k, v, _ := strings.Cut(kev, "=")
+		buildConfig.MiscStringString = append(buildConfig.MiscStringString, "{{"+k+"}}", v)
 	}
 
 	networkTemplateFile := resolveFile(r.NetworkFile, templateBaseDir)

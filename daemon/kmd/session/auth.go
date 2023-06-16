@@ -52,14 +52,11 @@ func validateHandleSecret(handleSecret []byte) error {
 }
 
 func splitHandle(walletHandle []byte) ([]byte, []byte, error) {
-	split := bytes.SplitN(walletHandle, wHandleTokenSplitChar, 2)
+	handleID, handleSecret, found := bytes.Cut(walletHandle, wHandleTokenSplitChar)
 
-	if len(split) != 2 {
+	if !found {
 		return nil, nil, fmt.Errorf("wrong number of token parts")
 	}
-
-	handleID := split[0]
-	handleSecret := split[1]
 
 	err := validateHandleID(handleID)
 	if err != nil {
