@@ -28,6 +28,7 @@ import (
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
 // TxnNotWellFormedError indicates a transaction was not well-formed when evaluated by the BlockEvaluator
+//
 //msgp:ignore TxnNotWellFormedError
 type TxnNotWellFormedError string
 
@@ -106,6 +107,7 @@ func (err ErrNonSequentialBlockEval) Error() string {
 }
 
 // TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
+//
 //msgp:ignore TxGroupMalformedErrorReasonCode
 type TxGroupMalformedErrorReasonCode int
 

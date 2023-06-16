@@ -81,7 +81,7 @@ func (t *telemetryURIUpdater) Start() {
 	}()
 }
 
-//TODO: Support secondary telemetry SRV record lookup
+// TODO: Support secondary telemetry SRV record lookup
 func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
 	bootstrapArray := t.cfg.DNSBootstrapArray(t.genesisNetwork)
 	bootstrapArray = append(bootstrapArray, &config.DNSBootstrap{PrimarySRVBootstrap: "default.algodev.network"})

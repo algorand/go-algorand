@@ -17,6 +17,7 @@
 package generator
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -39,6 +40,20 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 )
+
+// ---- templates ----
+
+//go:embed teal/poap_boxes.teal
+var approvalBoxes string
+
+//go:embed teal/poap_clear.teal
+var clearBoxes string
+
+//go:embed teal/swap_amm.teal
+var approvalSwap string
+
+//go:embed teal/swap_clear.teal
+var clearSwap string
 
 // ---- constructors ----
 
@@ -77,6 +92,9 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 		gen.genesisID = bkGenesis.ID()
 		gen.genesisHash = bkGenesis.Hash()
 	}
+
+	gen.apps = make(map[appKind][]*appData)
+	gen.pendingApps = make(map[appKind][]*appData)
 
 	gen.initializeAccounting()
 	gen.initializeLedger()
@@ -166,10 +184,6 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 
 // initializeAccounting creates the genesis accounts.
 func (g *generator) initializeAccounting() {
-	if g.config.NumGenesisAccounts == 0 {
-		panic("Number of genesis accounts must be > 0.")
-	}
-
 	g.numPayments = 0
 	g.numAccounts = g.config.NumGenesisAccounts
 	for i := uint64(0); i < g.config.NumGenesisAccounts; i++ {
@@ -483,18 +497,6 @@ func (g *generator) Stop() {
 	g.ledger.Close()
 }
 
-// Accounts is used in the runner to generate a list of addresses.
-func (g *generator) Accounts() <-chan basics.Address {
-	results := make(chan basics.Address, 10)
-	go func() {
-		defer close(results)
-		for i := uint64(0); i < g.numAccounts; i++ {
-			results <- indexToAccount(i)
-		}
-	}()
-	return results
-}
-
 // ---- transaction options vectors ----
 
 func getTransactionOptions() []interface{} {
@@ -529,6 +531,8 @@ func (g *generator) generateTransaction(round uint64, intra uint64) (transaction
 		return g.generatePaymentTxn(round, intra)
 	case assetTx:
 		return g.generateAssetTxn(round, intra)
+	case applicationTx:
+		return g.generateAppTxn(round, intra)
 	default:
 		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("no generator available for %s", selection)
 	}
@@ -539,7 +543,7 @@ func (g *generator) generateTransaction(round uint64, intra uint64) (transaction
 // generatePaymentTxn creates a new payment transaction. The sender is always a genesis account, the receiver is random,
 // or a new account.
 func (g *generator) generatePaymentTxn(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
-	selection, err := weightedSelection(g.payTxWeights, getPaymentTxOptions(), paymentTx)
+	selection, err := weightedSelection(g.payTxWeights, getPaymentTxOptions(), paymentPayTx)
 	if err != nil {
 		return transactions.SignedTxn{}, transactions.ApplyData{}, err
 	}
@@ -556,7 +560,7 @@ func (g *generator) generatePaymentTxnInternal(selection TxTypeID, round uint64,
 	// Select a receiver
 	var receiveIndex uint64
 	switch selection {
-	case paymentTx:
+	case paymentPayTx:
 		receiveIndex = rand.Uint64() % g.numAccounts
 	case paymentAcctCreateTx:
 		// give new accounts get extra algos for sending other transactions
@@ -598,6 +602,7 @@ func (g *generator) generateAssetTxn(round uint64, intra uint64) (transactions.S
 	actual, txn := g.generateAssetTxnInternal(selection.(TxTypeID), round, intra)
 	defer g.recordData(actual, start)
 
+	// TODO: shouldn't we just return an error?
 	if txn.Type == "" {
 		fmt.Println("Empty asset transaction.")
 		os.Exit(1)
@@ -613,14 +618,14 @@ func (g *generator) generateAssetTxnInternal(txType TxTypeID, round uint64, intr
 func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, intra uint64, hintIndex uint64, hint *assetData) (actual TxTypeID, txn transactions.Transaction) {
 	actual = txType
 	// If there are no assets the next operation needs to be a create.
-	if len(g.assets) == 0 {
+	numAssets := uint64(len(g.assets))
+
+	if numAssets == 0 {
 		actual = assetCreate
 	}
-
-	numAssets := uint64(len(g.assets))
 	var senderIndex uint64
 	if actual == assetCreate {
-		numAssets = uint64(len(g.assets)) + uint64(len(g.pendingAssets))
+		numAssets += uint64(len(g.pendingAssets))
 		senderIndex = numAssets % g.config.NumGenesisAccounts
 		senderAcct := indexToAccount(senderIndex)
 
@@ -643,11 +648,14 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 
 		g.pendingAssets = append(g.pendingAssets, &a)
 	} else {
-		assetIndex := rand.Uint64() % numAssets
-		asset := g.assets[assetIndex]
+		var assetIndex uint64
+		var asset *assetData
 		if hint != nil {
 			assetIndex = hintIndex
 			asset = hint
+		} else {
+			assetIndex = rand.Uint64()%numAssets
+			asset = g.assets[assetIndex]
 		}
 
 		switch actual {
@@ -759,6 +767,93 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 	return
 }
 
+// ---- 3. App Transactions ----
+
+func (g *generator) generateAppTxn(round uint64, intra uint64) (transactions.SignedTxn, transactions.ApplyData, error) {
+	start := time.Now()
+	selection, err := weightedSelection(g.appTxWeights, getAppTxOptions(), appSwapCall)
+	if err != nil {
+		return transactions.SignedTxn{}, transactions.ApplyData{}, err
+	}
+
+	actual, txn, err := g.generateAppCallInternal(selection.(TxTypeID), round, intra, 0, nil)
+	if err != nil {
+		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("unexpected error received from generateAppCallInternal(): %w", err)
+	}
+	if txn.Type == "" {
+		return transactions.SignedTxn{}, transactions.ApplyData{}, fmt.Errorf("missing transaction type for app transaction")
+	}
+
+	g.recordData(actual, start)
+	return signTxn(txn), transactions.ApplyData{}, nil
+}
+
+func (g *generator) generateAppCallInternal(txType TxTypeID, round, intra, hintIndex uint64, hintApp *appData) (TxTypeID, transactions.Transaction, error) {
+	actual := txType
+
+	isApp, kind, appTx, err := parseAppTxType(txType)
+	if err != nil {
+		return "", transactions.Transaction{}, err
+	}
+	if !isApp {
+		return "", transactions.Transaction{}, fmt.Errorf("should be an app but not parsed that way: %v", txType)
+	}
+	if appTx != appTxTypeCreate {
+		return "", transactions.Transaction{}, fmt.Errorf("invalid transaction type for app %v", appTx)
+	}
+
+	var senderIndex uint64
+	if hintApp != nil {
+		return "", transactions.Transaction{}, fmt.Errorf("not ready for hint app %v", hintApp)
+	} else {
+		senderIndex = rand.Uint64() % g.numAccounts
+	}
+
+	actualAppTx := appTx
+
+	numApps := uint64(len(g.apps[kind]))
+	if numApps == 0 {
+		actualAppTx = appTxTypeCreate
+	}
+
+	var txn transactions.Transaction
+	if actualAppTx == appTxTypeCreate {
+		numApps += uint64(len(g.pendingApps[kind]))
+		senderIndex = numApps % g.config.NumGenesisAccounts
+		senderAcct := indexToAccount(senderIndex)
+
+		var approval, clear string
+		if kind == appKindSwap {
+			approval, clear = approvalSwap, clearSwap
+		} else {
+			approval, clear = approvalBoxes, clearBoxes
+		}
+
+		txn = g.makeAppCreateTxn(senderAcct, round, intra, approval, clear)
+
+		appID := g.txnCounter + intra + 1
+		holding := &appHolding{appIndex: appID}
+		ad := &appData{
+			appID:    appID,
+			creator:  senderIndex,
+			kind:     kind,
+			holdings: []*appHolding{holding},
+			holders:  map[uint64]*appHolding{senderIndex: holding},
+		}
+		g.pendingApps[kind] = append(g.pendingApps[kind], ad)
+	}
+
+	// account := indexToAccount(senderIndex)
+	// txn = g.makeAppCallTxn(account, round, intra, round, approval, clear)
+
+	if g.balances[senderIndex] < g.params.MinTxnFee {
+		return "", transactions.Transaction{}, fmt.Errorf("the sender account does not have enough algos for the app call. idx %d, app transaction type %v, num %d\n\n", senderIndex, txType, g.reportData[txType].GenerationCount)
+	}
+	g.balances[senderIndex] -= g.params.MinTxnFee
+
+	return actual, txn, nil
+}
+
 // ---- miscellaneous ----
 
 func track(id TxTypeID) (TxTypeID, time.Time) {
@@ -790,6 +885,12 @@ func (g *generator) finishRound(txnCount uint64) {
 	// Apply pending assets...
 	g.assets = append(g.assets, g.pendingAssets...)
 	g.pendingAssets = nil
+
+	// Apply pending apps...
+	for _, kind := range []appKind{appKindSwap, appKindBoxes} {
+		g.apps[kind] = append(g.apps[kind], g.pendingApps[kind]...)
+		g.pendingApps[kind] = nil
+	}
 }
 
 func signTxn(txn transactions.Transaction) transactions.SignedTxn {

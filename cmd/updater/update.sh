@@ -537,7 +537,7 @@ function install_new_binaries() {
     if [ ! -d ${UPDATESRCDIR}/bin ]; then
         return 0
     else
-        echo "Installing new binary files..."
+        echo "Installing new binary files into ${BINDIR}"
         ROLLBACKBIN=1
         rm -rf ${BINDIR}/new
         mkdir ${BINDIR}/new

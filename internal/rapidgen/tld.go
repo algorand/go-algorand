@@ -18,8 +18,9 @@ package rapidgen
 
 import "strings"
 
-// nolint:misspell // this is a list of TLDs from IANA - we do not have control over spelling
 // sourced from https://data.iana.org/TLD/tlds-alpha-by-domain.txt
+//
+//nolint:misspell // this is a list of TLDs from IANA - we do not have control over spelling
 const tldsByAlpha = `
 AAA
 AARP

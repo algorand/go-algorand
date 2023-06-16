@@ -62,7 +62,6 @@ type actorContract interface {
 }
 
 // A checkedActor wraps an actor, checking its contract on each call.
-//
 type checkedActor struct {
 	actor
 	actorContract

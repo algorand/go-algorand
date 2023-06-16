@@ -34,9 +34,8 @@ type Generator interface {
 	WriteGenesis(output io.Writer) error
 	WriteBlock(output io.Writer, round uint64) error
 	WriteAccount(output io.Writer, accountString string) error
-	WriteStatus(output io.Writer) error
 	WriteDeltas(output io.Writer, round uint64) error
-	Accounts() <-chan basics.Address
+	WriteStatus(output io.Writer) error
 	Stop()
 }
 
@@ -115,12 +114,22 @@ type assetData struct {
 type appData struct {
 	appID   uint64
 	creator uint64
+	kind    appKind
+	// Holding at index 0 is the creator.
+	holdings []*appHolding
+	// Set of holders in the holdings array for easy reference.
+	holders map[uint64]*appHolding
 	// TODO: more data, not sure yet exactly what
 }
 
 type assetHolding struct {
 	acctIndex uint64
 	balance   uint64
+}
+
+type appHolding struct {
+	appIndex uint64
+	// TODO: more data, not sure yet exactly what
 }
 
 // Report is the generation report.
