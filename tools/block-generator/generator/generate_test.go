@@ -191,6 +191,49 @@ func TestAssetDestroy(t *testing.T) {
 	require.Len(t, g.assets, 0)
 }
 
+func TestAppCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+
+	// app call transaction creating appBoxes
+	actual, txn, err := g.generateAppCallInternal(appBoxesCreate, 1, 0, 0, nil)
+	require.NoError(t, err)
+	require.Equal(t, appBoxesCreate, actual)
+	require.Equal(t, protocol.ApplicationCallTx, txn.Type)
+	require.Len(t, g.apps, 0)
+	require.Len(t, g.pendingApps, 1)
+	require.Len(t, g.pendingApps[appKindBoxes], 1)
+	require.Len(t, g.pendingApps[appKindSwap], 0)
+	require.Len(t, g.pendingApps[appKindBoxes][0].holdings, 1)
+	require.Len(t, g.pendingApps[appKindBoxes][0].holders, 1)
+	ad := *g.pendingApps[appKindBoxes][0]
+	holding := *ad.holdings[0]
+	require.Equal(t, holding, *ad.holders[0])
+	require.Equal(t, uint64(1001), holding.appIndex)
+	require.Equal(t, ad.appID, holding.appIndex)
+	require.Equal(t, appKindBoxes, ad.kind)
+
+	// app call transaction creating appSwap
+	actual, txn, err = g.generateAppCallInternal(appSwapCreate, 1, 0, 0, nil)
+	require.NoError(t, err)
+	require.Equal(t, appSwapCreate, actual)
+	require.Equal(t, protocol.ApplicationCallTx, txn.Type)
+	require.Len(t, g.apps, 0)
+	require.Len(t, g.pendingApps, 2)
+	require.Len(t, g.pendingApps[appKindBoxes], 1)
+	require.Len(t, g.pendingApps[appKindSwap], 1)
+	require.Len(t, g.pendingApps[appKindSwap][0].holdings, 1)
+	require.Len(t, g.pendingApps[appKindSwap][0].holders, 1)
+	ad = *g.pendingApps[appKindSwap][0]
+	holding = *ad.holdings[0]
+	require.Equal(t, holding, *ad.holders[0])
+	require.Equal(t, uint64(1001), holding.appIndex)
+	require.Equal(t, ad.appID, holding.appIndex)
+	require.Equal(t, appKindSwap, ad.kind)
+}
+
 func TestWriteRoundZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var testcases = []struct {
@@ -214,7 +257,7 @@ func TestWriteRoundZero(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		tc := tc
-		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			g := makePrivateGenerator(t, tc.dbround, tc.genesis)
 			var data []byte
@@ -408,7 +451,9 @@ func TestHandlers(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
+		testcase := testcase
 		t.Run(testcase.name, func(t *testing.T) {
+			t.Parallel()
 			req := httptest.NewRequest("GET", testcase.url, nil)
 			w := httptest.NewRecorder()
 			handler(w, req)

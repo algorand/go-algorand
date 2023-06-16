@@ -105,6 +105,7 @@ type VotingData struct {
 }
 
 // OnlineAccountData contains the voting information for a single account.
+//
 //msgp:ignore OnlineAccountData
 type OnlineAccountData struct {
 	MicroAlgosWithRewards MicroAlgos
@@ -572,7 +573,7 @@ func (u AccountData) IsZero() bool {
 	return reflect.DeepEqual(u, AccountData{})
 }
 
-// NormalizedOnlineBalance returns a ``normalized'' balance for this account.
+// NormalizedOnlineBalance returns a “normalized” balance for this account.
 //
 // The normalization compensates for rewards that have not yet been applied,
 // by computing a balance normalized to round 0.  To normalize, we estimate
@@ -594,7 +595,7 @@ func (u AccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint6
 	return NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, proto)
 }
 
-// NormalizedOnlineAccountBalance returns a ``normalized'' balance for an account
+// NormalizedOnlineAccountBalance returns a “normalized” balance for an account
 // with the given parameters.
 //
 // The normalization compensates for rewards that have not yet been applied,
