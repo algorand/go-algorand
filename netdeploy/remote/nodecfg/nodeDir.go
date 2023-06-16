@@ -40,18 +40,18 @@ type nodeDir struct {
 }
 
 // * Configure:
-// 		* IsRelay
-// 		* NetAddress
-// 		* APIEndpoint
-// 		* APIToken
-// 		* EnableTelemetry
-// 		* TelemetryURI
-// 		* EnableMetrics
-// 		* EnableService
-// 		* CronTabSchedule
-//		* EnableBlockStats
-//		* DashboardEndpoint
-//		* DeadlockOverride
+//   - IsRelay
+//   - NetAddress
+//   - APIEndpoint
+//   - APIToken
+//   - EnableTelemetry
+//   - TelemetryURI
+//   - EnableMetrics
+//   - EnableService
+//   - CronTabSchedule
+//   - EnableBlockStats
+//   - DashboardEndpoint
+//   - DeadlockOverride
 func (nd *nodeDir) configure() (err error) {
 	fmt.Fprintf(os.Stdout, "Configuring Node %s\n", nd.Name)
 	if err = nd.configureRelay(nd.IsRelay()); err != nil {

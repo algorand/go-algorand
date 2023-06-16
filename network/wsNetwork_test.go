@@ -1137,6 +1137,16 @@ func TestGetPeers(t *testing.T) {
 	expectAddrs := []string{addrA, "a", "b", "c"}
 	sort.Strings(expectAddrs)
 	assert.Equal(t, expectAddrs, peerAddrs)
+
+	// For now, PeersPhonebookArchivalNodes and PeersPhonebookRelays will return the same set of nodes
+	bPeers2 := netB.GetPeers(PeersPhonebookArchivalNodes)
+	peerAddrs2 := make([]string, len(bPeers2))
+	for pi2, peer2 := range bPeers2 {
+		peerAddrs2[pi2] = peer2.(HTTPPeer).GetAddress()
+	}
+	sort.Strings(peerAddrs2)
+	assert.Equal(t, expectAddrs, peerAddrs2)
+
 }
 
 // confirms that if the config PublicAddress is set to "testing",
@@ -4056,7 +4066,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	require.Contains(t, lg, "wsPeer readLoop: received a TS response for a stale request ")
 }
 
-func customNetworkIDGen(networkID protocol.NetworkID) *rapid.Generator {
+func customNetworkIDGen(networkID protocol.NetworkID) *rapid.Generator[protocol.NetworkID] {
 	return rapid.Custom(func(t *rapid.T) protocol.NetworkID {
 		// Unused/satisfying rapid requirement
 		rapid.String().Draw(t, "networkIDGen")
@@ -4066,7 +4076,7 @@ func customNetworkIDGen(networkID protocol.NetworkID) *rapid.Generator {
 
 // The hardcoded network IDs just make testing this function more difficult with no confidence gain (the custom logic
 // is already exercised well in the dnsbootstrap parsing tests).
-func nonHardcodedNetworkIDGen() *rapid.Generator {
+func nonHardcodedNetworkIDGen() *rapid.Generator[protocol.NetworkID] {
 	return rapid.OneOf(customNetworkIDGen(config.Testnet), customNetworkIDGen(config.Mainnet),
 		customNetworkIDGen(config.Devtestnet))
 }
@@ -4084,7 +4094,7 @@ func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
 		refreshTestConf := defaultConfig
 		refreshTestConf.DNSBootstrapID = refreshRelayDNSBootstrapID
 		netA = makeTestWebsocketNodeWithConfig(t, refreshTestConf)
-		netA.NetworkID = nonHardcodedNetworkIDGen().Draw(t1, "network").(protocol.NetworkID)
+		netA.NetworkID = nonHardcodedNetworkIDGen().Draw(t1, "network")
 
 		primarySRVBootstrap := strings.Replace("<network>.algorand.network", "<network>", string(netA.NetworkID), -1)
 		backupSRVBootstrap := strings.Replace("<network>.algorand.net", "<network>", string(netA.NetworkID), -1)
@@ -4179,11 +4189,11 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		// Generate between 0 and N examples - if no dups, should end up in phonebook
 		relayDomainsGen := rapid.SliceOfN(domainGen, 0, 200)
 
-		relayDomains := relayDomainsGen.Draw(t1, "relayDomains").([]string)
+		relayDomains := relayDomainsGen.Draw(t1, "relayDomains")
 
 		// Dont overlap with relays, duplicates between them not stored in phonebook as of this writing
 		archiveDomainsGen := rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", relayDomains), 0, 200)
-		archiveDomains := archiveDomainsGen.Draw(t1, "archiveDomains").([]string)
+		archiveDomains := archiveDomainsGen.Draw(t1, "archiveDomains")
 		netA.updatePhonebookAddresses(relayDomains, archiveDomains)
 
 		// Check that entries are in fact in phonebook less any duplicates
@@ -4217,11 +4227,11 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 
 		// Dont overlap with archive nodes previously specified, duplicates between them not stored in phonebook as of this writing
 		relayDomainsGen = rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", archiveDomains), 0, 200)
-		relayDomains = relayDomainsGen.Draw(t1, "relayDomains").([]string)
+		relayDomains = relayDomainsGen.Draw(t1, "relayDomains")
 
 		// Randomly select a prior relay domain
 		if len(priorRelayDomains) > 0 {
-			priorIdx := rapid.IntRange(0, len(priorRelayDomains)-1).Draw(t1, "").(int)
+			priorIdx := rapid.IntRange(0, len(priorRelayDomains)-1).Draw(t1, "")
 			relayDomains = append(relayDomains, priorRelayDomains[priorIdx])
 		}
 
@@ -4277,7 +4287,7 @@ func replaceAllIn(strSlice []string, strToReplace string, newStr string) []strin
 	return subbedStrSlice
 }
 
-func supportedNetworkGen() *rapid.Generator {
+func supportedNetworkGen() *rapid.Generator[string] {
 	return rapid.OneOf(rapid.StringMatching(string(config.Testnet)), rapid.StringMatching(string(config.Mainnet)),
 		rapid.StringMatching(string(config.Devnet)), rapid.StringMatching(string(config.Betanet)),
 		rapid.StringMatching(string(config.Alphanet)), rapid.StringMatching(string(config.Devtestnet)))
@@ -4290,7 +4300,7 @@ func TestMergePrimarySecondaryRelayAddressListsMinOverlap(t *testing.T) {
 	rapid.Check(t, func(t1 *rapid.T) {
 		netA = makeTestWebsocketNode(t)
 
-		network := supportedNetworkGen().Draw(t1, "network").(string)
+		network := supportedNetworkGen().Draw(t1, "network")
 		dedupExp := regexp.MustCompile(strings.Replace(
 			`(algorand-<network>.(network|net))`, "<network>", network, -1))
 		domainPortGen := rapidgen.DomainWithPort()
@@ -4298,8 +4308,8 @@ func TestMergePrimarySecondaryRelayAddressListsMinOverlap(t *testing.T) {
 		// Generate between 0 and N examples - if no dups, should end up in phonebook
 		domainsGen := rapid.SliceOfN(domainPortGen, 0, 200)
 
-		primaryRelayAddresses := domainsGen.Draw(t1, "primaryRelayAddresses").([]string)
-		secondaryRelayAddresses := domainsGen.Draw(t1, "secondaryRelayAddresses").([]string)
+		primaryRelayAddresses := domainsGen.Draw(t1, "primaryRelayAddresses")
+		secondaryRelayAddresses := domainsGen.Draw(t1, "secondaryRelayAddresses")
 
 		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
 			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
@@ -4318,7 +4328,7 @@ type MergeTestDNSInputs struct {
 	secondaryDomainSuffix string
 }
 
-func mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen() *rapid.Generator {
+func mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen() *rapid.Generator[*MergeTestDNSInputs] {
 
 	algorand0Base := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
 		//unused/satisfying rapid expectation
@@ -4378,8 +4388,8 @@ func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 	rapid.Check(t, func(t1 *rapid.T) {
 		netA = makeTestWebsocketNode(t)
 
-		network := supportedNetworkGen().Draw(t1, "network").(string)
-		mergeTestInputs := mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen().Draw(t1, "mergeTestInputs").(*MergeTestDNSInputs)
+		network := supportedNetworkGen().Draw(t1, "network")
+		mergeTestInputs := mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen().Draw(t1, "mergeTestInputs")
 
 		dedupExp := regexp.MustCompile(strings.Replace(
 			mergeTestInputs.dedupExpStr, "<network>", network, -1))
@@ -4390,7 +4400,7 @@ func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 		primaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(primaryDomainSuffix, nil)
 		primaryDomainsGen := rapid.SliceOfN(primaryNetworkDomainGen, 0, 200)
 
-		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses").([]string)
+		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses")
 
 		secondaryDomainSuffix := strings.Replace(
 			mergeTestInputs.secondaryDomainSuffix, "<network>", network, -1)
@@ -4401,7 +4411,7 @@ func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 		// the replaced secondary ones
 		secondaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(secondaryDomainSuffix, secondaryRelayAddresses)
 		secondaryDomainsGen := rapid.SliceOfN(secondaryNetworkDomainGen, 0, 200)
-		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses").([]string)
+		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses")
 		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
 
 		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
@@ -4424,7 +4434,7 @@ func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
 	rapid.Check(t, func(t1 *rapid.T) {
 		netA = makeTestWebsocketNode(t)
 
-		network := supportedNetworkGen().Draw(t1, "network").(string)
+		network := supportedNetworkGen().Draw(t1, "network")
 		primaryDomainSuffix := strings.Replace(
 			`n-<network>.algorand0.network`, "<network>", network, -1)
 
@@ -4432,7 +4442,7 @@ func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
 		primaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(primaryDomainSuffix, nil)
 		primaryDomainsGen := rapid.SliceOfN(primaryNetworkDomainGen, 0, 200)
 
-		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses").([]string)
+		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses")
 
 		secondaryDomainSuffix := strings.Replace(
 			`algorand-<network>.network`, "<network>", network, -1)
@@ -4443,7 +4453,7 @@ func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
 		// the replaced secondary ones
 		secondaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(secondaryDomainSuffix, secondaryRelayAddresses)
 		secondaryDomainsGen := rapid.SliceOfN(secondaryNetworkDomainGen, 0, 200)
-		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses").([]string)
+		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses")
 		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
 
 		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),

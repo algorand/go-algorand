@@ -23,6 +23,7 @@ import (
 )
 
 // MinFeeError defines an error type which could be returned from the method WellFormed
+//
 //msgp:ignore MinFeeError
 type MinFeeError string
 
