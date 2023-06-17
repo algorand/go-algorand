@@ -303,6 +303,9 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 	var respTopics network.Topics
 
 	defer func() {
+		reqMsg.CallWhenDone = func() {
+			// decrement the counter here
+		}
 		target.Respond(ctx, reqMsg, respTopics)
 	}()
 
