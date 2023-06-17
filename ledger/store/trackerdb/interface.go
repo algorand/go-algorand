@@ -18,6 +18,7 @@ package trackerdb
 
 import (
 	"context"
+	"errors"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -25,6 +26,9 @@ import (
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
+
+// ErrNotFound is returned when a record is not found.
+var ErrNotFound = errors.New("trackerdb: not found")
 
 // AccountRef is an opaque ref to an account in the db.
 type AccountRef interface {
@@ -116,7 +120,8 @@ type AccountsReaderExt interface {
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
-	Testing() TestAccountsReaderExt
+	// testing
+	Testing() AccountsReaderTestExt
 }
 
 // AccountsReaderWriter is AccountsReader+AccountsWriter

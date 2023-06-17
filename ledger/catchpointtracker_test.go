@@ -401,9 +401,7 @@ func writeDummySpVerification(t *testing.T, nextIndexForContext uint64, numberOf
 			e.LastAttestedRound = basics.Round(nextIndexForContext + i)
 			contexts[i] = &e
 		}
-		writer := tx.MakeSpVerificationCtxReaderWriter()
-
-		return writer.StoreSPContexts(ctx, contexts[:])
+		return tx.MakeSpVerificationCtxWriter().StoreSPContexts(ctx, contexts[:])
 	})
 	require.NoError(t, err)
 }
@@ -436,7 +434,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		arw, err := tx.MakeAccountsReaderWriter()
+		aw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
 		}
@@ -457,7 +455,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 			}
 		}
 
-		return arw.UpdateAccountsHashRound(ctx, 1)
+		return aw.UpdateAccountsHashRound(ctx, 1)
 	})
 	require.NoError(b, err)
 
@@ -1331,20 +1329,20 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 	err = os.WriteFile(catchpointDataFilePath, catchpointData, 0644)
 	require.NoError(t, err)
 
-	cps2, err := ml2.dbs.MakeCatchpointReaderWriter()
+	cw2, err := ml2.dbs.MakeCatchpointWriter()
 	require.NoError(t, err)
 
 	// Restore the first stage database record.
-	err = cps2.InsertOrReplaceCatchpointFirstStageInfo(context.Background(), firstStageRound, &firstStageInfo)
+	err = cw2.InsertOrReplaceCatchpointFirstStageInfo(context.Background(), firstStageRound, &firstStageInfo)
 	require.NoError(t, err)
 
 	// Insert unfinished catchpoint record.
-	err = cps2.InsertUnfinishedCatchpoint(
+	err = cw2.InsertUnfinishedCatchpoint(
 		context.Background(), secondStageRound, crypto.Digest{})
 	require.NoError(t, err)
 
 	// Delete the catchpoint file database record.
-	err = cps2.StoreCatchpoint(
+	err = cw2.StoreCatchpoint(
 		context.Background(), secondStageRound, "", "", 0)
 	require.NoError(t, err)
 

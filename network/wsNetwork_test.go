@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/internal/rapidgen"
 	"io"
 	"math/rand"
 	"net"
@@ -31,7 +30,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"pgregory.net/rapid"
 	"regexp"
 	"runtime"
 	"sort"
@@ -40,6 +38,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/internal/rapidgen"
+	"pgregory.net/rapid"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,11 +61,6 @@ import (
 const sendBufferLength = 1000
 
 const genesisID = "go-test-network-genesis"
-
-func init() {
-	// this allows test code to use out-of-protocol message tags and have them go through
-	allowCustomTags = true
-}
 
 func TestMain(m *testing.M) {
 	logging.Base().SetLevel(logging.Debug)
@@ -302,10 +298,16 @@ func netStop(t testing.TB, wn *WebsocketNetwork, name string) {
 }
 
 func setupWebsocketNetworkAB(t *testing.T, countTarget int) (*WebsocketNetwork, *WebsocketNetwork, *messageCounterHandler, func()) {
+	return setupWebsocketNetworkABwithLogger(t, countTarget, nil)
+}
+func setupWebsocketNetworkABwithLogger(t *testing.T, countTarget int, log logging.Logger) (*WebsocketNetwork, *WebsocketNetwork, *messageCounterHandler, func()) {
 	success := false
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
+	if log != nil {
+		netA.log = log
+	}
 	netA.Start()
 	defer func() {
 		if !success {
@@ -313,6 +315,9 @@ func setupWebsocketNetworkAB(t *testing.T, countTarget int) (*WebsocketNetwork, 
 		}
 	}()
 	netB := makeTestWebsocketNode(t)
+	if log != nil {
+		netB.log = log
+	}
 	netB.config.GossipFanout = 1
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
@@ -358,38 +363,54 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	}
 }
 
-// Set up two nodes, test that B drops invalid tags when A ends them.
-func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest // changes global variable allowCustomTags
+type mutexBuilder struct {
+	logOutput strings.Builder
+	mu        deadlock.Mutex
+}
+
+func (lw *mutexBuilder) Write(p []byte) (n int, err error) {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+	return lw.logOutput.Write(p)
+}
+func (lw *mutexBuilder) String() string {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+	return lw.logOutput.String()
+}
+
+// Set up two nodes, test that the connection between A and B is not established.
+func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest // changes global variable defaultSendMessageTags
 	partitiontest.PartitionTest(t)
-	// disallow custom tags for this test
-	allowCustomTags = false
 	defaultSendMessageTags["XX"] = true
 	defer func() {
-		allowCustomTags = true
 		delete(defaultSendMessageTags, "XX")
 	}()
+	var logOutput mutexBuilder
+	log := logging.TestingLog(t)
+	log.SetOutput(&logOutput)
+	log.SetLevel(logging.Level(logging.Debug))
+	netA, netB, counter, closeFunc := setupWebsocketNetworkABwithLogger(t, 0, log)
 
-	netA, netB, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
 	defer closeFunc()
-	counterDone := counter.done
-	// register a handler that should never get called, because the message will
-	// be dropped before it gets to the handlers if allowCustomTags = false
+	// register a handler that should never get called, because the message will never be delivered
 	netB.RegisterHandlers([]TaggedMessageHandler{
 		{Tag: "XX", MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
 			require.Fail(t, "MessageHandler for out-of-protocol tag should not be called")
 			return OutgoingMessage{}
 		})}})
-	// send 2 valid and 2 invalid tags
-	netA.Broadcast(context.Background(), "TX", []byte("foo"), false, nil)
+	// send a message with an invalid tag which is in defaultSendMessageTags.
+	// it should not go through because the defaultSendMessageTags should not be accepted
+	// and the connection should be dropped dropped
 	netA.Broadcast(context.Background(), "XX", []byte("foo"), false, nil)
-	netA.Broadcast(context.Background(), "TX", []byte("bar"), false, nil)
-	netA.Broadcast(context.Background(), "XX", []byte("bar"), false, nil)
-
-	select {
-	case <-counterDone:
-	case <-time.After(2 * time.Second):
-		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	for p := 0; p < 100; p++ {
+		if strings.Contains(logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from") {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
+	require.Contains(t, logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from")
+	require.Equal(t, 0, counter.count)
 }
 
 // Set up two nodes, send proposal
@@ -2769,15 +2790,6 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 	assert.Equal(t, 5, int(sum[0]))
 }
 
-var (
-	ft1 = protocol.Tag("F1")
-	ft2 = protocol.Tag("F2")
-	ft3 = protocol.Tag("F3")
-	ft4 = protocol.Tag("F4")
-
-	testTags = []protocol.Tag{ft1, ft2, ft3, ft4}
-)
-
 func waitPeerInternalChanQuiet(t *testing.T, netA *WebsocketNetwork) {
 	// okay, but now we need to wait for asynchronous thread within netA to _apply_ the MOI to its peer for netB...
 	timeout := time.Now().Add(100 * time.Millisecond)
@@ -2816,7 +2828,14 @@ func waitForMOIRefreshQuiet(netB *WebsocketNetwork) {
 // Set up two nodes, have one of them request a certain message tag mask, and verify the other follow that.
 func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	var (
+		ft1 = protocol.Tag("AV")
+		ft2 = protocol.Tag("pj")
+		ft3 = protocol.Tag("NI")
+		ft4 = protocol.Tag("TX")
 
+		testTags = []protocol.Tag{ft1, ft2, ft3, ft4}
+	)
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.config.EnablePingHandler = false
@@ -2881,6 +2900,9 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
 	netB.RegisterMessageInterest(ft2)
+	netB.DeregisterMessageInterest(ft1)
+	netB.DeregisterMessageInterest(ft3)
+	netB.DeregisterMessageInterest(ft4)
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -3154,11 +3176,11 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 
 	netB.OnNetworkAdvance()
 	waitForMOIRefreshQuiet(netB)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		if atomic.LoadUint32(&netB.wantTXGossip) == uint32(wantTXGossipNo) {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	require.Equal(t, uint32(wantTXGossipNo), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
@@ -3259,11 +3281,11 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 
 	netB.OnNetworkAdvance()
 	waitForMOIRefreshQuiet(netB)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		if atomic.LoadUint32(&netB.wantTXGossip) == uint32(wantTXGossipYes) {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	require.Equal(t, uint32(wantTXGossipYes), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.

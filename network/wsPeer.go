@@ -52,9 +52,6 @@ const msgsInReadBufferPerPeer = 10
 
 var tagStringList []string
 
-// allowCustomTags is set by tests to allow non-protocol-defined message tags. It is false in non-test code.
-var allowCustomTags bool
-
 func init() {
 	tagStringList = make([]string, len(protocol.TagList))
 	for i, t := range protocol.TagList {
@@ -538,7 +535,11 @@ func (wp *wsPeer) readLoop() {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
 			atomic.AddUint64(&wp.miMessageCount, 1)
-			if wp.handleMessageOfInterest(msg) {
+			if close, reason := wp.handleMessageOfInterest(msg); close {
+				cleanupCloseError = reason
+				if reason == disconnectBadData {
+					networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
+				}
 				return
 			}
 			continue
@@ -583,9 +584,8 @@ func (wp *wsPeer) readLoop() {
 		default: // unrecognized tag
 			unknownProtocolTagMessagesTotal.Inc(nil)
 			atomic.AddUint64(&wp.unkMessageCount, 1)
-			if !allowCustomTags {
-				continue // drop message, skip adding it to queue
-			}
+			continue // drop message, skip adding it to queue
+			// TODO: should disconnect here?
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
@@ -616,13 +616,14 @@ func (wp *wsPeer) readLoop() {
 	}
 }
 
-func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
-	shutdown = false
+func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (close bool, reason disconnectReason) {
+	close = false
+	reason = disconnectReasonNone
 	// decode the message, and ensure it's a valid message.
 	msgTagsMap, err := unmarshallMessageOfInterest(msg.Data)
 	if err != nil {
 		wp.net.log.Warnf("wsPeer handleMessageOfInterest: could not unmarshall message from: %s %v", wp.conn.RemoteAddr().String(), err)
-		return
+		return true, disconnectBadData
 	}
 	msgs := make([]sendMessage, 1, 1)
 	msgs[0] = sendMessage{
@@ -641,7 +642,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 		return
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
-		shutdown = true
+		return true, disconnectReasonNone
 	default:
 	}
 
@@ -650,7 +651,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 	case wp.sendBufferBulk <- sm:
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
-		shutdown = true
+		return true, disconnectReasonNone
 	}
 	return
 }
