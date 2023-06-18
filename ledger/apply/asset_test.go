@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -30,19 +31,11 @@ import (
 )
 
 func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
-	res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
-	for id, val := range m {
-		res[id] = val
-	}
-	return res
+	return maps.Clone(m)
 }
 
 func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
-	res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
-	for id, val := range m {
-		res[id] = val
-	}
-	return res
+	return maps.Clone(m)
 }
 
 func TestAssetTransfer(t *testing.T) {

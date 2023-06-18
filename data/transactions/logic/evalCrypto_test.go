@@ -31,6 +31,7 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
@@ -331,8 +332,7 @@ load 0
 byte 0x%s
 ==
 &&`
-	pkTampered1 := make([]byte, len(pk))
-	copy(pkTampered1, pk)
+	pkTampered1 := slices.Clone(pk)
 	pkTampered1[0] = 0                     // first byte is a prefix of either 0x02 or 0x03
 	pkTampered2 := make([]byte, len(pk)-1) // must be 33 bytes length
 	copy(pkTampered2, pk)
@@ -378,8 +378,7 @@ ecdsa_verify Secp256k1
 	s := sign[32:64]
 	v := int(sign[64])
 
-	rTampered := make([]byte, len(r))
-	copy(rTampered, r)
+	rTampered := slices.Clone(r)
 	rTampered[0] += byte(1) // intentional overflow
 
 	var verifyTests = []struct {
@@ -487,8 +486,7 @@ load 0
 byte 0x%s
 ==
 &&`
-	pkTampered1 := make([]byte, len(pk))
-	copy(pkTampered1, pk)
+	pkTampered1 := slices.Clone(pk)
 	pkTampered1[0] = 0                     // first byte is a prefix of either 0x02 or 0x03
 	pkTampered2 := make([]byte, len(pk)-1) // must be 33 bytes length
 	copy(pkTampered2, pk)
@@ -533,8 +531,7 @@ ecdsa_verify Secp256r1
 	r := ri.Bytes()
 	s := si.Bytes()
 
-	rTampered := make([]byte, len(r))
-	copy(rTampered, r)
+	rTampered := slices.Clone(r)
 	rTampered[0] += byte(1) // intentional overflow
 
 	var verifyTests = []struct {

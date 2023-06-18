@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -614,7 +615,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 				keys = append(keys, cidx)
 			}
 		}
-		sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
+		slices.Sort(keys)
 
 		// Check for creatables that haven't been synced to disk yet.
 		unsyncedCreatables := make([]basics.CreatableLocator, 0, len(keys))

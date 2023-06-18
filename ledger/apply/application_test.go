@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -37,22 +38,14 @@ import (
 // call clone on each basics.AppParams -- callers must do that for any values where
 // they intend to modify a contained reference type.
 func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
-	res := make(map[basics.AppIndex]basics.AppParams, len(m))
-	for k, v := range m {
-		res[k] = v
-	}
-	return res
+	return maps.Clone(m)
 }
 
 // Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
 // call clone on each AppLocalState -- callers must do that for any values
 // where they intend to modify a contained reference type.
 func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
-	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
-	for k, v := range m {
-		res[k] = v
-	}
-	return res
+	return maps.Clone(m)
 }
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
@@ -571,9 +564,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Zero(b.putAppParams)
 	// ensure original balance record in the mock was not changed
 	// this ensure proper cloning and any in-intended in-memory modifications
-	//
-	// known artefact of cloning AppLocalState even with empty update, nil map vs empty map
-	saved.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{}
 	a.Equal(saved, b.balances[creator])
 	saved = b.putBalances[creator]
 

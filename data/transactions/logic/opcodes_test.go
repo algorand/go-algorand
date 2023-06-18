@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 )
 
 func TestOpSpecs(t *testing.T) {
@@ -62,11 +63,7 @@ func TestOpcodesByVersionReordered(t *testing.T) { // nolint:paralleltest // man
 	partitiontest.PartitionTest(t)
 
 	// Make a copy to restore to the original
-	OpSpecsOrig := make([]OpSpec, len(OpSpecs))
-	for idx, opspec := range OpSpecs {
-		cp := opspec
-		OpSpecsOrig[idx] = cp
-	}
+	OpSpecsOrig := slices.Clone(OpSpecs)
 	defer func() {
 		OpSpecs = OpSpecsOrig
 	}()
@@ -88,11 +85,7 @@ func TestOpcodesByVersion(t *testing.T) {
 
 func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
-	OpSpecs2 := make([]OpSpec, len(OpSpecs))
-	for idx, opspec := range OpSpecs {
-		cp := opspec
-		OpSpecs2[idx] = cp
-	}
+	OpSpecs2 := slices.Clone(OpSpecs)
 
 	opSpecs := make([][]OpSpec, LogicVersion)
 	for v := uint64(1); v <= LogicVersion; v++ {

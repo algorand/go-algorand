@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"golang.org/x/exp/maps"
 )
 
 // DeltaAction is an enum of actions that may be performed when applying a
@@ -234,14 +235,7 @@ type TealKeyValue map[string]TealValue
 // Clone returns a copy of a TealKeyValue that may be modified without
 // affecting the original
 func (tk TealKeyValue) Clone() TealKeyValue {
-	if tk == nil {
-		return nil
-	}
-	res := make(TealKeyValue, len(tk))
-	for k, v := range tk {
-		res[k] = v
-	}
-	return res
+	return maps.Clone(tk)
 }
 
 // ToStateSchema calculates the number of each value type in a TealKeyValue and

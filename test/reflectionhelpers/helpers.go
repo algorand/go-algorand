@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 // TypeSegmentKind is a enum for the types of TypeSegment
@@ -61,9 +63,7 @@ type TypePath []TypeSegment
 
 // Clone creates a deep copy of a TypePath
 func (p TypePath) Clone() TypePath {
-	cloned := make(TypePath, len(p))
-	copy(cloned, p)
-	return cloned
+	return slices.Clone(p)
 }
 
 // AddMapKey adds a map key segment to a TypePath. The modification is done using append, so this

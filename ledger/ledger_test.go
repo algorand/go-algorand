@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -696,8 +697,7 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	appIdx = 2 // the second successful txn
 
 	badTx = correctAppCreate
-	program := make([]byte, len(approvalProgram))
-	copy(program, approvalProgram)
+	program := slices.Clone(approvalProgram)
 	program[0] = '\x01'
 	badTx.ApprovalProgram = program
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)

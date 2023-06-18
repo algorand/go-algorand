@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -707,10 +709,7 @@ func OpcodesByVersion(version uint64) []OpSpec {
 			}
 		}
 	}
-	result := make([]OpSpec, 0, len(subv))
-	for _, v := range subv {
-		result = append(result, v)
-	}
+	result := maps.Values(subv)
 	sort.Sort(sortByOpcode(result))
 	return result
 }

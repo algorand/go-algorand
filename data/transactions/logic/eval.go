@@ -35,6 +35,7 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -5291,8 +5292,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
 		}
-		txn.Note = make([]byte, len(sv.Bytes))
-		copy(txn.Note, sv.Bytes)
+		txn.Note = slices.Clone(sv.Bytes)
 	// GenesisID, GenesisHash unsettable: surely makes no sense
 	// Group unsettable: Can't make groups from AVM (yet?)
 	// Lease unsettable: This seems potentially useful.
@@ -5406,9 +5406,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(txn.ApplicationArgs) >= cx.Proto.MaxAppArgs {
 			return errors.New("too many application args")
 		}
-		new := make([]byte, len(sv.Bytes))
-		copy(new, sv.Bytes)
-		txn.ApplicationArgs = append(txn.ApplicationArgs, new)
+		txn.ApplicationArgs = append(txn.ApplicationArgs, slices.Clone(sv.Bytes))
 	case Accounts:
 		var new basics.Address
 		new, err = cx.assignAccount(sv)
@@ -5424,15 +5422,13 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
-		txn.ApprovalProgram = make([]byte, len(sv.Bytes))
-		copy(txn.ApprovalProgram, sv.Bytes)
+		txn.ApprovalProgram = slices.Clone(sv.Bytes)
 	case ClearStateProgram:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
-		txn.ClearStateProgram = make([]byte, len(sv.Bytes))
-		copy(txn.ClearStateProgram, sv.Bytes)
+		txn.ClearStateProgram = slices.Clone(sv.Bytes)
 	case ApprovalProgramPages:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
 		txn.ApprovalProgram = append(txn.ApprovalProgram, sv.Bytes...)
