@@ -295,38 +295,24 @@ func (ad *AccountDeltas) Dehydrate() {
 	if ad.acctsCache == nil {
 		ad.acctsCache = make(map[basics.Address]int)
 	}
-	for key := range ad.acctsCache {
-		delete(ad.acctsCache, key)
-	}
+	maps.Clear(ad.acctsCache)
 	if ad.appResourcesCache == nil {
 		ad.appResourcesCache = make(map[AccountApp]int)
 	}
-	for key := range ad.appResourcesCache {
-		delete(ad.appResourcesCache, key)
-	}
+	maps.Clear(ad.appResourcesCache)
 	if ad.assetResourcesCache == nil {
 		ad.assetResourcesCache = make(map[AccountAsset]int)
 	}
-	for key := range ad.assetResourcesCache {
-		delete(ad.assetResourcesCache, key)
-	}
+	maps.Clear(ad.assetResourcesCache)
 }
 
 // Reset resets the StateDelta for re-use with sync.Pool
 func (sd *StateDelta) Reset() {
 	sd.Accts.reset()
-	for txid := range sd.Txids {
-		delete(sd.Txids, txid)
-	}
-	for txLease := range sd.Txleases {
-		delete(sd.Txleases, txLease)
-	}
-	for creatableIndex := range sd.Creatables {
-		delete(sd.Creatables, creatableIndex)
-	}
-	for key := range sd.KvMods {
-		delete(sd.KvMods, key)
-	}
+	maps.Clear(sd.Txids)
+	maps.Clear(sd.Txleases)
+	maps.Clear(sd.Creatables)
+	maps.Clear(sd.KvMods)
 	sd.Totals = AccountTotals{}
 
 	// these fields are going to be populated on next use but resetting them anyway for safety.
@@ -344,15 +330,9 @@ func (ad *AccountDeltas) reset() {
 	ad.AssetResources = ad.AssetResources[:0]
 
 	// reset the maps
-	for address := range ad.acctsCache {
-		delete(ad.acctsCache, address)
-	}
-	for aApp := range ad.appResourcesCache {
-		delete(ad.appResourcesCache, aApp)
-	}
-	for aAsset := range ad.assetResourcesCache {
-		delete(ad.assetResourcesCache, aAsset)
-	}
+	maps.Clear(ad.acctsCache)
+	maps.Clear(ad.appResourcesCache)
+	maps.Clear(ad.assetResourcesCache)
 }
 
 // notAllocated returns true if any of the fields allocated by MakeAccountDeltas is nil
