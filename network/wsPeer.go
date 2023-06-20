@@ -175,8 +175,8 @@ type Response struct {
 }
 
 type sendMessages struct {
-	msgs         []sendMessage
-	callWhenDone func()
+	msgs     []sendMessage
+	callback func()
 }
 
 type wsPeer struct {
@@ -409,7 +409,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	}
 
 	select {
-	case wp.sendBufferBulk <- sendMessages{msgs: msg, callWhenDone: reqMsg.CallWhenDone}:
+	case wp.sendBufferBulk <- sendMessages{msgs: msg, callback: reqMsg.Callback}:
 		atomic.AddInt64(&wp.net.topicBytesUsed, int64(len(msg[0].data)))
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
@@ -784,11 +784,11 @@ func (wp *wsPeer) writeLoop() {
 			}
 		case data := <-wp.sendBufferBulk:
 			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
-				data.callWhenDone()
+				data.callback()
 				cleanupCloseError = writeErr
 				return
 			}
-			data.callWhenDone()
+			data.callback()
 		}
 	}
 }

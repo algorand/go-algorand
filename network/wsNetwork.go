@@ -253,7 +253,7 @@ type IncomingMessage struct {
 	// messages.
 	processing chan struct{}
 
-	CallWhenDone func()
+	Callback func()
 }
 
 // Tag is a short string (2 bytes) marking a type of message
