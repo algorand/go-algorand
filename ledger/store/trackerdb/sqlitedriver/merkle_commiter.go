@@ -16,11 +16,15 @@
 
 package sqlitedriver
 
-import "database/sql"
+import (
+	"database/sql"
+
+	"github.com/algorand/go-algorand/util/db"
+)
 
 //msgp:ignore MerkleCommitter
 type merkleCommitter struct {
-	tx         *sql.Tx
+	e          db.Executable
 	deleteStmt *sql.Stmt
 	insertStmt *sql.Stmt
 	selectStmt *sql.Stmt
@@ -28,21 +32,21 @@ type merkleCommitter struct {
 
 // MakeMerkleCommitter creates a MerkleCommitter object that implements the merkletrie.Committer interface allowing storing and loading
 // merkletrie pages from a sqlite database.
-func MakeMerkleCommitter(tx *sql.Tx, staging bool) (mc *merkleCommitter, err error) {
-	mc = &merkleCommitter{tx: tx}
+func MakeMerkleCommitter(e db.Executable, staging bool) (mc *merkleCommitter, err error) {
+	mc = &merkleCommitter{e: e}
 	accountHashesTable := "accounthashes"
 	if staging {
 		accountHashesTable = "catchpointaccounthashes"
 	}
-	mc.deleteStmt, err = tx.Prepare("DELETE FROM " + accountHashesTable + " WHERE id=?")
+	mc.deleteStmt, err = e.Prepare("DELETE FROM " + accountHashesTable + " WHERE id=?")
 	if err != nil {
 		return nil, err
 	}
-	mc.insertStmt, err = tx.Prepare("INSERT OR REPLACE INTO " + accountHashesTable + "(id, data) VALUES(?, ?)")
+	mc.insertStmt, err = e.Prepare("INSERT OR REPLACE INTO " + accountHashesTable + "(id, data) VALUES(?, ?)")
 	if err != nil {
 		return nil, err
 	}
-	mc.selectStmt, err = tx.Prepare("SELECT data FROM " + accountHashesTable + " WHERE id = ?")
+	mc.selectStmt, err = e.Prepare("SELECT data FROM " + accountHashesTable + " WHERE id = ?")
 	if err != nil {
 		return nil, err
 	}

@@ -270,6 +270,9 @@ func getProtocolTags(t *testing.T) []string {
 		for _, spec := range genDecl.Specs {
 			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 				for _, n := range valueSpec.Names {
+					if n.Name == "TagLength" {
+						continue
+					}
 					declaredTags = append(declaredTags, n.Name)
 				}
 			}

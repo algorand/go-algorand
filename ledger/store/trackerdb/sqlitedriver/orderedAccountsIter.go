@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 // orderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
@@ -34,7 +35,7 @@ type orderedAccountsIter struct {
 	accountBaseRows    *sql.Rows
 	hashesRows         *sql.Rows
 	resourcesRows      *sql.Rows
-	tx                 *sql.Tx
+	e                  db.Executable
 	pendingBaseRow     pendingBaseRow
 	pendingResourceRow pendingResourceRow
 	accountCount       int
@@ -84,9 +85,9 @@ type pendingResourceRow struct {
 
 // MakeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
 // only a single iterator can be active at a time.
-func MakeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter {
+func MakeOrderedAccountsIter(e db.Executable, accountCount int) *orderedAccountsIter {
 	return &orderedAccountsIter{
-		tx:           tx,
+		e:            e,
 		accountCount: accountCount,
 		step:         oaiStepStartup,
 	}
@@ -104,7 +105,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 	if iterator.step == oaiStepDeleteOldOrderingTable {
 		// although we're going to delete this table anyway when completing the iterator execution, we'll try to
 		// clean up any intermediate table.
-		_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+		_, err = iterator.e.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
 		if err != nil {
 			return
 		}
@@ -113,7 +114,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 	}
 	if iterator.step == oaiStepCreateOrderingTable {
 		// create the temporary table
-		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(addrid INTEGER, hash blob)")
+		_, err = iterator.e.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(addrid INTEGER, hash blob)")
 		if err != nil {
 			return
 		}
@@ -122,17 +123,17 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 	}
 	if iterator.step == oaiStepQueryAccounts {
 		// iterate over the existing accounts
-		iterator.accountBaseRows, err = iterator.tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
+		iterator.accountBaseRows, err = iterator.e.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
 		if err != nil {
 			return
 		}
 		// iterate over the existing resources
-		iterator.resourcesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
+		iterator.resourcesRows, err = iterator.e.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
 		if err != nil {
 			return
 		}
 		// prepare the insert statement into the temporary table
-		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(addrid, hash) VALUES(?, ?)")
+		iterator.insertStmt, err = iterator.e.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(addrid, hash) VALUES(?, ?)")
 		if err != nil {
 			return
 		}
@@ -200,7 +201,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 	if iterator.step == oaiStepCreateOrderingAccountIndex {
 		// create an index. It shown that even when we're making a single select statement in step 5, it would be better to have this index vs. not having it at all.
 		// note that this index is using the rowid of the accountsiteratorhashes table.
-		_, err = iterator.tx.ExecContext(ctx, "CREATE INDEX accountsiteratorhashesidx ON accountsiteratorhashes(hash)")
+		_, err = iterator.e.ExecContext(ctx, "CREATE INDEX accountsiteratorhashesidx ON accountsiteratorhashes(hash)")
 		if err != nil {
 			iterator.Close(ctx)
 			return
@@ -210,7 +211,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []trackerdb
 	}
 	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
-		iterator.hashesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, hash FROM accountsiteratorhashes ORDER BY hash")
+		iterator.hashesRows, err = iterator.e.QueryContext(ctx, "SELECT addrid, hash FROM accountsiteratorhashes ORDER BY hash")
 
 		if err != nil {
 			iterator.Close(ctx)
@@ -272,7 +273,7 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 		iterator.insertStmt.Close()
 		iterator.insertStmt = nil
 	}
-	_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+	_, err = iterator.e.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
 	return
 }
 
