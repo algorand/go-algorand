@@ -18,6 +18,7 @@ package restapi
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -2413,7 +2414,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(approval),
+						Bytes: base64.StdEncoding.EncodeToString(approval),
 					},
 					{
 						Type: uint64(basics.TealUintType),
@@ -2445,7 +2446,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(approval),
+						Bytes: base64.StdEncoding.EncodeToString(approval),
 					},
 				},
 			},
@@ -2467,7 +2468,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(clearState),
+						Bytes: base64.StdEncoding.EncodeToString(clearState),
 					},
 					{
 						Type: uint64(basics.TealUintType),
@@ -2499,7 +2500,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(clearState),
+						Bytes: base64.StdEncoding.EncodeToString(clearState),
 					},
 				},
 			},
@@ -2510,7 +2511,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(crypto.Digest(appID.Address()).ToSlice()),
+						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
 			},
@@ -2531,7 +2532,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(crypto.Digest(appID.Address()).ToSlice()),
+						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
 			},
@@ -2641,7 +2642,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
@@ -2658,7 +2659,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
@@ -2690,7 +2691,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
 				Deletions: &[]model.TealValue{
@@ -2707,7 +2708,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
 			},
@@ -2718,7 +2719,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
@@ -2735,7 +2736,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
@@ -2838,7 +2839,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(approval),
+						Bytes: base64.StdEncoding.EncodeToString(approval),
 					},
 				},
 			},
@@ -2849,7 +2850,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(approval),
+						Bytes: base64.StdEncoding.EncodeToString(approval),
 					},
 				},
 			},
@@ -2860,7 +2861,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(clearState),
+						Bytes: base64.StdEncoding.EncodeToString(clearState),
 					},
 				},
 			},
@@ -2871,7 +2872,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(clearState),
+						Bytes: base64.StdEncoding.EncodeToString(clearState),
 					},
 				},
 			},
@@ -2991,7 +2992,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: "appID",
+						Bytes: base64.StdEncoding.EncodeToString([]byte("appID")),
 					},
 				},
 			},
@@ -3013,7 +3014,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(appID) + 3)),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(appID) + 3)),
 					},
 				},
 				Deletions: &[]model.TealValue{
@@ -3030,17 +3031,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: "appID" + string(uint64ToBytes(uint64(appID)+3)),
+						Bytes: base64.StdEncoding.EncodeToString([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
 					},
 				},
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: "appID",
+						Bytes: base64.StdEncoding.EncodeToString([]byte("appID")),
 					},
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(appID) + 3)),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(appID) + 3)),
 					},
 				},
 			},
@@ -3051,13 +3052,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
+						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
 					},
 				},
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: "appID" + string(uint64ToBytes(uint64(appID)+3)),
+						Bytes: base64.StdEncoding.EncodeToString([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
 					},
 				},
 			},
@@ -3068,7 +3069,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
+						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
 					},
 				},
 			},
@@ -3105,7 +3106,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
@@ -3122,7 +3123,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
@@ -3165,7 +3166,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer - 1))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer - 1))),
 					},
 				},
 				Deletions: &[]model.TealValue{
@@ -3182,7 +3183,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer - 1))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer - 1))),
 					},
 				},
 			},
@@ -3426,7 +3427,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(approval),
+						Bytes: base64.StdEncoding.EncodeToString(approval),
 					},
 					{
 						Type: uint64(basics.TealUintType),
@@ -3458,7 +3459,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(approval),
+						Bytes: base64.StdEncoding.EncodeToString(approval),
 					},
 				},
 			},
@@ -3480,7 +3481,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(clearState),
+						Bytes: base64.StdEncoding.EncodeToString(clearState),
 					},
 					{
 						Type: uint64(basics.TealUintType),
@@ -3512,7 +3513,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(clearState),
+						Bytes: base64.StdEncoding.EncodeToString(clearState),
 					},
 				},
 			},
@@ -3523,7 +3524,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(crypto.Digest(appID.Address()).ToSlice()),
+						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
 			},
@@ -3544,7 +3545,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(crypto.Digest(appID.Address()).ToSlice()),
+						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
 			},
@@ -3654,7 +3655,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
@@ -3671,7 +3672,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
@@ -3703,7 +3704,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
 				Deletions: &[]model.TealValue{
@@ -3720,7 +3721,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
 			},
@@ -3731,7 +3732,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Additions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
@@ -3748,7 +3749,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 				Deletions: &[]model.TealValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: string(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
