@@ -383,7 +383,7 @@ func (lw *mutexBuilder) String() string {
 func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest // changes global variable defaultSendMessageTags
 	partitiontest.PartitionTest(t)
 	defaultSendMessageTagsOriginal := defaultSendMessageTags
-	defaultSendMessageTags = map[protocol.Tag]bool{"XX": true, "TX": true}
+	defaultSendMessageTags = map[protocol.Tag]bool{"XX": true, "MI": true}
 	defer func() {
 		defaultSendMessageTags = defaultSendMessageTagsOriginal
 	}()
