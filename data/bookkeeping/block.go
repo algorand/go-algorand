@@ -234,7 +234,7 @@ type (
 	// A Block contains the Payset and metadata corresponding to a given Round.
 	Block struct {
 		BlockHeader
-		Payset transactions.Payset `codec:"txns,maxallocbytes=config.MaxTxnBytesPerBlock"`
+		Payset transactions.Payset `codec:"txns,maxtotalbytes=config.MaxTxnBytesPerBlock"`
 	}
 )
 

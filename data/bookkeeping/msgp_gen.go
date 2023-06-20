@@ -972,7 +972,7 @@ func BlockMaxSize() (s int) {
 	// Calculating size of slice: z.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 5
-	// Using maxallocbytes for: z.Payset
+	// Using maxtotalbytes for: z.Payset
 	s += config.MaxTxnBytesPerBlock
 	return
 }

@@ -72,8 +72,8 @@ type StateProof struct {
 
 	SigCommit                  crypto.GenericDigest `codec:"c"`
 	SignedWeight               uint64               `codec:"w"`
-	SigProofs                  merklearray.Proof    `codec:"S,maxallocbytes=SigPartProofMaxSize"`
-	PartProofs                 merklearray.Proof    `codec:"P,maxallocbytes=SigPartProofMaxSize"`
+	SigProofs                  merklearray.Proof    `codec:"S,maxtotalbytes=SigPartProofMaxSize"`
+	PartProofs                 merklearray.Proof    `codec:"P,maxtotalbytes=SigPartProofMaxSize"`
 	MerkleSignatureSaltVersion byte                 `codec:"v"`
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants

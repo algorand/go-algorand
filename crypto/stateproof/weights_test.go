@@ -189,7 +189,7 @@ func TestNumReveals(t *testing.T) {
 func TestSigPartProofMaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	// Ensures that the SigPartProofMaxSize constant used for maxallocbytes for StateProof.(Sig|Part)Proof(s) is
+	// Ensures that the SigPartProofMaxSize constant used for maxtotalbytes for StateProof.(Sig|Part)Proof(s) is
 	// correct. It should be logically bound by the maximum number of StateProofTopVoters. It is scaled by 1/2
 	require.Equal(t, SigPartProofMaxSize, merklearray.ProofMaxSizeByElements(config.StateProofTopVoters/2))
 }
