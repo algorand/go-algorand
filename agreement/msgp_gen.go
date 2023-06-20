@@ -4903,7 +4903,7 @@ func ProposalMaxSize() (s int) {
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 5
-	// Using totalallocbound for: z.unauthenticatedProposal.Block.Payset
+	// Using maxallocbytes for: z.unauthenticatedProposal.Block.Payset
 	s += config.MaxTxnBytesPerBlock
 	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()
 	return
@@ -9137,7 +9137,7 @@ func TransmittedPayloadMaxSize() (s int) {
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 5
-	// Using totalallocbound for: z.unauthenticatedProposal.Block.Payset
+	// Using maxallocbytes for: z.unauthenticatedProposal.Block.Payset
 	s += config.MaxTxnBytesPerBlock
 	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize() + 3 + UnauthenticatedVoteMaxSize()
 	return
@@ -10750,7 +10750,7 @@ func UnauthenticatedProposalMaxSize() (s int) {
 	// Calculating size of slice: z.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 5
-	// Using totalallocbound for: z.Block.Payset
+	// Using maxallocbytes for: z.Block.Payset
 	s += config.MaxTxnBytesPerBlock
 	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()
 	return

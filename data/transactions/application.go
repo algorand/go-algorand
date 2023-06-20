@@ -107,7 +107,7 @@ type ApplicationCallTxnFields struct {
 
 	// ApplicationArgs are arguments accessible to the executing
 	// ApprovalProgram or ClearStateProgram.
-	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs,totalallocbound=config.MaxAppTotalArgLen"`
+	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs,maxallocbytes=config.MaxAppTotalArgLen"`
 
 	// Accounts are accounts whose balance records are accessible
 	// by the executing ApprovalProgram or ClearStateProgram. To
