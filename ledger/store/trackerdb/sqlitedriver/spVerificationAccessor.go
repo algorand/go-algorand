@@ -18,6 +18,7 @@ package sqlitedriver
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -66,7 +67,9 @@ func (spa *stateProofVerificationReader) LookupSPContext(stateProofLastAttestedR
 		row := spa.q.QueryRow("SELECT verificationcontext FROM stateproofverification WHERE lastattestedround=?", stateProofLastAttestedRound)
 		var buf []byte
 		err := row.Scan(&buf)
-		if err != nil {
+		if err == sql.ErrNoRows {
+			return trackerdb.ErrNotFound
+		} else if err != nil {
 			return err
 		}
 		err = protocol.Decode(buf, &verificationContext)

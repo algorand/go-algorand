@@ -220,19 +220,17 @@ type boxRef struct {
 // newBoxRef parses a command-line box ref, which is an optional appId, a comma,
 // and then the same format as an app call arg.
 func newBoxRef(arg string) boxRef {
-	parts := strings.SplitN(arg, ":", 2)
-	if len(parts) != 2 {
+	encoding, value, found := strings.Cut(arg, ":")
+	if !found {
 		reportErrorf("box refs should be of the form '[<app>,]encoding:value'")
 	}
-	encoding := parts[0] // tentative, may be <app>,<encoding>
-	value := parts[1]
-	parts = strings.SplitN(encoding, ",", 2)
 	appID := uint64(0)
-	if len(parts) == 2 {
+
+	if appStr, enc, found := strings.Cut(encoding, ","); found {
 		// There was a comma in the part before the ":"
-		encoding = parts[1]
+		encoding = enc
 		var err error
-		appID, err = strconv.ParseUint(parts[0], 10, 64)
+		appID, err = strconv.ParseUint(appStr, 10, 64)
 		if err != nil {
 			reportErrorf("Could not parse app id in box ref: %v", err)
 		}

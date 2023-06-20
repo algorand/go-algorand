@@ -23,12 +23,13 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/msgp/msgp"
 )
 
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
 type encodedAccountsBatchIter struct {
-	tx              *sql.Tx
+	q               db.Queryable
 	accountsRows    *sql.Rows
 	resourcesRows   *sql.Rows
 	nextBaseRow     pendingBaseRow
@@ -45,21 +46,21 @@ type catchpointAccountResourceCounter struct {
 }
 
 // MakeEncodedAccoutsBatchIter creates an empty accounts batch iterator.
-func MakeEncodedAccoutsBatchIter(tx *sql.Tx) *encodedAccountsBatchIter {
-	return &encodedAccountsBatchIter{tx: tx}
+func MakeEncodedAccoutsBatchIter(q db.Queryable) *encodedAccountsBatchIter {
+	return &encodedAccountsBatchIter{q: q}
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
 func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, accountCount int, resourceCount int) (bals []encoded.BalanceRecordV6, numAccountsProcessed uint64, err error) {
 	if iterator.accountsRows == nil {
-		iterator.accountsRows, err = iterator.tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
+		iterator.accountsRows, err = iterator.q.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase ORDER BY rowid")
 		if err != nil {
 			return
 		}
 	}
 	if iterator.resourcesRows == nil {
-		iterator.resourcesRows, err = iterator.tx.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
+		iterator.resourcesRows, err = iterator.q.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources ORDER BY addrid, aidx")
 		if err != nil {
 			return
 		}

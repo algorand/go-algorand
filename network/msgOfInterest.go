@@ -26,6 +26,7 @@ import (
 var errUnableUnmarshallMessage = errors.New("unmarshalMessageOfInterest: could not unmarshall message")
 var errInvalidMessageOfInterest = errors.New("unmarshalMessageOfInterest: message missing the tags key")
 var errInvalidMessageOfInterestLength = errors.New("unmarshalMessageOfInterest: message length is too long")
+var errInvalidMessageOfInterestInvalidTag = errors.New("unmarshalMessageOfInterest: invalid tag")
 
 const maxMessageOfInterestTags = 1024
 const topicsEncodingSeparator = ","
@@ -46,6 +47,12 @@ func unmarshallMessageOfInterest(data []byte) (map[protocol.Tag]bool, error) {
 	// convert the tags into a tags map.
 	msgTagsMap := make(map[protocol.Tag]bool, len(tags))
 	for _, tag := range strings.Split(string(tags), topicsEncodingSeparator) {
+		if len(tag) != protocol.TagLength {
+			return nil, errInvalidMessageOfInterestInvalidTag
+		}
+		if _, ok := protocol.TagMap[protocol.Tag(tag)]; !ok {
+			return nil, errInvalidMessageOfInterestInvalidTag
+		}
 		msgTagsMap[protocol.Tag(tag)] = true
 	}
 	return msgTagsMap, nil

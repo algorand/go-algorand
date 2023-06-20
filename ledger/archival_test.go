@@ -76,7 +76,7 @@ func (wl *wrappedLedger) Latest() basics.Round {
 	return wl.l.Latest()
 }
 
-func (wl *wrappedLedger) trackerDB() trackerdb.TrackerStore {
+func (wl *wrappedLedger) trackerDB() trackerdb.Store {
 	return wl.l.trackerDB()
 }
 

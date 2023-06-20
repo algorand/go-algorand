@@ -151,7 +151,7 @@ type modifiedKvValue struct {
 
 type accountUpdates struct {
 	// Connection to the database.
-	dbs trackerdb.TrackerStore
+	dbs trackerdb.Store
 
 	// Optimized reader for fast accounts DB lookups.
 	accountsq trackerdb.AccountsReader
@@ -1685,12 +1685,12 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx trackerdb.Transact
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.OldAccountPreloadDuration
 	}
 
-	arw, err := tx.MakeAccountsReaderWriter()
+	aw, err := tx.MakeAccountsWriter()
 	if err != nil {
 		return err
 	}
 
-	err = arw.AccountsPutTotals(dcc.roundTotals, false)
+	err = aw.AccountsPutTotals(dcc.roundTotals, false)
 	if err != nil {
 		return err
 	}
