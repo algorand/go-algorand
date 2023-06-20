@@ -42,6 +42,7 @@ type Proof struct {
 // SingleLeafProof is used to convince a verifier about membership of a specific
 // leaf h at index i on a tree. The verifier has a trusted value of the tree
 // root hash. it corresponds to merkle verification path.
+//
 //msgp:maxsize ignore SingleLeafProof
 type SingleLeafProof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -52,6 +53,7 @@ type SingleLeafProof struct {
 // ProofMaxSizeByElements returns the maximum msgp encoded size of merklearray.Proof structs containing n signatures
 // This is necessary because the allocbounds on the proof are actual theoretical bounds but for calculating maximum
 // proof size for individual message types we have smaller valid bounds.
+// Exported because it's used in the stateproof package for ensuring that SigPartProof constant is correct size.
 func ProofMaxSizeByElements(n int) (s int) {
 	s = 1 + 4
 	// Calculating size of slice: z.Path
@@ -61,6 +63,8 @@ func ProofMaxSizeByElements(n int) (s int) {
 }
 
 // SingleLeafProofMaxSize returns the maximum msgp encoded size of proof verifying a single leaf
+// It is manually defined here instead of letting msgp do it since we cannot annotate the embedded Proof struct
+// with maxtotalbytes for msgp to autogenerate it.
 func SingleLeafProofMaxSize() int {
 	return ProofMaxSizeByElements(MaxEncodedTreeDepth)
 }
