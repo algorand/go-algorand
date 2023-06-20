@@ -273,7 +273,7 @@ func (tx Header) Alive(tc TxnContext) error {
 
 // MatchAddress checks if the transaction touches a given address.
 func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
-	return slices.Index(tx.RelevantAddrs(spec), addr) != -1
+	return slices.Contains(tx.RelevantAddrs(spec), addr)
 }
 
 var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")

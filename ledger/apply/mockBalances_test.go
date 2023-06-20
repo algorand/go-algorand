@@ -162,16 +162,13 @@ func (b *mockCreatableBalances) GetAssetParams(addr basics.Address, aidx basics.
 	return
 }
 
-// mapWith returns a new map with the given key and value added to it. Care must
-// be taken for nil input maps, which maps.Clone would keep as nil.
+// mapWith returns a new map with the given key and value added to it.
+// maps.Clone would keep nil inputs as nil, so we make() then map.Copy().
 func mapWith[M ~map[K]V, K comparable, V any](m M, k K, v V) M {
-	if m == nil {
-		m = make(M, len(m)+1)
-	} else {
-		m = maps.Clone(m)
-	}
-	m[k] = v
-	return m
+	new := make(M, len(m)+1)
+	maps.Copy(new, m)
+	new[k] = v
+	return new
 }
 
 func (b *mockCreatableBalances) PutAppParams(addr basics.Address, aidx basics.AppIndex, params basics.AppParams) error {
