@@ -4060,10 +4060,10 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	topics := Topics{
 		MakeTopic("requestDataType",
-			[]byte("fake block and cert value")),
+			[]byte("a")),
 		MakeTopic(
 			"blockData",
-			[]byte("fake round value")),
+			[]byte("b")),
 	}
 	// Send a request for a block and cancel it after the handler has been registered
 	go func() {
