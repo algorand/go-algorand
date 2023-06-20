@@ -23,7 +23,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -554,7 +553,9 @@ func (sd *StateDelta) AddKvMod(key string, delta KvValueDelta) {
 func (sd *StateDelta) OptimizeAllocatedMemory(maxBalLookback uint64) {
 	// Accts takes up 232 bytes per entry, and is saved for 320 rounds
 	if uint64(cap(sd.Accts.Accts)-len(sd.Accts.Accts))*accountArrayEntrySize*maxBalLookback > stateDeltaTargetOptimizationThreshold {
-		sd.Accts.Accts = slices.Clone(sd.Accts.Accts)
+		accts := make([]BalanceRecord, len(sd.Accts.Accts))
+		copy(accts, sd.Accts.Accts)
+		sd.Accts.Accts = accts
 	}
 
 	// acctsCache takes up 64 bytes per entry, and is saved for 320 rounds
