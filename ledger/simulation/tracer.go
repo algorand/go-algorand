@@ -19,7 +19,6 @@ package simulation
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -261,8 +260,8 @@ func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer 
 
 	for i := stackHeightAfterDeletion; i < stackHeight; i++ {
 		tealValue := cx.Stack[i].ToTealValue()
-		o.Deleted = append(o.Deleted, model.TealValue{
-			Type:  uint64(tealValue.Type),
+		o.Deleted = append(o.Deleted, basics.TealValue{
+			Type:  tealValue.Type,
 			Uint:  tealValue.Uint,
 			Bytes: tealValue.Bytes,
 		})
@@ -303,8 +302,8 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
 	for i := tracer.stackHeightAfterDeletion; i < len(cx.Stack); i++ {
 		tealValue := cx.Stack[i].ToTealValue()
-		o.Added = append(o.Added, model.TealValue{
-			Type:  uint64(tealValue.Type),
+		o.Added = append(o.Added, basics.TealValue{
+			Type:  tealValue.Type,
 			Uint:  tealValue.Uint,
 			Bytes: tealValue.Bytes,
 		})

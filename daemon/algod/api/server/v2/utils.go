@@ -360,12 +360,74 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
+func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.TealValue {
+	if len(tvs) == 0 {
+		return nil
+	}
+	modelTvs := make([]model.TealValue, len(tvs))
+	for i := range tvs {
+		modelTvs[i] = model.TealValue{
+			Type:  uint64(tvs[i].Type),
+			Uint:  tvs[i].Uint,
+			Bytes: tvs[i].Bytes,
+		}
+	}
+	return &modelTvs
+}
+
+func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.SimulationOpcodeTraceUnit {
+	if len(programTrace) == 0 {
+		return nil
+	}
+	modelProgramTrace := make([]model.SimulationOpcodeTraceUnit, len(programTrace))
+	for i := range programTrace {
+		var spawnedInnersPtr *[]uint64
+		if len(programTrace[i].SpawnedInners) > 0 {
+			spawnedInners := make([]uint64, len(programTrace[i].SpawnedInners))
+			for j, innerIndex := range programTrace[i].SpawnedInners {
+				spawnedInners[j] = uint64(innerIndex)
+			}
+			spawnedInnersPtr = &spawnedInners
+		}
+		modelProgramTrace[i] = model.SimulationOpcodeTraceUnit{
+			Pc:               programTrace[i].PC,
+			SpawnedInners:    spawnedInnersPtr,
+			DisassembledLine: &programTrace[i].DisassembledLine,
+			Additions:        convertTealValueSliceToModel(programTrace[i].Added),
+			Deletions:        convertTealValueSliceToModel(programTrace[i].Deleted),
+		}
+	}
+	return &modelProgramTrace
+}
+
+func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTransactionExecTrace {
+	if txnTrace == nil {
+		return nil
+	}
+
+	execTraceModel := model.SimulationTransactionExecTrace{
+		ApprovalProgramTrace:   convertProgramTrace(txnTrace.ApprovalProgramTrace),
+		ClearStateProgramTrace: convertProgramTrace(txnTrace.ClearStateProgramTrace),
+		LogicSigTrace:          convertProgramTrace(txnTrace.LogicSigTrace),
+	}
+
+	if len(txnTrace.InnerTraces) > 0 {
+		innerTraces := make([]model.SimulationTransactionExecTrace, len(txnTrace.InnerTraces))
+		for i := range txnTrace.InnerTraces {
+			innerTraces[i] = *convertTxnTrace(&txnTrace.InnerTraces[i])
+		}
+		execTraceModel.InnerTrace = &innerTraces
+	}
+
+	return &execTraceModel
+}
+
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
 		Txn:                    ConvertInnerTxn(&txnResult.Txn),
 		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed: numOrNil(txnResult.LogicSigBudgetConsumed),
-		TransactionTrace:       txnResult.Trace,
+		TransactionTrace:       convertTxnTrace(txnResult.Trace),
 	}
 }
 

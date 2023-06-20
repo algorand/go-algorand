@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -178,40 +177,37 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 }
 
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
-// NOTE: we are introducing model.TealValue here, to avoid declare again conversion subroutines in daemon/handlers.go
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
-	PC uint64 `codec:"pc"`
+	PC uint64
 
 	// SpawnedInners contains the indexes of traces for inner transactions spawned by this opcode,
 	// if any. These indexes refer to the InnerTraces array of the TransactionTrace object containing
 	// this OpcodeTraceUnit.
-	SpawnedInners []int `codec:"spawned-inners,omitempty"`
+	SpawnedInners []int
 
 	// the line disassembled from program byte code
-	DisassembledLine string `codec:"disassembled-line,omitempty"`
+	DisassembledLine string
 
 	// what has been added to stack
-	Added []model.TealValue `codec:"additions,omitempty"`
+	Added []basics.TealValue
 
 	// deleted elements from stack, help backwards debugging
-	Deleted []model.TealValue `codec:"deletions,omitempty"`
+	Deleted []basics.TealValue
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
 type TransactionTrace struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
 	// ApprovalProgramTrace stands for a slice of OpcodeTraceUnit over application call on approval program
-	ApprovalProgramTrace []OpcodeTraceUnit `codec:"approval-program-trace"`
+	ApprovalProgramTrace []OpcodeTraceUnit
 	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
-	ClearStateProgramTrace []OpcodeTraceUnit `codec:"clear-state-program-trace"`
+	ClearStateProgramTrace []OpcodeTraceUnit
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
-	LogicSigTrace []OpcodeTraceUnit `codec:"logic-sig-trace"`
+	LogicSigTrace []OpcodeTraceUnit
 	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
-	programTraceRef *[]OpcodeTraceUnit `codec:"-"`
+	programTraceRef *[]OpcodeTraceUnit
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.
-	InnerTraces []TransactionTrace `codec:"inner-trace"`
+	InnerTraces []TransactionTrace
 }
