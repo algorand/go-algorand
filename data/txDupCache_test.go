@@ -18,6 +18,7 @@ package data
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -109,7 +110,7 @@ func TestTxHandlerDigestCache(t *testing.T) {
 }
 
 func (c *txSaltedCache) check(msg []byte) bool {
-	_, found := c.innerCheck(msg)
+	_, _, found := c.innerCheck(msg)
 	return found
 }
 
@@ -129,7 +130,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	var exist bool
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		ks[i], exist = cache.CheckAndPut(ds[i][:])
+		ks[i], _, exist = cache.CheckAndPut(ds[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, ks[i])
 
@@ -141,9 +142,9 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	// try to re-add, ensure not added
 	for i := 0; i < size; i++ {
-		k, exist := cache.CheckAndPut(ds[i][:])
+		k, _, exist := cache.CheckAndPut(ds[i][:], struct{}{})
 		require.True(t, exist)
-		require.Empty(t, k)
+		require.NotEmpty(t, k)
 	}
 
 	require.Equal(t, size, cache.Len())
@@ -153,7 +154,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	var ks2 [size]*crypto.Digest
 	for i := 0; i < size; i++ {
 		crypto.RandBytes(ds2[i][:])
-		ks2[i], exist = cache.CheckAndPut(ds2[i][:])
+		ks2[i], _, exist = cache.CheckAndPut(ds2[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, ks2[i])
 
@@ -165,7 +166,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 
 	var d [8]byte
 	crypto.RandBytes(d[:])
-	k, exist := cache.CheckAndPut(d[:])
+	k, _, exist := cache.CheckAndPut(d[:], struct{}{})
 	require.False(t, exist)
 	require.NotEmpty(t, k)
 	exist = cache.check(d[:])
@@ -211,7 +212,7 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 	var ds [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		k, exist := cache.CheckAndPut(ds[i][:])
+		k, _, exist := cache.CheckAndPut(ds[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, k)
 
@@ -236,7 +237,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	var ds [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds[i][:]))
-		k, exist := cache.CheckAndPut(ds[i][:])
+		k, _, exist := cache.CheckAndPut(ds[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, k)
 		exist = cache.check(ds[i][:])
@@ -251,7 +252,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	var ds2 [size][8]byte
 	for i := 0; i < size; i++ {
 		crypto.RandBytes([]byte(ds2[i][:]))
-		k, exist := cache.CheckAndPut(ds2[i][:])
+		k, _, exist := cache.CheckAndPut(ds2[i][:], struct{}{})
 		require.False(t, exist)
 		require.NotEmpty(t, k)
 		exist = cache.check(ds2[i][:])
@@ -279,7 +280,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 
 // benchmark abstractions
 type cachePusher interface {
-	push()
+	push(seed int)
 }
 
 type cacheMaker interface {
@@ -288,12 +289,19 @@ type cacheMaker interface {
 
 type digestCacheMaker struct{}
 type saltedCacheMaker struct{}
+type saltedCacheDupMaker struct{}
 
 func (m digestCacheMaker) make(size int) cachePusher {
 	return &digestCachePusher{c: makeDigestCache(size)}
 }
 func (m saltedCacheMaker) make(size int) cachePusher {
 	scp := &saltedCachePusher{c: makeSaltedCache(size)}
+	scp.c.Start(context.Background(), 0)
+	return scp
+}
+
+func (m saltedCacheDupMaker) make(size int) cachePusher {
+	scp := &saltedCacheDupPusher{c: makeSaltedCache(size)}
 	scp.c.Start(context.Background(), 0)
 	return scp
 }
@@ -305,17 +313,29 @@ type saltedCachePusher struct {
 	c *txSaltedCache
 }
 
-func (p *digestCachePusher) push() {
+type saltedCacheDupPusher struct {
+	c *txSaltedCache
+}
+
+func (p *digestCachePusher) push(seed int) {
 	var d [crypto.DigestSize]byte
 	crypto.RandBytes(d[:])
 	h := crypto.Digest(blake2b.Sum256(d[:])) // digestCache does not hashes so calculate hash here
 	p.c.CheckAndPut(&h)
 }
 
-func (p *saltedCachePusher) push() {
+func (p *saltedCachePusher) push(seed int) {
 	var d [crypto.DigestSize]byte
 	crypto.RandBytes(d[:])
-	p.c.CheckAndPut(d[:]) // saltedCache hashes inside
+	p.c.CheckAndPut(d[:], struct{}{}) // saltedCache hashes inside
+}
+
+func (p *saltedCacheDupPusher) push(seed int) {
+	var d [crypto.DigestSize]byte
+	var peer [8]byte
+	crypto.RandBytes(peer[:])
+	binary.BigEndian.PutUint64(d[:], uint64(seed))
+	p.c.CheckAndPut(d[:], peer) // saltedCache hashes inside
 }
 
 func BenchmarkDigestCaches(b *testing.B) {
@@ -327,18 +347,23 @@ func BenchmarkDigestCaches(b *testing.B) {
 
 	digestCacheMaker := digestCacheMaker{}
 	saltedCacheMaker := saltedCacheMaker{}
+	saltedCacheDupMaker := saltedCacheDupMaker{}
 	var benchmarks = []struct {
 		maker      cacheMaker
 		numThreads int
 	}{
 		{digestCacheMaker, 1},
 		{saltedCacheMaker, 1},
+		{saltedCacheDupMaker, 1},
 		{digestCacheMaker, 4},
 		{saltedCacheMaker, 4},
+		{saltedCacheDupMaker, 4},
 		{digestCacheMaker, 16},
 		{saltedCacheMaker, 16},
+		{saltedCacheDupMaker, 16},
 		{digestCacheMaker, 128},
 		{saltedCacheMaker, 128},
+		{saltedCacheDupMaker, 128},
 	}
 	for _, bench := range benchmarks {
 		b.Run(fmt.Sprintf("%T/threads=%d", bench.maker, bench.numThreads), func(b *testing.B) {
@@ -365,9 +390,143 @@ func benchmarkDigestCache(b *testing.B, m cacheMaker, numThreads int) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numHashes; j++ {
-				p.push()
+				p.push(j)
 			}
 		}()
 	}
 	wg.Wait()
+}
+
+// TestTxHandlerSaltedCacheValues checks values are stored correctly
+func TestTxHandlerSaltedCacheValues(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const size = 2
+	cache := makeSaltedCache(size)
+	cache.Start(context.Background(), 0)
+	require.Zero(t, cache.Len())
+
+	smapLenEqual := func(t *testing.T, smap *sync.Map, expectedLen int) {
+		t.Helper()
+		actualLen := 0
+		smap.Range(func(_, _ interface{}) bool {
+			actualLen++
+			return true
+		})
+		require.Equal(t, expectedLen, actualLen)
+	}
+
+	smapContains := func(t *testing.T, smap *sync.Map, key interface{}) {
+		t.Helper()
+		_, ok := smap.Load(key)
+		require.True(t, ok)
+	}
+
+	type snd struct {
+		id int
+	}
+
+	d, v, found := cache.innerCheck([]byte{1})
+	require.False(t, found)
+	require.Nil(t, v)
+	require.NotNil(t, d)
+	require.NotEmpty(t, d)
+
+	// add a value, ensure it can be found
+	d1, v1, found := cache.CheckAndPut([]byte{1}, snd{id: 1})
+	require.False(t, found)
+	require.NotNil(t, d1)
+	require.NotEmpty(t, d1)
+	d, v, found = cache.innerCheck([]byte{1})
+	require.True(t, found)
+	require.NotNil(t, v)
+	require.NotNil(t, d)
+	require.Equal(t, *d, *d1)
+	smapLenEqual(t, v, 1)
+	require.Equal(t, v, v1)
+	smapContains(t, v, snd{id: 1})
+	d, v, found = cache.CheckAndPut([]byte{1}, snd{id: 1})
+	require.True(t, found)
+	require.NotNil(t, d)
+	require.NotEmpty(t, d)
+	require.Equal(t, *d, *d1)
+	require.Equal(t, v, v1)
+	require.Len(t, cache.cur, 1)
+	smapLenEqual(t, cache.cur[*d], 1)
+	require.Nil(t, cache.prev)
+
+	// add a value with different sender
+	dt, vt, found := cache.CheckAndPut([]byte{1}, snd{id: 2})
+	require.True(t, found)
+	require.NotNil(t, dt)
+	require.NotEmpty(t, dt)
+	require.Nil(t, cache.prev)
+	d, v, found = cache.innerCheck([]byte{1})
+	require.True(t, found)
+	require.NotNil(t, v)
+	require.NotNil(t, d)
+	require.Equal(t, *d, *dt)
+	require.Equal(t, *d, *d1)
+	require.Equal(t, v, vt)
+	smapLenEqual(t, v, 2)
+	smapContains(t, v, snd{id: 1})
+	smapContains(t, v, snd{id: 2})
+
+	// add one more value to full cache.cur
+	d2, v2, found := cache.CheckAndPut([]byte{2}, snd{id: 1})
+	require.False(t, found)
+	require.NotNil(t, d2)
+	require.NotEmpty(t, d2)
+	smapLenEqual(t, v2, 1)
+	require.Len(t, cache.cur, 2)
+	smapLenEqual(t, cache.cur[*d1], 2)
+	smapLenEqual(t, cache.cur[*d2], 1)
+	require.Nil(t, cache.prev)
+
+	// adding new value would trigger cache swap
+	// first ensure new sender for seen message does not trigger a swap
+	dt, vt, found = cache.CheckAndPut([]byte{2}, snd{id: 2})
+	require.True(t, found)
+	require.NotNil(t, dt)
+	require.NotEmpty(t, dt)
+	require.Equal(t, *d2, *dt)
+	smapLenEqual(t, vt, 2)
+	require.Len(t, cache.cur, 2)
+	smapLenEqual(t, cache.cur[*d1], 2)
+	smapLenEqual(t, cache.cur[*d2], 2)
+	require.Nil(t, cache.prev)
+
+	// add a new value triggers a swap
+	d3, v3, found := cache.CheckAndPut([]byte{3}, snd{id: 1})
+	require.False(t, found)
+	require.NotNil(t, d2)
+	require.NotEmpty(t, d2)
+	smapLenEqual(t, v3, 1)
+	require.Len(t, cache.cur, 1)
+	smapLenEqual(t, cache.cur[*d3], 1)
+	require.Len(t, cache.prev, 2)
+	smapLenEqual(t, cache.prev[*d1], 2)
+	smapLenEqual(t, cache.prev[*d2], 2)
+
+	// add a sender into old (prev) value
+	dt, vt, found = cache.CheckAndPut([]byte{2}, snd{id: 3})
+	require.True(t, found)
+	require.NotNil(t, dt)
+	require.NotEmpty(t, dt)
+	require.Equal(t, *d2, *dt)
+	require.Len(t, cache.cur, 1)
+	smapLenEqual(t, cache.cur[*d3], 1)
+	require.Len(t, cache.prev, 2)
+	smapLenEqual(t, cache.prev[*d1], 2)
+	smapLenEqual(t, cache.prev[*d2], 3)
+	d, v, found = cache.innerCheck([]byte{2})
+	require.True(t, found)
+	require.NotNil(t, v)
+	require.NotNil(t, d)
+	require.Equal(t, *d, *dt)
+	require.Equal(t, *d, *d2)
+	smapLenEqual(t, v, 3)
+	require.Equal(t, vt, v)
+	smapContains(t, v, snd{id: 3})
 }

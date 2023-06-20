@@ -1007,6 +1007,28 @@ func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 	require.Equal(t, initialValue+1, currentValue)
 }
 
+func makeTxn(sendIdx int, recvIdx int, addresses []basics.Address, secrets []*crypto.SignatureSecrets) ([]transactions.SignedTxn, []byte) {
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[sendIdx],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisID:   genesisID,
+			GenesisHash: genesisHash,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[recvIdx],
+			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
+		},
+	}
+	signedTx := tx.Sign(secrets[sendIdx])
+	blob := protocol.Encode(&signedTx)
+	return []transactions.SignedTxn{signedTx}, blob
+}
+
 func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1043,27 +1065,7 @@ loop:
 		}
 	}
 
-	makeTxns := func(sendIdx, recvIdx int) ([]transactions.SignedTxn, []byte) {
-		tx := transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:     addresses[sendIdx],
-				Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-				FirstValid: 0,
-				LastValid:  basics.Round(proto.MaxTxnLife),
-				Note:       make([]byte, 2),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: addresses[recvIdx],
-				Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
-			},
-		}
-		signedTx := tx.Sign(secrets[sendIdx])
-		blob := protocol.Encode(&signedTx)
-		return []transactions.SignedTxn{signedTx}, blob
-	}
-
-	stxns, blob := makeTxns(1, 2)
+	stxns, blob := makeTxn(1, 2, addresses, secrets)
 
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
@@ -1095,6 +1097,93 @@ loop:
 	require.Equal(t, initialCount+1, currentCount)
 	require.Equal(t, 0, handler.msgCache.Len())
 	require.Equal(t, 0, handler.txCanonicalCache.Len())
+}
+
+type dupMockNetwork struct {
+	mocks.MockNetwork
+	mu    deadlock.Mutex
+	relay []*sync.Map
+}
+
+func (network *dupMockNetwork) RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except *sync.Map) error {
+	network.mu.Lock()
+	defer network.mu.Unlock()
+	network.relay = append(network.relay, except)
+	return nil
+}
+
+func (network *dupMockNetwork) requireRelayCount(t *testing.T, callsCount int, exceptIdx int, exceptPeersCount int) {
+	network.mu.Lock()
+	defer network.mu.Unlock()
+
+	require.Len(t, network.relay, callsCount)
+	var count int
+	network.relay[exceptIdx].Range(func(_, _ interface{}) bool {
+		count++
+		return true
+	})
+	require.Equal(t, count, exceptPeersCount)
+}
+
+// TestTxHandlerProcessIncomingRelay ensures txHandler does not relay duplicates
+func TestTxHandlerProcessIncomingRelayDups(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const numUsers = 100
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
+
+	// prepare the accounts
+	addresses, secrets, genesis := makeTestGenesisAccounts(t, numUsers)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	cfg.EnableTxBacklogRateLimiting = false
+	cfg.TxIncomingFilteringFlags = 1 // txFilterRawMsg
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	net := dupMockNetwork{}
+
+	tp := pools.MakeTransactionPool(ledger.Ledger, cfg, logging.Base())
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	opts := TxHandlerOpts{
+		tp, backlogPool, ledger, &net, "", crypto.Digest{}, cfg,
+	}
+
+	handler, err := MakeTxHandler(opts)
+	require.NoError(t, err)
+	handler.Start()
+	defer handler.Stop()
+
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+
+	_, blob := makeTxn(1, 2, addresses, secrets)
+
+	type mockPeer struct {
+		id int
+	}
+
+	for i := 1; i <= 3; i++ {
+		msg := network.IncomingMessage{Data: blob, Sender: mockPeer{i}}
+		handler.processIncomingTxn(msg)
+	}
+
+	// wait until txn propagates in handler
+	require.Eventually(t, func() bool {
+		return tp.PendingCount() >= 1
+	}, time.Second, 10*time.Millisecond)
+
+	// there is almost no delay between tp.Remember and net.RelayArray but still wait until the goroutine finishes
+	handler.ctxCancel()
+	handler.backlogWg.Wait()
+
+	net.requireRelayCount(t, 1, 0, 3) // one RelayArray call and 3 except peers
 }
 
 const benchTxnNum = 25_000

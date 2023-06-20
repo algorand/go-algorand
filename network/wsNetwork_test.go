@@ -542,7 +542,7 @@ func TestWebsocketNetworkArray(t *testing.T) {
 
 	tags := []protocol.Tag{protocol.TxnTag, protocol.TxnTag, protocol.TxnTag}
 	data := [][]byte{[]byte("foo"), []byte("bar"), []byte("algo")}
-	netA.BroadcastArray(context.Background(), tags, data, false, nil)
+	netA.BroadcastArray(context.Background(), tags, data, false, nil, nil)
 
 	select {
 	case <-counterDone:
@@ -570,7 +570,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	cancel()
 
 	// try calling BroadcastArray
-	netA.BroadcastArray(ctx, tags, data, true, nil)
+	netA.BroadcastArray(ctx, tags, data, true, nil, nil)
 
 	select {
 	case <-counterDone:
@@ -4485,4 +4485,24 @@ func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
 
 		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
 	})
+}
+
+func TestInterfaceLookup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var m sync.Map
+	peer1 := &wsPeer{peerIndex: 1}
+	peer2 := &wsPeer{peerIndex: 1}
+
+	var sender1 Peer = peer1
+	m.Store(sender1, struct{}{})
+	m.Store(peer2, struct{}{})
+
+	_, ok := m.Load(Peer(peer1))
+	require.True(t, ok)
+	_, ok = m.Load(peer2)
+	require.True(t, ok)
+	_, ok = m.Load(sender1)
+	require.True(t, ok)
 }

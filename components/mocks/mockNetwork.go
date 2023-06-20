@@ -20,6 +20,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"sync"
 
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -35,8 +36,18 @@ func (network *MockNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 	return nil
 }
 
+// BroadcastArray - unused function
+func (network *MockNetwork) BroadcastArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except network.Peer, exceptMany *sync.Map) error {
+	return nil
+}
+
 // Relay - unused function
 func (network *MockNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	return nil
+}
+
+// RelayArray - unused function
+func (network *MockNetwork) RelayArray(ctx context.Context, tag []protocol.Tag, data [][]byte, wait bool, except *sync.Map) error {
 	return nil
 }
 
