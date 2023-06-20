@@ -359,6 +359,15 @@ type typedList struct {
 	Effects string
 }
 
+// StackChangeExplanation explains the effect of an opcode over the stack.
+// An opcode may delete a few variables from stack, then add a few to stack.
+type StackChangeExplanation struct {
+	Deletions int
+	Additions int
+}
+
+type debugStackExplain func(*EvalContext) StackChangeExplanation
+
 // Proto describes the "stack behavior" of an opcode, what it pops as arguments
 // and pushes onto the stack as return values.
 type Proto struct {
@@ -368,7 +377,99 @@ type Proto struct {
 	// Explain is the pointer to the function used in debugging process during simulation:
 	// - on default construction, Explain relies on Arg and Return count.
 	// - otherwise, we need to explicitly infer from EvalContext, by registering through explain function
-	Explain *debugExplain
+	Explain debugStackExplain
+}
+
+func (p Proto) stackExplain(e debugStackExplain) Proto {
+	p.Explain = e
+	return p
+}
+
+func defaultDebugExplain(argCount, retCount int) debugStackExplain {
+	return func(_ *EvalContext) StackChangeExplanation {
+		return StackChangeExplanation{Deletions: argCount, Additions: retCount}
+	}
+}
+
+// NextStackChange is a helper function that queries EvalContext for the coming stack change of the current PC.
+func (cx *EvalContext) NextStackChange() StackChangeExplanation {
+	return (opsByOpcode[cx.version][cx.program[cx.pc]].Explain)(cx)
+}
+
+func opReturnStackChange(cx *EvalContext) StackChangeExplanation {
+	return StackChangeExplanation{Deletions: len(cx.Stack), Additions: 1}
+}
+
+func opBuryStackChange(cx *EvalContext) StackChangeExplanation {
+	depth := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: depth + 1, Additions: depth}
+}
+
+func opPopNStackChange(cx *EvalContext) StackChangeExplanation {
+	n := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: n}
+}
+
+func opDupNStackChange(cx *EvalContext) StackChangeExplanation {
+	n := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: 1, Additions: n + 1}
+}
+
+func opDigStackChange(cx *EvalContext) StackChangeExplanation {
+	depth := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: depth + 1, Additions: depth + 2}
+}
+
+func opCoverStackChange(cx *EvalContext) StackChangeExplanation {
+	depth := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: depth + 1, Additions: depth + 1}
+}
+
+func opUncoverStackChange(cx *EvalContext) StackChangeExplanation {
+	depth := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: depth + 1, Additions: depth + 1}
+}
+
+func opRetSubStackChange(cx *EvalContext) StackChangeExplanation {
+	topFrame := cx.callstack[len(cx.callstack)-1]
+	// fast path, no proto case
+	if !topFrame.clear {
+		return StackChangeExplanation{}
+	}
+
+	argStart := topFrame.height - topFrame.args
+	topStackIdx := len(cx.Stack) - 1
+
+	diff := topStackIdx - argStart + 1
+
+	return StackChangeExplanation{Deletions: diff, Additions: topFrame.returns}
+}
+
+func opFrameBuryStackChange(cx *EvalContext) StackChangeExplanation {
+	topFrame := cx.callstack[len(cx.callstack)-1]
+
+	immIndex := int8(cx.program[cx.pc+1])
+	idx := topFrame.height + int(immIndex)
+	topStackIdx := len(cx.Stack) - 1
+
+	diff := topStackIdx - idx + 1
+	return StackChangeExplanation{Deletions: diff, Additions: diff - 1}
+}
+
+func opFrameDigStackChange(cx *EvalContext) StackChangeExplanation {
+	topFrame := cx.callstack[len(cx.callstack)-1]
+
+	immIndex := int8(cx.program[cx.pc+1])
+	idx := topFrame.height + int(immIndex)
+	topStackIdx := len(cx.Stack) - 1
+
+	diff := topStackIdx - idx + 1
+	return StackChangeExplanation{Deletions: diff, Additions: diff + 1}
+}
+
+func opMatchStackChange(cx *EvalContext) StackChangeExplanation {
+	labelNum := int(cx.program[cx.pc+1])
+	return StackChangeExplanation{Deletions: labelNum + 1}
 }
 
 func proto(signature string, effects ...string) Proto {
@@ -394,7 +495,7 @@ func proto(signature string, effects ...string) Proto {
 	return Proto{
 		Arg:     typedList{argTypes, argEffect},
 		Return:  typedList{retTypes, retEffect},
-		Explain: &debugExplainFunc,
+		Explain: debugExplainFunc,
 	}
 }
 
@@ -527,19 +628,19 @@ var OpSpecs = []OpSpec{
 	{0x40, "bnz", opBnz, proto("i:"), 1, detBranch()},
 	{0x41, "bz", opBz, proto("i:"), 2, detBranch()},
 	{0x42, "b", opB, proto(":"), 2, detBranch()},
-	{0x43, "return", opReturn, proto("i:x"), 2, detDefault()},
+	{0x43, "return", opReturn, proto("i:x").stackExplain(opReturnStackChange), 2, detDefault()},
 	{0x44, "assert", opAssert, proto("i:"), 3, detDefault()},
-	{0x45, "bury", opBury, proto("a:").explain(opBuryStackChange), fpVersion, immediates("n").typed(typeBury)},
-	{0x46, "popn", opPopN, proto(":", "[N items]", "").explain(opPopNStackChange), fpVersion, immediates("n").typed(typePopN).trust()},
-	{0x47, "dupn", opDupN, proto("a:", "", "A, [N copies of A]").explain(opDupNStackChange), fpVersion, immediates("n").typed(typeDupN).trust()},
+	{0x45, "bury", opBury, proto("a:").stackExplain(opBuryStackChange), fpVersion, immediates("n").typed(typeBury)},
+	{0x46, "popn", opPopN, proto(":", "[N items]", "").stackExplain(opPopNStackChange), fpVersion, immediates("n").typed(typePopN).trust()},
+	{0x47, "dupn", opDupN, proto("a:", "", "A, [N copies of A]").stackExplain(opDupNStackChange), fpVersion, immediates("n").typed(typeDupN).trust()},
 	{0x48, "pop", opPop, proto("a:"), 1, detDefault()},
 	{0x49, "dup", opDup, proto("a:aa", "A, A"), 1, typed(typeDup)},
 	{0x4a, "dup2", opDup2, proto("aa:aaaa", "A, B, A, B"), 2, typed(typeDupTwo)},
-	{0x4b, "dig", opDig, proto("a:aa", "A, [N items]", "A, [N items], A").explain(opDigStackChange), 3, immediates("n").typed(typeDig)},
+	{0x4b, "dig", opDig, proto("a:aa", "A, [N items]", "A, [N items], A").stackExplain(opDigStackChange), 3, immediates("n").typed(typeDig)},
 	{0x4c, "swap", opSwap, proto("aa:aa", "B, A"), 3, typed(typeSwap)},
 	{0x4d, "select", opSelect, proto("aai:a", "A or B"), 3, typed(typeSelect)},
-	{0x4e, "cover", opCover, proto("a:a", "[N items], A", "A, [N items]").explain(opCoverStackChange), 5, immediates("n").typed(typeCover)},
-	{0x4f, "uncover", opUncover, proto("a:a", "A, [N items]", "[N items], A").explain(opUncoverStackChange), 5, immediates("n").typed(typeUncover)},
+	{0x4e, "cover", opCover, proto("a:a", "[N items], A", "A, [N items]").stackExplain(opCoverStackChange), 5, immediates("n").typed(typeCover)},
+	{0x4f, "uncover", opUncover, proto("a:a", "A, [N items]", "[N items], A").stackExplain(opUncoverStackChange), 5, immediates("n").typed(typeUncover)},
 
 	// byteslice processing / StringOps
 	{0x50, "concat", opConcat, proto("bb:b"), 2, detDefault()},
@@ -594,13 +695,13 @@ var OpSpecs = []OpSpec{
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
-	{0x89, "retsub", opRetSub, proto(":").explain(opRetSubStackChange), 4, detDefault().trust()},
+	{0x89, "retsub", opRetSub, proto(":").stackExplain(opRetSubStackChange), 4, detDefault().trust()},
 	// protoByte is a named constant because opCallSub needs to know it.
 	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r").typed(typeProto)},
-	{0x8b, "frame_dig", opFrameDig, proto(":a").explain(opFrameDigStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
-	{0x8c, "frame_bury", opFrameBury, proto("a:").explain(opFrameBuryStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
+	{0x8b, "frame_dig", opFrameDig, proto(":a").stackExplain(opFrameDigStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
+	{0x8c, "frame_bury", opFrameBury, proto("a:").stackExplain(opFrameBuryStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
 	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
-	{0x8e, "match", opMatch, proto(":", "[A1, A2, ..., AN], B", "").explain(opMatchStackChange), 8, detSwitch().trust()},
+	{0x8e, "match", opMatch, proto(":", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), 8, detSwitch().trust()},
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},

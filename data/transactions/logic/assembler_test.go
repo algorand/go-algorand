@@ -2941,8 +2941,8 @@ func TestMergeProtos(t *testing.T) {
 	aVaa := OpSpec{Proto: proto("a:aa")}
 	p, _, _ := mergeProtos(map[int]OpSpec{0: iVi, 1: bVb})
 	expected := proto("a:a")
-	expected.Explain = p.Explain
-	require.Equal(t, expected, p)
+	require.Equal(t, expected.Arg, p.Arg)
+	require.Equal(t, expected.Return, p.Return)
 	_, _, ok := mergeProtos(map[int]OpSpec{0: aaVa, 1: iVi})
 	require.False(t, ok)
 	_, _, ok = mergeProtos(map[int]OpSpec{0: aVaa, 1: iVi})
@@ -2951,8 +2951,8 @@ func TestMergeProtos(t *testing.T) {
 	medley2 := OpSpec{Proto: proto("biabbaiia:biabbaiia")}
 	p, _, _ = mergeProtos(map[int]OpSpec{0: medley, 1: medley2})
 	expected = proto("aiaabaaaa:aiaabaaaa")
-	expected.Explain = p.Explain
-	require.Equal(t, expected, p)
+	require.Equal(t, expected.Arg, p.Arg)
+	require.Equal(t, expected.Return, p.Return)
 	v1 := OpSpec{Version: 1, Proto: proto(":")}
 	v2 := OpSpec{Version: 2, Proto: proto(":")}
 	_, v, _ := mergeProtos(map[int]OpSpec{0: v2, 1: v1})

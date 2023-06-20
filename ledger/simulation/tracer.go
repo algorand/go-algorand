@@ -259,9 +259,6 @@ func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer 
 	stackHeightAfterDeletion := stackHeight - tracer.stackChangeExplanation.Deletions
 	tracer.stackHeightAfterDeletion = stackHeightAfterDeletion
 
-	if tracer.stackChangeExplanation.Deletions == 0 {
-		return
-	}
 	for i := stackHeightAfterDeletion; i < stackHeight; i++ {
 		tealValue := cx.Stack[i].ToTealValue()
 		o.Deleted = append(o.Deleted, model.TealValue{
@@ -304,10 +301,6 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 }
 
 func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
-	// keep adding stuffs to added slice
-	if tracer.stackChangeExplanation.Additions == 0 {
-		return
-	}
 	for i := tracer.stackHeightAfterDeletion; i < len(cx.Stack); i++ {
 		tealValue := cx.Stack[i].ToTealValue()
 		o.Added = append(o.Added, model.TealValue{

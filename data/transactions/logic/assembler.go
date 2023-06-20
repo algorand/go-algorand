@@ -1751,7 +1751,7 @@ func isFullSpec(spec OpSpec) bool {
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	var args StackTypes
 	var returns StackTypes
-	var debugExplainFuncPtr *debugExplain
+	var debugExplainFuncPtr debugStackExplain
 	var minVersion uint64
 	i := 0
 	for _, spec := range specs {

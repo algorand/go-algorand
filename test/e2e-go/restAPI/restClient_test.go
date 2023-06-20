@@ -2252,6 +2252,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		{
 			PC:               150,
 			DisassembledLine: "return",
+			Added: []model.TealValue{
+				{
+					Type: uint64(basics.TealUintType),
+					Uint: 1,
+				},
+			},
 			Deleted: []model.TealValue{
 				{
 					Type: uint64(basics.TealUintType),
@@ -3267,6 +3273,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               73,
 				DisassembledLine: "return",
+				Added: []model.TealValue{
+					{
+						Type: uint64(basics.TealUintType),
+						Uint: 1,
+					},
+				},
 				Deleted: []model.TealValue{
 					{
 						Type: uint64(basics.TealUintType),
@@ -3793,6 +3805,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				PC:               73,
 				DisassembledLine: "return",
+				Added: []model.TealValue{
+					{
+						Type: uint64(basics.TealUintType),
+						Uint: 1,
+					},
+				},
 				Deleted: []model.TealValue{
 					{
 						Type: uint64(basics.TealUintType),
