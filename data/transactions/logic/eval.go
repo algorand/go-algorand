@@ -163,7 +163,7 @@ func (sv stackValue) string(limit int) (string, error) {
 // ToTealValue converts a stack value instance into a basics.TealValue instance
 func (sv stackValue) ToTealValue() basics.TealValue {
 	if sv.avmType() == avmBytes {
-		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: base64.StdEncoding.EncodeToString(sv.Bytes)}
 	}
 	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
 }
