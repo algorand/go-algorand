@@ -60,7 +60,7 @@ var clearSwap string
 // ---- init ----
 
 // effects is a map that contains the hard-coded non-trivial
-// consequents of a transaction type:
+// consequents of a transaction type in teal/poap_boxes.teal:
 //
 // appBoxesCreate: 1 sibling payment tx
 // appBoxesOptin: 1 sibling payment tx, 2 inner tx
