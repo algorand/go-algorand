@@ -114,6 +114,19 @@ func (counter *Counter) GetUint64Value() (x uint64) {
 	return atomic.LoadUint64(&counter.intValue)
 }
 
+// GetUint64ValueForLabels returns the value of the counter for the given labels or 0 if it's not found.
+func (counter *Counter) GetUint64ValueForLabels(labels map[string]string) uint64 {
+	counter.Lock()
+	defer counter.Unlock()
+
+	labelIndex := counter.findLabelIndex(labels)
+	counterIdx, has := counter.valuesIndices[labelIndex]
+	if !has {
+		return 0
+	}
+	return counter.values[counterIdx].counter
+}
+
 func (counter *Counter) fastAddUint64(x uint64) {
 	if atomic.AddUint64(&counter.intValue, x) == x {
 		// What we just added is the whole value, this
