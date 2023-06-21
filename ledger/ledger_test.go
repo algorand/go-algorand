@@ -2277,7 +2277,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 
 	// reset tables and re-init again, similary to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
-	err = l.trackerDBs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
+	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		arw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
@@ -2296,7 +2296,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			DbPathPrefix:      l.catchpoint.dbDirectory,
 			BlockDb:           l.blockDBs,
 		}
-		_, err0 = tx.Testing().RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		_, err0 = tx.RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
 		if err0 != nil {
 			return err0
 		}
@@ -2439,7 +2439,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = proto.MaxBalLookback
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
-	trackerDB, blockDB, err := openLedgerDB(dbName, inMem)
+	trackerDB, blockDB, err := openLedgerDB(dbName, inMem, cfg, log)
 	require.NoError(t, err)
 	defer func() {
 		trackerDB.Close()

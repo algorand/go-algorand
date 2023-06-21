@@ -108,17 +108,17 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 }
 
 func makeCatchpointWriter(ctx context.Context, filePath string, tx trackerdb.TransactionScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
-	arw, err := tx.MakeAccountsReaderWriter()
+	aw, err := tx.MakeAccountsReader()
 	if err != nil {
 		return nil, err
 	}
 
-	totalAccounts, err := arw.TotalAccounts(ctx)
+	totalAccounts, err := aw.TotalAccounts(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	totalKVs, err := arw.TotalKVs(ctx)
+	totalKVs, err := aw.TotalKVs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (cw *catchpointWriter) Abort() error {
 }
 
 func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest, error) {
-	rawData, err := cw.tx.MakeSpVerificationCtxReaderWriter().GetAllSPContexts(cw.ctx)
+	rawData, err := cw.tx.MakeSpVerificationCtxReader().GetAllSPContexts(cw.ctx)
 	if err != nil {
 		return crypto.Digest{}, err
 	}

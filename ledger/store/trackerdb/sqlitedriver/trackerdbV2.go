@@ -18,7 +18,6 @@ package sqlitedriver
 
 import (
 	"context"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -50,9 +49,9 @@ type trackerDBSchemaInitializer struct {
 // RunMigrations initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func RunMigrations(ctx context.Context, tx *sql.Tx, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
+func RunMigrations(ctx context.Context, e db.Executable, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
 	// check current database version.
-	dbVersion, err := db.GetUserVersion(ctx, tx)
+	dbVersion, err := db.GetUserVersion(ctx, e)
 	if err != nil {
 		return trackerdb.InitParams{}, fmt.Errorf("trackerDBInitialize unable to read database schema version : %v", err)
 	}
@@ -78,61 +77,61 @@ func RunMigrations(ctx context.Context, tx *sql.Tx, params trackerdb.Params, log
 			// perform the initialization/upgrade
 			switch tu.version() {
 			case 0:
-				err = tu.upgradeDatabaseSchema0(ctx, tx)
+				err = tu.upgradeDatabaseSchema0(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
 					return
 				}
 			case 1:
-				err = tu.upgradeDatabaseSchema1(ctx, tx)
+				err = tu.upgradeDatabaseSchema1(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return
 				}
 			case 2:
-				err = tu.upgradeDatabaseSchema2(ctx, tx)
+				err = tu.upgradeDatabaseSchema2(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
 					return
 				}
 			case 3:
-				err = tu.upgradeDatabaseSchema3(ctx, tx)
+				err = tu.upgradeDatabaseSchema3(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return
 				}
 			case 4:
-				err = tu.upgradeDatabaseSchema4(ctx, tx)
+				err = tu.upgradeDatabaseSchema4(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 4 : %v", err)
 					return
 				}
 			case 5:
-				err = tu.upgradeDatabaseSchema5(ctx, tx)
+				err = tu.upgradeDatabaseSchema5(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 5 : %v", err)
 					return
 				}
 			case 6:
-				err = tu.upgradeDatabaseSchema6(ctx, tx)
+				err = tu.upgradeDatabaseSchema6(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 6 : %v", err)
 					return
 				}
 			case 7:
-				err = tu.upgradeDatabaseSchema7(ctx, tx)
+				err = tu.upgradeDatabaseSchema7(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 7 : %v", err)
 					return
 				}
 			case 8:
-				err = tu.upgradeDatabaseSchema8(ctx, tx)
+				err = tu.upgradeDatabaseSchema8(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 8 : %v", err)
 					return
 				}
 			case 9:
-				err = tu.upgradeDatabaseSchema9(ctx, tx)
+				err = tu.upgradeDatabaseSchema9(ctx, e)
 				if err != nil {
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 9 : %v", err)
 					return
@@ -147,10 +146,10 @@ func RunMigrations(ctx context.Context, tx *sql.Tx, params trackerdb.Params, log
 	return trackerdb.InitParams{SchemaVersion: tu.schemaVersion, VacuumOnStartup: tu.vacuumOnStartup}, nil
 }
 
-func (tu *trackerDBSchemaInitializer) setVersion(ctx context.Context, tx *sql.Tx, version int32) (err error) {
+func (tu *trackerDBSchemaInitializer) setVersion(ctx context.Context, e db.Executable, version int32) (err error) {
 	oldVersion := tu.schemaVersion
 	tu.schemaVersion = version
-	_, err = db.SetUserVersion(ctx, tx, tu.schemaVersion)
+	_, err = db.SetUserVersion(ctx, e, tu.schemaVersion)
 	if err != nil {
 		return fmt.Errorf("trackerDBInitialize unable to update database schema version from %d to %d: %v", oldVersion, version, err)
 	}
@@ -180,13 +179,13 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 // The accountbase would get initialized with the au.initAccounts
 // The accounttotals would get initialized to align with the initialization account added to accountbase
 // The acctrounds would get updated to indicate that the balance matches round 0
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, e db.Executable) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
-	tu.newDatabase, err = accountsInit(tx, tu.InitAccounts, config.Consensus[tu.InitProto])
+	tu.newDatabase, err = accountsInit(e, tu.InitAccounts, config.Consensus[tu.InitProto])
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema0 unable to initialize schema : %v", err)
 	}
-	return tu.setVersion(ctx, tx, 1)
+	return tu.setVersion(ctx, e, 1)
 }
 
 // upgradeDatabaseSchema1 upgrades the database schema from version 1 to version 2
@@ -204,7 +203,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context
 //
 // This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
 // a functional update to it's content.
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context, e db.Executable) (err error) {
 	var modifiedAccounts uint
 	if tu.newDatabase {
 		goto schemaUpdateComplete
@@ -212,14 +211,14 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 
 	// update accounts encoding.
 	tu.log.Infof("upgradeDatabaseSchema1 verifying accounts data encoding")
-	modifiedAccounts, err = reencodeAccounts(ctx, tx)
+	modifiedAccounts, err = reencodeAccounts(ctx, e)
 	if err != nil {
 		return err
 	}
 
 	if modifiedAccounts > 0 {
-		crw := NewCatchpointSQLReaderWriter(tx)
-		arw := NewAccountsSQLReaderWriter(tx)
+		crw := NewCatchpointSQLReaderWriter(e)
+		arw := NewAccountsSQLReaderWriter(e)
 
 		tu.log.Infof("upgradeDatabaseSchema1 reencoded %d accounts", modifiedAccounts)
 
@@ -249,7 +248,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema1(ctx context.Context
 	}
 
 schemaUpdateComplete:
-	return tu.setVersion(ctx, tx, 2)
+	return tu.setVersion(ctx, e, 2)
 }
 
 // upgradeDatabaseSchema2 upgrades the database schema from version 2 to version 3
@@ -257,30 +256,30 @@ schemaUpdateComplete:
 // This upgrade only enables the database vacuuming which will take place once the upgrade process is complete.
 // If the user has already specified the OptimizeAccountsDatabaseOnStartup flag in the configuration file, this
 // step becomes a no-op.
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context, e db.Executable) (err error) {
 	if !tu.newDatabase {
 		tu.vacuumOnStartup = true
 	}
 
 	// update version
-	return tu.setVersion(ctx, tx, 3)
+	return tu.setVersion(ctx, e, 3)
 }
 
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsAddNormalizedBalance(tx, config.Consensus[tu.InitProto])
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, e db.Executable) (err error) {
+	err = accountsAddNormalizedBalance(e, config.Consensus[tu.InitProto])
 	if err != nil {
 		return err
 	}
 
 	// update version
-	return tu.setVersion(ctx, tx, 4)
+	return tu.setVersion(ctx, e, 4)
 }
 
 // upgradeDatabaseSchema4 does not change the schema but migrates data:
 // remove empty AccountData entries from accountbase table
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx) (err error) {
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context, e db.Executable) (err error) {
 	var numDeleted int64
 	var addresses []basics.Address
 
@@ -288,13 +287,13 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 		goto done
 	}
 
-	numDeleted, addresses, err = removeEmptyAccountData(tx, tu.CatchpointEnabled)
+	numDeleted, addresses, err = removeEmptyAccountData(e, tu.CatchpointEnabled)
 	if err != nil {
 		return err
 	}
 
 	if tu.CatchpointEnabled && len(addresses) > 0 {
-		mc, err := MakeMerkleCommitter(tx, false)
+		mc, err := MakeMerkleCommitter(e, false)
 		if err != nil {
 			// at this point record deleted and DB is pruned for account data
 			// if hash deletion fails just log it and do not abort startup
@@ -332,15 +331,15 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema4(ctx context.Context
 done:
 	tu.log.Infof("upgradeDatabaseSchema4: deleted %d rows", numDeleted)
 
-	return tu.setVersion(ctx, tx, 5)
+	return tu.setVersion(ctx, e, 5)
 }
 
 // upgradeDatabaseSchema5 upgrades the database schema from version 5 to version 6,
 // adding the resources table and clearing empty catchpoint directories.
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context, tx *sql.Tx) (err error) {
-	arw := NewAccountsSQLReaderWriter(tx)
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context, e db.Executable) (err error) {
+	arw := NewAccountsSQLReaderWriter(e)
 
-	err = accountsCreateResourceTable(ctx, tx)
+	err = accountsCreateResourceTable(ctx, e)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to create resources table : %v", err)
 	}
@@ -360,7 +359,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 		tu.log.Infof("upgradeDatabaseSchema5 upgraded %d out of %d accounts [ %3.1f%% ]", processed, total, float64(processed)*100.0/float64(total))
 	}
 
-	err = performResourceTableMigration(ctx, tx, migrationProcessLog)
+	err = performResourceTableMigration(ctx, e, migrationProcessLog)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema5 unable to complete data migration : %v", err)
 	}
@@ -372,11 +371,11 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema5(ctx context.Context
 	}
 
 	// update version
-	return tu.setVersion(ctx, tx, 6)
+	return tu.setVersion(ctx, e, 6)
 }
 
-func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Context, tx *sql.Tx) error {
-	cts := NewCatchpointSQLReaderWriter(tx)
+func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Context, e db.Executable) error {
+	cts := NewCatchpointSQLReaderWriter(e)
 	// Delete an unfinished catchpoint if there is one.
 	round, err := cts.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateWritingCatchpoint)
 	if err != nil {
@@ -400,18 +399,18 @@ func (tu *trackerDBSchemaInitializer) deleteUnfinishedCatchpoint(ctx context.Con
 // upgradeDatabaseSchema6 upgrades the database schema from version 6 to version 7,
 // adding a new onlineaccounts table
 // TODO: onlineaccounts: upgrade as needed after switching to the final table version
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsCreateOnlineAccountsTable(ctx, tx)
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context, e db.Executable) (err error) {
+	err = accountsCreateOnlineAccountsTable(ctx, e)
 	if err != nil {
 		return err
 	}
 
-	err = accountsCreateTxTailTable(ctx, tx)
+	err = accountsCreateTxTailTable(ctx, e)
 	if err != nil {
 		return err
 	}
 
-	err = accountsCreateOnlineRoundParamsTable(ctx, tx)
+	err = accountsCreateOnlineRoundParamsTable(ctx, e)
 	if err != nil {
 		return err
 	}
@@ -426,54 +425,54 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema6(ctx context.Context
 		lastProgressInfoMsg = time.Now()
 		tu.log.Infof("upgradeDatabaseSchema6 upgraded %d out of %d accounts [ %3.1f%% ]", processed, total, float64(processed)*100.0/float64(total))
 	}
-	err = performOnlineAccountsTableMigration(ctx, tx, migrationProcessLog, tu.log)
+	err = performOnlineAccountsTableMigration(ctx, e, migrationProcessLog, tu.log)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online account data migration : %w", err)
 	}
 
 	if !tu.newDatabase {
-		err = performTxTailTableMigration(ctx, tx, tu.BlockDb.Rdb)
+		err = performTxTailTableMigration(ctx, e, tu.BlockDb.Rdb)
 		if err != nil {
 			return fmt.Errorf("upgradeDatabaseSchema6 unable to complete transaction tail data migration : %w", err)
 		}
 	}
 
-	err = performOnlineRoundParamsTailMigration(ctx, tx, tu.BlockDb.Rdb, tu.newDatabase, tu.InitProto)
+	err = performOnlineRoundParamsTailMigration(ctx, e, tu.BlockDb.Rdb, tu.newDatabase, tu.InitProto)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema6 unable to complete online round params data migration : %w", err)
 	}
 
-	err = tu.deleteUnfinishedCatchpoint(ctx, tx)
+	err = tu.deleteUnfinishedCatchpoint(ctx, e)
 	if err != nil {
 		return err
 	}
-	err = accountsCreateCatchpointFirstStageInfoTable(ctx, tx)
+	err = accountsCreateCatchpointFirstStageInfoTable(ctx, e)
 	if err != nil {
 		return err
 	}
-	err = accountsCreateUnfinishedCatchpointsTable(ctx, tx)
+	err = accountsCreateUnfinishedCatchpointsTable(ctx, e)
 	if err != nil {
 		return err
 	}
 
 	// update version
-	return tu.setVersion(ctx, tx, 7)
+	return tu.setVersion(ctx, e, 7)
 }
 
 // upgradeDatabaseSchema7 upgrades the database schema from version 7 to version 8.
 // adding the kvstore table for box feature support.
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context, tx *sql.Tx) (err error) {
-	err = accountsCreateBoxTable(ctx, tx)
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema7(ctx context.Context, e db.Executable) (err error) {
+	err = accountsCreateBoxTable(ctx, e)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema7 unable to create kvstore through createTables : %v", err)
 	}
-	return tu.setVersion(ctx, tx, 8)
+	return tu.setVersion(ctx, e, 8)
 }
 
 // upgradeDatabaseSchema8 upgrades the database schema from version 8 to version 9,
 // forcing a rebuild of the accounthashes table on betanet nodes. Otherwise it has no effect.
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context, tx *sql.Tx) (err error) {
-	arw := NewAccountsSQLReaderWriter(tx)
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context, e db.Executable) (err error) {
+	arw := NewAccountsSQLReaderWriter(e)
 	betanetGenesisHash, _ := crypto.DigestFromString("TBMBVTC7W24RJNNUZCF7LWZD2NMESGZEQSMPG5XQD7JY4O7JKVWQ")
 	if tu.GenesisHash == betanetGenesisHash && !tu.FromCatchpoint {
 		// reset hash round to 0, forcing catchpointTracker.initializeHashes to rebuild accounthashes
@@ -482,30 +481,30 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema8(ctx context.Context
 			return fmt.Errorf("upgradeDatabaseSchema8 unable to reset acctrounds table 'hashbase' round : %v", err)
 		}
 	}
-	return tu.setVersion(ctx, tx, 9)
+	return tu.setVersion(ctx, e, 9)
 }
 
 // upgradeDatabaseSchema9 upgrades the database schema from version 9 to version 10,
 // adding a new stateproofverification table,
 // scrubbing out all nil values from kvstore table and replace with empty byte slice.
-func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context, tx *sql.Tx) (err error) {
-	err = createStateProofVerificationTable(ctx, tx)
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context, e db.Executable) (err error) {
+	err = createStateProofVerificationTable(ctx, e)
 	if err != nil {
 		return err
 	}
 
-	err = performKVStoreNullBlobConversion(ctx, tx)
+	err = performKVStoreNullBlobConversion(ctx, e)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema9 unable to replace kvstore nil entries with empty byte slices : %v", err)
 	}
 
-	err = convertOnlineRoundParamsTail(ctx, tx)
+	err = convertOnlineRoundParamsTail(ctx, e)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema10 unable to convert onlineroundparamstail: %v", err)
 	}
 
 	// update version
-	return tu.setVersion(ctx, tx, 10)
+	return tu.setVersion(ctx, e, 10)
 }
 
 func removeEmptyDirsOnSchemaUpgrade(dbDirectory string) (err error) {

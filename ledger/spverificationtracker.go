@@ -134,7 +134,7 @@ func (spt *spVerificationTracker) commitRound(ctx context.Context, tx trackerdb.
 	}
 
 	if dcc.spVerification.lastDeleteIndex >= 0 {
-		err = tx.MakeSpVerificationCtxReaderWriter().DeleteOldSPContexts(ctx, dcc.spVerification.earliestLastAttestedRound)
+		err = tx.MakeSpVerificationCtxWriter().DeleteOldSPContexts(ctx, dcc.spVerification.earliestLastAttestedRound)
 	}
 
 	return err
@@ -146,7 +146,7 @@ func commitSPContexts(ctx context.Context, tx trackerdb.TransactionScope, commit
 		ptrToCtxs[i] = &commitData[i].verificationContext
 	}
 
-	return tx.MakeSpVerificationCtxReaderWriter().StoreSPContexts(ctx, ptrToCtxs)
+	return tx.MakeSpVerificationCtxWriter().StoreSPContexts(ctx, ptrToCtxs)
 }
 
 func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
