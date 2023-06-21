@@ -79,8 +79,13 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 	if err := tokens.ValidateAPIToken(adminAPIToken); err != nil {
 		logger.Errorf("Invalid adminAPIToken was passed to NewRouter ('%s'): %v", adminAPIToken, err)
 	}
-	adminAuthenticator := middlewares.MakeAuth(TokenHeader, []string{adminAPIToken})
-	apiAuthenticator := middlewares.MakeAuth(TokenHeader, []string{adminAPIToken, apiToken})
+	adminMiddleware := []echo.MiddlewareFunc{
+		middlewares.MakeAuth(TokenHeader, []string{adminAPIToken}),
+	}
+	publicMiddleware := []echo.MiddlewareFunc{
+		middleware.BodyLimit(maxRequestBodyBytes),
+		middlewares.MakeAuth(TokenHeader, []string{adminAPIToken, apiToken}),
+	}
 
 	e := echo.New()
 
@@ -93,7 +98,6 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 	e.Use(
 		middlewares.MakeLogger(logger),
 		middlewares.MakeCORS(TokenHeader),
-		middleware.BodyLimit(maxRequestBodyBytes),
 	)
 
 	// Request Context
@@ -104,14 +108,14 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 	// Route pprof requests to DefaultServeMux.
 	// The auth middleware removes /urlAuth/:token so that it can be routed correctly.
 	if node.Config().EnableProfiler {
-		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
-		e.GET(fmt.Sprintf("%s/debug/pprof/*", middlewares.URLAuthPrefix), echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
+		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminMiddleware...)
+		e.GET(fmt.Sprintf("%s/debug/pprof/*", middlewares.URLAuthPrefix), echo.WrapHandler(http.DefaultServeMux), adminMiddleware...)
 	}
 	// Registering common routes (no auth)
 	registerHandlers(e, "", common.Routes, ctx)
 
 	// Registering v1 routes
-	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx, apiAuthenticator)
+	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx, publicMiddleware...)
 
 	// Registering v2 routes
 	v2Handler := v2.Handlers{
@@ -119,17 +123,17 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 		Log:      logger,
 		Shutdown: shutdown,
 	}
-	nppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
-	npprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
-	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
-	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+	nppublic.RegisterHandlers(e, &v2Handler, publicMiddleware...)
+	npprivate.RegisterHandlers(e, &v2Handler, adminMiddleware...)
+	ppublic.RegisterHandlers(e, &v2Handler, publicMiddleware...)
+	pprivate.RegisterHandlers(e, &v2Handler, adminMiddleware...)
 
 	if node.Config().EnableFollowMode {
-		data.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+		data.RegisterHandlers(e, &v2Handler, publicMiddleware...)
 	}
 
 	if node.Config().EnableExperimentalAPI {
-		experimental.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+		experimental.RegisterHandlers(e, &v2Handler, publicMiddleware...)
 	}
 
 	return e

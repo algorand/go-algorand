@@ -16,28 +16,23 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
-
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type TestSuite struct {
-	suite.Suite
-	e *echo.Echo
-}
-
-func (s *TestSuite) SetupSuite() {
-	s.e = echo.New()
+func setupRouter() *echo.Echo {
+	e := echo.New()
 	// Make a deep copy of the routes array with handlers.
 	v1RoutesCopy := make([]lib.Route, len(routes.V1Routes))
 	for _, route := range routes.V1Routes {
@@ -51,10 +46,14 @@ func (s *TestSuite) SetupSuite() {
 	// Make a ReqContext with an initialized logger to prevent nil dereferencing.
 	reqCtx := lib.ReqContext{Log: logging.NewLogger()}
 	// Registering v1 routes
-	registerHandlers(s.e, apiV1Tag, v1RoutesCopy, reqCtx)
+	registerHandlers(e, apiV1Tag, v1RoutesCopy, reqCtx)
+
+	return e
 }
 
-func (s *TestSuite) TestGetTransactionV1Sunset() {
+func TestGetTransactionV1Sunset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	testCases := []struct {
 		path  string
 		route string
@@ -67,21 +66,37 @@ func (s *TestSuite) TestGetTransactionV1Sunset() {
 	}
 
 	rec := httptest.NewRecorder()
-	ctx := s.e.NewContext(nil, rec)
+	e := setupRouter()
+	ctx := e.NewContext(nil, rec)
 
 	for _, testCase := range testCases {
-		s.e.Router().Find(http.MethodGet, testCase.path, ctx)
-		assert.Equal(s.T(), testCase.route, ctx.Path())
+		e.Router().Find(http.MethodGet, testCase.path, ctx)
+		assert.Equal(t, testCase.route, ctx.Path())
 
 		// Check that router correctly routes to the v1Sunset handler.
-		assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-		assert.NotNil(s.T(), rec.Body)
-		assert.Equal(s.T(), http.StatusGone, rec.Code)
+		assert.Equal(t, nil, ctx.Handler()(ctx))
+		assert.NotNil(t, rec.Body)
+		assert.Equal(t, http.StatusGone, rec.Code)
 	}
 
 }
 
-func TestTestSuite(t *testing.T) {
+func TestLargeKeyRegister(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	suite.Run(t, new(TestSuite))
+	t.Parallel()
+
+	rec := httptest.NewRecorder()
+	e := setupRouter()
+
+	// TODO: Make sure this fails without the change
+	assert.Equal(t, "10MB", maxRequestBodyBytes)
+	stringReader := strings.NewReader(strings.Repeat("a", 50_000_000))
+	req, err := http.NewRequest(http.MethodPost, "/v2/participation", stringReader)
+	assert.NoError(t, err)
+
+	e.ServeHTTP(rec, req)
+	fmt.Println(rec.Body)
+}
+
+func TestTestSuite(t *testing.T) {
 }
