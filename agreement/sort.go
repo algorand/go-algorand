@@ -22,7 +22,61 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// These types are defined to satisfy SortInterface used by
+////////////////////////////////////////////////////////////////////////////////////////////
+// These types are defined to satisfy SortInterface used by msgp to consistently sort maps with this type as key.
+//
+// We use base types as sort keys instead of the aliased types, i.e. basics.Round instead of the agreement local alias round.
+// This is safe as demonstrated by the test below included as a comment.
+// The test itself is not committed as it would require us to commit an unused test struct to non _test files
+// in order to generate msgp Marshal/Unmarshall methods for it
+//
+// With rootRouteBasic defined as:
+//
+// type rootRouterBasic struct {
+// 	_struct struct{} `codec:","`
+//
+// 	root         actor    // playerMachine   (not restored: explicitly set on construction)
+// 	proposalRoot listener // proposalMachine
+// 	voteRoot     listener // voteMachine
+//
+// 	ProposalManager proposalManager
+// 	VoteAggregator  voteAggregator
+//
+// 	Children map[basics.Round]*roundRouter `codec:"Children,allocbound=-"`
+// }
+// i.e. exactly the same but using basics.Round as the key instead of the alias the following test passes.
+//
+// func TestMsgpTypeAliasCompat(t *testing.T) {
+// 	partitiontest.PartitionTest(t)
+//
+// 	randomRound := rand.Uint64()
+// 	a := rootRouter{Children: map[round]*roundRouter{round(randomRound): {}}}
+//
+// 	b := rootRouterBasic{Children: map[basics.Round]*roundRouter{basics.Round(randomRound): {}}}
+//
+// 	require.NotEqual(t, a, b)
+//
+// 	aEnc := protocol.Encode(&a)
+// 	bEnc := protocol.Encode(&b)
+//
+// 	require.Equal(t, aEnc, bEnc)
+//
+// 	var aDecA, bDecA rootRouter
+// 	var aDecB, bDecB rootRouterBasic
+//
+// 	err := protocol.Decode(aEnc, &aDecA)
+// 	require.NoError(t, err)
+// 	err = protocol.Decode(bEnc, &bDecA)
+// 	require.NoError(t, err)
+// 	require.Equal(t, aDecA, bDecA)
+//
+// 	err = protocol.Decode(aEnc, &aDecB)
+// 	require.NoError(t, err)
+// 	err = protocol.Decode(bEnc, &bDecB)
+// 	require.NoError(t, err)
+// 	require.Equal(t, aDecB, bDecB)
+// }
+////////////////////////////////////////////////////////////////////////////////////////////
 
 // SortAddress is re-exported from basics.Address since the interface is already defined there
 //
