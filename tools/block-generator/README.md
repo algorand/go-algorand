@@ -133,18 +133,21 @@ Usage:
 
 Flags:
   -i, --conduit-binary string               Path to conduit binary.
-      --cpuprofile string                   Path where conduit writes its CPU profile.
+  -l, --conduit-log-level string            LogLevel to use when starting Conduit. [panic, fatal, error, warn, info, debug, trace] (default "error")
+      --cpuprofile string                   Path where Conduit writes its CPU profile.
+  -f, --genesis-file string                 file path to the genesis associated with the db snapshot
   -h, --help                                help for runner
   -k, --keep-data-dir                       If set the validator will not delete the data directory after tests complete.
-  -l, --log-level string                    LogLevel to use when starting conduit. [panic, fatal, error, warn, info, debug, trace] (default "error")
   -p, --metrics-port uint                   Port to start the metrics server at. (default 9999)
   -c, --postgres-connection-string string   Postgres connection string.
   -r, --report-directory string             Location to place test reports.
-      --reset                               If set any existing report directory will be deleted before running tests.
+      --reset-db                            If set database will be deleted before running tests.
+      --reset-report-dir                    If set any existing report directory will be deleted before running tests.
   -s, --scenario string                     Directory containing scenarios, or specific scenario file.
   -d, --test-duration duration              Duration to use for each scenario. (default 5m0s)
       --validate                            If set the validator will run after test-duration has elapsed to verify data is correct. An extra line in each report indicates validator success or failure.
-```
+  -v, --verbose                             If set the runner will print debugging information from the generator and ledger.
+ ```
 
 ## Example Run using Conduit and Postgres in **bash** via `run_runner.sh`
 
@@ -180,5 +183,5 @@ Then you can execute the following command to run the scenario:
 
 ### Scenario Report
 
-If all goes well, the run will generate a directory `tmp/OUTPUT_RUN_RUNNER_TEST`
+If all goes well, the run will generate a directory `../../tmp/OUTPUT_RUN_RUNNER_TEST`
 and in that directory you can see the statistics of the run in `scenario.report`.

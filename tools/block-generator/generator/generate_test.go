@@ -22,10 +22,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -42,7 +45,7 @@ func makePrivateGenerator(t *testing.T, round uint64, genesis bookkeeping.Genesi
 		AssetCreateFraction:          1.0,
 	}
 	cfg.validateWithDefaults(true)
-	publicGenerator, err := MakeGenerator(round, genesis, cfg)
+	publicGenerator, err := MakeGenerator(round, genesis, cfg, true)
 	require.NoError(t, err)
 	return publicGenerator.(*generator)
 }
@@ -66,7 +69,8 @@ func TestAssetXferNoAssetsOverride(t *testing.T) {
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 
 	// First asset transaction must create.
-	actual, txn := g.generateAssetTxnInternal(assetXfer, 1, 0)
+	actual, txn, assetID := g.generateAssetTxnInternal(assetXfer, 1, 0)
+	require.NotEqual(t, 0, assetID)
 	require.Equal(t, assetCreate, actual)
 	require.Equal(t, protocol.AssetConfigTx, txn.Type)
 	require.Len(t, g.assets, 0)
@@ -78,12 +82,13 @@ func TestAssetXferNoAssetsOverride(t *testing.T) {
 func TestAssetXferOneHolderOverride(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
-	g.finishRound(0)
+	g.finishRound()
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
-	g.finishRound(1)
+	g.finishRound()
 
 	// Transfer converted to optin if there is only 1 holder.
-	actual, txn := g.generateAssetTxnInternal(assetXfer, 2, 0)
+	actual, txn, assetID := g.generateAssetTxnInternal(assetXfer, 2, 0)
+	require.NotEqual(t, 0, assetID)
 	require.Equal(t, assetOptin, actual)
 	require.Equal(t, protocol.AssetTransferTx, txn.Type)
 	require.Len(t, g.assets, 1)
@@ -95,12 +100,13 @@ func TestAssetXferOneHolderOverride(t *testing.T) {
 func TestAssetCloseCreatorOverride(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
-	g.finishRound(0)
+	g.finishRound()
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
-	g.finishRound(1)
+	g.finishRound()
 
 	// Instead of closing the creator, optin a new account
-	actual, txn := g.generateAssetTxnInternal(assetClose, 2, 0)
+	actual, txn, assetID := g.generateAssetTxnInternal(assetClose, 2, 0)
+	require.NotEqual(t, 0, assetID)
 	require.Equal(t, assetOptin, actual)
 	require.Equal(t, protocol.AssetTransferTx, txn.Type)
 	require.Len(t, g.assets, 1)
@@ -112,29 +118,32 @@ func TestAssetCloseCreatorOverride(t *testing.T) {
 func TestAssetOptinEveryAccountOverride(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
-	g.finishRound(0)
+	g.finishRound()
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
-	g.finishRound(1)
+	g.finishRound()
 
 	// Opt all the accounts in, this also verifies that no account is opted in twice
 	var txn transactions.Transaction
 	var actual TxTypeID
+	var assetID uint64
 	for i := 2; uint64(i) <= g.numAccounts; i++ {
-		actual, txn = g.generateAssetTxnInternal(assetOptin, 2, uint64(1+i))
+		actual, txn, assetID = g.generateAssetTxnInternal(assetOptin, 2, uint64(1+i))
+		require.NotEqual(t, 0, assetID)
 		require.Equal(t, assetOptin, actual)
 		require.Equal(t, protocol.AssetTransferTx, txn.Type)
 		require.Len(t, g.assets, 1)
 		require.Len(t, g.assets[0].holdings, i)
 		require.Len(t, g.assets[0].holders, i)
 	}
-	g.finishRound(2)
+	g.finishRound()
 
 	// All accounts have opted in
 	require.Equal(t, g.numAccounts, uint64(len(g.assets[0].holdings)))
 
 	// The next optin closes instead
-	actual, txn = g.generateAssetTxnInternal(assetOptin, 3, 0)
-	g.finishRound(3)
+	actual, txn, assetID = g.generateAssetTxnInternal(assetOptin, 3, 0)
+	require.Greater(t, assetID, uint64(0))
+	g.finishRound()
 	require.Equal(t, assetClose, actual)
 	require.Equal(t, protocol.AssetTransferTx, txn.Type)
 	require.Len(t, g.assets, 1)
@@ -145,17 +154,18 @@ func TestAssetOptinEveryAccountOverride(t *testing.T) {
 func TestAssetDestroyWithHoldingsOverride(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
-	g.finishRound(0)
+	g.finishRound()
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
-	g.finishRound(1)
+	g.finishRound()
 	g.generateAssetTxnInternal(assetOptin, 2, 0)
-	g.finishRound(2)
+	g.finishRound()
 	g.generateAssetTxnInternal(assetXfer, 3, 0)
-	g.finishRound(3)
+	g.finishRound()
 	require.Len(t, g.assets[0].holdings, 2)
 	require.Len(t, g.assets[0].holders, 2)
 
-	actual, txn := g.generateAssetTxnInternal(assetDestroy, 4, 0)
+	actual, txn, assetID := g.generateAssetTxnInternal(assetDestroy, 4, 0)
+	require.NotEqual(t, 0, assetID)
 	require.Equal(t, assetClose, actual)
 	require.Equal(t, protocol.AssetTransferTx, txn.Type)
 	require.Len(t, g.assets, 1)
@@ -166,29 +176,59 @@ func TestAssetDestroyWithHoldingsOverride(t *testing.T) {
 func TestAssetTransfer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
-	g.finishRound(0)
+	g.finishRound()
 
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
-	g.finishRound(1)
+	g.finishRound()
 	g.generateAssetTxnInternal(assetOptin, 2, 0)
-	g.finishRound(2)
+	g.finishRound()
 	g.generateAssetTxnInternal(assetXfer, 3, 0)
-	g.finishRound(3)
-	require.Greater(t, g.assets[0].holdings[1].balance, uint64(0))
+	g.finishRound()
+	require.NotEqual(t, g.assets[0].holdings[1].balance, uint64(0))
 }
 
 func TestAssetDestroy(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
-	g.finishRound(0)
+	g.finishRound()
 	g.generateAssetTxnInternal(assetCreate, 1, 0)
-	g.finishRound(1)
+	g.finishRound()
 	require.Len(t, g.assets, 1)
 
-	actual, txn := g.generateAssetTxnInternal(assetDestroy, 2, 0)
+	actual, txn, assetID := g.generateAssetTxnInternal(assetDestroy, 2, 0)
+	require.NotEqual(t, 0, assetID)
 	require.Equal(t, assetDestroy, actual)
 	require.Equal(t, protocol.AssetConfigTx, txn.Type)
 	require.Len(t, g.assets, 0)
+}
+
+type assembledPrograms struct {
+	boxesApproval []byte
+	boxesClear    []byte
+	swapsApproval []byte
+	swapsClear    []byte
+}
+
+func assembleApps(t *testing.T) assembledPrograms {
+	t.Helper()
+
+	ap := assembledPrograms{}
+
+	ops, err := logic.AssembleString(approvalBoxes)
+	ap.boxesApproval = ops.Program
+	require.NoError(t, err)
+	ops, err = logic.AssembleString(clearBoxes)
+	ap.boxesClear = ops.Program
+	require.NoError(t, err)
+
+	ops, err = logic.AssembleString(approvalSwap)
+	ap.swapsApproval = ops.Program
+	require.NoError(t, err)
+	ops, err = logic.AssembleString(clearSwap)
+	ap.swapsClear = ops.Program
+	require.NoError(t, err)
+
+	return ap
 }
 
 func TestAppCreate(t *testing.T) {
@@ -196,42 +236,203 @@ func TestAppCreate(t *testing.T) {
 	t.Parallel()
 
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+	assembled := assembleApps(t)
+
+	round, intra := uint64(1337), uint64(0)
+	hint := appData{sender: 7}
 
 	// app call transaction creating appBoxes
-	actual, txn, err := g.generateAppCallInternal(appBoxesCreate, 1, 0, 0, nil)
+	actual, sgnTxns, appID, err := g.generateAppCallInternal(appBoxesCreate, round, intra, &hint)
+	_ = appID
 	require.NoError(t, err)
 	require.Equal(t, appBoxesCreate, actual)
-	require.Equal(t, protocol.ApplicationCallTx, txn.Type)
-	require.Len(t, g.apps, 0)
-	require.Len(t, g.pendingApps, 1)
-	require.Len(t, g.pendingApps[appKindBoxes], 1)
-	require.Len(t, g.pendingApps[appKindSwap], 0)
-	require.Len(t, g.pendingApps[appKindBoxes][0].holdings, 1)
-	require.Len(t, g.pendingApps[appKindBoxes][0].holders, 1)
-	ad := *g.pendingApps[appKindBoxes][0]
-	holding := *ad.holdings[0]
-	require.Equal(t, holding, *ad.holders[0])
-	require.Equal(t, uint64(1001), holding.appIndex)
-	require.Equal(t, ad.appID, holding.appIndex)
+
+	require.Len(t, sgnTxns, 2)
+	createTxn := sgnTxns[0].Txn
+
+	require.Equal(t, indexToAccount(hint.sender), createTxn.Sender)
+	require.Equal(t, protocol.ApplicationCallTx, createTxn.Type)
+	require.Equal(t, basics.AppIndex(0), createTxn.ApplicationCallTxnFields.ApplicationID)
+	require.Equal(t, assembled.boxesApproval, createTxn.ApplicationCallTxnFields.ApprovalProgram)
+	require.Equal(t, assembled.boxesClear, createTxn.ApplicationCallTxnFields.ClearStateProgram)
+	require.Equal(t, uint64(32), createTxn.ApplicationCallTxnFields.GlobalStateSchema.NumByteSlice)
+	require.Equal(t, uint64(32), createTxn.ApplicationCallTxnFields.GlobalStateSchema.NumUint)
+	require.Equal(t, uint64(8), createTxn.ApplicationCallTxnFields.LocalStateSchema.NumByteSlice)
+	require.Equal(t, uint64(8), createTxn.ApplicationCallTxnFields.LocalStateSchema.NumUint)
+	require.Equal(t, transactions.NoOpOC, createTxn.ApplicationCallTxnFields.OnCompletion)
+
+	require.Len(t, g.pendingAppSlice[appKindBoxes], 1)
+	require.Len(t, g.pendingAppSlice[appKindSwap], 0)
+	require.Len(t, g.pendingAppMap[appKindBoxes], 1)
+	require.Len(t, g.pendingAppMap[appKindSwap], 0)
+	ad := g.pendingAppSlice[appKindBoxes][0]
+	require.Equal(t, ad, g.pendingAppMap[appKindBoxes][ad.appID])
+	require.Equal(t, hint.sender, ad.sender)
 	require.Equal(t, appKindBoxes, ad.kind)
+	optins := ad.optins
+	require.Len(t, optins, 0)
+
+	paySiblingTxn := sgnTxns[1].Txn
+	require.Equal(t, protocol.PaymentTx, paySiblingTxn.Type)
 
 	// app call transaction creating appSwap
-	actual, txn, err = g.generateAppCallInternal(appSwapCreate, 1, 0, 0, nil)
+	intra = 1
+	actual, sgnTxns, appID, err = g.generateAppCallInternal(appSwapCreate, round, intra, &hint)
+	_ = appID
 	require.NoError(t, err)
 	require.Equal(t, appSwapCreate, actual)
-	require.Equal(t, protocol.ApplicationCallTx, txn.Type)
-	require.Len(t, g.apps, 0)
-	require.Len(t, g.pendingApps, 2)
-	require.Len(t, g.pendingApps[appKindBoxes], 1)
-	require.Len(t, g.pendingApps[appKindSwap], 1)
-	require.Len(t, g.pendingApps[appKindSwap][0].holdings, 1)
-	require.Len(t, g.pendingApps[appKindSwap][0].holders, 1)
-	ad = *g.pendingApps[appKindSwap][0]
-	holding = *ad.holdings[0]
-	require.Equal(t, holding, *ad.holders[0])
-	require.Equal(t, uint64(1001), holding.appIndex)
-	require.Equal(t, ad.appID, holding.appIndex)
+
+	require.Len(t, sgnTxns, 1)
+	createTxn = sgnTxns[0].Txn
+
+	require.Equal(t, protocol.ApplicationCallTx, createTxn.Type)
+	require.Equal(t, indexToAccount(hint.sender), createTxn.Sender)
+	require.Equal(t, basics.AppIndex(0), createTxn.ApplicationCallTxnFields.ApplicationID)
+	require.Equal(t, assembled.swapsApproval, createTxn.ApplicationCallTxnFields.ApprovalProgram)
+	require.Equal(t, assembled.swapsClear, createTxn.ApplicationCallTxnFields.ClearStateProgram)
+	require.Equal(t, uint64(32), createTxn.ApplicationCallTxnFields.GlobalStateSchema.NumByteSlice)
+	require.Equal(t, uint64(32), createTxn.ApplicationCallTxnFields.GlobalStateSchema.NumUint)
+	require.Equal(t, uint64(8), createTxn.ApplicationCallTxnFields.LocalStateSchema.NumByteSlice)
+	require.Equal(t, uint64(8), createTxn.ApplicationCallTxnFields.LocalStateSchema.NumUint)
+	require.Equal(t, transactions.NoOpOC, createTxn.ApplicationCallTxnFields.OnCompletion)
+
+	require.Len(t, g.pendingAppSlice[appKindBoxes], 1)
+	require.Len(t, g.pendingAppSlice[appKindSwap], 1)
+	require.Len(t, g.pendingAppMap[appKindBoxes], 1)
+	require.Len(t, g.pendingAppMap[appKindSwap], 1)
+	ad = g.pendingAppSlice[appKindSwap][0]
+	require.Equal(t, ad, g.pendingAppMap[appKindSwap][ad.appID])
+	require.Equal(t, hint.sender, ad.sender)
 	require.Equal(t, appKindSwap, ad.kind)
+	optins = ad.optins
+	require.Len(t, optins, 0)
+}
+
+func TestAppBoxesOptin(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+	assembled := assembleApps(t)
+
+	round, intra := uint64(1337), uint64(0)
+
+	hint := appData{sender: 7}
+
+	// app call transaction opting into boxes gets replaced by creating appBoxes
+	actual, sgnTxns, appID, err := g.generateAppCallInternal(appBoxesOptin, round, intra, &hint)
+	_ = appID
+	require.NoError(t, err)
+	require.Equal(t, appBoxesCreate, actual)
+
+	require.Len(t, sgnTxns, 2)
+	createTxn := sgnTxns[0].Txn
+
+	require.Equal(t, protocol.ApplicationCallTx, createTxn.Type)
+	require.Equal(t, indexToAccount(hint.sender), createTxn.Sender)
+	require.Equal(t, basics.AppIndex(0), createTxn.ApplicationCallTxnFields.ApplicationID)
+	require.Equal(t, assembled.boxesApproval, createTxn.ApplicationCallTxnFields.ApprovalProgram)
+	require.Equal(t, assembled.boxesClear, createTxn.ApplicationCallTxnFields.ClearStateProgram)
+	require.Equal(t, uint64(32), createTxn.ApplicationCallTxnFields.GlobalStateSchema.NumByteSlice)
+	require.Equal(t, uint64(32), createTxn.ApplicationCallTxnFields.GlobalStateSchema.NumUint)
+	require.Equal(t, uint64(8), createTxn.ApplicationCallTxnFields.LocalStateSchema.NumByteSlice)
+	require.Equal(t, uint64(8), createTxn.ApplicationCallTxnFields.LocalStateSchema.NumUint)
+	require.Equal(t, transactions.NoOpOC, createTxn.ApplicationCallTxnFields.OnCompletion)
+	require.Nil(t, createTxn.ApplicationCallTxnFields.Boxes)
+
+	require.Len(t, g.pendingAppSlice[appKindBoxes], 1)
+	require.Len(t, g.pendingAppSlice[appKindSwap], 0)
+	require.Len(t, g.pendingAppMap[appKindBoxes], 1)
+	require.Len(t, g.pendingAppMap[appKindSwap], 0)
+	ad := g.pendingAppSlice[appKindBoxes][0]
+	require.Equal(t, ad, g.pendingAppMap[appKindBoxes][ad.appID])
+	require.Equal(t, hint.sender, ad.sender)
+	require.Equal(t, appKindBoxes, ad.kind)
+	require.Len(t, ad.optins, 0)
+
+	require.Contains(t, effects, actual)
+
+	paySiblingTxn := sgnTxns[1].Txn
+	require.Equal(t, protocol.PaymentTx, paySiblingTxn.Type)
+
+	// 2nd attempt to optin (with new sender) doesn't get replaced
+	g.finishRound()
+	intra += 1
+	hint.sender = 8
+
+	actual, sgnTxns, appID, err = g.generateAppCallInternal(appBoxesOptin, round, intra, &hint)
+	_ = appID
+	require.NoError(t, err)
+	require.Equal(t, appBoxesOptin, actual)
+
+	require.Len(t, sgnTxns, 2)
+	pay := sgnTxns[1].Txn
+	require.Equal(t, protocol.PaymentTx, pay.Type)
+	require.NotEqual(t, basics.Address{}.String(), pay.Sender.String())
+
+	createTxn = sgnTxns[0].Txn
+	require.Equal(t, protocol.ApplicationCallTx, createTxn.Type)
+	require.Equal(t, indexToAccount(hint.sender), createTxn.Sender)
+	require.Equal(t, basics.AppIndex(1001), createTxn.ApplicationCallTxnFields.ApplicationID)
+	require.Equal(t, []byte(nil), createTxn.ApplicationCallTxnFields.ApprovalProgram)
+	require.Equal(t, []byte(nil), createTxn.ApplicationCallTxnFields.ClearStateProgram)
+	require.Equal(t, basics.StateSchema{}, createTxn.ApplicationCallTxnFields.GlobalStateSchema)
+	require.Equal(t, basics.StateSchema{}, createTxn.ApplicationCallTxnFields.LocalStateSchema)
+	require.Equal(t, transactions.OptInOC, createTxn.ApplicationCallTxnFields.OnCompletion)
+	require.Len(t, createTxn.ApplicationCallTxnFields.Boxes, 1)
+	require.Equal(t, crypto.Digest(pay.Sender).ToSlice(), createTxn.ApplicationCallTxnFields.Boxes[0].Name)
+
+	require.Len(t, g.pendingAppSlice[appKindBoxes], 1)
+	require.Len(t, g.pendingAppSlice[appKindSwap], 0)
+	require.Len(t, g.pendingAppMap[appKindBoxes], 1)
+	require.Len(t, g.pendingAppMap[appKindSwap], 0)
+	ad = g.pendingAppSlice[appKindBoxes][0]
+	require.Equal(t, ad, g.pendingAppMap[appKindBoxes][ad.appID])
+	require.Equal(t, hint.sender, ad.sender) // NOT 8!!!
+	require.Equal(t, appKindBoxes, ad.kind)
+	optins := ad.optins
+	require.Len(t, optins, 1)
+	require.Contains(t, optins, hint.sender)
+
+	require.Contains(t, effects, actual)
+	require.Len(t, effects[actual], 2)
+	require.Equal(t, TxEffect{effectPaymentTxSibling, 1}, effects[actual][0])
+	require.Equal(t, TxEffect{effectInnerTx, 2}, effects[actual][1])
+
+	numTxns, err := g.countAndRecordEffects(actual, time.Now())
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), numTxns)
+
+	// 3rd attempt to optin gets replaced by vanilla app call
+	g.finishRound()
+	intra += numTxns
+
+	actual, sgnTxns, appID, err = g.generateAppCallInternal(appBoxesOptin, round, intra, &hint)
+	_ = appID
+	require.NoError(t, err)
+	require.Equal(t, appBoxesCall, actual)
+
+	require.Len(t, sgnTxns, 1)
+
+	createTxn = sgnTxns[0].Txn
+	require.Equal(t, protocol.ApplicationCallTx, createTxn.Type)
+	require.Equal(t, indexToAccount(hint.sender), createTxn.Sender)
+	require.Equal(t, basics.AppIndex(1001), createTxn.ApplicationCallTxnFields.ApplicationID)
+	require.Equal(t, []byte(nil), createTxn.ApplicationCallTxnFields.ApprovalProgram)
+	require.Equal(t, []byte(nil), createTxn.ApplicationCallTxnFields.ClearStateProgram)
+	require.Equal(t, basics.StateSchema{}, createTxn.ApplicationCallTxnFields.GlobalStateSchema)
+	require.Equal(t, basics.StateSchema{}, createTxn.ApplicationCallTxnFields.LocalStateSchema)
+	require.Equal(t, transactions.NoOpOC, createTxn.ApplicationCallTxnFields.OnCompletion)
+	require.Len(t, createTxn.ApplicationCallTxnFields.Boxes, 1)
+	require.Equal(t, crypto.Digest(pay.Sender).ToSlice(), createTxn.ApplicationCallTxnFields.Boxes[0].Name)
+
+	// no change to app states
+	require.Len(t, g.pendingAppSlice[appKindBoxes], 0)
+	require.Len(t, g.pendingAppSlice[appKindSwap], 0)
+	require.Len(t, g.pendingAppMap[appKindBoxes], 0)
+	require.Len(t, g.pendingAppMap[appKindSwap], 0)
+
+	require.NotContains(t, effects, actual)
 }
 
 func TestWriteRoundZero(t *testing.T) {
@@ -461,4 +662,75 @@ func TestHandlers(t *testing.T) {
 			require.Contains(t, w.Body.String(), testcase.err)
 		})
 	}
+}
+
+func TestRecordData(t *testing.T) {
+	gen := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+
+	id := TxTypeID("test")
+	data, ok := gen.reportData[id]
+	require.False(t, ok)
+
+	gen.recordData(id, time.Now())
+	data, ok = gen.reportData[id]
+	require.True(t, ok)
+	require.Equal(t, uint64(1), data.GenerationCount)
+
+	gen.recordData(id, time.Now())
+	data, ok = gen.reportData[id]
+	require.True(t, ok)
+	require.Equal(t, uint64(2), data.GenerationCount)
+
+}
+
+func TestRecordOccurrences(t *testing.T) {
+	gen := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+
+	id := TxTypeID("test")
+	data, ok := gen.reportData[id]
+	require.False(t, ok)
+
+	gen.recordOccurrences(id, 100, time.Now())
+	data, ok = gen.reportData[id]
+	require.True(t, ok)
+	require.Equal(t, uint64(100), data.GenerationCount)
+
+	gen.recordOccurrences(id, 200, time.Now())
+	data, ok = gen.reportData[id]
+	require.True(t, ok)
+	require.Equal(t, uint64(300), data.GenerationCount)
+}
+
+func TestRecordAppConsequences(t *testing.T) {
+	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+
+	txTypeId := TxTypeID("test")
+	txCount, err := g.countAndRecordEffects(txTypeId, time.Now())
+	require.Error(t, err, "no effects for TxTypeId test")
+
+	// recordIncludingEffects always records the root txTypeId
+	require.Equal(t, uint64(1), txCount)
+	data, ok := g.reportData[txTypeId]
+	require.True(t, ok)
+	require.Equal(t, uint64(1), data.GenerationCount)
+	require.Len(t, g.reportData, 1)
+
+	txTypeId = appBoxesOptin
+	txCount, err = g.countAndRecordEffects(txTypeId, time.Now())
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), txCount)
+
+	require.Len(t, g.reportData, 4)
+
+	data, ok = g.reportData[txTypeId]
+	require.True(t, ok)
+	require.Equal(t, uint64(1), data.GenerationCount)
+
+	data, ok = g.reportData[effectPaymentTxSibling]
+	require.True(t, ok)
+	require.Equal(t, uint64(1), data.GenerationCount)
+
+	data, ok = g.reportData[effectInnerTx]
+	require.True(t, ok)
+	require.Equal(t, uint64(2), data.GenerationCount)
 }

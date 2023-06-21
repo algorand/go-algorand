@@ -5,6 +5,7 @@ replace github.com/algorand/go-algorand => ../..
 go 1.20
 
 require (
+	github.com/algorand/avm-abi v0.2.0
 	github.com/algorand/go-algorand v0.0.0-00010101000000-000000000000
 	github.com/algorand/go-codec/codec v1.1.10
 	github.com/algorand/go-deadlock v0.2.2
@@ -16,7 +17,6 @@ require (
 
 require (
 	github.com/DataDog/zstd v1.5.2 // indirect
-	github.com/algorand/avm-abi v0.2.0 // indirect
 	github.com/algorand/falcon v0.1.0 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
 	github.com/algorand/msgp v1.1.54 // indirect
