@@ -130,7 +130,7 @@ func MakeBlockService(log logging.Logger, config config.Local, ledger LedgerForB
 		fallbackEndpoints:       makeFallbackEndpoints(log, config.BlockServiceCustomFallbackEndpoints),
 		enableArchiverFallback:  config.EnableBlockServiceFallbackToArchiver,
 		log:                     log,
-		memoryCap:               config.BlockServiceHTTPMemCap,
+		memoryCap:               config.BlockServiceMemCap,
 	}
 	if service.enableService {
 		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
@@ -301,10 +301,18 @@ const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
 	target := reqMsg.Sender.(network.UnicastPeer)
 	var respTopics network.Topics
+	var n uint64
 
 	defer func() {
-		reqMsg.Callback = func() {
-			// decrement the counter here
+		if n > 0 {
+			reqMsg.Callback = func() {
+				bs.mu.Lock()
+				bs.memoryUsed -= n
+				bs.mu.Unlock()
+			}
+			bs.mu.Lock()
+			bs.memoryUsed += n
+			bs.mu.Unlock()
 		}
 		target.Respond(ctx, reqMsg, respTopics)
 	}()
@@ -341,7 +349,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 				[]byte(roundNumberParseErrMsg))}
 		return
 	}
-	respTopics = topicBlockBytes(bs.log, bs.ledger, basics.Round(round), string(requestType))
+	respTopics, n = topicBlockBytes(bs.log, bs.ledger, basics.Round(round), string(requestType))
 	return
 }
 
@@ -419,7 +427,7 @@ func (bs *BlockService) rawBlockBytes(round basics.Round) ([]byte, error) {
 	return data, err
 }
 
-func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) network.Topics {
+func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) (network.Topics, uint64) {
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
 		switch err.(type) {
@@ -428,7 +436,7 @@ func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round
 			log.Infof("BlockService topicBlockBytes: %s", err)
 		}
 		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}
+			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}, 0
 	}
 	switch requestType {
 	case BlockAndCertValue:
@@ -437,10 +445,10 @@ func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round
 				BlockDataKey, blk),
 			network.MakeTopic(
 				CertDataKey, cert),
-		}
+		}, uint64(len(blk) + len(cert))
 	default:
 		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(datatypeUnsupportedErrMsg))}
+			network.MakeTopic(network.ErrorKey, []byte(datatypeUnsupportedErrMsg))}, 0
 	}
 }
 

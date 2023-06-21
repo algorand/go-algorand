@@ -407,7 +407,6 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg, callback: reqMsg.Callback}:
-		atomic.AddInt64(&wp.net.topicBytesUsed, int64(len(msg[0].data)))
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
@@ -580,14 +579,9 @@ func (wp *wsPeer) readLoop() {
 			atomic.AddUint64(&wp.avMessageCount, 1)
 		case protocol.ProposalPayloadTag:
 			atomic.AddUint64(&wp.ppMessageCount, 1)
-		case protocol.UniEnsBlockReqTag:
-			if atomic.LoadInt64(&wp.net.topicBytesUsed) > wp.net.topicBytesCap {
-				networkCatchupMessagesDropped.Inc(nil)
-				continue // drop message, since we are over capacity for blocks we are currently serving
-			}
 		// the remaining valid tags: no special handling here
 		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
-			protocol.StateProofSigTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
+			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
 		default: // unrecognized tag
 			unknownProtocolTagMessagesTotal.Inc(nil)
 			atomic.AddUint64(&wp.unkMessageCount, 1)
@@ -691,6 +685,9 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 }
 
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
+	if msgs.callback != nil {
+		defer msgs.callback()
+	}
 	for _, msg := range msgs.msgs {
 		select {
 		case <-msg.ctx.Done():
@@ -721,9 +718,6 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 	}
 	// the tags are always 2 char long; note that this is safe since it's only being used for messages that we have generated locally.
 	tag := protocol.Tag(msg.data[:2])
-	if tag == protocol.TopicMsgRespTag {
-		defer atomic.AddInt64(&wp.net.topicBytesUsed, -int64(len(msg.data)))
-	}
 	if !wp.sendMessageTag[tag] {
 		// the peer isn't interested in this message.
 		return disconnectReasonNone
@@ -784,12 +778,13 @@ func (wp *wsPeer) writeLoop() {
 				return
 			}
 		case data := <-wp.sendBufferBulk:
+			if data.callback != nil {
+				defer data.callback()
+			}
 			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
-				data.callback()
 				cleanupCloseError = writeErr
 				return
 			}
-			data.callback()
 		}
 	}
 }
@@ -904,16 +899,14 @@ func (wp *wsPeer) Close(deadline time.Time) {
 		}
 	}
 
-	// We need to loop through all of the messages in the sendBufferBulk (sendBufferPrio never contains TS messages)
-	// and remove their sizes from the topicBytesUsed counter.
+	// We need to loop through all of the messages with callbacks still in the send queue and call them
+	// to ensure that state of counters such as wsBlockBytesUsed is correct.
 L:
 	for {
 		select {
 		case msgs := <-wp.sendBufferBulk:
-			for _, msg := range msgs.msgs {
-				if protocol.Tag(msg.data[:2]) == protocol.TopicMsgRespTag {
-					atomic.AddInt64(&wp.net.topicBytesUsed, -int64(len(msg.data)))
-				}
+			if msgs.callback != nil {
+				msgs.callback()
 			}
 		default:
 			break L

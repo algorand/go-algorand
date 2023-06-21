@@ -474,13 +474,6 @@ type WebsocketNetwork struct {
 
 	// resolveSRVRecords is a function that resolves SRV records for a given service, protocol and name
 	resolveSRVRecords func(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (addrs []string, err error)
-
-	// topicBytesUsed is the number of bytes of topic responses (currently only blocks) currently in memory being served to peers. This is used to limit the number of blocks that websocket
-	// peers can request at once.
-	topicBytesUsed int64
-
-	// topicBytesCap is the max number of topic response bytes (currently only blocks) we can serve to peers at once.
-	topicBytesCap int64
 }
 
 const (
@@ -836,10 +829,6 @@ func (wn *WebsocketNetwork) setup() {
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
 		wn.RegisterMessageInterest(protocol.StateProofSigTag)
-	}
-
-	if wn.config.BlockServiceWSMemCap > 0 {
-		wn.topicBytesCap = wn.config.BlockServiceWSMemCap
 	}
 }
 
