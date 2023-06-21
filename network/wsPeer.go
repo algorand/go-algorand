@@ -778,12 +778,15 @@ func (wp *wsPeer) writeLoop() {
 				return
 			}
 		case data := <-wp.sendBufferBulk:
-			if data.callback != nil {
-				defer data.callback()
-			}
 			if writeErr := wp.writeLoopSend(data); writeErr != disconnectReasonNone {
+				if data.callback != nil {
+					data.callback()
+				}
 				cleanupCloseError = writeErr
 				return
+			}
+			if data.callback != nil {
+				data.callback()
 			}
 		}
 	}
