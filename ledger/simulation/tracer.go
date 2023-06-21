@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -263,7 +264,7 @@ func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer 
 		o.Deleted = append(o.Deleted, basics.TealValue{
 			Type:  tealValue.Type,
 			Uint:  tealValue.Uint,
-			Bytes: tealValue.Bytes,
+			Bytes: base64.StdEncoding.EncodeToString([]byte(tealValue.Bytes)),
 		})
 	}
 }
@@ -305,7 +306,7 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 		o.Added = append(o.Added, basics.TealValue{
 			Type:  tealValue.Type,
 			Uint:  tealValue.Uint,
-			Bytes: tealValue.Bytes,
+			Bytes: base64.StdEncoding.EncodeToString([]byte(tealValue.Bytes)),
 		})
 	}
 }
