@@ -87,15 +87,16 @@ func TestLargeKeyRegister(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	e := setupRouter()
+	go e.Start(":9999")
 
 	// TODO: Make sure this fails without the change
 	assert.Equal(t, "10MB", maxRequestBodyBytes)
 	stringReader := strings.NewReader(strings.Repeat("a", 50_000_000))
-	req, err := http.NewRequest(http.MethodPost, "/v2/participation", stringReader)
+	req, err := http.NewRequest(http.MethodPost, "localhost:9999/v2/participation", stringReader)
 	assert.NoError(t, err)
 
 	e.ServeHTTP(rec, req)
-	fmt.Println(rec.Body)
+	fmt.Println(rec.Body.String())
 }
 
 func TestTestSuite(t *testing.T) {
