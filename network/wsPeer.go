@@ -165,6 +165,7 @@ const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
 const disconnectDuplicateConnection disconnectReason = "DuplicateConnection"
 const disconnectBadIdentityData disconnectReason = "BadIdentityData"
+const disconnectUnexpectedTopicResp disconnectReason = "UnexpectedTopicResp"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -181,6 +182,10 @@ type wsPeer struct {
 	// error.
 	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
 	lastPacketTime int64
+
+	// outstandingTopicRequests is an atomic counter for the number of outstanding block requests we've made out to this peer
+	// if a peer sends more blocks than we've requested, we'll disconnect from it.
+	outstandingTopicRequests int64
 
 	// intermittentOutgoingMessageEnqueueTime contains the UnixNano of the message's enqueue time that is currently being written to the
 	// peer, or zero if no message is being written.
@@ -502,6 +507,29 @@ func (wp *wsPeer) readLoop() {
 			return
 		}
 		msg.Tag = Tag(string(tag[:]))
+
+		// Skip the message if it's a response to a request we didn't make or has timed out
+		if msg.Tag == protocol.TopicMsgRespTag && wp.lenResponseChannels() == 0 {
+			atomic.AddInt64(&wp.outstandingTopicRequests, -1)
+
+			// This peers has sent us more responses than we have requested.  This is a protocol violation and we should disconnect.
+			if atomic.LoadInt64(&wp.outstandingTopicRequests) < 0 {
+				wp.net.log.Errorf("wsPeer readloop: peer %s sent TS response without a request", wp.conn.RemoteAddr().String())
+				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "unrequestedTS"})
+				cleanupCloseError = disconnectUnexpectedTopicResp
+				return
+			}
+			var n int64
+			// Peer sent us a response to a request we made but we've already timed out -- discard
+			n, err = io.Copy(io.Discard, reader)
+			if err != nil {
+				wp.net.log.Infof("wsPeer readloop: could not discard timed-out TS message from %s : %s", wp.conn.RemoteAddr().String(), err)
+				wp.reportReadErr(err)
+				return
+			}
+			wp.net.log.Warnf("wsPeer readLoop: received a TS response for a stale request from %s. %d bytes discarded", wp.conn.RemoteAddr().String(), n)
+			continue
+		}
 		slurper.Reset()
 		err = slurper.Read(reader)
 		if err != nil {
@@ -544,6 +572,7 @@ func (wp *wsPeer) readLoop() {
 			}
 			continue
 		case protocol.TopicMsgRespTag: // Handle Topic message
+			atomic.AddInt64(&wp.outstandingTopicRequests, -1)
 			topics, err := UnmarshallTopics(msg.Data)
 			if err != nil {
 				wp.net.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddr().String(), err)
@@ -950,6 +979,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 		ctx:          context.Background()}
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
+		atomic.AddInt64(&wp.outstandingTopicRequests, 1)
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
@@ -975,6 +1005,12 @@ func (wp *wsPeer) makeResponseChannel(key uint64) (responseChannel chan *Respons
 	defer wp.responseChannelsMutex.Unlock()
 	wp.responseChannels[key] = newChan
 	return newChan
+}
+
+func (wp *wsPeer) lenResponseChannels() int {
+	wp.responseChannelsMutex.Lock()
+	defer wp.responseChannelsMutex.Unlock()
+	return len(wp.responseChannels)
 }
 
 // getAndRemoveResponseChannel returns the channel and deletes the channel from the map
