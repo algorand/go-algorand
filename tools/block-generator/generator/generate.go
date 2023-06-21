@@ -60,23 +60,25 @@ var clearSwap string
 // ---- init ----
 
 // effects is a map that contains the hard-coded non-trivial
-// consequents of a transaction type in teal/poap_boxes.teal:
+// consequents of a transaction type.
+// The "sibling" transactions are added to an atomic transaction group
+// in a "makeXyzTransaction" function defined in make_transactions.go.
+// The "inner" transactions are created inside the TEAL programs. See:
+// * teal/poap_boxes.teal
+// * teal/swap_amm.teal
 //
 // appBoxesCreate: 1 sibling payment tx
 // appBoxesOptin: 1 sibling payment tx, 2 inner tx
-var effects map[TxTypeID][]TxEffect
-
-func init() {
-	effects = map[TxTypeID][]TxEffect{
-		appBoxesCreate: {
-			{effectPaymentTxSibling, 1},
-		},
-		appBoxesOptin: {
-			{effectPaymentTxSibling, 1},
-			{effectInnerTx, 2},
-		},
-	}
+var effects map[TxTypeID][]TxEffect = map[TxTypeID][]TxEffect{
+	appBoxesCreate: {
+		{effectPaymentTxSibling, 1},
+	},
+	appBoxesOptin: {
+		{effectPaymentTxSibling, 1},
+		{effectInnerTx, 2},
+	},
 }
+
 
 // ---- constructors ----
 
