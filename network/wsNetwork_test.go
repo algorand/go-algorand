@@ -4071,7 +4071,12 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	}()
 	require.Eventually(
 		t,
-		func() bool { return netC.peers[0].lenResponseChannels() > 0 },
+		func() bool {
+			netC.peersLock.RLock()
+			defer netC.peersLock.RUnlock()
+			require.NotEmpty(t, netC.peers)
+			return netC.peers[0].lenResponseChannels() > 0
+		},
 		1*time.Second,
 		50*time.Millisecond,
 	)
