@@ -151,10 +151,8 @@ func (w *wsFetcherClient) address() string {
 	return fmt.Sprintf("[ws] (%s)", w.target.GetAddress())
 }
 
-// MakeBlockRequestTopics builds topics for requesting a block.
-// It is exported for testing purposes since full request requires an additional nonce topic
-// coming from the network implementation
-func MakeBlockRequestTopics(r basics.Round) network.Topics {
+// makeBlockRequestTopics builds topics for requesting a block.
+func makeBlockRequestTopics(r basics.Round) network.Topics {
 	roundBin := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(roundBin, uint64(r))
 	return network.Topics{
@@ -168,7 +166,7 @@ func MakeBlockRequestTopics(r basics.Round) network.Topics {
 
 // requestBlock send a request for block <round> and wait until it receives a response or a context expires.
 func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) ([]byte, error) {
-	topics := MakeBlockRequestTopics(round)
+	topics := makeBlockRequestTopics(round)
 	resp, err := w.target.Request(ctx, protocol.UniEnsBlockReqTag, topics)
 	if err != nil {
 		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), err.Error())

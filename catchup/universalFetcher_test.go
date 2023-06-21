@@ -320,7 +320,7 @@ func TestMaxBlockRequestSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	round := rand.Uint64()
-	topics := MakeBlockRequestTopics(basics.Round(round))
+	topics := makeBlockRequestTopics(basics.Round(round))
 	nonce := rand.Uint64() - 1
 	nonceTopic := network.MakeNonceTopic(nonce)
 	topics = append(topics, nonceTopic)
