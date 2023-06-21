@@ -191,6 +191,7 @@ func TestSigPartProofMaxSize(t *testing.T) {
 	t.Parallel()
 	// Ensures that the SigPartProofMaxSize constant used for maxtotalbytes for StateProof.(Sig|Part)Proof(s) is
 	// correct. It should be logically bound by the maximum number of StateProofTopVoters. It is scaled by 1/2
+	// see merkelarray.Proof comment for explanation of the size calculation.
 	require.Equal(t, SigPartProofMaxSize, merklearray.ProofMaxSizeByElements(config.StateProofTopVoters/2))
 }
 
