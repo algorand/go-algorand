@@ -17,12 +17,10 @@
 package agreement
 
 import (
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -38,26 +36,4 @@ func TestEmptyEncoding(t *testing.T) {
 
 	var b bundle
 	require.Equal(t, 1, len(protocol.Encode(&b)))
-}
-
-// TestMsgpTypeAliasCompat ensures that type switching between types and type aliases
-// is backwards compatible.
-func TestMsgpTypeAliasCompat(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	encodedRound := protocol.Encode(round(rand.Uint64()))
-	var roundDecoded round
-	err := protocol.Decode(encodedRound, &roundDecoded)
-	require.NoError(t, err)
-	var basicsRoundDecoded basics.Round
-	err = protocol.Decode(encodedRound, &basicsRoundDecoded)
-	require.NoError(t, err)
-	require.Equal(t, roundDecoded, basicsRoundDecoded)
-
-	encodedBasicsRound := protocol.Encode(basics.Round(rand.Uint64()))
-	err = protocol.Decode(encodedBasicsRound, &roundDecoded)
-	require.NoError(t, err)
-	err = protocol.Decode(encodedBasicsRound, &basicsRoundDecoded)
-	require.NoError(t, err)
-	require.Equal(t, roundDecoded, basicsRoundDecoded)
 }
