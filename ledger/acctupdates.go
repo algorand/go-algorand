@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -585,100 +584,6 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, err error) {
 	data, validThrough, _, _, err = au.lookupWithoutRewards(rnd, addr, true /* take lock*/)
 	return
-}
-
-// ListAssets lists the assets by their asset index, limiting to the first maxResults
-func (au *accountUpdates) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
-	return au.listCreatables(basics.CreatableIndex(maxAssetIdx), maxResults, basics.AssetCreatable)
-}
-
-// ListApplications lists the application by their app index, limiting to the first maxResults
-func (au *accountUpdates) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
-	return au.listCreatables(basics.CreatableIndex(maxAppIdx), maxResults, basics.AppCreatable)
-}
-
-// listCreatables lists the application/asset by their app/asset index, limiting to the first maxResults
-func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) ([]basics.CreatableLocator, error) {
-	au.accountsMu.RLock()
-	for {
-		currentDbRound := au.cachedDBRound
-		currentDeltaLen := len(au.deltas)
-		// Sort indices for creatables that have been created/deleted. If this
-		// turns out to be too inefficient, we could keep around a heap of
-		// created/deleted asset indices in memory.
-		keys := make([]basics.CreatableIndex, 0, len(au.creatables))
-		for cidx, delta := range au.creatables {
-			if delta.Ctype != ctype {
-				continue
-			}
-			if cidx <= maxCreatableIdx {
-				keys = append(keys, cidx)
-			}
-		}
-		slices.Sort(keys)
-
-		// Check for creatables that haven't been synced to disk yet.
-		unsyncedCreatables := make([]basics.CreatableLocator, 0, len(keys))
-		deletedCreatables := make(map[basics.CreatableIndex]bool, len(keys))
-		for _, cidx := range keys {
-			delta := au.creatables[cidx]
-			if delta.Created {
-				// Created but only exists in memory
-				unsyncedCreatables = append(unsyncedCreatables, basics.CreatableLocator{
-					Type:    delta.Ctype,
-					Index:   cidx,
-					Creator: delta.Creator,
-				})
-			} else {
-				// Mark deleted creatables for exclusion from the results set
-				deletedCreatables[cidx] = true
-			}
-		}
-
-		au.accountsMu.RUnlock()
-
-		// Check in-memory created creatables, which will always be newer than anything
-		// in the database
-		if uint64(len(unsyncedCreatables)) >= maxResults {
-			return unsyncedCreatables[:maxResults], nil
-		}
-		res := unsyncedCreatables
-
-		// Fetch up to maxResults - len(res) + len(deletedCreatables) from the database,
-		// so we have enough extras in case creatables were deleted
-		numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedCreatables))
-		dbResults, dbRound, err := au.accountsq.ListCreatables(maxCreatableIdx, numToFetch, ctype)
-		if err != nil {
-			return nil, err
-		}
-
-		if dbRound == currentDbRound {
-			// Now we merge the database results with the in-memory results
-			for _, loc := range dbResults {
-				// Check if we have enough results
-				if uint64(len(res)) == maxResults {
-					return res, nil
-				}
-
-				// Creatable was deleted
-				if _, ok := deletedCreatables[loc.Index]; ok {
-					continue
-				}
-
-				// We're OK to include this result
-				res = append(res, loc)
-			}
-			return res, nil
-		}
-		if dbRound < currentDbRound {
-			au.log.Errorf("listCreatables: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-			return []basics.CreatableLocator{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
-		}
-		au.accountsMu.RLock()
-		for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
-			au.accountsReadCond.Wait()
-		}
-	}
 }
 
 // GetCreatorForRound returns the creator for a given asset/app index at a given round
