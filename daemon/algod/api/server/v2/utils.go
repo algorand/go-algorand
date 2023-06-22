@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
@@ -431,8 +432,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
-		failedAt := make([]uint64, len(txnGroupResult.FailedAt))
-		copy(failedAt, txnGroupResult.FailedAt)
+		failedAt := slices.Clone[[]uint64, uint64](txnGroupResult.FailedAt)
 		encoded.FailedAt = &failedAt
 	}
 

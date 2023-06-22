@@ -56,7 +56,6 @@ var waitSec uint32
 var newNodeNetwork string
 var newNodeDestination string
 var newNodeArchival bool
-var newNodeIndexer bool
 var newNodeRelay string
 var newNodeFullConfig bool
 var watchMillisecond uint64
@@ -98,7 +97,13 @@ func init() {
 	createCmd.Flags().StringVar(&newNodeDestination, "destination", "", "Destination path for the new node")
 	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", localDefaults.Archival, "Make the new node archival, storing all blocks")
 	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
-	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", localDefaults.IsIndexerActive, "Configure the new node to enable the indexer feature (implies --archival)")
+
+	// The flag for enabling an internal indexer is now deprecated, but we keep it for backwards compatibility for now.
+	indexerFlagName := "indexer"
+	_ = createCmd.Flags().BoolP(indexerFlagName, "i", false, "")
+	createCmd.Flags().MarkDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
+	createCmd.Flags().MarkShorthandDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
+
 	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "Configure as a relay with specified listening address (NetAddress)")
 	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")
 	createCmd.Flags().BoolVar(&newNodeFullConfig, "full-config", false, "Store full config file")
@@ -680,8 +685,7 @@ var createCmd = &cobra.Command{
 				reportErrorf(errorNodeCreationIPFailure, listenIP)
 			}
 		}
-		localConfig.Archival = newNodeArchival || newNodeRelay != "" || newNodeIndexer
-		localConfig.IsIndexerActive = newNodeIndexer
+		localConfig.Archival = newNodeArchival || newNodeRelay != ""
 		localConfig.RunHosted = runUnderHost
 		localConfig.EnableLedgerService = localConfig.Archival
 		localConfig.EnableBlockService = localConfig.Archival

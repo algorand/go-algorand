@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"golang.org/x/exp/maps"
 )
 
 // DeltaAction is an enum of actions that may be performed when applying a
@@ -77,24 +78,7 @@ type StateDelta map[string]ValueDelta
 // equality because an empty map will encode/decode as nil. So if our generated
 // map is empty but not nil, we want to equal a decoded nil off the wire.
 func (sd StateDelta) Equal(o StateDelta) bool {
-	// Lengths should be the same
-	if len(sd) != len(o) {
-		return false
-	}
-	// All keys and deltas should be the same
-	for k, v := range sd {
-		// Other StateDelta must contain key
-		ov, ok := o[k]
-		if !ok {
-			return false
-		}
-
-		// Other StateDelta must have same value for key
-		if ov != v {
-			return false
-		}
-	}
-	return true
+	return maps.Equal(sd, o)
 }
 
 // Valid checks whether the keys and values in a StateDelta conform to the
@@ -234,14 +218,7 @@ type TealKeyValue map[string]TealValue
 // Clone returns a copy of a TealKeyValue that may be modified without
 // affecting the original
 func (tk TealKeyValue) Clone() TealKeyValue {
-	if tk == nil {
-		return nil
-	}
-	res := make(TealKeyValue, len(tk))
-	for k, v := range tk {
-		res[k] = v
-	}
-	return res
+	return maps.Clone(tk)
 }
 
 // ToStateSchema calculates the number of each value type in a TealKeyValue and

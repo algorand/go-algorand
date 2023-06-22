@@ -32,6 +32,7 @@ type BuildConfig struct {
 	APIEndpoint2      string
 	APIEndpoint3      string
 	APIEndpoint4      string
+	AdminAPIToken     string
 	APIToken          string
 	EnableTelemetry   bool
 	TelemetryURI      string

@@ -40,7 +40,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
-	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -103,7 +102,7 @@ type mockNode struct {
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
-	panic("implement me")
+	return account.ParticipationID{}, nil
 }
 
 func (m *mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
@@ -219,10 +218,6 @@ func (m *mockNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDel
 
 func (m *mockNode) Uint64() uint64 {
 	return 1
-}
-
-func (m *mockNode) Indexer() (*indexer.Indexer, error) {
-	return nil, fmt.Errorf("indexer not implemented")
 }
 
 func (m *mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (node.TxnWithStatus, error) {
