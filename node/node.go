@@ -47,7 +47,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
-	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
@@ -127,8 +126,6 @@ type AlgorandFullNode struct {
 	blockService             *rpcs.BlockService
 	ledgerService            *rpcs.LedgerService
 	txPoolSyncerService      *rpcs.TxSyncer
-
-	indexer *indexer.Indexer
 
 	rootDir         string
 	genesisID       string
@@ -242,15 +239,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	if err != nil {
 		log.Errorf("Cannot initialize TxHandler: %v", err)
 		return nil, err
-	}
-
-	// Indexer setup
-	if cfg.IsIndexerActive && cfg.Archival {
-		node.indexer, err = indexer.MakeIndexer(genesisDir, node.ledger, false)
-		if err != nil {
-			logging.Base().Errorf("failed to make indexer -  %v", err)
-			return nil, err
-		}
 	}
 
 	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
@@ -369,18 +357,6 @@ func (node *AlgorandFullNode) Start() {
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
 		startNetwork()
-		// start indexer
-		if idx, err := node.Indexer(); err == nil {
-			err := idx.Start()
-			if err != nil {
-				node.log.Errorf("indexer failed to start, turning it off - %v", err)
-				node.config.IsIndexerActive = false
-			} else {
-				node.log.Info("Indexer was started successfully")
-			}
-		} else {
-			node.log.Infof("Indexer is not available - %v", err)
-		}
 
 		node.startMonitoringRoutines()
 	}
@@ -442,9 +418,6 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
-	if node.indexer != nil {
-		node.indexer.Shutdown()
-	}
 }
 
 // note: unlike the other two functions, this accepts a whole filename
@@ -1137,14 +1110,6 @@ func (node *AlgorandFullNode) Uint64() uint64 {
 	return crypto.RandUint64()
 }
 
-// Indexer returns a pointer to nodes indexer
-func (node *AlgorandFullNode) Indexer() (*indexer.Indexer, error) {
-	if node.indexer != nil && node.config.IsIndexerActive {
-		return node.indexer, nil
-	}
-	return nil, fmt.Errorf("indexer is not active")
-}
-
 // GetTransactionByID gets transaction by ID
 // this function is intended to be called externally via the REST api interface.
 func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error) {
@@ -1164,8 +1129,8 @@ func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd bas
 func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
-	if node.indexer != nil {
-		return fmt.Errorf("catching up using a catchpoint is not supported on indexer-enabled nodes")
+	if node.config.Archival {
+		return fmt.Errorf("catching up using a catchpoint is not supported on archive nodes")
 	}
 	if node.catchpointCatchupService != nil {
 		stats := node.catchpointCatchupService.GetStatistics()
@@ -1256,19 +1221,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
-
-		// start indexer
-		if idx, err := node.Indexer(); err == nil {
-			err := idx.Start()
-			if err != nil {
-				node.log.Errorf("indexer failed to start, turning it off - %v", err)
-				node.config.IsIndexerActive = false
-			} else {
-				node.log.Info("Indexer was started successfully")
-			}
-		} else {
-			node.log.Infof("Indexer is not available - %v", err)
-		}
 
 		// Set up a context we can use to cancel goroutines on Stop()
 		node.ctx, node.cancelCtx = context.WithCancel(context.Background())

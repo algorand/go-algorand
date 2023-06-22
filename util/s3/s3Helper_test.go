@@ -231,6 +231,7 @@ func TestGetPartsFromVersion(t *testing.T) {
 		{name: "test 4 (minor)", version: 1*1<<40 + 2*1<<24, expMajor: 1, expMinor: 2, expPatch: 0},
 		{name: "test 5 (patch)", version: 1*1<<40 + 1, expMajor: 1, expMinor: 0, expPatch: 1},
 		{name: "test 6 (patch)", version: 1*1<<40 + 2, expMajor: 1, expMinor: 0, expPatch: 2},
+		{name: "test 6 (patch)", version: 3298803318784, expMajor: 3, expMinor: 16, expPatch: 0},
 	}
 
 	for _, test := range tests {
