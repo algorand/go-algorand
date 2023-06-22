@@ -19,6 +19,7 @@ package rpcs
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,6 +44,7 @@ import (
 
 type mockUnicastPeer struct {
 	responseTopics network.Topics
+	reqMsg         network.IncomingMessage
 }
 
 func (mup *mockUnicastPeer) GetAddress() string {
@@ -64,6 +66,7 @@ func (mup *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics
 }
 func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, topics network.Topics) (e error) {
 	mup.responseTopics = topics
+	mup.reqMsg = reqMsg
 	return nil
 }
 
@@ -310,7 +313,7 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	config := config.GetDefaultLocal()
 	bs1 := MakeBlockService(log1, config, ledger1, net1, "test-genesis-ID")
 	bs2 := MakeBlockService(log2, config, ledger2, net2, "test-genesis-ID")
-	// set the meory cap so that it can serve only 1 block at a time
+	// set the memory cap so that it can serve only 1 block at a time
 	bs1.memoryCap = 250
 	bs2.memoryCap = 250
 
@@ -413,36 +416,60 @@ forloop:
 func TestWsBlockLimiting(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	log1 := logging.TestingLog(t)
-	logBuffer1 := bytes.NewBuffer(nil)
-	log1.SetOutput(logBuffer1)
+	log := logging.TestingLog(t)
+	logBuffer := bytes.NewBuffer(nil)
+	log.SetOutput(logBuffer)
 
-	log2 := logging.TestingLog(t)
-	logBuffer2 := bytes.NewBuffer(nil)
-	log2.SetOutput(logBuffer2)
+	ledger := makeLedger(t, "l1")
+	defer ledger.Close()
+	addBlock(t, ledger)
+	addBlock(t, ledger)
 
-	ledger1 := makeLedger(t, "l1")
-	defer ledger1.Close()
-	ledger2 := makeLedger(t, "l2")
-	defer ledger2.Close()
-	addBlock(t, ledger1)
-	l1Block2Ts := addBlock(t, ledger1)
-	addBlock(t, ledger2)
-	l2Block2Ts := addBlock(t, ledger2)
-	require.NotEqual(t, l1Block2Ts, l2Block2Ts)
-
-	net1 := &mockUnicastPeer{}
-	net2 := &mockUnicastPeer{}
+	net1 := &httpTestPeerSource{}
 
 	config := config.GetDefaultLocal()
-	bs1 := MakeBlockService(log1, config, ledger1, net1, "test-genesis-ID")
-	bs2 := MakeBlockService(log2, config, ledger2, net2, "test-genesis-ID")
-	// set the meory cap so that it can serve only 1 block at a time
+	bs1 := MakeBlockService(log, config, ledger, net1, "test-genesis-ID")
+	// set the memory cap so that it can serve only 1 block at a time
 	bs1.memoryCap = 250
-	bs2.memoryCap = 250
 
-	nodeA := &basicRPCNode{}
-	nodeB := &basicRPCNode{}
+	peer := mockUnicastPeer{}
+	reqMsg := network.IncomingMessage{
+		Sender: &peer,
+		Tag:    protocol.Tag("UE"),
+	}
+	roundBin := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(roundBin, uint64(2))
+	topics := network.Topics{
+		network.MakeTopic(RequestDataTypeKey,
+			[]byte(BlockAndCertValue)),
+		network.MakeTopic(
+			RoundKey,
+			roundBin),
+	}
+	reqMsg.Data = topics.MarshallTopics()
+	require.Zero(t, bs1.memoryUsed)
+	bs1.handleCatchupReq(context.Background(), reqMsg)
+	// We should have received the message into the mock peer and the block service should have memoryUsed > 0
+	data, found := peer.responseTopics.GetValue(BlockDataKey)
+	require.True(t, found)
+	blk, _, err := ledger.EncodedBlockCert(basics.Round(2))
+	require.NoError(t, err)
+	require.Equal(t, data, blk)
+	require.Positive(t, bs1.memoryUsed)
+
+	// Before making a new request save the callback since the new failed message will overwrite it in the mock peer
+	callback := peer.reqMsg.Callback
+
+	// Now we should be over the max and the block service should not return a block
+	// and should return an error instead
+	bs1.handleCatchupReq(context.Background(), reqMsg)
+	_, found = peer.responseTopics.GetValue(network.ErrorKey)
+	require.True(t, found)
+
+	// Now call the callback to free up memUsed
+	require.Nil(t, peer.reqMsg.Callback)
+	callback()
+	require.Zero(t, bs1.memoryUsed)
 }
 
 // TestRedirectExceptions tests exception cases:
