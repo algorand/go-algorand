@@ -66,6 +66,14 @@ func notImplemented(ctx echo.Context, internal error, external string, log loggi
 	return returnError(ctx, http.StatusNotImplemented, internal, external, log)
 }
 
+func uint64MapKeys[M ~map[K]V, K ~uint64, V any](m M) []uint64 {
+	r := make([]uint64, 0, len(m))
+	for k := range m {
+		r = append(r, uint64(k))
+	}
+	return r
+}
+
 func addrOrNil(addr basics.Address) *string {
 	if addr.IsZero() {
 		return nil
@@ -438,18 +446,12 @@ func convertUnnamedResourceAssignment(assignment *simulation.ResourceAssignment)
 		converted.Accounts = &accountStrings
 	}
 	if len(assignment.Assets) != 0 {
-		assets := make([]uint64, 0, len(assignment.Assets))
-		for asset := range assignment.Assets {
-			assets = append(assets, uint64(asset))
-		}
-		converted.Assets = &assets
+		keys := uint64MapKeys(assignment.Assets)
+		converted.Assets = &keys
 	}
 	if len(assignment.Apps) != 0 {
-		apps := make([]uint64, 0, len(assignment.Apps))
-		for app := range assignment.Apps {
-			apps = append(apps, uint64(app))
-		}
-		converted.Apps = &apps
+		keys := uint64MapKeys(assignment.Apps)
+		converted.Apps = &keys
 	}
 	if len(assignment.Boxes) != 0 {
 		boxes := make([]model.BoxReference, 0, len(assignment.Boxes))
