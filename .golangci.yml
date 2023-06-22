@@ -33,6 +33,8 @@ linters-settings:
     exclude-functions:
     # We do this 121 times and never check the error.
     - (*github.com/spf13/cobra.Command).MarkFlagRequired
+    - (*github.com/spf13/pflag.FlagSet).MarkDeprecated
+    - (*github.com/spf13/pflag.FlagSet).MarkShorthandDeprecated
   govet:
     check-shadowing: true
     settings:
