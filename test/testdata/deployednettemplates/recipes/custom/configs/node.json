@@ -1,6 +1,7 @@
 {
     "APIEndpoint": "{{APIEndpoint}}",
     "APIToken": "{{APIToken}}",
+    "AdminAPIToken": "{{AdminAPIToken}}",
     "EnableBlockStats": false,
     "EnableTelemetry": false,
     "TelemetryURI": "{{TelemetryURI}}",
@@ -11,6 +12,7 @@
         {
             "APIEndpoint": "{{APIEndpoint}}",
             "APIToken": "{{APIToken}}",
+            "AdminAPIToken": "{{AdminAPIToken}}",
             "EnableBlockStats": true,
             "EnableTelemetry": true,
             "TelemetryURI": "{{TelemetryURI}}",
