@@ -2220,9 +2220,6 @@ func TestRouterRequestBody(t *testing.T) {
 	// Admin API call greater than max body bytes should succeed
 	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
 	stringReader := strings.NewReader(strings.Repeat("a", 50_000_000))
-	fmt.Println(e.Listener)
-	fmt.Println(e.Listener.Addr())
-	fmt.Println(e.Listener.Addr().String())
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("https://%s/v2/participation", e.Listener.Addr().String()), stringReader)
 	assert.NoError(t, err)
 	rec := httptest.NewRecorder()

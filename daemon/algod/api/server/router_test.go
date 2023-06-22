@@ -20,12 +20,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/assert"
 )
 
 func setupRouter() *echo.Echo {
@@ -74,5 +75,4 @@ func TestGetTransactionV1Sunset(t *testing.T) {
 		assert.NotNil(t, rec.Body)
 		assert.Equal(t, http.StatusGone, rec.Code)
 	}
-
 }
