@@ -20,6 +20,7 @@ package protocol
 // in a block.  They are used in the data/transaction package and the REST API.
 
 // TxType is the type of the transaction written to the ledger
+//
 //msgp:allocbound TxType txTypeMaxLen
 type TxType string
 

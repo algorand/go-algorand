@@ -22,6 +22,7 @@ import (
 
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
+//
 //msgp:allocbound ConsensusVersion maxConsensusVersionLen
 type ConsensusVersion string
 

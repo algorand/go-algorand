@@ -50,7 +50,7 @@ const (
 // for the purposes of limiting the number of bytes read from the network.
 // The calculations to obtain them are defined in node/TestMaxSizesCorrect()
 
-//AgreementVoteTagMaxSize is the maximum size of an AgreementVoteTag message
+// AgreementVoteTagMaxSize is the maximum size of an AgreementVoteTag message
 const AgreementVoteTagMaxSize = 1228
 
 // MsgOfInterestTagMaxSize is the maximum size of a MsgOfInterestTag message
@@ -68,7 +68,7 @@ const NetIDVerificationTagMaxSize = 215
 // PingTagMaxSize is the maximum size of a PingTag message
 const PingTagMaxSize = 8
 
-//PingReplyTagMaxSize is the maximum size of a PingReplyTag message
+// PingReplyTagMaxSize is the maximum size of a PingReplyTag message
 const PingReplyTagMaxSize = 8
 
 // ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
