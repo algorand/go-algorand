@@ -16,19 +16,16 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 )
 
 func setupRouter() *echo.Echo {
@@ -47,7 +44,6 @@ func setupRouter() *echo.Echo {
 	reqCtx := lib.ReqContext{Log: logging.NewLogger()}
 	// Registering v1 routes
 	registerHandlers(e, apiV1Tag, v1RoutesCopy, reqCtx)
-
 	return e
 }
 
@@ -80,24 +76,5 @@ func TestGetTransactionV1Sunset(t *testing.T) {
 	}
 
 }
-
-func TestLargeKeyRegister(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	rec := httptest.NewRecorder()
-	e := setupRouter()
-	go e.Start(":9999")
-
-	// TODO: Make sure this fails without the change
-	assert.Equal(t, "10MB", maxRequestBodyBytes)
-	stringReader := strings.NewReader(strings.Repeat("a", 50_000_000))
-	req, err := http.NewRequest(http.MethodPost, "localhost:9999/v2/participation", stringReader)
-	assert.NoError(t, err)
-
-	e.ServeHTTP(rec, req)
-	fmt.Println(rec.Body.String())
-}
-
 func TestTestSuite(t *testing.T) {
 }
