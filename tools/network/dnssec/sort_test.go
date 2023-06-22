@@ -38,7 +38,19 @@ func TestSrvSort(t *testing.T) {
 	arr = append(arr, &net.SRV{Priority: 1, Weight: 1})
 	arr = append(arr, &net.SRV{Priority: 1, Weight: 1})
 
+	retryCounter := 0
+retry:
 	srvRecArray(arr).sortAndRand()
+	if (*arr[0] != net.SRV{Priority: 1, Weight: 200}) {
+		// there is a small change that random number from 0 to 204 would 0 or 1
+		// so the first element would be with weight of 1 and not 200
+		// if this happens, we will try again
+		if retryCounter > 3 {
+			a.Fail("randomization failed")
+		}
+		retryCounter++
+		goto retry
+	}
 	a.Equal(net.SRV{Priority: 1, Weight: 200}, *arr[0])
 	a.Equal(net.SRV{Priority: 1, Weight: 1}, *arr[1])
 	a.Equal(net.SRV{Priority: 1, Weight: 1}, *arr[2])
