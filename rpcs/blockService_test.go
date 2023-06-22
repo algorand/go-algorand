@@ -409,6 +409,42 @@ forloop:
 	require.True(t, strings.Contains(logBuffer2.String(), "ServeHTTP: returned retry-after: block service memory over capacity"))
 }
 
+// TestWsBlockLimiting ensures that limits are applied correctly on the websocket side of the service
+func TestWsBlockLimiting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log1 := logging.TestingLog(t)
+	logBuffer1 := bytes.NewBuffer(nil)
+	log1.SetOutput(logBuffer1)
+
+	log2 := logging.TestingLog(t)
+	logBuffer2 := bytes.NewBuffer(nil)
+	log2.SetOutput(logBuffer2)
+
+	ledger1 := makeLedger(t, "l1")
+	defer ledger1.Close()
+	ledger2 := makeLedger(t, "l2")
+	defer ledger2.Close()
+	addBlock(t, ledger1)
+	l1Block2Ts := addBlock(t, ledger1)
+	addBlock(t, ledger2)
+	l2Block2Ts := addBlock(t, ledger2)
+	require.NotEqual(t, l1Block2Ts, l2Block2Ts)
+
+	net1 := &mockUnicastPeer{}
+	net2 := &mockUnicastPeer{}
+
+	config := config.GetDefaultLocal()
+	bs1 := MakeBlockService(log1, config, ledger1, net1, "test-genesis-ID")
+	bs2 := MakeBlockService(log2, config, ledger2, net2, "test-genesis-ID")
+	// set the meory cap so that it can serve only 1 block at a time
+	bs1.memoryCap = 250
+	bs2.memoryCap = 250
+
+	nodeA := &basicRPCNode{}
+	nodeB := &basicRPCNode{}
+}
+
 // TestRedirectExceptions tests exception cases:
 // - the case when the peer is not a valid http peer
 // - the case when the block service keeps redirecting and cannot get a block
