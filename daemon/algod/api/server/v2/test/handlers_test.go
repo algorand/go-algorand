@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -2211,12 +2212,10 @@ func TestRouterRequestBody(t *testing.T) {
 	mockLedger, _, _, _, _ := testingenv(t, 1, 1, true)
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	dummyShutdownChan := make(chan struct{})
-	e := server.NewRouter(logging.TestingLog(t), mockNode, dummyShutdownChan, "", "", nil, 1000)
+	l, err := net.Listen("tcp", ":0") // create listener so requests are buffered
+	e := server.NewRouter(logging.TestingLog(t), mockNode, dummyShutdownChan, "", "", l, 1000)
 	go e.Start(":0")
 	defer e.Close()
-
-	// wait for server to start
-	require.Eventually(t, func() bool { return e.Listener != nil }, 5*time.Second, 100*time.Millisecond)
 
 	// Admin API call greater than max body bytes should succeed
 	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
