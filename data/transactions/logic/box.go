@@ -23,12 +23,17 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
+// BoxOperation is an enum of box operation types
 type BoxOperation int
 
 const (
+	// BoxCreateOperation creates a box
 	BoxCreateOperation BoxOperation = iota
+	// BoxReadOperation reads a box
 	BoxReadOperation
+	// BoxWriteOperation writes to a box
 	BoxWriteOperation
+	// BoxDeleteOperation deletes a box
 	BoxDeleteOperation
 )
 
