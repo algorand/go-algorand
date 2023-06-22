@@ -3574,7 +3574,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// Boxes introduced in v8
-	for v := 8; v <= 8; /*logic.LogicVersion*/ v++ {
+	for v := 8; v <= logic.LogicVersion; v++ {
 		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()

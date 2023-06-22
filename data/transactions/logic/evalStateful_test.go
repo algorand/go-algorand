@@ -2884,7 +2884,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
 						if tc.policy != nil {
-							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "new box", BoxCreateOperation, 0)}
+							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "new box", BoxCreateOperation, 1)}
 							assert.Equal(t, expectedEvents, tc.policy.events)
 							tc.policy.events = nil
 						}
