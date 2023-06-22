@@ -139,6 +139,10 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 
 	testcase := f(env)
 
+	runSimulationTestCase(t, env, testcase)
+}
+
+func runSimulationTestCase(t *testing.T, env simulationtesting.Environment, testcase simulationTestCase) {
 	actual, err := simulation.MakeSimulator(env.Ledger, testcase.developerAPI).Simulate(testcase.input)
 	require.NoError(t, err)
 
@@ -3183,9 +3187,9 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 8 { // boxes introduced
 					program += `byte "A"; int 64; box_create; assert;`
 					program += `byte "B"; box_len; !; assert; !; assert;`
-					expectedUnnamedResourceGroupAssignment.Resources.Boxes = map[logic.BoxRef]struct{}{
-						{App: 0, Name: "A"}: {},
-						{App: 0, Name: "B"}: {},
+					expectedUnnamedResourceGroupAssignment.Resources.Boxes = map[logic.BoxRef]uint64{
+						{App: 0, Name: "A"}: 0,
+						{App: 0, Name: "B"}: 0,
 					}
 				}
 
@@ -3231,9 +3235,10 @@ func TestUnnamedResources(t *testing.T) {
 					}
 				}
 				for _, box := range boxesToFix {
+					value := expectedUnnamedResourceGroupAssignment.Resources.Boxes[box]
 					delete(expectedUnnamedResourceGroupAssignment.Resources.Boxes, box)
 					box.App = testAppID
-					expectedUnnamedResourceGroupAssignment.Resources.Boxes[box] = struct{}{}
+					expectedUnnamedResourceGroupAssignment.Resources.Boxes[box] = value
 				}
 
 				txn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -3414,6 +3419,390 @@ int 1
 						},
 					},
 				}
+			})
+		})
+	}
+}
+
+const boxTestProgram = `#pragma version %d
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "create"
+byte "delete"
+byte "read"
+byte "write"
+txn ApplicationArgs 0
+match create delete read write
+err // Unknown command
+
+create:
+txn ApplicationArgs 1
+txn ApplicationArgs 2
+btoi
+box_create
+assert
+b end
+
+delete:
+txn ApplicationArgs 1
+box_del
+assert
+b end
+
+read:
+txn ApplicationArgs 1
+box_get
+pop
+pop
+b end
+
+write:
+txn ApplicationArgs 1
+int 0
+txn ApplicationArgs 2
+box_replace
+
+end:
+int 1
+`
+
+type boxOperation struct {
+	op         logic.BoxOperation
+	name       string
+	createSize uint64
+	contents   []byte
+}
+
+func (o boxOperation) appArgs() [][]byte {
+	switch o.op {
+	case logic.BoxCreateOperation:
+		return [][]byte{
+			[]byte("create"),
+			[]byte(o.name),
+			uint64ToBytes(o.createSize),
+		}
+	case logic.BoxReadOperation:
+		return [][]byte{
+			[]byte("read"),
+			[]byte(o.name),
+		}
+	case logic.BoxWriteOperation:
+		return [][]byte{
+			[]byte("write"),
+			[]byte(o.name),
+			o.contents,
+		}
+	case logic.BoxDeleteOperation:
+		return [][]byte{
+			[]byte("delete"),
+			[]byte(o.name),
+		}
+	default:
+		panic(fmt.Sprintf("unknown box operation: %v", o.op))
+	}
+}
+
+type boxTestResult struct {
+	Boxes         map[logic.BoxRef]uint64
+	NumEmptyBoxes int
+}
+
+func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, app basics.AppIndex, boxOps []boxOperation, expected boxTestResult) {
+	t.Helper()
+	txns := make([]*txntest.Txn, len(boxOps))
+	for i, op := range boxOps {
+		txn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          env.Accounts[0].Addr,
+			ApplicationID:   app,
+			ApplicationArgs: op.appArgs(),
+		})
+		txns[i] = &txn
+	}
+	txntest.Group(txns...)
+	stxns := make([]transactions.SignedTxn, len(txns))
+	for i, txn := range txns {
+		stxns[i] = txn.Txn().Sign(env.Accounts[0].Sk)
+	}
+
+	expectedTxnResults := make([]simulation.TxnResult, len(stxns))
+	for i := range expectedTxnResults {
+		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
+	}
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	testCase := simulationTestCase{
+		input: simulation.Request{
+			TxnGroups:             [][]transactions.SignedTxn{stxns},
+			AllowUnnamedResources: true,
+		},
+		expected: simulation.Result{
+			Version:   simulation.ResultLatestVersion,
+			LastRound: env.TxnInfo.LatestRound(),
+			TxnGroups: []simulation.TxnGroupResult{
+				{
+					Txns:              expectedTxnResults,
+					AppBudgetAdded:    uint64(700 * len(stxns)),
+					AppBudgetConsumed: ignoreAppBudgetConsumed,
+					UnnamedResources: &simulation.GroupResourceAssignment{
+						Resources: simulation.ResourceAssignment{
+							MaxAccounts:  proto.MaxTxGroupSize * proto.MaxAppTxnAccounts,
+							MaxAssets:    proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
+							MaxApps:      proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
+							MaxBoxes:     proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
+							MaxTotalRefs: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
+
+							Boxes:         expected.Boxes,
+							NumEmptyBoxes: expected.NumEmptyBoxes,
+						},
+					},
+				},
+			},
+			EvalOverrides: simulation.ResultEvalOverrides{
+				AllowUnnamedResources: true,
+			},
+		},
+	}
+	runSimulationTestCase(t, env, testCase)
+}
+
+// TestUnnamedResourcesBoxIOBudget tests that the box IO budgets behave properly when
+// AllowUnnamedResources is enabled. It does us no good if you can reference unnamed boxes, but the
+// IO budget is still restricted based on the predeclared foreign box array.
+func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Boxes introduced in v8
+	for v := 8; v <= 8; /*logic.LogicVersion*/ v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			env := simulationtesting.PrepareSimulatorTest(t)
+			defer env.Close()
+
+			sender := env.Accounts[0]
+
+			program := fmt.Sprintf(boxTestProgram, v)
+
+			appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+				ApprovalProgram:   program,
+				ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+			})
+
+			proto := env.TxnInfo.CurrentProtocolParams()
+
+			minBalanceNeeded := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee //proto.MinBalance + 3*proto.BoxFlatMinBalance + 3*(1+proto.BytesPerBoxReference)*proto.BoxByteMinBalance
+			env.TransferAlgos(env.Accounts[1].Addr, appID.Address(), minBalanceNeeded)
+
+			// Set up boxes A, B, and C for testing.
+			// A is a box with a size of exactly BytesPerBoxReference
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        sender.Addr,
+				ApplicationID: appID,
+				ApplicationArgs: [][]byte{
+					[]byte("create"),
+					[]byte("A"),
+					uint64ToBytes(proto.BytesPerBoxReference),
+				},
+				Boxes: []transactions.BoxRef{{Name: []byte("A")}},
+			}).SignedTxn())
+			// B is a box with a size of 1
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        sender.Addr,
+				ApplicationID: appID,
+				ApplicationArgs: [][]byte{
+					[]byte("create"),
+					[]byte("B"),
+					uint64ToBytes(1),
+				},
+				Boxes: []transactions.BoxRef{{Name: []byte("B")}},
+			}).SignedTxn())
+			// C is a box with a size of 2 * BytesPerBoxReference - 1
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        sender.Addr,
+				ApplicationID: appID,
+				ApplicationArgs: [][]byte{
+					[]byte("create"),
+					[]byte("C"),
+					uint64ToBytes(2*proto.BytesPerBoxReference - 1),
+				},
+				Boxes: []transactions.BoxRef{{Name: []byte("C")}, {}},
+			}).SignedTxn())
+
+			testBoxOps := func(boxOps []boxOperation, expected boxTestResult) {
+				t.Helper()
+				testUnnamedBoxOperations(t, env, appID, boxOps, expected)
+			}
+
+			// Each test below will run against the environment we just set up. They will each run
+			// in separate simulations, so we can reuse the same environment and not have to worry
+			// about the effects of one test interfering with another.
+
+			// Reading exisitng boxes
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+				NumEmptyBoxes: 0,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "B"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "B"}: 1,
+				},
+				NumEmptyBoxes: 0,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "C"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
+				},
+				// We need an additional empty box ref because the size of C exceeds BytesPerBoxReference
+				NumEmptyBoxes: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+				{op: logic.BoxReadOperation, name: "B"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+					{App: appID, Name: "B"}: 1,
+				},
+				NumEmptyBoxes: 0,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+				{op: logic.BoxReadOperation, name: "C"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
+				},
+				NumEmptyBoxes: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+				{op: logic.BoxReadOperation, name: "B"},
+				{op: logic.BoxReadOperation, name: "C"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+					{App: appID, Name: "B"}: 1,
+					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
+				},
+				// No empty box refs needed because we have perfectly reached 3 * BytesPerBoxReference
+				NumEmptyBoxes: 0,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "Q"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "Q"}: 0,
+				},
+				NumEmptyBoxes: 0,
+			})
+
+			// Creating new boxes
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+				},
+				NumEmptyBoxes: 0,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 1},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+				},
+				NumEmptyBoxes: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference * 3},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+				},
+				NumEmptyBoxes: 2,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: 1},
+				{op: logic.BoxCreateOperation, name: "E", createSize: 1},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "E"}: 0,
+				},
+				NumEmptyBoxes: 0,
+			})
+
+			// Creating new boxes and reading existing ones
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
+				{op: logic.BoxReadOperation, name: "A"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+				// Since we never write to A, its write budget can cover the extra bytes from writing D
+				NumEmptyBoxes: 0,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+				// The same is true in reverse
+				NumEmptyBoxes: 0,
+			})
+
+			// Writing to new boxes and existing boxes
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
+				{op: logic.BoxWriteOperation, name: "A", contents: []byte{1}},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+				NumEmptyBoxes: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
+				{op: logic.BoxWriteOperation, name: "B", contents: []byte{1}},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "B"}: 1,
+				},
+				// Expect 0 here because the additional box ref from B can cover the extra bytes
+				// from writing D
+				NumEmptyBoxes: 0,
+			})
+
+			// Writing then deleting
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: 2 * proto.BytesPerBoxReference},
+				{op: logic.BoxDeleteOperation, name: "D"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+				},
+				NumEmptyBoxes: 0,
 			})
 		})
 	}

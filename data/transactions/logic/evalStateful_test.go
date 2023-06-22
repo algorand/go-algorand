@@ -2612,10 +2612,10 @@ func allowsLocalEvent(addr basics.Address, aid basics.AppIndex) unnamedResourceP
 	}
 }
 
-func availableBoxEvent(app basics.AppIndex, name string) unnamedResourcePolicyEvent {
+func availableBoxEvent(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableBox",
-		args:      []interface{}{app, name},
+		args:      []interface{}{app, name, operation, createSize},
 	}
 }
 
@@ -2656,8 +2656,8 @@ func (p *mockUnnamedResourcePolicy) AllowsLocal(addr basics.Address, aid basics.
 	return p.allowEverything
 }
 
-func (p *mockUnnamedResourcePolicy) AvailableBox(app basics.AppIndex, name string) bool {
-	p.events = append(p.events, availableBoxEvent(app, name))
+func (p *mockUnnamedResourcePolicy) AvailableBox(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) bool {
+	p.events = append(p.events, availableBoxEvent(app, name, operation, createSize))
 	return p.allowEverything
 }
 
@@ -2873,7 +2873,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
 						if tc.policy != nil {
-							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "box key")}
+							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "box key", BoxReadOperation, 0)}
 							assert.Equal(t, expectedEvents, tc.policy.events)
 							tc.policy.events = nil
 						}
@@ -2884,7 +2884,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
 						if tc.policy != nil {
-							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "new box")}
+							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "new box", BoxCreateOperation, 0)}
 							assert.Equal(t, expectedEvents, tc.policy.events)
 							tc.policy.events = nil
 						}

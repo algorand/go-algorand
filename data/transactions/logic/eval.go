@@ -263,7 +263,7 @@ type UnnamedResourcePolicy interface {
 	AvailableApp(app basics.AppIndex) bool
 	AllowsHolding(addr basics.Address, asset basics.AssetIndex) bool
 	AllowsLocal(addr basics.Address, app basics.AppIndex) bool
-	AvailableBox(app basics.AppIndex, name string) bool
+	AvailableBox(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) bool
 }
 
 // EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
@@ -368,6 +368,11 @@ func (ep *EvalParams) GetIOBudget() uint64 {
 // SetIOBudget sets the IO budget for the group.
 func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
 	ep.ioBudget = ioBudget
+}
+
+// BoxDirtyBytes returns the number of bytes that have been written to boxes
+func (ep *EvalParams) BoxDirtyBytes() uint64 {
+	return ep.available.dirtyBytes
 }
 
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
@@ -4798,7 +4803,6 @@ func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 	if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
 		return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
 	}
-
 	return 0, fmt.Errorf("unavailable App %d", ref)
 }
 
@@ -4904,7 +4908,6 @@ func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err erro
 	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
 	}
-
 	return 0, fmt.Errorf("unavailable Asset %d", ref)
 }
 

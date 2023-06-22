@@ -17,6 +17,9 @@
 package simulation
 
 import (
+	"fmt"
+	"math"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -37,8 +40,11 @@ type ResourceAssignment struct {
 	Apps    map[basics.AppIndex]struct{}
 	MaxApps int
 
-	Boxes    map[logic.BoxRef]struct{}
-	MaxBoxes int
+	// The map value is the size of the box loaded from the ledger prior to any writes. This is used
+	// to track the box read budget.
+	Boxes         map[logic.BoxRef]uint64
+	NumEmptyBoxes int
+	MaxBoxes      int
 
 	MaxTotalRefs int
 }
@@ -99,7 +105,7 @@ func (a *ResourceAssignment) hasAccount(addr basics.Address, ep *logic.EvalParam
 }
 
 func (a *ResourceAssignment) addAccount(addr basics.Address) bool {
-	if len(a.Accounts) >= a.MaxAccounts || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes) >= a.MaxTotalRefs {
+	if len(a.Accounts) >= a.MaxAccounts || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxes >= a.MaxTotalRefs {
 		return false
 	}
 	if a.Accounts == nil {
@@ -116,7 +122,7 @@ func (a *ResourceAssignment) hasAsset(aid basics.AssetIndex) bool {
 }
 
 func (a *ResourceAssignment) addAsset(aid basics.AssetIndex) bool {
-	if len(a.Assets) >= a.MaxAssets || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes) >= a.MaxTotalRefs {
+	if len(a.Assets) >= a.MaxAssets || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxes >= a.MaxTotalRefs {
 		return false
 	}
 	if a.Assets == nil {
@@ -147,7 +153,7 @@ func (a *ResourceAssignment) addApp(aid basics.AppIndex, ep *logic.EvalParams, p
 		}
 	}
 
-	if len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes) >= a.MaxTotalRefs {
+	if len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxes >= a.MaxTotalRefs {
 		return false
 	}
 	if a.Apps == nil {
@@ -163,18 +169,39 @@ func (a *ResourceAssignment) hasBox(app basics.AppIndex, name string) bool {
 	return ok
 }
 
-func (a *ResourceAssignment) addBox(app basics.AppIndex, name string) bool {
-	if len(a.Boxes) >= a.MaxBoxes || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes) >= a.MaxTotalRefs {
+func (a *ResourceAssignment) addBox(app basics.AppIndex, name string, readSize uint64, additionalEmptyRefs int) bool {
+	if len(a.Boxes)+a.NumEmptyBoxes+additionalEmptyRefs >= a.MaxBoxes || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxes+additionalEmptyRefs >= a.MaxTotalRefs {
 		return false
 	}
 	if a.Boxes == nil {
-		a.Boxes = make(map[logic.BoxRef]struct{})
+		a.Boxes = make(map[logic.BoxRef]uint64)
 	}
-	a.Boxes[logic.BoxRef{App: app, Name: name}] = struct{}{}
+	a.Boxes[logic.BoxRef{App: app, Name: name}] = readSize
+	a.NumEmptyBoxes += additionalEmptyRefs
 	return true
 }
 
-func (a *ResourceAssignment) maxPossibleBoxes() int {
+func (a *ResourceAssignment) addEmptyBoxRefs(count int) bool {
+	if len(a.Boxes)+a.NumEmptyBoxes+count > a.MaxBoxes || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxes+count > a.MaxTotalRefs {
+		return false
+	}
+	a.NumEmptyBoxes += count
+	return true
+}
+
+func (a *ResourceAssignment) boxIOBudget(bytesPerBoxRef uint64) uint64 {
+	return uint64(len(a.Boxes)+a.NumEmptyBoxes) * bytesPerBoxRef
+}
+
+func (a *ResourceAssignment) usedBoxReadBudget() uint64 {
+	var budget uint64
+	for _, readSize := range a.Boxes {
+		budget = basics.AddSaturate(budget, readSize)
+	}
+	return budget
+}
+
+func (a *ResourceAssignment) maxPossibleUnnamedBoxes() int {
 	numBoxes := a.MaxTotalRefs - len(a.Accounts) - len(a.Assets) - len(a.Apps)
 	if a.MaxBoxes < numBoxes {
 		numBoxes = a.MaxBoxes
@@ -195,7 +222,8 @@ type GroupResourceAssignment struct {
 	// sharing was added).
 	localTxnResources []ResourceAssignment
 
-	startingBoxes int
+	startingBoxes          int
+	emptyBoxRefsFromWrites int
 }
 
 func makeGroupResourceAssignment(txns []transactions.SignedTxnWithAD, proto *config.ConsensusParams) GroupResourceAssignment {
@@ -214,6 +242,7 @@ func makeGroupResourceAssignment(txns []transactions.SignedTxnWithAD, proto *con
 
 func (a *GroupResourceAssignment) removePrivateFields() {
 	a.startingBoxes = 0
+	a.emptyBoxRefsFromWrites = 0
 	a.localTxnResources = nil
 }
 
@@ -264,9 +293,52 @@ func (a *GroupResourceAssignment) hasBox(app basics.AppIndex, name string) bool 
 	return a.Resources.hasBox(app, name)
 }
 
-func (a *GroupResourceAssignment) addBox(app basics.AppIndex, name string) bool {
+func (a *GroupResourceAssignment) addBox(app basics.AppIndex, name string, readSize uint64, additionalEmptyBoxes int) bool {
 	// all boxes are global, never consult PerTxnResources
-	return a.Resources.addBox(app, name)
+	if additionalEmptyBoxes != 0 {
+		a.emptyBoxRefsFromWrites = 0
+	}
+	return a.Resources.addBox(app, name, readSize, additionalEmptyBoxes)
+}
+
+func (a *GroupResourceAssignment) boxIOBudget(bytesPerBoxRef uint64) uint64 {
+	// all boxes are global, never consult PerTxnResources
+	return a.Resources.boxIOBudget(bytesPerBoxRef)
+}
+
+func (a *GroupResourceAssignment) usedBoxReadBudget() uint64 {
+	// all boxes are global, never consult PerTxnResources
+	return a.Resources.usedBoxReadBudget()
+}
+
+func (a *GroupResourceAssignment) reconcileBoxWriteBudget(used uint64, bytesPerBoxRef uint64) error {
+	writeBudget := basics.AddSaturate(uint64(a.startingBoxes)*bytesPerBoxRef, a.boxIOBudget(bytesPerBoxRef))
+	if used > writeBudget {
+		// need to allocate more empty box refs
+		overspend := used - writeBudget
+		requestingExtra := int((overspend + bytesPerBoxRef - 1) / bytesPerBoxRef) // adding (bytesPerBoxRef - 1) to round up
+		if !a.Resources.addEmptyBoxRefs(requestingExtra) {
+			return fmt.Errorf("cannot add %d extra box refs to satisfy write budget surplus of %d bytes", requestingExtra, overspend)
+		}
+		a.emptyBoxRefsFromWrites += requestingExtra
+	} else if used < writeBudget {
+		// can roll back up to `emptyBoxRefsFromWrites` empty box refs
+		surplus := writeBudget - used
+		canRemove := int(surplus / bytesPerBoxRef) // rounding down on purpose
+		if canRemove > a.emptyBoxRefsFromWrites {
+			canRemove = a.emptyBoxRefsFromWrites
+		}
+		a.Resources.NumEmptyBoxes -= canRemove
+		a.emptyBoxRefsFromWrites -= canRemove
+	}
+	return nil
+}
+
+func (a *GroupResourceAssignment) maxPossibleBoxIOBudget(bytesPerBoxRef uint64) uint64 {
+	return basics.MulSaturate(
+		uint64(a.startingBoxes+a.Resources.maxPossibleUnnamedBoxes()),
+		bytesPerBoxRef,
+	)
 }
 
 func (a *GroupResourceAssignment) hasHolding(addr basics.Address, aid basics.AssetIndex) bool {
@@ -303,15 +375,10 @@ func (a *GroupResourceAssignment) addLocal(addr basics.Address, aid basics.AppIn
 	return true
 }
 
-func (a *GroupResourceAssignment) boxIOBudget(bytesPerBoxRef uint64) uint64 {
-	return uint64(a.startingBoxes+a.Resources.maxPossibleBoxes()) * bytesPerBoxRef
-}
-
 type resourcePolicy struct {
 	assignment                  GroupResourceAssignment
 	ep                          *logic.EvalParams
 	initialBoxSurplusReadBudget *uint64
-	unnamedBoxUsedReadBudget    uint64
 
 	txnRootIndex   int
 	programVersion uint64
@@ -367,7 +434,7 @@ func (p *resourcePolicy) AllowsLocal(addr basics.Address, aid basics.AppIndex) b
 	return p.assignment.addLocal(addr, aid)
 }
 
-func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string) bool {
+func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operation logic.BoxOperation, createSize uint64) bool {
 	if p.assignment.hasBox(app, name) {
 		return true
 	}
@@ -375,17 +442,32 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string) bool {
 	if err != nil {
 		panic(err)
 	}
+	var readSize uint64
+	var additionalEmptyRefs int
 	if ok {
-		size := uint64(len(box))
-		newUsedReadBudget := basics.AddSaturate(p.unnamedBoxUsedReadBudget, size)
+		readSize = uint64(len(box))
+		usedReadBudget := basics.AddSaturate(p.assignment.usedBoxReadBudget(), readSize)
+		readBudget := basics.AddSaturate(
+			basics.AddSaturate(
+				*p.initialBoxSurplusReadBudget,
+				p.assignment.boxIOBudget(p.ep.Proto.BytesPerBoxReference),
+			),
+			// Account for budget increase from this new box reference
+			p.ep.Proto.BytesPerBoxReference,
+		)
 
-		unnamedReadBudget := basics.AddSaturate(*p.initialBoxSurplusReadBudget, basics.MulSaturate(uint64(p.assignment.Resources.maxPossibleBoxes()), p.ep.Proto.BytesPerBoxReference))
-		if newUsedReadBudget < unnamedReadBudget {
-			p.unnamedBoxUsedReadBudget = newUsedReadBudget
-		} else {
-			// Reading in this box would exceed the maximum possible read budget
-			return false
+		if usedReadBudget > readBudget {
+			// We need to allocate more empty box refs to increase the read budget
+			neededBudget := usedReadBudget - readBudget
+			// Adding (p.ep.Proto.BytesPerBoxReference - 1) to round up
+			additionalEmptyRefsU64 := (neededBudget + p.ep.Proto.BytesPerBoxReference - 1) / p.ep.Proto.BytesPerBoxReference
+			if additionalEmptyRefsU64 > math.MaxInt {
+				// Saturate to max int
+				additionalEmptyRefs = math.MaxInt
+			} else {
+				additionalEmptyRefs = int(additionalEmptyRefsU64)
+			}
 		}
 	}
-	return p.assignment.addBox(app, name)
+	return p.assignment.addBox(app, name, readSize, additionalEmptyRefs)
 }
