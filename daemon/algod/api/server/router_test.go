@@ -76,5 +76,3 @@ func TestGetTransactionV1Sunset(t *testing.T) {
 	}
 
 }
-func TestTestSuite(t *testing.T) {
-}

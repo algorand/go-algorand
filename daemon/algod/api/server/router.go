@@ -51,8 +51,8 @@ const (
 	apiV1Tag = "/v1"
 	// TokenHeader is the header where we put the token.
 	TokenHeader = "X-Algo-API-Token"
-	// maxRequestBodyBytes is the maximum request body size that we allow in our APIs.
-	maxRequestBodyBytes = "10MB"
+	// MaxRequestBodyBytes is the maximum request body size that we allow in our APIs.
+	MaxRequestBodyBytes = "10MB"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -83,7 +83,7 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 		middlewares.MakeAuth(TokenHeader, []string{adminAPIToken}),
 	}
 	publicMiddleware := []echo.MiddlewareFunc{
-		middleware.BodyLimit(maxRequestBodyBytes),
+		middleware.BodyLimit(MaxRequestBodyBytes),
 		middlewares.MakeAuth(TokenHeader, []string{adminAPIToken, apiToken}),
 	}
 

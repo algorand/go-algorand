@@ -30,15 +30,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
-	npprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/private"
-	nppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/public"
-	pprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/participating/private"
-	ppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/participating/public"
+	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -2209,61 +2204,38 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	require.Equal(t, 501, rec.Code)
 }
 
-func TestLargeKeyRegister(t *testing.T) {
+func TestRouterRequestBody(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	numAccounts := 1
-	numTransactions := 1
-	offlineAccounts := true
-	mockLedger, _, _, _, _ := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	mockLedger, _, _, _, _ := testingenv(t, 1, 1, true)
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	dummyShutdownChan := make(chan struct{})
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
-	}
+	e := server.NewRouter(logging.TestingLog(t), mockNode, dummyShutdownChan, "", "", nil, 1000)
+	go e.Start(":0")
+	defer e.Close()
 
-	rec := httptest.NewRecorder()
-	e := echo.New()
-	// set request body limit
-	e.Use(
-		middleware.BodyLimit("10MB"),
-	)
+	// wait for server to start
+	require.Eventually(t, func() bool { return e.Listener != nil }, 5*time.Second, 100*time.Millisecond)
 
-	// Registering v2 routes
-	adminMiddleware := []echo.MiddlewareFunc{
-		middlewares.MakeAuth("X-Algo-API-Token", []string{""}),
-	}
-	publicMiddleware := []echo.MiddlewareFunc{
-		middleware.BodyLimit("10MB"),
-		middlewares.MakeAuth("X-Algo-API-Token", []string{""}),
-	}
-	nppublic.RegisterHandlers(e, &handler, publicMiddleware...)
-	npprivate.RegisterHandlers(e, &handler, adminMiddleware...)
-	ppublic.RegisterHandlers(e, &handler, publicMiddleware...)
-	pprivate.RegisterHandlers(e, &handler, adminMiddleware...)
-
-	go e.Start(":9999")
+	// Admin API call greater than max body bytes should succeed
+	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
 	stringReader := strings.NewReader(strings.Repeat("a", 50_000_000))
-	req, err := http.NewRequest(http.MethodPost, "http://localhost:9999/v2/participation", stringReader)
+	fmt.Println(e.Listener)
+	fmt.Println(e.Listener.Addr())
+	fmt.Println(e.Listener.Addr().String())
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("https://%s/v2/participation", e.Listener.Addr().String()), stringReader)
 	assert.NoError(t, err)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Public API call greater than max body bytes fails
+	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
+	stringReader = strings.NewReader(strings.Repeat("a", 50_000_000))
+	req, err = http.NewRequest(http.MethodPost, fmt.Sprintf("https://%s/v2/transactions", e.Listener.Addr().String()), stringReader)
+	assert.NoError(t, err)
+	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
-	e.Close()
-
-	//start a new server without request body limit
-	rec2 := httptest.NewRecorder()
-	s := echo.New()
-	nppublic.RegisterHandlers(s, &handler, publicMiddleware...)
-	npprivate.RegisterHandlers(s, &handler, adminMiddleware...)
-	ppublic.RegisterHandlers(s, &handler, publicMiddleware...)
-	pprivate.RegisterHandlers(s, &handler, adminMiddleware...)
-	go s.Start(":9998")
-	req, err = http.NewRequest(http.MethodPost, "http://localhost:9998/v2/participation", stringReader)
-	assert.NoError(t, err)
-	s.ServeHTTP(rec2, req)
-	assert.Equal(t, http.StatusOK, rec2.Code)
-	s.Close()
 }
