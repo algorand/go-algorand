@@ -42,7 +42,7 @@ func TestSrvSort(t *testing.T) {
 retry:
 	srvRecArray(arr).sortAndRand()
 	if (*arr[0] != net.SRV{Priority: 1, Weight: 0xFFFF}) {
-		// there is a small change that a random number from 0 to max uint15 would be 0 or 1
+		// there is a small chance that a random number from 0 to max uint15 would be 0 or 1
 		// in this case the first element of the resulting sequence would be with weight of 1 and not the highest possible.
 		// if this happens, we will try again since it is expected time to time.
 		if retryCounter > 1 {

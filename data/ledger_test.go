@@ -628,6 +628,21 @@ func TestLedgerErrorValidate(t *testing.T) {
 		for more {
 			select {
 			case err := <-errChan:
+				if strings.Contains(err.Error(), "before dbRound") {
+					// handle race eval errors like "round 1933 before dbRound 1934"
+					// see explanation in unexpectedMessages
+					re := regexp.MustCompile(`round (\d+) before dbRound (\d+)`)
+					result := re.FindStringSubmatch(err.Error())
+					require.NotNil(t, result)
+					require.Len(t, result, 3)
+					evalRound, err1 := strconv.Atoi(result[1])
+					require.NoError(t, err1)
+					dbRound, err1 := strconv.Atoi(result[2])
+					require.NoError(t, err1)
+					require.GreaterOrEqual(t, int(l.Latest()), dbRound+int(cfg.MaxAcctLookback))
+					require.Less(t, evalRound, dbRound)
+					err = nil
+				}
 				require.NoError(t, err)
 			case <-expectedMessages:
 				// only debug messages should be reported
@@ -657,6 +672,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 					require.Equal(t, attemptedRound, evalRound+1)
 					require.LessOrEqual(t, attemptedRound, dbRound)
 					require.GreaterOrEqual(t, int(l.Latest()), dbRound+int(cfg.MaxAcctLookback))
+					um = ""
 				}
 				require.Empty(t, um, um)
 			default:
