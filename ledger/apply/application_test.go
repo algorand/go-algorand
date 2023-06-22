@@ -34,20 +34,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// Allocate the map of basics.AppParams if it is nil, and return a copy. We do *not*
-// call clone on each basics.AppParams -- callers must do that for any values where
-// they intend to modify a contained reference type.
-func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
-	return maps.Clone(m)
-}
-
-// Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
-// call clone on each AppLocalState -- callers must do that for any values
-// where they intend to modify a contained reference type.
-func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
-	return maps.Clone(m)
-}
-
 func TestApplicationCallFieldsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -342,20 +328,6 @@ func (b *testBalances) SetParams(params config.ConsensusParams) {
 	b.proto = params
 }
 
-func TestAppCallCloneEmpty(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-
-	var ls map[basics.AppIndex]basics.AppLocalState
-	cls := cloneAppLocalStates(ls)
-	a.Zero(len(cls))
-
-	var ap map[basics.AppIndex]basics.AppParams
-	cap := cloneAppParams(ap)
-	a.Zero(len(cap))
-}
-
 func TestAppCallGetParam(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -553,8 +525,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	// now we give the creator the app params again
 	cp := basics.AccountData{}
-	cp.AppParams = cloneAppParams(saved.AppParams)
-	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
+	cp.AppParams = maps.Clone(saved.AppParams)
+	cp.AppLocalStates = maps.Clone(saved.AppLocalStates)
 	b.balances[creator] = cp
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.Error(err)
