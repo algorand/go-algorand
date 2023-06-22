@@ -79,7 +79,7 @@ slack-fail-stop-step: &slack-fail-post-step
 # ===== Workflow Definitions =====
 workflows:
   version: 2
-  "circleci_build_and_test":
+  nightly_build_and_test:
     jobs:
       - build_nightly:
           name: << matrix.platform >>_build_nightly
@@ -94,34 +94,12 @@ workflows:
           context: slack-secrets
           <<: *slack-fail-post-step
 
-      - test:
-          name: << matrix.platform >>_test
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
       - test_nightly:
           name: << matrix.platform >>_test_nightly
           matrix:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
-      - integration:
-          name: << matrix.platform >>_integration
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
           context: slack-secrets
           <<: *slack-fail-post-step
 
@@ -134,30 +112,12 @@ workflows:
           context: slack-secrets
           <<: *slack-fail-post-step
 
-      - e2e_expect:
-          name: << matrix.platform >>_e2e_expect
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
           matrix:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
-      - e2e_subs:
-          name: << matrix.platform >>_e2e_subs
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
           context: slack-secrets
           <<: *slack-fail-post-step
 
@@ -170,17 +130,6 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
-          <<: *slack-fail-post-step
-
-      - tests_verification_job:
-          name: << matrix.platform >>_<< matrix.job_type >>_verification
-          matrix:
-            parameters:
-              platform: ["amd64", "arm64"]
-              job_type: ["test", "integration", "e2e_expect"]
-          requires:
-            - << matrix.platform >>_<< matrix.job_type >>
-          context: slack-secrets
           <<: *slack-fail-post-step
 
       - tests_verification_job_nightly:
@@ -203,17 +152,63 @@ workflows:
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
             - << matrix.platform >>_e2e_subs_nightly
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
           context:
             - slack-secrets
             - aws-secrets
           <<: *slack-fail-post-step
 
-      #- windows_x64_build
+  "circleci_build_and_test":
+    jobs:
+      - test:
+          name: << matrix.platform >>_test
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64"]
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - integration:
+          name: << matrix.platform >>_integration
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - e2e_expect:
+          name: << matrix.platform >>_e2e_expect
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - e2e_subs:
+          name: << matrix.platform >>_e2e_subs
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - tests_verification_job:
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
+          matrix:
+            parameters:
+              platform: ["amd64"]
+              job_type: ["test", "integration", "e2e_expect"]
+          requires:
+            - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
 # ===== Job Definitions =====
 jobs:
