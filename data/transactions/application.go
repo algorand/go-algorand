@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -248,10 +249,8 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 	}
 
 	// Otherwise we index into ac.Accounts
-	for idx, addr := range ac.Accounts {
-		if target == addr {
-			return uint64(idx) + 1, nil
-		}
+	if idx := slices.Index(ac.Accounts, target); idx != -1 {
+		return uint64(idx) + 1, nil
 	}
 
 	return 0, fmt.Errorf("invalid Account reference %s", target)
