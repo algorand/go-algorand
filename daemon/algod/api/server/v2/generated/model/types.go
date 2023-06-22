@@ -797,6 +797,9 @@ type SimulationUnnamedResourceAssignment struct {
 	// Boxes The unnamed boxes that were referenced. The order of this array is arbitrary.
 	Boxes *[]BoxReference `json:"boxes,omitempty"`
 
+	// EmptyBoxRefs The number of unnamed box references used to increase the IO budget.
+	EmptyBoxRefs *uint64 `json:"empty-box-refs,omitempty"`
+
 	// MaxAccounts The maximum allowed number of unnamed account references.
 	MaxAccounts uint64 `json:"max-accounts"`
 

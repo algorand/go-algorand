@@ -428,6 +428,7 @@ func convertUnnamedResourceAssignment(assignment *simulation.ResourceAssignment)
 		MaxAssets:    uint64(assignment.MaxAssets),
 		MaxApps:      uint64(assignment.MaxApps),
 		MaxBoxes:     uint64(assignment.MaxBoxes),
+		EmptyBoxRefs: numOrNil(uint64(assignment.NumEmptyBoxes)),
 	}
 	if len(assignment.Accounts) != 0 {
 		accountStrings := make([]string, 0, len(assignment.Accounts))
