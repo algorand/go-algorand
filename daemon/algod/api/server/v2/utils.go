@@ -369,7 +369,7 @@ func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.TealValue {
 		modelTvs[i] = model.TealValue{
 			Type:  uint64(tvs[i].Type),
 			Uint:  tvs[i].Uint,
-			Bytes: tvs[i].Bytes,
+			Bytes: base64.StdEncoding.EncodeToString([]byte(tvs[i].Bytes)),
 		}
 	}
 	return &modelTvs

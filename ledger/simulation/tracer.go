@@ -17,7 +17,6 @@
 package simulation
 
 import (
-	"encoding/base64"
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -183,7 +182,7 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	if tracer.result.ReturnTrace() {
 		var txnTraceStackElem *TransactionTrace
 
-		// The last question is, where should this transaction trace attach to:
+		// Where should the current transaction trace attach to:
 		// - if it is a top level transaction, then attach to TxnResult level
 		// - if it is an inner transaction, then refer to the stack for latest exec trace,
 		//   and attach to inner array
@@ -264,7 +263,7 @@ func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer 
 		o.Deleted = append(o.Deleted, basics.TealValue{
 			Type:  tealValue.Type,
 			Uint:  tealValue.Uint,
-			Bytes: base64.StdEncoding.EncodeToString([]byte(tealValue.Bytes)),
+			Bytes: tealValue.Bytes,
 		})
 	}
 }
@@ -306,7 +305,7 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 		o.Added = append(o.Added, basics.TealValue{
 			Type:  tealValue.Type,
 			Uint:  tealValue.Uint,
-			Bytes: base64.StdEncoding.EncodeToString([]byte(tealValue.Bytes)),
+			Bytes: tealValue.Bytes,
 		})
 	}
 }

@@ -17,7 +17,6 @@
 package simulation_test
 
 import (
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -2115,7 +2114,7 @@ byte "hello"; log; int 1`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
-		keccakBytes := base64.StdEncoding.EncodeToString([]byte(":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"))
+		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -2158,7 +2157,7 @@ byte "hello"; log; int 1`,
 											Added: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte("hello")),
+													Bytes: "hello",
 												},
 											},
 										},
@@ -2168,7 +2167,7 @@ byte "hello"; log; int 1`,
 											Deleted: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte("hello")),
+													Bytes: "hello",
 												},
 											},
 										},
@@ -2194,7 +2193,7 @@ byte "hello"; log; int 1`,
 											Added: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{'a'}),
+													Bytes: "a",
 												},
 											},
 										},
@@ -2210,7 +2209,7 @@ byte "hello"; log; int 1`,
 											Deleted: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{'a'}),
+													Bytes: "a",
 												},
 											},
 										},
@@ -2230,7 +2229,7 @@ byte "hello"; log; int 1`,
 											Added: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{'a'}),
+													Bytes: "a",
 												},
 											},
 										},
@@ -2246,7 +2245,7 @@ byte "hello"; log; int 1`,
 											Deleted: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{'a'}),
+													Bytes: "a",
 												},
 											},
 										},
@@ -2317,7 +2316,7 @@ byte "hello"; log; int 1`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
-		keccakBytes := base64.StdEncoding.EncodeToString([]byte(":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"))
+		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -2360,7 +2359,7 @@ byte "hello"; log; int 1`,
 											Added: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{'a'}),
+													Bytes: "a",
 												},
 											},
 										},
@@ -2376,7 +2375,7 @@ byte "hello"; log; int 1`,
 											Deleted: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{'a'}),
+													Bytes: "a",
 												},
 											},
 										},
@@ -2396,7 +2395,7 @@ byte "hello"; log; int 1`,
 											Added: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{'a'}),
+													Bytes: "a",
 												},
 											},
 										},
@@ -2412,7 +2411,7 @@ byte "hello"; log; int 1`,
 											Deleted: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{'a'}),
+													Bytes: "a",
 												},
 											},
 										},
@@ -2781,7 +2780,7 @@ int 1`,
 											Added: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{byte(applicationArg)}),
+													Bytes: string(byte(applicationArg)),
 												},
 											},
 										},
@@ -2797,7 +2796,7 @@ int 1`,
 											Deleted: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{byte(applicationArg)}),
+													Bytes: string(byte(applicationArg)),
 												},
 											},
 										},
@@ -3452,7 +3451,7 @@ int 1`,
 											Added: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
+													Bytes: string([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
 												},
 											},
 											Deleted: []basics.TealValue{
@@ -3469,7 +3468,7 @@ int 1`,
 											Deleted: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: base64.StdEncoding.EncodeToString([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
+													Bytes: string([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
 												},
 											},
 										},
