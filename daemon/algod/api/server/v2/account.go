@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"bytes"
 	"errors"
 	"math"
 	"sort"
@@ -145,7 +146,6 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *model.TealKeyValueStore {
 	}
 
 	converted := make(model.TealKeyValueStore, 0, len(*tkv))
-	rawKeyBytes := make([]string, 0, len(*tkv))
 	for k, v := range *tkv {
 		converted = append(converted, model.TealKeyValue{
 			Key: []byte(k),
@@ -155,10 +155,9 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *model.TealKeyValueStore {
 				Uint:  v.Uint,
 			},
 		})
-		rawKeyBytes = append(rawKeyBytes, k)
 	}
 	sort.Slice(converted, func(i, j int) bool {
-		return rawKeyBytes[i] < rawKeyBytes[j]
+		return bytes.Compare(converted[i].Key, converted[j].Key) < 0
 	})
 	return &converted
 }
