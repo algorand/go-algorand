@@ -33,7 +33,7 @@ const VersionMajor = 3
 
 // VersionMinor is the Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 // Not enforced until after initial public release (x > 0).
-const VersionMinor = 16
+const VersionMinor = 17
 
 // Version is the type holding our full version information.
 type Version struct {
@@ -72,7 +72,7 @@ func (v Version) AsUInt64() (versionInfo uint64) {
 	versionInfo = uint64(v.Major)
 	versionInfo <<= 16
 	versionInfo |= uint64(v.Minor)
-	versionInfo <<= 16
+	versionInfo <<= 24
 	versionInfo |= uint64(v.BuildNumber)
 	return
 }

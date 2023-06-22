@@ -9,6 +9,7 @@
   "APIEndpoint3": ":8582",
   "APIEndpoint4": ":8583",
   "APIToken": "19b3fa5fd63074f3ec7d7052f417c423986472d253eaf275704cbc07adfe64ff",
+  "AdminAPIToken": "19b3fa5fd63074f3ec7d7052f417c423986472d253eaf275704cbc07adfe64ff",
   "EnableTelemetry": true,
   "TelemetryURI": "telemetry.<network>.algodev.network:9105",
   "MetricsURI": "<network>.algodev.network:9106",
