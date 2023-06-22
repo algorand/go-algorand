@@ -49,7 +49,7 @@ func unB64(x string) []byte {
 
 func tvStr(tv model.TealValue) string {
 	if tv.Type == uint64(basics.TealBytesType) {
-		return tv.Bytes
+		return fmt.Sprintf("0x%x", tv.Bytes)
 	} else if tv.Type == uint64(basics.TealUintType) {
 		return strconv.FormatUint(tv.Uint, 10)
 	}
@@ -447,8 +447,8 @@ func TestDryrunGlobal1(t *testing.T) {
 	}
 	gkv := model.TealKeyValueStore{
 		model.TealKeyValue{
-			Key:   b64("foo"),
-			Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+			Key:   []byte("foo"),
+			Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: []byte("bar")},
 		},
 	}
 	dr.Apps = []model.Application{
@@ -497,8 +497,8 @@ func TestDryrunGlobal2(t *testing.T) {
 	}
 	gkv := model.TealKeyValueStore{
 		model.TealKeyValue{
-			Key:   b64("foo"),
-			Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+			Key:   []byte("foo"),
+			Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: []byte("bar")},
 		},
 	}
 	dr.Apps = []model.Application{
@@ -710,10 +710,10 @@ func TestDryrunLocalCheck(t *testing.T) {
 	}
 	localv := make(model.TealKeyValueStore, 1234)
 	localv[0] = model.TealKeyValue{
-		Key: b64("foo"),
+		Key: []byte("foo"),
 		Value: model.TealValue{
 			Type:  uint64(basics.TealBytesType),
-			Bytes: b64("bar"),
+			Bytes: []byte("bar"),
 		},
 	}
 
@@ -756,8 +756,8 @@ func TestDryrunMultipleTxns(t *testing.T) {
 	dr.Txns = []transactions.SignedTxn{txn, txn}
 	gkv := model.TealKeyValueStore{
 		model.TealKeyValue{
-			Key:   b64("foo"),
-			Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+			Key:   []byte("foo"),
+			Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: []byte("bar")},
 		},
 	}
 	dr.Apps = []model.Application{
@@ -815,8 +815,8 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	}
 	localv := make(model.TealKeyValueStore, 1)
 	localv[0] = model.TealKeyValue{
-		Key:   b64("foo"),
-		Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+		Key:   []byte("foo"),
+		Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: []byte("bar")},
 	}
 
 	gdr.Accounts = []model.Account{

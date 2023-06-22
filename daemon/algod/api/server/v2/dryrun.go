@@ -160,7 +160,7 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) model.Dryr
 	for i, v := range state.Stack {
 		st.Stack[i] = model.TealValue{
 			Uint:  v.Uint,
-			Bytes: v.Bytes,
+			Bytes: []byte(v.Bytes),
 			Type:  uint64(v.Type),
 		}
 	}
@@ -173,7 +173,7 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) model.Dryr
 	for i, v := range state.Scratch {
 		scratch[i] = model.TealValue{
 			Uint:  v.Uint,
-			Bytes: v.Bytes,
+			Bytes: []byte(v.Bytes),
 			Type:  uint64(v.Type),
 		}
 	}

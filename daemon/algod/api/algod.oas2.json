@@ -3071,7 +3071,8 @@
       ],
       "properties": {
         "key": {
-          "type": "string"
+          "type": "string",
+          "format": "byte"
         },
         "value": {
           "$ref": "#/definitions/TealValue"
@@ -3093,7 +3094,8 @@
         },
         "bytes": {
           "description": "\\[tb\\] bytes value.",
-          "type": "string"
+          "type": "string",
+          "format": "byte"
         },
         "uint": {
           "description": "\\[ui\\] uint value.",

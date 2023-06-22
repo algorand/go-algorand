@@ -1495,8 +1495,8 @@ func TestTealDryrun(t *testing.T) {
 	}
 	localv := make(model.TealKeyValueStore, 1)
 	localv[0] = model.TealKeyValue{
-		Key:   "foo",
-		Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+		Key:   []byte("foo"),
+		Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: []byte("bar")},
 	}
 
 	gdr.Accounts = []model.Account{

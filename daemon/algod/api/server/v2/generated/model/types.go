@@ -764,7 +764,7 @@ type StateProofMessage struct {
 
 // TealKeyValue Represents a key-value pair in an application store.
 type TealKeyValue struct {
-	Key string `json:"key"`
+	Key []byte `json:"key"`
 
 	// Value Represents a TEAL value.
 	Value TealValue `json:"value"`
@@ -776,7 +776,7 @@ type TealKeyValueStore = []TealKeyValue
 // TealValue Represents a TEAL value.
 type TealValue struct {
 	// Bytes \[tb\] bytes value.
-	Bytes string `json:"bytes"`
+	Bytes []byte `json:"bytes"`
 
 	// Type \[tt\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**
 	Type uint64 `json:"type"`

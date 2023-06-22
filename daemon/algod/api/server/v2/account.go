@@ -17,7 +17,6 @@
 package v2
 
 import (
-	"encoding/base64"
 	"errors"
 	"math"
 	"sort"
@@ -149,10 +148,10 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *model.TealKeyValueStore {
 	rawKeyBytes := make([]string, 0, len(*tkv))
 	for k, v := range *tkv {
 		converted = append(converted, model.TealKeyValue{
-			Key: base64.StdEncoding.EncodeToString([]byte(k)),
+			Key: []byte(k),
 			Value: model.TealValue{
 				Type:  uint64(v.Type),
-				Bytes: base64.StdEncoding.EncodeToString([]byte(v.Bytes)),
+				Bytes: []byte(v.Bytes),
 				Uint:  v.Uint,
 			},
 		})
@@ -164,32 +163,20 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *model.TealKeyValueStore {
 	return &converted
 }
 
-func convertGeneratedTKV(akvs *model.TealKeyValueStore) (basics.TealKeyValue, error) {
+func convertGeneratedTKV(akvs *model.TealKeyValueStore) basics.TealKeyValue {
 	if akvs == nil || len(*akvs) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	tkv := make(basics.TealKeyValue)
 	for _, kv := range *akvs {
-		// Decode base-64 encoded map key
-		decodedKey, err := base64.StdEncoding.DecodeString(kv.Key)
-		if err != nil {
-			return nil, err
-		}
-
-		// Decode base-64 encoded map value (OK even if empty string)
-		decodedBytes, err := base64.StdEncoding.DecodeString(kv.Value.Bytes)
-		if err != nil {
-			return nil, err
-		}
-
-		tkv[string(decodedKey)] = basics.TealValue{
+		tkv[string(kv.Key)] = basics.TealValue{
 			Type:  basics.TealType(kv.Value.Type),
 			Uint:  kv.Value.Uint,
-			Bytes: string(decodedBytes),
+			Bytes: string(kv.Value.Bytes),
 		}
 	}
-	return tkv, nil
+	return tkv
 }
 
 // AccountToAccountData converts v2.model.Account to basics.AccountData
@@ -290,10 +277,7 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 	if a.AppsLocalState != nil && len(*a.AppsLocalState) > 0 {
 		appLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(*a.AppsLocalState))
 		for _, ls := range *a.AppsLocalState {
-			kv, err := convertGeneratedTKV(ls.KeyValue)
-			if err != nil {
-				return basics.AccountData{}, err
-			}
+			kv := convertGeneratedTKV(ls.KeyValue)
 			appLocalStates[basics.AppIndex(ls.Id)] = basics.AppLocalState{
 				Schema: basics.StateSchema{
 					NumUint:      ls.Schema.NumUint,
@@ -411,11 +395,7 @@ func ApplicationParamsToAppParams(gap *model.ApplicationParams) (basics.AppParam
 			NumByteSlice: gap.GlobalStateSchema.NumByteSlice,
 		}
 	}
-	kv, err := convertGeneratedTKV(gap.GlobalState)
-	if err != nil {
-		return basics.AppParams{}, err
-	}
-	ap.GlobalState = kv
+	ap.GlobalState = convertGeneratedTKV(gap.GlobalState)
 
 	return ap, nil
 }

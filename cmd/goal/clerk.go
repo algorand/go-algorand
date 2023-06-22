@@ -1192,7 +1192,7 @@ var dryrunRemoteCmd = &cobra.Command{
 			result := make([]string, len(stack))
 			for i, sv := range stack {
 				if sv.Type == uint64(basics.TealBytesType) {
-					result[i] = heuristicFormatStr(sv.Bytes)
+					result[i] = heuristicFormatStr(base64.StdEncoding.EncodeToString(sv.Bytes))
 				} else {
 					result[i] = fmt.Sprintf("%d", sv.Uint)
 				}

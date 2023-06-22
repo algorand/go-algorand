@@ -142,13 +142,13 @@ func TestAccount(t *testing.T) {
 			value.Uint = uint64(v.(int))
 			value.Type = uint64(basics.TealUintType)
 		case string:
-			value.Bytes = b64(v.(string))
+			value.Bytes = []byte(v.(string))
 			value.Type = uint64(basics.TealBytesType)
 		default:
 			panic(fmt.Sprintf("Unknown teal type %v", t))
 		}
 		return model.TealKeyValue{
-			Key:   b64(k),
+			Key:   []byte(k),
 			Value: value,
 		}
 	}

@@ -19,7 +19,6 @@ package logic
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -184,7 +183,7 @@ func makeDebugState(cx *EvalContext) *DebugState {
 		if err != nil {
 			sv = stackValue{Bytes: []byte(err.Error())}
 		}
-		globals[fs.field] = sv.toEncodedTealValue()
+		globals[fs.field] = sv.toTealValue()
 	}
 	ds.Globals = globals
 
@@ -244,15 +243,6 @@ func (d *DebugState) PCToLine(pc int) int {
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
-// toEncodedTealValue converts stackValue to basics.TealValue, with the Bytes
-// field b64 encoded, so it is suitable for conversion to JSON.
-func (sv stackValue) toEncodedTealValue() basics.TealValue {
-	if sv.avmType() == avmBytes {
-		return basics.TealValue{Type: basics.TealBytesType, Bytes: base64.StdEncoding.EncodeToString(sv.Bytes)}
-	}
-	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
-}
-
 // parseCallStack initializes an array of CallFrame objects from the raw
 // callstack.
 func (d *DebugState) parseCallstack(callstack []frame) []CallFrame {
@@ -287,12 +277,12 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 
 	stack := make([]basics.TealValue, len(cx.stack))
 	for i, sv := range cx.stack {
-		stack[i] = sv.toEncodedTealValue()
+		stack[i] = sv.toTealValue()
 	}
 
 	scratch := make([]basics.TealValue, len(cx.scratch))
 	for i, sv := range cx.scratch {
-		scratch[i] = sv.toEncodedTealValue()
+		scratch[i] = sv.toTealValue()
 	}
 
 	ds.Stack = stack
