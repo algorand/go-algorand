@@ -137,12 +137,12 @@ func TestAccount(t *testing.T) {
 
 	makeTKV := func(k string, v interface{}) model.TealKeyValue {
 		value := model.TealValue{}
-		switch v.(type) {
+		switch vKnown := v.(type) {
 		case int:
-			value.Uint = uint64(v.(int))
+			value.Uint = uint64(vKnown)
 			value.Type = uint64(basics.TealUintType)
 		case string:
-			value.Bytes = []byte(v.(string))
+			value.Bytes = []byte(vKnown)
 			value.Type = uint64(basics.TealBytesType)
 		default:
 			panic(fmt.Sprintf("Unknown teal type %v", t))
