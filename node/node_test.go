@@ -548,9 +548,20 @@ func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 // TestMaxSizesCorrect tests that constants defined in the protocol package are correct
 // and match the MaxSize() values of associated msgp encodable structs.
 // the test is located here since it needs to import various other packages.
+//
+// If this test fails, DO NOT JUST UPDATE THE CONSTANTS OR MODIFY THE TEST!
+// Instead you need to introduce a new version of the protocol and mechanisms
+// to ensure that nodes on different proto versions don't reject each others messages due to exceeding
+// max size network protocol version
 func TestMaxSizesCorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	/************************************************
+	 * ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! *
+	 *  Read the comment before touching this test!  *
+	 * ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! *
+	 *************************************************
+	 */ ////////////////////////////////////////////////
 	avSize := uint64(agreement.UnauthenticatedVoteMaxSize())
 	require.Equal(t, avSize, protocol.AgreementVoteTag.MaxMessageSize())
 	miSize := uint64(network.MessageOfInterestMaxSize())
