@@ -69,7 +69,7 @@ var clearSwap string
 //
 // appBoxesCreate: 1 sibling payment tx
 // appBoxesOptin: 1 sibling payment tx, 2 inner tx
-var effects map[TxTypeID][]TxEffect = map[TxTypeID][]TxEffect{
+var effects = map[TxTypeID][]TxEffect{
 	appBoxesCreate: {
 		{effectPaymentTxSibling, 1},
 	},
@@ -877,7 +877,7 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 	}
 
 	if assetID == 0 {
-		fmt.Printf("\n\nassetID is 0 but should have been set by \ngenerateAssetTxnInternalHint(txType=%s, round=%d, intra=%d, hintIndex=%d, hintIsNil=%t)\nactual=%s\n\n",
+		fmt.Printf("\n\nthis should never happen: assetID is 0 but should have been set by \ngenerateAssetTxnInternalHint(txType=%s, round=%d, intra=%d, hintIndex=%d, hintIsNil=%t)\nactual=%s\n\n",
 			txType, round, intra, hintIndex, hint == nil, actual)
 		os.Exit(1)
 	}
