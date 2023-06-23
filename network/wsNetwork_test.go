@@ -4499,7 +4499,7 @@ func TestSendMessageCallbacks(t *testing.T) {
 	require.NotZero(t, netA.NumPeers())
 	peer := netA.peers[0]
 	// Need to create a channel so that the message doesn't get filtered out
-	netB.peers[0].responseChannels[uint64(1)] = make(chan *Response, 1)
+	netB.peers[0].makeResponseChannel(1)
 	for i := 0; i < 100; i++ {
 		randInt := crypto.RandUint64()%(128) + 1
 		atomic.AddUint64(&counter, randInt)
@@ -4510,12 +4510,20 @@ func TestSendMessageCallbacks(t *testing.T) {
 		msg := IncomingMessage{Sender: netA.peers[0], Tag: protocol.UniEnsBlockReqTag, Callback: callback}
 		peer.Respond(context.Background(), msg, Topics{topic})
 	}
+	// force it to disconnect by removing the only response channel -- this is breach of protocol.
+	netB.peers[0].getAndRemoveResponseChannel(1)
+	// confirm that we still have messages in the send buffer
 	require.NotZero(t, len(peer.sendBufferBulk))
-	netA.removePeer(peer, disconnectBadData)
+
+	// confirm that eventually the messages get drained during the cleanup
 	require.Eventually(t,
 		func() bool { return atomic.LoadUint64(&counter) == uint64(0) },
 		500*time.Millisecond,
 		25*time.Millisecond,
 	)
-	require.Zero(t, netA.NumPeers())
+	require.Eventually(t,
+		func() bool { return netA.NumPeers() == 0 },
+		500*time.Millisecond,
+		25*time.Millisecond,
+	)
 }
