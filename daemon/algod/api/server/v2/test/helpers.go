@@ -103,7 +103,7 @@ type mockNode struct {
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
-	panic("implement me")
+	return account.ParticipationID{}, nil
 }
 
 func (m *mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
