@@ -24,6 +24,7 @@ import (
 	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -223,7 +224,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 		idxs = VcIdxs
 	}
 
-	sort.Slice(idxs, func(i, j int) bool { return idxs[i] < idxs[j] })
+	slices.Sort(idxs)
 
 	return tree.createProof(idxs)
 }

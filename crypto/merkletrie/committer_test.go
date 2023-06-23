@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -33,9 +34,7 @@ func (mc *InMemoryCommitter) Duplicate(flat bool) (out *InMemoryCommitter) {
 		if flat {
 			out.memStore[k] = v
 		} else {
-			bytes := make([]byte, len(v))
-			copy(bytes[:], v[:])
-			out.memStore[k] = bytes
+			out.memStore[k] = slices.Clone(v)
 		}
 	}
 	return

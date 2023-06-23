@@ -23,6 +23,7 @@ import (
 	"unsafe"
 
 	"github.com/algorand/go-algorand/crypto"
+	"golang.org/x/exp/slices"
 )
 
 type childEntry struct {
@@ -339,8 +340,7 @@ func deserializeNode(buf []byte) (n *node, s int) {
 	if hashLength2 <= 0 {
 		return nil, hashLength2
 	}
-	n.hash = make([]byte, hashLength)
-	copy(n.hash, buf[hashLength2:hashLength2+int(hashLength)])
+	n.hash = slices.Clone(buf[hashLength2 : hashLength2+int(hashLength)])
 	s = hashLength2 + int(hashLength)
 	isLeaf := (buf[s] == 0)
 	s++

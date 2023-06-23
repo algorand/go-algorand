@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
@@ -557,8 +558,7 @@ var infoCmd = &cobra.Command{
 func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bool, account model.Account) bool {
 	var createdAssets []model.Asset
 	if account.CreatedAssets != nil {
-		createdAssets = make([]model.Asset, len(*account.CreatedAssets))
-		copy(createdAssets, *account.CreatedAssets)
+		createdAssets = slices.Clone(*account.CreatedAssets)
 		sort.Slice(createdAssets, func(i, j int) bool {
 			return createdAssets[i].Index < createdAssets[j].Index
 		})
@@ -566,8 +566,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 
 	var heldAssets []model.AssetHolding
 	if account.Assets != nil {
-		heldAssets = make([]model.AssetHolding, len(*account.Assets))
-		copy(heldAssets, *account.Assets)
+		heldAssets = slices.Clone(*account.Assets)
 		sort.Slice(heldAssets, func(i, j int) bool {
 			return heldAssets[i].AssetID < heldAssets[j].AssetID
 		})
@@ -575,8 +574,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 
 	var createdApps []model.Application
 	if account.CreatedApps != nil {
-		createdApps = make([]model.Application, len(*account.CreatedApps))
-		copy(createdApps, *account.CreatedApps)
+		createdApps = slices.Clone(*account.CreatedApps)
 		sort.Slice(createdApps, func(i, j int) bool {
 			return createdApps[i].Id < createdApps[j].Id
 		})
@@ -584,8 +582,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 
 	var optedInApps []model.ApplicationLocalState
 	if account.AppsLocalState != nil {
-		optedInApps = make([]model.ApplicationLocalState, len(*account.AppsLocalState))
-		copy(optedInApps, *account.AppsLocalState)
+		optedInApps = slices.Clone(*account.AppsLocalState)
 		sort.Slice(optedInApps, func(i, j int) bool {
 			return optedInApps[i].Id < optedInApps[j].Id
 		})

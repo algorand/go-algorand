@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -124,24 +125,10 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) agreement.Ledge
 func (l *testLedger) copy() *testLedger {
 	dup := new(testLedger)
 
-	dup.entries = make(map[basics.Round]bookkeeping.Block)
-	dup.certs = make(map[basics.Round]agreement.Certificate)
-	dup.state = make(map[basics.Address]basics.AccountData)
-	dup.notifications = make(map[basics.Round]signal)
-
-	for k, v := range l.entries {
-		dup.entries[k] = v
-	}
-	for k, v := range l.certs {
-		dup.certs[k] = v
-	}
-	for k, v := range l.state {
-		dup.state[k] = v
-	}
-	for k, v := range dup.notifications {
-		// note that old opened channels will now fire when these are closed
-		dup.notifications[k] = v
-	}
+	dup.entries = maps.Clone(l.entries)
+	dup.certs = maps.Clone(l.certs)
+	dup.state = maps.Clone(l.state)
+	dup.notifications = maps.Clone(l.notifications) // old opened channels will now fire when these are closed
 	dup.nextRound = l.nextRound
 
 	return dup
