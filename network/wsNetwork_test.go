@@ -4487,31 +4487,6 @@ func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
 	})
 }
 
-type tsMockHandler struct {
-	t     *testing.T
-	stop  bool
-	val   uint64
-	count int
-}
-
-func (t *tsMockHandler) Handle(msg IncomingMessage) OutgoingMessage {
-	if t.stop {
-		return OutgoingMessage{Action: Ignore}
-	}
-	topics, err := UnmarshallTopics(msg.Data)
-	require.NoError(t.t, err)
-	data, found := topics.GetValue("val")
-	require.True(t.t, found)
-	round, _ := binary.Uvarint(data)
-	t.val += round
-	if t.count == 5 {
-		t.stop = true
-		return OutgoingMessage{Action: Disconnect, reason: disconnectBadData}
-	}
-	t.count++
-	return OutgoingMessage{Action: Ignore}
-}
-
 // TestSendMessageCallbacks tests that the SendMessage callbacks are called correctly. These are currently used for
 // decrementing the number of bytes considered currently in flight for blockservice memcaps.
 func TestSendMessageCallbacks(t *testing.T) {
@@ -4521,33 +4496,26 @@ func TestSendMessageCallbacks(t *testing.T) {
 	defer closeFunc()
 
 	var counter uint64
-	var valTarget uint64
 	require.NotZero(t, netA.NumPeers())
-	handler := &tsMockHandler{t: t}
 	peer := netA.peers[0]
-	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TopicMsgRespTag, MessageHandler: handler}})
-	for i := 0; i < 10; i++ {
+	// Need to create a channel so that the message doesn't get filtered out
+	netB.peers[0].responseChannels[uint64(1)] = make(chan *Response, 1)
+	for i := 0; i < 100; i++ {
 		randInt := crypto.RandUint64()%(128) + 1
-		cur := atomic.AddUint64(&counter, randInt)
-		if i == 5 {
-			valTarget = cur
-		}
-
-		buf := make([]byte, binary.MaxVarintLen64)
-		binary.PutUvarint(buf, randInt)
-		topic := MakeTopic("val", buf)
+		atomic.AddUint64(&counter, randInt)
+		topic := MakeTopic("val", []byte("blah"))
 		callback := func() {
 			atomic.AddUint64(&counter, ^uint64(randInt-1))
 		}
 		msg := IncomingMessage{Sender: netA.peers[0], Tag: protocol.UniEnsBlockReqTag, Callback: callback}
 		peer.Respond(context.Background(), msg, Topics{topic})
-		handler.val += randInt
 	}
+	require.NotZero(t, len(peer.sendBufferBulk))
+	netA.removePeer(peer, disconnectBadData)
 	require.Eventually(t,
 		func() bool { return atomic.LoadUint64(&counter) == uint64(0) },
 		500*time.Millisecond,
 		25*time.Millisecond,
 	)
 	require.Zero(t, netA.NumPeers())
-	require.Equal(t, int(valTarget), int(handler.val))
 }
