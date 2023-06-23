@@ -154,3 +154,46 @@ func TestLimitedReaderSlurperBufferAllocations(t *testing.T) {
 		}
 	}
 }
+
+func TestLimitedReaderSlurperPerMessageMaxSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type randMode int
+
+	const (
+		modeLessThan randMode = iota
+		modeEqual
+		modeGreaterThan
+	)
+
+	maxMessageSize := 1024
+	slurper := MakeLimitedReaderSlurper(512, uint64(maxMessageSize))
+	for i := 0; i < 30; i++ {
+		var b []byte
+		randPick := randMode(crypto.RandUint64() % uint64(3))
+		currentSize := crypto.RandUint64()%uint64(maxMessageSize) + 1
+		slurper.Reset(currentSize)
+		if randPick == modeLessThan {
+			dataSize := crypto.RandUint64() % currentSize
+			b = make([]byte, dataSize)
+			crypto.RandBytes(b[:])
+			err := slurper.Read(bytes.NewBuffer(b))
+			require.NoError(t, err)
+			require.Len(t, slurper.Bytes(), int(dataSize))
+		} else if randPick == modeEqual {
+			dataSize := currentSize
+			b = make([]byte, dataSize)
+			crypto.RandBytes(b[:])
+			err := slurper.Read(bytes.NewBuffer(b))
+			require.NoError(t, err)
+			require.Len(t, slurper.Bytes(), int(currentSize))
+		} else if randPick == modeGreaterThan {
+			dataSize := currentSize + 1
+			b = make([]byte, dataSize)
+			crypto.RandBytes(b[:])
+			err := slurper.Read(bytes.NewBuffer(b))
+			require.Error(t, err)
+		}
+	}
+}
