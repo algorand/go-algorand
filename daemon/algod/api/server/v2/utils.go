@@ -75,8 +75,8 @@ func addrOrNil(addr basics.Address) *string {
 	return &ret
 }
 
-// valOrNil defines a handy impl for all comparable types to convert from default value to nil ptr
-func valOrNil[T comparable](val T) *T {
+// omitEmpty defines a handy impl for all comparable types to convert from default value to nil ptr
+func omitEmpty[T comparable](val T) *T {
 	var defaultVal T
 	if val == defaultVal {
 		return nil
@@ -254,8 +254,8 @@ func stateDeltaToStateDelta(d basics.StateDelta) *model.StateDelta {
 			Key: base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: model.EvalDelta{
 				Action: uint64(v.Action),
-				Bytes:  valOrNil(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
-				Uint:   valOrNil(v.Uint),
+				Bytes:  omitEmpty(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
+				Uint:   omitEmpty(v.Uint),
 			},
 		})
 	}
@@ -333,8 +333,8 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 
 	// Since this is an inner txn, we know these indexes will be populated. No
 	// need to search payset for IDs
-	response.AssetIndex = valOrNil(uint64(txn.ApplyData.ConfigAsset))
-	response.ApplicationIndex = valOrNil(uint64(txn.ApplyData.ApplicationID))
+	response.AssetIndex = omitEmpty(uint64(txn.ApplyData.ConfigAsset))
+	response.ApplicationIndex = omitEmpty(uint64(txn.ApplyData.ApplicationID))
 
 	withStatus := node.TxnWithStatus{
 		Txn:       txn.SignedTxn,
@@ -397,8 +397,8 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
 		Txn:                    ConvertInnerTxn(&txnResult.Txn),
-		AppBudgetConsumed:      valOrNil(txnResult.AppBudgetConsumed),
-		LogicSigBudgetConsumed: valOrNil(txnResult.LogicSigBudgetConsumed),
+		AppBudgetConsumed:      omitEmpty(txnResult.AppBudgetConsumed),
+		LogicSigBudgetConsumed: omitEmpty(txnResult.LogicSigBudgetConsumed),
 		TransactionTrace:       convertTxnTrace(txnResult.Trace),
 	}
 }
@@ -411,9 +411,9 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 
 	encoded := PreEncodedSimulateTxnGroupResult{
 		Txns:              txnResults,
-		FailureMessage:    valOrNil(txnGroupResult.FailureMessage),
-		AppBudgetAdded:    valOrNil(txnGroupResult.AppBudgetAdded),
-		AppBudgetConsumed: valOrNil(txnGroupResult.AppBudgetConsumed),
+		FailureMessage:    omitEmpty(txnGroupResult.FailureMessage),
+		AppBudgetAdded:    omitEmpty(txnGroupResult.AppBudgetAdded),
+		AppBudgetConsumed: omitEmpty(txnGroupResult.AppBudgetConsumed),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
@@ -428,10 +428,10 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
-			AllowEmptySignatures: valOrNil(result.EvalOverrides.AllowEmptySignatures),
+			AllowEmptySignatures: omitEmpty(result.EvalOverrides.AllowEmptySignatures),
 			MaxLogSize:           result.EvalOverrides.MaxLogSize,
 			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
-			ExtraOpcodeBudget:    valOrNil(result.EvalOverrides.ExtraOpcodeBudget),
+			ExtraOpcodeBudget:    omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
 		}
 	}
 
