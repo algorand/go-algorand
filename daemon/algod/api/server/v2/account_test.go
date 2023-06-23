@@ -136,7 +136,9 @@ func TestAccount(t *testing.T) {
 	verifyCreatedApp(1, appIdx2, appParams2)
 
 	makeTKV := func(k string, v interface{}) model.TealKeyValue {
-		value := model.TealValue{}
+		value := model.TealValue{
+			Bytes: []byte{},
+		}
 		switch vKnown := v.(type) {
 		case int:
 			value.Uint = uint64(vKnown)

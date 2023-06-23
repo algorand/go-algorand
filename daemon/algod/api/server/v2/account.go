@@ -155,9 +155,6 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *model.TealKeyValueStore {
 				Uint:  v.Uint,
 			},
 		}
-		if len(convertedKv.Value.Bytes) == 0 {
-			convertedKv.Value.Bytes = nil
-		}
 		converted = append(converted, convertedKv)
 	}
 	sort.Slice(converted, func(i, j int) bool {
