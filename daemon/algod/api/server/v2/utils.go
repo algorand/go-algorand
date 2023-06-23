@@ -100,8 +100,9 @@ func nilToZero(numPtr *uint64) uint64 {
 
 func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
 	// Compute transaction index in block
+	txID := tx.Txn.Txn.ID()
 	offset := slices.IndexFunc(payset, func(ad transactions.SignedTxnWithAD) bool {
-		return ad.Txn.ID() == tx.Txn.Txn.ID()
+		return ad.Txn.ID() == txID
 	})
 
 	// Sanity check that txn was in fetched block
