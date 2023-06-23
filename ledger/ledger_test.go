@@ -2987,8 +2987,6 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("skip flaky test")
-
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	cfg.MaxAcctLookback = 0
