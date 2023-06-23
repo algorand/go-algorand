@@ -208,39 +208,6 @@ func MakeAccountsSQLWriter(e db.Executable, hasAccounts, hasResources, hasKvPair
 	return
 }
 
-// ListCreatables returns an array of CreatableLocator which have CreatableIndex smaller or equal to maxIdx and are of the provided CreatableType.
-func (qs *accountsDbQueries) ListCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
-	err = db.Retry(func() error {
-		// Query for assets in range
-		rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-
-		// For each row, copy into a new CreatableLocator and append to results
-		var buf []byte
-		var cl basics.CreatableLocator
-		var creatableIndex sql.NullInt64
-		for rows.Next() {
-			err = rows.Scan(&dbRound, &creatableIndex, &buf)
-			if err != nil {
-				return err
-			}
-			if !creatableIndex.Valid {
-				// we received an entry without any index. This would happen only on the first entry when there are no creatables of the requested type.
-				break
-			}
-			cl.Index = basics.CreatableIndex(creatableIndex.Int64)
-			copy(cl.Creator[:], buf)
-			cl.Type = ctype
-			results = append(results, cl)
-		}
-		return nil
-	})
-	return
-}
-
 // sql.go has the following contradictory comments:
 
 // Reference types such as []byte are only valid until the next call to Scan
