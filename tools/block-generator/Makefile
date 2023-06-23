@@ -5,10 +5,10 @@ REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 DURATION = 30s
 VERBOSE = # --verbose
 
-block-generator: clean
+block-generator: clean-generator
 	go build
 
-clean:
+clean-generator:
 	rm -f block-generator
 
 debug-blockgen:
@@ -20,14 +20,11 @@ debug-blockgen:
 	--test-duration $(DURATION) \
 	$(RESETDB)
 
-clean-reports:
-	rm -rf $(REPORTS) 
-
-cleanup: clean-reports
-	python run_runner.py --purge
-
 enter-pg:
 	docker exec -it generator-test-container psql -U algorand -d generator_db
+
+clean-docker:
+	docker rm -f generator-test-container
 
 run-runner: block-generator
 	./block-generator runner --conduit-binary ./conduit \
@@ -39,6 +36,9 @@ run-runner: block-generator
 	$(RESETDB) \
 	$(VERBOSE) \
 	--report-directory $(REPORTS)
+
+clean-reports:
+	rm -rf $(REPORTS) 
 
 pre-git-push:
 	mv _go.mod go.mod
