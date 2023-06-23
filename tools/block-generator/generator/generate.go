@@ -369,7 +369,6 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		return nil
 	}
 	// round == nextRound case
-
 	err := g.startRound()
 	if err != nil {
 		return err
