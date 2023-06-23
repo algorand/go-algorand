@@ -5,6 +5,12 @@ REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 DURATION = 30s
 VERBOSE = # --verbose
 
+block-generator: clean
+	go build
+
+clean:
+	rm -f block-generator
+
 debug-blockgen:
 	python run_runner.py \
 	--conduit-binary ./conduit \
@@ -22,12 +28,6 @@ cleanup: clean-reports
 
 enter-pg:
 	docker exec -it generator-test-container psql -U algorand -d generator_db
-
-clean:
-	rm -f block-generator
-
-block-generator: clean
-	go build
 
 run-runner: block-generator
 	./block-generator runner --conduit-binary ./conduit \
