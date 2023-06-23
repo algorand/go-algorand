@@ -75,9 +75,9 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	require.NoError(t, err)
 	qs, err := AccountsInitDbQueries(dbs.Rdb.Handle)
 	require.NoError(t, err)
-	require.NotNil(t, qs.listCreatablesStmt)
+	require.NotNil(t, qs.lookupAccountStmt)
 	qs.Close()
-	require.Nil(t, qs.listCreatablesStmt)
+	require.Nil(t, qs.lookupAccountStmt)
 	qs.Close()
-	require.Nil(t, qs.listCreatablesStmt)
+	require.Nil(t, qs.lookupAccountStmt)
 }

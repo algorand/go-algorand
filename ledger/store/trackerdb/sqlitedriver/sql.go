@@ -30,7 +30,6 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt     *sql.Stmt
 	lookupAccountStmt      *sql.Stmt
 	lookupResourcesStmt    *sql.Stmt
 	lookupAllResourcesStmt *sql.Stmt
@@ -69,11 +68,6 @@ func (ref sqlRowRef) CreatableRefMarker()     {}
 func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
-
-	qs.listCreatablesStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.asset, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
-	if err != nil {
-		return nil, err
-	}
 
 	qs.lookupAccountStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, accountbase.data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
 	if err != nil {
@@ -538,7 +532,6 @@ func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 
 func (qs *accountsDbQueries) Close() {
 	preparedQueries := []**sql.Stmt{
-		&qs.listCreatablesStmt,
 		&qs.lookupAccountStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
