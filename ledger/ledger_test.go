@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -696,8 +697,7 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	appIdx = 2 // the second successful txn
 
 	badTx = correctAppCreate
-	program := make([]byte, len(approvalProgram))
-	copy(program, approvalProgram)
+	program := slices.Clone(approvalProgram)
 	program[0] = '\x01'
 	badTx.ApprovalProgram = program
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
@@ -1621,71 +1621,6 @@ func generateCreatables(numElementsPerSegement int) (
 		return nil, 0, 0, fmt.Errorf("could not generate 3 apps and 3 assets")
 	}
 	return
-}
-
-// TestListAssetsAndApplications tests the ledger.ListAssets and ledger.ListApplications
-// interfaces. The detailed test on the correctness of these functions is given in:
-// TestListCreatables (acctupdates_test.go)
-func TestListAssetsAndApplications(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	numElementsPerSegement := 10 // This is multiplied by 10. see randomCreatables
-
-	//initLedger
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
-	const inMem = true
-	log := logging.TestingLog(t)
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
-	require.NoError(t, err, "could not open ledger")
-	defer ledger.Close()
-
-	// ******* All results are obtained from the cache. Empty database *******
-	// ******* No deletes                                              *******
-	// get random data. Initial batch, no deletes
-	randomCtbs, maxAsset, maxApp, err := generateCreatables(numElementsPerSegement)
-	require.NoError(t, err)
-
-	// set the cache
-	ledger.accts.creatables = randomCtbs
-
-	// Test ListAssets
-	// Check the number of results limit
-	results, err := ledger.ListAssets(basics.AssetIndex(maxAsset), 2)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(results))
-	// Check the max asset id limit
-	results, err = ledger.ListAssets(basics.AssetIndex(maxAsset), 100)
-	require.NoError(t, err)
-	assetCount := 0
-	for id, ctb := range randomCtbs {
-		if ctb.Ctype == basics.AssetCreatable &&
-			ctb.Created &&
-			id <= maxAsset {
-			assetCount++
-		}
-	}
-	require.Equal(t, assetCount, len(results))
-
-	// Test ListApplications
-	// Check the number of results limit
-	ledger.accts.creatables = randomCtbs
-	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 2)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(results))
-	// Check the max application id limit
-	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
-	require.NoError(t, err)
-	appCount := 0
-	for id, ctb := range randomCtbs {
-		if ctb.Ctype == basics.AppCreatable &&
-			ctb.Created &&
-			id <= maxApp {
-			appCount++
-		}
-	}
-	require.Equal(t, appCount, len(results))
 }
 
 // TestLedgerVerifiesOldStateProofs test that if stateproof chain is delayed for X intervals (pass StateProofMaxRecoveryIntervals),

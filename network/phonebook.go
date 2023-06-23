@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"golang.org/x/exp/slices"
 )
 
 // when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
@@ -287,8 +288,7 @@ func shuffleStrings(set []string) {
 func shuffleSelect(set []string, n int) []string {
 	if n >= len(set) || n == getAllAddresses {
 		// return shuffled copy of everything
-		out := make([]string, len(set))
-		copy(out, set)
+		out := slices.Clone(set)
 		shuffleStrings(out)
 		return out
 	}

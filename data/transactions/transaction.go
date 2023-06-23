@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/slices"
 )
 
 // Txid is a hash used to uniquely identify individual transactions
@@ -272,12 +273,7 @@ func (tx Header) Alive(tc TxnContext) error {
 
 // MatchAddress checks if the transaction touches a given address.
 func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
-	for _, candidate := range tx.RelevantAddrs(spec) {
-		if addr == candidate {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(tx.RelevantAddrs(spec), addr)
 }
 
 var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")

@@ -21,6 +21,8 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 // EvalDelta stores StateDeltas for an application's global key/value store, as
@@ -50,23 +52,8 @@ type EvalDelta struct {
 // because the msgpack codec will encode/decode an empty map as nil, and we want
 // an empty generated EvalDelta to equal an empty one we decode off the wire.
 func (ed EvalDelta) Equal(o EvalDelta) bool {
-	// LocalDeltas length should be the same
-	if len(ed.LocalDeltas) != len(o.LocalDeltas) {
+	if !maps.EqualFunc(ed.LocalDeltas, o.LocalDeltas, maps.Equal[basics.StateDelta, basics.StateDelta]) {
 		return false
-	}
-
-	// All keys and local StateDeltas should be the same
-	for k, v := range ed.LocalDeltas {
-		// Other LocalDelta must have value for key
-		ov, ok := o.LocalDeltas[k]
-		if !ok {
-			return false
-		}
-
-		// Other LocalDelta must have same value for key
-		if !ov.Equal(v) {
-			return false
-		}
 	}
 
 	// GlobalDeltas must be equal
@@ -75,13 +62,8 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 	}
 
 	// Logs must be equal
-	if len(ed.Logs) != len(o.Logs) {
+	if !slices.Equal(ed.Logs, o.Logs) {
 		return false
-	}
-	for i, l := range ed.Logs {
-		if l != o.Logs[i] {
-			return false
-		}
 	}
 
 	// InnerTxns must be equal

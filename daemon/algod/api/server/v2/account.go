@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	"golang.org/x/exp/slices"
 )
 
 // AssetHolding converts between basics.AssetHolding and model.AssetHolding
@@ -477,8 +478,7 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 		Reserve:       addrOrNil(params.Reserve),
 	}
 	if params.MetadataHash != ([32]byte{}) {
-		metadataHash := make([]byte, len(params.MetadataHash))
-		copy(metadataHash, params.MetadataHash[:])
+		metadataHash := slices.Clone(params.MetadataHash[:])
 		assetParams.MetadataHash = &metadataHash
 	}
 

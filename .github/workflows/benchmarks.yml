@@ -29,7 +29,7 @@ jobs:
       # degradation, (2) `eval` degradation.  (2) suggests a broader performance
       # issue. 
       - name: Run benchmark
-        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' | tee benchmark_output.txt
+        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' -run=^$ | tee benchmark_output.txt
       - name: Push benchmark result to gh-pages branch
         if: github.event_name == 'push'
         uses: benchmark-action/github-action-benchmark@v1
