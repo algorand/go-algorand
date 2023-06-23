@@ -59,7 +59,7 @@ type Header struct {
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
 	Note        []byte            `codec:"note,allocbound=config.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
-	GenesisID   string            `codec:"gen"`
+	GenesisID   string            `codec:"gen,allocbound=config.MaxGenesisIDLen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
 
 	// Group specifies that this transaction is part of a

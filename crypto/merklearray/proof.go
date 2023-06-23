@@ -20,11 +20,38 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/msgp/msgp"
 )
 
 // Proof is used to convince a verifier about membership of leaves: h0,h1...hn
 // at indexes i0,i1...in on a tree. The verifier has a trusted value of the tree
 // root hash.
+// Path is bounded by MaxNumLeaves since there could be multiple reveals, and
+// given the distribution of the elt positions and the depth of the tree,
+// the path length can increase up to 2^MaxTreeDepth / 2
+//
+// . Consider two different reveals for the same tree:
+// .
+// .                z5
+// .         z3              z4
+// .     y       z       z1      z2
+// .   q   r   s   t   u   v   w   x
+// .  a b c d e f g h i j k l m n o p
+// .    ^
+// . hints: [a, r, z, z4]
+// . len(hints) = 4
+// . You need a to combine with b to get q, need r to combine with the computed q and get y, and so on.
+// . The worst case is this:
+// .
+// .               z5
+// .        z3              z4
+// .    y       z       z1      z2
+// .  q   r   s   t   u   v   w   x
+// . a b c d e f g h i j k l m n o p
+// . ^   ^     ^   ^ ^   ^     ^   ^
+// .
+// . hints: [b, d, e, g, j, l, m, o]
+// . len(hints) = 2^4/2
 type Proof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -41,10 +68,32 @@ type Proof struct {
 // SingleLeafProof is used to convince a verifier about membership of a specific
 // leaf h at index i on a tree. The verifier has a trusted value of the tree
 // root hash. it corresponds to merkle verification path.
+// The msgp directive belows tells msgp to not generate SingleLeafProofMaxSize method since we have one manually defined in this file.
+//
+//msgp:maxsize ignore SingleLeafProof
 type SingleLeafProof struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Proof
+}
+
+// ProofMaxSizeByElements returns the maximum msgp encoded size of merklearray.Proof structs containing n signatures
+// This is necessary because the allocbounds on the proof are actual theoretical bounds but for calculating maximum
+// proof size for individual message types we have smaller valid bounds.
+// Exported because it's used in the stateproof package for ensuring that SigPartProof constant is correct size.
+func ProofMaxSizeByElements(n int) (s int) {
+	s = 1 + 4
+	// Calculating size of slice: z.Path
+	s += msgp.ArrayHeaderSize + n*(crypto.GenericDigestMaxSize())
+	s += 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
+	return
+}
+
+// SingleLeafProofMaxSize returns the maximum msgp encoded size of proof verifying a single leaf
+// It is manually defined here instead of letting msgp do it since we cannot annotate the embedded Proof struct
+// with maxtotalbytes for msgp to autogenerate it.
+func SingleLeafProofMaxSize() int {
+	return ProofMaxSizeByElements(MaxEncodedTreeDepth)
 }
 
 // GetFixedLengthHashableRepresentation serializes the proof into a sequence of bytes.

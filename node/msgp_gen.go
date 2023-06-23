@@ -4,6 +4,9 @@ package node
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -14,6 +17,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> NetPrioResponseMaxSize()
 //
 // netPrioResponseSigned
 //           |-----> (*) MarshalMsg
@@ -22,6 +26,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> NetPrioResponseSignedMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -66,6 +71,16 @@ func (z *netPrioResponse) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
+			var zb0003 int
+			zb0003, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Nonce")
+				return
+			}
+			if zb0003 > netPrioChallengeSize {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(netPrioChallengeSize))
+				return
+			}
 			(*z).Nonce, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Nonce")
@@ -96,6 +111,16 @@ func (z *netPrioResponse) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "Nonce":
+				var zb0004 int
+				zb0004, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Nonce")
+					return
+				}
+				if zb0004 > netPrioChallengeSize {
+					err = msgp.ErrOverflow(uint64(zb0004), uint64(netPrioChallengeSize))
+					return
+				}
 				(*z).Nonce, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Nonce")
@@ -128,6 +153,12 @@ func (z *netPrioResponse) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *netPrioResponse) MsgIsZero() bool {
 	return ((*z).Nonce == "")
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func NetPrioResponseMaxSize() (s int) {
+	s = 1 + 6 + msgp.StringPrefixSize + netPrioChallengeSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -223,6 +254,16 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				if zb0003 > 0 {
 					zb0003--
+					var zb0005 int
+					zb0005, err = msgp.ReadBytesBytesHeader(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Response", "struct-from-array", "Nonce")
+						return
+					}
+					if zb0005 > netPrioChallengeSize {
+						err = msgp.ErrOverflow(uint64(zb0005), uint64(netPrioChallengeSize))
+						return
+					}
 					(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Response", "struct-from-array", "Nonce")
@@ -253,6 +294,16 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					switch string(field) {
 					case "Nonce":
+						var zb0006 int
+						zb0006, err = msgp.ReadBytesBytesHeader(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Response", "Nonce")
+							return
+						}
+						if zb0006 > netPrioChallengeSize {
+							err = msgp.ErrOverflow(uint64(zb0006), uint64(netPrioChallengeSize))
+							return
+						}
 						(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "struct-from-array", "Response", "Nonce")
@@ -316,25 +367,35 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "Response":
-				var zb0005 int
-				var zb0006 bool
-				zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0007 int
+				var zb0008 bool
+				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Response")
 						return
 					}
-					if zb0005 > 0 {
-						zb0005--
+					if zb0007 > 0 {
+						zb0007--
+						var zb0009 int
+						zb0009, err = msgp.ReadBytesBytesHeader(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Response", "struct-from-array", "Nonce")
+							return
+						}
+						if zb0009 > netPrioChallengeSize {
+							err = msgp.ErrOverflow(uint64(zb0009), uint64(netPrioChallengeSize))
+							return
+						}
 						(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "Response", "struct-from-array", "Nonce")
 							return
 						}
 					}
-					if zb0005 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0005)
+					if zb0007 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0007)
 						if err != nil {
 							err = msgp.WrapError(err, "Response", "struct-from-array")
 							return
@@ -345,11 +406,11 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "Response")
 						return
 					}
-					if zb0006 {
+					if zb0008 {
 						(*z).Response = netPrioResponse{}
 					}
-					for zb0005 > 0 {
-						zb0005--
+					for zb0007 > 0 {
+						zb0007--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "Response")
@@ -357,6 +418,16 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						}
 						switch string(field) {
 						case "Nonce":
+							var zb0010 int
+							zb0010, err = msgp.ReadBytesBytesHeader(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Response", "Nonce")
+								return
+							}
+							if zb0010 > netPrioChallengeSize {
+								err = msgp.ErrOverflow(uint64(zb0010), uint64(netPrioChallengeSize))
+								return
+							}
 							(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
 							if err != nil {
 								err = msgp.WrapError(err, "Response", "Nonce")
@@ -416,4 +487,10 @@ func (z *netPrioResponseSigned) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *netPrioResponseSigned) MsgIsZero() bool {
 	return ((*z).Response.Nonce == "") && ((*z).Round.MsgIsZero()) && ((*z).Sender.MsgIsZero()) && ((*z).Sig.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func NetPrioResponseSignedMaxSize() (s int) {
+	s = 1 + 9 + 1 + 6 + msgp.StringPrefixSize + netPrioChallengeSize + 6 + basics.RoundMaxSize() + 7 + basics.AddressMaxSize() + 4 + crypto.OneTimeSignatureMaxSize()
+	return
 }
