@@ -86,8 +86,6 @@ type AccountsWriterExt interface {
 // AccountsReader is the "optimized" read interface for:
 // - accounts, resources, app kvs, creatables
 type AccountsReader interface {
-	ListCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error)
-
 	LookupAccount(addr basics.Address) (data PersistedAccountData, err error)
 
 	LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error)
