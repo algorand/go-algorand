@@ -321,7 +321,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 	// If we are over-capacity, we will not process the request
 	// respond to sender with error message
 	memUsed := atomic.LoadUint64(&bs.memoryUsed)
-	if memUsed >= bs.memoryCap {
+	if memUsed > bs.memoryCap {
 		err := errMemoryAtCapacity{capacity: bs.memoryCap, used: memUsed}
 		bs.log.Infof("BlockService handleCatchupReq: %s", err.Error())
 		respTopics = network.Topics{
