@@ -482,9 +482,9 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 			NumByteSlice: record.TotalAppSchema.NumByteSlice,
 			NumUint:      record.TotalAppSchema.NumUint,
 		},
-		AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
-		TotalBoxes:          numOrNil(record.TotalBoxes),
-		TotalBoxBytes:       numOrNil(record.TotalBoxBytes),
+		AppsTotalExtraPages: valOrNil(uint64(record.TotalExtraAppPages)),
+		TotalBoxes:          valOrNil(record.TotalBoxes),
+		TotalBoxBytes:       valOrNil(record.TotalBoxBytes),
 		MinBalance:          record.MinBalance(&consensus).Raw,
 	}
 	response := model.AccountResponse(account)
@@ -821,7 +821,7 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		response.UpgradeVotes = &votes
 		response.UpgradeYesVotes = &votesYes
 		response.UpgradeNoVotes = &votesNo
-		response.UpgradeNextProtocolVoteBefore = numOrNil(uint64(stat.NextProtocolVoteBefore))
+		response.UpgradeNextProtocolVoteBefore = valOrNil(uint64(stat.NextProtocolVoteBefore))
 		response.UpgradeVoteRounds = &upgradeVoteRounds
 	}
 
