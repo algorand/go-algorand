@@ -3102,6 +3102,29 @@
         }
       }
     },
+    "StackValue": {
+      "description": "Represents a TEAL value over the stack.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "\\[tt\\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**",
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "\\[tb\\] bytes value.",
+          "type": "string",
+          "format": "byte"
+        },
+        "uint": {
+          "description": "\\[ui\\] uint value.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
     "StateDelta": {
       "description": "Application state delta.",
       "type": "array",
@@ -3877,14 +3900,14 @@
           "description": "The values deleted by this opcode from the stack.",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/TealValue"
+            "$ref": "#/definitions/StackValue"
           }
         },
         "additions": {
           "description": "The values added by this opcode to the stack.",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/TealValue"
+            "$ref": "#/definitions/StackValue"
           }
         }
       }

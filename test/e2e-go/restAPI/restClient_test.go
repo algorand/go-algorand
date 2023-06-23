@@ -18,7 +18,6 @@ package restapi
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -1966,9 +1965,14 @@ int 1`
 	a.Equal(expectedResult, resp)
 }
 
-func constToPtr[T any](constVar T) *T {
-	var localVar = constVar
-	return &localVar
+func toPtr[T any](constVar T) *T { return &constVar }
+
+func valToNil[T comparable](v *T) *T {
+	var defaultV T
+	if v == nil || *v == defaultV {
+		return nil
+	}
+	return v
 }
 
 // The program is copied from pyteal source for c2c test over betanet:
@@ -2187,87 +2191,83 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	creationOpcodeTrace := []model.SimulationOpcodeTraceUnit{
 		{
 			Pc:               1,
-			DisassembledLine: constToPtr[string]("intcblock 0 1 6"),
+			DisassembledLine: toPtr[string]("intcblock 0 1 6"),
 		},
 		// txn ApplicationID
 		{
 			Pc:               6,
-			DisassembledLine: constToPtr[string]("txn ApplicationID"),
-			Additions: &[]model.TealValue{
+			DisassembledLine: toPtr[string]("txn ApplicationID"),
+			Additions: &[]model.StackValue{
 				{
 					Type: uint64(basics.TealUintType),
-					Uint: 0,
 				},
 			},
 		},
 		// int 0
 		{
 			Pc:               8,
-			DisassembledLine: constToPtr[string]("intc_0 // 0"),
-			Additions: &[]model.TealValue{
+			DisassembledLine: toPtr[string]("intc_0 // 0"),
+			Additions: &[]model.StackValue{
 				{
 					Type: uint64(basics.TealUintType),
-					Uint: 0,
 				},
 			},
 		},
 		// ==
 		{
 			Pc:               9,
-			DisassembledLine: constToPtr[string]("=="),
-			Deletions: &[]model.TealValue{
+			DisassembledLine: toPtr[string]("=="),
+			Deletions: &[]model.StackValue{
 				{
 					Type: uint64(basics.TealUintType),
-					Uint: 0,
 				},
 				{
 					Type: uint64(basics.TealUintType),
-					Uint: 0,
 				},
 			},
-			Additions: &[]model.TealValue{
+			Additions: &[]model.StackValue{
 				{
 					Type: uint64(basics.TealUintType),
-					Uint: 1,
+					Uint: toPtr[uint64](1),
 				},
 			},
 		},
 		// bnz main_l6
 		{
 			Pc:               10,
-			DisassembledLine: constToPtr[string]("bnz 149"),
-			Deletions: &[]model.TealValue{
+			DisassembledLine: toPtr[string]("bnz 149"),
+			Deletions: &[]model.StackValue{
 				{
 					Type: uint64(basics.TealUintType),
-					Uint: 1,
+					Uint: toPtr[uint64](1),
 				},
 			},
 		},
 		// int 1
 		{
 			Pc:               149,
-			DisassembledLine: constToPtr[string]("intc_1 // 1"),
-			Additions: &[]model.TealValue{
+			DisassembledLine: toPtr[string]("intc_1 // 1"),
+			Additions: &[]model.StackValue{
 				{
 					Type: uint64(basics.TealUintType),
-					Uint: 1,
+					Uint: toPtr[uint64](1),
 				},
 			},
 		},
 		// return
 		{
 			Pc:               150,
-			DisassembledLine: constToPtr[string]("return"),
-			Additions: &[]model.TealValue{
+			DisassembledLine: toPtr[string]("return"),
+			Additions: &[]model.StackValue{
 				{
 					Type: uint64(basics.TealUintType),
-					Uint: 1,
+					Uint: toPtr[uint64](1),
 				},
 			},
-			Deletions: &[]model.TealValue{
+			Deletions: &[]model.StackValue{
 				{
 					Type: uint64(basics.TealUintType),
-					Uint: 1,
+					Uint: toPtr[uint64](1),
 				},
 			},
 		},
@@ -2286,1009 +2286,999 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		return &[]model.SimulationOpcodeTraceUnit{
 			{
 				Pc:               1,
-				DisassembledLine: constToPtr[string]("intcblock 0 1 6"),
+				DisassembledLine: toPtr[string]("intcblock 0 1 6"),
 			},
 			// txn ApplicationID
 			{
 				Pc:               6,
-				DisassembledLine: constToPtr[string]("txn ApplicationID"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("txn ApplicationID"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: valToNil(toPtr(uint64(appID))),
 					},
 				},
 			},
 			// int 0
 			{
 				Pc:               8,
-				DisassembledLine: constToPtr[string]("intc_0 // 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_0 // 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// ==
 			{
 				Pc:               9,
-				DisassembledLine: constToPtr[string]("=="),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("=="),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: valToNil(toPtr(uint64(appID))),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
-				Additions: &[]model.TealValue{
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(appID == 0),
+						Uint: valToNil(toPtr(boolToUint64(appID == 0))),
 					},
 				},
 			},
 			// bnz main_l6
 			{
 				Pc:               10,
-				DisassembledLine: constToPtr[string]("bnz 149"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("bnz 149"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(appID == 0),
+						Uint: valToNil(toPtr(boolToUint64(appID == 0))),
 					},
 				},
 			},
 			// txn NumAppArgs
 			{
 				Pc:               13,
-				DisassembledLine: constToPtr[string]("txn NumAppArgs"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("txn NumAppArgs"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: NumArgs,
+						Uint: toPtr[uint64](NumArgs),
 					},
 				},
 			},
 			// int 1
 			{
 				Pc:               15,
-				DisassembledLine: constToPtr[string]("intc_1 // 1"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_1 // 1"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// ==
 			{
 				Pc:               16,
-				DisassembledLine: constToPtr[string]("=="),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("=="),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: NumArgs,
+						Uint: toPtr[uint64](NumArgs),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Additions: &[]model.TealValue{
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(NumArgs == 1),
+						Uint: toPtr(boolToUint64(NumArgs == 1)),
 					},
 				},
 			},
 			// bnz main_l3
 			{
 				Pc:               17,
-				DisassembledLine: constToPtr[string]("bnz 21"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("bnz 21"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(NumArgs == 1),
+						Uint: toPtr(boolToUint64(NumArgs == 1)),
 					},
 				},
 			},
 			// global CurrentApplicationID
 			{
 				Pc:               21,
-				DisassembledLine: constToPtr[string]("global CurrentApplicationID"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("global CurrentApplicationID"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: valToNil(toPtr(uint64(appID))),
 					},
 				},
 			},
 			// app_params_get AppApprovalProgram
 			{
 				Pc:               23,
-				DisassembledLine: constToPtr[string]("app_params_get AppApprovalProgram"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("app_params_get AppApprovalProgram"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(approval),
+						Bytes: &approval,
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: valToNil(toPtr(uint64(appID))),
 					},
 				},
 			},
 			// store 1
 			{
 				Pc:               25,
-				DisassembledLine: constToPtr[string]("store 1"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 1"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// store 0
 			{
 				Pc:               27,
-				DisassembledLine: constToPtr[string]("store 0"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 0"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(approval),
+						Bytes: &approval,
 					},
 				},
 			},
 			// global CurrentApplicationID
 			{
 				Pc:               29,
-				DisassembledLine: constToPtr[string]("global CurrentApplicationID"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("global CurrentApplicationID"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: toPtr(uint64(appID)),
 					},
 				},
 			},
 			// app_params_get AppClearStateProgram
 			{
 				Pc:               31,
-				DisassembledLine: constToPtr[string]("app_params_get AppClearStateProgram"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("app_params_get AppClearStateProgram"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(clearState),
+						Bytes: &clearState,
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: toPtr(uint64(appID)),
 					},
 				},
 			},
 			// store 3
 			{
 				Pc:               33,
-				DisassembledLine: constToPtr[string]("store 3"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 3"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// store 2
 			{
 				Pc:               35,
-				DisassembledLine: constToPtr[string]("store 2"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 2"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(clearState),
+						Bytes: &clearState,
 					},
 				},
 			},
 			// global CurrentApplicationAddress
 			{
 				Pc:               37,
-				DisassembledLine: constToPtr[string]("global CurrentApplicationAddress"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("global CurrentApplicationAddress"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(appID.Address()).ToSlice()),
+						Bytes: toPtr(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
 			},
 			// acct_params_get AcctBalance
 			{
 				Pc:               39,
-				DisassembledLine: constToPtr[string]("acct_params_get AcctBalance"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("acct_params_get AcctBalance"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(3-layer) * MinBalance,
+						Uint: toPtr(uint64(3-layer) * MinBalance),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(appID.Address()).ToSlice()),
+						Bytes: toPtr(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
 			},
 			// store 5
 			{
 				Pc:               41,
-				DisassembledLine: constToPtr[string]("store 5"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 5"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// store 4
 			{
 				Pc:               43,
-				DisassembledLine: constToPtr[string]("store 4"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 4"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(3-layer) * MinBalance,
+						Uint: toPtr(uint64(3-layer) * MinBalance),
 					},
 				},
 			},
 			// load 1
 			{
 				Pc:               45,
-				DisassembledLine: constToPtr[string]("load 1"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("load 1"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// assert
 			{
 				Pc:               47,
-				DisassembledLine: constToPtr[string]("assert"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("assert"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// load 3
 			{
 				Pc:               48,
-				DisassembledLine: constToPtr[string]("load 3"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("load 3"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// assert
 			{
 				Pc:               50,
-				DisassembledLine: constToPtr[string]("assert"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("assert"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// load 5
 			{
 				Pc:               51,
-				DisassembledLine: constToPtr[string]("load 5"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("load 5"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// assert
 			{
 				Pc:               53,
-				DisassembledLine: constToPtr[string]("assert"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("assert"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// int 2
 			{
 				Pc:               54,
-				DisassembledLine: constToPtr[string]("pushint 2"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("pushint 2"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 2,
+						Uint: toPtr(uint64(2)),
 					},
 				},
 			},
 			// txna ApplicationArgs 0
 			{
 				Pc:               56,
-				DisassembledLine: constToPtr[string]("txna ApplicationArgs 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("txna ApplicationArgs 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// btoi
 			{
 				Pc:               59,
-				DisassembledLine: constToPtr[string]("btoi"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("btoi"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
+						Uint: toPtr(uint64(MaxDepth - layer)),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// exp
 			{
 				Pc:               60,
-				DisassembledLine: constToPtr[string]("exp"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("exp"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1 << uint64(MaxDepth-layer),
+						Uint: toPtr[uint64](1 << uint64(MaxDepth-layer)),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 2,
+						Uint: toPtr(uint64(2)),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
+						Uint: toPtr(uint64(MaxDepth - layer)),
 					},
 				},
 			},
 			// itob
 			{
 				Pc:               61,
-				DisassembledLine: constToPtr[string]("itob"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itob"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+						Bytes: toPtr(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1 << uint64(MaxDepth-layer),
+						Uint: toPtr[uint64](1 << uint64(MaxDepth-layer)),
 					},
 				},
 			},
 			// log
 			{
 				Pc:               62,
-				DisassembledLine: constToPtr[string]("log"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("log"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+						Bytes: toPtr(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
 			},
 			// txna ApplicationArgs 0
 			{
 				Pc:               63,
-				DisassembledLine: constToPtr[string]("txna ApplicationArgs 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("txna ApplicationArgs 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// btoi
 			{
 				Pc:               66,
-				DisassembledLine: constToPtr[string]("btoi"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("btoi"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
+						Uint: toPtr(uint64(MaxDepth - layer)),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// int 0
 			{
 				Pc:               67,
-				DisassembledLine: constToPtr[string]("intc_0 // 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_0 // 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// >
 			{
 				Pc:               68,
-				DisassembledLine: constToPtr[string](">"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string](">"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(MaxDepth-layer > 0),
+						Uint: toPtr(boolToUint64(MaxDepth-layer > 0)),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
+						Uint: toPtr(uint64(MaxDepth - layer)),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// bnz main_l5
 			{
 				Pc:               69,
-				DisassembledLine: constToPtr[string]("bnz 74"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("bnz 74"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(MaxDepth-layer > 0),
+						Uint: toPtr(boolToUint64(MaxDepth-layer > 0)),
 					},
 				},
 			},
 			// itxn_begin
 			{
 				Pc:               74,
-				DisassembledLine: constToPtr[string]("itxn_begin"),
+				DisassembledLine: toPtr[string]("itxn_begin"),
 			},
 			// int appl
 			{
 				Pc:               75,
-				DisassembledLine: constToPtr[string]("intc_2 // 6"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_2 // 6"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 6,
+						Uint: toPtr[uint64](6),
 					},
 				},
 			},
 			// itxn_field TypeEnum
 			{
 				Pc:               76,
-				DisassembledLine: constToPtr[string]("itxn_field TypeEnum"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field TypeEnum"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 6,
+						Uint: toPtr[uint64](6),
 					},
 				},
 			},
 			// int 0
 			{
 				Pc:               78,
-				DisassembledLine: constToPtr[string]("intc_0 // 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_0 // 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// itxn_field Fee
 			{
 				Pc:               79,
-				DisassembledLine: constToPtr[string]("itxn_field Fee"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field Fee"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// load 0
 			{
 				Pc:               81,
-				DisassembledLine: constToPtr[string]("load 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("load 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(approval),
+						Bytes: &approval,
 					},
 				},
 			},
 			// itxn_field ApprovalProgram
 			{
 				Pc:               83,
-				DisassembledLine: constToPtr[string]("itxn_field ApprovalProgram"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field ApprovalProgram"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(approval),
+						Bytes: &approval,
 					},
 				},
 			},
 			// load 2
 			{
 				Pc:               85,
-				DisassembledLine: constToPtr[string]("load 2"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("load 2"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(clearState),
+						Bytes: &clearState,
 					},
 				},
 			},
 			// itxn_field ClearStateProgram
 			{
 				Pc:               87,
-				DisassembledLine: constToPtr[string]("itxn_field ClearStateProgram"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field ClearStateProgram"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(clearState),
+						Bytes: &clearState,
 					},
 				},
 			},
 			// itxn_submit
 			{
 				Pc:               89,
-				DisassembledLine: constToPtr[string]("itxn_submit"),
+				DisassembledLine: toPtr[string]("itxn_submit"),
 				SpawnedInners:    &[]uint64{0},
 			},
 			// itxn_begin
 			{
 				Pc:               90,
-				DisassembledLine: constToPtr[string]("itxn_begin"),
+				DisassembledLine: toPtr[string]("itxn_begin"),
 			},
 			// int pay
 			{
 				Pc:               91,
-				DisassembledLine: constToPtr[string]("intc_1 // 1"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_1 // 1"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// itxn_field TypeEnum
 			{
 				Pc:               92,
-				DisassembledLine: constToPtr[string]("itxn_field TypeEnum"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field TypeEnum"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// int 0
 			{
 				Pc:               94,
-				DisassembledLine: constToPtr[string]("intc_0 // 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_0 // 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// itxn_field Fee
 			{
 				Pc:               95,
-				DisassembledLine: constToPtr[string]("itxn_field Fee"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field Fee"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// load 4
 			{
 				Pc:               97,
-				DisassembledLine: constToPtr[string]("load 4"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("load 4"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(3-layer) * MinBalance,
+						Uint: toPtr(uint64(3-layer) * MinBalance),
 					},
 				},
 			},
 			// int 100000
 			{
 				Pc:               99,
-				DisassembledLine: constToPtr[string]("pushint 100000"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("pushint 100000"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: MinBalance,
+						Uint: toPtr(MinBalance),
 					},
 				},
 			},
 			// -
 			{
 				Pc:               103,
-				DisassembledLine: constToPtr[string]("-"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("-"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(3-layer) * MinBalance,
+						Uint: toPtr(uint64(3-layer) * MinBalance),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: MinBalance,
+						Uint: toPtr(MinBalance),
 					},
 				},
-				Additions: &[]model.TealValue{
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(2-layer) * MinBalance,
+						Uint: toPtr(uint64(2-layer) * MinBalance),
 					},
 				},
 			},
 			// itxn_field Amount
 			{
 				Pc:               104,
-				DisassembledLine: constToPtr[string]("itxn_field Amount"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field Amount"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(2-layer) * MinBalance,
+						Uint: toPtr(uint64(2-layer) * MinBalance),
 					},
 				},
 			},
 			// byte "appID"
 			{
 				Pc:               106,
-				DisassembledLine: constToPtr[string](`pushbytes 0x6170704944 // "appID"`),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string](`pushbytes 0x6170704944 // "appID"`),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString([]byte("appID")),
+						Bytes: toPtr([]byte("appID")),
 					},
 				},
 			},
 			// gitxn 0 CreatedApplicationID
 			{
 				Pc:               113,
-				DisassembledLine: constToPtr[string]("gitxn 0 CreatedApplicationID"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("gitxn 0 CreatedApplicationID"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID) + 3,
+						Uint: toPtr(uint64(appID) + 3),
 					},
 				},
 			},
 			// itob
 			{
 				Pc:               116,
-				DisassembledLine: constToPtr[string]("itob"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itob"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(appID) + 3)),
+						Bytes: toPtr(uint64ToBytes(uint64(appID) + 3)),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID) + 3,
+						Uint: toPtr(uint64(appID) + 3),
 					},
 				},
 			},
 			// concat
 			{
 				Pc:               117,
-				DisassembledLine: constToPtr[string]("concat"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("concat"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
+						Bytes: toPtr([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString([]byte("appID")),
+						Bytes: toPtr([]byte("appID")),
 					},
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(appID) + 3)),
+						Bytes: toPtr(uint64ToBytes(uint64(appID) + 3)),
 					},
 				},
 			},
 			// sha512_256
 			{
 				Pc:               118,
-				DisassembledLine: constToPtr[string]("sha512_256"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("sha512_256"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
+						Bytes: toPtr(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
+						Bytes: toPtr([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
 					},
 				},
 			},
 			// itxn_field Receiver
 			{
 				Pc:               119,
-				DisassembledLine: constToPtr[string]("itxn_field Receiver"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field Receiver"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
+						Bytes: toPtr(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
 					},
 				},
 			},
 			{
 				Pc:               121,
-				DisassembledLine: constToPtr[string]("itxn_next"),
+				DisassembledLine: toPtr[string]("itxn_next"),
 			},
 			// int appl
 			{
 				Pc:               122,
-				DisassembledLine: constToPtr[string]("intc_2 // 6"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_2 // 6"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 6,
+						Uint: toPtr[uint64](6),
 					},
 				},
 			},
 			// itxn_field TypeEnum
 			{
 				Pc:               123,
-				DisassembledLine: constToPtr[string]("itxn_field TypeEnum"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field TypeEnum"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 6,
+						Uint: toPtr[uint64](6),
 					},
 				},
 			},
 			// txna ApplicationArgs 0
 			{
 				Pc:               125,
-				DisassembledLine: constToPtr[string]("txna ApplicationArgs 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("txna ApplicationArgs 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// btoi
 			{
 				Pc:               128,
-				DisassembledLine: constToPtr[string]("btoi"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("btoi"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
+						Uint: toPtr(uint64(MaxDepth - layer)),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// int 1
 			{
 				Pc:               129,
-				DisassembledLine: constToPtr[string]("intc_1 // 1"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_1 // 1"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// -
 			{
 				Pc:               130,
-				DisassembledLine: constToPtr[string]("-"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("-"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer - 1),
+						Uint: valToNil(toPtr(uint64(MaxDepth - layer - 1))),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
+						Uint: toPtr(uint64(MaxDepth - layer)),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// itob
 			{
 				Pc:               131,
-				DisassembledLine: constToPtr[string]("itob"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itob"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer - 1))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer - 1))),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer - 1),
+						Uint: valToNil(toPtr(uint64(MaxDepth - layer - 1))),
 					},
 				},
 			},
 			// itxn_field ApplicationArgs
 			{
 				Pc:               132,
-				DisassembledLine: constToPtr[string]("itxn_field ApplicationArgs"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field ApplicationArgs"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer - 1))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer - 1))),
 					},
 				},
 			},
 			// itxn CreatedApplicationID
 			{
 				Pc:               134,
-				DisassembledLine: constToPtr[string]("itxn CreatedApplicationID"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn CreatedApplicationID"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID) + 3,
+						Uint: toPtr(uint64(appID) + 3),
 					},
 				},
 			},
 			// itxn_field ApplicationID
 			{
 				Pc:               136,
-				DisassembledLine: constToPtr[string]("itxn_field ApplicationID"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field ApplicationID"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID) + 3,
+						Uint: toPtr(uint64(appID) + 3),
 					},
 				},
 			},
 			// int 0
 			{
 				Pc:               138,
-				DisassembledLine: constToPtr[string]("intc_0 // 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_0 // 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// itxn_field Fee
 			{
 				Pc:               139,
-				DisassembledLine: constToPtr[string]("itxn_field Fee"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field Fee"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// int DeleteApplication
 			{
 				Pc:               141,
-				DisassembledLine: constToPtr[string]("pushint 5"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("pushint 5"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 5,
+						Uint: toPtr[uint64](5),
 					},
 				},
 			},
 			// itxn_field OnCompletion
 			{
 				Pc:               143,
-				DisassembledLine: constToPtr[string]("itxn_field OnCompletion"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itxn_field OnCompletion"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 5,
+						Uint: toPtr[uint64](5),
 					},
 				},
 			},
 			// itxn_submit
 			{
 				Pc:               145,
-				DisassembledLine: constToPtr[string]("itxn_submit"),
+				DisassembledLine: toPtr[string]("itxn_submit"),
 				SpawnedInners:    &[]uint64{1, 2},
 			},
 			// b main_l4
 			{
 				Pc:               146,
-				DisassembledLine: constToPtr[string]("b 72"),
+				DisassembledLine: toPtr[string]("b 72"),
 			},
 			// int 1
 			{
 				Pc:               72,
-				DisassembledLine: constToPtr[string]("intc_1 // 1"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_1 // 1"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// return
 			{
 				Pc:               73,
-				DisassembledLine: constToPtr[string]("return"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("return"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
@@ -3299,528 +3289,518 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		return &[]model.SimulationOpcodeTraceUnit{
 			{
 				Pc:               1,
-				DisassembledLine: constToPtr[string]("intcblock 0 1 6"),
+				DisassembledLine: toPtr[string]("intcblock 0 1 6"),
 			},
 			// txn ApplicationID
 			{
 				Pc:               6,
-				DisassembledLine: constToPtr[string]("txn ApplicationID"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("txn ApplicationID"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: toPtr(uint64(appID)),
 					},
 				},
 			},
 			// int 0
 			{
 				Pc:               8,
-				DisassembledLine: constToPtr[string]("intc_0 // 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_0 // 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// ==
 			{
 				Pc:               9,
-				DisassembledLine: constToPtr[string]("=="),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("=="),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: toPtr(uint64(appID)),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
-				Additions: &[]model.TealValue{
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(appID == 0),
+						Uint: valToNil(toPtr(boolToUint64(appID == 0))),
 					},
 				},
 			},
 			// bnz main_l6
 			{
 				Pc:               10,
-				DisassembledLine: constToPtr[string]("bnz 149"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("bnz 149"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(appID == 0),
+						Uint: valToNil(toPtr(boolToUint64(appID == 0))),
 					},
 				},
 			},
 			// txn NumAppArgs
 			{
 				Pc:               13,
-				DisassembledLine: constToPtr[string]("txn NumAppArgs"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("txn NumAppArgs"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: NumArgs,
+						Uint: toPtr(uint64(NumArgs)),
 					},
 				},
 			},
 			// int 1
 			{
 				Pc:               15,
-				DisassembledLine: constToPtr[string]("intc_1 // 1"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_1 // 1"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// ==
 			{
 				Pc:               16,
-				DisassembledLine: constToPtr[string]("=="),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("=="),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: NumArgs,
+						Uint: toPtr(uint64(NumArgs)),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Additions: &[]model.TealValue{
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(NumArgs == 1),
+						Uint: toPtr(boolToUint64(NumArgs == 1)),
 					},
 				},
 			},
 			// bnz main_l3
 			{
 				Pc:               17,
-				DisassembledLine: constToPtr[string]("bnz 21"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("bnz 21"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(NumArgs == 1),
+						Uint: toPtr(boolToUint64(NumArgs == 1)),
 					},
 				},
 			},
 			// global CurrentApplicationID
 			{
 				Pc:               21,
-				DisassembledLine: constToPtr[string]("global CurrentApplicationID"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("global CurrentApplicationID"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: toPtr(uint64(appID)),
 					},
 				},
 			},
 			// app_params_get AppApprovalProgram
 			{
 				Pc:               23,
-				DisassembledLine: constToPtr[string]("app_params_get AppApprovalProgram"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("app_params_get AppApprovalProgram"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(approval),
+						Bytes: &approval,
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: toPtr(uint64(appID)),
 					},
 				},
 			},
 			// store 1
 			{
 				Pc:               25,
-				DisassembledLine: constToPtr[string]("store 1"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 1"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// store 0
 			{
 				Pc:               27,
-				DisassembledLine: constToPtr[string]("store 0"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 0"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(approval),
+						Bytes: &approval,
 					},
 				},
 			},
 			// global CurrentApplicationID
 			{
 				Pc:               29,
-				DisassembledLine: constToPtr[string]("global CurrentApplicationID"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("global CurrentApplicationID"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: toPtr(uint64(appID)),
 					},
 				},
 			},
 			// app_params_get AppClearStateProgram
 			{
 				Pc:               31,
-				DisassembledLine: constToPtr[string]("app_params_get AppClearStateProgram"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("app_params_get AppClearStateProgram"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(clearState),
+						Bytes: &clearState,
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(appID),
+						Uint: toPtr(uint64(appID)),
 					},
 				},
 			},
 			// store 3
 			{
 				Pc:               33,
-				DisassembledLine: constToPtr[string]("store 3"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 3"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// store 2
 			{
 				Pc:               35,
-				DisassembledLine: constToPtr[string]("store 2"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 2"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(clearState),
+						Bytes: &clearState,
 					},
 				},
 			},
 			// global CurrentApplicationAddress
 			{
 				Pc:               37,
-				DisassembledLine: constToPtr[string]("global CurrentApplicationAddress"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("global CurrentApplicationAddress"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(appID.Address()).ToSlice()),
+						Bytes: toPtr(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
 			},
 			// acct_params_get AcctBalance
 			{
 				Pc:               39,
-				DisassembledLine: constToPtr[string]("acct_params_get AcctBalance"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("acct_params_get AcctBalance"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(3-layer) * MinBalance,
+						Uint: toPtr(uint64(3-layer) * MinBalance),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(crypto.Digest(appID.Address()).ToSlice()),
+						Bytes: toPtr(crypto.Digest(appID.Address()).ToSlice()),
 					},
 				},
 			},
 			// store 5
 			{
 				Pc:               41,
-				DisassembledLine: constToPtr[string]("store 5"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 5"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// store 4
 			{
 				Pc:               43,
-				DisassembledLine: constToPtr[string]("store 4"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("store 4"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(3-layer) * MinBalance,
+						Uint: toPtr(uint64(3-layer) * MinBalance),
 					},
 				},
 			},
 			// load 1
 			{
 				Pc:               45,
-				DisassembledLine: constToPtr[string]("load 1"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("load 1"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// assert
 			{
 				Pc:               47,
-				DisassembledLine: constToPtr[string]("assert"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("assert"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// load 3
 			{
 				Pc:               48,
-				DisassembledLine: constToPtr[string]("load 3"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("load 3"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// assert
 			{
 				Pc:               50,
-				DisassembledLine: constToPtr[string]("assert"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("assert"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// load 5
 			{
 				Pc:               51,
-				DisassembledLine: constToPtr[string]("load 5"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("load 5"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// assert
 			{
 				Pc:               53,
-				DisassembledLine: constToPtr[string]("assert"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("assert"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// int 2
 			{
 				Pc:               54,
-				DisassembledLine: constToPtr[string]("pushint 2"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("pushint 2"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 2,
+						Uint: toPtr[uint64](2),
 					},
 				},
 			},
 			// txna ApplicationArgs 0
 			{
 				Pc:               56,
-				DisassembledLine: constToPtr[string]("txna ApplicationArgs 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("txna ApplicationArgs 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// btoi
 			{
 				Pc:               59,
-				DisassembledLine: constToPtr[string]("btoi"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("btoi"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// exp
 			{
 				Pc:               60,
-				DisassembledLine: constToPtr[string]("exp"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("exp"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1 << uint64(MaxDepth-layer),
+						Uint: toPtr[uint64](1 << uint64(MaxDepth-layer)),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 2,
+						Uint: toPtr(uint64(2)),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
 					},
 				},
 			},
 			// itob
 			{
 				Pc:               61,
-				DisassembledLine: constToPtr[string]("itob"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("itob"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+						Bytes: toPtr(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1 << uint64(MaxDepth-layer),
+						Uint: toPtr[uint64](1 << uint64(MaxDepth-layer)),
 					},
 				},
 			},
 			// log
 			{
 				Pc:               62,
-				DisassembledLine: constToPtr[string]("log"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("log"),
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+						Bytes: toPtr(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 					},
 				},
 			},
 			// txna ApplicationArgs 0
 			{
 				Pc:               63,
-				DisassembledLine: constToPtr[string]("txna ApplicationArgs 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("txna ApplicationArgs 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// btoi
 			{
 				Pc:               66,
-				DisassembledLine: constToPtr[string]("btoi"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("btoi"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type:  uint64(basics.TealBytesType),
-						Bytes: base64.StdEncoding.EncodeToString(uint64ToBytes(uint64(MaxDepth - layer))),
+						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
 					},
 				},
 			},
 			// int 0
 			{
 				Pc:               67,
-				DisassembledLine: constToPtr[string]("intc_0 // 0"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_0 // 0"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// >
 			{
 				Pc:               68,
-				DisassembledLine: constToPtr[string](">"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string](">"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(MaxDepth-layer > 0),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: uint64(MaxDepth - layer),
 					},
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 0,
 					},
 				},
 			},
 			// bnz main_l5
 			{
 				Pc:               69,
-				DisassembledLine: constToPtr[string]("bnz 74"),
-				Deletions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("bnz 74"),
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: boolToUint64(MaxDepth-layer > 0),
 					},
 				},
 			},
 			// int 1
 			{
 				Pc:               72,
-				DisassembledLine: constToPtr[string]("intc_1 // 1"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("intc_1 // 1"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},
 			// return
 			{
 				Pc:               73,
-				DisassembledLine: constToPtr[string]("return"),
-				Additions: &[]model.TealValue{
+				DisassembledLine: toPtr[string]("return"),
+				Additions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
-				Deletions: &[]model.TealValue{
+				Deletions: &[]model.StackValue{
 					{
 						Type: uint64(basics.TealUintType),
-						Uint: 1,
+						Uint: toPtr[uint64](1),
 					},
 				},
 			},

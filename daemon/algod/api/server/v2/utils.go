@@ -360,16 +360,19 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.TealValue {
+func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.StackValue {
 	if len(tvs) == 0 {
 		return nil
 	}
-	modelTvs := make([]model.TealValue, len(tvs))
+	modelTvs := make([]model.StackValue, len(tvs))
 	for i := range tvs {
-		modelTvs[i] = model.TealValue{
-			Type:  uint64(tvs[i].Type),
-			Uint:  tvs[i].Uint,
-			Bytes: base64.StdEncoding.EncodeToString([]byte(tvs[i].Bytes)),
+		modelTvs[i] = model.StackValue{
+			Type: uint64(tvs[i].Type),
+		}
+		if tvs[i].Type == basics.TealUintType {
+			modelTvs[i].Uint = &tvs[i].Uint
+		} else {
+			modelTvs[i].Bytes = byteOrNil([]byte(tvs[i].Bytes))
 		}
 	}
 	return &modelTvs

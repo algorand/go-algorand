@@ -714,10 +714,10 @@ type SimulationEvalOverrides struct {
 // SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
 type SimulationOpcodeTraceUnit struct {
 	// Additions The values added by this opcode to the stack.
-	Additions *[]TealValue `json:"additions,omitempty"`
+	Additions *[]StackValue `json:"additions,omitempty"`
 
 	// Deletions The values deleted by this opcode from the stack.
-	Deletions *[]TealValue `json:"deletions,omitempty"`
+	Deletions *[]StackValue `json:"deletions,omitempty"`
 
 	// DisassembledLine The line disassembled from program byte code.
 	DisassembledLine *string `json:"disassembled-line,omitempty"`
@@ -742,6 +742,18 @@ type SimulationTransactionExecTrace struct {
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
+}
+
+// StackValue Represents a TEAL value over the stack.
+type StackValue struct {
+	// Bytes \[tb\] bytes value.
+	Bytes *[]byte `json:"bytes,omitempty"`
+
+	// Type \[tt\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**
+	Type uint64 `json:"type"`
+
+	// Uint \[ui\] uint value.
+	Uint *uint64 `json:"uint,omitempty"`
 }
 
 // StateDelta Application state delta.
