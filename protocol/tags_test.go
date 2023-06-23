@@ -30,7 +30,7 @@ import (
 
 // getConstValues uses the AST to get a list of the values of declared const
 // variables of the provided typeName in a specified fileName.
-// if returnNames is true, it returns the names of the const variables instead.
+// if namesOnly is true, it returns the names of the const variables instead.
 func getConstValues(t *testing.T, fileName string, typeName string, namesOnly bool) []string {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, fileName, nil, 0)
@@ -57,7 +57,7 @@ func getConstValues(t *testing.T, fileName string, typeName string, namesOnly bo
 				continue
 			}
 
-			if returnNames {
+			if namesOnly {
 				ret = append(ret, v.Names[0].Name)
 				continue
 			}
