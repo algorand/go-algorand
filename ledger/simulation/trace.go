@@ -186,9 +186,6 @@ type OpcodeTraceUnit struct {
 	// this OpcodeTraceUnit.
 	SpawnedInners []int
 
-	// the line disassembled from program byte code
-	DisassembledLine string
-
 	// what has been added to stack
 	Added []basics.TealValue
 

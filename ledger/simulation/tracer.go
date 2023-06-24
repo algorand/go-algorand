@@ -294,7 +294,6 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		if tracer.result.ReturnStackChange() {
 			latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 			latestOpcodeTraceUnit.appendDeletedStackValue(cx, tracer)
-			latestOpcodeTraceUnit.DisassembledLine, _ = cx.DisassembleLine()
 		}
 	}
 }

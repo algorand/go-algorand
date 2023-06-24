@@ -3898,10 +3898,6 @@
             "type": "integer"
           }
         },
-        "disassembled-line": {
-          "description": "The line disassembled from program byte code.",
-          "type": "string"
-        },
         "deletions": {
           "description": "The values deleted by this opcode from the stack.",
           "type": "array",
