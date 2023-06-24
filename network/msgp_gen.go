@@ -4,6 +4,8 @@ package network
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
 )
 
 // The following msgp objects are implemented in this file:
@@ -14,6 +16,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> Msgsize
 //         |-----> MsgIsZero
+//         |-----> DisconnectReasonMaxSize()
 //
 // identityChallenge
 //         |-----> (*) MarshalMsg
@@ -22,6 +25,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> IdentityChallengeMaxSize()
 //
 // identityChallengeResponse
 //             |-----> (*) MarshalMsg
@@ -30,6 +34,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> IdentityChallengeResponseMaxSize()
 //
 // identityChallengeResponseSigned
 //                |-----> (*) MarshalMsg
@@ -38,6 +43,7 @@ import (
 //                |-----> (*) CanUnmarshalMsg
 //                |-----> (*) Msgsize
 //                |-----> (*) MsgIsZero
+//                |-----> IdentityChallengeResponseSignedMaxSize()
 //
 // identityChallengeSigned
 //            |-----> (*) MarshalMsg
@@ -46,6 +52,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> IdentityChallengeSignedMaxSize()
 //
 // identityChallengeValue
 //            |-----> (*) MarshalMsg
@@ -54,6 +61,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> IdentityChallengeValueMaxSize()
 //
 // identityVerificationMessage
 //              |-----> (*) MarshalMsg
@@ -62,6 +70,7 @@ import (
 //              |-----> (*) CanUnmarshalMsg
 //              |-----> (*) Msgsize
 //              |-----> (*) MsgIsZero
+//              |-----> IdentityVerificationMessageMaxSize()
 //
 // identityVerificationMessageSigned
 //                 |-----> (*) MarshalMsg
@@ -70,6 +79,7 @@ import (
 //                 |-----> (*) CanUnmarshalMsg
 //                 |-----> (*) Msgsize
 //                 |-----> (*) MsgIsZero
+//                 |-----> IdentityVerificationMessageSignedMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -116,6 +126,12 @@ func (z disconnectReason) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z disconnectReason) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func DisconnectReasonMaxSize() (s int) {
+	panic("Unable to determine max size: String type string(z) is unbounded")
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -290,6 +306,15 @@ func (z *identityChallenge) MsgIsZero() bool {
 	return ((*z).Key.MsgIsZero()) && ((*z).Challenge == (identityChallengeValue{})) && (len((*z).PublicAddress) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func IdentityChallengeMaxSize() (s int) {
+	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2
+	// Calculating size of array: z.Challenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 2 + msgp.BytesPrefixSize + maxAddressLen
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *identityChallengeResponse) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -442,6 +467,17 @@ func (z *identityChallengeResponse) MsgIsZero() bool {
 	return ((*z).Key.MsgIsZero()) && ((*z).Challenge == (identityChallengeValue{})) && ((*z).ResponseChallenge == (identityChallengeValue{}))
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func IdentityChallengeResponseMaxSize() (s int) {
+	s = 1 + 3 + crypto.PublicKeyMaxSize() + 2
+	// Calculating size of array: z.Challenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.ResponseChallenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *identityChallengeResponseSigned) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -569,6 +605,12 @@ func (z *identityChallengeResponseSigned) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *identityChallengeResponseSigned) MsgIsZero() bool {
 	return ((*z).Msg.MsgIsZero()) && ((*z).Signature.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func IdentityChallengeResponseSignedMaxSize() (s int) {
+	s = 1 + 4 + IdentityChallengeResponseMaxSize() + 4 + crypto.SignatureMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -700,6 +742,12 @@ func (z *identityChallengeSigned) MsgIsZero() bool {
 	return ((*z).Msg.MsgIsZero()) && ((*z).Signature.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func IdentityChallengeSignedMaxSize() (s int) {
+	s = 1 + 3 + IdentityChallengeMaxSize() + 4 + crypto.SignatureMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *identityChallengeValue) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -737,6 +785,13 @@ func (z *identityChallengeValue) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *identityChallengeValue) MsgIsZero() bool {
 	return (*z) == (identityChallengeValue{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func IdentityChallengeValueMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -843,6 +898,14 @@ func (z *identityVerificationMessage) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *identityVerificationMessage) MsgIsZero() bool {
 	return ((*z).ResponseChallenge == (identityChallengeValue{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func IdentityVerificationMessageMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.ResponseChallenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1085,4 +1148,13 @@ func (z *identityVerificationMessageSigned) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *identityVerificationMessageSigned) MsgIsZero() bool {
 	return ((*z).Msg.ResponseChallenge == (identityChallengeValue{})) && ((*z).Signature.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func IdentityVerificationMessageSignedMaxSize() (s int) {
+	s = 1 + 4 + 1 + 3
+	// Calculating size of array: z.Msg.ResponseChallenge
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 4 + crypto.SignatureMaxSize()
+	return
 }

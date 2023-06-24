@@ -61,7 +61,7 @@ const maxStringSize = 4096
 const maxByteMathSize = 64
 
 // maxLogSize is the limit of total log size from n log calls in a program
-const maxLogSize = 1024
+const maxLogSize = config.MaxEvalDeltaTotalLogSize
 
 // maxLogCalls is the limit of total log calls during a program execution
 const maxLogCalls = 32

@@ -29,7 +29,7 @@ func TestHashIDPrefix(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
 
-	values := getConstValues(t, "hash.go", "HashID")
+	values := getConstValues(t, "hash.go", "HashID", false)
 	for i, v1 := range values {
 		for j, v2 := range values {
 			if i == j {

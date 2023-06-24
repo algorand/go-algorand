@@ -42,7 +42,9 @@ type EvalDelta struct {
 	// can refer to it.
 	SharedAccts []basics.Address `codec:"sa,allocbound=config.MaxEvalDeltaAccounts"`
 
-	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
+	// The total allocbound calculation here accounts for the worse possible case of having config.MaxLogCalls individual log entries
+	// with the legnth of all of them summing up to config.MaxEvalDeltaTotalLogSize which is the limit for the sum of individual log lengths
+	Logs []string `codec:"lg,allocbound=config.MaxLogCalls,maxtotalbytes=(config.MaxLogCalls*msgp.StringPrefixSize) + config.MaxEvalDeltaTotalLogSize"`
 
 	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactionsPerDelta"`
 }

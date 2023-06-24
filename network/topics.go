@@ -112,7 +112,7 @@ func UnmarshallTopics(buffer []byte) (ts Topics, err error) {
 
 		// read the data length
 		dataLen, nr := binary.Uvarint(buffer[idx:])
-		if nr <= 0 || dataLen > maxMessageLength {
+		if nr <= 0 || dataLen > MaxMessageLength {
 			return nil, fmt.Errorf("UnmarshallTopics: could not read the data length")
 		}
 		idx += nr
