@@ -2103,9 +2103,9 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	c := e.NewContext(req, rec)
 	// Add blocks to tracer
 	tracer.BeforeBlock(&blk1)
-	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil, nil)
 	tracer.BeforeBlock(&blk2)
-	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil, nil)
 
 	// Test /v2/deltas/{round}/txn/group
 	jsonFormatForRound := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson

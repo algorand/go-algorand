@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
+	"github.com/mohae/deepcopy"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
@@ -117,7 +118,7 @@ func (tracer *TxnGroupDeltaTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
 }
 
 // AfterTxnGroup implements the EvalTracer interface for txn group boundaries
-func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
+func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, evalError error) {
 	if deltas == nil {
 		return
 	}
@@ -170,4 +171,40 @@ func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (StateDeltaSu
 		}
 	}
 	return StateDeltaSubset{}, fmt.Errorf("unable to find delta for id: %s", id)
+}
+
+// ApplyDataTracer implements the data.transactions.logic.EvalTracer interface
+// by collecting the apply data during AfterTxnGroup
+// but is a no-op for all other methods in all other cases.
+// NOTE: it is designed for testing purposes only and not meant
+// for production use.
+type ApplyDataTracer struct{
+	nullTracer bool
+	ApplyData []*transactions.ApplyData
+	// no-op methods we don't care about
+	logic.NullEvalTracer
+}
+
+// MakeApplyDataTracer creates an ApplyDataTracer
+func MakeApplyDataTracer(nullTracer bool) *ApplyDataTracer {
+	return &ApplyDataTracer{
+		nullTracer: nullTracer,
+	}
+}
+
+// AfterTxnGroup copies the apply data into the tracer
+func (adt *ApplyDataTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, evalError error) {
+	if adt.nullTracer {
+		return
+	}
+	
+	for _, txib := range txibs {
+		// Copy() current state as there are some nested slices
+		adCopy, ok := deepcopy.Copy(txib.ApplyData).(transactions.ApplyData)
+		var ad *transactions.ApplyData
+		if ok {	
+			ad = &adCopy
+		}
+		adt.ApplyData = append(adt.ApplyData, ad)
+	}
 }

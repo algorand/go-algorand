@@ -966,7 +966,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		// Ensure we update the tracer before exiting
 		defer func() {
 			deltas := cow.deltas()
-			eval.Tracer.AfterTxnGroup(evalParams, &deltas, err)
+			eval.Tracer.AfterTxnGroup(evalParams, &deltas, txibs, err)
 		}()
 	}
 

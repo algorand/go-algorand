@@ -74,7 +74,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeTxnGroup(ep *EvalParams) {
 }
 
 // AfterTxnGroup updates inner txn depth
-func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error) {
+func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, evalError error) {
 	a.txnDepth--
 }
 

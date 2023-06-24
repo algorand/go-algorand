@@ -133,7 +133,7 @@ type EvalTracer interface {
 	// For top-level transaction groups, the deltas argument is the ledgercore.StateDelta changes
 	// that occurred because of this transaction group. For inner transaction groups, this argument
 	// is nil.
-	AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error)
+	AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, evalError error)
 
 	// BeforeTxn is called before a transaction is executed.
 	//
@@ -174,7 +174,7 @@ func (n NullEvalTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {}
 func (n NullEvalTracer) BeforeTxnGroup(ep *EvalParams) {}
 
 // AfterTxnGroup does nothing
-func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error) {
+func (n NullEvalTracer) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, evalError error) {
 }
 
 // BeforeTxn does nothing

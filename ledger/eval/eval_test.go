@@ -550,7 +550,7 @@ int 1`,
 					},
 					scenario.ExpectedEvents,
 					{
-						mocktracer.AfterTxnGroup(3, &expectedDelta, scenario.Outcome != mocktracer.ApprovalOutcome),
+						mocktracer.AfterTxnGroup(3, &expectedDelta, nil, scenario.Outcome != mocktracer.ApprovalOutcome),
 						mocktracer.AfterBlock(eval.block.Round()),
 					},
 				})...)
@@ -571,7 +571,7 @@ int 1`,
 					{
 						mocktracer.AfterProgram(logic.ModeApp, hasError),
 						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, true), // end basicAppCallTxn
-						mocktracer.AfterTxnGroup(3, &expectedBasicAppCallDelta, true),
+						mocktracer.AfterTxnGroup(3, &expectedBasicAppCallDelta, nil, true),
 					},
 				})...)
 			}
