@@ -16,6 +16,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> AccountApplicationModelMaxSize()
 //
 // AccountAssetModel
 //         |-----> (*) MarshalMsg
@@ -24,6 +25,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> AccountAssetModelMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -218,6 +220,15 @@ func (z *AccountApplicationModel) MsgIsZero() bool {
 	return ((*z).AppLocalState == nil) && ((*z).AppParams == nil)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func AccountApplicationModelMaxSize() (s int) {
+	s = 1 + 16
+	s += basics.AppLocalStateMaxSize()
+	s += 11
+	s += basics.AppParamsMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *AccountAssetModel) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -408,4 +419,13 @@ func (z *AccountAssetModel) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AccountAssetModel) MsgIsZero() bool {
 	return ((*z).AssetParams == nil) && ((*z).AssetHolding == nil)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AccountAssetModelMaxSize() (s int) {
+	s = 1 + 13
+	s += basics.AssetParamsMaxSize()
+	s += 14
+	s += basics.AssetHoldingMaxSize()
+	return
 }

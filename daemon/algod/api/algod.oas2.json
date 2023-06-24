@@ -2413,6 +2413,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "408": {
+            "description": "Request Timeout",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {

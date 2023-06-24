@@ -53,7 +53,7 @@ type (
 		TimeStamp int64 `codec:"ts"`
 
 		// Genesis ID to which this block belongs.
-		GenesisID string `codec:"gen"`
+		GenesisID string `codec:"gen,allocbound=config.MaxGenesisIDLen"`
 
 		// Genesis hash to which this block belongs.
 		GenesisHash crypto.Digest `codec:"gh"`
@@ -234,7 +234,7 @@ type (
 	// A Block contains the Payset and metadata corresponding to a given Round.
 	Block struct {
 		BlockHeader
-		Payset transactions.Payset `codec:"txns"`
+		Payset transactions.Payset `codec:"txns,maxtotalbytes=config.MaxTxnBytesPerBlock"`
 	}
 )
 

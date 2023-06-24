@@ -19,6 +19,9 @@ package data
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -625,10 +628,52 @@ func TestLedgerErrorValidate(t *testing.T) {
 		for more {
 			select {
 			case err := <-errChan:
+				if strings.Contains(err.Error(), "before dbRound") {
+					// handle race eval errors like "round 1933 before dbRound 1934"
+					// see explanation in unexpectedMessages
+					re := regexp.MustCompile(`round (\d+) before dbRound (\d+)`)
+					result := re.FindStringSubmatch(err.Error())
+					require.NotNil(t, result)
+					require.Len(t, result, 3)
+					evalRound, err1 := strconv.Atoi(result[1])
+					require.NoError(t, err1)
+					dbRound, err1 := strconv.Atoi(result[2])
+					require.NoError(t, err1)
+					require.GreaterOrEqual(t, int(l.Latest()), dbRound+int(cfg.MaxAcctLookback))
+					require.Less(t, evalRound, dbRound)
+					err = nil
+				}
 				require.NoError(t, err)
 			case <-expectedMessages:
 				// only debug messages should be reported
 			case um := <-unexpectedMessages:
+				if strings.Contains(um, "before dbRound") {
+					// EnsureBlock might log the following:
+					// data.EnsureBlock: could not write block 774 to the ledger: round 773 before dbRound 774
+					// it happens because of simultaneous EnsureValidatedBlock and EnsureBlock calls
+					// that pass round check and then EnsureBlock yields after StartEvaluator.
+					// Meanwhile EnsureValidatedBlock finishes and adds the block to the ledger.
+					// After that trackersDB commit happen and account data get flushed.
+					// The EnsureBlock goroutine then tries to evaluate a first transaction and fails because
+					// the trackerDB advanced further.
+					// This is okay to ignore if
+					// - attempted round is less or equal than dbRound
+					// - ledger latest round is greater than dbRound + cfg.MaxAcctLookback
+					re := regexp.MustCompile(`could not write block (\d+) to the ledger: round (\d+) before dbRound (\d+)`)
+					result := re.FindStringSubmatch(um)
+					require.NotNil(t, result)
+					require.Len(t, result, 4)
+					attemptedRound, err := strconv.Atoi(result[1])
+					require.NoError(t, err)
+					evalRound, err := strconv.Atoi(result[2])
+					require.NoError(t, err)
+					dbRound, err := strconv.Atoi(result[3])
+					require.NoError(t, err)
+					require.Equal(t, attemptedRound, evalRound+1)
+					require.LessOrEqual(t, attemptedRound, dbRound)
+					require.GreaterOrEqual(t, int(l.Latest()), dbRound+int(cfg.MaxAcctLookback))
+					um = ""
+				}
 				require.Empty(t, um, um)
 			default:
 				more = false

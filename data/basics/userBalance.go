@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/slices"
 )
 
 // Status is the delegation status of an account's MicroAlgos
@@ -268,10 +269,8 @@ type StateSchemas struct {
 // affecting the original
 func (ap *AppParams) Clone() (res AppParams) {
 	res = *ap
-	res.ApprovalProgram = make([]byte, len(ap.ApprovalProgram))
-	copy(res.ApprovalProgram, ap.ApprovalProgram)
-	res.ClearStateProgram = make([]byte, len(ap.ClearStateProgram))
-	copy(res.ClearStateProgram, ap.ClearStateProgram)
+	res.ApprovalProgram = slices.Clone(ap.ApprovalProgram)
+	res.ClearStateProgram = slices.Clone(ap.ClearStateProgram)
 	res.GlobalState = ap.GlobalState.Clone()
 	return
 }
@@ -373,14 +372,14 @@ type AssetParams struct {
 
 	// UnitName specifies a hint for the name of a unit of
 	// this asset.
-	UnitName string `codec:"un"`
+	UnitName string `codec:"un,allocbound=config.MaxAssetUnitNameBytes"`
 
 	// AssetName specifies a hint for the name of the asset.
-	AssetName string `codec:"an"`
+	AssetName string `codec:"an,allocbound=config.MaxAssetNameBytes"`
 
 	// URL specifies a URL where more information about the asset can be
 	// retrieved
-	URL string `codec:"au"`
+	URL string `codec:"au,allocbound=config.MaxAssetURLBytes"`
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.

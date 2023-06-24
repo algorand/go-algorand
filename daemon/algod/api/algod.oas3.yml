@@ -3953,6 +3953,16 @@
             },
             "description": "Invalid API Token"
           },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
           "500": {
             "content": {
               "application/json": {
