@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
-	"github.com/mohae/deepcopy"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
@@ -180,7 +179,7 @@ func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (StateDeltaSu
 // for production use.
 type ApplyDataTracer struct{
 	nullTracer bool
-	ApplyData []*transactions.ApplyData
+	ApplyData []transactions.ApplyData
 	// no-op methods we don't care about
 	logic.NullEvalTracer
 }
@@ -199,12 +198,7 @@ func (adt *ApplyDataTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgerco
 	}
 	
 	for _, txib := range txibs {
-		// Copy() current state as there are some nested slices
-		adCopy, ok := deepcopy.Copy(txib.ApplyData).(transactions.ApplyData)
-		var ad *transactions.ApplyData
-		if ok {	
-			ad = &adCopy
-		}
-		adt.ApplyData = append(adt.ApplyData, ad)
+		// TODO: better to deep copy as there are some nested slices
+		adt.ApplyData = append(adt.ApplyData, txib.ApplyData)
 	}
 }
