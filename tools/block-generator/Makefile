@@ -1,9 +1,9 @@
-SCENARIO = scenarios/config.allmixed.small.yml
+SCENARIO = scenarios/config.allmixed.jumbo.yml
 SKIP = --skip-runner
 RESETDB = --reset-db
 REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 DURATION = 30s
-VERBOSE = # --verbose
+VERBOSE = --verbose
 
 block-generator: clean-generator
 	go build
