@@ -30,8 +30,8 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -54,11 +54,17 @@ const (
 	expectedWorstUploadSpeedBytesPerSecond = 20 * 1024
 )
 
+// LedgerForService defines the ledger interface required for the LedgerService
+type LedgerForService interface {
+	// GetCatchpointStream returns the ReadCloseSize for a request catchpoint round
+	GetCatchpointStream(round basics.Round) (ledger.ReadCloseSizer, error)
+}
+
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
 	// running is non-zero once the service is running, and zero when it's not running. it needs to be at a 32-bit aligned address for RasPI support.
 	running       int32
-	ledger        *data.Ledger
+	ledger        LedgerForService
 	genesisID     string
 	net           network.GossipNode
 	enableService bool
@@ -66,7 +72,7 @@ type LedgerService struct {
 }
 
 // MakeLedgerService creates a LedgerService around the provider Ledger and registers it with the HTTP router
-func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *LedgerService {
+func MakeLedgerService(config config.Local, ledger LedgerForService, net network.GossipNode, genesisID string) *LedgerService {
 	service := &LedgerService{
 		ledger:        ledger,
 		genesisID:     genesisID,
@@ -189,6 +195,11 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		}
 	}
 	defer cs.Close()
+	response.Header().Set("Content-Type", LedgerResponseContentType)
+	if request.Method == http.MethodHead {
+		response.WriteHeader(http.StatusOK)
+		return
+	}
 	if conn := ls.net.GetHTTPRequestConnection(request); conn != nil {
 		maxCatchpointFileWritingDuration := 2 * time.Minute
 
@@ -203,7 +214,6 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		logging.Base().Warnf("LedgerService.ServeHTTP unable to set connection timeout")
 	}
 
-	response.Header().Set("Content-Type", LedgerResponseContentType)
 	requestedCompressedResponse := strings.Contains(request.Header.Get("Accept-Encoding"), "gzip")
 	if requestedCompressedResponse {
 		response.Header().Set("Content-Encoding", "gzip")
