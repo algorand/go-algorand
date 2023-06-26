@@ -4550,3 +4550,42 @@ func TestSendMessageCallbacks(t *testing.T) {
 		25*time.Millisecond,
 	)
 }
+
+func TestSendMessageCallbackDrain(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	node := makeTestWebsocketNode(t)
+	destPeer := wsPeer{
+		closing:            make(chan struct{}),
+		sendBufferHighPrio: make(chan sendMessages, sendBufferLength),
+		sendBufferBulk:     make(chan sendMessages, sendBufferLength),
+		conn:               &nopConnSingleton,
+	}
+	node.addPeer(&destPeer)
+	node.Start()
+	defer node.Stop()
+
+	var target, counter uint64
+	// send messages to the peer that won't read them so they will sit in the sendQueue
+	for i := 0; i < 10; i++ {
+		randInt := crypto.RandUint64()%(128) + 1
+		target += randInt
+		topic := MakeTopic("val", []byte("blah"))
+		callback := func() {
+			counter += randInt
+		}
+		msg := IncomingMessage{Sender: node.peers[0], Tag: protocol.UniEnsBlockReqTag, Callback: callback}
+		destPeer.Respond(context.Background(), msg, Topics{topic})
+	}
+	require.Len(t, destPeer.sendBufferBulk, 10)
+	require.Zero(t, counter)
+	require.Positive(t, target)
+	// close the peer to trigger draining of the queue callbacks
+	destPeer.Close(time.Now().Add(time.Second))
+
+	require.Eventually(t,
+		func() bool { return target == counter },
+		2*time.Second,
+		50*time.Millisecond,
+	)
+}
