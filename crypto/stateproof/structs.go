@@ -72,8 +72,8 @@ type StateProof struct {
 
 	SigCommit                  crypto.GenericDigest `codec:"c"`
 	SignedWeight               uint64               `codec:"w"`
-	SigProofs                  merklearray.Proof    `codec:"S"`
-	PartProofs                 merklearray.Proof    `codec:"P"`
+	SigProofs                  merklearray.Proof    `codec:"S,maxtotalbytes=SigPartProofMaxSize"`
+	PartProofs                 merklearray.Proof    `codec:"P,maxtotalbytes=SigPartProofMaxSize"`
 	MerkleSignatureSaltVersion byte                 `codec:"v"`
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
@@ -81,6 +81,11 @@ type StateProof struct {
 	Reveals           map[uint64]Reveal `codec:"r,allocbound=MaxReveals"`
 	PositionsToReveal []uint64          `codec:"pr,allocbound=MaxReveals"`
 }
+
+// SigPartProofMaxSize is the maximum valid size of SigProofs and PartProofs elements of the Stateproof struct in bytes.
+// It is equal to merklearray.ProofMaxSizeByElements(config.StateProofTopVoters/2)
+// See merklearray.Proof comment for explanation on the bound calculation
+const SigPartProofMaxSize = 35353
 
 func (s StateProof) stringBuild() (b strings.Builder) {
 	b.WriteString("StateProof: {")

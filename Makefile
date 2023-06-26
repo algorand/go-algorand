@@ -77,6 +77,11 @@ ifeq ($(SHORT_PART_PERIOD), 1)
 export SHORT_PART_PERIOD_FLAG := -s
 endif
 
+# Disable go experiments during build as of go 1.20.5 due to
+# https://github.com/golang/go/issues/60825
+# Likely fix: https://go-review.googlesource.com/c/go/+/503937/6/src/runtime/race_arm64.s
+export GOEXPERIMENT=none
+
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
@@ -158,7 +163,7 @@ ALWAYS:
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
 crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
-	cp -R crypto/libsodium-fork crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
+	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
 		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
 		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" && \

@@ -41,7 +41,8 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-const maxMessageLength = 6 * 1024 * 1024 // Currently the biggest message is VB vote bundles. TODO: per message type size limit?
+// MaxMessageLength is the maximum length of a message that can be sent or received, exported to be used in the node.TestMaxSizesCorrect test
+const MaxMessageLength = 6 * 1024 * 1024 // Currently the biggest message is VB vote bundles.
 const averageMessageLength = 2 * 1024    // Most of the messages are smaller than this size, which makes it into a good base allocation.
 
 // This parameter controls how many messages from a single peer can be
@@ -475,8 +476,8 @@ func (wp *wsPeer) readLoop() {
 	defer func() {
 		wp.readLoopCleanup(cleanupCloseError)
 	}()
-	wp.conn.SetReadLimit(maxMessageLength)
-	slurper := MakeLimitedReaderSlurper(averageMessageLength, maxMessageLength)
+	wp.conn.SetReadLimit(MaxMessageLength)
+	slurper := MakeLimitedReaderSlurper(averageMessageLength, MaxMessageLength)
 	dataConverter := makeWsPeerMsgDataConverter(wp)
 
 	for {
@@ -531,7 +532,8 @@ func (wp *wsPeer) readLoop() {
 			wp.net.log.Warnf("wsPeer readLoop: received a TS response for a stale request from %s. %d bytes discarded", wp.conn.RemoteAddr().String(), n)
 			continue
 		}
-		slurper.Reset()
+
+		slurper.Reset(uint64(msg.Tag.MaxMessageSize()))
 		err = slurper.Read(reader)
 		if err != nil {
 			wp.reportReadErr(err)
@@ -734,15 +736,15 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 }
 
 func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
+	if len(msg.data) > MaxMessageLength {
+		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), MaxMessageLength, string(msg.data[0:2]))
+		// just drop it, don't break the connection
+		return disconnectReasonNone
+	}
 	if msg.msgTags != nil {
 		// when msg.msgTags is non-nil, the read loop has received a message-of-interest message that we want to apply.
 		// in order to avoid any locking, it sent it to this queue so that we could set it as the new outgoing message tag filter.
 		wp.sendMessageTag = msg.msgTags
-		return disconnectReasonNone
-	}
-	if len(msg.data) > maxMessageLength {
-		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
-		// just drop it, don't break the connection
 		return disconnectReasonNone
 	}
 	// the tags are always 2 char long; note that this is safe since it's only being used for messages that we have generated locally.
@@ -866,7 +868,8 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	return false
 }
 
-const pingLength = 8
+// PingLength is the fixed length of ping message, exported to be used in the node.TestMaxSizesCorrect test
+const PingLength = 8
 const maxPingWait = 60 * time.Second
 
 // sendPing sends a ping block to the peer.
@@ -880,7 +883,7 @@ func (wp *wsPeer) sendPing() bool {
 	}
 
 	tagBytes := []byte(protocol.PingTag)
-	mbytes := make([]byte, len(tagBytes)+pingLength)
+	mbytes := make([]byte, len(tagBytes)+PingLength)
 	copy(mbytes, tagBytes)
 	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
@@ -972,12 +975,20 @@ func (wp *wsPeer) getRequestNonce() []byte {
 	return buf
 }
 
+// MakeNonceTopic returns a topic with the nonce as the data
+// exported for testing purposes
+func MakeNonceTopic(nonce uint64) Topic {
+	buf := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(buf, nonce)
+	return Topic{key: "nonce", data: buf}
+}
+
 // Request submits the request to the server, waits for a response
 func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error) {
 
-	// Add nonce as a topic
-	nonce := wp.getRequestNonce()
-	topics = append(topics, Topic{key: "nonce", data: nonce})
+	// Add nonce, stored on the wsPeer as the topic
+	nonceTopic := MakeNonceTopic(atomic.AddUint64(&wp.requestNonce, 1))
+	topics = append(topics, nonceTopic)
 
 	// serialize the topics
 	serializedMsg := topics.MarshallTopics()

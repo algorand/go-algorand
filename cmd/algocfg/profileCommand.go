@@ -42,6 +42,8 @@ var (
 		updateFunc: func(cfg config.Local) config.Local {
 			cfg.EnableExperimentalAPI = true
 			cfg.EnableDeveloperAPI = true
+			cfg.MaxAcctLookback = 256
+			cfg.EnableTxnEvalTracer = true
 			return cfg
 		},
 	}

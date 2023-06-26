@@ -87,3 +87,13 @@ func MarshallMessageOfInterestMap(tagmap map[protocol.Tag]bool) []byte {
 	topics := Topics{Topic{key: "tags", data: []byte(tags)}}
 	return topics.MarshallTopics()
 }
+
+// MessageOfInterestMaxSize returns the maximum size of a MI message sent over the network
+// by encoding all of the tags currenttly in use.
+func MessageOfInterestMaxSize() int {
+	allTags := make(map[protocol.Tag]bool, len(protocol.TagList))
+	for _, tag := range protocol.TagList {
+		allTags[tag] = true
+	}
+	return len(MarshallMessageOfInterest(protocol.TagList))
+}

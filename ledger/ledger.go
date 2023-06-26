@@ -502,24 +502,6 @@ func (l *Ledger) GetStateProofVerificationContext(stateProofLastAttestedRound ba
 	return l.spVerification.LookupVerificationContext(stateProofLastAttestedRound)
 }
 
-// ListAssets takes a maximum asset index and maximum result length, and
-// returns up to that many CreatableLocators from the database where app idx is
-// less than or equal to the maximum.
-func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.ListAssets(maxAssetIdx, maxResults)
-}
-
-// ListApplications takes a maximum app index and maximum result length, and
-// returns up to that many CreatableLocators from the database where app idx is
-// less than or equal to the maximum.
-func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.ListApplications(maxAppIdx, maxResults)
-}
-
 // LookupLatest uses the accounts tracker to return the account state (including
 // resources) for a given address, for the latest round. The returned account values
 // reflect the changes of all blocks up to and including the returned round number.

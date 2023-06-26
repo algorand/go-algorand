@@ -88,7 +88,6 @@ var defaultLocal = Local{
 	IncomingConnectionsLimit:                   2400,
 	IncomingMessageFilterBucketCount:           5,
 	IncomingMessageFilterBucketSize:            512,
-	IsIndexerActive:                            false,
 	LedgerSynchronousMode:                      2,
 	LogArchiveMaxAge:                           "",
 	LogArchiveName:                             "node.archive.log",

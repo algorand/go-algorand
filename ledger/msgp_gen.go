@@ -5,6 +5,8 @@ package ledger
 import (
 	"github.com/algorand/msgp/msgp"
 
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
@@ -17,6 +19,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> Msgsize
 //            |-----> MsgIsZero
+//            |-----> CatchpointCatchupStateMaxSize()
 //
 // CatchpointFileHeader
 //           |-----> (*) MarshalMsg
@@ -25,6 +28,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> CatchpointFileHeaderMaxSize()
 //
 // catchpointFileBalancesChunkV5
 //               |-----> (*) MarshalMsg
@@ -33,6 +37,7 @@ import (
 //               |-----> (*) CanUnmarshalMsg
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
+//               |-----> CatchpointFileBalancesChunkV5MaxSize()
 //
 // catchpointFileChunkV6
 //           |-----> (*) MarshalMsg
@@ -41,6 +46,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> CatchpointFileChunkV6MaxSize()
 //
 // catchpointStateProofVerificationContext
 //                    |-----> (*) MarshalMsg
@@ -49,6 +55,7 @@ import (
 //                    |-----> (*) CanUnmarshalMsg
 //                    |-----> (*) Msgsize
 //                    |-----> (*) MsgIsZero
+//                    |-----> CatchpointStateProofVerificationContextMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -95,6 +102,12 @@ func (z CatchpointCatchupState) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z CatchpointCatchupState) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func CatchpointCatchupStateMaxSize() (s int) {
+	s = msgp.Int32Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -387,6 +400,14 @@ func (z *CatchpointFileHeader) MsgIsZero() bool {
 	return ((*z).Version == 0) && ((*z).BalancesRound.MsgIsZero()) && ((*z).BlocksRound.MsgIsZero()) && ((*z).Totals.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).TotalKVs == 0) && ((*z).Catchpoint == "") && ((*z).BlockHeaderDigest.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func CatchpointFileHeaderMaxSize() (s int) {
+	s = 1 + 8 + msgp.Uint64Size + 14 + basics.RoundMaxSize() + 12 + basics.RoundMaxSize() + 14 + ledgercore.AccountTotalsMaxSize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 9 + msgp.Uint64Size + 11
+	panic("Unable to determine max size: String type z.Catchpoint is unbounded")
+	s += 18 + crypto.DigestMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *catchpointFileBalancesChunkV5) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -543,6 +564,14 @@ func (z *catchpointFileBalancesChunkV5) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointFileBalancesChunkV5) MsgIsZero() bool {
 	return (len((*z).Balances) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func CatchpointFileBalancesChunkV5MaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of slice: z.Balances
+	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.BalanceRecordV5MaxSize()))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -779,6 +808,17 @@ func (z *catchpointFileChunkV6) MsgIsZero() bool {
 	return (len((*z).Balances) == 0) && (len((*z).KVs) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func CatchpointFileChunkV6MaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of slice: z.Balances
+	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.BalanceRecordV6MaxSize()))
+	s += 3
+	// Calculating size of slice: z.KVs
+	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.KVRecordV6MaxSize()))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *catchpointStateProofVerificationContext) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -935,4 +975,12 @@ func (z *catchpointStateProofVerificationContext) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointStateProofVerificationContext) MsgIsZero() bool {
 	return (len((*z).Data) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func CatchpointStateProofVerificationContextMaxSize() (s int) {
+	s = 1 + 4
+	// Calculating size of slice: z.Data
+	s += msgp.ArrayHeaderSize + ((SPContextPerCatchpointFile) * (ledgercore.StateProofVerificationContextMaxSize()))
+	return
 }

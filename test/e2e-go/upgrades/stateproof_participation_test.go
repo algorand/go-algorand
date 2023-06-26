@@ -18,7 +18,6 @@ package upgrades
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -44,7 +43,7 @@ func waitUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClie
 	startTime := time.Now()
 
 	// while consensus version has not upgraded
-	for strings.Compare(string(curProtocol), string(consensusTestFastUpgrade(protocol.ConsensusV30))) == 0 {
+	for curProtocol == consensusTestFastUpgrade(protocol.ConsensusV30) {
 		curRound = curRound + 1
 		fixture.WaitForRoundWithTimeout(curRound + 1)
 

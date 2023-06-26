@@ -382,9 +382,10 @@ func (lw *mutexBuilder) String() string {
 // Set up two nodes, test that the connection between A and B is not established.
 func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest // changes global variable defaultSendMessageTags
 	partitiontest.PartitionTest(t)
-	defaultSendMessageTags["XX"] = true
+	defaultSendMessageTagsOriginal := defaultSendMessageTags
+	defaultSendMessageTags = map[protocol.Tag]bool{"XX": true, "MI": true}
 	defer func() {
-		delete(defaultSendMessageTags, "XX")
+		defaultSendMessageTags = defaultSendMessageTagsOriginal
 	}()
 	var logOutput mutexBuilder
 	log := logging.TestingLog(t)
@@ -1057,8 +1058,16 @@ func TestDupFilter(t *testing.T) {
 	netC.Start()
 	defer netC.Stop()
 
-	msg := make([]byte, messageFilterSize+1)
-	rand.Read(msg)
+	makeMsg := func(n int) []byte {
+		// We cannot harcode the msgSize to messageFilterSize + 1 because max allowed AV message is smaller  than that.
+		// We also cannot use maxSize for PP since it's a compressible tag but trying to compress random data will expand it.
+		if messageFilterSize+1 < n {
+			n = messageFilterSize + 1
+		}
+		msg := make([]byte, n)
+		rand.Read(msg)
+		return msg
+	}
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -1074,9 +1083,10 @@ func TestDupFilter(t *testing.T) {
 	// Maybe we should just .Set(0) those counters and use them in this test?
 
 	// This exercise inbound dup detection.
-	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
-	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
-	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
+	avMsg := makeMsg(int(protocol.AgreementVoteTag.MaxMessageSize()))
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, avMsg, true, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, avMsg, true, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, avMsg, true, nil)
 	t.Log("A dup send done")
 
 	select {
@@ -1089,15 +1099,16 @@ func TestDupFilter(t *testing.T) {
 	counter.lock.Unlock()
 
 	// new message
-	rand.Read(msg)
+	debugTag2Msg := makeMsg(int(debugTag2.MaxMessageSize()))
+	t.Logf("debugTag2Msg len %d", len(debugTag2Msg))
 	t.Log("A send, C non-dup-send")
-	netA.Broadcast(context.Background(), debugTag2, msg, true, nil)
+	netA.Broadcast(context.Background(), debugTag2, debugTag2Msg, true, nil)
 	// B should broadcast its non-desire to receive the message again
 	time.Sleep(500 * time.Millisecond)
 
 	// C should now not send these
-	netC.Broadcast(context.Background(), debugTag2, msg, true, nil)
-	netC.Broadcast(context.Background(), debugTag2, msg, true, nil)
+	netC.Broadcast(context.Background(), debugTag2, debugTag2Msg, true, nil)
+	netC.Broadcast(context.Background(), debugTag2, debugTag2Msg, true, nil)
 
 	select {
 	case <-counter2.done:
@@ -2849,6 +2860,12 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	require.True(t, postListen)
 	t.Log(addrA)
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+
+	// have netB asking netA to send it ft2, deregister ping handler to make sure that we aren't exceeding the maximum MOI messagesize
+	// Max MOI size is calculated by encoding all of the valid tags, since we are using a custom tag here we must deregister one in the default set.
+	netB.DeregisterMessageInterest(protocol.PingTag)
+	netB.RegisterMessageInterest(ft2)
+
 	netB.Start()
 	defer netStop(t, netB, "B")
 
@@ -2903,6 +2920,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	netB.DeregisterMessageInterest(ft1)
 	netB.DeregisterMessageInterest(ft3)
 	netB.DeregisterMessageInterest(ft4)
+
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -4042,10 +4060,10 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	topics := Topics{
 		MakeTopic("requestDataType",
-			[]byte("fake block and cert value")),
+			[]byte("a")),
 		MakeTopic(
 			"blockData",
-			[]byte("fake round value")),
+			[]byte("b")),
 	}
 	// Send a request for a block and cancel it after the handler has been registered
 	go func() {
@@ -4053,7 +4071,12 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	}()
 	require.Eventually(
 		t,
-		func() bool { return netC.peers[0].lenResponseChannels() > 0 },
+		func() bool {
+			netC.peersLock.RLock()
+			defer netC.peersLock.RUnlock()
+			require.NotEmpty(t, netC.peers)
+			return netC.peers[0].lenResponseChannels() > 0
+		},
 		1*time.Second,
 		50*time.Millisecond,
 	)

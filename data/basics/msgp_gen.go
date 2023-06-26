@@ -9,6 +9,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 )
 
 // The following msgp objects are implemented in this file:
@@ -19,6 +20,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> AccountDataMaxSize()
 //
 // Address
 //    |-----> (*) MarshalMsg
@@ -35,6 +37,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
+//     |-----> AppIndexMaxSize()
 //
 // AppLocalState
 //       |-----> (*) MarshalMsg
@@ -43,6 +46,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> AppLocalStateMaxSize()
 //
 // AppParams
 //     |-----> (*) MarshalMsg
@@ -51,6 +55,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> AppParamsMaxSize()
 //
 // AssetHolding
 //       |-----> (*) MarshalMsg
@@ -59,6 +64,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> AssetHoldingMaxSize()
 //
 // AssetIndex
 //      |-----> MarshalMsg
@@ -67,6 +73,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> Msgsize
 //      |-----> MsgIsZero
+//      |-----> AssetIndexMaxSize()
 //
 // AssetParams
 //      |-----> (*) MarshalMsg
@@ -75,6 +82,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> AssetParamsMaxSize()
 //
 // BalanceRecord
 //       |-----> (*) MarshalMsg
@@ -83,6 +91,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> BalanceRecordMaxSize()
 //
 // CreatableIndex
 //        |-----> MarshalMsg
@@ -91,6 +100,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
+//        |-----> CreatableIndexMaxSize()
 //
 // CreatableType
 //       |-----> MarshalMsg
@@ -99,6 +109,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> Msgsize
 //       |-----> MsgIsZero
+//       |-----> CreatableTypeMaxSize()
 //
 // DeltaAction
 //      |-----> MarshalMsg
@@ -107,6 +118,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> Msgsize
 //      |-----> MsgIsZero
+//      |-----> DeltaActionMaxSize()
 //
 // Participant
 //      |-----> (*) MarshalMsg
@@ -115,6 +127,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> ParticipantMaxSize()
 //
 // Round
 //   |-----> MarshalMsg
@@ -123,6 +136,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
+//   |-----> RoundMaxSize()
 //
 // RoundInterval
 //       |-----> MarshalMsg
@@ -131,6 +145,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> Msgsize
 //       |-----> MsgIsZero
+//       |-----> RoundIntervalMaxSize()
 //
 // StateDelta
 //      |-----> MarshalMsg
@@ -139,6 +154,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> Msgsize
 //      |-----> MsgIsZero
+//      |-----> StateDeltaMaxSize()
 //
 // StateSchema
 //      |-----> (*) MarshalMsg
@@ -147,6 +163,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> StateSchemaMaxSize()
 //
 // StateSchemas
 //       |-----> (*) MarshalMsg
@@ -155,6 +172,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> StateSchemasMaxSize()
 //
 // Status
 //    |-----> MarshalMsg
@@ -163,6 +181,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
+//    |-----> StatusMaxSize()
 //
 // TealKeyValue
 //       |-----> MarshalMsg
@@ -171,6 +190,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> Msgsize
 //       |-----> MsgIsZero
+//       |-----> TealKeyValueMaxSize()
 //
 // TealType
 //     |-----> MarshalMsg
@@ -179,6 +199,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
+//     |-----> TealTypeMaxSize()
 //
 // TealValue
 //     |-----> (*) MarshalMsg
@@ -187,6 +208,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> TealValueMaxSize()
 //
 // ValueDelta
 //      |-----> (*) MarshalMsg
@@ -195,6 +217,10 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> ValueDeltaMaxSize()
+//
+// crypto.Digest
+//       |-----> crypto.DigestMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -1359,6 +1385,37 @@ func (z *AccountData) MsgIsZero() bool {
 	return ((*z).Status == 0) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).SelectionID.MsgIsZero()) && ((*z).StateProofID.MsgIsZero()) && ((*z).VoteFirstValid == 0) && ((*z).VoteLastValid == 0) && ((*z).VoteKeyDilution == 0) && (len((*z).AssetParams) == 0) && (len((*z).Assets) == 0) && ((*z).AuthAddr.MsgIsZero()) && (len((*z).AppLocalStates) == 0) && (len((*z).AppParams) == 0) && (((*z).TotalAppSchema.NumUint == 0) && ((*z).TotalAppSchema.NumByteSlice == 0)) && ((*z).TotalExtraAppPages == 0) && ((*z).TotalBoxes == 0) && ((*z).TotalBoxBytes == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func AccountDataMaxSize() (s int) {
+	s = 3 + 4 + msgp.ByteSize + 5 + MicroAlgosMaxSize() + 6 + msgp.Uint64Size + 4 + MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.AssetParams
+	s += encodedMaxAssetsPerAccount * (AssetIndexMaxSize())
+	// Adding size of map values for z.AssetParams
+	s += encodedMaxAssetsPerAccount * (AssetParamsMaxSize())
+	s += 6
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.Assets
+	s += encodedMaxAssetsPerAccount * (AssetIndexMaxSize())
+	// Adding size of map values for z.Assets
+	s += encodedMaxAssetsPerAccount * (1)
+	s += 2 + msgp.Uint64Size + 2 + msgp.BoolSize
+	s += 6 + AddressMaxSize() + 5
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.AppLocalStates
+	s += EncodedMaxAppLocalStates * (AppIndexMaxSize())
+	// Adding size of map values for z.AppLocalStates
+	s += EncodedMaxAppLocalStates * (AppLocalStateMaxSize())
+	s += 5
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.AppParams
+	s += EncodedMaxAppParams * (AppIndexMaxSize())
+	// Adding size of map values for z.AppParams
+	s += EncodedMaxAppParams * (AppParamsMaxSize())
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Address) MarshalMsg(b []byte) []byte {
 	return ((*(crypto.Digest))(z)).MarshalMsg(b)
@@ -1385,6 +1442,11 @@ func (z *Address) Msgsize() int {
 // MsgIsZero returns whether this is a zero value
 func (z *Address) MsgIsZero() bool {
 	return ((*(crypto.Digest))(z)).MsgIsZero()
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AddressMaxSize() int {
+	return crypto.DigestMaxSize()
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1431,6 +1493,12 @@ func (z AppIndex) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z AppIndex) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AppIndexMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1788,6 +1856,17 @@ func (z *AppLocalState) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AppLocalState) MsgIsZero() bool {
 	return (((*z).Schema.NumUint == 0) && ((*z).Schema.NumByteSlice == 0)) && (len((*z).KeyValue) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AppLocalStateMaxSize() (s int) {
+	s = 1 + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.KeyValue
+	s += EncodedMaxKeyValueEntries * (msgp.StringPrefixSize + config.MaxAppBytesKeyLen)
+	// Adding size of map values for z.KeyValue
+	s += EncodedMaxKeyValueEntries * (TealValueMaxSize())
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2430,6 +2509,18 @@ func (z *AppParams) MsgIsZero() bool {
 	return (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && (len((*z).GlobalState) == 0) && (((*z).StateSchemas.LocalStateSchema.NumUint == 0) && ((*z).StateSchemas.LocalStateSchema.NumByteSlice == 0)) && (((*z).StateSchemas.GlobalStateSchema.NumUint == 0) && ((*z).StateSchemas.GlobalStateSchema.NumByteSlice == 0)) && ((*z).ExtraProgramPages == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func AppParamsMaxSize() (s int) {
+	s = 1 + 7 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 7 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 3
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.GlobalState
+	s += EncodedMaxKeyValueEntries * (msgp.StringPrefixSize + config.MaxAppBytesKeyLen)
+	// Adding size of map values for z.GlobalState
+	s += EncodedMaxKeyValueEntries * (TealValueMaxSize())
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *AssetHolding) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2559,6 +2650,12 @@ func (z *AssetHolding) MsgIsZero() bool {
 	return ((*z).Amount == 0) && ((*z).Frozen == false)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func AssetHoldingMaxSize() (s int) {
+	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z AssetIndex) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2603,6 +2700,12 @@ func (z AssetIndex) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z AssetIndex) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AssetIndexMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2761,6 +2864,16 @@ func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
+			var zb0004 int
+			zb0004, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "UnitName")
+				return
+			}
+			if zb0004 > config.MaxAssetUnitNameBytes {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.MaxAssetUnitNameBytes))
+				return
+			}
 			(*z).UnitName, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "UnitName")
@@ -2769,6 +2882,16 @@ func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
+			var zb0005 int
+			zb0005, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "AssetName")
+				return
+			}
+			if zb0005 > config.MaxAssetNameBytes {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(config.MaxAssetNameBytes))
+				return
+			}
 			(*z).AssetName, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetName")
@@ -2777,6 +2900,16 @@ func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
+			var zb0006 int
+			zb0006, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "URL")
+				return
+			}
+			if zb0006 > config.MaxAssetURLBytes {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(config.MaxAssetURLBytes))
+				return
+			}
 			(*z).URL, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "URL")
@@ -2865,18 +2998,48 @@ func (z *AssetParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "un":
+				var zb0007 int
+				zb0007, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UnitName")
+					return
+				}
+				if zb0007 > config.MaxAssetUnitNameBytes {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxAssetUnitNameBytes))
+					return
+				}
 				(*z).UnitName, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "UnitName")
 					return
 				}
 			case "an":
+				var zb0008 int
+				zb0008, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "AssetName")
+					return
+				}
+				if zb0008 > config.MaxAssetNameBytes {
+					err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxAssetNameBytes))
+					return
+				}
 				(*z).AssetName, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetName")
 					return
 				}
 			case "au":
+				var zb0009 int
+				zb0009, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "URL")
+					return
+				}
+				if zb0009 > config.MaxAssetURLBytes {
+					err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxAssetURLBytes))
+					return
+				}
 				(*z).URL, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "URL")
@@ -2939,6 +3102,15 @@ func (z *AssetParams) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AssetParams) MsgIsZero() bool {
 	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AssetParamsMaxSize() (s int) {
+	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + config.MaxAssetUnitNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetURLBytes + 3
+	// Calculating size of array: z.MetadataHash
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4126,6 +4298,37 @@ func (z *BalanceRecord) MsgIsZero() bool {
 	return ((*z).Addr.MsgIsZero()) && ((*z).AccountData.Status == 0) && ((*z).AccountData.MicroAlgos.MsgIsZero()) && ((*z).AccountData.RewardsBase == 0) && ((*z).AccountData.RewardedMicroAlgos.MsgIsZero()) && ((*z).AccountData.VoteID.MsgIsZero()) && ((*z).AccountData.SelectionID.MsgIsZero()) && ((*z).AccountData.StateProofID.MsgIsZero()) && ((*z).AccountData.VoteFirstValid == 0) && ((*z).AccountData.VoteLastValid == 0) && ((*z).AccountData.VoteKeyDilution == 0) && (len((*z).AccountData.AssetParams) == 0) && (len((*z).AccountData.Assets) == 0) && ((*z).AccountData.AuthAddr.MsgIsZero()) && (len((*z).AccountData.AppLocalStates) == 0) && (len((*z).AccountData.AppParams) == 0) && (((*z).AccountData.TotalAppSchema.NumUint == 0) && ((*z).AccountData.TotalAppSchema.NumByteSlice == 0)) && ((*z).AccountData.TotalExtraAppPages == 0) && ((*z).AccountData.TotalBoxes == 0) && ((*z).AccountData.TotalBoxBytes == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func BalanceRecordMaxSize() (s int) {
+	s = 3 + 5 + AddressMaxSize() + 4 + msgp.ByteSize + 5 + MicroAlgosMaxSize() + 6 + msgp.Uint64Size + 4 + MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 8 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 5
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.AccountData.AssetParams
+	s += encodedMaxAssetsPerAccount * (AssetIndexMaxSize())
+	// Adding size of map values for z.AccountData.AssetParams
+	s += encodedMaxAssetsPerAccount * (AssetParamsMaxSize())
+	s += 6
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.AccountData.Assets
+	s += encodedMaxAssetsPerAccount * (AssetIndexMaxSize())
+	// Adding size of map values for z.AccountData.Assets
+	s += encodedMaxAssetsPerAccount * (1)
+	s += 2 + msgp.Uint64Size + 2 + msgp.BoolSize
+	s += 6 + AddressMaxSize() + 5
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.AccountData.AppLocalStates
+	s += EncodedMaxAppLocalStates * (AppIndexMaxSize())
+	// Adding size of map values for z.AccountData.AppLocalStates
+	s += EncodedMaxAppLocalStates * (AppLocalStateMaxSize())
+	s += 5
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.AccountData.AppParams
+	s += EncodedMaxAppParams * (AppIndexMaxSize())
+	// Adding size of map values for z.AccountData.AppParams
+	s += EncodedMaxAppParams * (AppParamsMaxSize())
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z CreatableIndex) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -4170,6 +4373,12 @@ func (z CreatableIndex) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z CreatableIndex) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func CreatableIndexMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4218,6 +4427,12 @@ func (z CreatableType) MsgIsZero() bool {
 	return z == 0
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func CreatableTypeMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z DeltaAction) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -4262,6 +4477,12 @@ func (z DeltaAction) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z DeltaAction) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func DeltaActionMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4393,6 +4614,12 @@ func (z *Participant) MsgIsZero() bool {
 	return ((*z).PK.MsgIsZero()) && ((*z).Weight == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func ParticipantMaxSize() (s int) {
+	s = 1 + 2 + merklesignature.VerifierMaxSize() + 2 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z Round) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -4439,6 +4666,12 @@ func (z Round) MsgIsZero() bool {
 	return z == 0
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func RoundMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z RoundInterval) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -4483,6 +4716,12 @@ func (z RoundInterval) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z RoundInterval) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func RoundIntervalMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4575,6 +4814,16 @@ func (z StateDelta) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z StateDelta) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func StateDeltaMaxSize() (s int) {
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z
+	s += config.MaxStateDeltaKeys * (msgp.StringPrefixSize + config.MaxAppBytesKeyLen)
+	// Adding size of map values for z
+	s += config.MaxStateDeltaKeys * (ValueDeltaMaxSize())
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4704,6 +4953,12 @@ func (z *StateSchema) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *StateSchema) MsgIsZero() bool {
 	return ((*z).NumUint == 0) && ((*z).NumByteSlice == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func StateSchemaMaxSize() (s int) {
+	s = 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -5135,6 +5390,12 @@ func (z *StateSchemas) MsgIsZero() bool {
 	return (((*z).LocalStateSchema.NumUint == 0) && ((*z).LocalStateSchema.NumByteSlice == 0)) && (((*z).GlobalStateSchema.NumUint == 0) && ((*z).GlobalStateSchema.NumByteSlice == 0))
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func StateSchemasMaxSize() (s int) {
+	s = 1 + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z Status) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -5179,6 +5440,12 @@ func (z Status) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z Status) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func StatusMaxSize() (s int) {
+	s = msgp.ByteSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -5273,6 +5540,16 @@ func (z TealKeyValue) MsgIsZero() bool {
 	return len(z) == 0
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func TealKeyValueMaxSize() (s int) {
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z
+	s += EncodedMaxKeyValueEntries * (msgp.StringPrefixSize + config.MaxAppBytesKeyLen)
+	// Adding size of map values for z
+	s += EncodedMaxKeyValueEntries * (TealValueMaxSize())
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z TealType) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -5317,6 +5594,12 @@ func (z TealType) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z TealType) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func TealTypeMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -5479,6 +5762,14 @@ func (z *TealValue) MsgIsZero() bool {
 	return ((*z).Type == 0) && ((*z).Bytes == "") && ((*z).Uint == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func TealValueMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3
+	panic("Unable to determine max size: String type z.Bytes is unbounded")
+	s += 3 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *ValueDelta) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -5551,6 +5842,16 @@ func (z *ValueDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
+			var zb0004 int
+			zb0004, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Bytes")
+				return
+			}
+			if zb0004 > config.MaxAppBytesValueLen {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.MaxAppBytesValueLen))
+				return
+			}
 			(*z).Bytes, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Bytes")
@@ -5590,15 +5891,25 @@ func (z *ValueDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			switch string(field) {
 			case "at":
 				{
-					var zb0004 uint64
-					zb0004, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0005 uint64
+					zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Action")
 						return
 					}
-					(*z).Action = DeltaAction(zb0004)
+					(*z).Action = DeltaAction(zb0005)
 				}
 			case "bs":
+				var zb0006 int
+				zb0006, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Bytes")
+					return
+				}
+				if zb0006 > config.MaxAppBytesValueLen {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(config.MaxAppBytesValueLen))
+					return
+				}
 				(*z).Bytes, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Bytes")
@@ -5637,4 +5948,10 @@ func (z *ValueDelta) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *ValueDelta) MsgIsZero() bool {
 	return ((*z).Action == 0) && ((*z).Bytes == "") && ((*z).Uint == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func ValueDeltaMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.StringPrefixSize + config.MaxAppBytesValueLen + 3 + msgp.Uint64Size
+	return
 }

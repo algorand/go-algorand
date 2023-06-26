@@ -237,10 +237,6 @@ type Local struct {
 	// the max size the sync server would return
 	TxSyncServeResponseSize int `version[3]:"1000000"`
 
-	// IsIndexerActive indicates whether to activate the indexer for fast retrieval of transactions
-	// Note -- Indexer cannot operate on non Archival nodes
-	IsIndexerActive bool `version[3]:"false"`
-
 	// UseXForwardedForAddress indicates whether or not the node should use the X-Forwarded-For HTTP Header when
 	// determining the source of a connection.  If used, it should be set to the string "X-Forwarded-For", unless the
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
