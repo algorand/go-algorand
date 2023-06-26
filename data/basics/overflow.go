@@ -84,21 +84,30 @@ func SubSaturate[T constraints.Unsigned](a, b T) T {
 }
 
 // Add adds 2 values with overflow detection
-func (t *OverflowTracker) Add(a, b uint64) (res uint64) {
-	res, t.Overflowed = OAdd(a, b)
-	return
+func (t *OverflowTracker) Add(a, b uint64) uint64 {
+	res, overflowed := OAdd(a, b)
+	if overflowed {
+		t.Overflowed = true
+	}
+	return res
 }
 
 // Sub subtracts b from a with overflow detection
-func (t *OverflowTracker) Sub(a, b uint64) (res uint64) {
-	res, t.Overflowed = OSub(a, b)
-	return
+func (t *OverflowTracker) Sub(a, b uint64) uint64 {
+	res, overflowed := OSub(a, b)
+	if overflowed {
+		t.Overflowed = true
+	}
+	return res
 }
 
 // Mul multiplies b by a with overflow detection
-func (t *OverflowTracker) Mul(a, b uint64) (res uint64) {
-	res, t.Overflowed = OMul(a, b)
-	return
+func (t *OverflowTracker) Mul(a, b uint64) uint64 {
+	res, overflowed := OMul(a, b)
+	if overflowed {
+		t.Overflowed = true
+	}
+	return res
 }
 
 // OAddA adds 2 MicroAlgos values with overflow tracking
