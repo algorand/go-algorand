@@ -1,4 +1,4 @@
-SCENARIO = scenarios/config.allmixed.jumbo.yml
+SCENARIO = scenarios/config.allmixed.small.yml
 SKIP = --skip-runner
 RESETDB = --reset-db
 REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
