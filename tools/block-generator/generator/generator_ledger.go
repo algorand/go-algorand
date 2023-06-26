@@ -113,7 +113,7 @@ func (g *generator) finishRound() {
 // calculated in BlockEvaluator.Eval() so that these can be added to the block.
 // As opposed to the the real ledger.AddBlock() it also returns the number of 
 // transactions observed in the block.
-func (g *generator) ledgerAddBlock(blk bookkeeping.Block, cert agreement.Certificate) (uint64, error) {
+func (g *generator) ledgerAddBlock(blk bookkeeping.Block, cert agreement.Certificate) (uint64 /* txnCount */, error) {
 	l := g.ledger
 	// TODO: If we modify OpenLedger() to allow arbitrary tracers
 	// we would be able to set adTracer := l.GetTracer()
