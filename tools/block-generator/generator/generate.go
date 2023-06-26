@@ -194,17 +194,6 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 	return gen, nil
 }
 
-func (g *generator) resetPendingApps() {
-	g.pendingAppSlice = map[appKind][]*appData{
-		appKindBoxes: make([]*appData, 0),
-		appKindSwap:  make([]*appData, 0),
-	}
-	g.pendingAppMap = map[appKind]map[uint64]*appData{
-		appKindBoxes: make(map[uint64]*appData),
-		appKindSwap:  make(map[uint64]*appData),
-	}
-}
-
 // initializeAccounting creates the genesis accounts.
 func (g *generator) initializeAccounting() {
 	g.numPayments = 0
@@ -317,7 +306,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-	numTxnForBlock := g.txnForRound(g.round)
+	minTxnsForBlock := g.minTxnsForBlock(g.round)
 
 	var intra uint64 = 0
 	var cert rpcs.EncodedBlockCert
@@ -351,7 +340,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 		// Generate the txibs
 		txibs := []txn.SignedTxnInBlock{}
-		for intra < numTxnForBlock {
+		for intra < minTxnsForBlock {
 			var signedTxns []txn.SignedTxn
 			var err error
 			signedTxns, intra, err = g.generateSignedTxns(g.round, intra)
@@ -370,8 +359,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 			}
 		}
 
-		if intra < numTxnForBlock {
-			return fmt.Errorf("not enough transactions generated: %d > %d", numTxnForBlock, intra)
+		if intra < minTxnsForBlock {
+			return fmt.Errorf("not enough transactions generated: %d > %d", minTxnsForBlock, intra)
 		}
 
 		cert.Block.BlockHeader.TxnCounter = g.txnCounter + intra
@@ -840,63 +829,7 @@ func (g *generator) recordData(id TxTypeID, start time.Time) {
 	g.reportData[id] = data
 }
 
-// ---- miscellaneous ----
-
-func (g *generator) txnForRound(round uint64) uint64 {
-	// There are no transactions in the 0th round
-	if round == 0 {
-		return 0
-	}
-	return g.config.TxnPerBlock
-}
-
-// startRound updates the generator's txnCounter based on the latest block header.
-// It is assumed that g.round has already been incremented in finishRound()
-func (g *generator) startRound() error {
-	if g.round == 0 {
-		// nothing to do in round 0
-		return nil
-	}
-
-	latestHeader, err := g.ledger.BlockHdr(basics.Round(g.round - 1))
-	if err != nil {
-		return fmt.Errorf("could not obtain block header for round %d: %w", g.round, err)
-	}
-	g.txnCounter = latestHeader.TxnCounter
-	return nil
-}
-
-// finishRound tells the generator it can apply any pending state and updates its round
-func (g *generator) finishRound() {
-	g.timestamp += consensusTimeMilli
-	g.round++
-
-	// Apply pending assets...
-	g.assets = append(g.assets, g.pendingAssets...)
-	g.pendingAssets = nil
-
-	g.latestPaysetWithExpectedID = nil
-	g.latestData = make(map[TxTypeID]uint64)
-
-	for kind, pendingAppSlice := range g.pendingAppSlice {
-		for _, pendingApp := range pendingAppSlice {
-			appID := pendingApp.appID
-			if g.appMap[kind][appID] == nil {
-				g.appSlice[kind] = append(g.appSlice[kind], pendingApp)
-				g.appMap[kind][appID] = pendingApp
-				for sender := range pendingApp.optins {
-					g.accountAppOptins[kind][sender] = append(g.accountAppOptins[kind][sender], appID)
-				}
-			} else { // just union the optins when already exists
-				for sender := range pendingApp.optins {
-					g.appMap[kind][appID].optins[sender] = true
-					g.accountAppOptins[kind][sender] = append(g.accountAppOptins[kind][sender], appID)
-				}
-			}
-		}
-	}
-	g.resetPendingApps()
-}
+// ---- sign transactions ----
 
 func signTxn(transaction txn.Transaction) txn.SignedTxn {
 	stxn := txn.SignedTxn{

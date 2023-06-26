@@ -8,6 +8,19 @@ import (
 	txn "github.com/algorand/go-algorand/data/transactions"
 )
 
+// ---- generator app state ----
+
+func (g *generator) resetPendingApps() {
+	g.pendingAppSlice = map[appKind][]*appData{
+		appKindBoxes: make([]*appData, 0),
+		appKindSwap:  make([]*appData, 0),
+	}
+	g.pendingAppMap = map[appKind]map[uint64]*appData{
+		appKindBoxes: make(map[uint64]*appData),
+		appKindSwap:  make(map[uint64]*appData),
+	}
+}
+
 // ---- effects and consequences ----
 
 // effects is a map that contains the hard-coded non-trivial

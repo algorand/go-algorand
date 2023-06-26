@@ -53,6 +53,62 @@ func (g *generator) initializeLedger() uint64 {
 	return startingTxnCounter
 }
 
+func (g *generator) minTxnsForBlock(round uint64) uint64 {
+	// There are no transactions in the 0th round
+	if round == 0 {
+		return 0
+	}
+	return g.config.TxnPerBlock
+}
+
+// startRound updates the generator's txnCounter based on the latest block header.
+// It is assumed that g.round has already been incremented in finishRound()
+func (g *generator) startRound() error {
+	if g.round == 0 {
+		// nothing to do in round 0
+		return nil
+	}
+
+	latestHeader, err := g.ledger.BlockHdr(basics.Round(g.round - 1))
+	if err != nil {
+		return fmt.Errorf("could not obtain block header for round %d: %w", g.round, err)
+	}
+	g.txnCounter = latestHeader.TxnCounter
+	return nil
+}
+
+// finishRound tells the generator it can apply any pending state and updates its round
+func (g *generator) finishRound() {
+	g.timestamp += consensusTimeMilli
+	g.round++
+
+	// Apply pending assets...
+	g.assets = append(g.assets, g.pendingAssets...)
+	g.pendingAssets = nil
+
+	g.latestPaysetWithExpectedID = nil
+	g.latestData = make(map[TxTypeID]uint64)
+
+	for kind, pendingAppSlice := range g.pendingAppSlice {
+		for _, pendingApp := range pendingAppSlice {
+			appID := pendingApp.appID
+			if g.appMap[kind][appID] == nil {
+				g.appSlice[kind] = append(g.appSlice[kind], pendingApp)
+				g.appMap[kind][appID] = pendingApp
+				for sender := range pendingApp.optins {
+					g.accountAppOptins[kind][sender] = append(g.accountAppOptins[kind][sender], appID)
+				}
+			} else { // just union the optins when already exists
+				for sender := range pendingApp.optins {
+					g.appMap[kind][appID].optins[sender] = true
+					g.accountAppOptins[kind][sender] = append(g.accountAppOptins[kind][sender], appID)
+				}
+			}
+		}
+	}
+	g.resetPendingApps()
+}
+
 // ledgerAddBlock simulates ledger.AddBlock() but exposes the ApplyData
 // calculated in BlockEvaluator.Eval() so that these can be added to the block.
 // As opposed to the the real ledger.AddBlock() it also returns the number of 
