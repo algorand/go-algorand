@@ -27,6 +27,7 @@ import (
 
 func TestSubSaturate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := Round(1)
 	b := Round(2)
@@ -37,23 +38,25 @@ func TestSubSaturate(t *testing.T) {
 
 func TestSubSaturate32(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	require.Equal(t, uint32(0), SubSaturate32(0, 1))
-	require.Equal(t, uint32(0), SubSaturate32(1, 2))
-	require.Equal(t, uint32(0), SubSaturate32(1, 1))
-	require.Equal(t, uint32(0), SubSaturate32(1, math.MaxUint32))
-	require.Equal(t, uint32(1), SubSaturate32(2, 1))
-	require.Equal(t, uint32(math.MaxUint32-1), SubSaturate32(math.MaxUint32, 1))
+	require.Equal(t, uint32(0), SubSaturate(uint32(0), uint32(1)))
+	require.Equal(t, uint32(0), SubSaturate(uint32(1), uint32(2)))
+	require.Equal(t, uint32(0), SubSaturate(uint32(1), uint32(1)))
+	require.Equal(t, uint32(0), SubSaturate(uint32(1), math.MaxUint32))
+	require.Equal(t, uint32(1), SubSaturate(uint32(2), uint32(1)))
+	require.Equal(t, uint32(math.MaxUint32-1), SubSaturate(math.MaxUint32, uint32(1)))
 }
 
 func TestAddSaturate32(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	require.Equal(t, uint32(1), AddSaturate32(0, 1))
-	require.Equal(t, uint32(math.MaxUint32-1), AddSaturate32(math.MaxUint32-2, 1))
-	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32, 0))
-	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32-1, 1))
-	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32, 2))
+	require.Equal(t, uint32(1), AddSaturate(uint32(0), uint32(1)))
+	require.Equal(t, uint32(math.MaxUint32-1), AddSaturate(math.MaxUint32-2, uint32(1)))
+	require.Equal(t, uint32(math.MaxUint32), AddSaturate(math.MaxUint32, uint32(0)))
+	require.Equal(t, uint32(math.MaxUint32), AddSaturate(math.MaxUint32-1, uint32(1)))
+	require.Equal(t, uint32(math.MaxUint32), AddSaturate(math.MaxUint32, uint32(2)))
 }
 
 func TestRoundUpToMultipleOf(t *testing.T) {

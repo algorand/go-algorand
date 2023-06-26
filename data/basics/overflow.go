@@ -17,8 +17,9 @@
 package basics
 
 import (
-	"math"
 	"math/bits"
+
+	"golang.org/x/exp/constraints"
 )
 
 // OverflowTracker is used to track when an operation causes an overflow
@@ -26,43 +27,22 @@ type OverflowTracker struct {
 	Overflowed bool
 }
 
-// OAdd16 adds 2 uint16 values with overflow detection
-func OAdd16(a uint16, b uint16) (res uint16, overflowed bool) {
-	res = a + b
-	overflowed = res < a
-	return
-}
-
-// OAdd32 adds 2 uint32 values with overflow detection
-func OAdd32(a uint32, b uint32) (res uint32, overflowed bool) {
-	res = a + b
-	overflowed = res < a
-	return
-}
-
 // OAdd adds 2 values with overflow detection
-func OAdd(a uint64, b uint64) (res uint64, overflowed bool) {
+func OAdd[T constraints.Unsigned](a, b T) (res T, overflowed bool) {
 	res = a + b
 	overflowed = res < a
 	return
 }
 
 // OSub subtracts b from a with overflow detection
-func OSub(a uint64, b uint64) (res uint64, overflowed bool) {
-	res = a - b
-	overflowed = res > a
-	return
-}
-
-// OSub32 subtracts b from a with overflow detection
-func OSub32(a uint32, b uint32) (res uint32, overflowed bool) {
+func OSub[T constraints.Unsigned](a, b T) (res T, overflowed bool) {
 	res = a - b
 	overflowed = res > a
 	return
 }
 
 // OMul multiplies 2 values with overflow detection
-func OMul(a uint64, b uint64) (res uint64, overflowed bool) {
+func OMul[T constraints.Unsigned](a, b T) (res T, overflowed bool) {
 	if b == 0 {
 		return 0, false
 	}
@@ -75,55 +55,30 @@ func OMul(a uint64, b uint64) (res uint64, overflowed bool) {
 }
 
 // MulSaturate multiplies 2 values with saturation on overflow
-func MulSaturate(a uint64, b uint64) uint64 {
+func MulSaturate[T constraints.Unsigned](a T, b T) T {
 	res, overflowed := OMul(a, b)
 	if overflowed {
-		return math.MaxUint64
+		var defaultT T
+		return ^defaultT
 	}
 	return res
 }
 
 // AddSaturate adds 2 values with saturation on overflow
-func AddSaturate(a uint64, b uint64) uint64 {
+func AddSaturate[T constraints.Unsigned](a, b T) T {
 	res, overflowed := OAdd(a, b)
 	if overflowed {
-		return math.MaxUint64
-	}
-	return res
-}
-
-// AddSaturate32 adds 2 uint32 values with saturation on overflow
-func AddSaturate32(a uint32, b uint32) uint32 {
-	res, overflowed := OAdd32(a, b)
-	if overflowed {
-		return math.MaxUint32
+		var defaultT T
+		return ^defaultT
 	}
 	return res
 }
 
 // SubSaturate subtracts 2 values with saturation on underflow
-func SubSaturate(a uint64, b uint64) uint64 {
+func SubSaturate[T constraints.Unsigned](a, b T) T {
 	res, overflowed := OSub(a, b)
 	if overflowed {
 		return 0
-	}
-	return res
-}
-
-// SubSaturate32 subtracts 2 uint32 values with saturation on underflow
-func SubSaturate32(a uint32, b uint32) uint32 {
-	res, overflowed := OSub32(a, b)
-	if overflowed {
-		return 0
-	}
-	return res
-}
-
-// Add16 adds 2 uint16 values with overflow detection
-func (t *OverflowTracker) Add16(a uint16, b uint16) uint16 {
-	res, overflowed := OAdd16(a, b)
-	if overflowed {
-		t.Overflowed = true
 	}
 	return res
 }
