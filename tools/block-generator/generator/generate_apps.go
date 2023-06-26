@@ -66,9 +66,7 @@ func (g *generator) generateAppTxn(round uint64, intra uint64) ([]txn.SignedTxn,
 		return nil, intra, appID, fmt.Errorf("unexpected error received from generateAppCallInternal(): %w", err)
 	}
 
-	intra++ // add 1 for actual
-	// and also the effects:
-	intra += countEffects(actual)
+	intra += 1 + countEffects(actual) // +1 for actual
 
 	g.recordData(actual, start)
 	return signedTxns, intra, appID, nil
