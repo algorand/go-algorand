@@ -414,9 +414,11 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg, callback: reqMsg.Callback}:
 	case <-wp.closing:
+		reqMsg.Callback()
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
 	case <-ctx.Done():
+		reqMsg.Callback()
 		return ctx.Err()
 	}
 	return nil
