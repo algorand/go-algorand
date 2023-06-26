@@ -361,7 +361,7 @@ func (cb *roundCowState) CalculateTotals() error {
 		return errUnsupportedChildCowTotalCalculation
 	}
 	totals := cb.prevTotals
-	var ot basics.OverflowTracker
+	var ot basics.OverflowTrackerU64
 	totals.ApplyRewards(cb.mods.Hdr.RewardsLevel, &ot)
 
 	for i := 0; i < cb.mods.Accts.Len(); i++ {

@@ -35,7 +35,7 @@ type AlgoCount struct {
 	RewardUnits uint64 `codec:"rwd"`
 }
 
-func (ac *AlgoCount) applyRewards(rewardsPerUnit uint64, ot *basics.OverflowTracker) {
+func (ac *AlgoCount) applyRewards(rewardsPerUnit uint64, ot *basics.OverflowTrackerU64) {
 	rewardsGottenThisRound := basics.MicroAlgos{Raw: ot.Mul(ac.RewardUnits, rewardsPerUnit)}
 	ac.Money = ot.AddA(ac.Money, rewardsGottenThisRound)
 }
@@ -79,7 +79,7 @@ func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 }
 
 // AddAccount adds an account algos from the total money
-func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTrackerU64) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.AddA(sum.Money, algos)
@@ -87,7 +87,7 @@ func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data AccountDa
 }
 
 // DelAccount removes an account algos from the total money
-func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTrackerU64) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.SubA(sum.Money, algos)
@@ -95,7 +95,7 @@ func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data AccountDa
 }
 
 // ApplyRewards adds the reward to the account totals based on the new rewards level
-func (at *AccountTotals) ApplyRewards(rewardsLevel uint64, ot *basics.OverflowTracker) {
+func (at *AccountTotals) ApplyRewards(rewardsLevel uint64, ot *basics.OverflowTrackerU64) {
 	rewardsPerUnit := ot.Sub(rewardsLevel, at.RewardsLevel)
 	at.RewardsLevel = rewardsLevel
 	at.Online.applyRewards(rewardsPerUnit, ot)

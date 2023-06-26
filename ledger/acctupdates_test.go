@@ -82,7 +82,7 @@ func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, err
 }
 
 func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]ledgercore.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
-	var ot basics.OverflowTracker
+	var ot basics.OverflowTrackerU64
 	proto := config.Consensus[consensusVersion]
 	totals.RewardsLevel = rewardLevel
 	for _, ar := range accts {

@@ -547,7 +547,7 @@ func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Rou
 		if err != nil {
 			return basics.MicroAlgos{}, err
 		}
-		ot := basics.OverflowTracker{}
+		ot := basics.OverflowTrackerU64{}
 		totalStake = ot.SubA(totalStake, expiredStake)
 		if ot.Overflowed {
 			return basics.MicroAlgos{}, fmt.Errorf("onlineTotals: overflow subtracting %v from %v", expiredStake, totalStake)
@@ -952,7 +952,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			if err != nil {
 				return nil, basics.MicroAlgos{}, err
 			}
-			ot := basics.OverflowTracker{}
+			ot := basics.OverflowTrackerU64{}
 			onlineStake := ot.SubA(totalOnlineStake, expiredStake)
 			if ot.Overflowed {
 				return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow subtracting ExpiredOnlineCirculation: %d - %d", totalOnlineStake, expiredStake)
@@ -960,7 +960,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			return topOnlineAccounts, onlineStake, nil
 		}
 
-		ot := basics.OverflowTracker{}
+		ot := basics.OverflowTrackerU64{}
 		for _, oa := range invalidOnlineAccounts {
 			totalOnlineStake = ot.SubA(totalOnlineStake, oa.MicroAlgos)
 			if ot.Overflowed {
@@ -1076,7 +1076,7 @@ func (ao *onlineAccounts) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (b
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
-	ot := basics.OverflowTracker{}
+	ot := basics.OverflowTrackerU64{}
 	expiredStake := basics.MicroAlgos{}
 	for _, d := range expiredAccounts {
 		expiredStake = ot.AddA(expiredStake, d.MicroAlgosWithRewards)

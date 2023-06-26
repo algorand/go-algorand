@@ -59,6 +59,93 @@ func TestAddSaturate32(t *testing.T) {
 	require.Equal(t, uint32(math.MaxUint32), AddSaturate(math.MaxUint32, uint32(2)))
 }
 
+func BenchmarkAddSaturateGenerics(b *testing.B) {
+	b.ResetTimer()
+
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(0); n < uint64(b.N); n++ {
+		temp := AddSaturate(n, startVar)
+		startVar = temp
+	}
+}
+
+// AddSaturateU64Old adds 2 values with saturation on overflow (OLD IMPLEMENTATION)
+func AddSaturateU64Old(a uint64, b uint64) uint64 {
+	res, overflowed := OAdd(a, b)
+	if overflowed {
+		return math.MaxUint64
+	}
+	return res
+}
+
+func BenchmarkAddSaturateU64Old(b *testing.B) {
+	b.ResetTimer()
+
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(0); n < uint64(b.N); n++ {
+		temp := AddSaturateU64Old(n, startVar)
+		startVar = temp
+	}
+}
+
+func BenchmarkSubSaturateGenerics(b *testing.B) {
+	b.ResetTimer()
+
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(0); n < uint64(b.N); n++ {
+		temp := SubSaturate(n, startVar)
+		startVar = temp
+	}
+}
+
+// SubSaturateU64Old subtracts 2 values with saturation on underflow (OLD IMPLEMENTATION)
+func SubSaturateU64Old(a uint64, b uint64) uint64 {
+	res, overflowed := OSub(a, b)
+	if overflowed {
+		return 0
+	}
+	return res
+}
+
+func BenchmarkSubSaturateU64Old(b *testing.B) {
+	b.ResetTimer()
+
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(0); n < uint64(b.N); n++ {
+		temp := SubSaturateU64Old(n, startVar)
+		startVar = temp
+	}
+}
+
+func BenchmarkMulSaturateGenerics(b *testing.B) {
+	b.ResetTimer()
+
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(1); n <= uint64(b.N); n++ {
+		temp := MulSaturate(n, startVar)
+		startVar = temp
+	}
+}
+
+// MulSaturateU64Old multiplies 2 values with saturation on overflow (OLD IMPLEMENTATION)
+func MulSaturateU64Old(a uint64, b uint64) uint64 {
+	res, overflowed := OMul(a, b)
+	if overflowed {
+		return math.MaxUint64
+	}
+	return res
+}
+
+func BenchmarkMulSaturateU64Old(b *testing.B) {
+	b.ResetTimer()
+
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(1); n <= uint64(b.N); n++ {
+		temp := MulSaturateU64Old(n, startVar)
+		startVar = temp
+	}
+}
+
 func TestRoundUpToMultipleOf(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -137,7 +224,7 @@ func TestNewMuldiv(t *testing.T) {
 		r1, o1 := OldMuldiv(a, b, c)
 		r2, o2 := Muldiv(a, b, c)
 		require.Equal(t, o1, o2)
-		// implementations differ in r1,r2 if overflow. old implemention is
+		// implementations differ in r1,r2 if overflew. old implemention is
 		// returning an unspecified value
 		if !o1 {
 			require.Equal(t, r1, r2)

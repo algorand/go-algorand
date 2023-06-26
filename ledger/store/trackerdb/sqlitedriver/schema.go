@@ -206,7 +206,7 @@ func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.Accoun
 
 	_, err = e.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
-		var ot basics.OverflowTracker
+		var ot basics.OverflowTrackerU64
 		var totals ledgercore.AccountTotals
 
 		for addr, data := range initAccounts {
