@@ -84,30 +84,21 @@ func SubSaturate[T constraints.Unsigned](a, b T) T {
 }
 
 // Add adds 2 values with overflow detection
-func (t *OverflowTracker) Add(a, b uint64) uint64 {
-	res, overflowed := OAdd(a, b)
-	if overflowed {
-		t.Overflowed = true
-	}
-	return res
+func (t *OverflowTracker) Add(a, b uint64) (res uint64) {
+	res, t.Overflowed = OAdd(a, b)
+	return
 }
 
 // Sub subtracts b from a with overflow detection
-func (t *OverflowTracker) Sub(a, b uint64) uint64 {
-	res, overflowed := OSub(a, b)
-	if overflowed {
-		t.Overflowed = true
-	}
-	return res
+func (t *OverflowTracker) Sub(a, b uint64) (res uint64) {
+	res, t.Overflowed = OSub(a, b)
+	return
 }
 
 // Mul multiplies b by a with overflow detection
-func (t *OverflowTracker) Mul(a, b uint64) uint64 {
-	res, overflowed := OMul(a, b)
-	if overflowed {
-		t.Overflowed = true
-	}
-	return res
+func (t *OverflowTracker) Mul(a, b uint64) (res uint64) {
+	res, t.Overflowed = OMul(a, b)
+	return
 }
 
 // OAddA adds 2 MicroAlgos values with overflow tracking
@@ -138,21 +129,15 @@ func (t *OverflowTracker) SubA(a, b MicroAlgos) MicroAlgos {
 }
 
 // AddR adds 2 Round values with overflow tracking
-func (t *OverflowTracker) AddR(a, b Round) Round {
-	round, overflowed := OAdd(a, b)
-	if overflowed {
-		t.Overflowed = true
-	}
-	return round
+func (t *OverflowTracker) AddR(a, b Round) (round Round) {
+	round, t.Overflowed = OAdd(a, b)
+	return
 }
 
 // SubR subtracts b from a with overflow tracking
-func (t *OverflowTracker) SubR(a, b Round) Round {
-	round, overflowed := OSub(a, b)
-	if overflowed {
-		t.Overflowed = true
-	}
-	return round
+func (t *OverflowTracker) SubR(a, b Round) (round Round) {
+	round, t.Overflowed = OSub(a, b)
+	return
 }
 
 // ScalarMulA multiplies an Algo amount by a scalar
