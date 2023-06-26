@@ -118,6 +118,8 @@ type onlineAccounts struct {
 
 	// disableCache (de)activates the LRU cache use in onlineAccounts
 	disableCache bool
+
+	offsetChanges [][]uint64
 }
 
 // initialize initializes the accountUpdates structure
@@ -315,17 +317,35 @@ func (ao *onlineAccounts) produceCommittingTask(committedRound basics.Round, dbR
 	}
 
 	lowestRound := ao.voters.lowestRound(newBase)
+	lowestPendingRound := ao.voters.lowestPendingRound(newBase)
 
 	offset = uint64(newBase - dbRound)
 	offset = ao.consecutiveVersion(offset)
+	offset = ao.calculateVotersOffset(dbRound, offset, lowestPendingRound)
 
 	// synchronize base and offset with account updates
 	if offset < dcr.offset {
+		ao.offsetChanges = append(ao.offsetChanges, []uint64{uint64(dbRound), dcr.offset, uint64(lowestPendingRound), offset})
 		dcr.offset = offset
 	}
 	dcr.oldBase = dbRound
 	dcr.lowestRound = lowestRound
 	return dcr
+}
+
+// calculateVotersOffset recalculates the offset in order to prevent tracker db advancing
+func (ao *onlineAccounts) calculateVotersOffset(dbRound basics.Round, offset uint64, lowestPendingRound basics.Round) uint64 {
+	if lowestPendingRound == 0 || dbRound+basics.Round(offset) <= lowestPendingRound {
+		// lowestPendingRound not set or non-completed voters ahead of the new base, no need to adjust offset
+		return offset
+	}
+	if lowestPendingRound < dbRound {
+		// this should not happen but this is recoverable with restart
+		ao.log.Warnf("onlineAccounts.calculateVotersOffset: lowestPendingRound %d < dbRound %d", lowestPendingRound, dbRound)
+		return offset
+	}
+
+	return uint64(lowestPendingRound - dbRound)
 }
 
 func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {

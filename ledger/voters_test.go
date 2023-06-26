@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -274,5 +275,34 @@ func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 	a.NoError(err)
 	for j := 0; j < len(top.Participants); j++ {
 		a.Equal(merklesignature.NoKeysCommitment, top.Participants[j].PK.Commitment)
+	}
+}
+
+func TestLowestPendingRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var vt votersTracker
+	const maxRounds = basics.Round(20)
+	vt.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound, maxRounds)
+	for i := basics.Round(1); i <= maxRounds/2; i++ {
+		voters := new(ledgercore.VotersForRound)
+		voters.Tree = &merklearray.Tree{}
+		vt.setVoters(i, voters)
+	}
+
+	for i := maxRounds/2 + 1; i <= maxRounds; i++ {
+		voters := new(ledgercore.VotersForRound)
+		voters.Tree = nil
+		vt.setVoters(i, voters)
+	}
+
+	for i := basics.Round(1); i < maxRounds; i++ {
+		lowestPending := vt.lowestPendingRound(i)
+		if i <= maxRounds/2 {
+			require.Equal(t, i, lowestPending)
+		} else {
+			require.Equal(t, basics.Round(maxRounds/2+1), lowestPending)
+		}
 	}
 }

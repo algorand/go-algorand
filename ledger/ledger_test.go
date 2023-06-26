@@ -2958,6 +2958,8 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 	beforeRemoveVotersLen := len(vtSnapshot)
+	l.trackerLog().Infof("votersTracker.removeOldVoters0: %d, %v, %v", l.trackers.dbRound, l.acctsOnline.voters.deleted, l.acctsOnline.voters.added)
+	l.trackerLog().Infof("acctsOnline.produceCommittingTask: %v", l.acctsOnline.offsetChanges)
 	err = l.reloadLedger()
 	require.NoError(t, err)
 	_, found := l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
@@ -2975,9 +2977,11 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 	require.False(t, found)
 
 	vtSnapshot = l.acctsOnline.voters.votersForRoundCache
+	l.trackerLog().Infof("votersTracker.removeOldVoters1: %d, %v, %v", l.trackers.dbRound, l.acctsOnline.voters.deleted, l.acctsOnline.voters.added)
 	err = l.reloadLedger()
 	require.NoError(t, err)
 
+	l.trackerLog().Infof("votersTracker.removeOldVoters2: %d, %v, %v", l.trackers.dbRound, l.acctsOnline.voters.deleted, l.acctsOnline.voters.added)
 	verifyVotersContent(t, vtSnapshot, l.acctsOnline.voters.votersForRoundCache)
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.False(t, found)

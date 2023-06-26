@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -31,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -2177,4 +2179,27 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			a.Equal(int(conf.MaxAcctLookback), len(oa.deltas))
 		}
 	}
+}
+
+func TestCalculateVotersOffset(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var bufNewLogger bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&bufNewLogger)
+
+	ao := onlineAccounts{}
+	ao.log = log
+
+	require.Equal(t, uint64(10), ao.calculateVotersOffset(100, 10, 0))
+	require.Equal(t, uint64(10), ao.calculateVotersOffset(100, 10, 120))
+
+	require.Equal(t, uint64(10), ao.calculateVotersOffset(100, 10, 110))
+	require.Equal(t, uint64(0), ao.calculateVotersOffset(100, 10, 100))
+	require.Equal(t, uint64(1), ao.calculateVotersOffset(100, 10, 101))
+	require.NotContains(t, bufNewLogger.String(), "onlineAccounts.calculateVotersOffset")
+
+	require.Equal(t, uint64(10), ao.calculateVotersOffset(100, 10, 99))
+	require.Contains(t, bufNewLogger.String(), "onlineAccounts.calculateVotersOffset")
 }
