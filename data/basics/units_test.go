@@ -250,7 +250,7 @@ func TestNewMuldiv(t *testing.T) {
 		r1, o1 := OldMuldiv(a, b, c)
 		r2, o2 := Muldiv(a, b, c)
 		require.Equal(t, o1, o2)
-		// implementations differ in r1,r2 if overflew. old implemention is
+		// implementations differ in r1,r2 if overflow. old implemention is
 		// returning an unspecified value
 		if !o1 {
 			require.Equal(t, r1, r2)

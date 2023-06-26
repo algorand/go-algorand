@@ -328,7 +328,7 @@ func (s RewardsState) NextRewardsState(nextRound basics.Round, nextProto config.
 		rewardsRate = s.RewardsRate
 	}
 
-	var ot basics.OverflowTrackerU64
+	var ot basics.OverflowTracker
 	rewardsWithResidue := ot.Add(rewardsRate, res.RewardsResidue)
 	nextRewardLevel := ot.Add(res.RewardsLevel, rewardsWithResidue/totalRewardUnits)
 	nextResidue := rewardsWithResidue % totalRewardUnits

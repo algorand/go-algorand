@@ -120,7 +120,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	}
 
 	// Set large enough soft file descriptors limit.
-	var ot basics.OverflowTrackerU64
+	var ot basics.OverflowTracker
 	fdRequired := ot.Add(cfg.ReservedFDs, cfg.RestConnectionsHardLimit)
 	if ot.Overflowed {
 		return errors.New(
@@ -131,7 +131,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		return fmt.Errorf("Initialize() err: %w", err)
 	}
 	if cfg.IsGossipServer() {
-		var ot basics.OverflowTrackerU64
+		var ot basics.OverflowTracker
 		fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
 		if ot.Overflowed {
 			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")

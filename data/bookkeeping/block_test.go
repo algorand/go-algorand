@@ -477,7 +477,7 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 		for rnd := 1; rnd < int(consensusParams.RewardsRateRefreshInterval+2); rnd++ {
 			nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits, log)
 			// adjust the incentive pool balance
-			var ot basics.OverflowTrackerU64
+			var ot basics.OverflowTracker
 
 			// get number of rewards per unit
 			rewardsPerUnit := ot.Sub(nextRewardState.RewardsLevel, curRewardsState.RewardsLevel)
@@ -526,7 +526,7 @@ func performRewardsRateCalculation(
 	for rnd := startingRound; rnd < startingRound+uint64(consensusParams.RewardsRateRefreshInterval)*3; rnd++ {
 		nextRewardState := curRewardsState.NextRewardsState(basics.Round(rnd), consensusParams, basics.MicroAlgos{Raw: incentivePoolBalance}, totalRewardUnits, log)
 		// adjust the incentive pool balance
-		var ot basics.OverflowTrackerU64
+		var ot basics.OverflowTracker
 
 		// get number of rewards per unit
 		rewardsPerUnit := ot.Sub(nextRewardState.RewardsLevel, curRewardsState.RewardsLevel)

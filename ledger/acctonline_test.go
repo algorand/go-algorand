@@ -1843,7 +1843,7 @@ func TestAcctOnlineTop_ChangeOnlineStake(t *testing.T) {
 
 type MicroAlgoOperations struct {
 	a  *require.Assertions
-	ot basics.OverflowTrackerU64
+	ot basics.OverflowTracker
 }
 
 func (m *MicroAlgoOperations) Sub(x, y basics.MicroAlgos) basics.MicroAlgos {

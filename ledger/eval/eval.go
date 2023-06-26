@@ -523,7 +523,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	fromBalNew := fromBal.WithUpdatedRewards(cs.proto, rewardlvl)
 
 	if fromRewards != nil {
-		var ot basics.OverflowTrackerU64
+		var ot basics.OverflowTracker
 		newFromRewards := ot.AddA(*fromRewards, ot.SubA(fromBalNew.MicroAlgos, fromBal.MicroAlgos))
 		if ot.Overflowed {
 			return fmt.Errorf("overflowed tracking of fromRewards for account %v: %d + (%d - %d)", from, *fromRewards, fromBalNew.MicroAlgos, fromBal.MicroAlgos)
@@ -551,7 +551,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	toBalNew := toBal.WithUpdatedRewards(cs.proto, rewardlvl)
 
 	if toRewards != nil {
-		var ot basics.OverflowTrackerU64
+		var ot basics.OverflowTracker
 		newToRewards := ot.AddA(*toRewards, ot.SubA(toBalNew.MicroAlgos, toBal.MicroAlgos))
 		if ot.Overflowed {
 			return fmt.Errorf("overflowed tracking of toRewards for account %v: %d + (%d - %d)", to, *toRewards, toBalNew.MicroAlgos, toBal.MicroAlgos)
@@ -752,7 +752,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	}
 
 	// Withdraw rewards from the incentive pool
-	var ot basics.OverflowTrackerU64
+	var ot basics.OverflowTracker
 	rewardsPerUnit := ot.Sub(eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel)
 	if ot.Overflowed {
 		return nil, fmt.Errorf("overflowed subtracting rewards(%d, %d) levels for block %v", eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel, hdr.Round)

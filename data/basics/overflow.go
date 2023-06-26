@@ -23,12 +23,9 @@ import (
 )
 
 // OverflowTracker is used to track when an operation causes an overflow
-type OverflowTracker[T constraints.Unsigned] struct {
+type OverflowTracker struct {
 	Overflowed bool
 }
-
-// OverflowTrackerU64 is the u64 instantiation for OverflowTracker
-type OverflowTrackerU64 = OverflowTracker[uint64]
 
 // OAdd adds 2 values with overflow detection
 func OAdd[T constraints.Unsigned](a, b T) (res T, overflowed bool) {
@@ -87,7 +84,7 @@ func SubSaturate[T constraints.Unsigned](a, b T) T {
 }
 
 // Add adds 2 values with overflow detection
-func (t *OverflowTracker[T]) Add(a, b T) T {
+func (t *OverflowTracker) Add(a, b uint64) uint64 {
 	res, overflowed := OAdd(a, b)
 	if overflowed {
 		t.Overflowed = true
@@ -96,7 +93,7 @@ func (t *OverflowTracker[T]) Add(a, b T) T {
 }
 
 // Sub subtracts b from a with overflow detection
-func (t *OverflowTracker[T]) Sub(a, b T) T {
+func (t *OverflowTracker) Sub(a, b uint64) uint64 {
 	res, overflowed := OSub(a, b)
 	if overflowed {
 		t.Overflowed = true
@@ -105,7 +102,7 @@ func (t *OverflowTracker[T]) Sub(a, b T) T {
 }
 
 // Mul multiplies b by a with overflow detection
-func (t *OverflowTracker[T]) Mul(a, b T) T {
+func (t *OverflowTracker) Mul(a, b uint64) uint64 {
 	res, overflowed := OMul(a, b)
 	if overflowed {
 		t.Overflowed = true
@@ -131,28 +128,28 @@ func MulAIntSaturate(a MicroAlgos, b int) MicroAlgos {
 }
 
 // AddA adds 2 MicroAlgos values with overflow tracking
-func (t *OverflowTracker[T]) AddA(a, b MicroAlgos) MicroAlgos {
-	return MicroAlgos{Raw: uint64(t.Add(T(a.Raw), T(b.Raw)))}
+func (t *OverflowTracker) AddA(a, b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: t.Add(a.Raw, b.Raw)}
 }
 
 // SubA subtracts b from a with overflow tracking
-func (t *OverflowTracker[T]) SubA(a, b MicroAlgos) MicroAlgos {
-	return MicroAlgos{Raw: uint64(t.Sub(T(a.Raw), T(b.Raw)))}
+func (t *OverflowTracker) SubA(a, b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: t.Sub(a.Raw, b.Raw)}
 }
 
 // AddR adds 2 Round values with overflow tracking
-func (t *OverflowTracker[T]) AddR(a, b Round) Round {
-	return Round(t.Add(T(a), T(b)))
+func (t *OverflowTracker) AddR(a, b Round) Round {
+	return Round(t.Add(uint64(a), uint64(b)))
 }
 
 // SubR subtracts b from a with overflow tracking
-func (t *OverflowTracker[T]) SubR(a, b Round) Round {
-	return Round(t.Sub(T(a), T(b)))
+func (t *OverflowTracker) SubR(a, b Round) Round {
+	return Round(t.Sub(uint64(a), uint64(b)))
 }
 
 // ScalarMulA multiplies an Algo amount by a scalar
-func (t *OverflowTracker[T]) ScalarMulA(a MicroAlgos, b uint64) MicroAlgos {
-	return MicroAlgos{Raw: uint64(t.Mul(T(a.Raw), T(b)))}
+func (t *OverflowTracker) ScalarMulA(a MicroAlgos, b uint64) MicroAlgos {
+	return MicroAlgos{Raw: t.Mul(a.Raw, b)}
 }
 
 // Muldiv computes a*b/c.  The overflow flag indicates that
