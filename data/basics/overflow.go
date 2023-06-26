@@ -139,12 +139,20 @@ func (t *OverflowTracker) SubA(a, b MicroAlgos) MicroAlgos {
 
 // AddR adds 2 Round values with overflow tracking
 func (t *OverflowTracker) AddR(a, b Round) Round {
-	return Round(t.Add(uint64(a), uint64(b)))
+	round, overflowed := OAdd(a, b)
+	if overflowed {
+		t.Overflowed = true
+	}
+	return round
 }
 
 // SubR subtracts b from a with overflow tracking
 func (t *OverflowTracker) SubR(a, b Round) Round {
-	return Round(t.Sub(uint64(a), uint64(b)))
+	round, overflowed := OSub(a, b)
+	if overflowed {
+		t.Overflowed = true
+	}
+	return round
 }
 
 // ScalarMulA multiplies an Algo amount by a scalar
