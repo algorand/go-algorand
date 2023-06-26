@@ -630,7 +630,7 @@ var rawsendCmd = &cobra.Command{
 				}
 
 				if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
-					reportInfof(infoTxCommitted, txidStr, txn.ConfirmedRound)
+					reportInfof(infoTxCommitted, txidStr, *txn.ConfirmedRound)
 					break
 				}
 
