@@ -69,9 +69,16 @@ func BenchmarkAddSaturateGenerics(b *testing.B) {
 	}
 }
 
+// OldOAdd adds 2 values with overflow detection
+func OldOAdd(a uint64, b uint64) (res uint64, overflowed bool) {
+	res = a + b
+	overflowed = res < a
+	return
+}
+
 // AddSaturateU64Old adds 2 values with saturation on overflow (OLD IMPLEMENTATION)
 func AddSaturateU64Old(a uint64, b uint64) uint64 {
-	res, overflowed := OAdd(a, b)
+	res, overflowed := OldOAdd(a, b)
 	if overflowed {
 		return math.MaxUint64
 	}
@@ -98,9 +105,16 @@ func BenchmarkSubSaturateGenerics(b *testing.B) {
 	}
 }
 
+// OldOSub subtracts b from a with overflow detection
+func OldOSub(a uint64, b uint64) (res uint64, overflowed bool) {
+	res = a - b
+	overflowed = res > a
+	return
+}
+
 // SubSaturateU64Old subtracts 2 values with saturation on underflow (OLD IMPLEMENTATION)
 func SubSaturateU64Old(a uint64, b uint64) uint64 {
-	res, overflowed := OSub(a, b)
+	res, overflowed := OldOSub(a, b)
 	if overflowed {
 		return 0
 	}
@@ -127,9 +141,21 @@ func BenchmarkMulSaturateGenerics(b *testing.B) {
 	}
 }
 
+// OldOMul multiplies 2 values with overflow detection
+func OldOMul(a uint64, b uint64) (res uint64, overflowed bool) {
+	if b == 0 {
+		return 0, false
+	}
+	c := a * b
+	if c/b != a {
+		return 0, true
+	}
+	return c, false
+}
+
 // MulSaturateU64Old multiplies 2 values with saturation on overflow (OLD IMPLEMENTATION)
 func MulSaturateU64Old(a uint64, b uint64) uint64 {
-	res, overflowed := OMul(a, b)
+	res, overflowed := OldOMul(a, b)
 	if overflowed {
 		return math.MaxUint64
 	}

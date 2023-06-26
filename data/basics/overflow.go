@@ -104,7 +104,7 @@ func (t *OverflowTracker[T]) Sub(a, b T) T {
 	return res
 }
 
-// Mul multiplies b from a with overflow detection
+// Mul multiplies b by a with overflow detection
 func (t *OverflowTracker[T]) Mul(a, b T) T {
 	res, overflowed := OMul(a, b)
 	if overflowed {
