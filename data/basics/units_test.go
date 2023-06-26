@@ -60,8 +60,6 @@ func TestAddSaturate32(t *testing.T) {
 }
 
 func BenchmarkAddSaturateGenerics(b *testing.B) {
-	b.ResetTimer()
-
 	startVar := uint64(0xdeadbeef)
 	for n := uint64(0); n < uint64(b.N); n++ {
 		temp := AddSaturate(n, startVar)
@@ -86,8 +84,6 @@ func addSaturateU64Old(a uint64, b uint64) uint64 {
 }
 
 func BenchmarkAddSaturateU64Old(b *testing.B) {
-	b.ResetTimer()
-
 	startVar := uint64(0xdeadbeef)
 	for n := uint64(0); n < uint64(b.N); n++ {
 		temp := addSaturateU64Old(n, startVar)
@@ -96,8 +92,6 @@ func BenchmarkAddSaturateU64Old(b *testing.B) {
 }
 
 func BenchmarkSubSaturateGenerics(b *testing.B) {
-	b.ResetTimer()
-
 	startVar := uint64(0xdeadbeef)
 	for n := uint64(0); n < uint64(b.N); n++ {
 		temp := SubSaturate(n, startVar)
@@ -122,8 +116,6 @@ func subSaturateU64Old(a uint64, b uint64) uint64 {
 }
 
 func BenchmarkSubSaturateU64Old(b *testing.B) {
-	b.ResetTimer()
-
 	startVar := uint64(0xdeadbeef)
 	for n := uint64(0); n < uint64(b.N); n++ {
 		temp := subSaturateU64Old(n, startVar)
@@ -132,8 +124,6 @@ func BenchmarkSubSaturateU64Old(b *testing.B) {
 }
 
 func BenchmarkMulSaturateGenerics(b *testing.B) {
-	b.ResetTimer()
-
 	startVar := uint64(0xdeadbeef)
 	for n := uint64(1); n <= uint64(b.N); n++ {
 		temp := MulSaturate(n, startVar)
@@ -163,8 +153,6 @@ func mulSaturateU64Old(a uint64, b uint64) uint64 {
 }
 
 func BenchmarkMulSaturateU64Old(b *testing.B) {
-	b.ResetTimer()
-
 	startVar := uint64(0xdeadbeef)
 	for n := uint64(1); n <= uint64(b.N); n++ {
 		temp := mulSaturateU64Old(n, startVar)
