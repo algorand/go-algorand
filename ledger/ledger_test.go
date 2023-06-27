@@ -2945,7 +2945,16 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 
 	// the voters tracker should contain all the voters for each stateproof round. nothing should be removed
 	l.WaitForCommit(l.Latest())
-	triggerTrackerFlush(t, l, genesisInitState)
+	// wait for any pending tracker flushes
+	l.trackers.waitAccountsWriting()
+	// force flush as needed
+	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
+		l.trackers.mu.Lock()
+		l.trackers.lastFlushTime = time.Time{}
+		l.trackers.mu.Unlock()
+		l.notifyCommit(l.Latest())
+		l.trackers.waitAccountsWriting()
+	}
 
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 	beforeRemoveVotersLen := len(vtSnapshot)
@@ -3259,7 +3268,18 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	// To be deleted, but not yet deleted (waiting for commit)
 	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
 
-	triggerTrackerFlush(t, l, genesisInitState)
+	// first ensure the block is committed into blockdb
+	l.WaitForCommit(l.Latest())
+	// wait for any pending tracker flushes
+	l.trackers.waitAccountsWriting()
+	// force flush as needed
+	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
+		l.trackers.mu.Lock()
+		l.trackers.lastFlushTime = time.Time{}
+		l.trackers.mu.Unlock()
+		l.notifyCommit(spblk.BlockHeader.Round)
+		l.trackers.waitAccountsWriting()
+	}
 
 	err = l.reloadLedger()
 	a.NoError(err)

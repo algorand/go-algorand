@@ -492,7 +492,7 @@ func addBlock(t *testing.T, ledger *data.Ledger) (timestamp int64) {
 	blk, err := ledger.Block(ledger.LastRound())
 	require.NoError(t, err)
 	blk.BlockHeader.Round++
-	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100000 * 1000)
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 

@@ -590,6 +590,39 @@ var MaxAvailableAppProgramLen int
 // to be taken offline, that would be proposed to be taken offline.
 var MaxProposedExpiredOnlineAccounts int
 
+// MaxAppTotalArgLen is the maximum number of bytes across all arguments of an application
+// max sum([len(arg) for arg in txn.ApplicationArgs])
+var MaxAppTotalArgLen int
+
+// MaxAssetNameBytes is the maximum asset name length in bytes
+var MaxAssetNameBytes int
+
+// MaxAssetUnitNameBytes is the maximum asset unit name length in bytes
+var MaxAssetUnitNameBytes int
+
+// MaxAssetURLBytes is the maximum asset URL length in bytes
+var MaxAssetURLBytes int
+
+// MaxAppBytesValueLen is the maximum length of a bytes value used in an application's global or
+// local key/value store
+var MaxAppBytesValueLen int
+
+// MaxAppBytesKeyLen is the maximum length of a key used in an application's global or local
+// key/value store
+var MaxAppBytesKeyLen int
+
+// StateProofTopVoters is a bound on how many online accounts get to
+// participate in forming the state proof, by including the
+// top StateProofTopVoters accounts (by normalized balance) into the
+// vector commitment.
+var StateProofTopVoters int
+
+// MaxTxnBytesPerBlock determines the maximum number of bytes
+// that transactions can take up in a block.  Specifically,
+// the sum of the lengths of encodings of each transaction
+// in a block must not exceed MaxTxnBytesPerBlock.
+var MaxTxnBytesPerBlock int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -627,6 +660,17 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
 	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
+
+	// These bounds are exported to make them available to the msgp generator for calculating
+	// maximum valid message size for each message going across the wire.
+	checkSetMax(p.MaxAppTotalArgLen, &MaxAppTotalArgLen)
+	checkSetMax(p.MaxAssetNameBytes, &MaxAssetNameBytes)
+	checkSetMax(p.MaxAssetUnitNameBytes, &MaxAssetUnitNameBytes)
+	checkSetMax(p.MaxAssetURLBytes, &MaxAssetURLBytes)
+	checkSetMax(p.MaxAppBytesValueLen, &MaxAppBytesValueLen)
+	checkSetMax(p.MaxAppKeyLen, &MaxAppBytesKeyLen)
+	checkSetMax(int(p.StateProofTopVoters), &StateProofTopVoters)
+	checkSetMax(p.MaxTxnBytesPerBlock, &MaxTxnBytesPerBlock)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
