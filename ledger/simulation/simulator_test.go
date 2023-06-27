@@ -233,7 +233,7 @@ int 1`,
 		mocktracer.AfterOpcode(false),
 		mocktracer.AfterProgram(logic.ModeApp, false),
 		mocktracer.AfterTxn(protocol.ApplicationCallTx, evalBlock.Payset[1].ApplyData, false),
-		mocktracer.AfterTxnGroup(2, &expectedDelta, nil, false),
+		mocktracer.AfterTxnGroup(2, &expectedDelta, false),
 		//Block evaluation
 		mocktracer.AfterBlock(block.Block().Round()),
 	}

@@ -314,29 +314,21 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	} else {
 		g.setBlockHeader(&cert)
 
-		txGroups := [][]txn.SignedTxn{}
+		txGroupsAD := [][]txn.SignedTxnWithAD{}
 		for intra < minTxnsForBlock {
-			var txGroup []txn.SignedTxn
+			var txGroupAD []txn.SignedTxnWithAD
 			var err error
-			txGroup, intra, err = g.generateTxGroup(g.round, intra)
+			txGroupAD, intra, err = g.generateTxGroup(g.round, intra)
 			if err != nil {
 				return fmt.Errorf("failed to generate transaction: %w", err)
 			}
-			if len(txGroup) == 0 {
+			if len(txGroupAD) == 0 {
 				return fmt.Errorf("failed to generate transaction: no transactions given")
 			}
-			txGroups = append(txGroups, txGroup)
+			txGroupsAD = append(txGroupsAD, txGroupAD)
 		}
 
-
-		if intra < minTxnsForBlock {
-			return fmt.Errorf("not enough transactions generated: %d > %d", minTxnsForBlock, intra)
-		}
-
-		txGroupsAD := txnGroupsWithAD(txGroups)
-
-		// nonValidatedBlock is of type *ledgercore.ValidateBlock but was generated without validation
-		nonValidatedBlock, ledgerTxnCount, err := g.evaluateBlock(cert.Block.BlockHeader, txGroupsAD, int(intra))
+		vBlock, ledgerTxnCount, err := g.evaluateBlock(cert.Block.BlockHeader, txGroupsAD, int(intra))
 		if err != nil {
 			return fmt.Errorf("failed to evaluate block: %w", err)
 		}
@@ -344,12 +336,12 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter + intra)
 		}
 
-		err = g.ledger.AddValidatedBlock(*nonValidatedBlock, cert.Certificate)
+		err = g.ledger.AddValidatedBlock(*vBlock, cert.Certificate)
 		if err != nil {
 			return fmt.Errorf("failed to add validated block: %w", err)
 		}
 
-		cert.Block.Payset = nonValidatedBlock.Block().Payset
+		cert.Block.Payset = vBlock.Block().Payset
 
 		if g.verbose {
 			errs := g.introspectLedgerVsGenerator(g.round, intra)
@@ -499,19 +491,7 @@ func getAppTxOptions() []interface{} {
 
 // ---- Transaction Generation (Pay/Asset/Apps) ----
 
-func txnGroupsWithAD(txGroups [][]txn.SignedTxn) ([][]txn.SignedTxnWithAD) {
-	txGroupsAD := make([][]txn.SignedTxnWithAD, len(txGroups))
-	for i, txGroup := range txGroups {
-		txGroupAD := make([]txn.SignedTxnWithAD, len(txGroup))
-		for j, tx := range txGroup {
-			txGroupAD[j] = txn.SignedTxnWithAD{SignedTxn: tx}
-		}
-		txGroupsAD[i] = txGroupAD
-	}
-	return txGroupsAD
-}
-
-func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxn, uint64 /* nextIntra */, error) {
+func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxnWithAD, uint64 /* nextIntra */, error) {
 	// TODO: return the number of transactions generated instead of updating intra!!!
 	selection, err := weightedSelection(g.transactionWeights, getTransactionOptions(), paymentTx)
 	if err != nil {
@@ -544,7 +524,11 @@ func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxn
 		return nil, intra, fmt.Errorf("no transactions generated")
 	}
 
+	txnGroupAD := make([]txn.SignedTxnWithAD, len(signedTxns))
 	for i := range signedTxns {
+		txnGroupAD[i] = txn.SignedTxnWithAD{SignedTxn: signedTxns[i]}
+
+		// for debugging:
 		g.latestPaysetWithExpectedID = append(
 			g.latestPaysetWithExpectedID,
 			txnWithExpectedID{
@@ -555,7 +539,7 @@ func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxn
 			},
 		)
 	}
-	return signedTxns, nextIntra, nil
+	return txnGroupAD, nextIntra, nil
 }
 
 // ---- 1. Pay Transactions ----
