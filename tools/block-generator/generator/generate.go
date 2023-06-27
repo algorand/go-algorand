@@ -52,29 +52,6 @@ var approvalSwap string
 //go:embed teal/swap_clear.teal
 var clearSwap string
 
-// ---- init ----
-
-// effects is a map that contains the hard-coded non-trivial
-// consequents of a transaction type.
-// The "sibling" transactions are added to an atomic transaction group
-// in a "makeXyzTransaction" function defined in make_transactions.go.
-// The "inner" transactions are created inside the TEAL programs. See:
-// * teal/poap_boxes.teal
-// * teal/swap_amm.teal
-//
-// appBoxesCreate: 1 sibling payment tx
-// appBoxesOptin: 1 sibling payment tx, 2 inner tx
-var effects = map[TxTypeID][]TxEffect{
-	appBoxesCreate: {
-		{effectPaymentTxSibling, 1},
-	},
-	appBoxesOptin: {
-		{effectPaymentTxSibling, 1},
-		{effectInnerTx, 2},
-	},
-}
-
-
 // ---- constructors ----
 
 // MakeGenerator initializes the Generator object.
@@ -213,17 +190,6 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 	}
 
 	return gen, nil
-}
-
-func (g *generator) resetPendingApps() {
-	g.pendingAppSlice = map[appKind][]*appData{
-		appKindBoxes: make([]*appData, 0),
-		appKindSwap:  make([]*appData, 0),
-	}
-	g.pendingAppMap = map[appKind]map[uint64]*appData{
-		appKindBoxes: make(map[uint64]*appData),
-		appKindSwap:  make(map[uint64]*appData),
-	}
 }
 
 // initializeAccounting creates the genesis accounts.
@@ -816,8 +782,6 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 	return
 }
 
-// ---- for 3. App Transactions see generate_apps.go ----
-
 // ---- metric data recorders ----
 
 func track(id TxTypeID) (TxTypeID, time.Time) {
@@ -827,7 +791,7 @@ func track(id TxTypeID) (TxTypeID, time.Time) {
 func (g *generator) recordData(id TxTypeID, start time.Time) {
 	g.latestData[id]++
 	data := g.reportData[id]
-	data.GenerationCount += count
+	data.GenerationCount += 1
 	data.GenerationTime += time.Since(start)
 	g.reportData[id] = data
 }
