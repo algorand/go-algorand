@@ -632,15 +632,15 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 		}
 		assetParams, err := client.AssetInformation(assetHolding.AssetID)
 		if err != nil {
-			hasError = true
-
 			var httpError apiClient.HTTPError
 			if errors.As(err, &httpError) && httpError.StatusCode == http.StatusNotFound {
 				fmt.Fprintf(report, "\tID %d, <deleted/unknown asset>\n", assetHolding.AssetID)
 			} else {
 				fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetID, address, err)
 				fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetID)
+				hasError = true
 			}
+			continue
 		}
 
 		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Params.Decimals)
