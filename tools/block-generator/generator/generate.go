@@ -19,13 +19,13 @@ package generator
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"os"
 	"time"
 
-	"github.com/algorand/go-algorand/agreement"
 	cconfig "github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -35,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 	txn "github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -313,75 +312,50 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		// we'll write genesis block / offset round for non-empty database
 		cert.Block, _, _ = g.ledger.BlockCert(basics.Round(round - g.roundOffset))
 	} else {
-		// generate a block
-		cert.Block.BlockHeader = bookkeeping.BlockHeader{
-			Round:          basics.Round(g.round),
-			Branch:         bookkeeping.BlockHash{},
-			Seed:           committee.Seed{},
-			TxnCommitments: bookkeeping.TxnCommitments{NativeSha512_256Commitment: crypto.Digest{}},
-			TimeStamp:      g.timestamp,
-			GenesisID:      g.genesisID,
-			GenesisHash:    g.genesisHash,
-			RewardsState: bookkeeping.RewardsState{
-				FeeSink:                   g.feeSink,
-				RewardsPool:               g.rewardsPool,
-				RewardsLevel:              0,
-				RewardsRate:               0,
-				RewardsResidue:            0,
-				RewardsRecalculationRound: 0,
-			},
-			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: g.protocol,
-			},
-			UpgradeVote:        bookkeeping.UpgradeVote{},
-			StateProofTracking: nil,
-		}
+		g.setBlockHeader(&cert)
 
-		// Generate the txibs
-		txibs := []txn.SignedTxnInBlock{}
+		txGroups := [][]txn.SignedTxn{}
 		for intra < minTxnsForBlock {
-			var signedTxns []txn.SignedTxn
+			var txGroup []txn.SignedTxn
 			var err error
-			signedTxns, intra, err = g.generateSignedTxns(g.round, intra)
+			txGroup, intra, err = g.generateTxGroup(g.round, intra)
 			if err != nil {
 				return fmt.Errorf("failed to generate transaction: %w", err)
 			}
-			if len(signedTxns) == 0 {
+			if len(txGroup) == 0 {
 				return fmt.Errorf("failed to generate transaction: no transactions given")
 			}
-			for _, stx := range signedTxns {
-				txib, err := cert.Block.BlockHeader.EncodeSignedTxn(stx, txn.ApplyData{})
-				if err != nil {
-					return fmt.Errorf("failed to encode transaction: %w", err)
-				}
-				txibs = append(txibs, txib)
-			}
+			txGroups = append(txGroups, txGroup)
 		}
+
 
 		if intra < minTxnsForBlock {
 			return fmt.Errorf("not enough transactions generated: %d > %d", minTxnsForBlock, intra)
 		}
 
-		cert.Block.BlockHeader.TxnCounter = g.txnCounter + intra
-		cert.Block.Payset = txibs
-		cert.Certificate = agreement.Certificate{} // empty certificate for clarity
+		txGroupsAD := txnGroupsWithAD(txGroups)
 
-		var errs []error
-		ledgerTxnCount, err := g.ledgerAddBlock(cert.Block, cert.Certificate)
+		// nonValidatedBlock is of type *ledgercore.ValidateBlock but was generated without validation
+		nonValidatedBlock, ledgerTxnCount, err := g.evaluateBlock(cert.Block.BlockHeader, txGroupsAD, int(intra))
 		if err != nil {
-			errs = append(errs, fmt.Errorf("error in ledgerAddBlock: %w", err))
+			return fmt.Errorf("failed to evaluate block: %w", err)
 		}
-		if ledgerTxnCount != intra {
-			errs = append(errs, fmt.Errorf("ledgerAddBlock txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, intra))
+		if ledgerTxnCount != g.txnCounter + intra {
+			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter + intra)
 		}
+
+		err = g.ledger.AddValidatedBlock(*nonValidatedBlock, cert.Certificate)
+		if err != nil {
+			return fmt.Errorf("failed to add validated block: %w", err)
+		}
+
+		cert.Block.Payset = nonValidatedBlock.Block().Payset
+
 		if g.verbose {
-			errs2 := g.introspectLedgerVsGenerator(g.round, intra)
-			if errs2 != nil {
-				errs = append(errs, errs2...)
+			errs := g.introspectLedgerVsGenerator(g.round, intra)
+			if len(errs) > 0 {
+				return fmt.Errorf("introspectLedgerVsGenerator: %w", errors.Join(errs...))
 			}
-		}
-		if len(errs) > 0 {
-			return fmt.Errorf("%d error(s): %v", len(errs), errs)
 		}
 	}
 	cert.Block.BlockHeader.Round = basics.Round(round)
@@ -525,7 +499,19 @@ func getAppTxOptions() []interface{} {
 
 // ---- Transaction Generation (Pay/Asset/Apps) ----
 
-func (g *generator) generateSignedTxns(round uint64, intra uint64) ([]txn.SignedTxn, uint64 /* nextIntra */, error) {
+func txnGroupsWithAD(txGroups [][]txn.SignedTxn) ([][]txn.SignedTxnWithAD) {
+	txGroupsAD := make([][]txn.SignedTxnWithAD, len(txGroups))
+	for i, txGroup := range txGroups {
+		txGroupAD := make([]txn.SignedTxnWithAD, len(txGroup))
+		for j, tx := range txGroup {
+			txGroupAD[j] = txn.SignedTxnWithAD{SignedTxn: tx}
+		}
+		txGroupsAD[i] = txGroupAD
+	}
+	return txGroupsAD
+}
+
+func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxn, uint64 /* nextIntra */, error) {
 	// TODO: return the number of transactions generated instead of updating intra!!!
 	selection, err := weightedSelection(g.transactionWeights, getTransactionOptions(), paymentTx)
 	if err != nil {

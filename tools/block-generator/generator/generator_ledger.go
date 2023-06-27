@@ -1,22 +1,52 @@
 package generator
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"os"
 
 	"github.com/algorand/avm-abi/apps"
-	"github.com/algorand/go-algorand/agreement"
 	cconfig "github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	txn "github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/rpcs"
 )
+
+// ---- ledger block genration ----
+
+func (g *generator) setBlockHeader(cert *rpcs.EncodedBlockCert) {
+	cert.Block.BlockHeader = bookkeeping.BlockHeader{
+		Round:          basics.Round(g.round),
+		TxnCounter: 	g.txnCounter,
+		Branch:         bookkeeping.BlockHash{},
+		Seed:           committee.Seed{},
+		TxnCommitments: bookkeeping.TxnCommitments{NativeSha512_256Commitment: crypto.Digest{}},
+		TimeStamp:      g.timestamp,
+		GenesisID:      g.genesisID,
+		GenesisHash:    g.genesisHash,
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:                   g.feeSink,
+			RewardsPool:               g.rewardsPool,
+			RewardsLevel:              0,
+			RewardsRate:               0,
+			RewardsResidue:            0,
+			RewardsRecalculationRound: 0,
+		},
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: g.protocol,
+		},
+		UpgradeVote:        bookkeeping.UpgradeVote{},
+		StateProofTracking: nil,
+	}
+}
+
 
 // ---- ledger simulation and introspection ----
 
@@ -109,48 +139,34 @@ func (g *generator) finishRound() {
 	g.resetPendingApps()
 }
 
-// ledgerAddBlock simulates ledger.AddBlock() but exposes the ApplyData
-// calculated in BlockEvaluator.Eval() so that these can be added to the block.
-// As opposed to the the real ledger.AddBlock() it also returns the number of 
-// transactions observed in the block.
-func (g *generator) ledgerAddBlock(blk bookkeeping.Block, cert agreement.Certificate) (uint64 /* txnCount */, error) {
-	l := g.ledger
-	// TODO: If we modify OpenLedger() to allow arbitrary tracers
-	// we would be able to set adTracer := l.GetTracer()
-	adTracer := eval.MakeApplyDataTracer(false /* nullTracer */)
-	updates, err := eval.Eval(context.Background(), l, blk, false, nil, nil, adTracer)
-	if err != nil {
-		return 0, fmt.Errorf("ledgerAddBlock() failed: %w", err)
-	}
+// ---- ledger block evaluator ----
 
-	// firstNonemptyIndex := -1
-	// for i, txib := range blk.Payset {
-	// 	if !txib.ApplyData.Equal(txn.ApplyData{}) {
-	// 		firstNonemptyIndex = i
-	// 		break
-	// 	}
-	// }
-	// fmt.Printf("firstNonemptyIndex: %d\n", firstNonemptyIndex)
-
-	if adTracer.ApplyData != nil {
-		if len(blk.Payset) != len(adTracer.ApplyData) {
-			return 0, fmt.Errorf("ledgerAddBlock() failed: len(blk.Payset) (%d) != len(adTracer.ApplyData) (%d)", len(blk.Payset), len(adTracer.ApplyData))
-		}
-		for i := range blk.Payset {
-			blk.Payset[i].ApplyData = adTracer.ApplyData[i]
-		}
-	}
-	updates.OptimizeAllocatedMemory(4)
-
-	vb := ledgercore.MakeValidatedBlock(blk, updates)
-
-	txnCount := uint64(0)
-	for _, sgnTxn := range blk.Payset {
-		txnCount += 1 + uint64(len(sgnTxn.ApplyData.EvalDelta.InnerTxns))
-	}
-
-	return txnCount, l.AddValidatedBlock(vb, cert)
+func (g *generator) startEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*eval.BlockEvaluator, error) {
+	return eval.StartEvaluator(g.ledger, hdr,
+		eval.EvaluatorOptions{
+			PaysetHint:          paysetHint,
+			Generate:            true,
+			Validate:            false,
+			MaxTxnBytesPerBlock: 0,
+			Tracer:              nil,
+		})
 }
+
+func (g *generator) evaluateBlock(hdr bookkeeping.BlockHeader, txGroups [][]txn.SignedTxnWithAD, paysetHint int) (*ledgercore.ValidatedBlock, uint64 /* txnCount */, error) {
+	eval, err := g.startEvaluator(hdr, paysetHint)
+	if err != nil {
+		return nil, 0, fmt.Errorf("could not start evaluator: %w", err)
+	}
+	for i, txGroup := range txGroups {
+		err := eval.TransactionGroup(txGroup)
+		if err != nil {
+			return nil, 0, fmt.Errorf("could not evaluate transaction group %d: %w", i, err)
+		}
+	}
+	lvb, err := eval.GenerateBlock()
+	return lvb, eval.TestingTxnCounter(), err
+}
+
 
 // introspectLedgerVsGenerator is only called when the --verbose command line argument is specified.
 func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs []error) {
