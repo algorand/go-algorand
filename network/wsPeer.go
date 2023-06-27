@@ -174,8 +174,10 @@ type Response struct {
 }
 
 type sendMessages struct {
-	msgs     []sendMessage
-	callback func()
+	msgs []sendMessage
+
+	// Function called when the message is released either by being sent or discarded.
+	onMessageRelease func()
 }
 
 type wsPeer struct {
@@ -412,13 +414,13 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	}
 
 	select {
-	case wp.sendBufferBulk <- sendMessages{msgs: msg, callback: reqMsg.Callback}:
+	case wp.sendBufferBulk <- sendMessages{msgs: msg, onMessageRelease: reqMsg.OnMessageRelease}:
 	case <-wp.closing:
-		reqMsg.Callback()
+		reqMsg.OnMessageRelease()
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
 	case <-ctx.Done():
-		reqMsg.Callback()
+		reqMsg.OnMessageRelease()
 		return ctx.Err()
 	}
 	return nil
@@ -718,8 +720,8 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 }
 
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
-	if msgs.callback != nil {
-		defer msgs.callback()
+	if msgs.onMessageRelease != nil {
+		defer msgs.onMessageRelease()
 	}
 	for _, msg := range msgs.msgs {
 		select {
@@ -936,8 +938,8 @@ L:
 	for {
 		select {
 		case msgs := <-wp.sendBufferBulk:
-			if msgs.callback != nil {
-				msgs.callback()
+			if msgs.onMessageRelease != nil {
+				msgs.onMessageRelease()
 			}
 		default:
 			break L

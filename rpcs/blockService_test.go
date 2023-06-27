@@ -458,7 +458,7 @@ func TestWsBlockLimiting(t *testing.T) {
 	require.Positive(t, bs1.memoryUsed)
 
 	// Before making a new request save the callback since the new failed message will overwrite it in the mock peer
-	callback := peer.reqMsg.Callback
+	callback := peer.reqMsg.OnMessageRelease
 
 	// Now we should be over the max and the block service should not return a block
 	// and should return an error instead
@@ -467,7 +467,7 @@ func TestWsBlockLimiting(t *testing.T) {
 	require.True(t, found)
 
 	// Now call the callback to free up memUsed
-	require.Nil(t, peer.reqMsg.Callback)
+	require.Nil(t, peer.reqMsg.OnMessageRelease)
 	callback()
 	require.Zero(t, bs1.memoryUsed)
 }

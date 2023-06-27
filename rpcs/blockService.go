@@ -306,7 +306,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 
 	defer func() {
 		if n > 0 {
-			reqMsg.Callback = func() {
+			reqMsg.OnMessageRelease = func() {
 				bs.mu.Lock()
 				bs.memoryUsed -= n
 				bs.mu.Unlock()

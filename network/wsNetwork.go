@@ -253,7 +253,9 @@ type IncomingMessage struct {
 	// messages.
 	processing chan struct{}
 
-	Callback func()
+	// Function called when outgoing message, resulting from this incoming message, is released
+	// either by being sent or discarded.
+	OnMessageRelease func()
 }
 
 // Tag is a short string (2 bytes) marking a type of message
