@@ -852,7 +852,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return err
 	}
 
-	hdr, err := l.BlockHdr(lastBalancesRound)
+	hdr, err := l.blockHdr(lastBalancesRound)
 	if err != nil {
 		return err
 	}

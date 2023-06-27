@@ -64,6 +64,10 @@ func (wl *wrappedLedger) Block(rnd basics.Round) (bookkeeping.Block, error) {
 }
 
 func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return wl.blockHdr(rnd)
+}
+
+func (wl *wrappedLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	wl.recordBlockQuery(rnd)
 	return wl.l.BlockHdr(rnd)
 }

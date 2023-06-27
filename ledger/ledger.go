@@ -91,7 +91,7 @@ type Ledger struct {
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
 
-	headerCache blockHeaderCache
+	//	headerCache blockHeaderCache
 
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
@@ -136,7 +136,7 @@ func OpenLedger(
 		tracer:                         tracer,
 	}
 
-	l.headerCache.initialize()
+	//	l.headerCache.initialize()
 
 	defer func() {
 		if err != nil {
@@ -654,16 +654,34 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 
 // BlockHdr returns the BlockHeader of the block for round rnd.
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	blk, exists := l.headerCache.get(rnd)
-	if exists {
-		return
-	}
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
 
-	blk, err = l.blockQ.getBlockHdr(rnd)
-	if err == nil {
-		l.headerCache.put(blk)
+	hdr, ok := l.txTail.blockHeader(rnd)
+	if !ok {
+		// maybe do this???
+		hdr, err = l.blockQ.getBlockHdr(rnd)
 	}
-	return
+	return hdr, err
+
+	/*
+		blk, exists := l.headerCache.get(rnd)
+		if exists {
+			return
+		}
+
+		blk, err = l.blockQ.getBlockHdr(rnd)
+		if err == nil {
+			l.headerCache.put(blk)
+		}
+		return
+	*/
+}
+
+// blockHdr returns the BlockHeader of the block for round rnd.
+func (l *Ledger) blockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
+	return l.blockQ.getBlockHdr(rnd)
+
 }
 
 // EncodedBlockCert returns the encoded block and the corresponding encoded certificate of the block for round rnd.
@@ -712,7 +730,7 @@ func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.
 	if err != nil {
 		return err
 	}
-	l.headerCache.put(blk.BlockHeader)
+	//	l.headerCache.put(blk.BlockHeader)
 	l.trackers.newBlock(blk, vb.Delta())
 	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil

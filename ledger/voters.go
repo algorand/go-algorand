@@ -121,7 +121,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, fetcher ledgercore.Onl
 	vt.votersMu.Unlock()
 
 	latestRoundInLedger := l.Latest()
-	hdr, err := l.BlockHdr(latestRoundInLedger)
+	hdr, err := l.blockHdr(latestRoundInLedger)
 	if err != nil {
 		return err
 	}
