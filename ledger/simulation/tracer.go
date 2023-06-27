@@ -159,7 +159,7 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
 }
 
-func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, evalError error) {
+func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	tracer.handleError(evalError)
 	tracer.cursorEvalTracer.AfterTxnGroup(ep, deltas, evalError)
 }
