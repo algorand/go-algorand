@@ -10,8 +10,8 @@ OS_LIST=(
     centos:7
     quay.io/centos/centos:stream8
     fedora:28
-    ubuntu:16.04
-    ubuntu:18.04
+    ubuntu:20.04
+    ubuntu:22.04
 )
 
 FAILED=()
