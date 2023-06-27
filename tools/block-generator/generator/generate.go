@@ -36,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
-	"github.com/algorand/go-algorand/data/transactions"
 	txn "github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -351,7 +350,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 				return fmt.Errorf("failed to generate transaction: no transactions given")
 			}
 			for _, stx := range signedTxns {
-				txib, err := cert.Block.BlockHeader.EncodeSignedTxn(stx, transactions.ApplyData{})
+				txib, err := cert.Block.BlockHeader.EncodeSignedTxn(stx, txn.ApplyData{})
 				if err != nil {
 					return fmt.Errorf("failed to encode transaction: %w", err)
 				}

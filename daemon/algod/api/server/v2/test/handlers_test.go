@@ -24,17 +24,14 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"golang.org/x/exp/slices"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -1031,7 +1028,8 @@ int 1`,
 
 					var expectedFailedAt *[]uint64
 					if len(scenario.FailedAt) != 0 {
-						clone := slices.Clone(scenario.FailedAt)
+						clone := make([]uint64, len(scenario.FailedAt))
+						copy(clone, scenario.FailedAt)
 						clone[0]++
 						expectedFailedAt = &clone
 					}
@@ -2103,9 +2101,9 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	c := e.NewContext(req, rec)
 	// Add blocks to tracer
 	tracer.BeforeBlock(&blk1)
-	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil, nil)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil)
 	tracer.BeforeBlock(&blk2)
-	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil, nil)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil)
 
 	// Test /v2/deltas/{round}/txn/group
 	jsonFormatForRound := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson
@@ -2204,35 +2202,4 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Equal(t, 501, rec.Code)
-}
-
-func TestRouterRequestBody(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	mockLedger, _, _, _, _ := testingenv(t, 1, 1, true)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
-	dummyShutdownChan := make(chan struct{})
-	l, err := net.Listen("tcp", ":0") // create listener so requests are buffered
-	e := server.NewRouter(logging.TestingLog(t), mockNode, dummyShutdownChan, "", "", l, 1000)
-	go e.Start(":0")
-	defer e.Close()
-
-	// Admin API call greater than max body bytes should succeed
-	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
-	stringReader := strings.NewReader(strings.Repeat("a", 50_000_000))
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("https://%s/v2/participation", e.Listener.Addr().String()), stringReader)
-	assert.NoError(t, err)
-	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	// Public API call greater than max body bytes fails
-	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
-	stringReader = strings.NewReader(strings.Repeat("a", 50_000_000))
-	req, err = http.NewRequest(http.MethodPost, fmt.Sprintf("https://%s/v2/transactions", e.Listener.Addr().String()), stringReader)
-	assert.NoError(t, err)
-	rec = httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
-	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
 }

@@ -92,7 +92,7 @@ func BeforeTxnGroup(groupSize int) Event {
 }
 
 // AfterTxnGroup creates a new Event with the type AfterTxnGroupEvent
-func AfterTxnGroup(groupSize int, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, hasError bool) Event {
+func AfterTxnGroup(groupSize int, deltas *ledgercore.StateDelta, hasError bool) Event {
 	return Event{Type: AfterTxnGroupEvent, GroupSize: groupSize, Deltas: copyDeltas(deltas), HasError: hasError}
 }
 
@@ -169,8 +169,8 @@ func (d *Tracer) BeforeTxnGroup(ep *logic.EvalParams) {
 }
 
 // AfterTxnGroup mocks the logic.EvalTracer.AfterTxnGroup method
-func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, evalError error) {
-	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), deltas, txibs, evalError != nil))
+func (d *Tracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
+	d.Events = append(d.Events, AfterTxnGroup(len(ep.TxnGroup), deltas, evalError != nil))
 }
 
 // BeforeTxn mocks the logic.EvalTracer.BeforeTxn method

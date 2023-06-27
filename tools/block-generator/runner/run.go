@@ -91,6 +91,9 @@ func Run(args Args) error {
 
 	defer fmt.Println("Done running tests!")
 	return filepath.Walk(args.Path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("run.go Run(): failed to walk path: %w", err)
+		}
 		// Ignore the directory
 		if info.IsDir() {
 			return nil

@@ -123,6 +123,15 @@ func (g *generator) ledgerAddBlock(blk bookkeeping.Block, cert agreement.Certifi
 		return 0, fmt.Errorf("ledgerAddBlock() failed: %w", err)
 	}
 
+	// firstNonemptyIndex := -1
+	// for i, txib := range blk.Payset {
+	// 	if !txib.ApplyData.Equal(txn.ApplyData{}) {
+	// 		firstNonemptyIndex = i
+	// 		break
+	// 	}
+	// }
+	// fmt.Printf("firstNonemptyIndex: %d\n", firstNonemptyIndex)
+
 	if adTracer.ApplyData != nil {
 		if len(blk.Payset) != len(adTracer.ApplyData) {
 			return 0, fmt.Errorf("ledgerAddBlock() failed: len(blk.Payset) (%d) != len(adTracer.ApplyData) (%d)", len(blk.Payset), len(adTracer.ApplyData))

@@ -35,7 +35,6 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -5292,7 +5291,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
 		}
-		txn.Note = slices.Clone(sv.Bytes)
+		txn.Note = make([]byte, len(sv.Bytes))
+		copy(txn.Note, sv.Bytes)
 	// GenesisID, GenesisHash unsettable: surely makes no sense
 	// Group unsettable: Can't make groups from AVM (yet?)
 	// Lease unsettable: This seems potentially useful.
@@ -5406,7 +5406,9 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(txn.ApplicationArgs) >= cx.Proto.MaxAppArgs {
 			return errors.New("too many application args")
 		}
-		txn.ApplicationArgs = append(txn.ApplicationArgs, slices.Clone(sv.Bytes))
+		new := make([]byte, len(sv.Bytes))
+		copy(new, sv.Bytes)
+		txn.ApplicationArgs = append(txn.ApplicationArgs, new)
 	case Accounts:
 		var new basics.Address
 		new, err = cx.assignAccount(sv)
@@ -5422,13 +5424,15 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
-		txn.ApprovalProgram = slices.Clone(sv.Bytes)
+		txn.ApprovalProgram = make([]byte, len(sv.Bytes))
+		copy(txn.ApprovalProgram, sv.Bytes)
 	case ClearStateProgram:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
-		txn.ClearStateProgram = slices.Clone(sv.Bytes)
+		txn.ClearStateProgram = make([]byte, len(sv.Bytes))
+		copy(txn.ClearStateProgram, sv.Bytes)
 	case ApprovalProgramPages:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
 		txn.ApprovalProgram = append(txn.ApprovalProgram, sv.Bytes...)
@@ -5667,7 +5671,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		ep.Tracer.BeforeTxnGroup(ep)
 		// Ensure we update the tracer before exiting
 		defer func() {
-			ep.Tracer.AfterTxnGroup(ep, nil, nil, err)
+			ep.Tracer.AfterTxnGroup(ep, nil, err)
 		}()
 	}
 

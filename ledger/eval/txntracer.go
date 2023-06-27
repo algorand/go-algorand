@@ -20,8 +20,6 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -53,22 +51,36 @@ func convertStateDelta(delta ledgercore.StateDelta) StateDeltaSubset {
 	// The StateDelta object returned through the EvalTracer has its values deleted between txn groups to avoid
 	// reallocation during evaluation.
 	// This means the map values need to be copied (to avoid deletion) since they are all passed by reference.
-	kvmods := maps.Clone(delta.KvMods)
-	txids := maps.Clone(delta.Txids)
-	txleases := maps.Clone(delta.Txleases)
-	creatables := maps.Clone(delta.Creatables)
-
+	kvmods := make(map[string]ledgercore.KvValueDelta, len(delta.KvMods))
+	for k1, v1 := range delta.KvMods {
+		kvmods[k1] = v1
+	}
+	txids := make(map[transactions.Txid]ledgercore.IncludedTransactions, len(delta.Txids))
+	for k2, v2 := range delta.Txids {
+		txids[k2] = v2
+	}
+	txleases := make(map[ledgercore.Txlease]basics.Round, len(delta.Txleases))
+	for k3, v3 := range delta.Txleases {
+		txleases[k3] = v3
+	}
+	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, len(delta.Creatables))
+	for k4, v4 := range delta.Creatables {
+		creatables[k4] = v4
+	}
 	var accR []ledgercore.BalanceRecord
 	var appR []ledgercore.AppResourceRecord
 	var assetR []ledgercore.AssetResourceRecord
 	if len(delta.Accts.Accts) > 0 {
-		accR = slices.Clone(delta.Accts.Accts)
+		accR = make([]ledgercore.BalanceRecord, len(delta.Accts.Accts))
+		copy(accR, delta.Accts.Accts)
 	}
 	if len(delta.Accts.AppResources) > 0 {
-		appR = slices.Clone(delta.Accts.AppResources)
+		appR = make([]ledgercore.AppResourceRecord, len(delta.Accts.AppResources))
+		copy(appR, delta.Accts.AppResources)
 	}
 	if len(delta.Accts.AssetResources) > 0 {
-		assetR = slices.Clone(delta.Accts.AssetResources)
+		assetR = make([]ledgercore.AssetResourceRecord, len(delta.Accts.AssetResources))
+		copy(assetR, delta.Accts.AssetResources)
 	}
 	return StateDeltaSubset{
 		Accts: ledgercore.AccountDeltas{
@@ -117,7 +129,7 @@ func (tracer *TxnGroupDeltaTracer) BeforeBlock(hdr *bookkeeping.BlockHeader) {
 }
 
 // AfterTxnGroup implements the EvalTracer interface for txn group boundaries
-func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, evalError error) {
+func (tracer *TxnGroupDeltaTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	if deltas == nil {
 		return
 	}
@@ -170,35 +182,4 @@ func (tracer *TxnGroupDeltaTracer) GetDeltaForID(id crypto.Digest) (StateDeltaSu
 		}
 	}
 	return StateDeltaSubset{}, fmt.Errorf("unable to find delta for id: %s", id)
-}
-
-// ApplyDataTracer implements the data.transactions.logic.EvalTracer interface
-// by collecting the apply data during AfterTxnGroup
-// but is a no-op for all other methods in all other cases.
-// NOTE: it is designed for testing purposes only and not meant
-// for production use.
-type ApplyDataTracer struct{
-	nullTracer bool
-	ApplyData []transactions.ApplyData
-	// no-op methods we don't care about
-	logic.NullEvalTracer
-}
-
-// MakeApplyDataTracer creates an ApplyDataTracer
-func MakeApplyDataTracer(nullTracer bool) *ApplyDataTracer {
-	return &ApplyDataTracer{
-		nullTracer: nullTracer,
-	}
-}
-
-// AfterTxnGroup copies the apply data into the tracer
-func (adt *ApplyDataTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, txibs []transactions.SignedTxnInBlock, evalError error) {
-	if adt.nullTracer {
-		return
-	}
-	
-	for _, txib := range txibs {
-		// TODO: better to deep copy as there are some nested slices
-		adt.ApplyData = append(adt.ApplyData, txib.ApplyData)
-	}
 }

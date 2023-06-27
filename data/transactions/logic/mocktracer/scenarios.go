@@ -381,7 +381,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				{
 					AfterProgram(logic.ModeApp, false),
 					AfterTxn(protocol.ApplicationCallTx, expectedAD.EvalDelta.InnerTxns[0].ApplyData, false),
-					AfterTxnGroup(1, nil, nil, false), // end first itxn group
+					AfterTxnGroup(1, nil, false), // end first itxn group
 					AfterOpcode(false),
 				},
 				OpcodeEvents(16, false),
@@ -392,7 +392,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[1].ApplyData, false),
 					BeforeTxn(protocol.PaymentTx),
 					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[2].ApplyData, false),
-					AfterTxnGroup(2, nil, nil, false), // end second itxn group
+					AfterTxnGroup(2, nil, false), // end second itxn group
 					AfterOpcode(false),
 				},
 				OpcodeEvents(3, false),
@@ -512,7 +512,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					{
 						AfterProgram(logic.ModeApp, shouldError),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallADNoEvalDelta, true),
-						AfterTxnGroup(1, nil, nil, true), // end first itxn group
+						AfterTxnGroup(1, nil, true), // end first itxn group
 						AfterOpcode(true),
 						AfterProgram(logic.ModeApp, true),
 						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
@@ -567,7 +567,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					{
 						AfterProgram(logic.ModeApp, false),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-						AfterTxnGroup(1, nil, nil, false), // end first itxn group
+						AfterTxnGroup(1, nil, false), // end first itxn group
 						AfterOpcode(false),
 					},
 					OpcodeEvents(4, shouldError),
@@ -627,7 +627,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						{
 							AfterProgram(logic.ModeApp, false),
 							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-							AfterTxnGroup(1, nil, nil, false), // end first itxn group
+							AfterTxnGroup(1, nil, false), // end first itxn group
 							AfterOpcode(false),
 						},
 						OpcodeEvents(16, false),
@@ -636,7 +636,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 							BeforeTxnGroup(2), // start second itxn group
 							BeforeTxn(protocol.PaymentTx),
 							AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, true),
-							AfterTxnGroup(2, nil, nil, true), // end second itxn group
+							AfterTxnGroup(2, nil, true), // end second itxn group
 							AfterOpcode(true),
 							AfterProgram(logic.ModeApp, true),
 							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
@@ -693,7 +693,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						{
 							AfterProgram(logic.ModeApp, false),
 							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-							AfterTxnGroup(1, nil, nil, false), // end first itxn group
+							AfterTxnGroup(1, nil, false), // end first itxn group
 							AfterOpcode(false),
 						},
 						OpcodeEvents(16, false),
@@ -704,7 +704,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 							AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, false),
 							BeforeTxn(protocol.PaymentTx),
 							AfterTxn(protocol.PaymentTx, expectedInnerPay2AD, true),
-							AfterTxnGroup(2, nil, nil, true), // end second itxn group
+							AfterTxnGroup(2, nil, true), // end second itxn group
 							AfterOpcode(true),
 							AfterProgram(logic.ModeApp, true),
 							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
@@ -756,7 +756,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					{
 						AfterProgram(logic.ModeApp, false),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-						AfterTxnGroup(1, nil, nil, false), // end first itxn group
+						AfterTxnGroup(1, nil, false), // end first itxn group
 						AfterOpcode(false),
 					},
 					OpcodeEvents(16, false),
@@ -767,7 +767,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, false),
 						BeforeTxn(protocol.PaymentTx),
 						AfterTxn(protocol.PaymentTx, expectedInnerPay2AD, false),
-						AfterTxnGroup(2, nil, nil, false), // end second itxn group
+						AfterTxnGroup(2, nil, false), // end second itxn group
 						AfterOpcode(false),
 					},
 					OpcodeEvents(3, shouldError),
