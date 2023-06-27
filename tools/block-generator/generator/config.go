@@ -70,15 +70,19 @@ const (
 	appBoxesClose  TxTypeID = "app_boxes_close"
 	appBoxesClear  TxTypeID = "app_boxes_clear"
 
-	// TODO: consider an app that creates/destroys an app during opup
+	// Special TxTypeID's recording effects of higher level transactions
+	effectPaymentTxSibling TxTypeID = "effect_payment_sibling"
+	effectInnerTx          TxTypeID = "effect_inner_tx"
 
 	// Defaults
 	defaultGenesisAccountsCount         uint64 = 1000
-	defaultGenesisAccountInitialBalance uint64 = 1000000000000
+	defaultGenesisAccountInitialBalance uint64 = 1_000_000_000000 // 1 million algos per account
 
-	assetTotal uint64 = 100000000000000000
+	assetTotal uint64 = 100_000_000_000_000_000 // 100 billion units per asset
 
-	consensusTimeMilli int64  = 3300
+	consensusTimeMilli int64 = 3300
+
+	// TODO: do we still need this as can get it from the Ledger?
 	startingTxnCounter uint64 = 1000
 )
 
@@ -88,6 +92,18 @@ const (
 	appKindSwap appKind = iota
 	appKindBoxes
 )
+
+func (a appKind) String() string {
+	switch a {
+	case appKindSwap:
+		return "swap"
+	case appKindBoxes:
+		return "boxes"
+	default:
+		// Return a default value for unknown kinds.
+		return "Unknown"
+	}
+}
 
 type appTxType uint8
 
@@ -100,6 +116,28 @@ const (
 	appTxTypeClose
 	appTxTypeClear
 )
+
+func (a appTxType) String() string {
+	switch a {
+	case appTxTypeCreate:
+		return "create"
+	case appTxTypeUpdate:
+		return "update"
+	case appTxTypeDelete:
+		return "delete"
+	case appTxTypeOptin:
+		return "optin"
+	case appTxTypeCall:
+		return "call"
+	case appTxTypeClose:
+		return "close"
+	case appTxTypeClear:
+		return "clear"
+	default:
+		// Return a default value for unknown types.
+		return "Unknown"
+	}
+}
 
 func parseAppTxType(txType TxTypeID) (isApp bool, kind appKind, tx appTxType, err error) {
 	parts := strings.Split(string(txType), "_")
@@ -147,6 +185,10 @@ func parseAppTxType(txType TxTypeID) (isApp bool, kind appKind, tx appTxType, er
 	}
 
 	return
+}
+
+func getAppTxType(kind appKind, appType appTxType) TxTypeID {
+	return TxTypeID(fmt.Sprintf("app_%s_%s", kind, appType))
 }
 
 // GenerationConfig defines the tunable parameters for block generation.

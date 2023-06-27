@@ -54,7 +54,7 @@ $(dirname "$0")/block-generator runner \
 	--conduit-binary "$CONDUIT_BINARY" \
 	--report-directory $OUTPUT \
 	--test-duration 30s \
-	--log-level trace \
+	--conduit-log-level trace \
 	--postgres-connection-string "host=localhost user=algorand password=algorand dbname=generator_db port=15432 sslmode=disable" \
 	--scenario ${SCENARIO} \
   --reset-db

@@ -92,6 +92,6 @@ echo "Log Level: $LOG_LEVEL"
   -d "$DURATION" \
   -c "$CONNECTION_STRING" \
   --report-directory "$REPORT_DIR" \
-  --log-level "$LOG_LEVEL" \
+  --conduit-log-level "$LOG_LEVEL" \
   --reset-report-dir
 
