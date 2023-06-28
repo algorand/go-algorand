@@ -3108,6 +3108,29 @@
         }
       }
     },
+    "StackValue": {
+      "description": "Represents a TEAL value over the stack.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "\\[tt\\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**",
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "\\[tb\\] bytes value.",
+          "type": "string",
+          "format": "byte"
+        },
+        "uint": {
+          "description": "\\[ui\\] uint value.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
     "StateDelta": {
       "description": "Application state delta.",
       "type": "array",
@@ -3491,6 +3514,10 @@
         "enable": {
           "description": "A boolean option for opting in execution trace features simulation endpoint.",
           "type": "boolean"
+        },
+        "scratch-change": {
+          "description": "A boolean option enabling returning scratch slot changes.",
+          "type": "boolean"
         }
       }
     },
@@ -3853,6 +3880,23 @@
         }
       }
     },
+    "ScratchWrite": {
+      "description": "The write operation into a scratch slot.",
+      "type": "object",
+      "required": [
+        "scratch-slot-id",
+        "value"
+      ],
+      "properties": {
+        "scratch-slot-id": {
+          "description": "The scratch slot id indicating where the value writes to.",
+          "type": "integer"
+        },
+        "value": {
+          "$ref": "#/definitions/StackValue"
+        }
+      }
+    },
     "SimulationOpcodeTraceUnit": {
       "description": "The set of trace information and effect from evaluating a single opcode.",
       "type": "object",
@@ -3863,6 +3907,9 @@
         "pc": {
           "description": "The program counter of the current opcode being evaluated.",
           "type": "integer"
+        },
+        "scratch-write": {
+          "$ref": "#/definitions/ScratchWrite"
         },
         "spawned-inners": {
           "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
