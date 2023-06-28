@@ -155,7 +155,7 @@ function start_new_public_network() {
 
 function start_private_network() {
   configure_data_dir
-  start_kmd
+  start_kmd &
 
   # TODO: Is there a way to properly exec a private network?
   goal network start -r "${ALGORAND_DATA}/.."
