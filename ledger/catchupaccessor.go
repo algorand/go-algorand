@@ -726,19 +726,23 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		crw, err := tx.MakeCatchpointWriter()
 		if err != nil {
-			return err
+			return fmt.Errorf("make catchpoint writer err: %v", err)
 		}
 
 		// creating the index can take a while, so ensure we don't generate false alerts for no good reason.
 		_, err = tx.ResetTransactionWarnDeadline(ctx, time.Now().Add(120*time.Second))
 		if err != nil {
-			return err
+			return fmt.Errorf("reset transaction warn deadline err: %v", err)
 		}
 
-		return crw.CreateCatchpointStagingHashesIndex(ctx)
+		err = crw.CreateCatchpointStagingHashesIndex(ctx)
+		if err != nil {
+			return fmt.Errorf("create catchpoint staging hashes index err: %v", err)
+		}
+		return nil
 	})
 	if err != nil {
-		return
+		return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie::Batch: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -760,15 +764,18 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			for {
 				hashes, err = it.Next(transactionCtx)
 				if err != nil {
+					err = fmt.Errorf("unable to read next pending hash: %w", err)
 					break
 				}
 				if len(hashes) > 0 {
 					writerQueue <- hashes
 				}
 				if len(hashes) != trieRebuildAccountChunkSize {
+					c.log.Warnf("read %d hashes, expected %d", len(hashes), trieRebuildAccountChunkSize)
 					break
 				}
 				if ctx.Err() != nil {
+					err = ctx.Err()
 					it.Close()
 					break
 				}
@@ -776,7 +783,10 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			// disable the warning for over-long atomic operation execution. It's meaningless here since it's
 			// co-dependent on the other go-routine.
 			db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(5*time.Second))
-			return err
+			if err != nil {
+				return fmt.Errorf("reader: reset transaction warn deadline err: %v", err)
+			}
+			return nil
 		})
 		if dbErr != nil {
 			errChan <- dbErr
@@ -796,11 +806,15 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			// create the merkle trie for the balances
 			mc, err = tx.MakeMerkleCommitter(true)
 			if err != nil {
-				return
+				return fmt.Errorf("writer: make merkle committer err %v", err)
 			}
 
+			// TODO: include context here?
 			trie, err = merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
-			return err
+			if err != nil {
+				return fmt.Errorf("writer: make trie err %v", err)
+			}
+			return nil
 		})
 		if txErr != nil {
 			errChan <- txErr
@@ -817,6 +831,9 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					continue
 				}
 			case <-ctx.Done():
+				if ctx.Err() != nil {
+					err = fmt.Errorf("writer: context error: %v", ctx.Err())
+				}
 				keepWriting = false
 				continue
 			}
@@ -824,17 +841,17 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			txErr = dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
 				mc, err = tx.MakeMerkleCommitter(true)
 				if err != nil {
-					return
+					return fmt.Errorf("writer: unable to make merkle committer to add hashes: %w", err)
 				}
 				trie.SetCommitter(mc)
 				for _, hash := range hashesToWrite {
 					var added bool
 					added, err = trie.Add(hash)
 					if !added {
-						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash = '%s' hash kind = %s", hex.EncodeToString(hash), trackerdb.HashKind(hash[trackerdb.HashKindEncodingIndex]))
+						return fmt.Errorf("writer: The provided catchpoint file contained the same account more than once. hash = '%s' hash kind = %s: %w", hex.EncodeToString(hash), trackerdb.HashKind(hash[trackerdb.HashKindEncodingIndex]), err)
 					}
 					if err != nil {
-						return
+						return fmt.Errorf("writer: unable to add hash: hash = '%s' hash kind = %s: %w", hex.EncodeToString(hash), trackerdb.HashKind(hash[trackerdb.HashKindEncodingIndex]), err)
 					}
 
 				}
@@ -847,7 +864,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				return nil
 			})
 			if txErr != nil {
-				break
+				keepWriting = false
+				continue
 			}
 
 			if uncommitedHashesCount >= trieRebuildCommitFrequency {
@@ -855,16 +873,16 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					// set a long 30-second window for the evict before warning is generated.
 					_, err = tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
 					if err != nil {
-						return
+						return fmt.Errorf("writer: reset transaction warn deadline err: %v", err)
 					}
 					mc, err = tx.MakeMerkleCommitter(true)
 					if err != nil {
-						return
+						return fmt.Errorf("writer: unable to make merkle committer for uncommitted hashes: %w", err)
 					}
 					trie.SetCommitter(mc)
 					_, err = trie.Evict(true)
 					if err != nil {
-						return
+						return fmt.Errorf("writer: unable to evict uncommitted hashes: %w", err)
 					}
 					uncommitedHashesCount = 0
 					return nil
@@ -888,14 +906,17 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				// set a long 30-second window for the evict before warning is generated.
 				_, err = tx.ResetTransactionWarnDeadline(transactionCtx, time.Now().Add(30*time.Second))
 				if err != nil {
-					return
+					return fmt.Errorf("writer: final reset transaction warn deadline err: %v", err)
 				}
 				mc, err = tx.MakeMerkleCommitter(true)
 				if err != nil {
-					return
+					return fmt.Errorf("writer: final unable to make MerkleCommitter: %v", err)
 				}
 				trie.SetCommitter(mc)
 				_, err = trie.Evict(true)
+				if err != nil {
+					return fmt.Errorf("writer: unable to run final evict: %w", err)
+				}
 				return
 			})
 		}
@@ -906,11 +927,16 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	}()
 
 	wg.Wait()
+	close(errChan)
 
-	select {
-	case err := <-errChan:
-		return err
-	default:
+	var errs []string
+	for err := range errChan {
+		errs = append(errs, err.Error())
+	}
+	if len(errs) == 1 {
+		return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: err occurred while building merkle trie: %v", errs[0])
+	} else if len(errs) > 1 {
+		return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: multiple errors occurred while building merkle trie: %s", strings.Join(errs, ", "))
 	}
 
 	return err

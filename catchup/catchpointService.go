@@ -325,8 +325,10 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 				break
 			}
 			// failed to build the merkle trie for the above catchpoint file.
+			cs.log.Warnf("failed to build merkle trie: %v", err)
 			peerSelector.rankPeer(psp, peerRankInvalidDownload)
 		} else {
+			cs.log.Warnf("failed to download ledger: %v", err)
 			peerSelector.rankPeer(psp, peerRankDownloadFailed)
 		}
 
