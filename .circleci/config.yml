@@ -70,7 +70,7 @@ workflows:
           filters: &filters-nightly
             branches:
               only:
-                - /rel\/.*/
+                - /.*5508.*/
                 - << pipeline.parameters.valid_nightly_branch >>
 
       - test_nightly:
