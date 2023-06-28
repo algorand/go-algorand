@@ -743,13 +743,13 @@ type SimulationTransactionExecTrace struct {
 
 // StackValue Represents a TEAL value over the stack.
 type StackValue struct {
-	// Bytes \[tb\] bytes value.
+	// Bytes bytes value.
 	Bytes *[]byte `json:"bytes,omitempty"`
 
-	// Type \[tt\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**
+	// Type value type. Value `1` refers to **bytes**, value `2` refers to **uint**
 	Type uint64 `json:"type"`
 
-	// Uint \[ui\] uint value.
+	// Uint uint value.
 	Uint *uint64 `json:"uint,omitempty"`
 }
 
