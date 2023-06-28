@@ -251,21 +251,12 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 	return OpcodeTraceUnit{PC: uint64(cx.PC())}
 }
 
-func (o *OpcodeTraceUnit) appendDeletedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
+func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
 	tracer.stackChangeExplanation = cx.NextStackChange()
+	o.Deletions = uint64(tracer.stackChangeExplanation.Deletions)
 
 	stackHeight := len(cx.Stack)
-	stackHeightAfterDeletion := stackHeight - tracer.stackChangeExplanation.Deletions
-	tracer.stackHeightAfterDeletion = stackHeightAfterDeletion
-
-	for i := stackHeightAfterDeletion; i < stackHeight; i++ {
-		tealValue := cx.Stack[i].ToTealValue()
-		o.Deleted = append(o.Deleted, basics.TealValue{
-			Type:  tealValue.Type,
-			Uint:  tealValue.Uint,
-			Bytes: tealValue.Bytes,
-		})
-	}
+	tracer.stackHeightAfterDeletion = stackHeight - int(o.Deletions)
 }
 
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
@@ -293,7 +284,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 
 		if tracer.result.ReturnStackChange() {
 			latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
-			latestOpcodeTraceUnit.appendDeletedStackValue(cx, tracer)
+			latestOpcodeTraceUnit.computeStackValueDeletions(cx, tracer)
 		}
 	}
 }

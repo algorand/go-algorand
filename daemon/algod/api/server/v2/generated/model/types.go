@@ -716,8 +716,8 @@ type SimulationOpcodeTraceUnit struct {
 	// Additions The values added by this opcode to the stack.
 	Additions *[]StackValue `json:"additions,omitempty"`
 
-	// Deletions The values deleted by this opcode from the stack.
-	Deletions *[]StackValue `json:"deletions,omitempty"`
+	// Deletions The number of deleted stack values by this opcode.
+	Deletions *uint64 `json:"deletions,omitempty"`
 
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`

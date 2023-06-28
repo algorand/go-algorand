@@ -189,8 +189,8 @@ type OpcodeTraceUnit struct {
 	// what has been added to stack
 	Added []basics.TealValue
 
-	// deleted elements from stack, help backwards debugging
-	Deleted []basics.TealValue
+	// deleted element number from stack
+	Deletions uint64
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

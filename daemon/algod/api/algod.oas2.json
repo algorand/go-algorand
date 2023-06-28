@@ -3899,11 +3899,8 @@
           }
         },
         "deletions": {
-          "description": "The values deleted by this opcode from the stack.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/StackValue"
-          }
+          "description": "The number of deleted stack values by this opcode.",
+          "type": "integer"
         },
         "additions": {
           "description": "The values added by this opcode to the stack.",
