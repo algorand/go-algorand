@@ -53,6 +53,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     useradd --uid=999 --no-log-init --create-home --system --gid algorand algorand && \
     chown -R algorand:algorand /algod
 
+USER algorand
+
 COPY --chown=algorand:algorand --from=builder "/dist/bin/" "/node/bin/"
 COPY --chown=algorand:algorand --from=builder "/dist/files/run/" "/node/run/"
 
