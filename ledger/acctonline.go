@@ -1002,13 +1002,22 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 			// roundOffsetError was returned, so the round number cannot be found in deltas, it is in history.
 			// This means offset will be 0 and ao.deltas[:offset] will be an empty slice.
 		}
+
+		var rewardsParams config.ConsensusParams
+		var rewardsLevel uint64
+		lookupRoundParamsData := false
 		paramsOffset, err := ao.roundParamsOffset(rnd)
 		if err != nil {
-			return nil, err
+			var roundOffsetError *RoundOffsetError
+			if !errors.As(err, &roundOffsetError) {
+				return nil, err
+			}
+			// roundOffsetError was returned, so the round number cannot be found in onlineRoundParamsData, it is in history.
+			lookupRoundParamsData = true
+		} else {
+			rewardsParams = config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
+			rewardsLevel = ao.onlineRoundParamsData[paramsOffset].RewardsLevel
 		}
-
-		rewardsParams := config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
-		rewardsLevel := ao.onlineRoundParamsData[paramsOffset].RewardsLevel
 
 		// Step 1: get all online accounts from DB for rnd
 		// Not unlocking ao.accountsMu yet, to stay consistent with Step 2
@@ -1017,6 +1026,14 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 			ar, err := tx.MakeAccountsReader()
 			if err != nil {
 				return err
+			}
+			if lookupRoundParamsData {
+				roundParamsData, err1 := ar.AccountsOnlineRoundParamsRound(rnd)
+				if err1 != nil {
+					return err1
+				}
+				rewardsParams = config.Consensus[roundParamsData.CurrentProtocol]
+				rewardsLevel = roundParamsData.RewardsLevel
 			}
 			expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams, rewardsLevel)
 			if err != nil {
