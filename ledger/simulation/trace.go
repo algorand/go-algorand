@@ -106,7 +106,8 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 
 // ExecTraceConfig gathers all execution trace related configs for simulation result
 type ExecTraceConfig struct {
-	Enable bool `codec:"enable,omitempty"`
+	Enable        bool `codec:"enable,omitempty"`
+	ScratchChange bool `codec:"scratch-change,omitempty"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -163,6 +164,15 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 	}, nil
 }
 
+// ScratchWrite represents a write operation into a scratch slot
+type ScratchWrite struct {
+	// ScratchSlot stands for the scratch slot id get written to
+	ScratchSlot uint64
+
+	// Value is the stack value written to scratch slot
+	Value basics.TealValue
+}
+
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
@@ -172,6 +182,9 @@ type OpcodeTraceUnit struct {
 	// if any. These indexes refer to the InnerTraces array of the TransactionTrace object containing
 	// this OpcodeTraceUnit.
 	SpawnedInners []int
+
+	// ScratchSlotChange stands for a write operation into a scratch slot
+	ScratchSlotChange *ScratchWrite
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

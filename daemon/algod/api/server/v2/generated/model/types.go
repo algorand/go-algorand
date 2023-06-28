@@ -630,6 +630,15 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// ScratchWrite The write operation into a scratch slot.
+type ScratchWrite struct {
+	// ScratchSlotId The scratch slot id indicating where the value writes to.
+	ScratchSlotId uint64 `json:"scratch-slot-id"`
+
+	// Value Represents a TEAL value over the stack.
+	Value StackValue `json:"value"`
+}
+
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
 	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
@@ -658,6 +667,9 @@ type SimulateRequestTransactionGroup struct {
 type SimulateTraceConfig struct {
 	// Enable A boolean option for opting in execution trace features simulation endpoint.
 	Enable *bool `json:"enable,omitempty"`
+
+	// ScratchChange A boolean option enabling returning scratch slot changes.
+	ScratchChange *bool `json:"scratch-change,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -713,6 +725,9 @@ type SimulationOpcodeTraceUnit struct {
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`
 
+	// ScratchWrite The write operation into a scratch slot.
+	ScratchWrite *ScratchWrite `json:"scratch-write,omitempty"`
+
 	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
 	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`
 }
@@ -730,6 +745,18 @@ type SimulationTransactionExecTrace struct {
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
+}
+
+// StackValue Represents a TEAL value over the stack.
+type StackValue struct {
+	// Bytes \[tb\] bytes value.
+	Bytes *[]byte `json:"bytes,omitempty"`
+
+	// Type \[tt\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**
+	Type uint64 `json:"type"`
+
+	// Uint \[ui\] uint value.
+	Uint *uint64 `json:"uint,omitempty"`
 }
 
 // StateDelta Application state delta.
