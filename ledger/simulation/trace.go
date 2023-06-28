@@ -125,6 +125,9 @@ type Result struct {
 // The other invalid options would be eliminated in validateSimulateRequest early.
 func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 
+// ReturnScratchChange tells if the simulation runs with scratch-change enabled.
+func (r Result) ReturnScratchChange() bool { return r.TraceConfig.ScratchChange }
+
 // validateSimulateRequest first checks relation between request and config variables, including developerAPI:
 // if `developerAPI` provided is turned off, this method would:
 // - error on asking for exec trace

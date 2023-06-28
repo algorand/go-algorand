@@ -271,6 +271,11 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
+	if evalError == nil && tracer.result.ReturnScratchChange() {
+		// TODO: do something: store, stores
+		_ = 1 + 1 // make a non empty logic branch
+	}
+
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig ops
 		return
