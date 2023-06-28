@@ -7,7 +7,6 @@ version: 2.1
 orbs:
   win: circleci/windows@2.3.0
   go: circleci/go@1.7.3
-  slack: circleci/slack@4.10.1
 
 parameters:
   ubuntu_image:
@@ -57,24 +56,6 @@ executors:
     resource_class: large
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
-  mac_arm64: &executor-mac-arm64
-    machine: true
-    resource_class: algorand/macstadium-m1-macos11
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-  # these are required b/c jobs explicitly assign sizes to the executors
-  # for `mac_arm64` there is only one size
-  mac_arm64_medium:
-    <<: *executor-mac-arm64
-  mac_arm64_large:
-    <<: *executor-mac-arm64
-
-slack-fail-stop-step: &slack-fail-post-step
-  post-steps:
-    - slack/notify:
-        branch_pattern: "master,rel/beta,rel/nightly,rel/stable"
-        event: fail
-        template: basic_fail_1
 
 # ===== Workflow Definitions =====
 workflows:
@@ -85,14 +66,12 @@ workflows:
           name: << matrix.platform >>_build_nightly
           matrix: &matrix-nightly
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["amd64", "arm64", "mac_amd64"]
           filters: &filters-nightly
             branches:
               only:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -100,8 +79,6 @@ workflows:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -109,8 +86,6 @@ workflows:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -118,8 +93,6 @@ workflows:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -127,35 +100,16 @@ workflows:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context:
-            - slack-secrets
-            - aws-secrets
-          <<: *slack-fail-post-step
 
       - tests_verification_job_nightly:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["amd64", "arm64", "mac_amd64"]
               job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
-      - upload_binaries:
-          name: << matrix.platform >>_upload_binaries
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_test_nightly_verification
-            - << matrix.platform >>_integration_nightly_verification
-            - << matrix.platform >>_e2e_expect_nightly_verification
-            - << matrix.platform >>_e2e_subs_nightly
-          context:
-            - slack-secrets
-            - aws-secrets
-          <<: *slack-fail-post-step
 
   "circleci_build_and_test":
     jobs:
@@ -169,8 +123,6 @@ workflows:
               ignore:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
       - integration:
           name: << matrix.platform >>_integration
@@ -178,8 +130,6 @@ workflows:
             <<: *matrix-default
           filters:
             <<: *filters-default
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
       - e2e_expect:
           name: << matrix.platform >>_e2e_expect
@@ -187,8 +137,6 @@ workflows:
             <<: *matrix-default
           filters:
             <<: *filters-default
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
       - e2e_subs:
           name: << matrix.platform >>_e2e_subs
@@ -196,8 +144,6 @@ workflows:
             <<: *matrix-default
           filters:
             <<: *filters-default
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
       - tests_verification_job:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -207,8 +153,6 @@ workflows:
               job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
-          context: slack-secrets
-          <<: *slack-fail-post-step
 
 # ===== Job Definitions =====
 jobs:
@@ -413,17 +357,6 @@ jobs:
       - tests_verification_command:
           result_subdir: << parameters.platform >>_<< parameters.job_type >>
 
-  upload_binaries:
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    steps:
-      - prepare_build_dir
-      - prepare_go
-      - upload_binaries_command:
-          platform: << parameters.platform >>
 
 # ===== Command Definitions =====
 commands:
@@ -711,34 +644,3 @@ commands:
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
 
-  upload_binaries_command:
-    description: save build artifacts for potential deployments
-    parameters:
-      platform:
-        type: string
-      build_dir:
-        type: string
-        default: << pipeline.parameters.build_dir >>
-    steps:
-        - attach_workspace:
-            at: << parameters.build_dir >>
-        - run:
-            name: Upload Binaries << parameters.platform >>
-            command: |
-              if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
-              then
-                export NO_BUILD="true"
-              fi
-              export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
-              export GOPATH="<< parameters.build_dir >>/go"
-              export TRAVIS_BRANCH=${CIRCLE_BRANCH}
-              scripts/travis/deploy_packages.sh
-        - when:
-            condition:
-              equal: [ "amd64", << parameters.platform >> ]
-            steps:
-              - run:
-                  name: test_release.sh
-                  command: |
-                    export TRAVIS_BRANCH=${CIRCLE_BRANCH}
-                    scripts/travis/test_release.sh
