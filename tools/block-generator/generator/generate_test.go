@@ -742,3 +742,55 @@ func TestCumulativeEffects(t *testing.T) {
 
 	require.Equal(t, expectedEffectsReport, CumulativeEffects(report))
 }
+
+func TestCountInners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tests := []struct {
+		name string
+		ad   transactions.ApplyData
+		want int
+	}{
+		{
+			name: "no inner transactions",
+			ad:   transactions.ApplyData{},
+			want: 0,
+		},
+		{
+			name: "one level of inner transactions",
+			ad: transactions.ApplyData{
+				EvalDelta: transactions.EvalDelta{
+					InnerTxns: []transactions.SignedTxnWithAD{{}, {}, {}},
+				},
+			},
+			want: 3,
+		},
+		{
+			name: "nested inner transactions",
+			ad: transactions.ApplyData{
+				EvalDelta: transactions.EvalDelta{
+					InnerTxns: []transactions.SignedTxnWithAD{
+						{
+							ApplyData: transactions.ApplyData{
+									EvalDelta: transactions.EvalDelta{
+									InnerTxns: []transactions.SignedTxnWithAD{{}, {}},
+								},
+							},
+						},
+						{},
+					},
+				},
+			},
+			want: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := countInners(tt.ad); got != tt.want {
+				t.Errorf("countInners() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+

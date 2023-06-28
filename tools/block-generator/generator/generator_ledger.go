@@ -184,6 +184,13 @@ func (g *generator) evaluateBlock(hdr bookkeeping.BlockHeader, txGroups [][]txn.
 	return lvb, eval.TestingTxnCounter(), err
 }
 
+func countInners(ad txn.ApplyData) int {
+	result := 0
+	for _, itxn := range ad.EvalDelta.InnerTxns {
+		result += 1 + countInners(itxn.ApplyData)
+	}
+	return result
+}
 
 // introspectLedgerVsGenerator is only called when the --verbose command line argument is specified.
 func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs []error) {
@@ -209,7 +216,7 @@ func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs
 			continue
 		}
 		nonEmptyApplyDataIndices = append(nonEmptyApplyDataIndices, uint64(i))
-		innerTxnCount += len(ad.EvalDelta.InnerTxns)
+		innerTxnCount += countInners(ad)
 	}
 
 	ledgerStateDeltas, err := g.ledger.GetStateDeltaForRound(round)
