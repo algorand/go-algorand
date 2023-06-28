@@ -83,22 +83,21 @@ func CumulativeEffects(report Report) EffectsReport {
 
 // ---- 3. App Transactions ----
 
-func (g *generator) generateAppTxn(round uint64, intra uint64) ([]txn.SignedTxn, uint64 /* nextIntra */, uint64 /* appID */, error) {
+func (g *generator) generateAppTxn(round uint64, intra uint64) ([]txn.SignedTxn, uint64 /* numTxns */, uint64 /* appID */, error) {
 	start := time.Now()
 	selection, err := weightedSelection(g.appTxWeights, getAppTxOptions(), appSwapCall)
 	if err != nil {
-		return nil, intra, 0, err
+		return nil, 0, 0, err
 	}
 
 	actual, signedTxns, appID, err := g.generateAppCallInternal(selection.(TxTypeID), round, intra, nil)
 	if err != nil {
-		return nil, intra, appID, fmt.Errorf("unexpected error received from generateAppCallInternal(): %w", err)
+		return nil, 0, appID, fmt.Errorf("unexpected error received from generateAppCallInternal(): %w", err)
 	}
 
-	intra += 1 + countEffects(actual) // +1 for actual
-
+	numTxns := 1 + countEffects(actual) // +1 for actual
 	g.recordData(actual, start)
-	return signedTxns, intra, appID, nil
+	return signedTxns, numTxns, appID, nil
 }
 
 // generateAppCallInternal is the main workhorse for generating app transactions.
