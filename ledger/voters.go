@@ -101,9 +101,6 @@ type votersTracker struct {
 	// cache.
 	commitListener   ledgercore.VotersCommitListener
 	commitListenerMu deadlock.RWMutex
-
-	added   []basics.Round
-	deleted []basics.Round
 }
 
 // votersRoundForStateProofRound computes the round number whose voting participants
@@ -270,7 +267,6 @@ func (vt *votersTracker) removeOldVoters(hdr bookkeeping.BlockHeader) {
 		// we remove voters that are no longer needed (i.e StateProofNextRound is larger ) or older than the recover period
 		if stateProofRound < lowestStateProofRound {
 			delete(vt.votersForRoundCache, r)
-			vt.deleted = append(vt.deleted, r)
 		}
 	}
 }
@@ -293,19 +289,6 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	}
 
 	return minRound
-}
-
-// lowestPendingRound returns the lowest round for which the tracker does not have VotersForRound completed.
-func (vt *votersTracker) lowestPendingRound(base basics.Round) basics.Round {
-	vt.votersMu.RLock()
-	defer vt.votersMu.RUnlock()
-	lowestPending := base
-	for r, voters := range vt.votersForRoundCache {
-		if r < lowestPending && !voters.Loaded() {
-			lowestPending = r
-		}
-	}
-	return lowestPending
 }
 
 // VotersForStateProof returns the top online participants from round r.
@@ -355,5 +338,4 @@ func (vt *votersTracker) setVoters(round basics.Round, voters *ledgercore.Voters
 	defer vt.votersMu.Unlock()
 
 	vt.votersForRoundCache[round] = voters
-	vt.added = append(vt.added, round)
 }

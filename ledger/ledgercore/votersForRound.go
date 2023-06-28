@@ -183,10 +183,3 @@ func (tr *VotersForRound) Wait() error {
 	}
 	return nil
 }
-
-// Loaded returns true if the tree is loaded.
-func (tr *VotersForRound) Loaded() bool {
-	tr.mu.Lock()
-	defer tr.mu.Unlock()
-	return tr.Tree != nil
-}
