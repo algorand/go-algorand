@@ -320,6 +320,7 @@ func TestAppBoxesOptin(t *testing.T) {
 	hint := appData{sender: 7}
 
 	// app call transaction opting into boxes gets replaced by creating appBoxes
+	g.startRound()
 	actual, sgnTxns, appID, err := g.generateAppCallInternal(appBoxesOptin, round, intra, &hint)
 	_ = appID
 	require.NoError(t, err)
@@ -354,9 +355,10 @@ func TestAppBoxesOptin(t *testing.T) {
 
 	paySiblingTxn := sgnTxns[1].Txn
 	require.Equal(t, protocol.PaymentTx, paySiblingTxn.Type)
-
-	// 2nd attempt to optin (with new sender) doesn't get replaced
+	
 	g.finishRound()
+	// 2nd attempt to optin (with new sender) doesn't get replaced
+	g.startRound()
 	intra += 1
 	hint.sender = 8
 
@@ -402,8 +404,9 @@ func TestAppBoxesOptin(t *testing.T) {
 	numTxns := 1 + countEffects(actual)
 	require.Equal(t, uint64(4), numTxns)
 
-	// 3rd attempt to optin gets replaced by vanilla app call
 	g.finishRound()
+	// 3rd attempt to optin gets replaced by vanilla app call
+	g.startRound()
 	intra += numTxns
 
 	actual, sgnTxns, appID, err = g.generateAppCallInternal(appBoxesOptin, round, intra, &hint)

@@ -106,7 +106,7 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 	}
 
 	g.initializeAccounting()
-	g.txnCounter = g.initializeLedger()
+	g.initializeLedger()
 	fmt.Printf("initializing generator with starting txnCounter from the genesis block: %d\n", g.txnCounter)
 	for _, val := range getTransactionOptions() {
 		switch val {
@@ -300,6 +300,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		return nil
 	}
 	// round == nextRound case
+
 	err := g.startRound()
 	if err != nil {
 		return err

@@ -66,7 +66,8 @@ func (g *generator) setBlockHeader(cert *rpcs.EncodedBlockCert) {
 
 // ---- ledger simulation and introspection ----
 
-func (g *generator) initializeLedger() uint64 {
+// initializeLedger creates a new ledger 
+func (g *generator) initializeLedger() {
 	genBal := convertToGenesisBalances(g.balances)
 	// add rewards pool with min balance
 	genBal[g.rewardsPool] = basics.AccountData{
@@ -74,7 +75,6 @@ func (g *generator) initializeLedger() uint64 {
 	}
 	bal := bookkeeping.MakeGenesisBalances(genBal, g.feeSink, g.rewardsPool)
 	block, err := bookkeeping.MakeGenesisBlock(g.protocol, bal, g.genesisID, g.genesisHash)
-	startingTxnCounter := block.TxnCounter
 	if err != nil {
 		fmt.Printf("error making genesis: %v\n.", err)
 		os.Exit(1)
@@ -95,8 +95,6 @@ func (g *generator) initializeLedger() uint64 {
 		os.Exit(1)
 	}
 	g.ledger = l
-
-	return startingTxnCounter
 }
 
 func (g *generator) minTxnsForBlock(round uint64) uint64 {
@@ -107,18 +105,21 @@ func (g *generator) minTxnsForBlock(round uint64) uint64 {
 	return g.config.TxnPerBlock
 }
 
-// startRound updates the generator's txnCounter based on the latest block header.
+// startRound updates the generator's txnCounter based on the latest block header's counter.
 // It is assumed that g.round has already been incremented in finishRound()
 func (g *generator) startRound() error {
-	if g.round == 0 {
-		// nothing to do in round 0
-		return nil
+	var latestRound basics.Round
+	if g.round > 0 {
+		latestRound = basics.Round(g.round - 1)
+	} else {
+		latestRound = basics.Round(0)
 	}
 
-	latestHeader, err := g.ledger.BlockHdr(basics.Round(g.round - 1))
+	latestHeader, err := g.ledger.BlockHdr(latestRound)
 	if err != nil {
-		return fmt.Errorf("could not obtain block header for round %d: %w", g.round, err)
+		return fmt.Errorf("could not obtain block header for round %d (latest round %d): %w", g.round, latestRound, err)
 	}
+
 	g.txnCounter = latestHeader.TxnCounter
 	return nil
 }
