@@ -2277,7 +2277,7 @@ func TestFailingLogicSigPCandStack(t *testing.T) {
 
 	op, err := logic.AssembleString(`#pragma version 8
 ` + strings.Repeat(`byte "a"; keccak256; pop
-`, 2) + `int 0`)
+`, 2) + `int 0; int 1; -`)
 	require.NoError(t, err)
 	program := logic.Program(op.Program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
@@ -2335,7 +2335,7 @@ byte "hello"; log; int 1`,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{},
 								},
-								LogicSigBudgetConsumed: 266,
+								LogicSigBudgetConsumed: 268,
 								Trace: &simulation.TransactionTrace{
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -2413,6 +2413,28 @@ byte "hello"; log; int 1`,
 												{
 													Type: basics.TealUintType,
 													Uint: 0,
+												},
+											},
+										},
+										{
+											PC: 13,
+											Added: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 15,
+											Deleted: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0,
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
 												},
 											},
 										},
