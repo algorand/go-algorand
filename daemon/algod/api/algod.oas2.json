@@ -3880,14 +3880,19 @@
         }
       }
     },
-    "ScratchWrite": {
+    "ScratchChangeUnit": {
       "description": "The write operation into a scratch slot.",
       "type": "object",
       "required": [
+        "type",
         "scratch-slot-id",
         "value"
       ],
       "properties": {
+        "type": {
+          "description": "Scratch change type. Value `1` refers to load, value `2` refers to store",
+          "type": "integer"
+        },
         "scratch-slot-id": {
           "description": "The scratch slot id indicating where the value writes to.",
           "type": "integer"
@@ -3908,8 +3913,8 @@
           "description": "The program counter of the current opcode being evaluated.",
           "type": "integer"
         },
-        "scratch-write": {
-          "$ref": "#/definitions/ScratchWrite"
+        "scratch-change": {
+          "$ref": "#/definitions/ScratchChangeUnit"
         },
         "spawned-inners": {
           "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",

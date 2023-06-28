@@ -630,10 +630,13 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
-// ScratchWrite The write operation into a scratch slot.
-type ScratchWrite struct {
+// ScratchChangeUnit The write operation into a scratch slot.
+type ScratchChangeUnit struct {
 	// ScratchSlotId The scratch slot id indicating where the value writes to.
 	ScratchSlotId uint64 `json:"scratch-slot-id"`
+
+	// Type Scratch change type. Value `1` refers to load, value `2` refers to store
+	Type uint64 `json:"type"`
 
 	// Value Represents a TEAL value over the stack.
 	Value StackValue `json:"value"`
@@ -725,8 +728,8 @@ type SimulationOpcodeTraceUnit struct {
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`
 
-	// ScratchWrite The write operation into a scratch slot.
-	ScratchWrite *ScratchWrite `json:"scratch-write,omitempty"`
+	// ScratchChange The write operation into a scratch slot.
+	ScratchChange *ScratchChangeUnit `json:"scratch-change,omitempty"`
 
 	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
 	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`
