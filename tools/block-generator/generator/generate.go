@@ -61,7 +61,7 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 	}
 
 	var proto protocol.ConsensusVersion = "future"
-	gen := &generator{
+	g := &generator{
 		verbose:                   verbose,
 		config:                    config,
 		protocol:                  proto,
@@ -81,115 +81,115 @@ func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config Generat
 		roundOffset:               dbround,
 	}
 
-	gen.feeSink[31] = 1
-	gen.rewardsPool[31] = 2
-	gen.genesisHash[31] = 3
+	g.feeSink[31] = 1
+	g.rewardsPool[31] = 2
+	g.genesisHash[31] = 3
 
 	// if genesis is provided
 	if bkGenesis.Network != "" {
-		gen.genesisID = bkGenesis.ID()
-		gen.genesisHash = bkGenesis.Hash()
+		g.genesisID = bkGenesis.ID()
+		g.genesisHash = bkGenesis.Hash()
 	}
 
-	gen.resetPendingApps()
-	gen.appSlice = map[appKind][]*appData{
+	g.resetPendingApps()
+	g.appSlice = map[appKind][]*appData{
 		appKindBoxes: make([]*appData, 0),
 		appKindSwap:  make([]*appData, 0),
 	}
-	gen.appMap = map[appKind]map[uint64]*appData{
+	g.appMap = map[appKind]map[uint64]*appData{
 		appKindBoxes: make(map[uint64]*appData),
 		appKindSwap:  make(map[uint64]*appData),
 	}
-	gen.accountAppOptins = map[appKind]map[uint64][]uint64{
+	g.accountAppOptins = map[appKind]map[uint64][]uint64{
 		appKindBoxes: make(map[uint64][]uint64),
 		appKindSwap:  make(map[uint64][]uint64),
 	}
 
-	gen.initializeAccounting()
-	gen.txnCounter = gen.initializeLedger()
-	fmt.Printf("initializing generator with starting txnCounter from the genesis block: %d\n", gen.txnCounter)
+	g.initializeAccounting()
+	g.txnCounter = g.initializeLedger()
+	fmt.Printf("initializing generator with starting txnCounter from the genesis block: %d\n", g.txnCounter)
 	for _, val := range getTransactionOptions() {
 		switch val {
 		case paymentTx:
-			gen.transactionWeights = append(gen.transactionWeights, config.PaymentTransactionFraction)
+			g.transactionWeights = append(g.transactionWeights, config.PaymentTransactionFraction)
 		case assetTx:
-			gen.transactionWeights = append(gen.transactionWeights, config.AssetTransactionFraction)
+			g.transactionWeights = append(g.transactionWeights, config.AssetTransactionFraction)
 		case applicationTx:
-			gen.transactionWeights = append(gen.transactionWeights, config.AppTransactionFraction)
+			g.transactionWeights = append(g.transactionWeights, config.AppTransactionFraction)
 
 		}
 	}
-	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.transactionWeights)); err != nil || !valid {
-		return gen, fmt.Errorf("invalid transaction config - bad txn distribution valid=%t: %w", valid, err)
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(g.transactionWeights)); err != nil || !valid {
+		return g, fmt.Errorf("invalid transaction config - bad txn distribution valid=%t: %w", valid, err)
 	}
 
 	for _, val := range getPaymentTxOptions() {
 		switch val {
 		case paymentAcctCreateTx:
-			gen.payTxWeights = append(gen.payTxWeights, config.PaymentNewAccountFraction)
+			g.payTxWeights = append(g.payTxWeights, config.PaymentNewAccountFraction)
 		case paymentPayTx:
-			gen.payTxWeights = append(gen.payTxWeights, config.PaymentFraction)
+			g.payTxWeights = append(g.payTxWeights, config.PaymentFraction)
 		}
 	}
-	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.payTxWeights)); err != nil || !valid {
-		return gen, fmt.Errorf("invalid payment config - bad txn distribution valid=%t: %w", valid, err)
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(g.payTxWeights)); err != nil || !valid {
+		return g, fmt.Errorf("invalid payment config - bad txn distribution valid=%t: %w", valid, err)
 	}
 
 	for _, val := range getAssetTxOptions() {
 		switch val {
 		case assetCreate:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetCreateFraction)
+			g.assetTxWeights = append(g.assetTxWeights, config.AssetCreateFraction)
 		case assetDestroy:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetDestroyFraction)
+			g.assetTxWeights = append(g.assetTxWeights, config.AssetDestroyFraction)
 		case assetOptin:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetOptinFraction)
+			g.assetTxWeights = append(g.assetTxWeights, config.AssetOptinFraction)
 		case assetXfer:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetXferFraction)
+			g.assetTxWeights = append(g.assetTxWeights, config.AssetXferFraction)
 		case assetClose:
-			gen.assetTxWeights = append(gen.assetTxWeights, config.AssetCloseFraction)
+			g.assetTxWeights = append(g.assetTxWeights, config.AssetCloseFraction)
 		}
 	}
-	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.assetTxWeights)); err != nil || !valid {
-		return gen, fmt.Errorf("invalid asset config - bad txn distribution valid=%t: %w", valid, err)
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(g.assetTxWeights)); err != nil || !valid {
+		return g, fmt.Errorf("invalid asset config - bad txn distribution valid=%t: %w", valid, err)
 	}
 
 	for _, val := range getAppTxOptions() {
 		switch val {
 		case appSwapCreate:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapCreateFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppSwapFraction*config.AppSwapCreateFraction)
 		case appSwapUpdate:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapUpdateFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppSwapFraction*config.AppSwapUpdateFraction)
 		case appSwapDelete:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapDeleteFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppSwapFraction*config.AppSwapDeleteFraction)
 		case appSwapOptin:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapOptinFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppSwapFraction*config.AppSwapOptinFraction)
 		case appSwapCall:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapCallFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppSwapFraction*config.AppSwapCallFraction)
 		case appSwapClose:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapCloseFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppSwapFraction*config.AppSwapCloseFraction)
 		case appSwapClear:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppSwapFraction*config.AppSwapClearFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppSwapFraction*config.AppSwapClearFraction)
 		case appBoxesCreate:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesCreateFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppBoxesFraction*config.AppBoxesCreateFraction)
 		case appBoxesUpdate:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesUpdateFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppBoxesFraction*config.AppBoxesUpdateFraction)
 		case appBoxesDelete:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesDeleteFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppBoxesFraction*config.AppBoxesDeleteFraction)
 		case appBoxesOptin:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesOptinFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppBoxesFraction*config.AppBoxesOptinFraction)
 		case appBoxesCall:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesCallFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppBoxesFraction*config.AppBoxesCallFraction)
 		case appBoxesClose:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesCloseFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppBoxesFraction*config.AppBoxesCloseFraction)
 		case appBoxesClear:
-			gen.appTxWeights = append(gen.appTxWeights, config.AppBoxesFraction*config.AppBoxesClearFraction)
+			g.appTxWeights = append(g.appTxWeights, config.AppBoxesFraction*config.AppBoxesClearFraction)
 		}
 	}
-	if _, valid, err := validateSumCloseToOne(asPtrSlice(gen.appTxWeights)); err != nil || !valid {
-		return gen, fmt.Errorf("invalid app config - bad txn distribution valid=%t: %w", valid, err)
+	if _, valid, err := validateSumCloseToOne(asPtrSlice(g.appTxWeights)); err != nil || !valid {
+		return g, fmt.Errorf("invalid app config - bad txn distribution valid=%t: %w", valid, err)
 	}
 
-	return gen, nil
+	return g, nil
 }
 
 // initializeAccounting creates the genesis accounts.
