@@ -3116,16 +3116,16 @@
       ],
       "properties": {
         "type": {
-          "description": "\\[tt\\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**",
+          "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint**",
           "type": "integer"
         },
         "bytes": {
-          "description": "\\[tb\\] bytes value.",
+          "description": "bytes value.",
           "type": "string",
           "format": "byte"
         },
         "uint": {
-          "description": "\\[ui\\] uint value.",
+          "description": "uint value.",
           "type": "integer",
           "x-algorand-format": "uint64"
         }
