@@ -312,7 +312,9 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	groupIndex := cx.GroupIndex()
 
-	if tracer.result.ReturnStackChange() {
+	// NOTE: only when we have no evalError on current opcode,
+	// we can proceed for recording stack chaange
+	if evalError == nil && tracer.result.ReturnStackChange() {
 		var txnTrace *TransactionTrace
 		if cx.RunMode() == logic.ModeSig {
 			txnTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
