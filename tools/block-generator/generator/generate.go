@@ -495,7 +495,6 @@ func getAppTxOptions() []interface{} {
 // ---- Transaction Generation (Pay/Asset/Apps) ----
 
 func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxnWithAD, uint64 /* numTxns */, error) {
-	// TODO: return the number of transactions generated instead of updating intra!!!
 	selection, err := weightedSelection(g.transactionWeights, getTransactionOptions(), paymentTx)
 	if err != nil {
 		return nil, 0, err
@@ -552,7 +551,7 @@ func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxn
 func (g *generator) generatePaymentTxn(round uint64, intra uint64) (txn.SignedTxn, uint64 /* numTxns */, error) {
 	selection, err := weightedSelection(g.payTxWeights, getPaymentTxOptions(), paymentPayTx)
 	if err != nil {
-		return txn.SignedTxn{}, intra, err
+		return txn.SignedTxn{}, 0, err
 	}
 	return g.generatePaymentTxnInternal(selection.(TxTypeID), round, intra)
 }
