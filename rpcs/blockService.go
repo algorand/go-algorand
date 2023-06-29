@@ -306,13 +306,14 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 	var n uint64
 
 	defer func() {
+		outMsg := network.OutgoingMessage{Topics: respTopics}
 		if n > 0 {
-			reqMsg.OnMessageRelease = func() {
+			outMsg.OnRelease = func() {
 				atomic.AddUint64(&bs.wsMemoryUsed, ^uint64(n-1))
 			}
 			atomic.AddUint64(&bs.wsMemoryUsed, (n))
 		}
-		target.Respond(ctx, reqMsg, respTopics)
+		target.Respond(ctx, reqMsg, outMsg)
 	}()
 
 	// If we are over-capacity, we will not process the request

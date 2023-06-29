@@ -4530,8 +4530,8 @@ func TestSendMessageCallbacks(t *testing.T) {
 		callback := func() {
 			atomic.AddUint64(&counter, ^uint64(randInt-1))
 		}
-		msg := IncomingMessage{Sender: netA.peers[0], Tag: protocol.UniEnsBlockReqTag, OnMessageRelease: callback}
-		peer.Respond(context.Background(), msg, Topics{topic})
+		msg := IncomingMessage{Sender: netA.peers[0], Tag: protocol.UniEnsBlockReqTag}
+		peer.Respond(context.Background(), msg, OutgoingMessage{OnRelease: callback, Topics: Topics{topic}})
 	}
 	// force it to disconnect by removing the only response channel -- this is breach of protocol.
 	netB.peers[0].getAndRemoveResponseChannel(1)
@@ -4574,8 +4574,8 @@ func TestSendMessageCallbackDrain(t *testing.T) {
 		callback := func() {
 			counter += randInt
 		}
-		msg := IncomingMessage{Sender: node.peers[0], Tag: protocol.UniEnsBlockReqTag, OnMessageRelease: callback}
-		destPeer.Respond(context.Background(), msg, Topics{topic})
+		msg := IncomingMessage{Sender: node.peers[0], Tag: protocol.UniEnsBlockReqTag}
+		destPeer.Respond(context.Background(), msg, OutgoingMessage{OnRelease: callback, Topics: Topics{topic}})
 	}
 	require.Len(t, destPeer.sendBufferBulk, 10)
 	require.Zero(t, counter)

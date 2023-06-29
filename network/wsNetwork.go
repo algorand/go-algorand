@@ -252,10 +252,6 @@ type IncomingMessage struct {
 	// is used to ensure fairness across peers in terms of processing
 	// messages.
 	processing chan struct{}
-
-	// Function called when outgoing message, resulting from this incoming message, is released
-	// either by being sent or discarded.
-	OnMessageRelease func()
 }
 
 // Tag is a short string (2 bytes) marking a type of message
@@ -277,6 +273,10 @@ type OutgoingMessage struct {
 	Payload []byte
 	Topics  Topics
 	reason  disconnectReason // used when Action == Disconnect
+
+	// OnRelease is a function called when outgoing message, resulting from this incoming message, is released
+	// either by being sent or discarded.
+	OnRelease func()
 }
 
 // ForwardingPolicy is an enum indicating to whom we should send a message
@@ -1326,7 +1326,7 @@ func (wn *WebsocketNetwork) messageHandlerThread(peersConnectivityCheckCh <-chan
 					wn.log.Warnf("WebsocketNetwork.messageHandlerThread: WebsocketNetwork.Broadcast returned unexpected error %v", err)
 				}
 			case Respond:
-				err := msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg.Topics)
+				err := msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg)
 				if err != nil && err != wn.ctx.Err() {
 					wn.log.Warnf("WebsocketNetwork.messageHandlerThread: wsPeer.Respond returned unexpected error %v", err)
 				}

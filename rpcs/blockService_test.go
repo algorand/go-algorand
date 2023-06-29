@@ -44,7 +44,7 @@ import (
 
 type mockUnicastPeer struct {
 	responseTopics network.Topics
-	reqMsg         network.IncomingMessage
+	outMsg         network.OutgoingMessage
 }
 
 func (mup *mockUnicastPeer) GetAddress() string {
@@ -64,9 +64,9 @@ func (mup *mockUnicastPeer) GetConnectionLatency() time.Duration {
 func (mup *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics network.Topics) (resp *network.Response, e error) {
 	return nil, nil
 }
-func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, topics network.Topics) (e error) {
-	mup.responseTopics = topics
-	mup.reqMsg = reqMsg
+func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, outMsg network.OutgoingMessage) (e error) {
+	mup.responseTopics = outMsg.Topics
+	mup.outMsg = outMsg
 	return nil
 }
 
@@ -458,7 +458,7 @@ func TestWsBlockLimiting(t *testing.T) {
 	require.Positive(t, bs1.wsMemoryUsed)
 
 	// Before making a new request save the callback since the new failed message will overwrite it in the mock peer
-	callback := peer.reqMsg.OnMessageRelease
+	callback := peer.outMsg.OnRelease
 
 	// Now we should be over the max and the block service should not return a block
 	// and should return an error instead
@@ -467,7 +467,7 @@ func TestWsBlockLimiting(t *testing.T) {
 	require.True(t, found)
 
 	// Now call the callback to free up memUsed
-	require.Nil(t, peer.reqMsg.OnMessageRelease)
+	require.Nil(t, peer.outMsg.OnRelease)
 	callback()
 	require.Zero(t, bs1.wsMemoryUsed)
 }
