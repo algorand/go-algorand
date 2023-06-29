@@ -51,7 +51,8 @@ type Args struct {
 	PostgresConnectionString string
 	CPUProfilePath           string
 	RunDuration              time.Duration
-	LogLevel                 string
+	RunnerVerbose            bool
+	ConduitLogLevel          string
 	ReportDirectory          string
 	ResetReportDir           bool
 	RunValidation            bool
@@ -142,7 +143,7 @@ func (r *Args) run() error {
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
-	generatorShutdownFunc, _ := startGenerator(r.Path, nextRound, r.GenesisFile, algodNet, blockMiddleware)
+	generatorShutdownFunc, _ := startGenerator(r.Path, nextRound, r.GenesisFile, r.RunnerVerbose, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
 		if err := generatorShutdownFunc(); err != nil {
@@ -162,7 +163,7 @@ func (r *Args) run() error {
 	}
 	defer f.Close()
 
-	conduitConfig := config{r.LogLevel, logfile,
+	conduitConfig := config{r.ConduitLogLevel, logfile,
 		fmt.Sprintf(":%d", r.MetricsPort),
 		algodNet, r.PostgresConnectionString,
 	}
@@ -407,9 +408,9 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 }
 
 // startGenerator starts the generator server.
-func startGenerator(configFile string, dbround uint64, genesisFile string, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+func startGenerator(configFile string, dbround uint64, genesisFile string, verbose bool, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
 	// Start generator.
-	server, generator := generator.MakeServerWithMiddleware(dbround, genesisFile, configFile, addr, blockMiddleware)
+	server, generator := generator.MakeServerWithMiddleware(dbround, genesisFile, configFile, verbose, addr, blockMiddleware)
 
 	// Start the server
 	go func() {

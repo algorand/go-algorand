@@ -19,6 +19,7 @@ package generator
 import (
 	"encoding/binary"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	txn "github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -121,26 +122,19 @@ func (g *generator) makeAssetAcceptanceTxn(header txn.Header, index uint64) txn.
 
 // ---- application transactions ----
 
-func (g *generator) makeAppCreateTxn(sender basics.Address, round, intra uint64, approval, clear string) txn.Transaction {
+func (g *generator) makeAppCreateTxn(kind appKind, sender basics.Address, round, intra uint64, futureAppId uint64) []txn.SignedTxn {
+	var approval, clear string
+	if kind == appKindSwap {
+		approval, clear = approvalSwap, clearSwap
+	} else {
+		approval, clear = approvalBoxes, clearBoxes
+	}
 
 	createTxn := g.makeTestTxn(sender, round, intra)
-
-	/* all 0 values but keep around for reference
-	createTxn.ApplicationID = 0
-	createTxn.ApplicationArgs = nil
-	createTxn.Accounts = nil
-	createTxn.ForeignApps = nil
-	createTxn.ForeignAssets = nil
-	createTxn.Boxes = nil
-	createTxn.ExtraProgramPages = 0
-	*/
 
 	createTxn.Type = protocol.ApplicationCallTx
 	createTxn.ApprovalProgram = approval
 	createTxn.ClearStateProgram = clear
-
-	// sender opts-in to their own created app
-	createTxn.OnCompletion = txn.OptInOC
 
 	// max out local/global state usage but split
 	// 50% between bytes/uint64
@@ -153,5 +147,91 @@ func (g *generator) makeAppCreateTxn(sender basics.Address, round, intra uint64,
 		NumByteSlice: 32,
 	}
 
-	return createTxn.Txn()
+	createTxFee := g.params.MinTxnFee
+	senderIndex := accountToIndex(sender)
+
+	// TODO: should check for min balance
+	g.balances[senderIndex] -= createTxFee
+	if kind != appKindBoxes {
+		return txntest.Group(&createTxn)
+	}
+
+	// also group in a pay txn to fund the app
+	pstFee := uint64(1_000)
+	pstAmt := uint64(1_000_000)
+
+	paySibTxn := g.makeTestTxn(sender, round, intra)
+	paySibTxn.Type = protocol.PaymentTx
+	paySibTxn.Receiver = basics.AppIndex(futureAppId).Address()
+	paySibTxn.Fee = basics.MicroAlgos{Raw: pstFee}
+	paySibTxn.Amount = uint64(pstAmt)
+
+	// TODO: should check for min balance}
+	g.balances[senderIndex] -= (pstFee + pstAmt)
+
+	return txntest.Group(&createTxn, &paySibTxn)
+}
+
+// makeAppOptinTxn currently only works for the boxes app
+func (g *generator) makeAppOptinTxn(sender basics.Address, round, intra uint64, kind appKind, appIndex uint64) []txn.SignedTxn {
+	if kind != appKindBoxes {
+		panic("makeAppOptinTxn only works for the boxes app currently")
+	}
+
+	optInTxn := g.makeTestTxn(sender, round, intra)
+	/* all 0 values but keep around for reference
+	optInTxn.ApplicationArgs = nil
+	optInTxn.ForeignApps = nil
+	optInTxn.ForeignAssets = nil
+	optInTxn.ExtraProgramPages = 0
+	*/
+
+	optInTxn.Type = protocol.ApplicationCallTx
+	optInTxn.ApplicationID = basics.AppIndex(appIndex)
+	optInTxn.OnCompletion = txn.OptInOC
+	// the first inner sends some algo to the creator:
+	optInTxn.Accounts = []basics.Address{indexToAccount(g.appMap[kind][appIndex].sender)}
+	optInTxn.Boxes = []txn.BoxRef{
+		{Name: crypto.Digest(sender).ToSlice()},
+	}
+
+	// TODO: these may not make sense for the swap optin
+
+	pstFee := uint64(2_000)
+	pstAmt := uint64(1_000_000)
+
+	paySibTxn := g.makeTestTxn(sender, round, intra)
+	paySibTxn.Type = protocol.PaymentTx
+	paySibTxn.Receiver = basics.AppIndex(appIndex).Address()
+	paySibTxn.Fee = basics.MicroAlgos{Raw: pstFee}
+	paySibTxn.Amount = uint64(pstAmt)
+
+	senderIndex := accountToIndex(sender)
+	// TODO: should check for min balance}
+	// TODO: for the case of boxes, should refund 0.76 algo
+	g.balances[senderIndex] -= (pstFee + pstAmt)
+
+	return txntest.Group(&optInTxn, &paySibTxn)
+}
+
+// makeAppCallTxn currently only works for the boxes app
+func (g *generator) makeAppCallTxn(sender basics.Address, round, intra, appIndex uint64) txn.Transaction {
+	callTxn := g.makeTestTxn(sender, round, intra)
+	callTxn.Type = protocol.ApplicationCallTx
+	callTxn.ApplicationID = basics.AppIndex(appIndex)
+	callTxn.OnCompletion = txn.NoOpOC // redundant for clarity
+	callTxn.ApplicationArgs = [][]byte{
+		{0xe1, 0xf9, 0x3f, 0x1d}, // the method selector for getting a box
+	}
+
+	callTxn.Boxes = []txn.BoxRef{
+		{Name: crypto.Digest(sender).ToSlice()},
+	}
+
+	// TODO: should check for min balance
+	appCallTxFee := g.params.MinTxnFee
+	senderIndex := accountToIndex(sender)
+	g.balances[senderIndex] -= appCallTxFee
+
+	return callTxn.Txn()
 }

@@ -28,17 +28,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-deadlock"
 )
 
 const basicTestCatchpointInterval = 4
@@ -277,6 +279,52 @@ func getFixture(consensusParams *config.ConsensusParams) *fixtures.RestClientFix
 	return &fixture
 }
 
+func TestCatchpointCatchupFailure(t *testing.T) {
+	// Overview of this test:
+	// Start a two-node network (primary has 100%, using has 0%)
+	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
+	// Let it run until the first usable catchpoint, as computed in getFirstCatchpointRound, is generated.
+	// Shut down the primary node so that using node will have no peers for catchpoint catchup.
+	// Instruct the using node to catchpoint catchup from the proxy.
+	// Make sure starting the catchpoint service returns an error.
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	applyCatchpointConsensusChanges(&consensusParams)
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	fixture := getFixture(&consensusParams)
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
+
+	primaryNode, primaryNodeRestClient, primaryErrorsCollector := startCatchpointGeneratingNode(a, fixture, "Primary")
+	defer primaryNode.StopAlgod()
+
+	primaryNodeAddr, err := primaryNode.GetListeningAddress()
+	a.NoError(err)
+
+	usingNode, usingNodeRestClient, wp, usingNodeErrorsCollector := startCatchpointUsingNode(a, fixture, "Node", primaryNodeAddr)
+	defer usingNodeErrorsCollector.Print()
+	defer wp.Close()
+	defer usingNode.StopAlgod()
+
+	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
+
+	catchpointLabel, err := waitForCatchpointGeneration(fixture, primaryNodeRestClient, targetCatchpointRound)
+	a.NoError(err)
+
+	primaryErrorsCollector.Print()
+	err = primaryNode.StopAlgod()
+	a.NoError(err)
+
+	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	a.ErrorContains(err, node.MakeStartCatchpointError(catchpointLabel, fmt.Errorf("")).Error())
+}
+
 func TestBasicCatchpointCatchup(t *testing.T) {
 	// Overview of this test:
 	// Start a two-node network (primary has 100%, using has 0%)
@@ -448,9 +496,6 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	// prepare it's configuration file to set it to generate a catchpoint every 16 rounds.
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
-	const catchpointInterval = 16
-	cfg.CatchpointInterval = catchpointInterval
-	cfg.CatchpointTracking = 2
 	cfg.MaxAcctLookback = 2
 	cfg.Archival = false
 
@@ -461,6 +506,9 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 
 	cfg, err = config.LoadConfigFromDisk(relayNode.GetDataDir())
 	a.NoError(err)
+	const catchpointInterval = 16
+	cfg.CatchpointInterval = catchpointInterval
+	cfg.CatchpointTracking = 2
 	cfg.TxSyncIntervalSeconds = 200000 // disable txSync
 	cfg.SaveToDisk(relayNode.GetDataDir())
 
@@ -469,6 +517,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 
 	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
+	relayClient := fixture.GetLibGoalClientFromNodeController(relayNode)
 	wallet1, err := client1.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	wallet2, err := client2.GetUnencryptedWalletHandle()
@@ -491,7 +540,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	timer := time.NewTimer(100 * time.Second)
 outer:
 	for {
-		status, err = client1.Status()
+		status, err = relayClient.Status()
 		a.NoError(err)
 
 		var round basics.Round
@@ -504,7 +553,7 @@ outer:
 		}
 		select {
 		case <-timer.C:
-			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
+			a.Failf("timeout waiting on a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
 			break outer
 		default:
 			time.Sleep(250 * time.Millisecond)
@@ -573,9 +622,6 @@ func TestReadyEndpoint(t *testing.T) {
 	// prepare its configuration file to set it to generate a catchpoint every 16 rounds.
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
-	const catchpointInterval = 16
-	cfg.CatchpointInterval = catchpointInterval
-	cfg.CatchpointTracking = 2
 	cfg.MaxAcctLookback = 2
 	cfg.Archival = false
 	cfg.TxSyncIntervalSeconds = 200000 // disable txSync
@@ -587,6 +633,9 @@ func TestReadyEndpoint(t *testing.T) {
 
 	cfg, err = config.LoadConfigFromDisk(relayNode.GetDataDir())
 	a.NoError(err)
+	const catchpointInterval = 16
+	cfg.CatchpointInterval = catchpointInterval
+	cfg.CatchpointTracking = 2
 	cfg.TxSyncIntervalSeconds = 200000 // disable txSync
 	cfg.SaveToDisk(relayNode.GetDataDir())
 
@@ -595,6 +644,7 @@ func TestReadyEndpoint(t *testing.T) {
 
 	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
+	relayClient := fixture.GetLibGoalClientFromNodeController(relayNode)
 	wallet1, err := client1.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	wallet2, err := client2.GetUnencryptedWalletHandle()
@@ -617,7 +667,7 @@ func TestReadyEndpoint(t *testing.T) {
 	timer := time.NewTimer(100 * time.Second)
 outer:
 	for {
-		status, err = client1.Status()
+		status, err = relayClient.Status()
 		a.NoError(err)
 
 		var round basics.Round
@@ -630,7 +680,7 @@ outer:
 		}
 		select {
 		case <-timer.C:
-			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
+			a.Failf("timeout waiting on a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
 			break outer
 		default:
 			time.Sleep(250 * time.Millisecond)
@@ -732,9 +782,6 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	// prepare it's configuration file to set it to generate a catchpoint every 16 rounds.
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
-	const catchpointInterval = 16
-	cfg.CatchpointInterval = catchpointInterval
-	cfg.CatchpointTracking = 2
 	cfg.MaxAcctLookback = 2
 	cfg.Archival = false
 
@@ -746,6 +793,9 @@ func TestNodeTxSyncRestart(t *testing.T) {
 
 	cfg, err = config.LoadConfigFromDisk(relayNode.GetDataDir())
 	a.NoError(err)
+	const catchpointInterval = 16
+	cfg.CatchpointInterval = catchpointInterval
+	cfg.CatchpointTracking = 2
 	cfg.TxSyncIntervalSeconds = 4
 	cfg.SaveToDisk(relayNode.GetDataDir())
 
@@ -754,6 +804,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 
 	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
+	relayClient := fixture.GetLibGoalClientFromNodeController(relayNode)
 	wallet1, err := client1.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	wallet2, err := client2.GetUnencryptedWalletHandle()
@@ -776,7 +827,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	timer := time.NewTimer(100 * time.Second)
 outer:
 	for {
-		status, err = client1.Status()
+		status, err = relayClient.Status()
 		a.NoError(err)
 
 		var round basics.Round
@@ -789,7 +840,7 @@ outer:
 		}
 		select {
 		case <-timer.C:
-			a.Failf("timeout waiting a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
+			a.Failf("timeout waiting on a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
 			break outer
 		default:
 			time.Sleep(250 * time.Millisecond)

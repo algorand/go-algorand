@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/slices"
 )
 
 func protoFromString(protoString string) (name string, proto config.ConsensusParams, err error) {
@@ -190,8 +191,7 @@ func (a *AppState) clone() (b AppState) {
 			b.locals[addr][aid] = tkv.Clone()
 		}
 	}
-	b.logs = make([]string, len(a.logs))
-	copy(b.logs, a.logs)
+	b.logs = slices.Clone(a.logs)
 	b.innerTxns = cloneInners(a.innerTxns)
 	return
 }

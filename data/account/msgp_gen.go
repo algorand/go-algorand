@@ -4,6 +4,10 @@ package account
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -14,6 +18,7 @@ import (
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> ParticipationKeyIdentityMaxSize()
 //
 // StateProofKeys
 //        |-----> MarshalMsg
@@ -22,6 +27,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
+//        |-----> StateProofKeysMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -245,6 +251,12 @@ func (z *ParticipationKeyIdentity) MsgIsZero() bool {
 	return ((*z).Parent.MsgIsZero()) && ((*z).VRFSK.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && ((*z).KeyDilution == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func ParticipationKeyIdentityMaxSize() (s int) {
+	s = 1 + 5 + basics.AddressMaxSize() + 6 + crypto.VrfPrivkeyMaxSize() + 8 + crypto.OneTimeSignatureVerifierMaxSize() + 3 + basics.RoundMaxSize() + 3 + basics.RoundMaxSize() + 3 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z StateProofKeys) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -316,4 +328,11 @@ func (z StateProofKeys) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z StateProofKeys) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func StateProofKeysMaxSize() (s int) {
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((1000) * (merklesignature.KeyRoundPairMaxSize()))
+	return
 }

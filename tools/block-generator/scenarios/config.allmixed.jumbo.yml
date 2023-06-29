@@ -1,0 +1,31 @@
+name: "App Create"
+tx_per_block: 25000
+
+# transaction distribution
+tx_pay_fraction: 0.25
+tx_asset_fraction: 0.25
+tx_app_fraction: 0.50
+
+# payment config
+pay_acct_create_fraction: 0.02
+pay_xfer_fraction: 0.98
+
+# asset config
+asset_create_fraction: 0.001
+asset_optin_fraction: 0.1
+asset_close_fraction: 0.05
+asset_xfer_fraction: 0.849
+asset_delete_fraction: 0
+
+# app kind config
+app_boxes_fraction: 0.5
+app_swap_fraction: 0.5
+
+# app boxes config
+app_boxes_create_fraction: 0.01
+app_boxes_optin_fraction: 0.1
+app_boxes_call_fraction: 0.89
+
+# app swap config
+app_swap_create_fraction: 1.0
+

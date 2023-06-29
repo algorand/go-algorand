@@ -22,6 +22,9 @@ package protocol
 // TxType is the type of the transaction written to the ledger
 type TxType string
 
+//msgp:allocbound TxType txTypeMaxLen
+const txTypeMaxLen = 7
+
 const (
 	// PaymentTx indicates a payment transaction
 	PaymentTx TxType = "pay"

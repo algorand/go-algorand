@@ -482,9 +482,9 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 			NumByteSlice: record.TotalAppSchema.NumByteSlice,
 			NumUint:      record.TotalAppSchema.NumUint,
 		},
-		AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
-		TotalBoxes:          numOrNil(record.TotalBoxes),
-		TotalBoxBytes:       numOrNil(record.TotalBoxBytes),
+		AppsTotalExtraPages: omitEmpty(uint64(record.TotalExtraAppPages)),
+		TotalBoxes:          omitEmpty(record.TotalBoxes),
+		TotalBoxBytes:       omitEmpty(record.TotalBoxBytes),
 		MinBalance:          record.MinBalance(&consensus).Raw,
 	}
 	response := model.AccountResponse(account)
@@ -821,7 +821,7 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		response.UpgradeVotes = &votes
 		response.UpgradeYesVotes = &votesYes
 		response.UpgradeNoVotes = &votesNo
-		response.UpgradeNextProtocolVoteBefore = numOrNil(uint64(stat.NextProtocolVoteBefore))
+		response.UpgradeNextProtocolVoteBefore = omitEmpty(uint64(stat.NextProtocolVoteBefore))
 		response.UpgradeVoteRounds = &upgradeVoteRounds
 	}
 
@@ -1357,6 +1357,8 @@ func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
 		code = http.StatusOK
 	case *node.CatchpointUnableToStartError:
 		return badRequest(ctx, err, err.Error(), v2.Log)
+	case *node.StartCatchpointError:
+		return timeout(ctx, err, err.Error(), v2.Log)
 	default:
 		return internalError(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
 	}

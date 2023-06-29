@@ -34,6 +34,8 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"golang.org/x/exp/slices"
+
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -1029,8 +1031,7 @@ int 1`,
 
 					var expectedFailedAt *[]uint64
 					if len(scenario.FailedAt) != 0 {
-						clone := make([]uint64, len(scenario.FailedAt))
-						copy(clone, scenario.FailedAt)
+						clone := slices.Clone(scenario.FailedAt)
 						clone[0]++
 						expectedFailedAt = &clone
 					}

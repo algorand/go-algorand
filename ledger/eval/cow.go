@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/maps"
 )
 
 //   ___________________
@@ -336,13 +337,9 @@ func (cb *roundCowState) reset() {
 	cb.proto = config.ConsensusParams{}
 	cb.mods.Reset()
 	cb.txnCount = 0
-	for addr := range cb.sdeltas {
-		delete(cb.sdeltas, addr)
-	}
+	maps.Clear(cb.sdeltas)
 	cb.compatibilityMode = false
-	for addr := range cb.compatibilityGetKeyCache {
-		delete(cb.compatibilityGetKeyCache, addr)
-	}
+	maps.Clear(cb.compatibilityGetKeyCache)
 	cb.prevTotals = ledgercore.AccountTotals{}
 }
 
