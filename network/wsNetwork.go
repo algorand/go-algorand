@@ -142,8 +142,6 @@ var networkPrioBatchesPPWithoutCompression = metrics.MakeCounter(metrics.MetricN
 var networkPrioPPCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_compressed_size_total", Description: "cumulative size of all compressed PP"})
 var networkPrioPPNonCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_non_compressed_size_total", Description: "cumulative size of all non-compressed PP"})
 
-var networkCatchupMessagesDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_ue_messages_dropped", Description: "number of (UE) block catchup request messages dropped due to being at byte limit"})
-
 // peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to complete.
 const peerDisconnectionAckDuration = 5 * time.Second
 
