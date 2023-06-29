@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // BlockResponseContentType is the HTTP Content-Type header for a raw binary block
@@ -68,11 +69,20 @@ const (
 
 var errBlockServiceClosed = errors.New("block service is shutting down")
 
+const errMemoryAtCapacityPublic = "block service memory over capacity"
+
 type errMemoryAtCapacity struct{ capacity, used uint64 }
 
 func (err errMemoryAtCapacity) Error() string {
 	return fmt.Sprintf("block service memory over capacity: %d / %d", err.used, err.capacity)
 }
+
+var wsBlockMessagesDroppedCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_rpcs_ws_reqs_dropped", Description: "Number of websocket block requests dropped due to memory capacity"},
+)
+var httpBlockMessagesDroppedCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_rpcs_http_reqs_dropped", Description: "Number of http block requests dropped due to memory capacity"},
+)
 
 // LedgerForBlockService describes the Ledger methods used by BlockService.
 type LedgerForBlockService interface {
@@ -246,6 +256,7 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 				response.WriteHeader(http.StatusServiceUnavailable)
 				bs.log.Debugf("ServeHTTP: returned retry-after: %v", err)
 			}
+			httpBlockMessagesDroppedCounter.Inc(nil)
 			return
 		default:
 			// unexpected error.
@@ -323,8 +334,9 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 		err := errMemoryAtCapacity{capacity: bs.memoryCap, used: memUsed}
 		bs.log.Infof("BlockService handleCatchupReq: %s", err.Error())
 		respTopics = network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(err.Error())),
+			network.MakeTopic(network.ErrorKey, []byte(errMemoryAtCapacityPublic)),
 		}
+		wsBlockMessagesDroppedCounter.Inc(nil)
 		return
 	}
 
