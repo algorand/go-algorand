@@ -2081,6 +2081,64 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	})
 }
 
+func goValuesToTealValues(goValues ...interface{}) []basics.TealValue {
+	if len(goValues) == 0 {
+		return nil
+	}
+
+	boolToUint64 := func(b bool) uint64 {
+		if b {
+			return 1
+		}
+		return 0
+	}
+
+	modelValues := make([]basics.TealValue, len(goValues))
+	for i, goValue := range goValues {
+		switch goValue.(type) {
+		case []byte:
+			convertedBytes, _ := goValue.([]byte)
+			modelValues[i] = basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: string(convertedBytes),
+			}
+		case string:
+			convertedBytes, _ := goValue.(string)
+			modelValues[i] = basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: convertedBytes,
+			}
+		case bool:
+			convertedBool, _ := goValue.(bool)
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: boolToUint64(convertedBool),
+			}
+		case int:
+			convertedInt, _ := goValue.(int)
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: uint64(convertedInt),
+			}
+		case basics.AppIndex:
+			convertedInt, _ := goValue.(basics.AppIndex)
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: uint64(convertedInt),
+			}
+		case uint64:
+			convertedUint, _ := goValue.(uint64)
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: convertedUint,
+			}
+		default:
+			panic("unexpected type inferred from interface{}")
+		}
+	}
+	return modelValues
+}
+
 func TestLogicSigPCandStackExposure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -2153,26 +2211,16 @@ byte "hello"; log; int 1`,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
-											PC: 1,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "hello",
-												},
-											},
+											PC:         1,
+											StackAdded: goValuesToTealValues("hello"),
 										},
 										{
 											PC:             8,
 											StackDeletions: 1,
 										},
 										{
-											PC: 9,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:         9,
+											StackAdded: goValuesToTealValues(1),
 										},
 									},
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
@@ -2180,22 +2228,12 @@ byte "hello"; log; int 1`,
 											PC: 1,
 										},
 										{
-											PC: 5,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "a",
-												},
-											},
+											PC:         5,
+											StackAdded: goValuesToTealValues("a"),
 										},
 										{
-											PC: 6,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: keccakBytes,
-												},
-											},
+											PC:             6,
+											StackAdded:     goValuesToTealValues(keccakBytes),
 											StackDeletions: 1,
 										},
 										{
@@ -2203,22 +2241,12 @@ byte "hello"; log; int 1`,
 											StackDeletions: 1,
 										},
 										{
-											PC: 8,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "a",
-												},
-											},
+											PC:         8,
+											StackAdded: goValuesToTealValues("a"),
 										},
 										{
-											PC: 9,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: keccakBytes,
-												},
-											},
+											PC:             9,
+											StackAdded:     goValuesToTealValues(keccakBytes),
 											StackDeletions: 1,
 										},
 										{
@@ -2226,13 +2254,8 @@ byte "hello"; log; int 1`,
 											StackDeletions: 1,
 										},
 										{
-											PC: 11,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:         11,
+											StackAdded: goValuesToTealValues(1),
 										},
 									},
 								},
@@ -2318,22 +2341,12 @@ byte "hello"; log; int 1`,
 											PC: 1,
 										},
 										{
-											PC: 5,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "a",
-												},
-											},
+											PC:         5,
+											StackAdded: goValuesToTealValues("a"),
 										},
 										{
-											PC: 6,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: keccakBytes,
-												},
-											},
+											PC:             6,
+											StackAdded:     goValuesToTealValues(keccakBytes),
 											StackDeletions: 1,
 										},
 										{
@@ -2341,22 +2354,12 @@ byte "hello"; log; int 1`,
 											StackDeletions: 1,
 										},
 										{
-											PC: 8,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "a",
-												},
-											},
+											PC:         8,
+											StackAdded: goValuesToTealValues("a"),
 										},
 										{
-											PC: 9,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: keccakBytes,
-												},
-											},
+											PC:             9,
+											StackAdded:     goValuesToTealValues(keccakBytes),
 											StackDeletions: 1,
 										},
 										{
@@ -2364,22 +2367,12 @@ byte "hello"; log; int 1`,
 											StackDeletions: 1,
 										},
 										{
-											PC: 11,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-											},
+											PC:         11,
+											StackAdded: goValuesToTealValues(0),
 										},
 										{
-											PC: 13,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:         13,
+											StackAdded: goValuesToTealValues(1),
 										},
 										{
 											PC:             15,
@@ -2602,35 +2595,20 @@ int 1`,
 											PC: 1,
 										},
 										{
-											PC: 4,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-											},
+											PC:         4,
+											StackAdded: goValuesToTealValues(0),
 										},
 										{
 											PC:             6,
 											StackDeletions: 1,
 										},
 										{
-											PC: 56,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:         56,
+											StackAdded: goValuesToTealValues(1),
 										},
 										{
-											PC: 57,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:             57,
+											StackAdded:     goValuesToTealValues(1),
 											StackDeletions: 1,
 										},
 									},
@@ -2656,44 +2634,24 @@ int 1`,
 											PC: 1,
 										},
 										{
-											PC: 4,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(futureAppID),
-												},
-											},
+											PC:         4,
+											StackAdded: goValuesToTealValues(futureAppID),
 										},
 										{
 											PC:             6,
 											StackDeletions: 1,
 										},
 										{
-											PC: 9,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:         9,
+											StackAdded: goValuesToTealValues(1),
 										},
 										{
-											PC: 11,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:         11,
+											StackAdded: goValuesToTealValues(1),
 										},
 										{
-											PC: 12,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:             12,
+											StackAdded:     goValuesToTealValues(1),
 											StackDeletions: 2,
 										},
 										{
@@ -2701,22 +2659,12 @@ int 1`,
 											StackDeletions: 1,
 										},
 										{
-											PC: 14,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: string(byte(applicationArg)),
-												},
-											},
+											PC:         14,
+											StackAdded: goValuesToTealValues([]byte{byte(applicationArg)}),
 										},
 										{
-											PC: 17,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-											},
+											PC:             17,
+											StackAdded:     goValuesToTealValues(applicationArg),
 											StackDeletions: 1,
 										},
 										// call sub
@@ -2728,206 +2676,67 @@ int 1`,
 											PC: 26,
 										},
 										{
-											PC: 29,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-											},
+											PC:         29,
+											StackAdded: goValuesToTealValues(0),
 										},
 										// dup
 										{
-											PC: 31,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-											},
+											PC:             31,
+											StackAdded:     goValuesToTealValues(0, 0),
 											StackDeletions: 1,
 										},
 										// dupn 4
 										{
-											PC: 32,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-											},
+											PC:             32,
+											StackAdded:     goValuesToTealValues(0, 0, 0, 0, 0),
 											StackDeletions: 1,
 										},
 										// frame_dig -1
 										{
-											PC: 34,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-											},
+											PC:             34,
+											StackAdded:     goValuesToTealValues(applicationArg),
 											StackDeletions: 0,
 										},
 										// frame_bury 0
 										{
-											PC: 36,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-											},
+											PC:             36,
+											StackAdded:     goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
 											StackDeletions: 7,
 										},
 										// dig 5
 										{
-											PC: 38,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-											},
+											PC:             38,
+											StackAdded:     goValuesToTealValues(applicationArg),
 											StackDeletions: 0,
 										},
 										// cover 5
 										{
-											PC: 40,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-											},
+											PC:             40,
+											StackAdded:     goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
 											StackDeletions: 6,
 										},
 										// frame_dig 0
 										{
-											PC: 42,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-											},
+											PC:             42,
+											StackAdded:     goValuesToTealValues(applicationArg),
 											StackDeletions: 0,
 										},
 										// frame_dig 1
 										{
-											PC: 44,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-											},
+											PC:             44,
+											StackAdded:     goValuesToTealValues(applicationArg),
 											StackDeletions: 0,
 										},
 										// +
 										{
-											PC: 46,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg * 2),
-												},
-											},
+											PC:             46,
+											StackAdded:     goValuesToTealValues(applicationArg * 2),
 											StackDeletions: 2,
 										},
 										// bury 7
 										{
-											PC: 47,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg * 2),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-											},
+											PC:             47,
+											StackAdded:     goValuesToTealValues(applicationArg*2, applicationArg, 0, 0, 0, 0, 0),
 											StackDeletions: 8,
 										},
 										// popn 5
@@ -2939,62 +2748,30 @@ int 1`,
 										{
 											PC:             51,
 											StackDeletions: 2,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg * 2),
-												},
-											},
+											StackAdded:     goValuesToTealValues(applicationArg, applicationArg*2),
 										},
+										// swap
 										{
-											PC: 53,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg * 2),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-											},
+											PC:             53,
+											StackAdded:     goValuesToTealValues(applicationArg*2, applicationArg),
 											StackDeletions: 2,
 										},
 										// +
 										{
-											PC: 54,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg * 3),
-												},
-											},
+											PC:             54,
+											StackAdded:     goValuesToTealValues(applicationArg * 3),
 											StackDeletions: 2,
 										},
 										// retsub
 										{
-											PC: 55,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg * 3),
-												},
-											},
+											PC:             55,
+											StackAdded:     goValuesToTealValues(applicationArg * 3),
 											StackDeletions: 2,
 										},
 										// itob
 										{
-											PC: 21,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: string([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
-												},
-											},
+											PC:             21,
+											StackAdded:     goValuesToTealValues([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
 											StackDeletions: 1,
 										},
 										// log
@@ -3008,23 +2785,13 @@ int 1`,
 										},
 										// int 1
 										{
-											PC: 56,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:         56,
+											StackAdded: goValuesToTealValues(1),
 										},
 										// return
 										{
-											PC: 57,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
+											PC:             57,
+											StackAdded:     goValuesToTealValues(1),
 											StackDeletions: 1,
 										},
 									},
