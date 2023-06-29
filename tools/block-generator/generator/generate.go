@@ -523,7 +523,7 @@ func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxn
 	}
 
 	if len(signedTxns) == 0 {
-		return nil, numTxns, fmt.Errorf("no transactions generated")
+		return nil, numTxns, fmt.Errorf("this should never happen! no transactions generated")
 	}
 
 	txnGroupAD := make([]txn.SignedTxnWithAD, len(signedTxns))
