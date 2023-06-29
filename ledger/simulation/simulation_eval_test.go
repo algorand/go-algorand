@@ -2778,7 +2778,7 @@ int 1`,
 										// itob
 										{
 											PC:             21,
-											StackAdded:     goValuesToTealValues([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
+											StackAdded:     goValuesToTealValues(uint64ToBytes(uint64(applicationArg) * 3)),
 											StackDeletions: 1,
 										},
 										// log
