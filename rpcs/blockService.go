@@ -324,7 +324,10 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 			}
 			atomic.AddUint64(&bs.wsMemoryUsed, (n))
 		}
-		target.Respond(ctx, reqMsg, outMsg)
+		err := target.Respond(ctx, reqMsg, outMsg)
+		if err != nil {
+			bs.log.Warnf("BlockService handleCatchupReq: failed to respond: %s", err)
+		}
 	}()
 
 	// If we are over-capacity, we will not process the request
