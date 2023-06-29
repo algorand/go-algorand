@@ -18,7 +18,6 @@ package simulation
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -196,7 +195,7 @@ func (a *ResourceAssignment) boxIOBudget(bytesPerBoxRef uint64) uint64 {
 func (a *ResourceAssignment) usedBoxReadBudget() uint64 {
 	var budget uint64
 	for _, readSize := range a.Boxes {
-		budget = basics.AddSaturate(budget, readSize)
+		budget += readSize
 	}
 	return budget
 }
@@ -447,26 +446,14 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operatio
 	if ok {
 		readSize = uint64(len(box))
 		usedReadBudget := basics.AddSaturate(p.assignment.usedBoxReadBudget(), readSize)
-		readBudget := basics.AddSaturate(
-			basics.AddSaturate(
-				*p.initialBoxSurplusReadBudget,
-				p.assignment.boxIOBudget(p.ep.Proto.BytesPerBoxReference),
-			),
-			// Account for budget increase from this new box reference
-			p.ep.Proto.BytesPerBoxReference,
-		)
+		// Adding BytesPerBoxReference to account for the new IO budget from adding an additional box ref
+		readBudget := *p.initialBoxSurplusReadBudget + p.assignment.boxIOBudget(p.ep.Proto.BytesPerBoxReference) + p.ep.Proto.BytesPerBoxReference
 
 		if usedReadBudget > readBudget {
 			// We need to allocate more empty box refs to increase the read budget
 			neededBudget := usedReadBudget - readBudget
 			// Adding (p.ep.Proto.BytesPerBoxReference - 1) to round up
-			additionalEmptyRefsU64 := (neededBudget + p.ep.Proto.BytesPerBoxReference - 1) / p.ep.Proto.BytesPerBoxReference
-			if additionalEmptyRefsU64 > math.MaxInt {
-				// Saturate to max int
-				additionalEmptyRefs = math.MaxInt
-			} else {
-				additionalEmptyRefs = int(additionalEmptyRefsU64)
-			}
+			additionalEmptyRefs = int((neededBudget + p.ep.Proto.BytesPerBoxReference - 1) / p.ep.Proto.BytesPerBoxReference)
 		}
 	}
 	return p.assignment.addBox(app, name, readSize, additionalEmptyRefs)
