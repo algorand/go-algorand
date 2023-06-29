@@ -2067,6 +2067,61 @@ main_l6:
 int 1
 return`
 
+func goValuesToStackValues(goValues ...interface{}) *[]model.StackValue {
+	if len(goValues) == 0 {
+		return nil
+	}
+
+	boolToUint64 := func(b bool) uint64 {
+		if b {
+			return 1
+		}
+		return 0
+	}
+
+	modelValues := make([]model.StackValue, len(goValues))
+	for i, goValue := range goValues {
+		switch goValue.(type) {
+		case []byte:
+			convertedBytes, _ := goValue.([]byte)
+			modelValues[i] = model.StackValue{
+				Type:  uint64(basics.TealBytesType),
+				Bytes: &convertedBytes,
+			}
+		case bool:
+			convertedBool, _ := goValue.(bool)
+			convertedUint := boolToUint64(convertedBool)
+			modelValues[i] = model.StackValue{
+				Type: uint64(basics.TealUintType),
+				Uint: valToNil(&convertedUint),
+			}
+		case int:
+			convertedInt, _ := goValue.(int)
+			convertedUint := uint64(convertedInt)
+			modelValues[i] = model.StackValue{
+				Type: uint64(basics.TealUintType),
+				Uint: valToNil(&convertedUint),
+			}
+		case basics.AppIndex:
+			convertedInt, _ := goValue.(basics.AppIndex)
+			convertedUint := uint64(convertedInt)
+			modelValues[i] = model.StackValue{
+				Type: uint64(basics.TealUintType),
+				Uint: valToNil(&convertedUint),
+			}
+		case uint64:
+			convertedUint, _ := goValue.(uint64)
+			modelValues[i] = model.StackValue{
+				Type: uint64(basics.TealUintType),
+				Uint: valToNil(&convertedUint),
+			}
+		default:
+			panic("unexpected type inferred from interface{}")
+		}
+	}
+	return toPtr(modelValues)
+}
+
 func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -2194,32 +2249,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		},
 		// txn ApplicationID
 		{
-			Pc: 6,
-			StackAdditions: &[]model.StackValue{
-				{
-					Type: uint64(basics.TealUintType),
-				},
-			},
+			Pc:             6,
+			StackAdditions: goValuesToStackValues(0),
 		},
 		// int 0
 		{
-			Pc: 8,
-			StackAdditions: &[]model.StackValue{
-				{
-					Type: uint64(basics.TealUintType),
-				},
-			},
+			Pc:             8,
+			StackAdditions: goValuesToStackValues(0),
 		},
 		// ==
 		{
 			Pc:             9,
 			StackDeletions: toPtr[uint64](2),
-			StackAdditions: &[]model.StackValue{
-				{
-					Type: uint64(basics.TealUintType),
-					Uint: toPtr[uint64](1),
-				},
-			},
+			StackAdditions: goValuesToStackValues(1),
 		},
 		// bnz main_l6
 		{
@@ -2228,32 +2270,15 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		},
 		// int 1
 		{
-			Pc: 149,
-			StackAdditions: &[]model.StackValue{
-				{
-					Type: uint64(basics.TealUintType),
-					Uint: toPtr[uint64](1),
-				},
-			},
+			Pc:             149,
+			StackAdditions: goValuesToStackValues(1),
 		},
 		// return
 		{
-			Pc: 150,
-			StackAdditions: &[]model.StackValue{
-				{
-					Type: uint64(basics.TealUintType),
-					Uint: toPtr[uint64](1),
-				},
-			},
+			Pc:             150,
+			StackAdditions: goValuesToStackValues(1),
 			StackDeletions: toPtr[uint64](1),
 		},
-	}
-
-	boolToUint64 := func(b bool) uint64 {
-		if b {
-			return 1
-		}
-		return 0
 	}
 
 	const NumArgs = 1
@@ -2265,32 +2290,18 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// txn ApplicationID
 			{
-				Pc: 6,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: valToNil(toPtr(uint64(appID))),
-					},
-				},
+				Pc:             6,
+				StackAdditions: goValuesToStackValues(appID),
 			},
 			// int 0
 			{
-				Pc: 8,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             8,
+				StackAdditions: goValuesToStackValues(0),
 			},
 			// ==
 			{
-				Pc: 9,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: valToNil(toPtr(boolToUint64(false))),
-					},
-				},
+				Pc:             9,
+				StackAdditions: goValuesToStackValues(false),
 				StackDeletions: toPtr[uint64](2),
 			},
 			// bnz main_l6
@@ -2300,34 +2311,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// txn NumAppArgs
 			{
-				Pc: 13,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](NumArgs),
-					},
-				},
+				Pc:             13,
+				StackAdditions: goValuesToStackValues(NumArgs),
 			},
 			// int 1
 			{
-				Pc: 15,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             15,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// ==
 			{
 				Pc:             16,
 				StackDeletions: toPtr[uint64](2),
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(boolToUint64(true)),
-					},
-				},
+				StackAdditions: goValuesToStackValues(true),
 			},
 			// bnz main_l3
 			{
@@ -2336,27 +2332,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// global CurrentApplicationID
 			{
-				Pc: 21,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: valToNil(toPtr(uint64(appID))),
-					},
-				},
+				Pc:             21,
+				StackAdditions: goValuesToStackValues(appID),
 			},
 			// app_params_get AppApprovalProgram
 			{
-				Pc: 23,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: &approval,
-					},
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             23,
+				StackAdditions: goValuesToStackValues(approval, 1),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// store 1
@@ -2371,27 +2353,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// global CurrentApplicationID
 			{
-				Pc: 29,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(appID)),
-					},
-				},
+				Pc:             29,
+				StackAdditions: goValuesToStackValues(appID),
 			},
 			// app_params_get AppClearStateProgram
 			{
-				Pc: 31,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: &clearState,
-					},
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             31,
+				StackAdditions: goValuesToStackValues(clearState, 1),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// store 3
@@ -2406,27 +2374,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// global CurrentApplicationAddress
 			{
-				Pc: 37,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(crypto.Digest(appID.Address()).ToSlice()),
-					},
-				},
+				Pc:             37,
+				StackAdditions: goValuesToStackValues(crypto.Digest(appID.Address()).ToSlice()),
 			},
 			// acct_params_get AcctBalance
 			{
-				Pc: 39,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(3-layer) * MinBalance),
-					},
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             39,
+				StackAdditions: goValuesToStackValues(uint64(3-layer)*MinBalance, 1),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// store 5
@@ -2441,13 +2395,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// load 1
 			{
-				Pc: 45,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             45,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// assert
 			{
@@ -2456,13 +2405,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// load 3
 			{
-				Pc: 48,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             48,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// assert
 			{
@@ -2471,13 +2415,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// load 5
 			{
-				Pc: 51,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             51,
+				StackAdditions: goValuesToStackValues(uint64(1)),
 			},
 			// assert
 			{
@@ -2486,55 +2425,30 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int 2
 			{
-				Pc: 54,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(2)),
-					},
-				},
+				Pc:             54,
+				StackAdditions: goValuesToStackValues(uint64(2)),
 			},
 			// txna ApplicationArgs 0
 			{
-				Pc: 56,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
-					},
-				},
+				Pc:             56,
+				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
-				Pc: 59,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(MaxDepth - layer)),
-					},
-				},
+				Pc:             59,
+				StackAdditions: goValuesToStackValues(uint64(MaxDepth - layer)),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// exp
 			{
-				Pc: 60,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1 << uint64(MaxDepth-layer)),
-					},
-				},
+				Pc:             60,
+				StackAdditions: goValuesToStackValues(1 << (MaxDepth - layer)),
 				StackDeletions: toPtr[uint64](2),
 			},
 			// itob
 			{
-				Pc: 61,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(uint64ToBytes(1 << uint64(MaxDepth-layer))),
-					},
-				},
+				Pc:             61,
+				StackAdditions: goValuesToStackValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// log
@@ -2544,43 +2458,24 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// txna ApplicationArgs 0
 			{
-				Pc: 63,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
-					},
-				},
+				Pc:             63,
+				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
-				Pc: 66,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(MaxDepth - layer)),
-					},
-				},
+				Pc:             66,
+				StackAdditions: goValuesToStackValues(MaxDepth - layer),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// int 0
 			{
-				Pc: 67,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             67,
+				StackAdditions: goValuesToStackValues(0),
 			},
 			// >
 			{
-				Pc: 68,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(boolToUint64(MaxDepth-layer > 0)),
-					},
-				},
+				Pc:             68,
+				StackAdditions: goValuesToStackValues(MaxDepth-layer > 0),
 				StackDeletions: toPtr[uint64](2),
 			},
 			// bnz main_l5
@@ -2594,13 +2489,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int appl
 			{
-				Pc: 75,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](6),
-					},
-				},
+				Pc:             75,
+				StackAdditions: goValuesToStackValues(6),
 			},
 			// itxn_field TypeEnum
 			{
@@ -2609,12 +2499,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int 0
 			{
-				Pc: 78,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             78,
+				StackAdditions: goValuesToStackValues(0),
 			},
 			// itxn_field Fee
 			{
@@ -2623,13 +2509,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// load 0
 			{
-				Pc: 81,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: &approval,
-					},
-				},
+				Pc:             81,
+				StackAdditions: goValuesToStackValues(approval),
 			},
 			// itxn_field ApprovalProgram
 			{
@@ -2638,13 +2519,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// load 2
 			{
-				Pc: 85,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: &clearState,
-					},
-				},
+				Pc:             85,
+				StackAdditions: goValuesToStackValues(clearState),
 			},
 			// itxn_field ClearStateProgram
 			{
@@ -2662,13 +2538,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int pay
 			{
-				Pc: 91,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             91,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// itxn_field TypeEnum
 			{
@@ -2677,12 +2548,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int 0
 			{
-				Pc: 94,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             94,
+				StackAdditions: goValuesToStackValues(0),
 			},
 			// itxn_field Fee
 			{
@@ -2691,34 +2558,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// load 4
 			{
-				Pc: 97,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(3-layer) * MinBalance),
-					},
-				},
+				Pc:             97,
+				StackAdditions: goValuesToStackValues(uint64(3-layer) * MinBalance),
 			},
 			// int 100000
 			{
-				Pc: 99,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(MinBalance),
-					},
-				},
+				Pc:             99,
+				StackAdditions: goValuesToStackValues(MinBalance),
 			},
 			// -
 			{
 				Pc:             103,
 				StackDeletions: toPtr[uint64](2),
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(2-layer) * MinBalance),
-					},
-				},
+				StackAdditions: goValuesToStackValues(uint64(2-layer) * MinBalance),
 			},
 			// itxn_field Amount
 			{
@@ -2727,55 +2579,30 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// byte "appID"
 			{
-				Pc: 106,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr([]byte("appID")),
-					},
-				},
+				Pc:             106,
+				StackAdditions: goValuesToStackValues([]byte("appID")),
 			},
 			// gitxn 0 CreatedApplicationID
 			{
-				Pc: 113,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(appID) + 3),
-					},
-				},
+				Pc:             113,
+				StackAdditions: goValuesToStackValues(appID + 3),
 			},
 			// itob
 			{
-				Pc: 116,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(uint64ToBytes(uint64(appID) + 3)),
-					},
-				},
+				Pc:             116,
+				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(appID) + 3)),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// concat
 			{
-				Pc: 117,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
-					},
-				},
+				Pc:             117,
+				StackAdditions: goValuesToStackValues([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
 				StackDeletions: toPtr[uint64](2),
 			},
 			// sha512_256
 			{
-				Pc: 118,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
-					},
-				},
+				Pc:             118,
+				StackAdditions: goValuesToStackValues(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// itxn_field Receiver
@@ -2788,13 +2615,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int appl
 			{
-				Pc: 122,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](6),
-					},
-				},
+				Pc:             122,
+				StackAdditions: goValuesToStackValues(6),
 			},
 			// itxn_field TypeEnum
 			{
@@ -2803,55 +2625,30 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// txna ApplicationArgs 0
 			{
-				Pc: 125,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
-					},
-				},
+				Pc:             125,
+				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
-				Pc: 128,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(MaxDepth - layer)),
-					},
-				},
+				Pc:             128,
+				StackAdditions: goValuesToStackValues(MaxDepth - layer),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// int 1
 			{
-				Pc: 129,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             129,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// -
 			{
-				Pc: 130,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: valToNil(toPtr(uint64(MaxDepth - layer - 1))),
-					},
-				},
+				Pc:             130,
+				StackAdditions: goValuesToStackValues(MaxDepth - layer - 1),
 				StackDeletions: toPtr[uint64](2),
 			},
 			// itob
 			{
-				Pc: 131,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer - 1))),
-					},
-				},
+				Pc:             131,
+				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer - 1))),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// itxn_field ApplicationArgs
@@ -2861,13 +2658,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn CreatedApplicationID
 			{
-				Pc: 134,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(appID) + 3),
-					},
-				},
+				Pc:             134,
+				StackAdditions: goValuesToStackValues(appID + 3),
 			},
 			// itxn_field ApplicationID
 			{
@@ -2876,12 +2668,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int 0
 			{
-				Pc: 138,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             138,
+				StackAdditions: goValuesToStackValues(0),
 			},
 			// itxn_field Fee
 			{
@@ -2890,13 +2678,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int DeleteApplication
 			{
-				Pc: 141,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](5),
-					},
-				},
+				Pc:             141,
+				StackAdditions: goValuesToStackValues(5),
 			},
 			// itxn_field OnCompletion
 			{
@@ -2914,23 +2697,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int 1
 			{
-				Pc: 72,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             72,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// return
 			{
-				Pc: 73,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             73,
+				StackAdditions: goValuesToStackValues(1),
 				StackDeletions: toPtr[uint64](1),
 			},
 		}
@@ -2943,33 +2716,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// txn ApplicationID
 			{
-				Pc: 6,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(appID)),
-					},
-				},
+				Pc:             6,
+				StackAdditions: goValuesToStackValues(appID),
 			},
 			// int 0
 			{
-				Pc: 8,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             8,
+				StackAdditions: goValuesToStackValues(0),
 			},
 			// ==
 			{
 				Pc:             9,
+				StackAdditions: goValuesToStackValues(false),
 				StackDeletions: toPtr[uint64](2),
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: valToNil(toPtr(boolToUint64(false))),
-					},
-				},
 			},
 			// bnz main_l6
 			{
@@ -2978,34 +2737,19 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// txn NumAppArgs
 			{
-				Pc: 13,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(NumArgs)),
-					},
-				},
+				Pc:             13,
+				StackAdditions: goValuesToStackValues(NumArgs),
 			},
 			// int 1
 			{
-				Pc: 15,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             15,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// ==
 			{
 				Pc:             16,
 				StackDeletions: toPtr[uint64](2),
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(boolToUint64(true)),
-					},
-				},
+				StackAdditions: goValuesToStackValues(true),
 			},
 			// bnz main_l3
 			{
@@ -3014,27 +2758,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// global CurrentApplicationID
 			{
-				Pc: 21,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(appID)),
-					},
-				},
+				Pc:             21,
+				StackAdditions: goValuesToStackValues(appID),
 			},
 			// app_params_get AppApprovalProgram
 			{
-				Pc: 23,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: &approval,
-					},
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             23,
+				StackAdditions: goValuesToStackValues(approval, 1),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// store 1
@@ -3049,27 +2779,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// global CurrentApplicationID
 			{
-				Pc: 29,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(appID)),
-					},
-				},
+				Pc:             29,
+				StackAdditions: goValuesToStackValues(appID),
 			},
 			// app_params_get AppClearStateProgram
 			{
-				Pc: 31,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: &clearState,
-					},
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             31,
+				StackAdditions: goValuesToStackValues(clearState, 1),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// store 3
@@ -3084,27 +2800,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// global CurrentApplicationAddress
 			{
-				Pc: 37,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(crypto.Digest(appID.Address()).ToSlice()),
-					},
-				},
+				Pc:             37,
+				StackAdditions: goValuesToStackValues(crypto.Digest(appID.Address()).ToSlice()),
 			},
 			// acct_params_get AcctBalance
 			{
-				Pc: 39,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr(uint64(3-layer) * MinBalance),
-					},
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             39,
+				StackAdditions: goValuesToStackValues(uint64(3-layer)*MinBalance, 1),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// store 5
@@ -3119,13 +2821,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// load 1
 			{
-				Pc: 45,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             45,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// assert
 			{
@@ -3134,13 +2831,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// load 3
 			{
-				Pc: 48,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             48,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// assert
 			{
@@ -3149,13 +2841,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// load 5
 			{
-				Pc: 51,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             51,
+				StackAdditions: goValuesToStackValues(uint64(1)),
 			},
 			// assert
 			{
@@ -3164,54 +2851,30 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int 2
 			{
-				Pc: 54,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](2),
-					},
-				},
+				Pc:             54,
+				StackAdditions: goValuesToStackValues(uint64(2)),
 			},
 			// txna ApplicationArgs 0
 			{
-				Pc: 56,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
-					},
-				},
+				Pc:             56,
+				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
-				Pc: 59,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             59,
+				StackAdditions: goValuesToStackValues(uint64(MaxDepth - layer)),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// exp
 			{
-				Pc: 60,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1 << uint64(MaxDepth-layer)),
-					},
-				},
+				Pc:             60,
+				StackAdditions: goValuesToStackValues(1 << (MaxDepth - layer)),
 				StackDeletions: toPtr[uint64](2),
 			},
 			// itob
 			{
-				Pc: 61,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(uint64ToBytes(1 << uint64(MaxDepth-layer))),
-					},
-				},
+				Pc:             61,
+				StackAdditions: goValuesToStackValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// log
@@ -3221,41 +2884,24 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// txna ApplicationArgs 0
 			{
-				Pc: 63,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(uint64ToBytes(uint64(MaxDepth - layer))),
-					},
-				},
+				Pc:             63,
+				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
-				Pc: 66,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             66,
+				StackAdditions: goValuesToStackValues(MaxDepth - layer),
 				StackDeletions: toPtr[uint64](1),
 			},
 			// int 0
 			{
-				Pc: 67,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             67,
+				StackAdditions: goValuesToStackValues(0),
 			},
 			// >
 			{
-				Pc: 68,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-					},
-				},
+				Pc:             68,
+				StackAdditions: goValuesToStackValues(MaxDepth-layer > 0),
 				StackDeletions: toPtr[uint64](2),
 			},
 			// bnz main_l5
@@ -3265,23 +2911,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// int 1
 			{
-				Pc: 72,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             72,
+				StackAdditions: goValuesToStackValues(1),
 			},
 			// return
 			{
-				Pc: 73,
-				StackAdditions: &[]model.StackValue{
-					{
-						Type: uint64(basics.TealUintType),
-						Uint: toPtr[uint64](1),
-					},
-				},
+				Pc:             73,
+				StackAdditions: goValuesToStackValues(1),
 				StackDeletions: toPtr[uint64](1),
 			},
 		}
