@@ -421,6 +421,10 @@ func opDigStackChange(cx *EvalContext) StackChangeExplanation {
 	return StackChangeExplanation{Deletions: 0, Additions: 1}
 }
 
+func opFrameDigStackChange(cx *EvalContext) StackChangeExplanation {
+	return StackChangeExplanation{Deletions: 0, Additions: 1}
+}
+
 func opCoverStackChange(cx *EvalContext) StackChangeExplanation {
 	depth := int(cx.program[cx.pc+1])
 	return StackChangeExplanation{Deletions: depth + 1, Additions: depth + 1}
@@ -688,7 +692,7 @@ var OpSpecs = []OpSpec{
 	{0x89, "retsub", opRetSub, proto(":").stackExplain(opRetSubStackChange), 4, detDefault().trust()},
 	// protoByte is a named constant because opCallSub needs to know it.
 	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r").typed(typeProto)},
-	{0x8b, "frame_dig", opFrameDig, proto(":a"), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
+	{0x8b, "frame_dig", opFrameDig, proto(":a").stackExplain(opFrameDigStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
 	{0x8c, "frame_bury", opFrameBury, proto("a:").stackExplain(opFrameBuryStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
 	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
 	{0x8e, "match", opMatch, proto(":", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), 8, detSwitch().trust()},
