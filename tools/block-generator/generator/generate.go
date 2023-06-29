@@ -305,7 +305,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		return err
 	}
 	if g.round == 0 {
-		fmt.Printf("initializing generator with starting txnCounter from the genesis block: %d\n", g.txnCounter)
+		fmt.Printf("starting txnCounter: %d\n", g.txnCounter)
 	}
 	minTxnsForBlock := g.minTxnsForBlock(g.round)
 
