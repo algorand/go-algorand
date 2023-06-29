@@ -114,7 +114,6 @@ type AccountsReaderExt interface {
 	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
 	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
-	AccountsOnlineRoundParamsRound(rnd basics.Round) (onlineRoundParamsData ledgercore.OnlineRoundParamsData, err error)
 	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
@@ -143,7 +142,7 @@ type OnlineAccountsWriter interface {
 // - online accounts
 type OnlineAccountsReader interface {
 	LookupOnline(addr basics.Address, rnd basics.Round) (data PersistedOnlineAccountData, err error)
-	LookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error)
+	LookupOnlineRoundParams(rnd basics.Round) (onlineRoundParamsData ledgercore.OnlineRoundParamsData, err error)
 	LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error)
 
 	Close()

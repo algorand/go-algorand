@@ -661,19 +661,6 @@ func (r *accountsV2Reader) AccountsOnlineRoundParams() (onlineRoundParamsData []
 	return
 }
 
-func (r *accountsV2Reader) AccountsOnlineRoundParamsRound(rnd basics.Round) (onlineRoundParamsData ledgercore.OnlineRoundParamsData, err error) {
-	var buf []byte
-	err = r.q.QueryRow("SELECT data FROM onlineroundparamstail WHERE rnd = ?", rnd).Scan(&buf)
-	if err != nil {
-		return ledgercore.OnlineRoundParamsData{}, err
-	}
-	err = protocol.Decode(buf, &onlineRoundParamsData)
-	if err != nil {
-		return ledgercore.OnlineRoundParamsData{}, err
-	}
-	return onlineRoundParamsData, nil
-}
-
 // AccountsPutTotals updates account totals
 func (w *accountsV2Writer) AccountsPutTotals(totals ledgercore.AccountTotals, catchpointStaging bool) error {
 	id := ""

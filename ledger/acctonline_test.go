@@ -2275,15 +2275,7 @@ func TestAcctOnline_OnlineAcctsExpiredByRound(t *testing.T) {
 	require.Zero(t, offset)
 
 	// but the DB has data
-	var roundParamsData ledgercore.OnlineRoundParamsData
-	err = oa.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		ar, err := tx.MakeAccountsReader()
-		if err != nil {
-			return err
-		}
-		roundParamsData, err = ar.AccountsOnlineRoundParamsRound(targetRound)
-		return err
-	})
+	roundParamsData, err := oa.accountsq.LookupOnlineRoundParams(targetRound)
 	require.NoError(t, err)
 	require.NotEmpty(t, roundParamsData)
 
