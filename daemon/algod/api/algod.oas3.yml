@@ -2057,17 +2057,6 @@
       "SimulationOpcodeTraceUnit": {
         "description": "The set of trace information and effect from evaluating a single opcode.",
         "properties": {
-          "additions": {
-            "description": "The values added by this opcode to the stack.",
-            "items": {
-              "$ref": "#/components/schemas/StackValue"
-            },
-            "type": "array"
-          },
-          "deletions": {
-            "description": "The number of deleted stack values by this opcode.",
-            "type": "integer"
-          },
           "pc": {
             "description": "The program counter of the current opcode being evaluated.",
             "type": "integer"
@@ -2078,6 +2067,17 @@
               "type": "integer"
             },
             "type": "array"
+          },
+          "stack-additions": {
+            "description": "The values added by this opcode to the stack.",
+            "items": {
+              "$ref": "#/components/schemas/StackValue"
+            },
+            "type": "array"
+          },
+          "stack-deletions": {
+            "description": "The number of deleted stack values by this opcode.",
+            "type": "integer"
           }
         },
         "required": [

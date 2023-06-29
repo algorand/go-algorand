@@ -376,10 +376,10 @@ func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.Sim
 			spawnedInnersPtr = &spawnedInners
 		}
 		modelProgramTrace[i] = model.SimulationOpcodeTraceUnit{
-			Pc:            programTrace[i].PC,
-			SpawnedInners: spawnedInnersPtr,
-			Additions:     convertTealValueSliceToModel(programTrace[i].Added),
-			Deletions:     &programTrace[i].Deletions,
+			Pc:             programTrace[i].PC,
+			SpawnedInners:  spawnedInnersPtr,
+			StackAdditions: convertTealValueSliceToModel(programTrace[i].StackAdded),
+			StackDeletions: omitEmpty(programTrace[i].StackDeletions),
 		}
 	}
 	return &modelProgramTrace

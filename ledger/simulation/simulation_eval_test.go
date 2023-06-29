@@ -317,6 +317,7 @@ int 0`,
 	}
 
 	_, err := simulation.MakeSimulator(env.Ledger, true).Simulate(simRequest)
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
 	require.ErrorContains(t, err, "the request didn't ask for enabling returning basic trace, but ask for returning stack change")
 }
 
@@ -2153,7 +2154,7 @@ byte "hello"; log; int 1`,
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
 											PC: 1,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: "hello",
@@ -2161,12 +2162,12 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC:        8,
-											Deletions: 1,
+											PC:             8,
+											StackDeletions: 1,
 										},
 										{
 											PC: 9,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 1,
@@ -2180,7 +2181,7 @@ byte "hello"; log; int 1`,
 										},
 										{
 											PC: 5,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: "a",
@@ -2189,21 +2190,21 @@ byte "hello"; log; int 1`,
 										},
 										{
 											PC: 6,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: keccakBytes,
 												},
 											},
-											Deletions: 1,
+											StackDeletions: 1,
 										},
 										{
-											PC:        7,
-											Deletions: 1,
+											PC:             7,
+											StackDeletions: 1,
 										},
 										{
 											PC: 8,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: "a",
@@ -2212,21 +2213,21 @@ byte "hello"; log; int 1`,
 										},
 										{
 											PC: 9,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: keccakBytes,
 												},
 											},
-											Deletions: 1,
+											StackDeletions: 1,
 										},
 										{
-											PC:        10,
-											Deletions: 1,
+											PC:             10,
+											StackDeletions: 1,
 										},
 										{
 											PC: 11,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 1,
@@ -2318,7 +2319,7 @@ byte "hello"; log; int 1`,
 										},
 										{
 											PC: 5,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: "a",
@@ -2327,21 +2328,21 @@ byte "hello"; log; int 1`,
 										},
 										{
 											PC: 6,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: keccakBytes,
 												},
 											},
-											Deletions: 1,
+											StackDeletions: 1,
 										},
 										{
-											PC:        7,
-											Deletions: 1,
+											PC:             7,
+											StackDeletions: 1,
 										},
 										{
 											PC: 8,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: "a",
@@ -2350,21 +2351,21 @@ byte "hello"; log; int 1`,
 										},
 										{
 											PC: 9,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: keccakBytes,
 												},
 											},
-											Deletions: 1,
+											StackDeletions: 1,
 										},
 										{
-											PC:        10,
-											Deletions: 1,
+											PC:             10,
+											StackDeletions: 1,
 										},
 										{
 											PC: 11,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 0,
@@ -2373,7 +2374,7 @@ byte "hello"; log; int 1`,
 										},
 										{
 											PC: 13,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 1,
@@ -2381,8 +2382,8 @@ byte "hello"; log; int 1`,
 											},
 										},
 										{
-											PC:        15,
-											Deletions: 2,
+											PC:             15,
+											StackDeletions: 2,
 										},
 									},
 								},
@@ -2521,11 +2522,13 @@ subroutine_manipulating_stack:
   bury 7              // [arg_0 * 2, arg_0, 0, 0, 0, 0, 0]
   popn 5              // [arg_0 * 2, arg_0]
   uncover 1           // [arg_0, arg_0 * 2]
+  swap                // [arg_0 * 2, arg_0]
   +                   // [arg_0 * 3]
   retsub
 
 end:
   int 1
+  return
 `
 
 func TestFrameBuryDigStackTrace(t *testing.T) {
@@ -2558,7 +2561,6 @@ int 1`,
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
 			ApplicationArgs: [][]byte{{byte(applicationArg)}},
-			Fee:             basics.MicroAlgos{Raw: env.TxnInfo.CurrentProtocolParams().MinTxnFee},
 		})
 		txntest.Group(&createTxn, &payment, &callTxn)
 
@@ -2593,7 +2595,7 @@ int 1`,
 										ApplicationID: futureAppID,
 									},
 								},
-								AppBudgetConsumed: 4,
+								AppBudgetConsumed: 5,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -2601,7 +2603,7 @@ int 1`,
 										},
 										{
 											PC: 4,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 0,
@@ -2609,17 +2611,27 @@ int 1`,
 											},
 										},
 										{
-											PC:        6,
-											Deletions: 1,
+											PC:             6,
+											StackDeletions: 1,
 										},
 										{
-											PC: 55,
-											Added: []basics.TealValue{
+											PC: 56,
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 1,
 												},
 											},
+										},
+										{
+											PC: 57,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StackDeletions: 1,
 										},
 									},
 								},
@@ -2632,12 +2644,12 @@ int 1`,
 									ApplyData: transactions.ApplyData{
 										EvalDelta: transactions.EvalDelta{
 											Logs: []string{
-												string([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, byte(applicationArg * 3)}),
+												string(uint64ToBytes(uint64(applicationArg * 3))),
 											},
 										},
 									},
 								},
-								AppBudgetConsumed: 30,
+								AppBudgetConsumed: 32,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -2645,7 +2657,7 @@ int 1`,
 										},
 										{
 											PC: 4,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(futureAppID),
@@ -2653,12 +2665,12 @@ int 1`,
 											},
 										},
 										{
-											PC:        6,
-											Deletions: 1,
+											PC:             6,
+											StackDeletions: 1,
 										},
 										{
 											PC: 9,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 1,
@@ -2667,7 +2679,7 @@ int 1`,
 										},
 										{
 											PC: 11,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 1,
@@ -2676,21 +2688,21 @@ int 1`,
 										},
 										{
 											PC: 12,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 1,
 												},
 											},
-											Deletions: 2,
+											StackDeletions: 2,
 										},
 										{
-											PC:        13,
-											Deletions: 1,
+											PC:             13,
+											StackDeletions: 1,
 										},
 										{
 											PC: 14,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: string(byte(applicationArg)),
@@ -2699,13 +2711,13 @@ int 1`,
 										},
 										{
 											PC: 17,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deletions: 1,
+											StackDeletions: 1,
 										},
 										// call sub
 										{
@@ -2717,7 +2729,7 @@ int 1`,
 										},
 										{
 											PC: 29,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 0,
@@ -2727,7 +2739,7 @@ int 1`,
 										// dup
 										{
 											PC: 31,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 0,
@@ -2737,12 +2749,12 @@ int 1`,
 													Uint: 0,
 												},
 											},
-											Deletions: 1,
+											StackDeletions: 1,
 										},
 										// dupn 4
 										{
 											PC: 32,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 0,
@@ -2764,51 +2776,23 @@ int 1`,
 													Uint: 0,
 												},
 											},
-											Deletions: 1,
+											StackDeletions: 1,
 										},
 										// frame_dig -1
 										{
 											PC: 34,
-											Added: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deletions: 7,
+											StackDeletions: 0,
 										},
 										// frame_bury 0
 										{
 											PC: 36,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg),
@@ -2834,47 +2818,23 @@ int 1`,
 													Uint: 0,
 												},
 											},
-											Deletions: 7,
+											StackDeletions: 7,
 										},
 										// dig 5
 										{
 											PC: 38,
-											Added: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deletions: 6,
+											StackDeletions: 0,
 										},
 										// cover 5
 										{
 											PC: 40,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg),
@@ -2900,101 +2860,45 @@ int 1`,
 													Uint: 0,
 												},
 											},
-											Deletions: 6,
+											StackDeletions: 6,
 										},
 										// frame_dig 0
 										{
 											PC: 42,
-											Added: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deletions: 7,
+											StackDeletions: 0,
 										},
 										// frame_dig 1
 										{
 											PC: 44,
-											Added: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 0,
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(applicationArg),
-												},
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg),
 												},
 											},
-											Deletions: 7,
+											StackDeletions: 0,
 										},
 										// +
 										{
 											PC: 46,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg * 2),
 												},
 											},
-											Deletions: 2,
+											StackDeletions: 2,
 										},
 										// bury 7
 										{
 											PC: 47,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg * 2),
@@ -3024,18 +2928,18 @@ int 1`,
 													Uint: 0,
 												},
 											},
-											Deletions: 8,
+											StackDeletions: 8,
 										},
 										// popn 5
 										{
-											PC:        49,
-											Deletions: 5,
+											PC:             49,
+											StackDeletions: 5,
 										},
 										// uncover 1
 										{
-											PC:        51,
-											Deletions: 2,
-											Added: []basics.TealValue{
+											PC:             51,
+											StackDeletions: 2,
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg),
@@ -3046,43 +2950,57 @@ int 1`,
 												},
 											},
 										},
-										// +
 										{
 											PC: 53,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg * 2),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(applicationArg),
+												},
+											},
+											StackDeletions: 2,
+										},
+										// +
+										{
+											PC: 54,
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg * 3),
 												},
 											},
-											Deletions: 2,
+											StackDeletions: 2,
 										},
 										// retsub
 										{
-											PC: 54,
-											Added: []basics.TealValue{
+											PC: 55,
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: uint64(applicationArg * 3),
 												},
 											},
-											Deletions: 2,
+											StackDeletions: 2,
 										},
 										// itob
 										{
 											PC: 21,
-											Added: []basics.TealValue{
+											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
 													Bytes: string([]byte{0, 0, 0, 0, 0, 0, 0, byte(applicationArg * 3)}),
 												},
 											},
-											Deletions: 1,
+											StackDeletions: 1,
 										},
 										// log
 										{
-											PC:        22,
-											Deletions: 1,
+											PC:             22,
+											StackDeletions: 1,
 										},
 										// b end
 										{
@@ -3090,20 +3008,31 @@ int 1`,
 										},
 										// int 1
 										{
-											PC: 55,
-											Added: []basics.TealValue{
+											PC: 56,
+											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
 													Uint: 1,
 												},
 											},
 										},
+										// return
+										{
+											PC: 57,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StackDeletions: 1,
+										},
 									},
 								},
 							},
 						},
 						AppBudgetAdded:    1400,
-						AppBudgetConsumed: 34,
+						AppBudgetConsumed: 37,
 					},
 				},
 			},

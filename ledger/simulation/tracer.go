@@ -253,10 +253,10 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 
 func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
 	tracer.stackChangeExplanation = cx.NextStackChange()
-	o.Deletions = uint64(tracer.stackChangeExplanation.Deletions)
+	o.StackDeletions = uint64(tracer.stackChangeExplanation.Deletions)
 
 	stackHeight := len(cx.Stack)
-	tracer.stackHeightAfterDeletion = stackHeight - int(o.Deletions)
+	tracer.stackHeightAfterDeletion = stackHeight - int(o.StackDeletions)
 }
 
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
@@ -292,7 +292,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
 	for i := tracer.stackHeightAfterDeletion; i < len(cx.Stack); i++ {
 		tealValue := cx.Stack[i].ToTealValue()
-		o.Added = append(o.Added, basics.TealValue{
+		o.StackAdded = append(o.StackAdded, basics.TealValue{
 			Type:  tealValue.Type,
 			Uint:  tealValue.Uint,
 			Bytes: tealValue.Bytes,

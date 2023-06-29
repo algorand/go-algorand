@@ -187,10 +187,10 @@ type OpcodeTraceUnit struct {
 	SpawnedInners []int
 
 	// what has been added to stack
-	Added []basics.TealValue
+	StackAdded []basics.TealValue
 
 	// deleted element number from stack
-	Deletions uint64
+	StackDeletions uint64
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

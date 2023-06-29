@@ -713,17 +713,17 @@ type SimulationEvalOverrides struct {
 
 // SimulationOpcodeTraceUnit The set of trace information and effect from evaluating a single opcode.
 type SimulationOpcodeTraceUnit struct {
-	// Additions The values added by this opcode to the stack.
-	Additions *[]StackValue `json:"additions,omitempty"`
-
-	// Deletions The number of deleted stack values by this opcode.
-	Deletions *uint64 `json:"deletions,omitempty"`
-
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`
 
 	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
 	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`
+
+	// StackAdditions The values added by this opcode to the stack.
+	StackAdditions *[]StackValue `json:"stack-additions,omitempty"`
+
+	// StackDeletions The number of deleted stack values by this opcode.
+	StackDeletions *uint64 `json:"stack-deletions,omitempty"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
