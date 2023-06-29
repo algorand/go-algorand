@@ -2081,39 +2081,34 @@ func goValuesToStackValues(goValues ...interface{}) *[]model.StackValue {
 
 	modelValues := make([]model.StackValue, len(goValues))
 	for i, goValue := range goValues {
-		switch goValue.(type) {
+		switch converted := goValue.(type) {
 		case []byte:
-			convertedBytes, _ := goValue.([]byte)
 			modelValues[i] = model.StackValue{
 				Type:  uint64(basics.TealBytesType),
-				Bytes: &convertedBytes,
+				Bytes: &converted,
 			}
 		case bool:
-			convertedBool, _ := goValue.(bool)
-			convertedUint := boolToUint64(convertedBool)
+			convertedUint := boolToUint64(converted)
 			modelValues[i] = model.StackValue{
 				Type: uint64(basics.TealUintType),
 				Uint: valToNil(&convertedUint),
 			}
 		case int:
-			convertedInt, _ := goValue.(int)
-			convertedUint := uint64(convertedInt)
+			convertedUint := uint64(converted)
 			modelValues[i] = model.StackValue{
 				Type: uint64(basics.TealUintType),
 				Uint: valToNil(&convertedUint),
 			}
 		case basics.AppIndex:
-			convertedInt, _ := goValue.(basics.AppIndex)
-			convertedUint := uint64(convertedInt)
+			convertedUint := uint64(converted)
 			modelValues[i] = model.StackValue{
 				Type: uint64(basics.TealUintType),
 				Uint: valToNil(&convertedUint),
 			}
 		case uint64:
-			convertedUint, _ := goValue.(uint64)
 			modelValues[i] = model.StackValue{
 				Type: uint64(basics.TealUintType),
-				Uint: valToNil(&convertedUint),
+				Uint: valToNil(&converted),
 			}
 		default:
 			panic("unexpected type inferred from interface{}")

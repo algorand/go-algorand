@@ -2095,42 +2095,36 @@ func goValuesToTealValues(goValues ...interface{}) []basics.TealValue {
 
 	modelValues := make([]basics.TealValue, len(goValues))
 	for i, goValue := range goValues {
-		switch goValue.(type) {
+		switch convertedValue := goValue.(type) {
 		case []byte:
-			convertedBytes, _ := goValue.([]byte)
 			modelValues[i] = basics.TealValue{
 				Type:  basics.TealBytesType,
-				Bytes: string(convertedBytes),
+				Bytes: string(convertedValue),
 			}
 		case string:
-			convertedBytes, _ := goValue.(string)
 			modelValues[i] = basics.TealValue{
 				Type:  basics.TealBytesType,
-				Bytes: convertedBytes,
+				Bytes: string(convertedValue),
 			}
 		case bool:
-			convertedBool, _ := goValue.(bool)
 			modelValues[i] = basics.TealValue{
 				Type: basics.TealUintType,
-				Uint: boolToUint64(convertedBool),
+				Uint: boolToUint64(convertedValue),
 			}
 		case int:
-			convertedInt, _ := goValue.(int)
 			modelValues[i] = basics.TealValue{
 				Type: basics.TealUintType,
-				Uint: uint64(convertedInt),
+				Uint: uint64(convertedValue),
 			}
 		case basics.AppIndex:
-			convertedInt, _ := goValue.(basics.AppIndex)
 			modelValues[i] = basics.TealValue{
 				Type: basics.TealUintType,
-				Uint: uint64(convertedInt),
+				Uint: uint64(convertedValue),
 			}
 		case uint64:
-			convertedUint, _ := goValue.(uint64)
 			modelValues[i] = basics.TealValue{
 				Type: basics.TealUintType,
-				Uint: convertedUint,
+				Uint: convertedValue,
 			}
 		default:
 			panic("unexpected type inferred from interface{}")
