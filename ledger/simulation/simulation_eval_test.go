@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -2496,21 +2497,23 @@ b end
 
 subroutine_manipulating_stack:
   proto 1 1
-  int 0               // [0]
-  dup                 // [0, 0]
-  dupn 4              // [0, 0, 0, 0, 0, 0]
-  frame_dig -1        // [0, 0, 0, 0, 0, 0, arg_0]
-  frame_bury 0        // [arg_0, 0, 0, 0, 0, 0]
-  dig 5               // [arg_0, 0, 0, 0, 0, 0, arg_0]
-  cover 5             // [arg_0, arg_0, 0, 0, 0, 0, 0]
-  frame_dig 0         // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0]
-  frame_dig 1         // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0, arg_0]
-  +                   // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0 * 2]
-  bury 7              // [arg_0 * 2, arg_0, 0, 0, 0, 0, 0]
-  popn 5              // [arg_0 * 2, arg_0]
-  uncover 1           // [arg_0, arg_0 * 2]
-  swap                // [arg_0 * 2, arg_0]
-  +                   // [arg_0 * 3]
+  int 0                                   // [0]
+  dup                                     // [0, 0]
+  dupn 4                                  // [0, 0, 0, 0, 0, 0]
+  frame_dig -1                            // [0, 0, 0, 0, 0, 0, arg_0]
+  frame_bury 0                            // [arg_0, 0, 0, 0, 0, 0]
+  dig 5                                   // [arg_0, 0, 0, 0, 0, 0, arg_0]
+  cover 5                                 // [arg_0, arg_0, 0, 0, 0, 0, 0]
+  frame_dig 0                             // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0]
+  frame_dig 1                             // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0, arg_0]
+  +                                       // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0 * 2]
+  bury 7                                  // [arg_0 * 2, arg_0, 0, 0, 0, 0, 0]
+  popn 5                                  // [arg_0 * 2, arg_0]
+  uncover 1                               // [arg_0, arg_0 * 2]
+  swap                                    // [arg_0 * 2, arg_0]
+  +                                       // [arg_0 * 3]
+  pushbytess "1!" "5!"                    // [arg_0 * 3, "1!", "5!"]
+  pushints 0 2 1 1 5 18446744073709551615 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5, 18446744073709551615]
   retsub
 
 end:
@@ -2597,11 +2600,11 @@ int 1`,
 											StackDeletions: 1,
 										},
 										{
-											PC:         56,
+											PC:         81,
 											StackAdded: goValuesToTealValues(1),
 										},
 										{
-											PC:             57,
+											PC:             82,
 											StackAdded:     goValuesToTealValues(1),
 											StackDeletions: 1,
 										},
@@ -2621,7 +2624,7 @@ int 1`,
 										},
 									},
 								},
-								AppBudgetConsumed: 32,
+								AppBudgetConsumed: 34,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -2756,11 +2759,21 @@ int 1`,
 											StackAdded:     goValuesToTealValues(applicationArg * 3),
 											StackDeletions: 2,
 										},
+										// pushbytess "1!" "5!"
+										{
+											PC:         55,
+											StackAdded: goValuesToTealValues("1!", "5!"),
+										},
+										// pushints 0 2 1 1 5 18446744073709551615
+										{
+											PC:         63,
+											StackAdded: goValuesToTealValues(0, 2, 1, 1, 5, uint64(math.MaxUint64)),
+										},
 										// retsub
 										{
-											PC:             55,
+											PC:             80,
 											StackAdded:     goValuesToTealValues(applicationArg * 3),
-											StackDeletions: 2,
+											StackDeletions: 10,
 										},
 										// itob
 										{
@@ -2779,12 +2792,12 @@ int 1`,
 										},
 										// int 1
 										{
-											PC:         56,
+											PC:         81,
 											StackAdded: goValuesToTealValues(1),
 										},
 										// return
 										{
-											PC:             57,
+											PC:             82,
 											StackAdded:     goValuesToTealValues(1),
 											StackDeletions: 1,
 										},
@@ -2793,7 +2806,7 @@ int 1`,
 							},
 						},
 						AppBudgetAdded:    1400,
-						AppBudgetConsumed: 37,
+						AppBudgetConsumed: 39,
 					},
 				},
 			},

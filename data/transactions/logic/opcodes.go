@@ -398,6 +398,20 @@ func (cx *EvalContext) NextStackChange() StackChangeExplanation {
 	return (opsByOpcode[cx.version][cx.program[cx.pc]].Explain)(cx)
 }
 
+func opPushIntsStackChange(cx *EvalContext) StackChangeExplanation {
+	// NOTE: WE ARE SWOLLOWING THE ERROR HERE!
+	// FOR EVENTUALLY IT WOULD ERROR IN EVALUATION, IF THERE IS AN ERR
+	intc, _, _ := parseIntImmArgs(cx.program, cx.pc+1)
+	return StackChangeExplanation{Additions: len(intc)}
+}
+
+func opPushBytessStackChange(cx *EvalContext) StackChangeExplanation {
+	// NOTE: WE ARE SWOLLOWING THE ERROR HERE!
+	// FOR EVENTUALLY IT WOULD ERROR IN EVALUATION, IF THERE IS AN ERR
+	cbytess, _, _ := parseByteImmArgs(cx.program, cx.pc+1)
+	return StackChangeExplanation{Additions: len(cbytess)}
+}
+
 func opReturnStackChange(cx *EvalContext) StackChangeExplanation {
 	return StackChangeExplanation{Deletions: len(cx.Stack), Additions: 1}
 }
@@ -418,11 +432,11 @@ func opDupNStackChange(cx *EvalContext) StackChangeExplanation {
 }
 
 func opDigStackChange(cx *EvalContext) StackChangeExplanation {
-	return StackChangeExplanation{Deletions: 0, Additions: 1}
+	return StackChangeExplanation{Additions: 1}
 }
 
 func opFrameDigStackChange(cx *EvalContext) StackChangeExplanation {
-	return StackChangeExplanation{Deletions: 0, Additions: 1}
+	return StackChangeExplanation{Additions: 1}
 }
 
 func opCoverStackChange(cx *EvalContext) StackChangeExplanation {
@@ -682,8 +696,8 @@ var OpSpecs = []OpSpec{
 	// Immediate bytes and ints. Smaller code size for single use of constant.
 	{0x80, "pushbytes", opPushBytes, proto(":b"), 3, constants(asmPushBytes, opPushBytes, "bytes", immBytes)},
 	{0x81, "pushint", opPushInt, proto(":i"), 3, constants(asmPushInt, opPushInt, "uint", immInt)},
-	{0x82, "pushbytess", opPushBytess, proto(":", "", "[N items]"), 8, constants(asmPushBytess, checkByteImmArgs, "bytes ...", immBytess).typed(typePushBytess).trust()},
-	{0x83, "pushints", opPushInts, proto(":", "", "[N items]"), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
+	{0x82, "pushbytess", opPushBytess, proto(":", "", "[N items]").stackExplain(opPushBytessStackChange), 8, constants(asmPushBytess, checkByteImmArgs, "bytes ...", immBytess).typed(typePushBytess).trust()},
+	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bbb:T"), 7, costly(1900)},
 
