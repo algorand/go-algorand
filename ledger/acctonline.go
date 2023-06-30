@@ -205,12 +205,14 @@ func (ao *onlineAccounts) latest() basics.Round {
 
 // close closes the accountUpdates, waiting for all the child go-routine to complete
 func (ao *onlineAccounts) close() {
+	// ao.voters' loadTree might use ao.accountsq if looking up DB
+	// so it must be closed before ao.accountsq
+	ao.voters.close()
+
 	if ao.accountsq != nil {
 		ao.accountsq.Close()
 		ao.accountsq = nil
 	}
-
-	ao.voters.close()
 
 	ao.baseOnlineAccounts.prune(0)
 }
