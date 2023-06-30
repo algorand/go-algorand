@@ -12,7 +12,7 @@ fi
 # as the algorand user.
 if [ "$(id -u)" = '0' ]; then
   chown -R algorand:algorand $ALGORAND_DATA
-  exec runuser -u algorand "$BASH_SOURCE"
+  runuser -u algorand "$BASH_SOURCE"
 fi
 
 # Script to configure or resume a network. Based on environment settings the
