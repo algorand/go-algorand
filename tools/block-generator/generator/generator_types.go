@@ -149,6 +149,9 @@ type assetHolding struct {
 // Report is the generation report.
 type Report map[TxTypeID]TxData
 
+// EffectsReport collates transaction counts caused by a root transaction.
+type EffectsReport map[string]uint64
+
 // TxData is the generator report data.
 type TxData struct {
 	GenerationTime  time.Duration `json:"generation_time_milli"`
@@ -157,7 +160,7 @@ type TxData struct {
 
 // TxEffect summarizes a txn type count caused by a root transaction.
 type TxEffect struct {
-	txType TxTypeID
+	effect string
 	count  uint64
 }
 

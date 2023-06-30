@@ -19,6 +19,7 @@ package runner
 import (
 	"bytes"
 	"context"
+	"sort"
 
 	// embed conduit template config file
 	_ "embed"
@@ -90,6 +91,9 @@ func Run(args Args) error {
 
 	defer fmt.Println("Done running tests!")
 	return filepath.Walk(args.Path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("run.go Run(): failed to walk path: %w", err)
+		}
 		// Ignore the directory
 		if info.IsDir() {
 			return nil
@@ -381,15 +385,29 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 	if err = json.NewDecoder(resp.Body).Decode(&generatorReport); err != nil {
 		return fmt.Errorf("problem decoding generator report: %w", err)
 	}
-	for metric, entry := range generatorReport {
+
+	effects := generator.CumulativeEffects(generatorReport)
+	keys := make([]string, 0, len(effects))
+	for k := range effects {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	allTxns := uint64(0)
+	for _, metric := range keys {
 		// Skip this one
 		if metric == "genesis" {
 			continue
 		}
-		str := fmt.Sprintf("transaction_%s_total:%d\n", metric, entry.GenerationCount)
+		txCount := effects[metric]
+		allTxns += txCount
+		str := fmt.Sprintf("transaction_%s_total:%d\n", metric, txCount)
 		if _, err = report.WriteString(str); err != nil {
 			return fmt.Errorf("unable to write transaction_count metric: %w", err)
 		}
+	}
+	str := fmt.Sprintf("transaction_%s_total:%d\n", "ALL", allTxns)
+	if _, err = report.WriteString(str); err != nil {
+		return fmt.Errorf("unable to write transaction_count metric: %w", err)
 	}
 
 	// Record a rate from one of the first data points.
