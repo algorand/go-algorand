@@ -226,8 +226,8 @@ func (spt *spVerificationTracker) lookupContextInTrackedMemory(stateProofLastAtt
 		}
 	}
 
-	return &ledgercore.StateProofVerificationContext{}, fmt.Errorf("%w for round %d: memory lookup failed",
-		errSPVerificationContextNotFound, stateProofLastAttestedRound)
+	return &ledgercore.StateProofVerificationContext{}, fmt.Errorf("%w for round %d: memory lookup failed (pending len %d)",
+		errSPVerificationContextNotFound, stateProofLastAttestedRound, len(spt.pendingCommitContexts))
 }
 
 func (spt *spVerificationTracker) lookupContextInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
