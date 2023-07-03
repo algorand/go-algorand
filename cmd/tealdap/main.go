@@ -19,7 +19,26 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/spf13/cobra"
 )
+
+var networkInterface string
+var debuggerPort uint64
+
+func init() {
+	rootCmd.PersistentFlags().StringVar(&networkInterface, "listen", "127.0.0.1", "Network interface to listen to")
+	rootCmd.PersistentFlags().Uint64Var(&debuggerPort, "port", 22015, "Debugger port to listen to")
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "tealdap",
+	Short: "Algorand TEAL Debugger (supporting Debug Adapter Protocol)",
+	Long:  `Debug a ...`,
+	Run: func(cmd *cobra.Command, args []string) {
+		cmd.HelpFunc()(cmd, args)
+	},
+}
 
 func main() {
 	fmt.Println("start debugging")
