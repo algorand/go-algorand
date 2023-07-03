@@ -110,4 +110,7 @@ func TestTxnGroupDeltasDevMode(t *testing.T) {
 	groupDelta := roundResponse.Deltas[0]
 	require.Equal(t, 1, len(groupDelta.Ids))
 	require.Equal(t, groupDelta.Ids[0], txn.Txn.ID().String())
+
+	// Assert that the TxIDs field across both endpoint responses is the same
+	require.Equal(t, txngroupResponse["Txids"], groupDelta.Delta["Txids"])
 }

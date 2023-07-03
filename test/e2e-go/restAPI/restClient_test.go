@@ -1568,6 +1568,94 @@ end:
 	assertBoxCount(numberOfBoxesRemaining)
 }
 
+func TestSimulateTxnTracerDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "DevModeTxnTracerNetwork.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	senderBalance, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	if senderAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	toAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
+	closeToAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
+
+	// Ensure these accounts don't exist
+	receiverBalance, err := testClient.GetBalance(toAddress)
+	a.NoError(err)
+	a.Zero(receiverBalance)
+	closeToBalance, err := testClient.GetBalance(closeToAddress)
+	a.NoError(err)
+	a.Zero(closeToBalance)
+
+	txn, err := testClient.ConstructPayment(senderAddress, toAddress, 0, senderBalance/2, nil, closeToAddress, [32]byte{}, 0, 0)
+	a.NoError(err)
+	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
+	a.NoError(err)
+
+	currentRoundBeforeSimulate, err := testClient.CurrentRound()
+	a.NoError(err)
+
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+	}
+	result, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	currentAfterAfterSimulate, err := testClient.CurrentRound()
+	a.NoError(err)
+
+	// We can assert equality here since DevMode rounds are controlled by txn sends.
+	a.Equal(result.LastRound, currentRoundBeforeSimulate)
+	a.Equal(result.LastRound, currentAfterAfterSimulate)
+
+	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
+	expectedResult := v2.PreEncodedSimulateResponse{
+		Version:   2,
+		LastRound: result.LastRound, // checked above
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn: v2.PreEncodedTxInfo{
+							Txn:           stxn,
+							ClosingAmount: &closingAmount,
+						},
+					},
+				},
+			},
+		},
+	}
+	a.Equal(expectedResult, result)
+
+	// Ensure the transaction did not actually get applied to the ledger
+	receiverBalance, err = testClient.GetBalance(toAddress)
+	a.NoError(err)
+	a.Zero(receiverBalance)
+	closeToBalance, err = testClient.GetBalance(closeToAddress)
+	a.NoError(err)
+	a.Zero(closeToBalance)
+}
+
 func TestSimulateTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

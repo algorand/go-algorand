@@ -760,7 +760,7 @@ func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (resp
 	return
 }
 
-// GetTransactionGroupLedgerStateDeltasForRound retrieves the ledger state deltas for the txn groups in the specified by round
+// GetTransactionGroupLedgerStateDeltasForRound retrieves the ledger state deltas for the txn groups in the specified round
 func (client RestClient) GetTransactionGroupLedgerStateDeltasForRound(round uint64) (response model.TransactionGroupLedgerStateDeltasForRoundResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d/txn/group", round), nil)
 	return
