@@ -320,6 +320,7 @@ func TestAppBoxesOptin(t *testing.T) {
 	hint := appData{sender: 7}
 
 	// app call transaction opting into boxes gets replaced by creating appBoxes
+	g.startRound()
 	actual, sgnTxns, appID, err := g.generateAppCallInternal(appBoxesOptin, round, intra, &hint)
 	_ = appID
 	require.NoError(t, err)
@@ -354,9 +355,10 @@ func TestAppBoxesOptin(t *testing.T) {
 
 	paySiblingTxn := sgnTxns[1].Txn
 	require.Equal(t, protocol.PaymentTx, paySiblingTxn.Type)
-
-	// 2nd attempt to optin (with new sender) doesn't get replaced
+	
 	g.finishRound()
+	// 2nd attempt to optin (with new sender) doesn't get replaced
+	g.startRound()
 	intra += 1
 	hint.sender = 8
 
@@ -399,12 +401,12 @@ func TestAppBoxesOptin(t *testing.T) {
 	require.Equal(t, TxEffect{effectPaymentTxSibling, 1}, effects[actual][0])
 	require.Equal(t, TxEffect{effectInnerTx, 2}, effects[actual][1])
 
-	numTxns, err := g.countAndRecordEffects(actual, time.Now())
-	require.NoError(t, err)
+	numTxns := 1 + countEffects(actual)
 	require.Equal(t, uint64(4), numTxns)
 
-	// 3rd attempt to optin gets replaced by vanilla app call
 	g.finishRound()
+	// 3rd attempt to optin gets replaced by vanilla app call
+	g.startRound()
 	intra += numTxns
 
 	actual, sgnTxns, appID, err = g.generateAppCallInternal(appBoxesOptin, round, intra, &hint)
@@ -665,6 +667,8 @@ func TestHandlers(t *testing.T) {
 }
 
 func TestRecordData(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	gen := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 
 	id := TxTypeID("test")
@@ -680,57 +684,113 @@ func TestRecordData(t *testing.T) {
 	data, ok = gen.reportData[id]
 	require.True(t, ok)
 	require.Equal(t, uint64(2), data.GenerationCount)
-
 }
 
-func TestRecordOccurrences(t *testing.T) {
-	gen := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+// TestEffectsMap is a sanity check that asserts that the effects map
+// has exactly the number of consequences that we expect.
+func TestEffectsMap(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-	id := TxTypeID("test")
-	data, ok := gen.reportData[id]
+	require.Len(t, effects, 2)
+	txId := TxTypeID("DNE")
+	_, ok := effects[txId]
 	require.False(t, ok)
+	require.Equal(t, uint64(0), countEffects(txId))
 
-	gen.recordOccurrences(id, 100, time.Now())
-	data, ok = gen.reportData[id]
+	txId = appBoxesCreate
+	data, ok := effects[txId]
 	require.True(t, ok)
-	require.Equal(t, uint64(100), data.GenerationCount)
+	require.Len(t, data, 1)
+	effect := data[0]
+	require.Equal(t, uint64(1), effect.count)
+	require.Contains(t, effect.effect, "sibling")
+	require.Equal(t, uint64(1), countEffects(txId))
 
-	gen.recordOccurrences(id, 200, time.Now())
-	data, ok = gen.reportData[id]
+	txId = appBoxesOptin
+	data, ok = effects[txId]
 	require.True(t, ok)
-	require.Equal(t, uint64(300), data.GenerationCount)
+	require.Len(t, data, 2)
+	effect = data[0]
+	require.Equal(t, uint64(1), effect.count)
+	require.Contains(t, effect.effect, "sibling")
+	effect = data[1]
+	require.Equal(t, uint64(2), effect.count)
+	require.Contains(t, effect.effect, "inner")
+	require.Equal(t, uint64(3), countEffects(txId))
 }
 
-func TestRecordAppConsequences(t *testing.T) {
-	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
+func TestCumulativeEffects(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
-	txTypeId := TxTypeID("test")
-	txCount, err := g.countAndRecordEffects(txTypeId, time.Now())
-	require.Error(t, err, "no effects for TxTypeId test")
+	report := Report{
+		TxTypeID("app_boxes_optin"): 	{GenerationCount: uint64(42)},
+		TxTypeID("app_boxes_create"): 	{GenerationCount: uint64(1337)},
+		TxTypeID("pay_pay"):         	{GenerationCount: uint64(999)},
+		TxTypeID("asset_optin_total"): 	{GenerationCount: uint64(13)},
+		TxTypeID("app_boxes_call"):    	{GenerationCount: uint64(413)},
+	}
 
-	// recordIncludingEffects always records the root txTypeId
-	require.Equal(t, uint64(1), txCount)
-	data, ok := g.reportData[txTypeId]
-	require.True(t, ok)
-	require.Equal(t, uint64(1), data.GenerationCount)
-	require.Len(t, g.reportData, 1)
+	expectedEffectsReport := EffectsReport{
+		"app_boxes_optin": 			uint64(42),
+		"app_boxes_create": 		uint64(1337),
+		"pay_pay":         			uint64(999),
+		"asset_optin_total": 		uint64(13),
+		"app_boxes_call":    		uint64(413),
+		"effect_payment_sibling": 	uint64(42) + uint64(1337),
+		"effect_inner_tx": 			uint64(2 * 42),
+	}
 
-	txTypeId = appBoxesOptin
-	txCount, err = g.countAndRecordEffects(txTypeId, time.Now())
-	require.NoError(t, err)
-	require.Equal(t, uint64(4), txCount)
-
-	require.Len(t, g.reportData, 4)
-
-	data, ok = g.reportData[txTypeId]
-	require.True(t, ok)
-	require.Equal(t, uint64(1), data.GenerationCount)
-
-	data, ok = g.reportData[effectPaymentTxSibling]
-	require.True(t, ok)
-	require.Equal(t, uint64(1), data.GenerationCount)
-
-	data, ok = g.reportData[effectInnerTx]
-	require.True(t, ok)
-	require.Equal(t, uint64(2), data.GenerationCount)
+	require.Equal(t, expectedEffectsReport, CumulativeEffects(report))
 }
+
+func TestCountInners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tests := []struct {
+		name string
+		ad   transactions.ApplyData
+		want int
+	}{
+		{
+			name: "no inner transactions",
+			ad:   transactions.ApplyData{},
+			want: 0,
+		},
+		{
+			name: "one level of inner transactions",
+			ad: transactions.ApplyData{
+				EvalDelta: transactions.EvalDelta{
+					InnerTxns: []transactions.SignedTxnWithAD{{}, {}, {}},
+				},
+			},
+			want: 3,
+		},
+		{
+			name: "nested inner transactions",
+			ad: transactions.ApplyData{
+				EvalDelta: transactions.EvalDelta{
+					InnerTxns: []transactions.SignedTxnWithAD{
+						{
+							ApplyData: transactions.ApplyData{
+									EvalDelta: transactions.EvalDelta{
+									InnerTxns: []transactions.SignedTxnWithAD{{}, {}},
+								},
+							},
+						},
+						{},
+					},
+				},
+			},
+			want: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := countInners(tt.ad); got != tt.want {
+				t.Errorf("countInners() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+

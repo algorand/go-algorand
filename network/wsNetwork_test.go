@@ -606,7 +606,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	msgs[50].ctx = ctx
 
 	for _, peer := range peers {
-		peer.sendBufferHighPrio <- sendMessages{msgs}
+		peer.sendBufferHighPrio <- sendMessages{msgs: msgs}
 	}
 
 	select {
@@ -4508,4 +4508,84 @@ func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
 
 		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
 	})
+}
+
+// TestSendMessageCallbacks tests that the SendMessage callbacks are called correctly. These are currently used for
+// decrementing the number of bytes considered currently in flight for blockservice memcaps.
+func TestSendMessageCallbacks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	netA, netB, _, closeFunc := setupWebsocketNetworkAB(t, 2)
+	_ = netB
+	defer closeFunc()
+
+	var counter uint64
+	require.NotZero(t, netA.NumPeers())
+	peer := netA.peers[0]
+	// Need to create a channel so that the message doesn't get filtered out
+	netB.peers[0].makeResponseChannel(1)
+	for i := 0; i < 100; i++ {
+		randInt := crypto.RandUint64()%(128) + 1
+		atomic.AddUint64(&counter, randInt)
+		topic := MakeTopic("val", []byte("blah"))
+		callback := func() {
+			atomic.AddUint64(&counter, ^uint64(randInt-1))
+		}
+		msg := IncomingMessage{Sender: netA.peers[0], Tag: protocol.UniEnsBlockReqTag}
+		peer.Respond(context.Background(), msg, OutgoingMessage{OnRelease: callback, Topics: Topics{topic}})
+	}
+	// force it to disconnect by removing the only response channel -- this is breach of protocol.
+	netB.peers[0].getAndRemoveResponseChannel(1)
+	// confirm that we still have messages in the send buffer
+	require.NotZero(t, len(peer.sendBufferBulk))
+
+	// confirm that eventually the messages get drained during the cleanup
+	require.Eventually(t,
+		func() bool { return atomic.LoadUint64(&counter) == uint64(0) },
+		500*time.Millisecond,
+		25*time.Millisecond,
+	)
+	require.Eventually(t,
+		func() bool { return netA.NumPeers() == 0 },
+		500*time.Millisecond,
+		25*time.Millisecond,
+	)
+}
+
+func TestSendMessageCallbackDrain(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	node := makeTestWebsocketNode(t)
+	destPeer := wsPeer{
+		closing:            make(chan struct{}),
+		sendBufferHighPrio: make(chan sendMessages, sendBufferLength),
+		sendBufferBulk:     make(chan sendMessages, sendBufferLength),
+		conn:               &nopConnSingleton,
+	}
+	node.addPeer(&destPeer)
+	node.Start()
+	defer node.Stop()
+
+	var target, counter uint64
+	// send messages to the peer that won't read them so they will sit in the sendQueue
+	for i := 0; i < 10; i++ {
+		randInt := crypto.RandUint64()%(128) + 1
+		target += randInt
+		topic := MakeTopic("val", []byte("blah"))
+		callback := func() {
+			counter += randInt
+		}
+		msg := IncomingMessage{Sender: node.peers[0], Tag: protocol.UniEnsBlockReqTag}
+		destPeer.Respond(context.Background(), msg, OutgoingMessage{OnRelease: callback, Topics: Topics{topic}})
+	}
+	require.Len(t, destPeer.sendBufferBulk, 10)
+	require.Zero(t, counter)
+	require.Positive(t, target)
+	// close the peer to trigger draining of the queue callbacks
+	destPeer.Close(time.Now().Add(time.Second))
+
+	require.Eventually(t,
+		func() bool { return target == counter },
+		2*time.Second,
+		50*time.Millisecond,
+	)
 }
