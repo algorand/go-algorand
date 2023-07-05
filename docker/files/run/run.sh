@@ -2,6 +2,11 @@
 
 set -e
 
+if [ "$ALGORAND_DATA" != "/algod/data" ]; then
+  echo "Do not override 'ALGORAND_DATA' environment variable."
+  exit 1
+fi
+
 if [ "$DEBUG" = "1" ]; then
   set -x
 fi
@@ -74,10 +79,16 @@ function configure_data_dir() {
     algocfg profile set --yes -d "$ALGORAND_DATA" "$PROFILE" 
   fi
 
-  # call after copying config.json to make sure the port is exposed.
+  # set profile overrides
+  if [ "$GOSSIP_PORT" != "" ]; then
+    algocfg -d . set -p NetAddress -v "0.0.0.0:${GOSSIP_PORT}"
+    algocfg -d . set -p DisableNetworking -v "false"
+    algocfg -d . set -p IncomingConnectionsLimit -v "1000"
+  fi
+
   algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
 
-  # check for token overrides
+  # set token overrides
   for dir in ${ALGORAND_DATA}/../*/; do
     if [ "$TOKEN" != "" ]; then
         echo "$TOKEN" > "$dir/algod.token"
@@ -121,17 +132,23 @@ function start_kmd() {
 }
 
 function start_new_public_network() {
-  cd /algod
-  if [ ! -d "/node/run/genesis/${NETWORK}" ]; then
+  mkdir -p "$ALGORAND_DATA"
+  cd "$ALGORAND_DATA"
+
+  # initialize genesis.json
+  if [ "$GENESIS_ADDRESS" != "" ]; then
+    # download genesis file from peer
+    echo "Attempting to download genesis file from $GENESIS_ADDRESS"
+    curl "$GENESIS_ADDRESS/genesis" -o genesis.json
+  elif [ -d "/node/run/genesis/${NETWORK}" ]; then
+    echo "Installing genesis file for ${NETWORK}"
+    cp "/node/run/genesis/${NETWORK}/genesis.json" genesis.json
+  else
     echo "No genesis file for '$NETWORK' is available."
     exit 1
   fi
 
-  mkdir -p "$ALGORAND_DATA"
 
-  cd "$ALGORAND_DATA"
-
-  cp "/node/run/genesis/${NETWORK}/genesis.json" genesis.json
   cp /node/run/config.json.example config.json
 
   configure_data_dir
@@ -144,11 +161,13 @@ function start_new_public_network() {
   alphanet) ID="<network>.algodev.network" ;;
   devnet) ID="<network>.algodev.network" ;;
   *)
-    echo "Unknown network"
-    exit 1
+    echo "Unknown network, not setting bootstrap ID"
     ;;
   esac
-  set -p DNSBootstrapID -v "$ID"
+
+  if [ "$ID" != "" ]; then
+    set -p DNSBootstrapID -v "$ID"
+  fi
 
   start_public_network
 }
