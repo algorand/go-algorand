@@ -75,7 +75,7 @@ func (msig MultisigSig) Preimage() (version, threshold uint8, pks []PublicKey) {
 	return msig.Version, msig.Threshold, pks
 }
 
-// Signatures returns the actually number of signatures included in the
+// Signatures returns the actual number of signatures included in the
 // multisig. That is, the number of subsigs that are not blank.
 func (msig MultisigSig) Signatures() int {
 	sigs := 0
