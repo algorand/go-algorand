@@ -307,8 +307,11 @@ func (ds *fakeDebugSession) onInitializeRequest(request *dap.InitializeRequest) 
 	response.Body.SupportsHitConditionalBreakpoints = false
 	response.Body.SupportsEvaluateForHovers = false
 	response.Body.ExceptionBreakpointFilters = []dap.ExceptionBreakpointsFilter{}
+	// might be true, given that we provide reverse data
+	// reverse data includes stuff removed from stack, previous state info
 	response.Body.SupportsStepBack = false
 	response.Body.SupportsSetVariable = false
+	// unless we export frame info of execution
 	response.Body.SupportsRestartFrame = false
 	response.Body.SupportsGotoTargetsRequest = false
 	response.Body.SupportsStepInTargetsRequest = false
@@ -317,6 +320,7 @@ func (ds *fakeDebugSession) onInitializeRequest(request *dap.InitializeRequest) 
 	response.Body.SupportsModulesRequest = false
 	response.Body.AdditionalModuleColumns = []dap.ColumnDescriptor{}
 	response.Body.SupportedChecksumAlgorithms = []dap.ChecksumAlgorithm{}
+	// should be true
 	response.Body.SupportsRestartRequest = false
 	response.Body.SupportsExceptionOptions = false
 	response.Body.SupportsValueFormattingOptions = false
@@ -331,6 +335,7 @@ func (ds *fakeDebugSession) onInitializeRequest(request *dap.InitializeRequest) 
 	response.Body.SupportsDataBreakpoints = false
 	response.Body.SupportsReadMemoryRequest = false
 	response.Body.SupportsDisassembleRequest = false
+	// should be true
 	response.Body.SupportsCancelRequest = false
 	response.Body.SupportsBreakpointLocationsRequest = false
 	// This is a fake set up, so we can start "accepting" configuration
