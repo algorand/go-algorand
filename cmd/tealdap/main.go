@@ -20,15 +20,37 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+
 	"github.com/spf13/cobra"
 )
 
 var networkInterface string
 var debuggerPort uint64
+var simulationResultFileName string
+var sourcemapFileNamesAndAppIDs []string
+
+// SourcemapWithAppID is the struct containing the sourcemap and appIDs
+// retrieved from the commandline argument
+type SourcemapWithAppID struct {
+	sourcemap logic.SourceMap
+	appIDs    []basics.AppIndex
+}
+
+var AppIDtoSourcemap map[basics.AppIndex]*logic.SourceMap
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&networkInterface, "listen", "127.0.0.1", "Network interface to listen to")
-	rootCmd.PersistentFlags().Uint64Var(&debuggerPort, "port", 22015, "Debugger port to listen to")
+	rootCmd.PersistentFlags().StringVar(
+		&networkInterface, "listen", "127.0.0.1", "Network interface to listen to")
+	rootCmd.PersistentFlags().Uint64Var(
+		&debuggerPort, "port", 22015, "Debugger port to listen to")
+	rootCmd.PersistentFlags().StringVar(
+		&simulationResultFileName, "simulation-trace-file", "",
+		"Simulate trace file to start debug session")
+	rootCmd.PersistentFlags().StringArrayVar(
+		&sourcemapFileNamesAndAppIDs, "sourcemap-file", nil,
+		"Sourcemap file name together with appIDs with this sourcemap")
 }
 
 var rootCmd = &cobra.Command{
@@ -39,6 +61,11 @@ var rootCmd = &cobra.Command{
 		cmd.HelpFunc()(cmd, args)
 	},
 }
+
+// TODO should consider a few inputs
+// - sourcemap (together with source?)
+// - app-id(s) tied to the source map
+// - simulation result?
 
 func main() {
 	fmt.Println("start debugging")
