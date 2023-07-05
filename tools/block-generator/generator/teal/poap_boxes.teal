@@ -113,7 +113,7 @@ label15: // trying to optin with non-zero balance and when app already exists
 	assert // must be in a group of 2
 
 	gtxn 1 Amount
-	int 1000000 // pay 1 algo
+	int 2000000 // pay 2 algo
 	// intc 4 // 2000
 	==
 

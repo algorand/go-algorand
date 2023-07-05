@@ -158,7 +158,7 @@ func (g *generator) makeAppCreateTxn(kind appKind, sender basics.Address, round,
 
 	// also group in a pay txn to fund the app
 	pstFee := uint64(1_000)
-	pstAmt := uint64(1_000_000)
+	pstAmt := uint64(2_000_000)
 
 	paySibTxn := g.makeTestTxn(sender, round, intra)
 	paySibTxn.Type = protocol.PaymentTx
@@ -198,7 +198,7 @@ func (g *generator) makeAppOptinTxn(sender basics.Address, round, intra uint64, 
 	// TODO: these may not make sense for the swap optin
 
 	pstFee := uint64(2_000)
-	pstAmt := uint64(1_000_000)
+	pstAmt := uint64(2_000_000)
 
 	paySibTxn := g.makeTestTxn(sender, round, intra)
 	paySibTxn.Type = protocol.PaymentTx

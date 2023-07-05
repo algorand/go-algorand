@@ -1,10 +1,6 @@
-name: "App Create"
+name: "Boxes Optins Small"
 tx_per_block: 100
 
-# transaction distribution
-# tx_pay_fraction: 0.01
-# tx_asset_fraction: 0.01
-# tx_app_fraction: 0.98
 tx_app_fraction: 1
 
 # payment config
@@ -19,5 +15,5 @@ app_boxes_fraction: 1.0
 
 # app boxes config
 app_boxes_create_fraction: 0.01
-app_boxes_optin_fraction: 0.1
-app_boxes_call_fraction: 0.89
+app_boxes_optin_fraction: 0.89
+app_boxes_call_fraction: 0.1

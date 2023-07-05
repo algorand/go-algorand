@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorilla/mux"
 
@@ -42,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // BlockResponseContentType is the HTTP Content-Type header for a raw binary block
@@ -67,11 +69,20 @@ const (
 
 var errBlockServiceClosed = errors.New("block service is shutting down")
 
+const errMemoryAtCapacityPublic = "block service memory over capacity"
+
 type errMemoryAtCapacity struct{ capacity, used uint64 }
 
 func (err errMemoryAtCapacity) Error() string {
 	return fmt.Sprintf("block service memory over capacity: %d / %d", err.used, err.capacity)
 }
+
+var wsBlockMessagesDroppedCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_rpcs_ws_reqs_dropped", Description: "Number of websocket block requests dropped due to memory capacity"},
+)
+var httpBlockMessagesDroppedCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_rpcs_http_reqs_dropped", Description: "Number of http block requests dropped due to memory capacity"},
+)
 
 // LedgerForBlockService describes the Ledger methods used by BlockService.
 type LedgerForBlockService interface {
@@ -93,6 +104,7 @@ type BlockService struct {
 	closeWaitGroup          sync.WaitGroup
 	mu                      deadlock.Mutex
 	memoryUsed              uint64
+	wsMemoryUsed            uint64
 	memoryCap               uint64
 }
 
@@ -130,7 +142,7 @@ func MakeBlockService(log logging.Logger, config config.Local, ledger LedgerForB
 		fallbackEndpoints:       makeFallbackEndpoints(log, config.BlockServiceCustomFallbackEndpoints),
 		enableArchiverFallback:  config.EnableBlockServiceFallbackToArchiver,
 		log:                     log,
-		memoryCap:               config.BlockServiceHTTPMemCap,
+		memoryCap:               config.BlockServiceMemCap,
 	}
 	if service.enableService {
 		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
@@ -244,6 +256,7 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 				response.WriteHeader(http.StatusServiceUnavailable)
 				bs.log.Debugf("ServeHTTP: returned retry-after: %v", err)
 			}
+			httpBlockMessagesDroppedCounter.Inc(nil)
 			return
 		default:
 			// unexpected error.
@@ -301,10 +314,34 @@ const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
 	target := reqMsg.Sender.(network.UnicastPeer)
 	var respTopics network.Topics
+	var n uint64
 
 	defer func() {
-		target.Respond(ctx, reqMsg, respTopics)
+		outMsg := network.OutgoingMessage{Topics: respTopics}
+		if n > 0 {
+			outMsg.OnRelease = func() {
+				atomic.AddUint64(&bs.wsMemoryUsed, ^uint64(n-1))
+			}
+			atomic.AddUint64(&bs.wsMemoryUsed, (n))
+		}
+		err := target.Respond(ctx, reqMsg, outMsg)
+		if err != nil {
+			bs.log.Warnf("BlockService handleCatchupReq: failed to respond: %s", err)
+		}
 	}()
+
+	// If we are over-capacity, we will not process the request
+	// respond to sender with error message
+	memUsed := atomic.LoadUint64(&bs.wsMemoryUsed)
+	if memUsed > bs.memoryCap {
+		err := errMemoryAtCapacity{capacity: bs.memoryCap, used: memUsed}
+		bs.log.Infof("BlockService handleCatchupReq: %s", err.Error())
+		respTopics = network.Topics{
+			network.MakeTopic(network.ErrorKey, []byte(errMemoryAtCapacityPublic)),
+		}
+		wsBlockMessagesDroppedCounter.Inc(nil)
+		return
+	}
 
 	topics, err := network.UnmarshallTopics(reqMsg.Data)
 	if err != nil {
@@ -338,7 +375,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 				[]byte(roundNumberParseErrMsg))}
 		return
 	}
-	respTopics = topicBlockBytes(bs.log, bs.ledger, basics.Round(round), string(requestType))
+	respTopics, n = topicBlockBytes(bs.log, bs.ledger, basics.Round(round), string(requestType))
 	return
 }
 
@@ -416,7 +453,7 @@ func (bs *BlockService) rawBlockBytes(round basics.Round) ([]byte, error) {
 	return data, err
 }
 
-func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) network.Topics {
+func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) (network.Topics, uint64) {
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
 		switch err.(type) {
@@ -425,7 +462,7 @@ func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round
 			log.Infof("BlockService topicBlockBytes: %s", err)
 		}
 		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}
+			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}, 0
 	}
 	switch requestType {
 	case BlockAndCertValue:
@@ -434,10 +471,10 @@ func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round
 				BlockDataKey, blk),
 			network.MakeTopic(
 				CertDataKey, cert),
-		}
+		}, uint64(len(blk) + len(cert))
 	default:
 		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(datatypeUnsupportedErrMsg))}
+			network.MakeTopic(network.ErrorKey, []byte(datatypeUnsupportedErrMsg))}, 0
 	}
 }
 

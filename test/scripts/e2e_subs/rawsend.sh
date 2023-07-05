@@ -30,14 +30,16 @@ fi
 STILL_PENDING_PATTERN='still pending as of round [[:digit:]]+'
 
 PENDING_ROUNDS=$(echo ${RES} | grep -Eo "${STILL_PENDING_PATTERN}" | grep -Eo '[[:digit:]]+')
-ASCENDING_PENDING_ROUNDS=$(echo ${PENDING_ROUNDS} | sort -n)
 
-if [[ ${PENDING_ROUNDS} != ${ASCENDING_PENDING_ROUNDS} ]]; then
+echo "$PENDING_ROUNDS" | sort -nuC
+SORT_CHECK=$?
+
+if [[ ${SORT_CHECK} -ne 0 ]]; then
     date '+rawsend-test pending rounds should be in ascending order %Y%m%d_%H%M%S'
     false
 fi
 
-LAST_PENDING_ROUND=$(echo ${PENDING_ROUNDS} | tail -1)
+LAST_PENDING_ROUND=$(echo "$PENDING_ROUNDS" | tail -1)
 
 # prepare commmited round, and committed round should always > any of the pending rounds
 COMMITTED_PATTERN='committed in round [[:digit:]]+'

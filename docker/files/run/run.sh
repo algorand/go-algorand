@@ -12,7 +12,7 @@ fi
 # as the algorand user.
 if [ "$(id -u)" = '0' ]; then
   chown -R algorand:algorand $ALGORAND_DATA
-  exec runuser -u algorand "$BASH_SOURCE"
+  runuser -u algorand "$BASH_SOURCE"
 fi
 
 # Script to configure or resume a network. Based on environment settings the
@@ -155,7 +155,7 @@ function start_new_public_network() {
 
 function start_private_network() {
   configure_data_dir
-  start_kmd
+  start_kmd &
 
   # TODO: Is there a way to properly exec a private network?
   goal network start -r "${ALGORAND_DATA}/.."

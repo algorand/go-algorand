@@ -3,7 +3,7 @@ SKIP = --skip-runner
 RESETDB = --reset-db
 REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 DURATION = 30s
-VERBOSE = # --verbose
+VERBOSE = --verbose
 
 block-generator: clean-generator
 	go build

@@ -3137,7 +3137,19 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
-	triggerTrackerFlush(t, l, genesisInitState)
+	// trigger trackers flush
+	// first ensure the block is committed into blockdb
+	l.WaitForCommit(l.Latest())
+	// wait for any pending tracker flushes
+	l.trackers.waitAccountsWriting()
+	// force flush as needed
+	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
+		l.trackers.mu.Lock()
+		l.trackers.lastFlushTime = time.Time{}
+		l.trackers.mu.Unlock()
+		l.notifyCommit(l.Latest())
+		l.trackers.waitAccountsWriting()
+	}
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
