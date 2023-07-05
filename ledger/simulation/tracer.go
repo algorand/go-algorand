@@ -89,8 +89,10 @@ type evalTracer struct {
 	// NOTE: execTraceStack is used only for PC/Stack/Storage exposure.
 	execTraceStack []*TransactionTrace
 
-	// stackChangeExplanation keep tracks of the latest opcode change explanation from opcode.
-	stackChangeExplanation logic.StackChangeExplanation
+	// addCount and popCount keep track of the latest opcode change explanation from opcode.
+	addCount int
+	popCount int
+
 	// stackHeightAfterDeletion is calculated by stack height before opcode - stack element deletion number.
 	// NOTE: both stackChangeExplanation and stackHeightAfterDeletion are used only for Stack exposure.
 	stackHeightAfterDeletion int
@@ -252,8 +254,8 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
-	tracer.stackChangeExplanation = cx.NextStackChange()
-	o.StackPopCount = uint64(tracer.stackChangeExplanation.Deletions)
+	tracer.popCount, tracer.addCount = cx.NextStackChange()
+	o.StackPopCount = uint64(tracer.popCount)
 
 	stackHeight := len(cx.Stack)
 	tracer.stackHeightAfterDeletion = stackHeight - int(o.StackPopCount)

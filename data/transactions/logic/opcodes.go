@@ -361,14 +361,10 @@ type typedList struct {
 	Effects string
 }
 
-// StackChangeExplanation explains the effect of an opcode over the stack.
+// debugStackExplain explains the effect of an opcode over the stack
+// with 2 integers: deletions and additions, representing pops and inserts.
 // An opcode may delete a few variables from stack, then add a few to stack.
-type StackChangeExplanation struct {
-	Deletions int
-	Additions int
-}
-
-type debugStackExplain func(*EvalContext) StackChangeExplanation
+type debugStackExplain func(*EvalContext) (int, int)
 
 // Proto describes the "stack behavior" of an opcode, what it pops as arguments
 // and pushes onto the stack as return values.
@@ -388,72 +384,96 @@ func (p Proto) stackExplain(e debugStackExplain) Proto {
 }
 
 func defaultDebugExplain(argCount, retCount int) debugStackExplain {
-	return func(_ *EvalContext) StackChangeExplanation {
-		return StackChangeExplanation{Deletions: argCount, Additions: retCount}
+	return func(_ *EvalContext) (deletions, additions int) {
+		deletions = argCount
+		additions = retCount
+		return
 	}
 }
 
 // NextStackChange is a helper function that queries EvalContext for the coming stack change of the current PC.
-func (cx *EvalContext) NextStackChange() StackChangeExplanation {
+func (cx *EvalContext) NextStackChange() (deletions, additions int) {
 	return (opsByOpcode[cx.version][cx.program[cx.pc]].Explain)(cx)
 }
 
-func opPushIntsStackChange(cx *EvalContext) StackChangeExplanation {
+func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
 	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
-	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY, IF THERE IS AN ERR
+	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
 	intc, _, _ := parseIntImmArgs(cx.program, cx.pc+1)
-	return StackChangeExplanation{Additions: len(intc)}
+
+	additions = len(intc)
+	return
 }
 
-func opPushBytessStackChange(cx *EvalContext) StackChangeExplanation {
+func opPushBytessStackChange(cx *EvalContext) (deletions, additions int) {
 	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
-	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY, IF THERE IS AN ERR
+	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
 	cbytess, _, _ := parseByteImmArgs(cx.program, cx.pc+1)
-	return StackChangeExplanation{Additions: len(cbytess)}
+
+	additions = len(cbytess)
+	return
 }
 
-func opReturnStackChange(cx *EvalContext) StackChangeExplanation {
-	return StackChangeExplanation{Deletions: len(cx.Stack), Additions: 1}
+func opReturnStackChange(cx *EvalContext) (deletions, additions int) {
+	deletions = len(cx.Stack)
+	additions = 1
+	return
 }
 
-func opBuryStackChange(cx *EvalContext) StackChangeExplanation {
+func opBuryStackChange(cx *EvalContext) (deletions, additions int) {
 	depth := int(cx.program[cx.pc+1])
-	return StackChangeExplanation{Deletions: depth + 1, Additions: depth}
+
+	deletions = depth + 1
+	additions = depth
+	return
 }
 
-func opPopNStackChange(cx *EvalContext) StackChangeExplanation {
+func opPopNStackChange(cx *EvalContext) (deletions, additions int) {
 	n := int(cx.program[cx.pc+1])
-	return StackChangeExplanation{Deletions: n}
+
+	deletions = n
+	return
 }
 
-func opDupNStackChange(cx *EvalContext) StackChangeExplanation {
+func opDupNStackChange(cx *EvalContext) (deletions, additions int) {
 	n := int(cx.program[cx.pc+1])
-	return StackChangeExplanation{Deletions: 1, Additions: n + 1}
+
+	deletions = 1
+	additions = n + 1
+	return
 }
 
-func opDigStackChange(cx *EvalContext) StackChangeExplanation {
-	return StackChangeExplanation{Additions: 1}
+func opDigStackChange(cx *EvalContext) (deletions, additions int) {
+	additions = 1
+	return
 }
 
-func opFrameDigStackChange(cx *EvalContext) StackChangeExplanation {
-	return StackChangeExplanation{Additions: 1}
+func opFrameDigStackChange(cx *EvalContext) (deletions, additions int) {
+	additions = 1
+	return
 }
 
-func opCoverStackChange(cx *EvalContext) StackChangeExplanation {
+func opCoverStackChange(cx *EvalContext) (deletions, additions int) {
 	depth := int(cx.program[cx.pc+1])
-	return StackChangeExplanation{Deletions: depth + 1, Additions: depth + 1}
+
+	deletions = depth + 1
+	additions = depth + 1
+	return
 }
 
-func opUncoverStackChange(cx *EvalContext) StackChangeExplanation {
+func opUncoverStackChange(cx *EvalContext) (deletions, additions int) {
 	depth := int(cx.program[cx.pc+1])
-	return StackChangeExplanation{Deletions: depth + 1, Additions: depth + 1}
+
+	deletions = depth + 1
+	additions = depth + 1
+	return
 }
 
-func opRetSubStackChange(cx *EvalContext) StackChangeExplanation {
+func opRetSubStackChange(cx *EvalContext) (deletions, additions int) {
 	topFrame := cx.callstack[len(cx.callstack)-1]
 	// fast path, no proto case
 	if !topFrame.clear {
-		return StackChangeExplanation{}
+		return
 	}
 
 	argStart := topFrame.height - topFrame.args
@@ -461,10 +481,12 @@ func opRetSubStackChange(cx *EvalContext) StackChangeExplanation {
 
 	diff := topStackIdx - argStart + 1
 
-	return StackChangeExplanation{Deletions: diff, Additions: topFrame.returns}
+	deletions = diff
+	additions = topFrame.returns
+	return
 }
 
-func opFrameBuryStackChange(cx *EvalContext) StackChangeExplanation {
+func opFrameBuryStackChange(cx *EvalContext) (deletions, additions int) {
 	topFrame := cx.callstack[len(cx.callstack)-1]
 
 	immIndex := int8(cx.program[cx.pc+1])
@@ -472,12 +494,17 @@ func opFrameBuryStackChange(cx *EvalContext) StackChangeExplanation {
 	topStackIdx := len(cx.Stack) - 1
 
 	diff := topStackIdx - idx + 1
-	return StackChangeExplanation{Deletions: diff, Additions: diff - 1}
+
+	deletions = diff
+	additions = diff - 1
+	return
 }
 
-func opMatchStackChange(cx *EvalContext) StackChangeExplanation {
+func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 	labelNum := int(cx.program[cx.pc+1])
-	return StackChangeExplanation{Deletions: labelNum + 1}
+
+	deletions = labelNum + 1
+	return
 }
 
 func proto(signature string, effects ...string) Proto {
