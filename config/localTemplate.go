@@ -361,7 +361,7 @@ type Local struct {
 	// MaxCatchpointDownloadDuration defines the maximum duration a client will be keeping the outgoing connection of a catchpoint download request open for processing before
 	// shutting it down. Networks that have large catchpoint files, slow connection or slow storage could be a good reason to increase this value. Note that this is a client-side only
 	// configuration value, and it's independent of the actual catchpoint file size.
-	MaxCatchpointDownloadDuration time.Duration `version[13]:"7200000000000"`
+	MaxCatchpointDownloadDuration time.Duration `version[13]:"7200000000000" version[28]:"43200000000000"`
 
 	// MinCatchpointFileDownloadBytesPerSecond defines the minimal download speed that would be considered to be "acceptable" by the catchpoint file fetcher, measured in bytes per seconds. If the
 	// provided stream speed drops below this threshold, the connection would be recycled. Note that this field is evaluated per catchpoint "chunk" and not on it's own. If this field is zero,
@@ -517,9 +517,9 @@ type Local struct {
 	// only relevant if TxIncomingFilteringFlags is non-zero
 	TxIncomingFilterMaxSize uint64 `version[28]:"500000"`
 
-	// BlockServiceHTTPMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
+	// BlockServiceMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
 	// When it exceeds this capacity, it redirects the block requests to a different node
-	BlockServiceHTTPMemCap uint64 `version[28]:"500000000"`
+	BlockServiceMemCap uint64 `version[28]:"500000000"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

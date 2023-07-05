@@ -125,7 +125,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
 	s.blockValidationPool = blockValidationPool
-	s.syncNow = make(chan struct{})
+	s.syncNow = make(chan struct{}, 1)
 
 	return s
 }
@@ -159,11 +159,11 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 
 // triggerSync attempts to wake up the sync loop.
 func (s *Service) triggerSync() {
-	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
-		select {
-		case s.syncNow <- struct{}{}:
-		default:
-		}
+	// Prevents deadlock if periodic sync isn't running
+	// when catchup is setting the sync round.
+	select {
+	case s.syncNow <- struct{}{}:
+	default:
 	}
 }
 
