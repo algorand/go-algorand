@@ -142,7 +142,7 @@ type OnlineAccountsWriter interface {
 // - online accounts
 type OnlineAccountsReader interface {
 	LookupOnline(addr basics.Address, rnd basics.Round) (data PersistedOnlineAccountData, err error)
-	LookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error)
+	LookupOnlineRoundParams(rnd basics.Round) (onlineRoundParamsData ledgercore.OnlineRoundParamsData, err error)
 	LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error)
 
 	Close()
