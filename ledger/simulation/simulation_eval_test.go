@@ -2210,8 +2210,8 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues("hello"),
 										},
 										{
-											PC:             8,
-											StackDeletions: 1,
+											PC:            8,
+											StackPopCount: 1,
 										},
 										{
 											PC:         9,
@@ -2227,26 +2227,26 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues("a"),
 										},
 										{
-											PC:             6,
-											StackAdded:     goValuesToTealValues(keccakBytes),
-											StackDeletions: 1,
+											PC:            6,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
 										},
 										{
-											PC:             7,
-											StackDeletions: 1,
+											PC:            7,
+											StackPopCount: 1,
 										},
 										{
 											PC:         8,
 											StackAdded: goValuesToTealValues("a"),
 										},
 										{
-											PC:             9,
-											StackAdded:     goValuesToTealValues(keccakBytes),
-											StackDeletions: 1,
+											PC:            9,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
 										},
 										{
-											PC:             10,
-											StackDeletions: 1,
+											PC:            10,
+											StackPopCount: 1,
 										},
 										{
 											PC:         11,
@@ -2340,26 +2340,26 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues("a"),
 										},
 										{
-											PC:             6,
-											StackAdded:     goValuesToTealValues(keccakBytes),
-											StackDeletions: 1,
+											PC:            6,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
 										},
 										{
-											PC:             7,
-											StackDeletions: 1,
+											PC:            7,
+											StackPopCount: 1,
 										},
 										{
 											PC:         8,
 											StackAdded: goValuesToTealValues("a"),
 										},
 										{
-											PC:             9,
-											StackAdded:     goValuesToTealValues(keccakBytes),
-											StackDeletions: 1,
+											PC:            9,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
 										},
 										{
-											PC:             10,
-											StackDeletions: 1,
+											PC:            10,
+											StackPopCount: 1,
 										},
 										{
 											PC:         11,
@@ -2370,8 +2370,8 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues(1),
 										},
 										{
-											PC:             15,
-											StackDeletions: 2,
+											PC:            15,
+											StackPopCount: 2,
 										},
 									},
 								},
@@ -2596,17 +2596,17 @@ int 1`,
 											StackAdded: goValuesToTealValues(0),
 										},
 										{
-											PC:             6,
-											StackDeletions: 1,
+											PC:            6,
+											StackPopCount: 1,
 										},
 										{
 											PC:         81,
 											StackAdded: goValuesToTealValues(1),
 										},
 										{
-											PC:             82,
-											StackAdded:     goValuesToTealValues(1),
-											StackDeletions: 1,
+											PC:            82,
+											StackAdded:    goValuesToTealValues(1),
+											StackPopCount: 1,
 										},
 									},
 								},
@@ -2635,8 +2635,8 @@ int 1`,
 											StackAdded: goValuesToTealValues(futureAppID),
 										},
 										{
-											PC:             6,
-											StackDeletions: 1,
+											PC:            6,
+											StackPopCount: 1,
 										},
 										{
 											PC:         9,
@@ -2647,22 +2647,22 @@ int 1`,
 											StackAdded: goValuesToTealValues(1),
 										},
 										{
-											PC:             12,
-											StackAdded:     goValuesToTealValues(1),
-											StackDeletions: 2,
+											PC:            12,
+											StackAdded:    goValuesToTealValues(1),
+											StackPopCount: 2,
 										},
 										{
-											PC:             13,
-											StackDeletions: 1,
+											PC:            13,
+											StackPopCount: 1,
 										},
 										{
 											PC:         14,
 											StackAdded: goValuesToTealValues([]byte{byte(applicationArg)}),
 										},
 										{
-											PC:             17,
-											StackAdded:     goValuesToTealValues(applicationArg),
-											StackDeletions: 1,
+											PC:            17,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 1,
 										},
 										// call sub
 										{
@@ -2678,86 +2678,86 @@ int 1`,
 										},
 										// dup
 										{
-											PC:             31,
-											StackAdded:     goValuesToTealValues(0, 0),
-											StackDeletions: 1,
+											PC:            31,
+											StackAdded:    goValuesToTealValues(0, 0),
+											StackPopCount: 1,
 										},
 										// dupn 4
 										{
-											PC:             32,
-											StackAdded:     goValuesToTealValues(0, 0, 0, 0, 0),
-											StackDeletions: 1,
+											PC:            32,
+											StackAdded:    goValuesToTealValues(0, 0, 0, 0, 0),
+											StackPopCount: 1,
 										},
 										// frame_dig -1
 										{
-											PC:             34,
-											StackAdded:     goValuesToTealValues(applicationArg),
-											StackDeletions: 0,
+											PC:            34,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
 										},
 										// frame_bury 0
 										{
-											PC:             36,
-											StackAdded:     goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
-											StackDeletions: 7,
+											PC:            36,
+											StackAdded:    goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
+											StackPopCount: 7,
 										},
 										// dig 5
 										{
-											PC:             38,
-											StackAdded:     goValuesToTealValues(applicationArg),
-											StackDeletions: 0,
+											PC:            38,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
 										},
 										// cover 5
 										{
-											PC:             40,
-											StackAdded:     goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
-											StackDeletions: 6,
+											PC:            40,
+											StackAdded:    goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
+											StackPopCount: 6,
 										},
 										// frame_dig 0
 										{
-											PC:             42,
-											StackAdded:     goValuesToTealValues(applicationArg),
-											StackDeletions: 0,
+											PC:            42,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
 										},
 										// frame_dig 1
 										{
-											PC:             44,
-											StackAdded:     goValuesToTealValues(applicationArg),
-											StackDeletions: 0,
+											PC:            44,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
 										},
 										// +
 										{
-											PC:             46,
-											StackAdded:     goValuesToTealValues(applicationArg * 2),
-											StackDeletions: 2,
+											PC:            46,
+											StackAdded:    goValuesToTealValues(applicationArg * 2),
+											StackPopCount: 2,
 										},
 										// bury 7
 										{
-											PC:             47,
-											StackAdded:     goValuesToTealValues(applicationArg*2, applicationArg, 0, 0, 0, 0, 0),
-											StackDeletions: 8,
+											PC:            47,
+											StackAdded:    goValuesToTealValues(applicationArg*2, applicationArg, 0, 0, 0, 0, 0),
+											StackPopCount: 8,
 										},
 										// popn 5
 										{
-											PC:             49,
-											StackDeletions: 5,
+											PC:            49,
+											StackPopCount: 5,
 										},
 										// uncover 1
 										{
-											PC:             51,
-											StackDeletions: 2,
-											StackAdded:     goValuesToTealValues(applicationArg, applicationArg*2),
+											PC:            51,
+											StackPopCount: 2,
+											StackAdded:    goValuesToTealValues(applicationArg, applicationArg*2),
 										},
 										// swap
 										{
-											PC:             53,
-											StackAdded:     goValuesToTealValues(applicationArg*2, applicationArg),
-											StackDeletions: 2,
+											PC:            53,
+											StackAdded:    goValuesToTealValues(applicationArg*2, applicationArg),
+											StackPopCount: 2,
 										},
 										// +
 										{
-											PC:             54,
-											StackAdded:     goValuesToTealValues(applicationArg * 3),
-											StackDeletions: 2,
+											PC:            54,
+											StackAdded:    goValuesToTealValues(applicationArg * 3),
+											StackPopCount: 2,
 										},
 										// pushbytess "1!" "5!"
 										{
@@ -2771,20 +2771,20 @@ int 1`,
 										},
 										// retsub
 										{
-											PC:             80,
-											StackAdded:     goValuesToTealValues(applicationArg * 3),
-											StackDeletions: 10,
+											PC:            80,
+											StackAdded:    goValuesToTealValues(applicationArg * 3),
+											StackPopCount: 10,
 										},
 										// itob
 										{
-											PC:             21,
-											StackAdded:     goValuesToTealValues(uint64ToBytes(uint64(applicationArg) * 3)),
-											StackDeletions: 1,
+											PC:            21,
+											StackAdded:    goValuesToTealValues(uint64ToBytes(uint64(applicationArg) * 3)),
+											StackPopCount: 1,
 										},
 										// log
 										{
-											PC:             22,
-											StackDeletions: 1,
+											PC:            22,
+											StackPopCount: 1,
 										},
 										// b end
 										{
@@ -2797,9 +2797,9 @@ int 1`,
 										},
 										// return
 										{
-											PC:             82,
-											StackAdded:     goValuesToTealValues(1),
-											StackDeletions: 1,
+											PC:            82,
+											StackAdded:    goValuesToTealValues(1),
+											StackPopCount: 1,
 										},
 									},
 								},

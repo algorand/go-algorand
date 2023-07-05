@@ -253,10 +253,10 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 
 func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
 	tracer.stackChangeExplanation = cx.NextStackChange()
-	o.StackDeletions = uint64(tracer.stackChangeExplanation.Deletions)
+	o.StackPopCount = uint64(tracer.stackChangeExplanation.Deletions)
 
 	stackHeight := len(cx.Stack)
-	tracer.stackHeightAfterDeletion = stackHeight - int(o.StackDeletions)
+	tracer.stackHeightAfterDeletion = stackHeight - int(o.StackPopCount)
 }
 
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {

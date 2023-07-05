@@ -399,15 +399,15 @@ func (cx *EvalContext) NextStackChange() StackChangeExplanation {
 }
 
 func opPushIntsStackChange(cx *EvalContext) StackChangeExplanation {
-	// NOTE: WE ARE SWOLLOWING THE ERROR HERE!
-	// FOR EVENTUALLY IT WOULD ERROR IN EVALUATION, IF THERE IS AN ERR
+	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
+	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY, IF THERE IS AN ERR
 	intc, _, _ := parseIntImmArgs(cx.program, cx.pc+1)
 	return StackChangeExplanation{Additions: len(intc)}
 }
 
 func opPushBytessStackChange(cx *EvalContext) StackChangeExplanation {
-	// NOTE: WE ARE SWOLLOWING THE ERROR HERE!
-	// FOR EVENTUALLY IT WOULD ERROR IN EVALUATION, IF THERE IS AN ERR
+	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
+	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY, IF THERE IS AN ERR
 	cbytess, _, _ := parseByteImmArgs(cx.program, cx.pc+1)
 	return StackChangeExplanation{Additions: len(cbytess)}
 }

@@ -2255,13 +2255,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		// ==
 		{
 			Pc:             9,
-			StackDeletions: toPtr[uint64](2),
+			StackPopCount:  toPtr[uint64](2),
 			StackAdditions: goValuesToStackValues(1),
 		},
 		// bnz main_l6
 		{
-			Pc:             10,
-			StackDeletions: toPtr[uint64](1),
+			Pc:            10,
+			StackPopCount: toPtr[uint64](1),
 		},
 		// int 1
 		{
@@ -2272,7 +2272,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		{
 			Pc:             150,
 			StackAdditions: goValuesToStackValues(1),
-			StackDeletions: toPtr[uint64](1),
+			StackPopCount:  toPtr[uint64](1),
 		},
 	}
 
@@ -2297,12 +2297,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             9,
 				StackAdditions: goValuesToStackValues(false),
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 			},
 			// bnz main_l6
 			{
-				Pc:             10,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            10,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// txn NumAppArgs
 			{
@@ -2317,13 +2317,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// ==
 			{
 				Pc:             16,
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 				StackAdditions: goValuesToStackValues(true),
 			},
 			// bnz main_l3
 			{
-				Pc:             17,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            17,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// global CurrentApplicationID
 			{
@@ -2334,17 +2334,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             23,
 				StackAdditions: goValuesToStackValues(approval, 1),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 1
 			{
-				Pc:             25,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            25,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// store 0
 			{
-				Pc:             27,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            27,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// global CurrentApplicationID
 			{
@@ -2355,17 +2355,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             31,
 				StackAdditions: goValuesToStackValues(clearState, 1),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 3
 			{
-				Pc:             33,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            33,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// store 2
 			{
-				Pc:             35,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            35,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// global CurrentApplicationAddress
 			{
@@ -2376,17 +2376,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             39,
 				StackAdditions: goValuesToStackValues(uint64(3-layer)*MinBalance, 1),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 5
 			{
-				Pc:             41,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            41,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// store 4
 			{
-				Pc:             43,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            43,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// load 1
 			{
@@ -2395,8 +2395,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// assert
 			{
-				Pc:             47,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            47,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// load 3
 			{
@@ -2405,8 +2405,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// assert
 			{
-				Pc:             50,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            50,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// load 5
 			{
@@ -2415,8 +2415,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// assert
 			{
-				Pc:             53,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            53,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// int 2
 			{
@@ -2432,24 +2432,24 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             59,
 				StackAdditions: goValuesToStackValues(uint64(MaxDepth - layer)),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// exp
 			{
 				Pc:             60,
 				StackAdditions: goValuesToStackValues(1 << (MaxDepth - layer)),
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 			},
 			// itob
 			{
 				Pc:             61,
 				StackAdditions: goValuesToStackValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// log
 			{
-				Pc:             62,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            62,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// txna ApplicationArgs 0
 			{
@@ -2460,7 +2460,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             66,
 				StackAdditions: goValuesToStackValues(MaxDepth - layer),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// int 0
 			{
@@ -2471,12 +2471,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             68,
 				StackAdditions: goValuesToStackValues(MaxDepth-layer > 0),
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 			},
 			// bnz main_l5
 			{
-				Pc:             69,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            69,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// itxn_begin
 			{
@@ -2489,8 +2489,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field TypeEnum
 			{
-				Pc:             76,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            76,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// int 0
 			{
@@ -2499,8 +2499,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field Fee
 			{
-				Pc:             79,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            79,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// load 0
 			{
@@ -2509,8 +2509,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field ApprovalProgram
 			{
-				Pc:             83,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            83,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// load 2
 			{
@@ -2519,8 +2519,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field ClearStateProgram
 			{
-				Pc:             87,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            87,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// itxn_submit
 			{
@@ -2538,8 +2538,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field TypeEnum
 			{
-				Pc:             92,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            92,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// int 0
 			{
@@ -2548,8 +2548,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field Fee
 			{
-				Pc:             95,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            95,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// load 4
 			{
@@ -2564,13 +2564,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// -
 			{
 				Pc:             103,
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 				StackAdditions: goValuesToStackValues(uint64(2-layer) * MinBalance),
 			},
 			// itxn_field Amount
 			{
-				Pc:             104,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            104,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// byte "appID"
 			{
@@ -2586,24 +2586,24 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             116,
 				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(appID) + 3)),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// concat
 			{
 				Pc:             117,
 				StackAdditions: goValuesToStackValues([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 			},
 			// sha512_256
 			{
 				Pc:             118,
 				StackAdditions: goValuesToStackValues(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// itxn_field Receiver
 			{
-				Pc:             119,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            119,
+				StackPopCount: toPtr[uint64](1),
 			},
 			{
 				Pc: 121,
@@ -2615,8 +2615,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field TypeEnum
 			{
-				Pc:             123,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            123,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// txna ApplicationArgs 0
 			{
@@ -2627,7 +2627,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             128,
 				StackAdditions: goValuesToStackValues(MaxDepth - layer),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// int 1
 			{
@@ -2638,18 +2638,18 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             130,
 				StackAdditions: goValuesToStackValues(MaxDepth - layer - 1),
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 			},
 			// itob
 			{
 				Pc:             131,
 				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer - 1))),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// itxn_field ApplicationArgs
 			{
-				Pc:             132,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            132,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// itxn CreatedApplicationID
 			{
@@ -2658,8 +2658,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field ApplicationID
 			{
-				Pc:             136,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            136,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// int 0
 			{
@@ -2668,8 +2668,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field Fee
 			{
-				Pc:             139,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            139,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// int DeleteApplication
 			{
@@ -2678,8 +2678,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// itxn_field OnCompletion
 			{
-				Pc:             143,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            143,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// itxn_submit
 			{
@@ -2699,7 +2699,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             73,
 				StackAdditions: goValuesToStackValues(1),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 		}
 	}
@@ -2723,12 +2723,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             9,
 				StackAdditions: goValuesToStackValues(false),
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 			},
 			// bnz main_l6
 			{
-				Pc:             10,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            10,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// txn NumAppArgs
 			{
@@ -2743,13 +2743,13 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// ==
 			{
 				Pc:             16,
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 				StackAdditions: goValuesToStackValues(true),
 			},
 			// bnz main_l3
 			{
-				Pc:             17,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            17,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// global CurrentApplicationID
 			{
@@ -2760,17 +2760,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             23,
 				StackAdditions: goValuesToStackValues(approval, 1),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 1
 			{
-				Pc:             25,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            25,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// store 0
 			{
-				Pc:             27,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            27,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// global CurrentApplicationID
 			{
@@ -2781,17 +2781,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             31,
 				StackAdditions: goValuesToStackValues(clearState, 1),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 3
 			{
-				Pc:             33,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            33,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// store 2
 			{
-				Pc:             35,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            35,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// global CurrentApplicationAddress
 			{
@@ -2802,17 +2802,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             39,
 				StackAdditions: goValuesToStackValues(uint64(3-layer)*MinBalance, 1),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 5
 			{
-				Pc:             41,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            41,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// store 4
 			{
-				Pc:             43,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            43,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// load 1
 			{
@@ -2821,8 +2821,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// assert
 			{
-				Pc:             47,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            47,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// load 3
 			{
@@ -2831,8 +2831,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// assert
 			{
-				Pc:             50,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            50,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// load 5
 			{
@@ -2841,8 +2841,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			},
 			// assert
 			{
-				Pc:             53,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            53,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// int 2
 			{
@@ -2858,24 +2858,24 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             59,
 				StackAdditions: goValuesToStackValues(uint64(MaxDepth - layer)),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// exp
 			{
 				Pc:             60,
 				StackAdditions: goValuesToStackValues(1 << (MaxDepth - layer)),
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 			},
 			// itob
 			{
 				Pc:             61,
 				StackAdditions: goValuesToStackValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// log
 			{
-				Pc:             62,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            62,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// txna ApplicationArgs 0
 			{
@@ -2886,7 +2886,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             66,
 				StackAdditions: goValuesToStackValues(MaxDepth - layer),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 			// int 0
 			{
@@ -2897,12 +2897,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             68,
 				StackAdditions: goValuesToStackValues(MaxDepth-layer > 0),
-				StackDeletions: toPtr[uint64](2),
+				StackPopCount:  toPtr[uint64](2),
 			},
 			// bnz main_l5
 			{
-				Pc:             69,
-				StackDeletions: toPtr[uint64](1),
+				Pc:            69,
+				StackPopCount: toPtr[uint64](1),
 			},
 			// int 1
 			{
@@ -2913,7 +2913,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			{
 				Pc:             73,
 				StackAdditions: goValuesToStackValues(1),
-				StackDeletions: toPtr[uint64](1),
+				StackPopCount:  toPtr[uint64](1),
 			},
 		}
 	}

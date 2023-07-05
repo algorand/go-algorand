@@ -722,8 +722,8 @@ type SimulationOpcodeTraceUnit struct {
 	// StackAdditions The values added by this opcode to the stack.
 	StackAdditions *[]StackValue `json:"stack-additions,omitempty"`
 
-	// StackDeletions The number of deleted stack values by this opcode.
-	StackDeletions *uint64 `json:"stack-deletions,omitempty"`
+	// StackPopCount The number of deleted stack values by this opcode.
+	StackPopCount *uint64 `json:"stack-pop-count,omitempty"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
@@ -746,7 +746,7 @@ type StackValue struct {
 	// Bytes bytes value.
 	Bytes *[]byte `json:"bytes,omitempty"`
 
-	// Type value type. Value `1` refers to **bytes**, value `2` refers to **uint**
+	// Type value type. Value `1` refers to **bytes**, value `2` refers to **uint64**
 	Type uint64 `json:"type"`
 
 	// Uint uint value.

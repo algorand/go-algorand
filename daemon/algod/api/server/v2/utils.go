@@ -379,7 +379,7 @@ func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.Sim
 			Pc:             programTrace[i].PC,
 			SpawnedInners:  spawnedInnersPtr,
 			StackAdditions: convertTealValueSliceToModel(programTrace[i].StackAdded),
-			StackDeletions: omitEmpty(programTrace[i].StackDeletions),
+			StackPopCount:  omitEmpty(programTrace[i].StackPopCount),
 		}
 	}
 	return &modelProgramTrace

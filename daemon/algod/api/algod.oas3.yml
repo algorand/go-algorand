@@ -2075,7 +2075,7 @@
             },
             "type": "array"
           },
-          "stack-deletions": {
+          "stack-pop-count": {
             "description": "The number of deleted stack values by this opcode.",
             "type": "integer"
           }
@@ -2129,7 +2129,7 @@
             "type": "string"
           },
           "type": {
-            "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint**",
+            "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint64**",
             "type": "integer"
           },
           "uint": {
