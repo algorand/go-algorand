@@ -76,7 +76,7 @@ function configure_data_dir() {
 
   # initialize config with profile.
   if [ "$PROFILE" != "" ]; then
-    algocfg profile set --yes -d "$ALGORAND_DATA" "$PROFILE" 
+    algocfg profile set --yes -d "$ALGORAND_DATA" "$PROFILE"
   fi
 
   # set profile overrides
@@ -201,19 +201,21 @@ function start_new_private_network() {
 ##############
 
 echo "Starting Algod Docker Container"
-echo "   ALGORAND_DATA:  $ALGORAND_DATA"
-echo "   NETWORK:        $NETWORK"
-echo "   PROFILE:        $PROFILE"
-echo "   DEV_MODE:       $DEV_MODE"
-echo "   START_KMD:      ${START_KMD:-"Not Set"}"
-echo "   FAST_CATCHUP:   $FAST_CATCHUP"
-echo "   TOKEN:          ${TOKEN:-"Not Set"}"
-echo "   ADMIN_TOKEN:    ${ADMIN_TOKEN:-"Not Set"}"
-echo "   KMD_TOKEN:      ${KMD_TOKEN:-"Not Set"}"
-echo "   TELEMETRY_NAME: $TELEMETRY_NAME"
-echo "   NUM_ROUNDS:     $NUM_ROUNDS"
-echo "   PEER_ADDRESS:   $PEER_ADDRESS"
-echo "   ALGOD_PORT:     $ALGOD_PORT"
+echo "   ALGORAND_DATA:   $ALGORAND_DATA"
+echo "   NETWORK:         $NETWORK"
+echo "   PROFILE:         $PROFILE"
+echo "   DEV_MODE:        $DEV_MODE"
+echo "   START_KMD:       ${START_KMD:-"Not Set"}"
+echo "   FAST_CATCHUP:    $FAST_CATCHUP"
+echo "   TOKEN:           ${TOKEN:-"Not Set"}"
+echo "   ADMIN_TOKEN:     ${ADMIN_TOKEN:-"Not Set"}"
+echo "   KMD_TOKEN:       ${KMD_TOKEN:-"Not Set"}"
+echo "   TELEMETRY_NAME:  $TELEMETRY_NAME"
+echo "   NUM_ROUNDS:      $NUM_ROUNDS"
+echo "   GENESIS_ADDRESS: $GENESIS_ADDRESS"
+echo "   PEER_ADDRESS:    $PEER_ADDRESS"
+echo "   GOSSIP_PORT:     $GOSSIP_PORT"
+echo "   ALGOD_PORT:      $ALGOD_PORT"
 
 # If data directory is initialized, start existing environment.
 if [ -f "$ALGORAND_DATA/../network.json" ]; then
