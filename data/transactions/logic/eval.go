@@ -570,8 +570,8 @@ type scratchSpace [256]stackValue
 type EvalContext struct {
 	*EvalParams
 
-	// determines eval mode: runModeSignature or runModeApplication
-	runModeFlags RunMode
+	// determines eval mode: ModeSig or ModeApp
+	runMode RunMode
 
 	// the index of the transaction being evaluated
 	groupIndex int
@@ -624,7 +624,7 @@ func (cx *EvalContext) GroupIndex() int {
 
 // RunMode returns the evaluation context's mode (signature or application)
 func (cx *EvalContext) RunMode() RunMode {
-	return cx.runModeFlags
+	return cx.runMode
 }
 
 // PC returns the program counter of the current application being evaluated
@@ -911,11 +911,11 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		return false, nil, errors.New("0 appId in contract eval")
 	}
 	cx := EvalContext{
-		EvalParams:   params,
-		runModeFlags: ModeApp,
-		groupIndex:   gi,
-		txn:          &params.TxnGroup[gi],
-		appID:        aid,
+		EvalParams: params,
+		runMode:    ModeApp,
+		groupIndex: gi,
+		txn:        &params.TxnGroup[gi],
+		appID:      aid,
 	}
 
 	if cx.Proto.IsolateClearState && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
@@ -1014,10 +1014,10 @@ func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 		return false, nil, errors.New("no sig ledger in signature eval")
 	}
 	cx := EvalContext{
-		EvalParams:   params,
-		runModeFlags: ModeSig,
-		groupIndex:   gi,
-		txn:          &params.TxnGroup[gi],
+		EvalParams: params,
+		runMode:    ModeSig,
+		groupIndex: gi,
+		txn:        &params.TxnGroup[gi],
 	}
 	pass, err := eval(cx.txn.Lsig.Logic, &cx)
 
@@ -1176,7 +1176,7 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
-	cx.runModeFlags = mode
+	cx.runMode = mode
 	cx.program = program
 	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
 	cx.instructionStarts = make([]bool, len(program)+1)
@@ -1262,7 +1262,7 @@ func (cx *EvalContext) AppID() basics.AppIndex {
 }
 
 func (cx *EvalContext) remainingBudget() int {
-	if cx.runModeFlags == ModeSig {
+	if cx.runMode == ModeSig {
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
 
@@ -1300,7 +1300,7 @@ func (cx *EvalContext) step() error {
 	if spec.op == nil {
 		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 	}
-	if (cx.runModeFlags & spec.Modes) == 0 {
+	if (cx.runMode & spec.Modes) == 0 {
 		return fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
 
@@ -1449,7 +1449,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if spec.op == nil {
 		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
 	}
-	if (cx.runModeFlags & spec.Modes) == 0 {
+	if (cx.runMode & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
 	deets := spec.OpDetails
@@ -2871,7 +2871,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 
 func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *txnFieldSpec, arrayFieldIdx uint64, groupIndex int, inner bool) (sv stackValue, err error) {
 	if fs.effects {
-		if cx.runModeFlags == ModeSig {
+		if cx.runMode == ModeSig {
 			return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 		}
 		if cx.version < txnEffectsVersion && !inner {
@@ -3139,7 +3139,7 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 	case srcGroup:
 		if fs.effects && gi >= uint64(cx.groupIndex) {
 			// Test mode so that error is clearer
-			if cx.runModeFlags == ModeSig {
+			if cx.runMode == ModeSig {
 				return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 			}
 			return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.groupIndex)
@@ -3557,7 +3557,7 @@ func opGlobal(cx *EvalContext) error {
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid global field %s", globalField)
 	}
-	if (cx.runModeFlags & fs.mode) == 0 {
+	if (cx.runMode & fs.mode) == 0 {
 		return fmt.Errorf("global[%s] not allowed in current mode", globalField)
 	}
 

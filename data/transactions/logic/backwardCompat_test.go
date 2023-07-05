@@ -368,7 +368,6 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		ops := testProg(t, text, AssemblerMaxVersion)
 
 		ep, _, _ := makeSampleEnvWithVersion(1)
-		ep.TxnGroup[0].Txn.RekeyTo = basics.Address{} // avoid min version issues
 		ep.TxnGroup[0].Lsig.Logic = ops.Program
 		_, err := EvalSignature(0, ep)
 		require.Error(t, err)
@@ -431,11 +430,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			ep, tx, _ := makeSampleEnvWithVersion(1)
-			// We'll reject too early if we have a nonzero RekeyTo, because that
-			// field must be zero for every txn in the group if this is an old
-			// AVM version
-			tx.RekeyTo = basics.Address{}
+			ep, _, _ := makeSampleEnvWithVersion(1)
 			ep.TxnGroup[0].Lsig.Logic = ops.Program
 
 			// check failure with version check
