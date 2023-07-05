@@ -148,24 +148,23 @@ function start_new_public_network() {
     exit 1
   fi
 
-
-  cp /node/run/config.json.example config.json
-
   configure_data_dir
 
-  local ID
-  case $NETWORK in
-  mainnet) ID="<network>.algorand.network" ;;
-  testnet) ID="<network>.algorand.network" ;;
-  betanet) ID="<network>.algodev.network" ;;
-  alphanet) ID="<network>.algodev.network" ;;
-  devnet) ID="<network>.algodev.network" ;;
-  *)
-    echo "Unknown network, not setting bootstrap ID"
-    ;;
-  esac
+  # if the peer address is set, it will be used instead of the DNS bootstrap ID
+  if [ "$PEER_ADDRESS" != "" ]; then
+    local ID
+    case $NETWORK in
+    mainnet) ID="<network>.algorand.network" ;;
+    testnet) ID="<network>.algorand.network" ;;
+    betanet) ID="<network>.algodev.network" ;;
+    alphanet) ID="<network>.algodev.network" ;;
+    devnet) ID="<network>.algodev.network" ;;
+    *)
+      echo "Unknown network."
+      exit 1
+      ;;
+    esac
 
-  if [ "$ID" != "" ]; then
     set -p DNSBootstrapID -v "$ID"
   fi
 
@@ -227,7 +226,7 @@ elif [ -f "$ALGORAND_DATA/genesis.json" ]; then
 fi
 
 # Initialize and start network.
-if [ "$NETWORK" == "" ]; then
+if [ "$NETWORK" == "" ] && [ "$PEER_ADDRESS" == "" ]; then
   start_new_private_network
 else
   start_new_public_network
