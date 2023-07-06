@@ -441,6 +441,9 @@ func (p *resourcePolicy) AllowsLocal(addr basics.Address, aid basics.AppIndex) b
 
 func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operation logic.BoxOperation, createSize uint64) bool {
 	if p.assignment.hasBox(app, name) {
+		// We actually never expect this to happen, since the EvalContext remembers each box in
+		// order to track their dirty bytes, and it won't invoke this method if it's already seen
+		// the box.
 		return true
 	}
 	box, ok, err := p.ep.Ledger.GetBox(app, name)

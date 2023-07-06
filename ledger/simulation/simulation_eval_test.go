@@ -3604,7 +3604,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	// Boxes introduced in v8
-	for v := 8; v <= 8; /*logic.LogicVersion*/ v++ {
+	for v := 8; v <= logic.LogicVersion; v++ {
 		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
@@ -3613,10 +3613,8 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 
 			sender := env.Accounts[0]
 
-			program := fmt.Sprintf(boxTestProgram, v)
-
 			appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
-				ApprovalProgram:   program,
+				ApprovalProgram:   fmt.Sprintf(boxTestProgram, v),
 				ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
 			})
 
@@ -3959,6 +3957,432 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				FailureMessage: fmt.Sprintf("logic eval error: invalid Box reference %#x", "B"),
 				FailingIndex:   1,
 			})
+		})
+	}
+}
+
+const resourceLimitsTestProgram = `#pragma version %d
+txn ApplicationID
+bz end // Do nothing during create
+
+loop:
+load 0
+txn NumAppArgs
+<
+bz loop_end
+load 0
+txnas ApplicationArgs
+dup
+
+extract 1 0
+swap
+
+int 0
+getbyte
+
+switch account asset app box
+err
+
+account:
+balance
+assert
+b loop_step
+
+asset:
+btoi
+asset_params_get AssetTotal
+assert
+assert
+b loop_step
+
+app:
+btoi
+byte 0x01
+app_global_get_ex
+!
+assert
+!
+assert
+b loop_step
+
+box:
+box_len
+!
+assert
+!
+assert
+
+loop_step:
+load 0
+int 1
++
+store 0
+b loop
+loop_end:
+
+// TODO: cross product lookups
+
+end:
+int 1
+`
+
+type unnamedResourceArgument struct {
+	account       basics.Address
+	asset         basics.AssetIndex
+	app           basics.AppIndex
+	box           string
+	limitExceeded bool
+}
+
+type unnamedResourceArguments []unnamedResourceArgument
+
+func (resources unnamedResourceArguments) markLimitExceeded() unnamedResourceArguments {
+	resources[len(resources)-1].limitExceeded = true
+	return resources
+}
+
+func (resources unnamedResourceArguments) addAccounts(accounts ...basics.Address) unnamedResourceArguments {
+	for _, account := range accounts {
+		resources = append(resources, unnamedResourceArgument{account: account})
+	}
+	return resources
+}
+
+func (resources unnamedResourceArguments) addAssets(assets ...basics.AssetIndex) unnamedResourceArguments {
+	for _, asset := range assets {
+		resources = append(resources, unnamedResourceArgument{asset: asset})
+	}
+	return resources
+}
+
+func (resources unnamedResourceArguments) addApps(apps ...basics.AppIndex) unnamedResourceArguments {
+	for _, app := range apps {
+		resources = append(resources, unnamedResourceArgument{app: app})
+	}
+	return resources
+}
+
+func (resources unnamedResourceArguments) addBoxes(boxes ...string) unnamedResourceArguments {
+	for _, box := range boxes {
+		resources = append(resources, unnamedResourceArgument{box: box})
+	}
+	return resources
+}
+
+func (resources unnamedResourceArguments) accounts() []basics.Address {
+	var accounts []basics.Address
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		if !resources[i].account.IsZero() {
+			accounts = append(accounts, resources[i].account)
+		}
+	}
+	return accounts
+}
+
+func (resources unnamedResourceArguments) assets() []basics.AssetIndex {
+	var assets []basics.AssetIndex
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		if resources[i].asset != 0 {
+			assets = append(assets, resources[i].asset)
+		}
+	}
+	return assets
+}
+
+func (resources unnamedResourceArguments) apps() []basics.AppIndex {
+	var apps []basics.AppIndex
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		if resources[i].app != 0 {
+			apps = append(apps, resources[i].app)
+		}
+	}
+	return apps
+}
+
+func (resources unnamedResourceArguments) boxes() []string {
+	var boxes []string
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		if resources[i].box != "" {
+			boxes = append(boxes, resources[i].box)
+		}
+	}
+	return boxes
+}
+
+func (resources unnamedResourceArguments) toAppArgs() [][]byte {
+	encoded := make([][]byte, len(resources))
+	for i, resource := range resources {
+		switch {
+		case !resource.account.IsZero():
+			encoded[i] = append([]byte{0}, resource.account[:]...)
+		case resource.asset != 0:
+			encoded[i] = append([]byte{1}, uint64ToBytes(uint64(resource.asset))...)
+		case resource.app != 0:
+			encoded[i] = append([]byte{2}, uint64ToBytes(uint64(resource.app))...)
+		case resource.box != "":
+			encoded[i] = append([]byte{3}, []byte(resource.box)...)
+		default:
+			panic("unknown resource type")
+		}
+	}
+	return encoded
+}
+
+func mapWithKeys[K comparable, V any](keys []K, defaultValue V) map[K]V {
+	if keys == nil {
+		return nil
+	}
+
+	m := make(map[K]V, len(keys))
+	for _, k := range keys {
+		m[k] = defaultValue
+	}
+	return m
+}
+
+func boxNamesToRefs(app basics.AppIndex, names []string) []logic.BoxRef {
+	if names == nil {
+		return nil
+	}
+
+	refs := make([]logic.BoxRef, len(names))
+	for i, name := range names {
+		refs[i] = logic.BoxRef{
+			App:  app,
+			Name: name,
+		}
+	}
+	return refs
+}
+
+func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, app basics.AppIndex, resources unnamedResourceArguments, expectedError string) {
+	t.Helper()
+	maxGroupSize := env.TxnInfo.CurrentProtocolParams().MaxTxGroupSize
+	txns := make([]*txntest.Txn, maxGroupSize)
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:            protocol.ApplicationCallTx,
+		Sender:          env.Accounts[0].Addr,
+		ApplicationID:   app,
+		ApplicationArgs: resources.toAppArgs(),
+	})
+	txns[0] = &appCall
+	for i := 1; i < maxGroupSize; i++ {
+		// Fill out the rest of the group with non-app transactions. This reduces the amount of
+		// unnamed global resources available.
+		txn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   env.Accounts[0].Addr,
+			Receiver: env.Accounts[0].Addr,
+			Note:     []byte{byte(i)}, // Make each txn unique
+		})
+		txns[i] = &txn
+	}
+	txntest.Group(txns...)
+	stxns := make([]transactions.SignedTxn, len(txns))
+	for i, txn := range txns {
+		stxns[i] = txn.Txn().Sign(env.Accounts[0].Sk)
+	}
+
+	expectedTxnResults := make([]simulation.TxnResult, len(stxns))
+	for i := range expectedTxnResults {
+		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
+	}
+
+	var failedAt simulation.TxnPath
+	if expectedError != "" {
+		failedAt = simulation.TxnPath{0}
+	}
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	testCase := simulationTestCase{
+		input: simulation.Request{
+			TxnGroups:             [][]transactions.SignedTxn{stxns},
+			AllowUnnamedResources: true,
+		},
+		expectedError: expectedError,
+		expected: simulation.Result{
+			Version:   simulation.ResultLatestVersion,
+			LastRound: env.TxnInfo.LatestRound(),
+			TxnGroups: []simulation.TxnGroupResult{
+				{
+					Txns:              expectedTxnResults,
+					AppBudgetAdded:    uint64(700),
+					AppBudgetConsumed: ignoreAppBudgetConsumed,
+					UnnamedResources: &simulation.GroupResourceAssignment{
+						Resources: simulation.ResourceAssignment{
+							MaxAccounts:  proto.MaxAppTxnAccounts,
+							MaxAssets:    proto.MaxAppTxnForeignAssets,
+							MaxApps:      proto.MaxAppTxnForeignApps,
+							MaxBoxes:     proto.MaxAppBoxReferences,
+							MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+
+							Accounts: mapWithKeys(resources.accounts(), struct{}{}),
+							Assets:   mapWithKeys(resources.assets(), struct{}{}),
+							Apps:     mapWithKeys(resources.apps(), struct{}{}),
+							Boxes:    mapWithKeys(boxNamesToRefs(app, resources.boxes()), uint64(0)),
+						},
+					},
+					FailedAt: failedAt,
+				},
+			},
+			EvalOverrides: simulation.ResultEvalOverrides{
+				AllowUnnamedResources: true,
+			},
+		},
+	}
+	runSimulationTestCase(t, env, testCase)
+}
+
+func TestUnnamedResourcesLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
+	// be indexes into the foreign arrays, meaning we can't test the unnamed case.
+	for v := /*4*/ logic.LogicVersion; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			env := simulationtesting.PrepareSimulatorTest(t)
+			defer env.Close()
+
+			proto := env.TxnInfo.CurrentProtocolParams()
+
+			sender := env.Accounts[0]
+			otherAccounts := make([]basics.Address, len(env.Accounts)-1)
+			for i := range otherAccounts[:len(otherAccounts)-1] {
+				otherAccounts[i] = env.Accounts[i+1].Addr
+			}
+
+			assetCreator := env.Accounts[2].Addr
+			assets := make([]basics.AssetIndex, proto.MaxAppTxnForeignAssets+1)
+			for i := range assets {
+				assets[i] = env.CreateAsset(assetCreator, basics.AssetParams{Total: 100})
+			}
+
+			otherAppCreator := env.Accounts[4].Addr
+			otherApps := make([]basics.AppIndex, proto.MaxAppTxnForeignApps+1)
+			for i := range otherApps {
+				otherApps[i] = env.CreateApp(otherAppCreator, simulationtesting.AppParams{
+					// The program version here doesn't matter
+					ApprovalProgram:   "#pragma version 8\nint 1",
+					ClearStateProgram: "#pragma version 8\nint 1",
+				})
+			}
+
+			boxes := make([]string, proto.MaxAppBoxReferences+1)
+			for i := range boxes {
+				boxes[i] = fmt.Sprintf("box%d", i)
+			}
+
+			appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+				ApprovalProgram:   fmt.Sprintf(resourceLimitsTestProgram, v),
+				ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+			})
+
+			testResourceAccess := func(resources unnamedResourceArguments, expectedError ...string) {
+				t.Helper()
+				if len(expectedError) == 0 {
+					expectedError = []string{""}
+				}
+				testUnnamedResourceLimits(t, env, appID, resources, expectedError[0])
+			}
+
+			// Each test below will run against the environment we just set up. They will each run
+			// in separate simulations, so we can reuse the same environment and not have to worry
+			// about the effects of one test interfering with another.
+
+			// Exactly at account limit
+			testResourceAccess(
+				unnamedResourceArguments{}.addAccounts(otherAccounts[:proto.MaxAppTxnAccounts]...),
+			)
+			// Over account limit
+			testResourceAccess(
+				unnamedResourceArguments{}.
+					addAccounts(otherAccounts[:proto.MaxAppTxnAccounts+1]...).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[proto.MaxAppTxnAccounts]),
+			)
+
+			// Exactly at asset limit
+			testResourceAccess(
+				unnamedResourceArguments{}.addAssets(assets[:proto.MaxAppTxnForeignAssets]...),
+			)
+			// Over asset limit
+			testResourceAccess(
+				unnamedResourceArguments{}.
+					addAssets(assets[:proto.MaxAppTxnForeignAssets+1]...).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Asset %d", assets[proto.MaxAppTxnForeignAssets]),
+			)
+
+			// Exactly at app limit
+			testResourceAccess(
+				unnamedResourceArguments{}.addApps(otherApps[:proto.MaxAppTxnForeignApps]...),
+			)
+			// Over app limit
+			testResourceAccess(
+				unnamedResourceArguments{}.
+					addApps(otherApps[:proto.MaxAppTxnForeignApps+1]...).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable App %d", otherApps[proto.MaxAppTxnForeignApps]),
+			)
+
+			// Exactly at box limit
+			testResourceAccess(
+				unnamedResourceArguments{}.addBoxes(boxes[:proto.MaxAppBoxReferences]...),
+			)
+			// Over box limit
+			testResourceAccess(
+				unnamedResourceArguments{}.
+					addBoxes(boxes[:proto.MaxAppBoxReferences+1]...).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: invalid Box reference %#x", boxes[proto.MaxAppBoxReferences]),
+			)
+
+			// Update the below tests if these limits change
+			require.Equal(t, 8, proto.MaxAppTotalTxnReferences, "Consensus param changed, must update this test")
+			require.GreaterOrEqual(t, proto.MaxAppTxnAccounts, 2, "Consensus param changed, must update this test")
+			require.GreaterOrEqual(t, proto.MaxAppTxnForeignAssets, 2, "Consensus param changed, must update this test")
+			require.GreaterOrEqual(t, proto.MaxAppTxnForeignApps, 2, "Consensus param changed, must update this test")
+			require.GreaterOrEqual(t, proto.MaxAppBoxReferences, 2, "Consensus param changed, must update this test")
+
+			// 2 of each is at the limit for total references
+			atLimit := unnamedResourceArguments{}.
+				addAccounts(otherAccounts[:2]...).
+				addAssets(assets[:2]...).
+				addApps(otherApps[:2]...).
+				addBoxes(boxes[:2]...)
+			testResourceAccess(atLimit)
+
+			// Adding 1 more of each is over the limit
+			testResourceAccess(
+				atLimit.addAccounts(otherAccounts[2]).markLimitExceeded(),
+				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[2]),
+			)
+			testResourceAccess(
+				atLimit.addAssets(assets[2]).markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Asset %d", assets[2]),
+			)
+			testResourceAccess(
+				atLimit.addApps(otherApps[2]).markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable App %d", otherApps[2]),
+			)
+			testResourceAccess(
+				atLimit.addBoxes(boxes[2]).markLimitExceeded(),
+				fmt.Sprintf("logic eval error: invalid Box reference %#x", boxes[2]),
+			)
 		})
 	}
 }
