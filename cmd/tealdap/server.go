@@ -128,6 +128,23 @@ func (ds *DebugSession) handleRequest() error {
 	return nil
 }
 
+// TEALDAServerInterface abstract out the server behavior for dispatching
+// each viable request.  We define such interface to introduce multiple
+// implementations, including real runtime of DA and mock DA for testing.
+type TEALDAServerInterface interface {
+	onInitializeRequest(*dap.InitializeRequest)
+	onLaunchRequest(*dap.LaunchRequest)
+	onDisconnectRequest(*dap.DisconnectRequest)
+	onTerminateRequest(*dap.TerminateRequest)
+	onSetBreakpointsRequest(*dap.SetBreakpointsRequest)
+	onConfigurationDoneRequest(*dap.ConfigurationDoneRequest)
+	onContinueRequest(*dap.ContinueRequest)
+	onNextRequest(*dap.NextRequest)
+	onVariablesRequest(*dap.VariablesRequest)
+	onCancelRequest(*dap.CancelRequest)
+	onBreakpointLocationsRequest(*dap.BreakpointLocationsRequest)
+}
+
 // dispatchRequest launches a new goroutine to process each request
 // and send back events and responses.
 func (ds *DebugSession) dispatchRequest(request dap.Message) {

@@ -42,7 +42,8 @@ type SourcemapWithAppID struct {
 	appIDs    []basics.AppIndex
 }
 
-var AppIDtoSourcemap map[basics.AppIndex]*logic.SourceMap
+// Should be a map of a hash of something (e.g., program bytes) to app-id pair with sourcemap?
+// TODO we should decide the input format here
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(
