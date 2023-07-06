@@ -143,7 +143,8 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 	if empty {
 		// We made an app type in order to get a full ep, but that sets MinTealVersion=2
 		ep.TxnGroup[0].Txn.Type = "" // set it back
-		ep.MinAvmVersion = nil       // will recalculate in eval()
+		zero := uint64(0)
+		ep.MinAvmVersion = &zero
 	}
 	return ep
 }
@@ -3270,7 +3271,7 @@ func TestProgramTooNew(t *testing.T) {
 
 	t.Parallel()
 	var program [12]byte
-	vlen := binary.PutUvarint(program[:], evalMaxVersion+1)
+	vlen := binary.PutUvarint(program[:], LogicVersion+1)
 	testLogicBytes(t, program[:vlen], defaultEvalParams(),
 		"greater than max supported", "greater than max supported")
 }
@@ -3289,10 +3290,10 @@ func TestProgramProtoForbidden(t *testing.T) {
 
 	t.Parallel()
 	var program [12]byte
-	vlen := binary.PutUvarint(program[:], evalMaxVersion)
+	vlen := binary.PutUvarint(program[:], LogicVersion)
 	ep := defaultEvalParams()
 	ep.Proto = &config.ConsensusParams{
-		LogicSigVersion: evalMaxVersion - 1,
+		LogicSigVersion: LogicVersion - 1,
 	}
 	testLogicBytes(t, program[:vlen], ep, "greater than protocol", "greater than protocol")
 }

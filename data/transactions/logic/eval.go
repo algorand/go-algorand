@@ -48,9 +48,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// evalMaxVersion is the max version we can interpret and run
-const evalMaxVersion = LogicVersion
-
 // The constants below control opcode evaluation and MAY NOT be changed without
 // gating them by version. Old programs need to retain their old behavior.
 
@@ -204,6 +201,17 @@ func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 	return minVersion
 }
 
+// LsigBudgetExpectation determines how much of the pooled logicsig budget this
+// logicsig is expecting. 0 indicates that the program requests the default (the
+// the normal max budget), but <SOMEHOW> the program can indicate that it
+// expects less (allowing others to have more) or more budget (which will be
+// allowed if the total group expectations come in under the group allowance).
+func LsigBudgetExpectation(lsig transactions.LogicSig, proto *config.ConsensusParams) uint64 {
+	_, expects, _, _ := preambleCheck(lsig.Logic, proto, ModeSig)
+	// err is ignored because transaction was already WellFormed-checked
+	return expects
+}
+
 // LedgerForSignature represents the parts of Ledger that LogicSigs can see. It
 // only exposes things that consensus has already agreed upon, so it is
 // "stateless" for signature purposes.
@@ -311,6 +319,9 @@ type EvalParams struct {
 	// Total allowable inner txns in a group transaction (nil before inner pooling enabled)
 	pooledAllowedInners *int
 
+	// Budgets for each txn in a group. (if gi exceeds length, use normal maximum)
+	logicSigBudgets []int
+
 	// available contains resources that may be used even though they are not
 	// necessarily directly in the txn's "static arrays". Apps and ASAs go in if
 	// the app or asa was created earlier in the txgroup (empty until
@@ -364,16 +375,17 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		}
 	}
 
+	minAvmVersion := ComputeMinAvmVersion(txgroup)
+
 	// Make a simpler EvalParams that is good enough to evaluate LogicSigs.
 	if apps == 0 {
 		return &EvalParams{
-			TxnGroup: txgroup,
-			Proto:    proto,
-			Specials: specials,
+			TxnGroup:      txgroup,
+			Proto:         proto,
+			Specials:      specials,
+			MinAvmVersion: &minAvmVersion,
 		}
 	}
-
-	minAvmVersion := ComputeMinAvmVersion(txgroup)
 
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
@@ -423,6 +435,16 @@ func (ep *EvalParams) computeAvailability() *resources {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
 	}
 	return available
+}
+
+func (cx *EvalContext) minAvmVersionCheck() error {
+	if cx.MinAvmVersion == nil {
+		panic("very bad!")
+	}
+	if cx.version < *cx.MinAvmVersion {
+		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *cx.MinAvmVersion, cx.version)
+	}
+	return nil
 }
 
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
@@ -927,6 +949,9 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if params.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in contract eval")
 	}
+	if params.MinAvmVersion == nil {
+		return false, nil, errors.New("no min avm version in contract eval")
+	}
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
 	}
@@ -1033,6 +1058,9 @@ func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 	if params.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in signature eval")
 	}
+	if params.MinAvmVersion == nil {
+		return false, nil, errors.New("no min avm version in signature eval")
+	}
 	cx := EvalContext{
 		EvalParams: params,
 		runMode:    ModeSig,
@@ -1077,11 +1105,11 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	// Avoid returning for any reason until after cx.debugState is setup. That
 	// require cx to be minimally setup, too.
 
-	version, vlen, verr := versionCheck(program, cx.EvalParams)
-	// defer verr check until after cx and debugState is setup
+	version, _, pc, perr := preambleCheck(program, cx.Proto, cx.runMode)
+	// defer perr check until after cx and debugState is setup
 
 	cx.version = version
-	cx.pc = vlen
+	cx.pc = pc
 	// 16 is chosen to avoid growth for small programs, and so that repeated
 	// doublings lead to a number just a bit above 1000, the max stack height.
 	cx.Stack = make([]stackValue, 0, 16)
@@ -1117,8 +1145,12 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	if cx.txn.Lsig.Args != nil && len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
 		return false, errTooManyArgs
 	}
-	if verr != nil {
-		return false, verr
+	if perr != nil {
+		return false, perr
+	}
+
+	if err = cx.minAvmVersionCheck(); err != nil {
+		return false, err
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
@@ -1187,19 +1219,23 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 		return errLogicSigNotSupported
 	}
 
-	version, vlen, err := versionCheck(program, params)
+	version, _, pc, err := preambleCheck(program, params.Proto, mode)
 	if err != nil {
 		return err
 	}
 
 	var cx EvalContext
 	cx.version = version
-	cx.pc = vlen
+	cx.pc = pc
 	cx.EvalParams = params
 	cx.runMode = mode
 	cx.program = program
 	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
 	cx.instructionStarts = make([]bool, len(program)+1)
+
+	if err := cx.minAvmVersionCheck(); err != nil {
+		return err
+	}
 
 	maxCost := cx.remainingBudget()
 	staticCost := 0
@@ -1224,26 +1260,28 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	return nil
 }
 
-func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
-	version, vlen, err := transactions.ProgramVersion(program)
+func preambleCheck(program []byte, proto *config.ConsensusParams, mode RunMode) (version uint64, expects uint64, pc int, err error) {
+	version, pc, err = transactions.ProgramVersion(program)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	if version > evalMaxVersion {
-		return 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, evalMaxVersion)
+	if version > LogicVersion {
+		return 0, 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, LogicVersion)
 	}
-	if version > params.Proto.LogicSigVersion {
-		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+	if version > proto.LogicSigVersion {
+		return 0, 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, proto.LogicSigVersion)
 	}
 
-	if params.MinAvmVersion == nil {
-		minVersion := ComputeMinAvmVersion(params.TxnGroup)
-		params.MinAvmVersion = &minVersion
-	}
-	if version < *params.MinAvmVersion {
-		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinAvmVersion, version)
-	}
-	return version, vlen, nil
+	expects = 15000 // TODO: need a way to annotate programs with expected cost
+	/*
+		if version >= pairingVersion && mode == ModeSig {
+			expects, pc = binary.Uvarint(program[pc:])
+			if pc <= 0 {
+				return 0, 0, 0, errors.New("invalid budget expectation")
+			}
+		}
+	*/
+	return version, expects, pc, nil
 }
 
 func opCompat(expected, got avmType) bool {
@@ -1283,6 +1321,9 @@ func (cx *EvalContext) AppID() basics.AppIndex {
 
 func (cx *EvalContext) remainingBudget() int {
 	if cx.runMode == ModeSig {
+		if cx.groupIndex < len(cx.logicSigBudgets) {
+			return cx.logicSigBudgets[cx.groupIndex] - cx.cost
+		}
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
 

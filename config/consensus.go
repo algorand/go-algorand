@@ -112,6 +112,14 @@ type ConsensusParams struct {
 	// rather than check each individual app call is within the budget.
 	EnableAppCostPooling bool
 
+	// EnableLogicSigCostPooling specifies LogicSig budgets are pooled across a
+	// group, but unlike app budgets, such pooling must be explicit. The total
+	// available is len(group) * LogicSigMaxCost. The amount requested for a txn
+	// is LogicSigMaxCost by default, but can be changed with the `budget`
+	// opcode. A group is allowed if the total amount requested is less than
+	// what's available.
+	EnableLogicSigCostPooling bool
+
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//

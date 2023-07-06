@@ -59,24 +59,31 @@ const txnPerWorksetThreshold = 32
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
 const concurrentWorksets = 16
 
-// GroupContext is the set of parameters external to a transaction which
-// stateless checks are performed against.
+// GroupContext holds values used to evaluate the LogicSigs in a group.  The
+// first set are the parameters external to a transaction which could
+// potentially change the result of LogicSig evaluation. Example: If the
+// consensusVersion changes, a rule might change that matters. Certainly this is
+// _very_ rare, but we don't want to use the result of a LogicSig evaluation
+// across a protocol upgrade boundary.
 //
-// For efficient caching, these parameters should either be constant
-// or change slowly over time.
-//
-// Group data are omitted because they are committed to in the
-// transaction and its ID.
+// The second set are derived from the first set and from the transaction
+// data. They are stored here only for efficiency, not for correctness, so they
+// are not checked in Equal()
 type GroupContext struct {
+	// These three fields determine whether a logicsig must be re-evaluated.
 	specAddrs        transactions.SpecialAddresses
 	consensusVersion protocol.ConsensusVersion
-	consensusParams  config.ConsensusParams
 	minAvmVersion    uint64
-	signedGroupTxns  []transactions.SignedTxn
-	ledger           logic.LedgerForSignature
+
+	// These fields just hold useful data that ought not be recomputed.
+	consensusParams config.ConsensusParams
+	signedGroupTxns []transactions.SignedTxn
+	ledger          logic.LedgerForSignature
+	budgets         []int // logicsigs can "pool" their budgets, but do so explicitly
 }
 
 var errTxGroupInvalidFee = errors.New("txgroup fee requirement overflow")
+var errTxGroupInsuffientLsigBudget = errors.New("txgroup lsig expectations exceed available budget")
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
 var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
@@ -125,6 +132,33 @@ func (e *TxGroupError) Unwrap() error {
 	return e.err
 }
 
+// verifyCount gives the number of signature verifications
+func verifyCount(txn *transactions.SignedTxn) int {
+	if !txn.Sig.Blank() {
+		return 1
+	}
+	if !txn.Msig.Blank() {
+		return txn.Msig.Signatures()
+	}
+	if !txn.Lsig.Blank() {
+		if !txn.Lsig.Sig.Blank() {
+			return 1
+		}
+		if !txn.Lsig.Msig.Blank() {
+			return txn.Lsig.Msig.Signatures()
+		}
+		return 0
+	}
+	return 0
+	// stateproof txns have no sigs at all
+}
+
+// verifyPenalty is intended to be a rough estimate of the cost of verifying, in
+// opcode units. It's not actually drawn from the logic package, because we
+// don't want changes to propagate here if the cost is changed there (unless we
+// take a LOT of care).
+const verifyPenalty = 2000
+
 // PrepareGroupContext prepares a verification group parameter object for a given transaction
 // group.
 func PrepareGroupContext(group []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, ledger logic.LedgerForSignature) (*GroupContext, error) {
@@ -134,6 +168,54 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr *bookkeeping
 	consensusParams, ok := config.Consensus[contextHdr.CurrentProtocol]
 	if !ok {
 		return nil, protocol.Error(contextHdr.CurrentProtocol)
+	}
+	var budgets []int
+	if consensusParams.EnableLogicSigCostPooling {
+		budgets = make([]int, len(group))
+		totalExpectation := 0
+		for i := range group {
+			if !group[i].Lsig.Blank() {
+				expected := logic.LsigBudgetExpectation(group[i].Lsig, &consensusParams)
+				// sanity check that also means the value is small enough for
+				// `int` and that adding a handful together can't overflow.
+				if expected > uint64(consensusParams.MaxTxGroupSize)*consensusParams.LogicSigMaxCost {
+					return nil, errTxGroupInsuffientLsigBudget
+				}
+				if expected == 0 {
+					expected = consensusParams.LogicSigMaxCost
+				}
+				budgets[i] = int(expected)
+			}
+			totalExpectation += budgets[i]
+		}
+
+		available := 0
+		for i := range group {
+			contribution := int(consensusParams.LogicSigMaxCost) - verifyPenalty*verifyCount(&group[i])
+			switch {
+			case !group[i].Msig.Blank():
+				// We don't allow a negative contribution, because it would lead
+				// to the strange result that a logicsig txn could run on its
+				// own, but not in combination with another msig transaction
+				// that leeches away budget.
+				if contribution < 0 {
+					contribution = 0
+				}
+			case !group[i].Lsig.Blank():
+				// Even if expensive delegated logicsigs are used, we always
+				// allow an lsig to cover its own expectation if that
+				// expectation was in the original limit. This maintains
+				// backward compatibility.
+				if budgets[i] <= int(consensusParams.LogicSigMaxCost) &&
+					contribution < budgets[i] {
+					contribution = budgets[i]
+				}
+			}
+			available += contribution
+		}
+		if available < totalExpectation {
+			return nil, errTxGroupInsuffientLsigBudget
+		}
 	}
 	return &GroupContext{
 		specAddrs: transactions.SpecialAddresses{
@@ -145,6 +227,7 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr *bookkeeping
 		minAvmVersion:    logic.ComputeMinAvmVersion(transactions.WrapSignedTxnsWithAD(group)),
 		signedGroupTxns:  group,
 		ledger:           ledger,
+		budgets:          budgets,
 	}, nil
 }
 

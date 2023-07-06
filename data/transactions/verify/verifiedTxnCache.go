@@ -73,7 +73,7 @@ type VerifiedTransactionCache interface {
 type verifiedTransactionCache struct {
 	// Number of entries in each map (bucket).
 	entriesPerBucket int
-	// bucketsLock is the lock for syncornizing the access to the cache
+	// bucketsLock is the lock for synchronizing access to the cache
 	bucketsLock deadlock.Mutex
 	// buckets is the circular cache buckets buffer
 	buckets []map[transactions.Txid]*GroupContext
