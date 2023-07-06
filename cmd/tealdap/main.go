@@ -29,6 +29,10 @@ import (
 var networkInterface string
 var debuggerPort uint64
 var simulationResultFileName string
+
+// maybe pass in sourcemap together with appID in format
+// sourcemap.....,100,101,102
+// such that the sourcemap will not mismatch with appID
 var sourcemapFileNamesAndAppIDs []string
 
 // SourcemapWithAppID is the struct containing the sourcemap and appIDs
@@ -69,5 +73,10 @@ var rootCmd = &cobra.Command{
 
 func main() {
 	fmt.Println("start debugging")
+	// TODO haven't start server yet, was thinking of testing:
+	// how to bring up the server for testing, and bring down after the test
+
+	// I suppose once we run `launch`, namely dap.LaunchResponse,
+	// the server just run all the way to end (if we let through all the stop points).
 	os.Exit(0)
 }
