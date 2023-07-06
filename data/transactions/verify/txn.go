@@ -252,7 +252,7 @@ const stateProofTxn sigOrTxnType = 4
 // checkTxnSigTypeCounts checks the number of signature types and reports an error in case of a violation
 func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType sigOrTxnType, err *TxGroupError) {
 	numSigCategories := 0
-	if s.Sig != (crypto.Signature{}) {
+	if !s.Sig.Blank() {
 		numSigCategories++
 		sigType = regularSig
 	}
@@ -295,15 +295,10 @@ func stxnCoreChecks(s *transactions.SignedTxn, groupIndex int, groupCtx *GroupCo
 		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
 			return &TxGroupError{err: fmt.Errorf("multisig validation failed: %w", err), GroupIndex: groupIndex, Reason: TxGroupErrorReasonMsigNotWellFormed}
 		}
-		counter := 0
-		for _, subsigi := range s.Msig.Subsigs {
-			if (subsigi.Sig != crypto.Signature{}) {
-				counter++
-			}
-		}
-		if counter <= 4 {
+		sigs := s.Msig.Signatures()
+		if sigs <= 4 {
 			msigLessOrEqual4.Inc(nil)
-		} else if counter <= 10 {
+		} else if sigs <= 10 {
 			msigLessOrEqual10.Inc(nil)
 		} else {
 			msigMore10.Inc(nil)
@@ -375,7 +370,7 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 
 	hasMsig := false
 	numSigs := 0
-	if lsig.Sig != (crypto.Signature{}) {
+	if !lsig.Sig.Blank() {
 		numSigs++
 	}
 	if !lsig.Msig.Blank() {
@@ -403,15 +398,10 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 		if err := crypto.MultisigBatchPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); err != nil {
 			return fmt.Errorf("logic multisig validation failed: %w", err)
 		}
-		counter := 0
-		for _, subsigi := range lsig.Msig.Subsigs {
-			if (subsigi.Sig != crypto.Signature{}) {
-				counter++
-			}
-		}
-		if counter <= 4 {
+		sigs := lsig.Msig.Signatures()
+		if sigs <= 4 {
 			msigLsigLessOrEqual4.Inc(nil)
-		} else if counter <= 10 {
+		} else if sigs <= 10 {
 			msigLsigLessOrEqual10.Inc(nil)
 		} else {
 			msigLsigMore10.Inc(nil)
