@@ -3250,6 +3250,17 @@ func TestUnnamedResources(t *testing.T) {
 				})
 				stxn := txn.Txn().Sign(sender.Sk)
 
+				if expectedUnnamedResourceTxnAssignment != nil {
+					localAccounts := len(expectedUnnamedResourceTxnAssignment.Accounts)
+					localAssets := len(expectedUnnamedResourceTxnAssignment.Assets)
+					localApps := len(expectedUnnamedResourceTxnAssignment.Apps)
+					// Skip boxes, they are global only
+					expectedUnnamedResourceGroupAssignment.Resources.MaxAccounts -= localAccounts
+					expectedUnnamedResourceGroupAssignment.Resources.MaxAssets -= localAssets
+					expectedUnnamedResourceGroupAssignment.Resources.MaxApps -= localApps
+					expectedUnnamedResourceGroupAssignment.Resources.MaxTotalRefs -= localAccounts + localAssets + localApps
+				}
+
 				return simulationTestCase{
 					input: simulation.Request{
 						TxnGroups:             [][]transactions.SignedTxn{{stxn}},
@@ -3386,6 +3397,8 @@ int 1
 							testAppUser: {},
 						},
 					}
+					expectedUnnamedResourceAssignment.Resources.MaxAccounts--
+					expectedUnnamedResourceAssignment.Resources.MaxTotalRefs--
 				}
 
 				return simulationTestCase{
@@ -4256,6 +4269,10 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			Assets:   mapWithKeys(resources.assets(), struct{}{}),
 			Apps:     mapWithKeys(resources.apps(), struct{}{}),
 		}
+		expectedGlobalResources.MaxAccounts -= len(localResources.Accounts)
+		expectedGlobalResources.MaxAssets -= len(localResources.Assets)
+		expectedGlobalResources.MaxApps -= len(localResources.Apps)
+		expectedGlobalResources.MaxTotalRefs -= len(localResources.Accounts) + len(localResources.Assets) + len(localResources.Apps)
 		if localResources.HasResources() {
 			expectedTxnResults[0].UnnamedResources = &localResources
 		}
@@ -4404,13 +4421,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 			}
 
 			numResourceTypes := 3 // accounts, assets, apps
-			if v >= 9 {
-				// We purpusefully wait for v9 to test boxes, even though they are available
-				// starting in v8. This is because boxes are counted against the global resource
-				// limit, and in v8 other resources are still counted against the local transaction
-				// limit. As a result, we actually end up being able to reference MORE resources
-				// than we should be able to. This is a caveat of the unnamed resource limits
-				// implementation.
+			if v >= 8 {
 				numResourceTypes++ // boxes
 			}
 			var atLimit unnamedResourceArguments
@@ -4444,7 +4455,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				atLimit.addApps(otherApps[len(otherApps)-1]).markLimitExceeded(),
 				fmt.Sprintf("logic eval error: unavailable App %d", otherApps[len(otherApps)-1]),
 			)
-			if v >= 9 {
+			if v >= 8 {
 				// See note above about why we wait until v9 to test boxes.
 				testResourceAccess(
 					atLimit.addBoxes(boxes[len(boxes)-1]).markLimitExceeded(),

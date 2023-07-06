@@ -119,6 +119,15 @@ func (a *ResourceAssignment) addAccount(addr basics.Address) bool {
 	return true
 }
 
+func (a *ResourceAssignment) removeAccountSlot() bool {
+	if len(a.Accounts) >= a.MaxAccounts || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
+		return false
+	}
+	a.MaxAccounts--
+	a.MaxTotalRefs--
+	return true
+}
+
 func (a *ResourceAssignment) hasAsset(aid basics.AssetIndex) bool {
 	// nil map lookup is ok
 	_, ok := a.Assets[aid]
@@ -133,6 +142,15 @@ func (a *ResourceAssignment) addAsset(aid basics.AssetIndex) bool {
 		a.Assets = make(map[basics.AssetIndex]struct{})
 	}
 	a.Assets[aid] = struct{}{}
+	return true
+}
+
+func (a *ResourceAssignment) removeAssetSlot() bool {
+	if len(a.Assets) >= a.MaxAssets || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
+		return false
+	}
+	a.MaxAssets--
+	a.MaxTotalRefs--
 	return true
 }
 
@@ -164,6 +182,15 @@ func (a *ResourceAssignment) addApp(aid basics.AppIndex, ep *logic.EvalParams, p
 		a.Apps = make(map[basics.AppIndex]struct{})
 	}
 	a.Apps[aid] = struct{}{}
+	return true
+}
+
+func (a *ResourceAssignment) removeAppSlot() bool {
+	if len(a.Apps) >= a.MaxApps || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
+		return false
+	}
+	a.MaxApps--
+	a.MaxTotalRefs--
 	return true
 }
 
@@ -282,6 +309,11 @@ func (a *GroupResourceAssignment) removePrivateFields() {
 
 func (a *GroupResourceAssignment) hasAccount(addr basics.Address, ep *logic.EvalParams, programVersion uint64, globalSharing bool, txnIndex int) bool {
 	if globalSharing {
+		for i := range a.localTxnResources {
+			if a.localTxnResources[i].hasAccount(addr, ep, programVersion) {
+				return true
+			}
+		}
 		return a.Resources.hasAccount(addr, ep, programVersion)
 	}
 	return a.localTxnResources[txnIndex].hasAccount(addr, ep, programVersion)
@@ -291,11 +323,33 @@ func (a *GroupResourceAssignment) addAccount(addr basics.Address, globalSharing 
 	if globalSharing {
 		return a.Resources.addAccount(addr)
 	}
-	return a.localTxnResources[txnIndex].addAccount(addr)
+	if !a.localTxnResources[txnIndex].addAccount(addr) {
+		return false
+	}
+	if a.Resources.hasAccount(addr, nil, 0) {
+		// It's redundant to list a resources in both the global and local assignment, so remove it
+		// from global. The below call to a.Resources.removeAccountSlot() will revert the changes to
+		// a.Resources.MaxAccounts and a.Resources.MaxTotalRefs.
+		delete(a.Resources.Accounts, addr)
+		a.Resources.MaxAccounts++
+		a.Resources.MaxTotalRefs++
+	}
+	// This ensures that the global assignment reduces in size if a resource is assigned locally.
+	if a.Resources.removeAccountSlot() {
+		return true
+	}
+	// Undo the local assignment if global is full.
+	delete(a.localTxnResources[txnIndex].Accounts, addr)
+	return false
 }
 
 func (a *GroupResourceAssignment) hasAsset(aid basics.AssetIndex, globalSharing bool, txnIndex int) bool {
 	if globalSharing {
+		for i := range a.localTxnResources {
+			if a.localTxnResources[i].hasAsset(aid) {
+				return true
+			}
+		}
 		return a.Resources.hasAsset(aid)
 	}
 	return a.localTxnResources[txnIndex].hasAsset(aid)
@@ -305,11 +359,33 @@ func (a *GroupResourceAssignment) addAsset(aid basics.AssetIndex, globalSharing 
 	if globalSharing {
 		return a.Resources.addAsset(aid)
 	}
-	return a.localTxnResources[txnIndex].addAsset(aid)
+	if !a.localTxnResources[txnIndex].addAsset(aid) {
+		return false
+	}
+	if a.Resources.hasAsset(aid) {
+		// It's redundant to list a resources in both the global and local assignment, so remove it
+		// from global. The below call to a.Resources.removeAssetSlot() will revert the changes to
+		// a.Resources.MaxAssets and a.Resources.MaxTotalRefs.
+		delete(a.Resources.Assets, aid)
+		a.Resources.MaxAssets++
+		a.Resources.MaxTotalRefs++
+	}
+	// This ensures that the global assignment reduces in size if a resource is assigned locally.
+	if a.Resources.removeAssetSlot() {
+		return true
+	}
+	// Undo the local assignment if global is full.
+	delete(a.localTxnResources[txnIndex].Assets, aid)
+	return false
 }
 
 func (a *GroupResourceAssignment) hasApp(aid basics.AppIndex, globalSharing bool, txnIndex int) bool {
 	if globalSharing {
+		for i := range a.localTxnResources {
+			if a.localTxnResources[i].hasApp(aid) {
+				return true
+			}
+		}
 		return a.Resources.hasApp(aid)
 	}
 	return a.localTxnResources[txnIndex].hasApp(aid)
@@ -319,16 +395,33 @@ func (a *GroupResourceAssignment) addApp(aid basics.AppIndex, ep *logic.EvalPara
 	if globalSharing {
 		return a.Resources.addApp(aid, ep, programVersion)
 	}
-	return a.localTxnResources[txnIndex].addApp(aid, ep, programVersion)
+	if !a.localTxnResources[txnIndex].addApp(aid, ep, programVersion) {
+		return false
+	}
+	if a.Resources.hasApp(aid) {
+		// It's redundant to list a resources in both the global and local assignment, so remove it
+		// from global. The below call to a.Resources.removeAppSlot() will revert the changes to
+		// a.Resources.MaxApps and a.Resources.MaxTotalRefs.
+		delete(a.Resources.Apps, aid)
+		a.Resources.MaxApps++
+		a.Resources.MaxTotalRefs++
+	}
+	// This ensures that the global assignment reduces in size if a resource is assigned locally.
+	if a.Resources.removeAppSlot() {
+		return true
+	}
+	// Undo the local assignment if global is full.
+	delete(a.localTxnResources[txnIndex].Apps, aid)
+	return false
 }
 
 func (a *GroupResourceAssignment) hasBox(app basics.AppIndex, name string) bool {
-	// all boxes are global, never consult PerTxnResources
+	// All boxes are global, never consult localTxnResources
 	return a.Resources.hasBox(app, name)
 }
 
 func (a *GroupResourceAssignment) addBox(app basics.AppIndex, name string, readSize, additionalReadBudget, bytesPerBoxRef uint64) bool {
-	// all boxes are global, never consult PerTxnResources
+	// All boxes are global, never consult localTxnResources
 	return a.Resources.addBox(app, name, readSize, additionalReadBudget, bytesPerBoxRef)
 }
 
