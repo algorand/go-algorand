@@ -114,8 +114,7 @@ func commitSyncPartialComplete(t *testing.T, oa *onlineAccounts, ml *mockLedgerF
 	}
 }
 
-func newBlock(t *testing.T, ml *mockLedgerForTracker, testProtocolVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, rnd basics.Round, base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, prevTotals ledgercore.AccountTotals) (newTotals ledgercore.AccountTotals) {
-	rewardLevel := uint64(0)
+func newBlockWithRewards(t *testing.T, ml *mockLedgerForTracker, testProtocolVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, rnd basics.Round, base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, rewardLevel uint64, prevTotals ledgercore.AccountTotals) (newTotals ledgercore.AccountTotals) {
 	newTotals = ledgertesting.CalculateNewRoundAccountTotals(t, updates, rewardLevel, protoParams, base, prevTotals)
 
 	blk := bookkeeping.Block{
@@ -132,6 +131,10 @@ func newBlock(t *testing.T, ml *mockLedgerForTracker, testProtocolVersion protoc
 	ml.addBlock(blockEntry{block: blk}, delta)
 
 	return newTotals
+}
+
+func newBlock(t *testing.T, ml *mockLedgerForTracker, testProtocolVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, rnd basics.Round, base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, prevTotals ledgercore.AccountTotals) (newTotals ledgercore.AccountTotals) {
+	return newBlockWithRewards(t, ml, testProtocolVersion, protoParams, rnd, base, updates, 0, prevTotals)
 }
 
 // TestAcctOnline checks the online accounts tracker correctly stores accont change history
@@ -2177,4 +2180,115 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			a.Equal(int(conf.MaxAcctLookback), len(oa.deltas))
 		}
 	}
+}
+
+// TestAcctOnline_OnlineAcctsExpiredByRound ensures that onlineAcctsExpiredByRound
+// can retrieve data from DB even if trackersDB flushed and the requested round is in
+// extended history controlled by voters' lowest round.
+// The test uses non-empty rewards in order to ensure onlineAcctsExpiredByRound internally fetches
+// actual non-empty rewards data from DB.
+func TestAcctOnline_OnlineAcctsExpiredByRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const seedLookback = 2
+	const seedInteval = 3
+	const maxBalLookback = 2 * seedLookback * seedInteval
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-OnlineAcctsExpiredByRound")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = maxBalLookback
+	protoParams.SeedLookback = seedLookback
+	protoParams.SeedRefreshInterval = seedInteval
+	protoParams.StateProofInterval = 16
+	protoParams.RewardsRateRefreshInterval = 10
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	maxRound := 5*basics.Round(protoParams.StateProofInterval) + 1
+	targetRound := basics.Round(protoParams.StateProofInterval * 2)
+
+	const numAccts = 20
+	allAccts := make([]basics.BalanceRecord, numAccts)
+	genesisAccts := []map[basics.Address]basics.AccountData{{}}
+	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
+	numExpiredAccts := 5
+	totalExpiredStake := basics.MicroAlgos{Raw: 0}
+	for i := 0; i < numAccts; i++ {
+		allAccts[i] = basics.BalanceRecord{
+			Addr:        ledgertesting.RandomAddress(),
+			AccountData: ledgertesting.RandomOnlineAccountData(0),
+		}
+		// make some accounts to expire before the targetRound
+		if i < numExpiredAccts {
+			allAccts[i].AccountData.VoteLastValid = targetRound - 1
+			totalExpiredStake.Raw += allAccts[i].MicroAlgos.Raw
+		}
+		genesisAccts[0][allAccts[i].Addr] = allAccts[i].AccountData
+	}
+
+	addSinkAndPoolAccounts(genesisAccts)
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, genesisAccts)
+	defer ml.Close()
+	conf := config.GetDefaultLocal()
+	conf.MaxAcctLookback = maxBalLookback
+
+	au, oa := newAcctUpdates(t, ml, conf)
+	defer oa.close()
+	_, totals, err := au.LatestTotals()
+	require.NoError(t, err)
+
+	accounts := genesisAccts
+	var updates ledgercore.AccountDeltas
+	base := accounts[0]
+
+	// add some blocks to cover few stateproof periods
+	for i := basics.Round(1); i <= maxRound; i++ {
+		newAccts := applyPartialDeltas(base, updates)
+		accounts = append(accounts, newAccts)
+		totals = newBlockWithRewards(t, ml, testProtocolVersion, protoParams, i, base, updates, uint64(i), totals)
+		base = newAccts
+	}
+
+	// ensure voters kicked in
+	require.Greater(t, len(oa.voters.votersForRoundCache), 1)
+	lowestRound := oa.voters.lowestRound(maxRound)
+	require.Equal(t, basics.Round(protoParams.StateProofInterval), lowestRound)
+
+	// commit max possible number of rounds
+	commitSync(t, oa, ml, maxRound)
+	// check voters did not allow to remove online accounts and params data after commit
+	require.Equal(t, lowestRound, oa.voters.lowestRound(maxRound))
+
+	// check the stateproof interval 2 not in deltas
+	offset, err := oa.roundOffset(targetRound)
+	require.Error(t, err)
+	var roundOffsetError *RoundOffsetError
+	require.ErrorAs(t, err, &roundOffsetError)
+	require.Zero(t, offset)
+
+	offset, err = oa.roundParamsOffset(targetRound)
+	require.Error(t, err)
+	require.ErrorAs(t, err, &roundOffsetError)
+	require.Zero(t, offset)
+
+	// but the DB has data
+	roundParamsData, err := oa.accountsq.LookupOnlineRoundParams(targetRound)
+	require.NoError(t, err)
+	require.NotEmpty(t, roundParamsData)
+
+	// but still available for lookup via onlineAcctsExpiredByRound
+	expAccts, err := oa.onlineAcctsExpiredByRound(targetRound, targetRound+10)
+	require.NoError(t, err)
+	require.Len(t, expAccts, numExpiredAccts)
+
+	var expiredStake basics.MicroAlgos
+	for _, expAcct := range expAccts {
+		expiredStake.Raw += expAcct.MicroAlgosWithRewards.Raw
+	}
+
+	// ensure onlineAcctsExpiredByRound fetched proto and rewards level and it recalculated
+	require.Greater(t, expiredStake.Raw, totalExpiredStake.Raw)
 }

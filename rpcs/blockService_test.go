@@ -19,6 +19,7 @@ package rpcs
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,6 +44,7 @@ import (
 
 type mockUnicastPeer struct {
 	responseTopics network.Topics
+	outMsg         network.OutgoingMessage
 }
 
 func (mup *mockUnicastPeer) GetAddress() string {
@@ -62,8 +64,9 @@ func (mup *mockUnicastPeer) GetConnectionLatency() time.Duration {
 func (mup *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics network.Topics) (resp *network.Response, e error) {
 	return nil, nil
 }
-func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, topics network.Topics) (e error) {
-	mup.responseTopics = topics
+func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, outMsg network.OutgoingMessage) (e error) {
+	mup.responseTopics = outMsg.Topics
+	mup.outMsg = outMsg
 	return nil
 }
 
@@ -310,7 +313,7 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	config := config.GetDefaultLocal()
 	bs1 := MakeBlockService(log1, config, ledger1, net1, "test-genesis-ID")
 	bs2 := MakeBlockService(log2, config, ledger2, net2, "test-genesis-ID")
-	// set the meory cap so that it can serve only 1 block at a time
+	// set the memory cap so that it can serve only 1 block at a time
 	bs1.memoryCap = 250
 	bs2.memoryCap = 250
 
@@ -407,6 +410,66 @@ forloop:
 	// Second node cannot redirect, it returns retry-after when over capacity
 	require.False(t, strings.Contains(logBuffer2.String(), "redirectRequest: redirected block request to"))
 	require.True(t, strings.Contains(logBuffer2.String(), "ServeHTTP: returned retry-after: block service memory over capacity"))
+}
+
+// TestWsBlockLimiting ensures that limits are applied correctly on the websocket side of the service
+func TestWsBlockLimiting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+	logBuffer := bytes.NewBuffer(nil)
+	log.SetOutput(logBuffer)
+
+	ledger := makeLedger(t, "l1")
+	defer ledger.Close()
+	addBlock(t, ledger)
+	addBlock(t, ledger)
+
+	net1 := &httpTestPeerSource{}
+
+	config := config.GetDefaultLocal()
+	bs1 := MakeBlockService(log, config, ledger, net1, "test-genesis-ID")
+	// set the memory cap so that it can serve only 1 block at a time
+	bs1.memoryCap = 250
+
+	peer := mockUnicastPeer{}
+	reqMsg := network.IncomingMessage{
+		Sender: &peer,
+		Tag:    protocol.Tag("UE"),
+	}
+	roundBin := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(roundBin, uint64(2))
+	topics := network.Topics{
+		network.MakeTopic(RequestDataTypeKey,
+			[]byte(BlockAndCertValue)),
+		network.MakeTopic(
+			RoundKey,
+			roundBin),
+	}
+	reqMsg.Data = topics.MarshallTopics()
+	require.Zero(t, bs1.wsMemoryUsed)
+	bs1.handleCatchupReq(context.Background(), reqMsg)
+	// We should have received the message into the mock peer and the block service should have memoryUsed > 0
+	data, found := peer.responseTopics.GetValue(BlockDataKey)
+	require.True(t, found)
+	blk, _, err := ledger.EncodedBlockCert(basics.Round(2))
+	require.NoError(t, err)
+	require.Equal(t, data, blk)
+	require.Positive(t, bs1.wsMemoryUsed)
+
+	// Before making a new request save the callback since the new failed message will overwrite it in the mock peer
+	callback := peer.outMsg.OnRelease
+
+	// Now we should be over the max and the block service should not return a block
+	// and should return an error instead
+	bs1.handleCatchupReq(context.Background(), reqMsg)
+	_, found = peer.responseTopics.GetValue(network.ErrorKey)
+	require.True(t, found)
+
+	// Now call the callback to free up memUsed
+	require.Nil(t, peer.outMsg.OnRelease)
+	callback()
+	require.Zero(t, bs1.wsMemoryUsed)
 }
 
 // TestRedirectExceptions tests exception cases:

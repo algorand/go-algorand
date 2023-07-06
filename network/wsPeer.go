@@ -175,6 +175,9 @@ type Response struct {
 
 type sendMessages struct {
 	msgs []sendMessage
+
+	// onRelease function is called when the message is released either by being sent or discarded.
+	onRelease func()
 }
 
 type wsPeer struct {
@@ -312,7 +315,7 @@ type UnicastPeer interface {
 	// Version returns the matching version from network.SupportedProtocolVersions
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
-	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
+	Respond(ctx context.Context, reqMsg IncomingMessage, outMsg OutgoingMessage) (e error)
 }
 
 // TCPInfoUnicastPeer exposes information about the underlying connection if available on the platform
@@ -388,7 +391,7 @@ func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
 }
 
 // Respond sends the response of a request message
-func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseTopics Topics) (e error) {
+func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, outMsg OutgoingMessage) (e error) {
 
 	// Get the hash/key of the request message
 	requestHash := hashTopics(reqMsg.Data)
@@ -396,7 +399,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	// Add the request hash
 	requestHashData := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(requestHashData, requestHash)
-	responseTopics = append(responseTopics, Topic{key: requestHashKey, data: requestHashData})
+	responseTopics := append(outMsg.Topics, Topic{key: requestHashKey, data: requestHashData})
 
 	// Serialize the topics
 	serializedMsg := responseTopics.MarshallTopics()
@@ -411,11 +414,17 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	}
 
 	select {
-	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
+	case wp.sendBufferBulk <- sendMessages{msgs: msg, onRelease: outMsg.OnRelease}:
 	case <-wp.closing:
+		if outMsg.OnRelease != nil {
+			outMsg.OnRelease()
+		}
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
 	case <-ctx.Done():
+		if outMsg.OnRelease != nil {
+			outMsg.OnRelease()
+		}
 		return ctx.Err()
 	}
 	return nil
@@ -715,6 +724,9 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 }
 
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
+	if msgs.onRelease != nil {
+		defer msgs.onRelease()
+	}
 	for _, msg := range msgs.msgs {
 		select {
 		case <-msg.ctx.Done():
@@ -922,6 +934,21 @@ func (wp *wsPeer) Close(deadline time.Time) {
 		if err != nil {
 			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
 		}
+	}
+
+	// We need to loop through all of the messages with callbacks still in the send queue and call them
+	// to ensure that state of counters such as wsBlockBytesUsed is correct.
+L:
+	for {
+		select {
+		case msgs := <-wp.sendBufferBulk:
+			if msgs.onRelease != nil {
+				msgs.onRelease()
+			}
+		default:
+			break L
+		}
+
 	}
 	// now call all registered closers
 	for _, f := range wp.closers {
