@@ -244,7 +244,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
-	if simulatorTracer.result.EvalOverrides.AllowUnnamedResources {
+	if simulatorTracer.result.TxnGroups[0].UnnamedResources != nil {
 		// Remove private fields for easier test comparison
 		simulatorTracer.result.TxnGroups[0].UnnamedResources.removePrivateFields()
 		for i := range simulatorTracer.result.TxnGroups[0].Txns {
