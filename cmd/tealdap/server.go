@@ -469,15 +469,7 @@ func (ds *DebugSession) onStackTraceRequest(request *dap.StackTraceRequest) {
 }
 
 func (ds *DebugSession) onScopesRequest(request *dap.ScopesRequest) {
-	response := &dap.ScopesResponse{}
-	response.Response = *newResponse(request.Seq, request.Command)
-	response.Body = dap.ScopesResponseBody{
-		Scopes: []dap.Scope{
-			{Name: "Local", VariablesReference: 1000, Expensive: false},
-			{Name: "Global", VariablesReference: 1001, Expensive: true},
-		},
-	}
-	ds.send(response)
+	ds.send(newErrorResponse(request.Seq, request.Command, "ScopeRequest is not yet supported"))
 }
 
 func (ds *DebugSession) onVariablesRequest(request *dap.VariablesRequest) {
@@ -509,11 +501,7 @@ func (ds *DebugSession) onSourceRequest(request *dap.SourceRequest) {
 }
 
 func (ds *DebugSession) onThreadsRequest(request *dap.ThreadsRequest) {
-	response := &dap.ThreadsResponse{}
-	response.Response = *newResponse(request.Seq, request.Command)
-	response.Body = dap.ThreadsResponseBody{Threads: []dap.Thread{{Id: 1, Name: "main"}}}
-	ds.send(response)
-
+	ds.send(newErrorResponse(request.Seq, request.Command, "ThreadRequest is not yet supported"))
 }
 
 func (ds *DebugSession) onTerminateThreadsRequest(request *dap.TerminateThreadsRequest) {
