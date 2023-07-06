@@ -212,14 +212,7 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) 
 	case regularSig:
 		return 1, nil
 	case multiSig:
-		sig := stx.Msig
-		batchSigs := uint64(0)
-		for _, subsigi := range sig.Subsigs {
-			if (subsigi.Sig != crypto.Signature{}) {
-				batchSigs++
-			}
-		}
-		return batchSigs, nil
+		return uint64(stx.Msig.Signatures()), nil
 	case logicSig:
 		// Currently the sigs in here are not batched. Something to consider later.
 		return 0, nil
