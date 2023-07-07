@@ -9,6 +9,3 @@ tx_pay_fraction: 1.0
 # payment config
 pay_acct_create_fraction: 0.02
 pay_xfer_fraction: 0.98
-
-# asset config must be 1.0
-asset_create_fraction: 1.0

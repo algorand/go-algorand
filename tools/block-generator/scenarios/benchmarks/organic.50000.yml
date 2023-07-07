@@ -27,7 +27,3 @@ app_swap_fraction: 0.0
 app_boxes_create_fraction: 0.01
 app_boxes_optin_fraction: 0.1
 app_boxes_call_fraction: 0.89
-
-# app swap config
-app_swap_create_fraction: 1.0
-
