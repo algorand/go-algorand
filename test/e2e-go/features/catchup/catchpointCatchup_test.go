@@ -536,28 +536,24 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	a.NoError(err)
 	targetCatchpointRound := status.LastRound
 
-	// ensure the catchpoint is created for targetCatchpointRound
-	timer := time.NewTimer(100 * time.Second)
-outer:
-	for {
+	var round basics.Round
+	catchpointConfirmed := false
+	for t := 0; t < 1000; t++ {
 		status, err = relayClient.Status()
 		a.NoError(err)
 
-		var round basics.Round
 		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
 			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
 			a.NoError(err)
 			if uint64(round) >= targetCatchpointRound {
+				catchpointConfirmed = true
 				break
 			}
 		}
-		select {
-		case <-timer.C:
-			a.Failf("timeout waiting on a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
-			break outer
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	if !catchpointConfirmed {
+		a.Failf("timeout waiting on a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
 	}
 
 	// let the primary node catchup
