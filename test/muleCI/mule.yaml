@@ -125,9 +125,8 @@ tasks:
     agent: cicd.ubuntu.arm
     target: ci-build
 
-  - task: docker.Make
+  - task: shell.Make
     name: archive
-    agent: cicd.centos8.amd64
     target: archive
 
   - task: docker.Make
