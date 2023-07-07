@@ -57,6 +57,10 @@ func makeSampleEnvWithVersion(version uint64) (*EvalParams, *transactions.Transa
 	if version >= appsEnabledVersion {
 		firstTxn.Txn.Type = protocol.ApplicationCallTx
 	}
+	// avoid putting in a RekeyTo field if version < rekeyingEnabledVersion
+	if version < rekeyingEnabledVersion {
+		firstTxn.Txn.RekeyTo = basics.Address{}
+	}
 	ep := defaultEvalParamsWithVersion(version, makeSampleTxnGroup(firstTxn)...)
 	ledger := NewLedger(nil)
 	ep.SigLedger = ledger
@@ -2845,11 +2849,11 @@ func TestReturnTypes(t *testing.T) {
 				ep.ioBudget = 50
 
 				cx := EvalContext{
-					EvalParams:   ep,
-					runModeFlags: m,
-					groupIndex:   1,
-					txn:          &ep.TxnGroup[1],
-					appID:        300,
+					EvalParams: ep,
+					runMode:    m,
+					groupIndex: 1,
+					txn:        &ep.TxnGroup[1],
+					appID:      300,
 				}
 
 				// These set conditions for some ops that examine the group.
