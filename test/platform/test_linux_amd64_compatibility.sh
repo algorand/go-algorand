@@ -9,7 +9,7 @@ END_FG_COLOR=$(tput sgr0 2>/dev/null)
 OS_LIST=(
     centos:7
     quay.io/centos/centos:stream8
-    fedora:28
+    fedora:38
     ubuntu:20.04
     ubuntu:22.04
 )
