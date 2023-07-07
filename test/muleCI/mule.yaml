@@ -248,7 +248,7 @@ jobs:
   archive-all:
     tasks:
       - stash.Unstash.packages
-      - docker.Make.archive
+      - shell.Make.archive
   package-docker:
     tasks:
       - docker.Make.docker-image
