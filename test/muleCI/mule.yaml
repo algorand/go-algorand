@@ -125,8 +125,9 @@ tasks:
     agent: cicd.ubuntu.arm
     target: ci-build
 
-  - task: shell.Make
+  - task: docker.Make
     name: archive
+    agent: cicd.ubuntu.amd64
     target: archive
 
   - task: docker.Make
@@ -247,7 +248,7 @@ jobs:
   archive-all:
     tasks:
       - stash.Unstash.packages
-      - shell.Make.archive
+      - docker.Make.archive
   package-docker:
     tasks:
       - docker.Make.docker-image
