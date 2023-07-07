@@ -158,6 +158,17 @@ func run() int {
 	}
 	defer fileLock.Unlock()
 
+	// Delete legaxy indexer.sqlite file if it happens to exist
+	indexerDBPath := filepath.Join(absolutePath, genesis.ID(), "indexer.sqlite")
+
+	if _, idxFilePathErr := os.Stat(indexerDBPath); idxFilePathErr == nil {
+		if idxFileRemoveErr := os.Remove(indexerDBPath); idxFileRemoveErr != nil {
+			fmt.Fprintln(os.Stderr, "Error removing indexer.sqlite file from Data directory", idxFileRemoveErr)
+		} else {
+			fmt.Fprintln(os.Stdout, "Removed legacy indexer.sqlite file from data directory")
+		}
+	}
+
 	cfg, err := config.LoadConfigFromDisk(absolutePath)
 	if err != nil && !os.IsNotExist(err) {
 		// log is not setup yet, this will log to stderr
