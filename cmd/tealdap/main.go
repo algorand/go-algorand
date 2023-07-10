@@ -77,6 +77,12 @@ func main() {
 	// TODO haven't start server yet, was thinking of testing:
 	// how to bring up the server for testing, and bring down after the test
 
+	err := server("55551")
+
+	if err != nil {
+		os.Exit(1)
+	}
+
 	// I suppose once we run `launch`, namely dap.LaunchResponse,
 	// the server just run all the way to end (if we let through all the stop points).
 	os.Exit(0)

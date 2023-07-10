@@ -55,6 +55,8 @@ import (
 	"github.com/google/go-dap"
 )
 
+var shutdownChannel chan bool
+
 // server starts a server that listens on a specified port
 // and blocks indefinitely. This server can accept multiple
 // client connections at the same time.
@@ -66,6 +68,8 @@ func server(port string) error {
 	defer listener.Close()
 	log.Println("Started server at", listener.Addr())
 
+	shutdownChannel = make(chan bool, 1)
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -75,6 +79,14 @@ func server(port string) error {
 		log.Println("Accepted connection from", conn.RemoteAddr())
 		// Handle multiple client connections concurrently
 		go handleConnection(conn)
+
+		select {
+		case <-shutdownChannel:
+			continue
+		default:
+			_ = <-shutdownChannel
+			return nil
+		}
 	}
 }
 
@@ -379,12 +391,14 @@ func (ds *DebugSession) onAttachRequest(request *dap.AttachRequest) {
 }
 
 func (ds *DebugSession) onDisconnectRequest(request *dap.DisconnectRequest) {
+	shutdownChannel <- true
 	response := &dap.DisconnectResponse{}
 	response.Response = *newResponse(request.Seq, request.Command)
 	ds.send(response)
 }
 
 func (ds *DebugSession) onTerminateRequest(request *dap.TerminateRequest) {
+	shutdownChannel <- true
 	ds.send(newErrorResponse(request.Seq, request.Command, "TerminateRequest is not yet supported"))
 }
 
