@@ -163,7 +163,7 @@ workflows:
           name: << matrix.platform >>_test
           matrix: &matrix-default
             parameters:
-              platform: ["amd64"]
+              platform: ["mac_amd64"]
           filters: &filters-default
             branches:
               ignore:
