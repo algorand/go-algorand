@@ -203,7 +203,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64"]
+              platform: ["mac_amd64"]
               job_type: ["test", "integration", "e2e_expect"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
