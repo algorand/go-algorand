@@ -92,6 +92,7 @@ func handleConnection(conn net.Conn) {
 	go debugSession.sendFromQueue()
 
 	for {
+		// TODO should break out when handling terminate request
 		err := debugSession.handleRequest()
 		// TODO(polina): check for connection vs decoding error?
 		if err != nil {
