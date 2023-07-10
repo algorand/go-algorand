@@ -233,6 +233,11 @@ func (node *AlgorandFollowerNode) BroadcastSignedTxGroup(_ []transactions.Signed
 	return fmt.Errorf("cannot broadcast txns in sync mode")
 }
 
+// BroadcastRawSignedTxGroup errors in follower mode
+func (node *AlgorandFollowerNode) BroadcastRawSignedTxGroup(_ []transactions.SignedTxn) (err error) {
+	return fmt.Errorf("cannot broadcast txns in sync mode")
+}
+
 // BroadcastInternalSignedTxGroup errors in follower mode
 func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transactions.SignedTxn) (err error) {
 	return fmt.Errorf("cannot broadcast internal signed txn group in sync mode")

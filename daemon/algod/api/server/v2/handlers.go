@@ -105,6 +105,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
+	BroadcastRawSignedTxGroup(txgroup []transactions.SignedTxn) error
 	Simulate(request simulation.Request) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
@@ -928,6 +929,23 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	// For backwards compatibility, return txid of first tx in group
 	txid := txgroup[0].ID()
 	return ctx.JSON(http.StatusOK, model.PostTransactionsResponse{TxId: txid.String()})
+}
+
+// RawTransactionAsync broadcasts a raw transaction to the network without ensuring it is accepted by transaction pool.
+// (POST /v2/transactions/async)
+func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
+	if !v2.Node.Config().EnableExperimentalAPI {
+		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
+	}
+	txgroup, err := decodeTxGroup(ctx.Request().Body, config.MaxTxGroupSize)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	err = v2.Node.BroadcastRawSignedTxGroup(txgroup)
+	if err != nil {
+		return serviceUnavailable(ctx, err, err.Error(), v2.Log)
+	}
+	return ctx.NoContent(http.StatusOK)
 }
 
 // PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
