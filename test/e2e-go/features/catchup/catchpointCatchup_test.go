@@ -538,7 +538,10 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 
 	var round basics.Round
 	catchpointConfirmed := false
-	for t := 0; t < 1000; t++ {
+	for i := 0; i < 1000; i++ {
+		if i == 80 {
+			fmt.Println("TestNodeTxHandlerRestart waiting for catchpont for more than 20sec")
+		}
 		status, err = relayClient.Status()
 		a.NoError(err)
 
