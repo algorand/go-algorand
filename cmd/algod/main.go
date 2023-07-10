@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/algorand/go-algorand/util"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -158,10 +159,10 @@ func run() int {
 	}
 	defer fileLock.Unlock()
 
-	// Delete legaxy indexer.sqlite file if it happens to exist
+	// Delete legacy indexer.sqlite file if it happens to exist
 	indexerDBPath := filepath.Join(absolutePath, genesis.ID(), "indexer.sqlite")
 
-	if _, idxFilePathErr := os.Stat(indexerDBPath); idxFilePathErr == nil {
+	if util.FileExists(indexerDBPath) {
 		if idxFileRemoveErr := os.Remove(indexerDBPath); idxFileRemoveErr != nil {
 			fmt.Fprintln(os.Stderr, "Error removing indexer.sqlite file from Data directory", idxFileRemoveErr)
 		} else {
