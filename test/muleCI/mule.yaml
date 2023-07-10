@@ -240,10 +240,10 @@ jobs:
   package-all:
     tasks:
       - stash.Unstash.linux-amd64
-      # - stash.Unstash.linux-arm64
-      # - stash.Unstash.linux-arm
-      # - stash.Unstash.darwin-arm64
-      # - stash.Unstash.darwin-amd64
+      - stash.Unstash.linux-arm64
+      - stash.Unstash.linux-arm
+      - stash.Unstash.darwin-arm64
+      - stash.Unstash.darwin-amd64
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
       - stash.Stash.packages
