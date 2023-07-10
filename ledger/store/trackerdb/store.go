@@ -56,6 +56,9 @@ type Reader interface {
 	MakeAccountsOptimizedReader() (AccountsReader, error)
 	MakeOnlineAccountsOptimizedReader() (OnlineAccountsReader, error)
 	MakeSpVerificationCtxReader() SpVerificationCtxReader
+	// catchpoint
+	// Note: BuildMerkleTrie() needs this on the reader handle in sqlite to not get locked by write txns
+	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
 }
 
 // Writer is the interface for the trackerdb write operations.
@@ -80,7 +83,6 @@ type Writer interface {
 type Catchpoint interface {
 	// reader
 	MakeCatchpointReader() (CatchpointReader, error)
-	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
 	MakeOrderedAccountsIter(accountCount int) OrderedAccountsIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
 	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
