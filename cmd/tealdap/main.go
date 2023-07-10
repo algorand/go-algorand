@@ -18,7 +18,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"strconv"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -26,7 +28,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var networkInterface string
 var debuggerPort uint64
 var simulationResultFileName string
 
@@ -46,10 +47,8 @@ type SourcemapWithAppID struct {
 // TODO we should decide the input format here
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(
-		&networkInterface, "listen", "127.0.0.1", "Network interface to listen to")
 	rootCmd.PersistentFlags().Uint64Var(
-		&debuggerPort, "port", 22015, "Debugger port to listen to")
+		&debuggerPort, "port", 54321, "Debugger port to listen to")
 	rootCmd.PersistentFlags().StringVar(
 		&simulationResultFileName, "simulation-trace-file", "",
 		"Simulate trace file to start debug session")
@@ -63,7 +62,15 @@ var rootCmd = &cobra.Command{
 	Short: "Algorand TEAL Debugger (supporting Debug Adapter Protocol)",
 	Long:  `Debug a ...`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.HelpFunc()(cmd, args)
+		fmt.Println("start debugging")
+		// TODO haven't start server yet, was thinking of testing:
+		// how to bring up the server for testing, and bring down after the test
+
+		if err := server(strconv.FormatUint(debuggerPort, 10)); err != nil {
+			log.Fatalf("debug error: %s", err.Error())
+		}
+		// I suppose once we run `launch`, namely dap.LaunchResponse,
+		// the server just run all the way to end (if we let through all the stop points).
 	},
 }
 
@@ -73,17 +80,9 @@ var rootCmd = &cobra.Command{
 // - simulation result?
 
 func main() {
-	fmt.Println("start debugging")
-	// TODO haven't start server yet, was thinking of testing:
-	// how to bring up the server for testing, and bring down after the test
-
-	err := server("55551")
-
-	if err != nil {
+	if err := rootCmd.Execute(); err != nil {
+		log.Println(err)
 		os.Exit(1)
 	}
-
-	// I suppose once we run `launch`, namely dap.LaunchResponse,
-	// the server just run all the way to end (if we let through all the stop points).
 	os.Exit(0)
 }

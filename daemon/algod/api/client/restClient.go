@@ -754,6 +754,18 @@ func (client RestClient) GetLedgerStateDelta(round uint64) (response model.Ledge
 	return
 }
 
+// GetLedgerStateDeltaForTransactionGroup retrieves the ledger state delta for the txn group specified by the id
+func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (response model.LedgerStateDeltaForTransactionGroupResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/deltas/txn/group/%s", id), nil)
+	return
+}
+
+// GetTransactionGroupLedgerStateDeltasForRound retrieves the ledger state deltas for the txn groups in the specified round
+func (client RestClient) GetTransactionGroupLedgerStateDeltasForRound(round uint64) (response model.TransactionGroupLedgerStateDeltasForRoundResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d/txn/group", round), nil)
+	return
+}
+
 // SetBlockTimestampOffset sets the offset in seconds to add to the block timestamp when in devmode
 func (client RestClient) SetBlockTimestampOffset(offset uint64) (err error) {
 	err = client.post(nil, fmt.Sprintf("/v2/devmode/blocks/offset/%d", offset), nil, nil, true)

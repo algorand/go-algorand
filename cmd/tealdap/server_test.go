@@ -19,15 +19,16 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/google/go-dap"
-	"github.com/stretchr/testify/require"
 	"log"
 	"net"
 	"sync"
 	"testing"
 	"time"
-	// "github.com/stretchr/testify/require"
+
+	"github.com/google/go-dap"
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var initializeRequest = []byte(`{"seq":1,"type":"request","command":"initialize","arguments":{"clientID":"vscode","clientName":"Visual Studio Code","adapterID":"go","pathFormat":"path","linesStartAt1":true,"columnsStartAt1":true,"supportsVariableType":true,"supportsVariablePaging":true,"supportsRunInTerminalRequest":true,"locale":"en-us"}}`)
