@@ -43,6 +43,7 @@ const (
 	BlockHeader                      HashID = "BH"
 	BalanceRecord                    HashID = "BR"
 	Credential                       HashID = "CR"
+	DNSAddrNode                      HashID = "DNSADDR"
 	Genesis                          HashID = "GE"
 	KeysInMSS                        HashID = "KP"
 	MerkleArrayNode                  HashID = "MA"
