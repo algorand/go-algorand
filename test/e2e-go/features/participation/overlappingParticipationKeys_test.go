@@ -44,7 +44,8 @@ import (
 // ((Network Round - 1) Mod 10) = nodeIdx and nodeIdx is used to pull out from an
 // "array" of nodes similar to {Node1, Node2, Node3} etc.  The Mod 10 simply pulls the
 // "digit" from the number:
-//    Round: 13 -> 13 - 1 = 12 ->  12 Mod 10 -> 2 -> Node3 with nodeIdx == 2
+//
+//	Round: 13 -> 13 - 1 = 12 ->  12 Mod 10 -> 2 -> Node3 with nodeIdx == 2
 //
 // The keys are overlapped in the sense that a key is registered to a node and
 // "overlaps" with other installed keys that are also valid.  Meaning there might be:

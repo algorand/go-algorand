@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -631,7 +633,7 @@ var OpSpecs = []OpSpec{
 
 	// AVM "effects"
 	{0xb0, "log", opLog, proto("b:"), 5, only(ModeApp)},
-	{0xb1, "itxn_begin", opTxBegin, proto(":"), 5, only(ModeApp)},
+	{0xb1, "itxn_begin", opItxnBegin, proto(":"), 5, only(ModeApp)},
 	{0xb2, "itxn_field", opItxnField, proto("a:"), 5, immediates("f").typed(typeTxField).field("f", &TxnFields).only(ModeApp).assembler(asmItxnField)},
 	{0xb3, "itxn_submit", opItxnSubmit, proto(":"), 5, only(ModeApp)},
 	{0xb4, "itxn", opItxn, proto(":a"), 5, field("f", &TxnScalarFields).only(ModeApp).assembler(asmItxn)},
@@ -707,10 +709,7 @@ func OpcodesByVersion(version uint64) []OpSpec {
 			}
 		}
 	}
-	result := make([]OpSpec, 0, len(subv))
-	for _, v := range subv {
-		result = append(result, v)
-	}
+	result := maps.Values(subv)
 	sort.Sort(sortByOpcode(result))
 	return result
 }
@@ -749,12 +748,8 @@ func init() {
 	// Start from v2 and higher,
 	// copy lower version opcodes and overwrite matching version
 	for v := uint64(2); v <= evalMaxVersion; v++ {
-		OpsByName[v] = make(map[string]OpSpec, 256)
-
 		// Copy opcodes from lower version
-		for opName, oi := range OpsByName[v-1] {
-			OpsByName[v][opName] = oi
-		}
+		OpsByName[v] = maps.Clone(OpsByName[v-1])
 		for op, oi := range opsByOpcode[v-1] {
 			opsByOpcode[v][op] = oi
 		}

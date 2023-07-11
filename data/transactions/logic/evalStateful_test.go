@@ -19,6 +19,7 @@ package logic
 import (
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -55,6 +56,10 @@ func makeSampleEnvWithVersion(version uint64) (*EvalParams, *transactions.Transa
 	firstTxn := makeSampleTxn()
 	if version >= appsEnabledVersion {
 		firstTxn.Txn.Type = protocol.ApplicationCallTx
+	}
+	// avoid putting in a RekeyTo field if version < rekeyingEnabledVersion
+	if version < rekeyingEnabledVersion {
+		firstTxn.Txn.RekeyTo = basics.Address{}
 	}
 	ep := defaultEvalParamsWithVersion(version, makeSampleTxnGroup(firstTxn)...)
 	ledger := NewLedger(nil)
@@ -2844,11 +2849,11 @@ func TestReturnTypes(t *testing.T) {
 				ep.ioBudget = 50
 
 				cx := EvalContext{
-					EvalParams:   ep,
-					runModeFlags: m,
-					groupIndex:   1,
-					txn:          &ep.TxnGroup[1],
-					appID:        300,
+					EvalParams: ep,
+					runMode:    m,
+					groupIndex: 1,
+					txn:        &ep.TxnGroup[1],
+					appID:      300,
 				}
 
 				// These set conditions for some ops that examine the group.
@@ -3265,5 +3270,25 @@ itxn_submit
 		maxAppCallDepth = 10_000_000
 
 		testApp(t, source, ep, "too many inner transactions 1 with 0 left")
+	})
+}
+
+func TestTxnaLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// txna came in v2, but Apps and Assets in v3.
+	TestLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		testApp(t, "txna Accounts "+strconv.Itoa(len(tx.Accounts))+";len", ep)
+		testApp(t, "txna Accounts "+strconv.Itoa(len(tx.Accounts)+1)+";len", ep, "invalid Accounts index")
+
+		testApp(t, "txna Applications "+strconv.Itoa(len(tx.ForeignApps)), ep)
+		testApp(t, "txna Applications "+strconv.Itoa(len(tx.ForeignApps)+1), ep, "invalid Applications index")
+
+		// Assets and AppArgs have no implicit 0 index, so everything shifts
+		testApp(t, "txna Assets "+strconv.Itoa(len(tx.ForeignAssets)-1), ep)
+		testApp(t, "txna Assets "+strconv.Itoa(len(tx.ForeignAssets)), ep, "invalid Assets index")
+
+		testApp(t, "txna ApplicationArgs "+strconv.Itoa(len(tx.ApplicationArgs)-1)+";len", ep)
+		testApp(t, "txna ApplicationArgs "+strconv.Itoa(len(tx.ApplicationArgs))+";len", ep, "invalid ApplicationArgs index")
 	})
 }

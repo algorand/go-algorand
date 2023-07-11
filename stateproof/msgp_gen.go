@@ -7,7 +7,11 @@ import (
 
 	"github.com/algorand/msgp/msgp"
 
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 )
 
 // The following msgp objects are implemented in this file:
@@ -18,6 +22,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> SigFromAddrMaxSize()
 //
 // spProver
 //     |-----> (*) MarshalMsg
@@ -26,6 +31,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> SpProverMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -180,6 +186,12 @@ func (z *sigFromAddr) MsgIsZero() bool {
 	return ((*z).SignerAddress.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).Sig.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func SigFromAddrMaxSize() (s int) {
+	s = 1 + 2 + basics.AddressMaxSize() + 2 + basics.RoundMaxSize() + 2 + merklesignature.SignatureMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *spProver) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -213,7 +225,7 @@ func (z *spProver) MarshalMsg(b []byte) (o []byte) {
 			} else {
 				o = msgp.AppendMapHeader(o, uint32(len((*z).AddrToPos)))
 			}
-			zb0001_keys := make([]Address, 0, len((*z).AddrToPos))
+			zb0001_keys := make([]basics.Address, 0, len((*z).AddrToPos))
 			for zb0001 := range (*z).AddrToPos {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
@@ -305,7 +317,7 @@ func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).AddrToPos = make(map[Address]uint64, zb0005)
 			}
 			for zb0005 > 0 {
-				var zb0001 Address
+				var zb0001 basics.Address
 				var zb0002 uint64
 				zb0005--
 				bts, err = zb0001.UnmarshalMsg(bts)
@@ -396,7 +408,7 @@ func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).AddrToPos = make(map[Address]uint64, zb0007)
 				}
 				for zb0007 > 0 {
-					var zb0001 Address
+					var zb0001 basics.Address
 					var zb0002 uint64
 					zb0007--
 					bts, err = zb0001.UnmarshalMsg(bts)
@@ -464,4 +476,18 @@ func (z *spProver) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *spProver) MsgIsZero() bool {
 	return ((*z).Prover == nil) && (len((*z).AddrToPos) == 0) && ((*z).VotersHdr.MsgIsZero()) && ((*z).Message.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SpProverMaxSize() (s int) {
+	s = 1 + 4
+	s += stateproof.ProverMaxSize()
+	s += 5
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.AddrToPos
+	s += stateproof.VotersAllocBound * (basics.AddressMaxSize())
+	// Adding size of map values for z.AddrToPos
+	s += stateproof.VotersAllocBound * (msgp.Uint64Size)
+	s += 4 + bookkeeping.BlockHeaderMaxSize() + 4 + stateproofmsg.MessageMaxSize()
+	return
 }

@@ -104,7 +104,7 @@ func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 }
 
 func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return ml.blockHdrCached(rnd)
+	return ml.BlockHdr(rnd)
 }
 
 func (ml *mockLedger) GetStateProofVerificationContext(rnd basics.Round) (*ledgercore.StateProofVerificationContext, error) {

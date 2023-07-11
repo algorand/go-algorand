@@ -123,14 +123,14 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 		if lsigTxnFilename != "" {
 			// If passed a SignedTxn with a logic sig, compute
 			// the hash of the program within the logic sig
-			stxnBytes, err := os.ReadFile(lsigTxnFilename)
-			if err != nil {
-				reportErrorf(fileReadError, lsigTxnFilename, err)
+			stxnBytes, err2 := os.ReadFile(lsigTxnFilename)
+			if err2 != nil {
+				reportErrorf(fileReadError, lsigTxnFilename, err2)
 			}
 
-			err = protocol.Decode(stxnBytes, &stxn)
-			if err != nil {
-				reportErrorf(txDecodeError, lsigTxnFilename, err)
+			err2 = protocol.Decode(stxnBytes, &stxn)
+			if err2 != nil {
+				reportErrorf(txDecodeError, lsigTxnFilename, err2)
 			}
 
 			// Ensure signed transaction has a logic sig with a

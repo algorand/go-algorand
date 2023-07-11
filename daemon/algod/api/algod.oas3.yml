@@ -790,6 +790,9 @@
                 "eval-overrides": {
                   "$ref": "#/components/schemas/SimulationEvalOverrides"
                 },
+                "exec-trace-config": {
+                  "$ref": "#/components/schemas/SimulateTraceConfig"
+                },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                   "type": "integer"
@@ -1918,6 +1921,9 @@
             "description": "Lifts limits on log opcode usage during simulation.",
             "type": "boolean"
           },
+          "exec-trace-config": {
+            "$ref": "#/components/schemas/SimulateTraceConfig"
+          },
           "extra-opcode-budget": {
             "description": "Applies extra opcode budget during simulation for each transaction group.",
             "type": "integer"
@@ -1952,6 +1958,16 @@
         "required": [
           "txns"
         ],
+        "type": "object"
+      },
+      "SimulateTraceConfig": {
+        "description": "An object that configures simulation execution trace.",
+        "properties": {
+          "enable": {
+            "description": "A boolean option for opting in execution trace features simulation endpoint.",
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "SimulateTransactionGroupResult": {
@@ -1996,6 +2012,9 @@
             "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
             "type": "integer"
           },
+          "exec-trace": {
+            "$ref": "#/components/schemas/SimulationTransactionExecTrace"
+          },
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
@@ -2027,6 +2046,60 @@
           "max-log-size": {
             "description": "The maximum byte number to log during simulation",
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SimulationOpcodeTraceUnit": {
+        "description": "The set of trace information and effect from evaluating a single opcode.",
+        "properties": {
+          "pc": {
+            "description": "The program counter of the current opcode being evaluated.",
+            "type": "integer"
+          },
+          "spawned-inners": {
+            "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pc"
+        ],
+        "type": "object"
+      },
+      "SimulationTransactionExecTrace": {
+        "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
+        "properties": {
+          "approval-program-trace": {
+            "description": "Program trace that contains a trace of opcode effects in an approval program.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          },
+          "clear-state-program-trace": {
+            "description": "Program trace that contains a trace of opcode effects in a clear state program.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          },
+          "inner-trace": {
+            "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationTransactionExecTrace"
+            },
+            "type": "array"
+          },
+          "logic-sig-trace": {
+            "description": "Program trace that contains a trace of opcode effects in a logic sig.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -3833,6 +3906,16 @@
               }
             },
             "description": "Invalid API Token"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Timeout"
           },
           "500": {
             "content": {
@@ -6289,6 +6372,9 @@
                     "eval-overrides": {
                       "$ref": "#/components/schemas/SimulationEvalOverrides"
                     },
+                    "exec-trace-config": {
+                      "$ref": "#/components/schemas/SimulateTraceConfig"
+                    },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
@@ -6318,6 +6404,9 @@
                   "properties": {
                     "eval-overrides": {
                       "$ref": "#/components/schemas/SimulationEvalOverrides"
+                    },
+                    "exec-trace-config": {
+                      "$ref": "#/components/schemas/SimulateTraceConfig"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",

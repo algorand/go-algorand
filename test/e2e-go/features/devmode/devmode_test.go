@@ -75,3 +75,42 @@ func TestDevMode(t *testing.T) {
 		prevTime = currTime
 	}
 }
+
+// Starts up a devmode network, sends a txn, and fetches the txn group delta for that txn
+func TestTxnGroupDeltasDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
+
+	// Start devmode network, and send a transaction.
+	var fixture fixtures.RestClientFixture
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeTxnTracerNetwork.json"))
+	fixture.Start()
+	defer fixture.Shutdown()
+	sender, err := fixture.GetRichestAccount()
+	require.NoError(t, err)
+	key := crypto.GenerateSignatureSecrets(crypto.Seed{})
+	receiver := basics.Address(key.SignatureVerifier)
+	txn := fixture.SendMoneyAndWait(0, 100000, 1000, sender.Address, receiver.String(), "")
+	require.NotNil(t, txn.ConfirmedRound)
+	_, err = fixture.AlgodClient.Block(*txn.ConfirmedRound)
+	require.NoError(t, err)
+
+	// Test GetLedgerStateDeltaForTransactionGroup and verify the response contains a delta
+	txngroupResponse, err := fixture.AlgodClient.GetLedgerStateDeltaForTransactionGroup(txn.Txn.ID().String())
+	require.NoError(t, err)
+	require.True(t, len(txngroupResponse) > 0)
+
+	// Test GetTransactionGroupLedgerStateDeltasForRound and verify the response contains the delta for our txn
+	roundResponse, err := fixture.AlgodClient.GetTransactionGroupLedgerStateDeltasForRound(1)
+	require.NoError(t, err)
+	require.Equal(t, len(roundResponse.Deltas), 1)
+	groupDelta := roundResponse.Deltas[0]
+	require.Equal(t, 1, len(groupDelta.Ids))
+	require.Equal(t, groupDelta.Ids[0], txn.Txn.ID().String())
+
+	// Assert that the TxIDs field across both endpoint responses is the same
+	require.Equal(t, txngroupResponse["Txids"], groupDelta.Delta["Txids"])
+}

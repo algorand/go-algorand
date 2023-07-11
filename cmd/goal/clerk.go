@@ -73,6 +73,7 @@ var (
 	simulateAllowMoreLogging      bool
 	simulateAllowMoreOpcodeBudget bool
 	simulateExtraOpcodeBudget     uint64
+	simulateEnableRequestTrace    bool
 )
 
 func init() {
@@ -161,6 +162,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
+	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
 }
 
 var clerkCmd = &cobra.Command{
@@ -443,10 +445,10 @@ var sendCmd = &cobra.Command{
 			}
 			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil)
 			if err == nil {
-				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
+				err = verify.LogicSigSanityCheck(0, groupCtx)
 			}
 			if err != nil {
-				reportErrorf("%s: txn[0] error %s", outFilename, err)
+				reportErrorf("%s: txn error %s", outFilename, err)
 			}
 			stx = uncheckedTxn
 		} else if program != nil {
@@ -628,7 +630,7 @@ var rawsendCmd = &cobra.Command{
 				}
 
 				if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
-					reportInfof(infoTxCommitted, txidStr, txn.ConfirmedRound)
+					reportInfof(infoTxCommitted, txidStr, *txn.ConfirmedRound)
 					break
 				}
 
@@ -848,17 +850,17 @@ var signCmd = &cobra.Command{
 					reportErrorf("%s: %v", txFilename, err)
 				}
 			}
-			for i, txn := range txnGroup {
+			for i := range txnGroup {
 				var signedTxn transactions.SignedTxn
 				if lsig.Logic != nil {
-					err = verify.LogicSigSanityCheck(&txn, i, groupCtx)
+					err = verify.LogicSigSanityCheck(i, groupCtx)
 					if err != nil {
 						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
 					}
-					signedTxn = txn
+					signedTxn = txnGroup[i]
 				} else {
 					// sign the usual way
-					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txn.Txn)
+					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txnGroup[i].Txn)
 					if err != nil {
 						reportErrorf(errorSigningTX, err)
 					}
@@ -1276,6 +1278,7 @@ var simulateCmd = &cobra.Command{
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
 				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1299,6 +1302,7 @@ var simulateCmd = &cobra.Command{
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
 				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
@@ -1357,4 +1361,10 @@ func decodeTxnsFromFile(file string) []transactions.SignedTxn {
 		txgroup = append(txgroup, txn)
 	}
 	return txgroup
+}
+
+func traceCmdOptionToSimulateTraceConfigModel() simulation.ExecTraceConfig {
+	return simulation.ExecTraceConfig{
+		Enable: simulateEnableRequestTrace,
+	}
 }

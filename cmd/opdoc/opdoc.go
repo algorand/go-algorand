@@ -482,7 +482,7 @@ func main() {
 			AVMType:      t.AVMType.String(),
 		})
 	}
-	sort.Slice(named, func(i, j int) bool { return strings.Compare(named[i].Name, named[j].Name) > 0 })
+	sort.Slice(named, func(i, j int) bool { return named[i].Name > named[j].Name })
 
 	namedStackTypes := create("named_stack_types.md")
 	namedStackTypesMarkdown(namedStackTypes, named)

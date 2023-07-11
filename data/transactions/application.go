@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -56,6 +57,7 @@ const (
 
 // OnCompletion is an enum representing some layer 1 side effect that an
 // ApplicationCall transaction will have if it is included in a block.
+//
 //go:generate stringer -type=OnCompletion -output=application_string.go
 type OnCompletion uint64
 
@@ -106,7 +108,7 @@ type ApplicationCallTxnFields struct {
 
 	// ApplicationArgs are arguments accessible to the executing
 	// ApprovalProgram or ClearStateProgram.
-	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
+	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs,maxtotalbytes=config.MaxAppTotalArgLen"`
 
 	// Accounts are accounts whose balance records are accessible
 	// by the executing ApprovalProgram or ClearStateProgram. To
@@ -172,7 +174,7 @@ type BoxRef struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Index uint64 `codec:"i"`
-	Name  []byte `codec:"n"`
+	Name  []byte `codec:"n,allocbound=config.MaxBytesKeyValueLen"`
 }
 
 // Empty indicates whether or not all the fields in the
@@ -247,10 +249,8 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 	}
 
 	// Otherwise we index into ac.Accounts
-	for idx, addr := range ac.Accounts {
-		if target == addr {
-			return uint64(idx) + 1, nil
-		}
+	if idx := slices.Index(ac.Accounts, target); idx != -1 {
+		return uint64(idx) + 1, nil
 	}
 
 	return 0, fmt.Errorf("invalid Account reference %s", target)

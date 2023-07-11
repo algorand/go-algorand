@@ -6,6 +6,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 )
 
 // The following msgp objects are implemented in this file:
@@ -16,6 +17,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> CommitmentMaxSize()
 //
 // KeyRoundPair
 //       |-----> (*) MarshalMsg
@@ -24,6 +26,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> KeyRoundPairMaxSize()
 //
 // Secrets
 //    |-----> (*) MarshalMsg
@@ -32,6 +35,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> SecretsMaxSize()
 //
 // Signature
 //     |-----> (*) MarshalMsg
@@ -40,6 +44,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> SignatureMaxSize()
 //
 // SignerContext
 //       |-----> (*) MarshalMsg
@@ -48,6 +53,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> SignerContextMaxSize()
 //
 // Verifier
 //     |-----> (*) MarshalMsg
@@ -56,6 +62,7 @@ import (
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> VerifierMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -95,6 +102,13 @@ func (z *Commitment) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Commitment) MsgIsZero() bool {
 	return (*z) == (Commitment{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func CommitmentMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -257,6 +271,13 @@ func (z *KeyRoundPair) MsgIsZero() bool {
 	return ((*z).Round == 0) && ((*z).Key == nil)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func KeyRoundPairMaxSize() (s int) {
+	s = 1 + 4 + msgp.Uint64Size + 4
+	s += crypto.FalconSignerMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Secrets) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -407,6 +428,12 @@ func (z *Secrets) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Secrets) MsgIsZero() bool {
 	return ((*z).SignerContext.FirstValid == 0) && ((*z).SignerContext.KeyLifetime == 0) && ((*z).SignerContext.Tree.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SecretsMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + merklearray.TreeMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -584,6 +611,12 @@ func (z *Signature) MsgIsZero() bool {
 	return ((*z).Signature.MsgIsZero()) && ((*z).VectorCommitmentIndex == 0) && ((*z).Proof.MsgIsZero()) && ((*z).VerifyingKey.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func SignatureMaxSize() (s int) {
+	s = 1 + 4 + crypto.FalconSignatureMaxSize() + 4 + msgp.Uint64Size + 4 + merklearray.SingleLeafProofMaxSize() + 5 + crypto.FalconVerifierMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *SignerContext) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -736,6 +769,12 @@ func (z *SignerContext) MsgIsZero() bool {
 	return ((*z).FirstValid == 0) && ((*z).KeyLifetime == 0) && ((*z).Tree.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func SignerContextMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + merklearray.TreeMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Verifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -863,4 +902,13 @@ func (z *Verifier) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
 	return ((*z).Commitment == (Commitment{})) && ((*z).KeyLifetime == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func VerifierMaxSize() (s int) {
+	s = 1 + 4
+	// Calculating size of array: z.Commitment
+	s += msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize))
+	s += 3 + msgp.Uint64Size
+	return
 }

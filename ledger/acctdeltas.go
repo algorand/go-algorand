@@ -298,7 +298,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.MakeAccountsReaderWriter()
+	ar, err := tx.MakeAccountsReader()
 	if err != nil {
 		return err
 	}
@@ -317,9 +317,9 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 		if delta.oldResource.AcctRef != nil {
 			acctRef = delta.oldResource.AcctRef
 		} else if acctRef, ok = knownAddresses[addr]; !ok {
-			acctRef, err = arw.LookupAccountRowID(addr)
+			acctRef, err = ar.LookupAccountRowID(addr)
 			if err != nil {
-				if err != sql.ErrNoRows {
+				if err != sql.ErrNoRows || err != trackerdb.ErrNotFound {
 					err = fmt.Errorf("base account cannot be read while processing resource for addr=%s, aidx=%d: %w", addr.String(), aidx, err)
 					return err
 
@@ -330,7 +330,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 				continue
 			}
 		}
-		resDataBuf, err = arw.LookupResourceDataByAddrID(acctRef, aidx)
+		resDataBuf, err = ar.LookupResourceDataByAddrID(acctRef, aidx)
 		switch err {
 		case nil:
 			if len(resDataBuf) > 0 {
@@ -344,6 +344,10 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 				err = fmt.Errorf("empty resource record: addrid=%d, aidx=%d", acctRef, aidx)
 				return err
 			}
+		case trackerdb.ErrNotFound:
+			// we don't have that account, just return an empty record.
+			a.updateOld(missIdx, trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx})
+			err = nil
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
 			a.updateOld(missIdx, trackerdb.PersistedResourcesData{AcctRef: acctRef, Aidx: aidx})
@@ -466,7 +470,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx trackerdb.TransactionScope) (e
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.MakeAccountsReaderWriter()
+	arw, err := tx.MakeAccountsOptimizedReader()
 	if err != nil {
 		return err
 	}
@@ -476,29 +480,13 @@ func (a *compactAccountDeltas) accountsLoadOld(tx trackerdb.TransactionScope) (e
 	}()
 	for _, idx := range a.misses {
 		addr := a.deltas[idx].address
-		ref, acctDataBuf, err := arw.LookupAccountDataByAddress(addr)
-		switch err {
-		case nil:
-			if len(acctDataBuf) > 0 {
-				persistedAcctData := &trackerdb.PersistedAccountData{Addr: addr, Ref: ref}
-				err = protocol.Decode(acctDataBuf, &persistedAcctData.AccountData)
-				if err != nil {
-					return err
-				}
-				a.updateOld(idx, *persistedAcctData)
-			} else {
-				// to retain backward compatibility, we will treat this condition as if we don't have the account.
-				a.updateOld(idx, trackerdb.PersistedAccountData{Addr: addr, Ref: ref})
-			}
-		case sql.ErrNoRows:
-			// we don't have that account, just return an empty record.
-			a.updateOld(idx, trackerdb.PersistedAccountData{Addr: addr})
-			// Note: the err will be ignored in this case since `err` is being shadowed.
-			// this behaviour is equivalent to `err = nil`
-		default:
+		data, err := arw.LookupAccount(addr)
+		if err != nil {
 			// unexpected error - let the caller know that we couldn't complete the operation.
 			return err
 		}
+		// update the account
+		a.updateOld(idx, data)
 	}
 	return
 }
@@ -607,7 +595,7 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx trackerdb.TransactionSco
 	if len(a.misses) == 0 {
 		return nil
 	}
-	arw, err := tx.MakeAccountsReaderWriter()
+	ar, err := tx.MakeAccountsReader()
 	if err != nil {
 		return err
 	}
@@ -616,7 +604,7 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx trackerdb.TransactionSco
 	}()
 	for _, idx := range a.misses {
 		addr := a.deltas[idx].address
-		ref, acctDataBuf, err := arw.LookupOnlineAccountDataByAddress(addr)
+		ref, acctDataBuf, err := ar.LookupOnlineAccountDataByAddress(addr)
 		switch err {
 		case nil:
 			if len(acctDataBuf) > 0 {
@@ -630,6 +618,10 @@ func (a *compactOnlineAccountDeltas) accountsLoadOld(tx trackerdb.TransactionSco
 				// empty data means offline account
 				a.updateOld(idx, trackerdb.PersistedOnlineAccountData{Addr: addr, Ref: ref})
 			}
+		case trackerdb.ErrNotFound:
+			// we don't have that account, just return an empty record.
+			a.updateOld(idx, trackerdb.PersistedOnlineAccountData{Addr: addr})
+		// TODO: phase out sql.ErrNoRows
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
 			a.updateOld(idx, trackerdb.PersistedOnlineAccountData{Addr: addr})

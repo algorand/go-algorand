@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
@@ -35,6 +34,8 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof/verify"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 var errVotersNotTracked = errors.New("voters not tracked for the given lookback round")
@@ -270,9 +271,9 @@ func (spw *Worker) getAllOnlineProverRounds() ([]basics.Round, error) {
 
 	var rnds []basics.Round
 	err = spw.db.Atomic(func(_ context.Context, tx *sql.Tx) error {
-		var err error
-		rnds, err = getSignatureRounds(tx, threshold, latestStateProofRound)
-		return err
+		var err2 error
+		rnds, err2 = getSignatureRounds(tx, threshold, latestStateProofRound)
+		return err2
 	})
 
 	return rnds, err
@@ -641,11 +642,8 @@ func (spw *Worker) tryBroadcast() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	sortedRounds := make([]basics.Round, 0, len(spw.provers))
-	for rnd := range spw.provers {
-		sortedRounds = append(sortedRounds, rnd)
-	}
-	sort.Slice(sortedRounds, func(i, j int) bool { return sortedRounds[i] < sortedRounds[j] })
+	sortedRounds := maps.Keys(spw.provers)
+	slices.Sort(sortedRounds)
 
 	for _, rnd := range sortedRounds {
 		// Iterate over the provers in a sequential manner. If the earlist state proof is not ready/rejected

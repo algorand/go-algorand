@@ -41,8 +41,9 @@ func (sp StateProofTxnFields) Empty() bool {
 		sp.Message.MsgIsZero()
 }
 
-//msgp:ignore specialAddr
 // specialAddr is used to form a unique address that will send out state proofs.
+//
+//msgp:ignore specialAddr
 type specialAddr string
 
 // ToBeHashed implements the crypto.Hashable interface
