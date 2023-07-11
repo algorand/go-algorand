@@ -852,7 +852,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		return err
 	}
 
-	hdr, err := l.blockHdr(lastBalancesRound)
+	hdr, err := l.BlockHdr(lastBalancesRound)
 	if err != nil {
 		return err
 	}
@@ -1172,7 +1172,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 
 		if resourceDbRound < currentDbRound {
 			au.log.Errorf("accountUpdates.lookupLatest: resource database round %d is behind in-memory round %d", resourceDbRound, currentDbRound)
-			return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDbRound}
+			/*xxxxx*/ return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDbRound}
 		}
 
 	tryAgain:

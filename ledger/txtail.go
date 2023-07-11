@@ -400,8 +400,5 @@ func (t *txTail) blockHeader(rnd basics.Round) (bookkeeping.BlockHeader, bool) {
 	t.tailMu.RLock()
 	defer t.tailMu.RUnlock()
 	hdr, ok := t.blockHeaderData[rnd]
-	if !ok {
-		t.log.Warnf("txtail failed to fetch blockHeader from rnd: %d", rnd)
-	}
 	return hdr, ok
 }

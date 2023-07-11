@@ -654,29 +654,9 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
 	hdr, ok := l.txTail.blockHeader(rnd)
 	if !ok {
-		// maybe do this???
 		hdr, err = l.blockQ.getBlockHdr(rnd)
 	}
 	return hdr, err
-
-	/*
-		blk, exists := l.headerCache.get(rnd)
-		if exists {
-			return
-		}
-
-		blk, err = l.blockQ.getBlockHdr(rnd)
-		if err == nil {
-			l.headerCache.put(blk)
-		}
-		return
-	*/
-}
-
-// blockHdr returns the BlockHeader of the block for round rnd.
-func (l *Ledger) blockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	return l.blockQ.getBlockHdr(rnd)
-
 }
 
 // EncodedBlockCert returns the encoded block and the corresponding encoded certificate of the block for round rnd.
