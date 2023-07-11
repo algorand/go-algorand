@@ -628,8 +628,6 @@ func (l *Ledger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basi
 
 // CheckDup return whether a transaction is a duplicate one.
 func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
@@ -654,9 +652,6 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 
 // BlockHdr returns the BlockHeader of the block for round rnd.
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-
 	hdr, ok := l.txTail.blockHeader(rnd)
 	if !ok {
 		// maybe do this???
@@ -785,8 +780,6 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 // the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
 // that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
 func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	hdr, ok := l.txTail.blockHeader(rnd)
 	if !ok {
 		err = fmt.Errorf("no cached header data for round %d", rnd)

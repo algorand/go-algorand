@@ -90,6 +90,9 @@ type txTail struct {
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	t.log = l.trackerLog()
 
 	var roundData []*trackerdb.TxTailRound
@@ -196,6 +199,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 		return
 	}
 
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	var tail trackerdb.TxTailRound
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
 	tail.LastValid = make([]basics.Round, len(delta.Txids))
@@ -215,8 +221,6 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	}
 	encodedTail, tailHash := tail.Encode()
 
-	t.tailMu.Lock()
-	defer t.tailMu.Unlock()
 	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
@@ -229,6 +233,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	proto := t.recent[rnd].proto
 	maxlife := basics.Round(proto.MaxTxnLife)
 
@@ -246,8 +253,8 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 }
 
 func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
-	dcc.txTailDeltas = make([][]byte, 0, dcc.offset)
 	t.tailMu.RLock()
+	dcc.txTailDeltas = make([][]byte, 0, dcc.offset)
 	for i := uint64(0); i < dcc.offset; i++ {
 		dcc.txTailDeltas = append(dcc.txTailDeltas, t.roundTailSerializedDeltas[i])
 	}
@@ -273,6 +280,9 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 }
 
 func (t *txTail) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) error {
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	aw, err := tx.MakeAccountsWriter()
 	if err != nil {
 		return err
@@ -333,6 +343,9 @@ func (t errTxTailMissingRound) Error() string {
 // checkDup test to see if the given transaction id/lease already exists. It returns nil if neither exists, or
 // TransactionInLedgerError / LeaseInLedgerError respectively.
 func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	t.tailMu.RLock()
+	defer t.tailMu.RUnlock()
+
 	if lastValid < t.lowWaterMark {
 		return &errTxTailMissingRound{round: lastValid}
 	}
