@@ -2193,7 +2193,6 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 // 4. Add 2001 block with a txn first=1001, last=2001 and block data access for 1000
 // 5. Expect the txn to be accepted
 func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
-	return
 	partitiontest.PartitionTest(t)
 
 	const preReleaseDBVersion = 6
