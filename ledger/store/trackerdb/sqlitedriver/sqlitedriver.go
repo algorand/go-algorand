@@ -178,6 +178,11 @@ func (r *sqlReader) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxRea
 	return makeStateProofVerificationReader(r.q)
 }
 
+// MakeCatchpointPendingHashesIterator implements trackerdb.Reader
+func (r *sqlReader) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
+	return MakeCatchpointPendingHashesIterator(hashCount, r.q)
+}
+
 type sqlWriter struct {
 	e db.Executable
 }
@@ -229,11 +234,6 @@ func (w *sqlWriter) ModifyAcctBaseTest() error {
 
 type sqlCatchpoint struct {
 	e db.Executable
-}
-
-// MakeCatchpointPendingHashesIterator implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
-	return MakeCatchpointPendingHashesIterator(hashCount, c.e)
 }
 
 // MakeCatchpointReader implements trackerdb.Catchpoint

@@ -45,39 +45,35 @@ import (
 
 const basicTestCatchpointInterval = 4
 
-func waitForCatchpointGeneration(fixture *fixtures.RestClientFixture, client client.RestClient, catchpointRound basics.Round) (string, error) {
+func waitForCatchpointGeneration(t *testing.T, fixture *fixtures.RestClientFixture, client client.RestClient, catchpointRound basics.Round) string {
 	err := fixture.ClientWaitForRoundWithTimeout(client, uint64(catchpointRound+1))
 	if err != nil {
-		return "", err
+		return ""
 	}
 
+	var round basics.Round
 	var status model.NodeStatusResponse
-	timer := time.NewTimer(10 * time.Second)
-	for {
+	catchpointConfirmed := false
+	for i := 0; i < 1000; i++ {
 		status, err = client.Status()
-		if err != nil {
-			return "", err
-		}
-
-		var round basics.Round
+		require.NoError(t, err)
 		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
 			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
-			if err != nil {
-				return "", err
-			}
+			require.NoError(t, err)
 			if round >= catchpointRound {
+				catchpointConfirmed = true
+				if i > 80 {
+					fmt.Printf("%s: waited for catchpont for %d sec\n", t.Name(), (i*250)/1000)
+				}
 				break
 			}
 		}
-		select {
-		case <-timer.C:
-			return "", fmt.Errorf("timeout while waiting for catchpoint, target: %d, got %d", catchpointRound, round)
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
+		time.Sleep(250 * time.Millisecond)
 	}
-
-	return *status.LastCatchpoint, nil
+	if !catchpointConfirmed {
+		require.Failf(t, "timeout waiting on a catchpoint", "target: %d, got %d", catchpointRound, round)
+	}
+	return *status.LastCatchpoint
 }
 
 func denyRoundRequestsWebProxy(a *require.Assertions, listeningAddress string, round basics.Round) *fixtures.WebProxy {
@@ -314,8 +310,7 @@ func TestCatchpointCatchupFailure(t *testing.T) {
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
-	catchpointLabel, err := waitForCatchpointGeneration(fixture, primaryNodeRestClient, targetCatchpointRound)
-	a.NoError(err)
+	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
 	primaryErrorsCollector.Print()
 	err = primaryNode.StopAlgod()
@@ -361,8 +356,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
-	catchpointLabel, err := waitForCatchpointGeneration(fixture, primaryNodeRestClient, targetCatchpointRound)
-	a.NoError(err)
+	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
@@ -517,7 +511,8 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 
 	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
-	relayClient := fixture.GetLibGoalClientFromNodeController(relayNode)
+	relayClient := fixture.GetAlgodClientForController(relayNode)
+
 	wallet1, err := client1.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	wallet2, err := client2.GetUnencryptedWalletHandle()
@@ -536,32 +531,10 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	a.NoError(err)
 	targetCatchpointRound := status.LastRound
 
-	// ensure the catchpoint is created for targetCatchpointRound
-	timer := time.NewTimer(100 * time.Second)
-outer:
-	for {
-		status, err = relayClient.Status()
-		a.NoError(err)
-
-		var round basics.Round
-		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
-			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
-			a.NoError(err)
-			if uint64(round) >= targetCatchpointRound {
-				break
-			}
-		}
-		select {
-		case <-timer.C:
-			a.Failf("timeout waiting on a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
-			break outer
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
-	}
+	lastCatchpoint := waitForCatchpointGeneration(t, &fixture, relayClient, basics.Round(targetCatchpointRound))
 
 	// let the primary node catchup
-	err = client1.Catchup(*status.LastCatchpoint)
+	err = client1.Catchup(lastCatchpoint)
 	a.NoError(err)
 
 	status1, err := client1.Status()
@@ -644,7 +617,7 @@ func TestReadyEndpoint(t *testing.T) {
 
 	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
-	relayClient := fixture.GetLibGoalClientFromNodeController(relayNode)
+	relayClient := fixture.GetAlgodClientForController(relayNode)
 	wallet1, err := client1.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	wallet2, err := client2.GetUnencryptedWalletHandle()
@@ -664,28 +637,7 @@ func TestReadyEndpoint(t *testing.T) {
 	targetCatchpointRound := status.LastRound
 
 	// ensure the catchpoint is created for targetCatchpointRound
-	timer := time.NewTimer(100 * time.Second)
-outer:
-	for {
-		status, err = relayClient.Status()
-		a.NoError(err)
-
-		var round basics.Round
-		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
-			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
-			a.NoError(err)
-			if uint64(round) >= targetCatchpointRound {
-				break
-			}
-		}
-		select {
-		case <-timer.C:
-			a.Failf("timeout waiting on a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
-			break outer
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
-	}
+	lastCatchpoint := waitForCatchpointGeneration(t, &fixture, relayClient, basics.Round(targetCatchpointRound))
 
 	//////////
 	// NOTE //
@@ -695,7 +647,7 @@ outer:
 	// Then when the primary node is at target round, it should satisfy ready 200 condition
 
 	// let the primary node catchup
-	err = client1.Catchup(*status.LastCatchpoint)
+	err = client1.Catchup(lastCatchpoint)
 	a.NoError(err)
 
 	// The primary node is catching up with its previous catchpoint
@@ -716,7 +668,7 @@ outer:
 	// The primary node has reached the target round,
 	// - the sync-time (aka catchup time should be 0.0)
 	// - the catchpoint should be empty (len == 0)
-	timer = time.NewTimer(100 * time.Second)
+	timer := time.NewTimer(100 * time.Second)
 
 	for {
 		err = primaryNodeRestClient.ReadyCheck()
@@ -804,7 +756,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 
 	client1 := fixture.GetLibGoalClientFromNodeController(primaryNode)
 	client2 := fixture.GetLibGoalClientFromNodeController(secondNode)
-	relayClient := fixture.GetLibGoalClientFromNodeController(relayNode)
+	relayClient := fixture.GetAlgodClientForController(relayNode)
 	wallet1, err := client1.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	wallet2, err := client2.GetUnencryptedWalletHandle()
@@ -824,28 +776,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	targetCatchpointRound := status.LastRound
 
 	// ensure the catchpoint is created for targetCatchpointRound
-	timer := time.NewTimer(100 * time.Second)
-outer:
-	for {
-		status, err = relayClient.Status()
-		a.NoError(err)
-
-		var round basics.Round
-		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
-			round, _, err = ledgercore.ParseCatchpointLabel(*status.LastCatchpoint)
-			a.NoError(err)
-			if uint64(round) >= targetCatchpointRound {
-				break
-			}
-		}
-		select {
-		case <-timer.C:
-			a.Failf("timeout waiting on a catchpoint", "target: %d, got %d", targetCatchpointRound, round)
-			break outer
-		default:
-			time.Sleep(250 * time.Millisecond)
-		}
-	}
+	lastCatchpoint := waitForCatchpointGeneration(t, &fixture, relayClient, basics.Round(targetCatchpointRound))
 
 	// stop the primary node
 	client1.FullStop()
@@ -858,7 +789,7 @@ outer:
 	_, err = fixture.StartNode(primaryNode.GetDataDir())
 	a.NoError(err)
 	// let the primary node catchup
-	err = client1.Catchup(*status.LastCatchpoint)
+	err = client1.Catchup(lastCatchpoint)
 	a.NoError(err)
 
 	// the transaction should not be confirmed yet

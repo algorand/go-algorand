@@ -447,10 +447,10 @@ var sendCmd = &cobra.Command{
 			}
 			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil)
 			if err == nil {
-				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
+				err = verify.LogicSigSanityCheck(0, groupCtx)
 			}
 			if err != nil {
-				reportErrorf("%s: txn[0] error %s", outFilename, err)
+				reportErrorf("%s: txn error %s", outFilename, err)
 			}
 			stx = uncheckedTxn
 		} else if program != nil {
@@ -852,17 +852,17 @@ var signCmd = &cobra.Command{
 					reportErrorf("%s: %v", txFilename, err)
 				}
 			}
-			for i, txn := range txnGroup {
+			for i := range txnGroup {
 				var signedTxn transactions.SignedTxn
 				if lsig.Logic != nil {
-					err = verify.LogicSigSanityCheck(&txn, i, groupCtx)
+					err = verify.LogicSigSanityCheck(i, groupCtx)
 					if err != nil {
 						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
 					}
-					signedTxn = txn
+					signedTxn = txnGroup[i]
 				} else {
 					// sign the usual way
-					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txn.Txn)
+					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txnGroup[i].Txn)
 					if err != nil {
 						reportErrorf(errorSigningTX, err)
 					}

@@ -836,15 +836,19 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 // If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
 // be used instead.
 // The tracer argument is a logic.EvalTracer which will be attached to the evaluator and have its hooked invoked during
-// the eval process for each block. A nil tracer will skip tracer invocation entirely.
+// the eval process for each block. A nil tracer will default to the tracer attached to the ledger.
 func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
+	tracerForEval := tracer
+	if tracerForEval == nil {
+		tracerForEval = l.tracer
+	}
 	return eval.StartEvaluator(l, hdr,
 		eval.EvaluatorOptions{
 			PaysetHint:          paysetHint,
 			Generate:            true,
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
-			Tracer:              tracer,
+			Tracer:              tracerForEval,
 		})
 }
 
