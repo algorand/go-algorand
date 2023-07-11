@@ -58,13 +58,21 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
+	github.com/minio/sha256-simd v0.1.1-0.20190913151208-6de447530771 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
+	github.com/mr-tron/base58 v1.1.2 // indirect
+	github.com/multiformats/go-multiaddr v0.2.0 // indirect
+	github.com/multiformats/go-multiaddr-dns v0.3.1 // indirect
+	github.com/multiformats/go-multihash v0.0.8 // indirect
+	github.com/multiformats/go-varint v0.0.1 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
