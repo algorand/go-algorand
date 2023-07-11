@@ -59,8 +59,8 @@ endif
 GOTAGSLIST  += osusergo netgo static_build
 GOBUILDMODE := -buildmode pie
 endif
-ifeq ($(ARCH), arm)
-ifneq ("$(wildcard /etc/alpine-release)","")
+ifeq ($(ARCH), $(filter $(ARCH), arm arm64))
+ifeq (,$(wildcard /etc/alpine-release))
 EXTLDFLAGS  += -static
 GOTAGSLIST  += osusergo netgo static_build
 GOBUILDMODE := -buildmode pie
