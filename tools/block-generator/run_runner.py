@@ -172,7 +172,7 @@ runner \\
 --conduit-binary "{args.conduit_binary}" \\
 --report-directory {args.report_directory} \\
 --test-duration {args.test_duration} \\
---log-level trace \\
+--conduit-log-level trace \\
 --postgres-connection-string "host=localhost user=algorand password=algorand dbname={args.pg_database} port={args.pg_port} sslmode=disable" \\
 --scenario {args.scenario} {DBS + NL + '--reset-db' if args.reset_db else ''}"""
             if args.skip_runner:

@@ -110,7 +110,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	// Update the cached TotalExtraAppPages for this account, used
 	// when computing MinBalance
 	totalExtraPages := record.TotalExtraAppPages
-	totalExtraPages = basics.AddSaturate32(totalExtraPages, ac.ExtraProgramPages)
+	totalExtraPages = basics.AddSaturate(totalExtraPages, ac.ExtraProgramPages)
 	record.TotalExtraAppPages = totalExtraPages
 
 	// Write back to the creator's balance record
@@ -161,7 +161,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		proto := balances.ConsensusParams()
 		if proto.EnableExtraPagesOnAppUpdate {
 			extraPages := params.ExtraProgramPages
-			totalExtraPages = basics.SubSaturate32(totalExtraPages, extraPages)
+			totalExtraPages = basics.SubSaturate(totalExtraPages, extraPages)
 		}
 		record.TotalExtraAppPages = totalExtraPages
 	}

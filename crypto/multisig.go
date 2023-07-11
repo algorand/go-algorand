@@ -75,6 +75,18 @@ func (msig MultisigSig) Preimage() (version, threshold uint8, pks []PublicKey) {
 	return msig.Version, msig.Threshold, pks
 }
 
+// Signatures returns the actual number of signatures included in the
+// multisig. That is, the number of subsigs that are not blank.
+func (msig MultisigSig) Signatures() int {
+	sigs := 0
+	for i := range msig.Subsigs {
+		if !msig.Subsigs[i].Sig.Blank() {
+			sigs++
+		}
+	}
+	return sigs
+}
+
 const multiSigString = "MultisigAddr"
 const maxMultisig = 255
 
@@ -207,7 +219,7 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 	}
 	for i := 0; i < len(unisig); i++ {
 		for j := 0; j < len(unisig[0].Subsigs); j++ {
-			if (unisig[i].Subsigs[j].Sig != Signature{}) {
+			if !unisig[i].Subsigs[j].Sig.Blank() {
 				msig.Subsigs[j].Sig = unisig[i].Subsigs[j].Sig
 			}
 		}
@@ -228,7 +240,7 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (err error) {
 
 // MultisigBatchPrep performs checks on the assembled MultisigSig and adds to the batch.
 // The caller must call batchVerifier.verify() to verify it.
-func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) (err error) {
+func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) error {
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
 	// then terminate (the upper layer should now verify the unisig)
 	if (len(sig.Subsigs) == 0 || sig.Subsigs[0] == MultisigSubsig{}) {
@@ -238,7 +250,7 @@ func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier
 	// check the address is correct
 	addrnew, err := MultisigAddrGenWithSubsigs(sig.Version, sig.Threshold, sig.Subsigs)
 	if err != nil {
-		return
+		return err
 	}
 	if addr != addrnew {
 		return errInvalidAddress
@@ -249,37 +261,18 @@ func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier
 		return errInvalidNumberOfSignature
 	}
 
-	// check that we don't have too few multisig subsigs
-	if len(sig.Subsigs) < int(sig.Threshold) {
-		return errInvalidNumberOfSignature
-	}
-
 	// checks the number of non-blank signatures is no less than threshold
-	var counter uint8
-	for _, subsigi := range sig.Subsigs {
-		if (subsigi.Sig != Signature{}) {
-			counter++
-		}
-	}
-	if counter < sig.Threshold {
+	if sig.Signatures() < int(sig.Threshold) {
 		return errInvalidNumberOfSignature
 	}
 
-	// checks individual signature verifies
-	var sigCount int
+	// queues individual signature verifies
 	for _, subsigi := range sig.Subsigs {
-		if (subsigi.Sig != Signature{}) {
+		if !subsigi.Sig.Blank() {
 			batchVerifier.EnqueueSignature(subsigi.Key, msg, subsigi.Sig)
-			sigCount++
 		}
 	}
-
-	// sanity check. if we get here then every non-blank subsig should have
-	// been verified successfully, and we should have had enough of them
-	if sigCount < int(sig.Threshold) {
-		return errInvalidNumberOfSignature
-	}
-	return
+	return nil
 }
 
 // MultisigAdd adds unisig to an existing msig
@@ -315,8 +308,8 @@ func MultisigAdd(unisig []MultisigSig, msig *MultisigSig) (err error) {
 	// update the msig
 	for i := 0; i < len(unisig); i++ {
 		for j := 0; j < len(msig.Subsigs); j++ {
-			if (unisig[i].Subsigs[j].Sig != Signature{}) {
-				if (msig.Subsigs[j].Sig == Signature{}) {
+			if !unisig[i].Subsigs[j].Sig.Blank() {
+				if msig.Subsigs[j].Sig.Blank() {
 					// add the signature
 					msig.Subsigs[j].Sig = unisig[i].Subsigs[j].Sig
 				} else if msig.Subsigs[j].Sig != unisig[i].Subsigs[j].Sig {
@@ -354,13 +347,13 @@ func MultisigMerge(msig1 MultisigSig, msig2 MultisigSig) (msigt MultisigSig, err
 	msigt.Subsigs = make([]MultisigSubsig, len(msig1.Subsigs))
 	for i := 0; i < len(msigt.Subsigs); i++ {
 		msigt.Subsigs[i].Key = msig1.Subsigs[i].Key
-		if (msig1.Subsigs[i].Sig == Signature{}) {
-			if (msig2.Subsigs[i].Sig != Signature{}) {
+		if msig1.Subsigs[i].Sig.Blank() {
+			if !msig2.Subsigs[i].Sig.Blank() {
 				// update signature with msig2's signature
 				msigt.Subsigs[i].Sig = msig2.Subsigs[i].Sig
 			}
-		} else if (msig2.Subsigs[i].Sig == Signature{} || // msig2's sig is empty
-			msig2.Subsigs[i].Sig == msig1.Subsigs[i].Sig) { // valid duplicates
+		} else if msig2.Subsigs[i].Sig.Blank() || // msig2's sig is empty
+			msig2.Subsigs[i].Sig == msig1.Subsigs[i].Sig { // valid duplicates
 			// update signature with msig1's signature
 			msigt.Subsigs[i].Sig = msig1.Subsigs[i].Sig
 		} else {

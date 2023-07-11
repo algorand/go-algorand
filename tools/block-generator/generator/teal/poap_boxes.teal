@@ -51,15 +51,15 @@ intc_1 // 2
 bnz label4
 
 txn OnCompletion
-intc_2 // 1
+intc_2 // 1 == OptInOC
 ==
 bnz label5
 
 txn NumAppArgs
 intc_0 // 0
 ==
-bz label6
-b label7
+bz label6 // if have some app args ... continue ...
+b label7  // if no app app args: error
 
 label6:
 
@@ -71,19 +71,19 @@ label6:
 	pushbytes 0xddc3d103 // 0xddc3d103
 	txna ApplicationArgs 0
 	==
-	bnz label9
+	bnz label9 // create an app with approval in arg1 and clear in arg2 and return the new appID
 
 	pushbytes 0x935e5c25 // 0x935e5c25
 	txna ApplicationArgs 0
 	==
-	bnz label10
+	bnz label10 // lets you call an arbitrary app with appid provided in arg1, approval program arg2, and clear program arg3
 
 	pushbytes 0xedbb9ab8 // 0xedbb9ab8
 	txna ApplicationArgs 0
 	==
-	bnz label11
+	bnz label11 // delete case
 
-	pushbytes 0xe1f93f1d // 0xe1f93f1d
+	pushbytes 0xe1f93f1d // 0xe1f93f1d <--- what we want to call
 	txna ApplicationArgs 0
 	==
 	bnz label12
@@ -103,55 +103,59 @@ label1: // App Creation
 	global CurrentApplicationID
 	itob
 	concat
-	b localsfill
+	b globalset
 
-label15:
+label15: // trying to optin with non-zero balance and when app already exists
 
 	global GroupSize
 	intc_1 // 2
 	==
-	assert
+	assert // must be in a group of 2
 
 	gtxn 1 Amount
-	intc 4 // 2000
+	int 2000000 // pay 2 algo
+	// intc 4 // 2000
 	==
+
 	gtxn 1 Receiver
 	global CurrentApplicationAddress
 	==
 	&&
 	assert
 
-	gtxn 1 Sender
-	global CreatorAddress
-	==
-	assert
-
+	// we don't want to limit the generator to only allow the creator to be the sender
+	// so the following is commented out:
+	// gtxn 1 Sender
+	// global CreatorAddress
+	// ==
+	// assert // 2nd txn in the group must be a pymt to the app for .002 Algos from the creator
 	gtxn 1 Fee
+
 	intc 4 // 2000
 	==
-	assert
+	assert // fee must be 2000
 
 	itxn_begin
 	intc_2 // 1
-	itxn_field TypeEnum
+	itxn_field TypeEnum // payment txn
 	txn Sender
 	itxn_field Receiver
 	pushint 764000
 	itxn_field Amount
 	global MinTxnFee
 	itxn_field Fee
-	itxn_submit
+	itxn_submit  // send 0.764 Algos from the app account to the Sender!!!
 
 	itxn_begin
 	intc_2 // 1
-	itxn_field TypeEnum
+	itxn_field TypeEnum // payment txn
 	global CreatorAddress
 	itxn_field Receiver
 	pushint 4000
 	itxn_field Amount
 	global MinTxnFee
 	itxn_field Fee
-	itxn_submit
+	itxn_submit // send .004 Algos to the creator
 	retsub
 
 label5:
@@ -159,15 +163,13 @@ label5:
 	txn Sender
 	store 3
 
-	load 3
+	load 3 // Sender
 	balance
-	store 4
+	store 4 // SenderBalance
 
 	load 4
-	bnz label14
-	callsub label15
-
-label14:
+	bz label7
+	callsub label15 // This introduces 2 inner txns
 
 	bytec_1 // "poap_onboard_count"
 	dup
@@ -184,9 +186,11 @@ label14:
 
 label16:
 
-	load 3
-	pushbytes 0x302c // "0,"
-	box_put
+	load 3 // Sender
+	// 992 = 1024 - 32 bytes:
+	byte "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+
+	box_put  // boxes[Sender] = "z" * 992 - our box of size 1024 has MBR 412,100 µA
 	retsub
 
 label2:
@@ -212,7 +216,7 @@ label3:
 label4:
 
 	txn Sender
-	store 3
+	store 3  // 3 -> Sender
 
 	load 3
 	box_del
@@ -267,7 +271,7 @@ label9:
 	assert
 
 	gtxn 0 TypeEnum
-	intc_2 // 1
+	intc_2 // 1  // first txn in group is a payment
 	==
 	assert
 
@@ -299,7 +303,7 @@ label9:
 
 	itxn_begin
 	intc_3 // 6
-	itxn_field TypeEnum
+	itxn_field TypeEnum // app call type
 	intc_0 // 0
 	itxn_field OnCompletion
 	txna ApplicationArgs 1
@@ -353,7 +357,7 @@ label10:
 
 	itxn_begin
 	intc_3 // 6
-	itxn_field TypeEnum
+	itxn_field TypeEnum // app call type
 	intc 6 // 4
 	itxn_field OnCompletion
 	txna ApplicationArgs 1
@@ -407,9 +411,9 @@ label11:
 	txna Assets 0
 	itxn_field Assets
 	intc_3 // 6
-	itxn_field TypeEnum
+	itxn_field TypeEnum // 6 => app call
 	intc 5 // 5
-	itxn_field OnCompletion
+	itxn_field OnCompletion // 5 => delete application
 	txna ApplicationArgs 1
 	btoi
 	txnas Applications
@@ -432,7 +436,9 @@ label11:
 
 label12:
 
-	intc_0 // 0
+	// intc_0 // 0
+	txn Sender
+
 	global CurrentApplicationID
 	app_opted_in
 	assert
@@ -456,7 +462,7 @@ label13:
 	intc_2 // 1
 	return
 
-localsfill:
+globalset:
 
 	// 64 bytes
 	byte "Why did the chicken cross the road? The answer has been omitted."
@@ -464,82 +470,82 @@ localsfill:
 	txn Sender
 	byte "0000000000000000000000000000000000000000000000000000000000000000"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "1111111111111111111111111111111111111111111111111111111111111111"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "2222222222222222222222222222222222222222222222222222222222222222"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "3333333333333333333333333333333333333333333333333333333333333332"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "4444444444444444444444444444444444444444444444444444444444444444"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "5555555555555555555555555555555555555555555555555555555555555555"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "6666666666666666666666666666666666666666666666666666666666666666"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "7777777777777777777777777777777777777777777777777777777777777777"
 	uncover 2
-	app_local_put
+	app_global_put
 
 	int 1337
 	txn Sender
 	byte "8888888888888888888888888888888888888888888888888888888888888888"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "9999999999999999999999999999999999999999999999999999999999999999"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 	dig 2
-	app_local_put
+	app_global_put
 
 	txn Sender
 	byte "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	uncover 2
-	app_local_put
+	app_global_put
 	b label13
 

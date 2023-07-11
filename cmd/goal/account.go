@@ -19,7 +19,9 @@ package main
 import (
 	"bufio"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -33,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
+	apiClient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -629,9 +632,15 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 		}
 		assetParams, err := client.AssetInformation(assetHolding.AssetID)
 		if err != nil {
-			hasError = true
-			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetID, address, err)
-			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetID)
+			var httpError apiClient.HTTPError
+			if errors.As(err, &httpError) && httpError.StatusCode == http.StatusNotFound {
+				fmt.Fprintf(report, "\tID %d, <deleted/unknown asset>\n", assetHolding.AssetID)
+			} else {
+				fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetID, address, err)
+				fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetID)
+				hasError = true
+			}
+			continue
 		}
 
 		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Params.Decimals)

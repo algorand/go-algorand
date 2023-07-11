@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	txn "github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -40,6 +41,8 @@ type Generator interface {
 }
 
 type generator struct {
+	verbose bool
+
 	config GenerationConfig
 
 	// payment transaction metadata
@@ -49,7 +52,7 @@ type generator struct {
 	numAccounts uint64
 
 	// Block stuff
-	round         uint64
+	round uint64
 	txnCounter    uint64
 	prevBlockHash string
 	timestamp     int64
@@ -78,11 +81,24 @@ type generator struct {
 	// being created.
 	pendingAssets []*assetData
 
-	// apps is a minimal representation of the app holdings
-	apps map[appKind][]*appData
-	// pendingApps is used to hold newly created apps so that they are not used before
-	// being created.
-	pendingApps map[appKind][]*appData
+	// pendingAppMap provides a live mapping from appID to appData for each appKind
+	// for the current round
+	pendingAppMap map[appKind]map[uint64]*appData
+
+	// pendingAppSlice provides a live slice of appData for each appKind. The reason
+	// for maintaining both appMap and pendingAppSlice is to enable
+	// randomly selecting an app to interact with and yet easily access it once
+	// its identifier is known
+	pendingAppSlice map[appKind][]*appData
+
+	// appMap and appSlice store the information from their corresponding pending*
+	// data structures at the end of each round and for the rest of the experiment
+	appMap   map[appKind]map[uint64]*appData
+	appSlice map[appKind][]*appData
+
+	// accountAppOptins is used to keep track of which accounts have opted into
+	// and app and enable random selection.
+	accountAppOptins map[appKind]map[uint64][]uint64
 
 	transactionWeights []float32
 
@@ -92,12 +108,19 @@ type generator struct {
 
 	// Reporting information from transaction type to data
 	reportData Report
+	// latestData keeps a count of how many transactions of each
+	// txType occurred in the current round.
+	latestData map[TxTypeID]uint64
 
 	// ledger
 	ledger *ledger.Ledger
 
-	// cache the latest written block
+	// latestBlockMsgp caches the latest written block
 	latestBlockMsgp []byte
+
+	// latestPaysetWithExpectedID provides the ordered payest transactions
+	// together the expected asset/app IDs (or 0 if not applicable)
+	latestPaysetWithExpectedID []txnWithExpectedID
 
 	roundOffset uint64
 }
@@ -112,14 +135,10 @@ type assetData struct {
 }
 
 type appData struct {
-	appID   uint64
-	creator uint64
-	kind    appKind
-	// Holding at index 0 is the creator.
-	holdings []*appHolding
-	// Set of holders in the holdings array for easy reference.
-	holders map[uint64]*appHolding
-	// TODO: more data, not sure yet exactly what
+	appID  uint64
+	sender uint64
+	kind   appKind
+	optins map[uint64]bool
 }
 
 type assetHolding struct {
@@ -127,16 +146,29 @@ type assetHolding struct {
 	balance   uint64
 }
 
-type appHolding struct {
-	appIndex uint64
-	// TODO: more data, not sure yet exactly what
-}
-
 // Report is the generation report.
 type Report map[TxTypeID]TxData
+
+// EffectsReport collates transaction counts caused by a root transaction.
+type EffectsReport map[string]uint64
 
 // TxData is the generator report data.
 type TxData struct {
 	GenerationTime  time.Duration `json:"generation_time_milli"`
 	GenerationCount uint64        `json:"num_generated"`
+}
+
+// TxEffect summarizes a txn type count caused by a root transaction.
+type TxEffect struct {
+	effect string
+	count  uint64
+}
+
+// txnWithExpectedID rolls up an expected asset/app ID for non-pay txns
+// together with a signedTxn expected to be in the payset.
+type txnWithExpectedID struct {
+	expectedID uint64
+	signedTxn  *txn.SignedTxn
+	intra      uint64
+	nextIntra  uint64
 }

@@ -61,7 +61,6 @@ var (
 	participation = configUpdater{
 		description: "Participate in consensus or simply ensure chain health by validating blocks.",
 		updateFunc: func(cfg config.Local) config.Local {
-			cfg.CatchupBlockValidateMode = 0b1100
 			return cfg
 		},
 	}

@@ -2,6 +2,27 @@
 
 This tool is used for testing Conduit import performance. It does this by generating synthetic blocks which are sent by mocking the Algod REST API endpoints that Conduit uses.
 
+## Benchmark Scenarios
+
+Several scenarios were designed to mimic different block traffic patterns. Scenarios can be used to test the same traffic across multiple versions of software. Each benchmark is run twice. Once with blocks containing 25000 transactions, and once with blocks containing 50000 transactions.
+
+### Organic Traffic
+
+Simulate the current mainnet traffic pattern. Approximately:
+* 15% payment transactions
+* 10% application transactions
+* 75% asset transactions
+
+With current tooling, the app transactions use boxes much more frequently than current mainnet traffic.
+
+### Payment Test (best case TPS)
+
+Blocks are entirely made up of payments. Most payments are transfers between existing accounts.
+
+### Stress Test (worst case TPS)
+
+Blocks are heavily weighted towards creating applications and boxes. This means a lot of data is being written which should translate to lower TPS.
+
 ## Scenario Configuration
 
 Block generator uses a YAML config file to describe the composition of each randomly generated block. There are three levels of configuration:
@@ -84,7 +105,7 @@ Flags:
   -h, --help            help for daemon
   -p, --port uint       Port to start the server at. (default 4010)
 ```
-  
+
 ### runner
 
 The runner mode is well suited for running the same set of tests consistently across many scenarios and for different releases. The runner mode automates this process by starting the **daemon** with many different configurations, managing a postgres database, and running a separate Conduit process configured to use them.
@@ -133,18 +154,21 @@ Usage:
 
 Flags:
   -i, --conduit-binary string               Path to conduit binary.
-      --cpuprofile string                   Path where conduit writes its CPU profile.
+  -l, --conduit-log-level string            LogLevel to use when starting Conduit. [panic, fatal, error, warn, info, debug, trace] (default "error")
+      --cpuprofile string                   Path where Conduit writes its CPU profile.
+  -f, --genesis-file string                 file path to the genesis associated with the db snapshot
   -h, --help                                help for runner
   -k, --keep-data-dir                       If set the validator will not delete the data directory after tests complete.
-  -l, --log-level string                    LogLevel to use when starting conduit. [panic, fatal, error, warn, info, debug, trace] (default "error")
   -p, --metrics-port uint                   Port to start the metrics server at. (default 9999)
   -c, --postgres-connection-string string   Postgres connection string.
   -r, --report-directory string             Location to place test reports.
-      --reset                               If set any existing report directory will be deleted before running tests.
+      --reset-db                            If set database will be deleted before running tests.
+      --reset-report-dir                    If set any existing report directory will be deleted before running tests.
   -s, --scenario string                     Directory containing scenarios, or specific scenario file.
   -d, --test-duration duration              Duration to use for each scenario. (default 5m0s)
       --validate                            If set the validator will run after test-duration has elapsed to verify data is correct. An extra line in each report indicates validator success or failure.
-```
+  -v, --verbose                             If set the runner will print debugging information from the generator and ledger.
+ ```
 
 ## Example Run using Conduit and Postgres in **bash** via `run_runner.sh`
 
@@ -175,10 +199,10 @@ the `go-algorand` repo, and:
 Then you can execute the following command to run the scenario:
 
 ```sh
-./run_runner.sh ./conduit scenario.yml 
+./run_runner.sh ./conduit scenario.yml
 ```
 
 ### Scenario Report
 
-If all goes well, the run will generate a directory `tmp/OUTPUT_RUN_RUNNER_TEST`
+If all goes well, the run will generate a directory `../../tmp/OUTPUT_RUN_RUNNER_TEST`
 and in that directory you can see the statistics of the run in `scenario.report`.
