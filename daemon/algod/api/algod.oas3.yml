@@ -2193,11 +2193,21 @@
             },
             "type": "array"
           },
+          "max-app-locals": {
+            "description": "The maximum allowed number of unnamed app local states.",
+            "type": "integer"
+          },
+          "max-asset-holdings": {
+            "description": "The maximum allowed number of unnamed asset holdings.",
+            "type": "integer"
+          },
           "resources": {
             "$ref": "#/components/schemas/SimulationUnnamedResourceAssignment"
           }
         },
         "required": [
+          "max-app-locals",
+          "max-asset-holdings",
           "resources"
         ],
         "type": "object"

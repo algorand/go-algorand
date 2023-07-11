@@ -3982,11 +3982,17 @@
       "description": "If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and benefit from group resource sharing. Also see property 'unnamed-resources' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing.",
       "type": "object",
       "required": [
-        "resources"
+        "resources",
+        "max-asset-holdings",
+        "max-app-locals"
       ],
       "properties": {
         "resources": {
           "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
+        },
+        "max-asset-holdings": {
+          "description": "The maximum allowed number of unnamed asset holdings.",
+          "type": "integer"
         },
         "asset-holdings": {
           "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
@@ -3994,6 +4000,10 @@
           "items": {
             "$ref": "#/definitions/AssetHoldingReference"
           }
+        },
+        "max-app-locals": {
+          "description": "The maximum allowed number of unnamed app local states.",
+          "type": "integer"
         },
         "app-locals": {
           "description": "The unnamed app local states that were referenced. The order of this array is arbitrary.",

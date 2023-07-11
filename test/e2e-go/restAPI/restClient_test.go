@@ -2564,9 +2564,11 @@ int 1
 			Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
 			MaxBoxes:     uint64(proto.MaxTxGroupSize * proto.MaxAppBoxReferences),
 		},
+		MaxAssetHoldings: uint64(proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4),
 		AssetHoldings: &[]model.AssetHoldingReference{
 			{Account: otherAddress, Asset: assetID},
 		},
+		MaxAppLocals: uint64(proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4),
 		AppLocals: &[]model.ApplicationLocalReference{
 			{Account: otherAddress, App: uint64(otherAppID)},
 		},

@@ -272,9 +272,13 @@ func (a *ResourceAssignment) maxPossibleUnnamedBoxes() int {
 // and it tracks any referenced unnamed resources that fit within those limits.
 type GroupResourceAssignment struct {
 	// Resources specifies global resources for the entire group.
-	Resources     ResourceAssignment
-	AssetHoldings map[ledgercore.AccountAsset]struct{}
-	AppLocals     map[ledgercore.AccountApp]struct{}
+	Resources ResourceAssignment
+
+	AssetHoldings    map[ledgercore.AccountAsset]struct{}
+	MaxAssetHoldings int
+
+	AppLocals    map[ledgercore.AccountApp]struct{}
+	MaxAppLocals int
 
 	// localTxnResources specifies local resources for each transaction in the group. This will only
 	// be populated if a top-level transaction executes AVM programs prior to v9 (when resource
@@ -284,15 +288,32 @@ type GroupResourceAssignment struct {
 	startingBoxes int
 }
 
+const maxCrossProductsPerAppCall = 16
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func makeGroupResourceAssignment(txns []transactions.SignedTxnWithAD, proto *config.ConsensusParams) GroupResourceAssignment {
 	var startingBoxes int
+	var nonAppCalls int
 	localTxnResources := make([]ResourceAssignment, len(txns))
 	for i := range txns {
 		localTxnResources[i] = makeTxnResourceAssignment(&txns[i].Txn, proto)
 		startingBoxes += len(txns[i].Txn.Boxes)
+		if txns[i].Txn.Type != protocol.ApplicationCallTx {
+			nonAppCalls++
+		}
 	}
+	maxAssetHoldingsPerAppCall := min(proto.MaxAppTxnForeignAssets, proto.MaxAppTotalTxnReferences/2) * min(proto.MaxAppTxnAccounts, proto.MaxAppTotalTxnReferences/2)
+	maxAppLocalsPerAppCall := min(proto.MaxAppTxnForeignApps, proto.MaxAppTotalTxnReferences/2) * min(proto.MaxAppTxnAccounts, proto.MaxAppTotalTxnReferences/2)
 	return GroupResourceAssignment{
 		Resources:         makeGlobalResourceAssignment(localTxnResources, proto),
+		MaxAssetHoldings:  maxAssetHoldingsPerAppCall * (proto.MaxTxGroupSize - nonAppCalls),
+		MaxAppLocals:      maxAppLocalsPerAppCall * (proto.MaxTxGroupSize - nonAppCalls),
 		localTxnResources: localTxnResources,
 		startingBoxes:     startingBoxes,
 	}
@@ -446,7 +467,9 @@ func (a *GroupResourceAssignment) hasHolding(addr basics.Address, aid basics.Ass
 }
 
 func (a *GroupResourceAssignment) addHolding(addr basics.Address, aid basics.AssetIndex) bool {
-	// TODO: limit cross-product usage
+	if len(a.AssetHoldings) >= a.MaxAssetHoldings {
+		return false
+	}
 	if a.AssetHoldings == nil {
 		a.AssetHoldings = make(map[ledgercore.AccountAsset]struct{})
 	}
@@ -465,7 +488,9 @@ func (a *GroupResourceAssignment) hasLocal(addr basics.Address, aid basics.AppIn
 }
 
 func (a *GroupResourceAssignment) addLocal(addr basics.Address, aid basics.AppIndex) bool {
-	// TODO: limit cross-product usage
+	if len(a.AppLocals) >= a.MaxAppLocals {
+		return false
+	}
 	if a.AppLocals == nil {
 		a.AppLocals = make(map[ledgercore.AccountApp]struct{})
 	}

@@ -3093,6 +3093,8 @@ func TestUnnamedResources(t *testing.T) {
 						MaxBoxes:     proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
 						MaxTotalRefs: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
 					},
+					MaxAssetHoldings: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
+					MaxAppLocals:     proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
 				}
 				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment
 				var expectedResources *simulation.ResourceAssignment
@@ -3359,6 +3361,8 @@ int 1
 						MaxBoxes:     proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
 						MaxTotalRefs: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
 					},
+					MaxAssetHoldings: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
+					MaxAppLocals:     proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
 				}
 				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment
 
@@ -3600,6 +3604,8 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 							Boxes:           expected.Boxes,
 							NumEmptyBoxRefs: expected.NumEmptyBoxRefs,
 						},
+						MaxAssetHoldings: len(boxOps) * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
+						MaxAppLocals:     len(boxOps) * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
 					},
 					FailedAt: failedAt,
 				},
@@ -3980,6 +3986,12 @@ const resourceLimitsTestProgramBase = `#pragma version %d
 txn ApplicationID
 bz end // Do nothing during create
 
+// Scratch slots:
+// 0 - loop counter
+// 1 - resource type
+// 2 - cross-product app/asset ID
+// 3 - cross-product accounts
+
 loop:
 load 0
 txn NumAppArgs
@@ -4010,6 +4022,14 @@ load 1
 int 3
 ==
 bnz box
+load 1
+int 4
+==
+bnz asset_holding
+load 1
+int 5
+==
+bnz app_local
 err
 
 account:
@@ -4036,6 +4056,56 @@ b loop_step
 
 box:
 %s
+b loop_step
+
+asset_holding:
+dup
+int 0
+extract_uint64
+store 2
+extract 8 0
+store 3
+asset_holding_loop:
+load 3
+len
+bz asset_holding_loop_end
+load 3
+dup
+extract 32 0
+store 3
+extract 0 32
+load 2
+asset_holding_get AssetBalance
+!
+assert
+!
+assert
+b asset_holding_loop
+asset_holding_loop_end:
+b loop_step
+
+app_local:
+dup
+int 0
+extract_uint64
+store 2
+extract 8 0
+store 3
+app_local_loop:
+load 3
+len
+bz app_local_loop_end
+load 3
+dup
+extract 32 0
+store 3
+extract 0 32
+load 2
+app_opted_in
+!
+assert
+b app_local_loop
+app_local_loop_end:
 
 loop_step:
 load 0
@@ -4044,8 +4114,6 @@ int 1
 store 0
 b loop
 loop_end:
-
-// TODO: cross product lookups
 
 end:
 int 1
@@ -4063,10 +4131,13 @@ func resourceLimitsTestProgram(version int) string {
 }
 
 type unnamedResourceArgument struct {
-	account       basics.Address
-	asset         basics.AssetIndex
-	app           basics.AppIndex
-	box           string
+	account              basics.Address
+	asset                basics.AssetIndex
+	app                  basics.AppIndex
+	box                  string
+	assetHoldingAccounts []basics.Address
+	appLocalAccounts     []basics.Address
+
 	limitExceeded bool
 }
 
@@ -4109,6 +4180,18 @@ func (resources unnamedResourceArguments) addBoxes(boxes ...string) unnamedResou
 	return modified
 }
 
+func (resources unnamedResourceArguments) addAssetHoldings(asset basics.AssetIndex, accounts ...basics.Address) unnamedResourceArguments {
+	modified := slices.Clone(resources)
+	modified = append(modified, unnamedResourceArgument{asset: asset, assetHoldingAccounts: accounts})
+	return modified
+}
+
+func (resources unnamedResourceArguments) addAppLocals(app basics.AppIndex, accounts ...basics.Address) unnamedResourceArguments {
+	modified := slices.Clone(resources)
+	modified = append(modified, unnamedResourceArgument{app: app, appLocalAccounts: accounts})
+	return modified
+}
+
 func (resources unnamedResourceArguments) accounts() []basics.Address {
 	var accounts []basics.Address
 	for i := range resources {
@@ -4118,6 +4201,8 @@ func (resources unnamedResourceArguments) accounts() []basics.Address {
 		if !resources[i].account.IsZero() {
 			accounts = append(accounts, resources[i].account)
 		}
+		accounts = append(accounts, resources[i].assetHoldingAccounts...)
+		accounts = append(accounts, resources[i].appLocalAccounts...)
 	}
 	return accounts
 }
@@ -4161,10 +4246,58 @@ func (resources unnamedResourceArguments) boxes() []string {
 	return boxes
 }
 
+func (resources unnamedResourceArguments) assetHoldings() []ledgercore.AccountAsset {
+	var assetHoldings []ledgercore.AccountAsset
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		for _, account := range resources[i].assetHoldingAccounts {
+			assetHoldings = append(assetHoldings, ledgercore.AccountAsset{
+				Address: account,
+				Asset:   resources[i].asset,
+			})
+		}
+	}
+	return assetHoldings
+}
+
+func (resources unnamedResourceArguments) appLocals() []ledgercore.AccountApp {
+	var appLocals []ledgercore.AccountApp
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		for _, account := range resources[i].appLocalAccounts {
+			appLocals = append(appLocals, ledgercore.AccountApp{
+				Address: account,
+				App:     resources[i].app,
+			})
+		}
+	}
+	return appLocals
+}
+
 func (resources unnamedResourceArguments) toAppArgs() [][]byte {
 	encoded := make([][]byte, len(resources))
 	for i, resource := range resources {
 		switch {
+		case len(resource.assetHoldingAccounts) != 0:
+			encoding := make([]byte, 1+8+32*len(resource.assetHoldingAccounts))
+			encoding[0] = 4
+			copy(encoding[1:9], uint64ToBytes(uint64(resource.asset)))
+			for accountIndex, account := range resource.assetHoldingAccounts {
+				copy(encoding[9+32*accountIndex:], account[:])
+			}
+			encoded[i] = encoding
+		case len(resource.appLocalAccounts) != 0:
+			encoding := make([]byte, 1+8+32*len(resource.appLocalAccounts))
+			encoding[0] = 5
+			copy(encoding[1:9], uint64ToBytes(uint64(resource.app)))
+			for accountIndex, account := range resource.appLocalAccounts {
+				copy(encoding[9+32*accountIndex:], account[:])
+			}
+			encoded[i] = encoding
 		case !resource.account.IsZero():
 			encoded[i] = append([]byte{0}, resource.account[:]...)
 		case resource.asset != 0:
@@ -4247,14 +4380,18 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 
 	proto := env.TxnInfo.CurrentProtocolParams()
 
-	expectedGlobalResources := simulation.ResourceAssignment{
-		MaxAccounts:  proto.MaxAppTxnAccounts,
-		MaxAssets:    proto.MaxAppTxnForeignAssets,
-		MaxApps:      proto.MaxAppTxnForeignApps,
-		MaxBoxes:     proto.MaxAppBoxReferences,
-		MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+	expectedGroupResources := simulation.GroupResourceAssignment{
+		Resources: simulation.ResourceAssignment{
+			MaxAccounts:  proto.MaxAppTxnAccounts,
+			MaxAssets:    proto.MaxAppTxnForeignAssets,
+			MaxApps:      proto.MaxAppTxnForeignApps,
+			MaxBoxes:     proto.MaxAppBoxReferences,
+			MaxTotalRefs: proto.MaxAppTotalTxnReferences,
 
-		Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), uint64(0)),
+			Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), uint64(0)),
+		},
+		MaxAssetHoldings: proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
+		MaxAppLocals:     proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
 	}
 	if appVersion < 9 {
 		// No shared resources
@@ -4269,18 +4406,20 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			Assets:   mapWithKeys(resources.assets(), struct{}{}),
 			Apps:     mapWithKeys(resources.apps(), struct{}{}),
 		}
-		expectedGlobalResources.MaxAccounts -= len(localResources.Accounts)
-		expectedGlobalResources.MaxAssets -= len(localResources.Assets)
-		expectedGlobalResources.MaxApps -= len(localResources.Apps)
-		expectedGlobalResources.MaxTotalRefs -= len(localResources.Accounts) + len(localResources.Assets) + len(localResources.Apps)
+		expectedGroupResources.Resources.MaxAccounts -= len(localResources.Accounts)
+		expectedGroupResources.Resources.MaxAssets -= len(localResources.Assets)
+		expectedGroupResources.Resources.MaxApps -= len(localResources.Apps)
+		expectedGroupResources.Resources.MaxTotalRefs -= len(localResources.Accounts) + len(localResources.Assets) + len(localResources.Apps)
 		if localResources.HasResources() {
 			expectedTxnResults[0].UnnamedResources = &localResources
 		}
 	} else {
 		// Shared resources
-		expectedGlobalResources.Accounts = mapWithKeys(resources.accounts(), struct{}{})
-		expectedGlobalResources.Assets = mapWithKeys(resources.assets(), struct{}{})
-		expectedGlobalResources.Apps = mapWithKeys(resources.apps(), struct{}{})
+		expectedGroupResources.Resources.Accounts = mapWithKeys(resources.accounts(), struct{}{})
+		expectedGroupResources.Resources.Assets = mapWithKeys(resources.assets(), struct{}{})
+		expectedGroupResources.Resources.Apps = mapWithKeys(resources.apps(), struct{}{})
+		expectedGroupResources.AssetHoldings = mapWithKeys(resources.assetHoldings(), struct{}{})
+		expectedGroupResources.AppLocals = mapWithKeys(resources.appLocals(), struct{}{})
 	}
 
 	testCase := simulationTestCase{
@@ -4297,10 +4436,8 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 					Txns:              expectedTxnResults,
 					AppBudgetAdded:    uint64(700),
 					AppBudgetConsumed: ignoreAppBudgetConsumed,
-					UnnamedResources: &simulation.GroupResourceAssignment{
-						Resources: expectedGlobalResources,
-					},
-					FailedAt: failedAt,
+					UnnamedResources:  &expectedGroupResources,
+					FailedAt:          failedAt,
 				},
 			},
 			EvalOverrides: simulation.ResultEvalOverrides{
@@ -4331,13 +4468,13 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				otherAccounts[i] = env.Accounts[i+1].Addr
 			}
 
-			assetCreator := env.Accounts[2].Addr
+			assetCreator := env.Accounts[1].Addr
 			assets := make([]basics.AssetIndex, proto.MaxAppTxnForeignAssets+1)
 			for i := range assets {
 				assets[i] = env.CreateAsset(assetCreator, basics.AssetParams{Total: 100})
 			}
 
-			otherAppCreator := env.Accounts[4].Addr
+			otherAppCreator := env.Accounts[1].Addr
 			otherApps := make([]basics.AppIndex, proto.MaxAppTxnForeignApps+1)
 			for i := range otherApps {
 				otherApps[i] = env.CreateApp(otherAppCreator, simulationtesting.AppParams{
@@ -4456,12 +4593,31 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				fmt.Sprintf("logic eval error: unavailable App %d", otherApps[len(otherApps)-1]),
 			)
 			if v >= 8 {
-				// See note above about why we wait until v9 to test boxes.
 				testResourceAccess(
 					atLimit.addBoxes(boxes[len(boxes)-1]).markLimitExceeded(),
 					fmt.Sprintf("logic eval error: invalid Box reference %#x", boxes[len(boxes)-1]),
 				)
 			}
+
+			// Exactly at asset holding limit
+			testResourceAccess(
+				unnamedResourceArguments{}.
+					addAssetHoldings(assets[0], otherAccounts[1:5]...).
+					addAssetHoldings(assets[1], otherAccounts[1:5]...).
+					addAssetHoldings(assets[2], otherAccounts[1:5]...).
+					addAssetHoldings(assets[3], otherAccounts[1:5]...),
+			)
+
+			// Exactly at app local limit
+			testResourceAccess(
+				unnamedResourceArguments{}.
+					addAppLocals(otherApps[0], otherAccounts[1:5]...).
+					addAppLocals(otherApps[1], otherAccounts[1:5]...).
+					addAppLocals(otherApps[2], otherAccounts[1:5]...).
+					addAppLocals(otherApps[3], otherAccounts[1:5]...),
+			)
+
+			// TODO: test exceeding asset holding and app local limits
 		})
 	}
 }
