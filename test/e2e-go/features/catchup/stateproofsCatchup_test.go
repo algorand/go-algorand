@@ -91,8 +91,7 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
-	catchpointLabel, err := waitForCatchpointGeneration(fixture, primaryNodeRestClient, targetCatchpointRound)
-	a.NoError(err)
+	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
@@ -168,8 +167,7 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
-	catchpointLabel, err := waitForCatchpointGeneration(fixture, primaryNodeRestClient, targetCatchpointRound)
-	a.NoError(err)
+	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
@@ -259,8 +257,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
-	catchpointLabel, err := waitForCatchpointGeneration(&fixture, primaryNodeRestClient, targetCatchpointRound)
-	a.NoError(err)
+	catchpointLabel := waitForCatchpointGeneration(t, &fixture, primaryNodeRestClient, targetCatchpointRound)
 	_, err = usingNodeRestClient.Catchup(catchpointLabel)
 	a.NoError(err)
 
