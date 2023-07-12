@@ -6,7 +6,7 @@ import csv
 import random
 
 from matplotlib import pyplot as plt
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MaxNLocator, FuncFormatter
 
 _meta_cols = {'when', 'dt', 'round'}
 _metrics_cols = {'free', 'inuse', 'released', 'total'}
@@ -43,6 +43,15 @@ def add_metric(d, k, m, x, y):
             mt[m] = [(x,y)]
         else:
             klist.append((x, y))
+
+
+def format_mem(x, _):
+    if x<0:
+        return ""
+    for unit in ['bytes', 'KB', 'MB', 'GB']:
+        if x < 1024:
+            return "%3.1f %s" % (x, unit)
+        x /= 1024
 
 def main():
     import argparse
@@ -81,6 +90,7 @@ def main():
         print("{} found series {}".format(fname, nodes))
         fig, ax = plt.subplots()
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.yaxis.set_major_formatter(FuncFormatter(format_mem))
         ax.set_ylabel('bytes')
         ax.set_xlabel('round')
         ax.set_ylim(minv,maxv)
