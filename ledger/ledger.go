@@ -91,8 +91,6 @@ type Ledger struct {
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
 
-	//	headerCache blockHeaderCache
-
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
 
@@ -135,8 +133,6 @@ func OpenLedger(
 		dbPathPrefix:                   dbPathPrefix,
 		tracer:                         tracer,
 	}
-
-	//	l.headerCache.initialize()
 
 	defer func() {
 		if err != nil {
@@ -705,7 +701,6 @@ func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.
 	if err != nil {
 		return err
 	}
-	//	l.headerCache.put(blk.BlockHeader)
 	l.trackers.newBlock(blk, vb.Delta())
 	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil
