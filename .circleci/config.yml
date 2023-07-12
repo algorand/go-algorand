@@ -86,7 +86,7 @@ workflows:
           name: << matrix.platform >>_build_nightly
           matrix: &matrix-nightly
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["mac_amd64"]
           filters: &filters-nightly
             branches:
               only:
