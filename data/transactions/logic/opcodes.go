@@ -23,6 +23,8 @@ import (
 	"strings"
 
 	"golang.org/x/exp/maps"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -505,6 +507,29 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 
 	deletions = labelNum + 1
 	return
+}
+
+// StoreNewValue ...
+func (cx *EvalContext) StoreNewValue() (uint64, basics.TealValue, basics.TealValue, bool) {
+	currentOpcodeName := opsByOpcode[cx.version][cx.program[cx.pc]].Name
+	if currentOpcodeName == "store" {
+		scratchSlotID := uint64(cx.pc + 1)
+		oldValue := cx.scratch[scratchSlotID].ToTealValue()
+		newValue := cx.Stack[len(cx.Stack)-1].ToTealValue()
+		return scratchSlotID, oldValue, newValue, true
+	} else if currentOpcodeName == "stores" {
+		last := len(cx.Stack) - 1
+		prev := last - 1
+		scratchSlotID := cx.Stack[prev].Uint
+		if scratchSlotID >= uint64(len(cx.scratch)) {
+			return 0, basics.TealValue{}, basics.TealValue{}, true
+		}
+		oldValue := cx.scratch[scratchSlotID].ToTealValue()
+		newValue := cx.Stack[last].ToTealValue()
+		return scratchSlotID, oldValue, newValue, true
+	} else {
+		return 0, basics.TealValue{}, basics.TealValue{}, false
+	}
 }
 
 func proto(signature string, effects ...string) Proto {

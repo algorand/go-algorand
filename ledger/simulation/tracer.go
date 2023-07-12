@@ -303,11 +303,6 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
-	if evalError == nil && tracer.result.ReturnScratchChange() {
-		// TODO: do something: store, stores
-		_ = 1 + 1 // make a non empty logic branch
-	}
-
 	groupIndex := cx.GroupIndex()
 
 	// NOTE: only when we have no evalError on current opcode,
@@ -320,8 +315,21 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
 		}
 
-		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
-		latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
+		if tracer.result.ReturnStackChange() {
+			latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
+			latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
+		}
+
+		if tracer.result.ReturnScratchChange() {
+			scratchSlotID, oldValue, newValue, isStoreAlike := cx.StoreNewValue()
+			if isStoreAlike {
+				latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
+				latestOpcodeTraceUnit.ScratchSlotChange = &ScratchChange{ScratchSlot: scratchSlotID}
+				if oldValue != newValue {
+					latestOpcodeTraceUnit.ScratchSlotChange.Value = newValue
+				}
+			}
+		}
 	}
 
 	if cx.RunMode() != logic.ModeApp {

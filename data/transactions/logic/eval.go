@@ -631,15 +631,6 @@ func (cx *EvalContext) RunMode() RunMode {
 // PC returns the program counter of the current application being evaluated
 func (cx *EvalContext) PC() int { return cx.pc }
 
-// DisassembleLine disassembles the line pointing to current PC
-func (cx *EvalContext) DisassembleLine() (string, error) {
-	currentDisassembleState := &disassembleState{
-		program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec,
-	}
-	currentOpSpec := &opsByOpcode[cx.version][cx.program[cx.pc]]
-	return disassemble(currentDisassembleState, currentOpSpec)
-}
-
 // avmType describes the type of a value on the operand stack
 // avmTypes are a subset of StackTypes
 type avmType byte
