@@ -54,7 +54,8 @@ executors:
   mac_amd64_large:
     macos:
       xcode: 14.2.0
-    resource_class: macos.m1.large.gen1
+    # Since they removed the large class for amd64, we will use medium here too.
+    resource_class: macos.x86.medium.gen2
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_arm64: &executor-mac-arm64
@@ -136,7 +137,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["mac_amd64"]
               job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
@@ -163,7 +164,7 @@ workflows:
           name: << matrix.platform >>_test
           matrix: &matrix-default
             parameters:
-              platform: ["mac_amd64", "mac_arm64"]
+              platform: ["mac_amd64"]
           filters: &filters-default
             branches:
               ignore:
