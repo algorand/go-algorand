@@ -70,9 +70,9 @@ const (
 	appBoxesClose  TxTypeID = "app_boxes_close"
 	appBoxesClear  TxTypeID = "app_boxes_clear"
 
-	// Special TxTypeID's recording effects of higher level transactions
-	effectPaymentTxSibling TxTypeID = "effect_payment_sibling"
-	effectInnerTx          TxTypeID = "effect_inner_tx"
+	// For reporting side-effects of higher level transactions
+	effectPaymentTxSibling = "effect_payment_sibling"
+	effectInnerTx          = "effect_inner_tx"
 
 	// Defaults
 	defaultGenesisAccountsCount         uint64 = 1000
@@ -81,9 +81,6 @@ const (
 	assetTotal uint64 = 100_000_000_000_000_000 // 100 billion units per asset
 
 	consensusTimeMilli int64 = 3300
-
-	// TODO: do we still need this as can get it from the Ledger?
-	startingTxnCounter uint64 = 1000
 )
 
 type appKind uint8

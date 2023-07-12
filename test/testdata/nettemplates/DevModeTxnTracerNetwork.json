@@ -1,0 +1,36 @@
+{
+  "Genesis": {
+    "NetworkName": "devmodefollowernet",
+    "LastPartKeyRound": 3000,
+    "Wallets": [
+      {
+        "Name": "Wallet1",
+        "Stake": 40,
+        "Online": true
+      },
+      {
+        "Name": "Wallet2",
+        "Stake": 40,
+        "Online": true
+      },
+      {
+        "Name": "Wallet3",
+        "Stake": 20,
+        "Online": true
+      }
+    ],
+    "DevMode": true
+  },
+  "Nodes": [
+    {
+      "Name": "Node",
+      "IsRelay": false,
+      "ConfigJSONOverride": "{\"EnableTxnEvalTracer\":true}",
+      "Wallets": [
+        { "Name": "Wallet1", "ParticipationOnly": false },
+        { "Name": "Wallet2", "ParticipationOnly": false },
+        { "Name": "Wallet3", "ParticipationOnly": false }
+      ]
+    }
+  ]
+}

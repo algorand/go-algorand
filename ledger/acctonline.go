@@ -205,12 +205,14 @@ func (ao *onlineAccounts) latest() basics.Round {
 
 // close closes the accountUpdates, waiting for all the child go-routine to complete
 func (ao *onlineAccounts) close() {
+	// ao.voters' loadTree might use ao.accountsq if looking up DB
+	// so it must be closed before ao.accountsq
+	ao.voters.close()
+
 	if ao.accountsq != nil {
 		ao.accountsq.Close()
 		ao.accountsq = nil
 	}
-
-	ao.voters.close()
 
 	ao.baseOnlineAccounts.prune(0)
 }
@@ -556,6 +558,26 @@ func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Rou
 	return totalStake, nil
 }
 
+// roundsParamsEx return the round params for the given round for extended rounds range
+// by looking into DB as needed
+// locking semantics: requires accountsMu.RLock()
+func (ao *onlineAccounts) roundsParamsEx(rnd basics.Round) (ledgercore.OnlineRoundParamsData, error) {
+	paramsOffset, err := ao.roundParamsOffset(rnd)
+	if err == nil {
+		return ao.onlineRoundParamsData[paramsOffset], nil
+	}
+	var roundOffsetError *RoundOffsetError
+	if !errors.As(err, &roundOffsetError) {
+		return ledgercore.OnlineRoundParamsData{}, err
+	}
+
+	roundParams, err := ao.accountsq.LookupOnlineRoundParams(rnd)
+	if err != nil {
+		return ledgercore.OnlineRoundParamsData{}, err
+	}
+	return roundParams, nil
+}
+
 // onlineTotalsEx return the total online balance for the given round for extended rounds range
 // by looking into DB
 func (ao *onlineAccounts) onlineTotalsEx(rnd basics.Round) (basics.MicroAlgos, error) {
@@ -569,8 +591,12 @@ func (ao *onlineAccounts) onlineTotalsEx(rnd basics.Round) (basics.MicroAlgos, e
 		ao.log.Errorf("onlineTotals error: %v", err)
 	}
 
-	totalsOnline, err = ao.accountsq.LookupOnlineTotalsHistory(rnd)
-	return totalsOnline, err
+	roundParams, err := ao.accountsq.LookupOnlineRoundParams(rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	totalsOnline = basics.MicroAlgos{Raw: roundParams.OnlineSupply}
+	return totalsOnline, nil
 }
 
 // onlineTotals returns the online totals of all accounts at the end of round rnd.
@@ -1002,13 +1028,13 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 			// roundOffsetError was returned, so the round number cannot be found in deltas, it is in history.
 			// This means offset will be 0 and ao.deltas[:offset] will be an empty slice.
 		}
-		paramsOffset, err := ao.roundParamsOffset(rnd)
+
+		roundParams, err := ao.roundsParamsEx(rnd)
 		if err != nil {
 			return nil, err
 		}
-
-		rewardsParams := config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
-		rewardsLevel := ao.onlineRoundParamsData[paramsOffset].RewardsLevel
+		rewardsParams := config.Consensus[roundParams.CurrentProtocol]
+		rewardsLevel := roundParams.RewardsLevel
 
 		// Step 1: get all online accounts from DB for rnd
 		// Not unlocking ao.accountsMu yet, to stay consistent with Step 2

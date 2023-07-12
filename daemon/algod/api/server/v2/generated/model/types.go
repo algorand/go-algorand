@@ -407,6 +407,18 @@ type AssetParams struct {
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
+// AvmValue Represents an AVM value.
+type AvmValue struct {
+	// Bytes bytes value.
+	Bytes *[]byte `json:"bytes,omitempty"`
+
+	// Type value type. Value `1` refers to **bytes**, value `2` refers to **uint64**
+	Type uint64 `json:"type"`
+
+	// Uint uint value.
+	Uint *uint64 `json:"uint,omitempty"`
+}
+
 // Box Box name and its content.
 type Box struct {
 	// Name \[name\] box name, base64 encoded
@@ -638,8 +650,8 @@ type ScratchChangeUnit struct {
 	// Type Scratch change type. Value `1` refers to load, value `2` refers to store
 	Type uint64 `json:"type"`
 
-	// Value Represents a TEAL value over the stack.
-	Value StackValue `json:"value"`
+	// Value Represents an AVM value.
+	Value AvmValue `json:"value"`
 }
 
 // SimulateRequest Request type for simulation endpoint.
@@ -673,6 +685,9 @@ type SimulateTraceConfig struct {
 
 	// ScratchChange A boolean option enabling returning scratch slot changes.
 	ScratchChange *bool `json:"scratch-change,omitempty"`
+
+	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
+	StackChange *bool `json:"stack-change,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -733,6 +748,12 @@ type SimulationOpcodeTraceUnit struct {
 
 	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
 	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`
+
+	// StackAdditions The values added by this opcode to the stack.
+	StackAdditions *[]AvmValue `json:"stack-additions,omitempty"`
+
+	// StackPopCount The number of deleted stack values by this opcode.
+	StackPopCount *uint64 `json:"stack-pop-count,omitempty"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
@@ -748,18 +769,6 @@ type SimulationTransactionExecTrace struct {
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
-}
-
-// StackValue Represents a TEAL value over the stack.
-type StackValue struct {
-	// Bytes bytes value.
-	Bytes *[]byte `json:"bytes,omitempty"`
-
-	// Type value type. Value `1` refers to **bytes**, value `2` refers to **uint**
-	Type uint64 `json:"type"`
-
-	// Uint uint value.
-	Uint *uint64 `json:"uint,omitempty"`
 }
 
 // StateDelta Application state delta.

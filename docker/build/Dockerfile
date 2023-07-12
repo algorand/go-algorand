@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:22.04
 ARG GOLANG_VERSION
 
 RUN apt-get update && apt-get install -y git wget sqlite3 autoconf build-essential shellcheck

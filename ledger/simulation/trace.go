@@ -106,7 +106,10 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 
 // ExecTraceConfig gathers all execution trace related configs for simulation result
 type ExecTraceConfig struct {
-	Enable        bool `codec:"enable,omitempty"`
+	_struct struct{} `codec:",omitempty"`
+
+	Enable        bool `codec:"enable"`
+	Stack         bool `codec:"stack-change"`
 	ScratchChange bool `codec:"scratch-change,omitempty"`
 }
 
@@ -125,6 +128,9 @@ type Result struct {
 // The other invalid options would be eliminated in validateSimulateRequest early.
 func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 
+// ReturnStackChange reads from Result object and decides if simulation return stack changes.
+func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
+
 // ReturnScratchChange tells if the simulation runs with scratch-change enabled.
 func (r Result) ReturnScratchChange() bool { return r.TraceConfig.ScratchChange }
 
@@ -136,6 +142,13 @@ func validateSimulateRequest(request Request, developerAPI bool) error {
 		return InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace"),
+			},
+		}
+	}
+	if !request.TraceConfig.Enable && request.TraceConfig.Stack {
+		return InvalidRequestError{
+			SimulatorError{
+				err: fmt.Errorf("basic trace must be enabled when enabling stack tracing"),
 			},
 		}
 	}
@@ -190,7 +203,7 @@ type ScratchChange struct {
 	Value basics.TealValue
 }
 
-// OpcodeTraceUnit contains the trace effects of a single opcode evaluation
+// OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
 	PC uint64
@@ -199,6 +212,12 @@ type OpcodeTraceUnit struct {
 	// if any. These indexes refer to the InnerTraces array of the TransactionTrace object containing
 	// this OpcodeTraceUnit.
 	SpawnedInners []int
+
+	// what has been added to stack
+	StackAdded []basics.TealValue
+
+	// deleted element number from stack
+	StackPopCount uint64
 
 	// ScratchSlotChange stands for a write operation into a scratch slot
 	ScratchSlotChange *ScratchChange

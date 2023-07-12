@@ -2945,16 +2945,7 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 
 	// the voters tracker should contain all the voters for each stateproof round. nothing should be removed
 	l.WaitForCommit(l.Latest())
-	// wait for any pending tracker flushes
-	l.trackers.waitAccountsWriting()
-	// force flush as needed
-	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
-		l.trackers.mu.Lock()
-		l.trackers.lastFlushTime = time.Time{}
-		l.trackers.mu.Unlock()
-		l.notifyCommit(l.Latest())
-		l.trackers.waitAccountsWriting()
-	}
+	triggerDeleteVoters(t, l, genesisInitState)
 
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 	beforeRemoveVotersLen := len(vtSnapshot)
@@ -2970,7 +2961,7 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 
 	triggerDeleteVoters(t, l, genesisInitState)
 
-	// round 512 should now be forgotten.
+	// round 256 (240+16) should now be forgotten.
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.False(t, found)
 
@@ -2986,8 +2977,6 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 
 func TestVotersReloadFromDiskPassRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	t.Skip("skip flaky test")
 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
@@ -3137,7 +3126,19 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
-	triggerTrackerFlush(t, l, genesisInitState)
+	// trigger trackers flush
+	// first ensure the block is committed into blockdb
+	l.WaitForCommit(l.Latest())
+	// wait for any pending tracker flushes
+	l.trackers.waitAccountsWriting()
+	// force flush as needed
+	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
+		l.trackers.mu.Lock()
+		l.trackers.lastFlushTime = time.Time{}
+		l.trackers.mu.Unlock()
+		l.notifyCommit(l.Latest())
+		l.trackers.waitAccountsWriting()
+	}
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)

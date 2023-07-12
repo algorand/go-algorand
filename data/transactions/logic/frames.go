@@ -27,8 +27,8 @@ func opProto(cx *EvalContext) error {
 	}
 	cx.fromCallsub = false
 	nargs := int(cx.program[cx.pc+1])
-	if nargs > len(cx.stack) {
-		return fmt.Errorf("callsub to proto that requires %d args with stack height %d", nargs, len(cx.stack))
+	if nargs > len(cx.Stack) {
+		return fmt.Errorf("callsub to proto that requires %d args with stack height %d", nargs, len(cx.Stack))
 	}
 	top := len(cx.callstack) - 1
 	cx.callstack[top].clear = true
@@ -51,18 +51,18 @@ func opFrameDig(cx *EvalContext) error {
 		return fmt.Errorf("frame_dig %d in sub with %d args", i, topFrame.args)
 	}
 	idx := topFrame.height + int(i)
-	if idx >= len(cx.stack) {
+	if idx >= len(cx.Stack) {
 		return errors.New("frame_dig above stack")
 	}
 	if idx < 0 {
 		return errors.New("frame_dig below stack")
 	}
 
-	cx.stack = append(cx.stack, cx.stack[idx])
+	cx.Stack = append(cx.Stack, cx.Stack[idx])
 	return nil
 }
 func opFrameBury(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // value
+	last := len(cx.Stack) - 1 // value
 	i := int8(cx.program[cx.pc+1])
 
 	top := len(cx.callstack) - 1
@@ -82,42 +82,42 @@ func opFrameBury(cx *EvalContext) error {
 	if idx < 0 {
 		return errors.New("frame_bury below stack")
 	}
-	cx.stack[idx] = cx.stack[last]
-	cx.stack = cx.stack[:last] // pop value
+	cx.Stack[idx] = cx.Stack[last]
+	cx.Stack = cx.Stack[:last] // pop value
 	return nil
 }
 func opBury(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // value
+	last := len(cx.Stack) - 1 // value
 	i := int(cx.program[cx.pc+1])
 
 	idx := last - i
 	if idx < 0 || idx == last {
 		return errors.New("bury outside stack")
 	}
-	cx.stack[idx] = cx.stack[last]
-	cx.stack = cx.stack[:last] // pop value
+	cx.Stack[idx] = cx.Stack[last]
+	cx.Stack = cx.Stack[:last] // pop value
 	return nil
 }
 
 func opPopN(cx *EvalContext) error {
 	n := cx.program[cx.pc+1]
-	top := len(cx.stack) - int(n)
+	top := len(cx.Stack) - int(n)
 	if top < 0 {
-		return fmt.Errorf("popn %d while stack contains %d", n, len(cx.stack))
+		return fmt.Errorf("popn %d while stack contains %d", n, len(cx.Stack))
 	}
-	cx.stack = cx.stack[:top] // pop value
+	cx.Stack = cx.Stack[:top] // pop value
 	return nil
 }
 
 func opDupN(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // value
+	last := len(cx.Stack) - 1 // value
 
 	n := int(cx.program[cx.pc+1])
-	finalLen := len(cx.stack) + n
+	finalLen := len(cx.Stack) + n
 	cx.ensureStackCap(finalLen)
 	for i := 0; i < n; i++ {
 		// There will be enough room that this will not allocate
-		cx.stack = append(cx.stack, cx.stack[last])
+		cx.Stack = append(cx.Stack, cx.Stack[last])
 	}
 	return nil
 }
