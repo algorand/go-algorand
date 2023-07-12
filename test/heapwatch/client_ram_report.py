@@ -47,16 +47,28 @@ multipliers = {
     'TB': 1024*1024*1024*1024,
 }
 
-# d = {k:[v,...]}
-def dapp(d, k, v):
+# d = {k: {t: v},...}
+def dapp(d, k, t, v):
     l = d.get(k)
     if l is None:
-        d[k] = [v]
+        d[k] = {t: v}
     else:
-        l.append(v)
+        l[t] = v
+
+# d = {k: {t: {m: v},...},...}
+def dapp_metric(d, k, t, m, v):
+    l = d.get(k)
+    if l is None:
+        d[k] = {t: {m: v}}
+    else:
+        l2 = l.get(t)
+        if l2 is None:
+            l[t] = {m: v}
+        else:
+            l2[m] = v
 
 def get_heap_inuse_totals(dirpath):
-    '''return {"node nickname":[(YYYYmmdd_HHMMSS, bytes), ...], ...}'''
+    '''return {"node nickname": {"YYYYmmdd_HHMMSS": bytes}, ...}'''
     cache_mtime = 0
     cache_path = os.path.join(dirpath, 'heap_inuse_totals.json')
     if os.path.exists(cache_path):
@@ -88,21 +100,50 @@ def get_heap_inuse_totals(dirpath):
             logger.error('could not find total in output: %s', text)
             raise Exception('could not find total in output of: %s', ' '.join([repr(x) for x in cmd]))
         bytesinuse = float(m.group(1)) * multipliers[m.group(2).upper()]
-        dapp(bynick, nick, (timestamp, bytesinuse))
+        dapp(bynick, nick, timestamp, bytesinuse)
         logger.debug('%s ok, %s %f', path, timestamp, bytesinuse)
 
     logger.debug('%d skipped older than cache', skipcount)
     for nick, recs in bynick.items():
         old = cached.get(nick)
         if old is None:
-            cached[nick] = sorted(recs)
+            cached[nick] = recs
         else:
-            cached[nick] = sorted(old + recs)
+            cached[nick].update(recs)
     if cached and bynick:
         with open(cache_path, 'wt') as fout:
             json.dump(cached, fout)
     return cached
 
+def get_heap_metrics(dirpath):
+    '''return {"node nickname": {"YYYYmmdd_HHMMSS": {"metric": value}, ...}, ...}'''
+    metrics_name_re = re.compile(r'(.*)\.(.*).metrics')
+    bynick = {}
+    for path in glob.glob(os.path.join(dirpath, '*.*.metrics')):
+        fname = os.path.basename(path)
+        m = metrics_name_re.match(fname)
+        if not m:
+            logger.warning('could not parse heap filename: %r', path)
+            continue
+        nick = m.group(1)
+        timestamp = m.group(2)
+        with open(path, 'rt') as fin:
+            for line in fin.readlines():
+                if line.startswith('#'):
+                    continue
+                elif line.startswith('algod_go_memory_classes_heap_objects_bytes'):
+                    inuse = float(line.split()[1])
+                    dapp_metric(bynick, nick, timestamp, 'inuse', inuse)
+                elif line.startswith('algod_go_memory_classes_total_bytes'):
+                    total = float(line.split()[1])
+                    dapp_metric(bynick, nick, timestamp, 'total', total)
+                elif line.startswith('algod_go_memory_classes_heap_free_bytes'):
+                    free = float(line.split()[1])
+                    dapp_metric(bynick, nick, timestamp, 'free', free)
+                elif line.startswith('algod_go_memory_classes_heap_released_bytes'):
+                    released = float(line.split()[1])
+                    dapp_metric(bynick, nick, timestamp, 'released', released)
+    return bynick
 
 def maybe_load_tf_nicks(args):
     tf_inventory_path = os.path.join(args.dir, 'terraform-inventory.host')
@@ -154,6 +195,7 @@ def main():
         logging.basicConfig(level=logging.INFO)
 
     heap_totals = get_heap_inuse_totals(args.dir)
+    heap_details = get_heap_metrics(args.dir)
 
     if args.csv:
         if args.csv == '-':
@@ -162,12 +204,15 @@ def main():
             csvf = open(args.csv, 'wt')
         writer = csv.writer(csvf)
         whens = set()
-        for nick, recs in heap_totals.items():
-            for ts, n in recs:
+        meta_cols_target = heap_totals if heap_totals else heap_details
+        for nick, recs in meta_cols_target.items():
+            # {k: {t: v}}
+            for ts in recs.keys():
                 whens.add(ts)
         whens = sorted(whens)
-        nodes = sorted(heap_totals.keys())
-        writer.writerow(['when','dt','round'] + hostports_to_nicks(args, nodes))
+        nodes = sorted(meta_cols_target.keys())
+        metrics = list(heap_details[nodes[0]].values())[0]
+        writer.writerow(['when','dt','round'] + hostports_to_nicks(args, nodes) + list(metrics))
         first = None
         for ts in whens:
             tv = time.mktime(time.strptime(ts, '%Y%m%d_%H%M%S'))
@@ -182,10 +227,14 @@ def main():
                 rnd = ''
             row = [ts, tv-first, rnd]
             for nick in nodes:
-                for rec in heap_totals[nick]:
-                    if rec[0] == ts:
-                        row.append(rec[1])
-                        break
+                # {k: {t: v}}
+                val = heap_totals.get(nick, {}).get(ts)
+                row.append(val if val else 0)
+                vals = heap_details[nick].get(ts)
+                # {k: {t: {m: v}}}
+                if vals:
+                    for val in vals.values():
+                        row.append(val)
             writer.writerow(row)
 
     return 0
