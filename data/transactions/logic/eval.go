@@ -178,13 +178,13 @@ func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 	return
 }
 
-// ComputeMinAvmVersion calculates the minimum safe AVM version that may be
+// computeMinAvmVersion calculates the minimum safe AVM version that may be
 // used by a transaction in this group. It is important to prevent
 // newly-introduced transaction fields from breaking assumptions made by older
 // versions of the AVM. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
 // anywhere in the transaction group, or the group will be rejected.
-func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
+func computeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -199,17 +199,6 @@ func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 		}
 	}
 	return minVersion
-}
-
-// LsigBudgetExpectation determines how much of the pooled logicsig budget this
-// logicsig is expecting. 0 indicates that the program requests the default (the
-// the normal max budget), but <SOMEHOW> the program can indicate that it
-// expects less (allowing others to have more) or more budget (which will be
-// allowed if the total group expectations come in under the group allowance).
-func LsigBudgetExpectation(lsig transactions.LogicSig, proto *config.ConsensusParams) uint64 {
-	_, expects, _, _ := preambleCheck(lsig.Logic, proto, ModeSig)
-	// err is ignored because transaction was already WellFormed-checked
-	return expects
 }
 
 // LedgerForSignature represents the parts of Ledger that LogicSigs can see. It
@@ -300,10 +289,9 @@ type EvalParams struct {
 	// optional tracer
 	Tracer EvalTracer
 
-	// MinAvmVersion is the minimum allowed AVM version of this program.
-	// The program must reject if its version is less than this version. If
-	// MinAvmVersion is nil, we will compute it ourselves
-	MinAvmVersion *uint64
+	// minAvmVersion is the minimum allowed AVM version of this program.
+	// The program must reject if its version is less than this version.
+	minAvmVersion uint64
 
 	// Amount "overpaid" by the transactions of the group.  Often 0.  When
 	// positive, it can be spent by inner transactions.  Shared across a group's
@@ -316,11 +304,11 @@ type EvalParams struct {
 	// Total pool of app call budget in a group transaction (nil before budget pooling enabled)
 	PooledApplicationBudget *int
 
+	// Total pool of logicsig budget in a group transaction (nil before lsig pooling enabled)
+	PooledLogicSigBudget *int
+
 	// Total allowable inner txns in a group transaction (nil before inner pooling enabled)
 	pooledAllowedInners *int
-
-	// Budgets for each txn in a group. (if gi exceeds length, use normal maximum)
-	logicSigBudgets []int
 
 	// available contains resources that may be used even though they are not
 	// necessarily directly in the txn's "static arrays". Apps and ASAs go in if
@@ -366,24 +354,58 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 	return copy
 }
 
-// NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
-func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
+// NewSigEvalParams creates an EvalParams to be used while evaluating a group's logicsigs
+func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
+	lsigs := 0
+	for _, tx := range txgroup {
+		if !tx.Lsig.Blank() {
+			lsigs++
+		}
+	}
+	if lsigs == 0 {
+		return nil // won't actually be used
+	}
+
+	var pooledLogicBudget *int
+	if proto.EnableLogicSigCostPooling {
+		pooledLogicBudget = new(int)
+		*pooledLogicBudget = len(txgroup) * int(proto.LogicSigMaxCost)
+	}
+
+	withADs := transactions.WrapSignedTxnsWithAD(txgroup)
+	return &EvalParams{
+		TxnGroup:             withADs,
+		Proto:                proto,
+		minAvmVersion:        computeMinAvmVersion(withADs),
+		SigLedger:            ls,
+		PooledLogicSigBudget: pooledLogicBudget,
+	}
+}
+
+// NewAppEvalParams creates an EvalParams to use while evaluating a top-level txgroup.
+func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
+	lsigs := 0
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
 			apps++
 		}
+		if !tx.Lsig.Blank() {
+			lsigs++
+		}
 	}
 
-	minAvmVersion := ComputeMinAvmVersion(txgroup)
+	minAvmVersion := computeMinAvmVersion(txgroup)
 
 	// Make a simpler EvalParams that is good enough to evaluate LogicSigs.
+	// TODO: Can we make all LogisSig callers use the new NewSigEvalParams? The
+	// problem seems to be in test/dryrun/goal/simulate type situations, where we
+	// want a single ep that can evaluate anything.
 	if apps == 0 {
 		return &EvalParams{
 			TxnGroup:      txgroup,
 			Proto:         proto,
-			Specials:      specials,
-			MinAvmVersion: &minAvmVersion,
+			minAvmVersion: minAvmVersion,
 		}
 	}
 
@@ -407,7 +429,7 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		Proto:                   proto,
 		Specials:                specials,
 		pastScratch:             make([]*scratchSpace, len(txgroup)),
-		MinAvmVersion:           &minAvmVersion,
+		minAvmVersion:           minAvmVersion,
 		FeeCredit:               &credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
@@ -438,11 +460,9 @@ func (ep *EvalParams) computeAvailability() *resources {
 }
 
 func (cx *EvalContext) minAvmVersionCheck() error {
-	if cx.MinAvmVersion == nil {
-		panic("very bad!")
-	}
-	if cx.version < *cx.MinAvmVersion {
-		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *cx.MinAvmVersion, cx.version)
+	if cx.version < cx.minAvmVersion {
+		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d",
+			cx.minAvmVersion, cx.version)
 	}
 	return nil
 }
@@ -466,12 +486,12 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minAvmVersion := ComputeMinAvmVersion(txg)
+	minAvmVersion := computeMinAvmVersion(txg)
 	// Can't happen currently, since earliest inner callable version is higher
 	// than any minimum imposed otherwise.  But is correct to inherit a stronger
 	// restriction from above, in case of future restriction.
-	if minAvmVersion < *caller.MinAvmVersion {
-		minAvmVersion = *caller.MinAvmVersion
+	if minAvmVersion < caller.minAvmVersion {
+		minAvmVersion = caller.minAvmVersion
 	}
 
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
@@ -493,7 +513,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
 		Tracer:                  caller.Tracer,
-		MinAvmVersion:           &minAvmVersion,
+		minAvmVersion:           minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
@@ -949,9 +969,6 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if params.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in contract eval")
 	}
-	if params.MinAvmVersion == nil {
-		return false, nil, errors.New("no min avm version in contract eval")
-	}
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
 	}
@@ -1058,9 +1075,6 @@ func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 	if params.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in signature eval")
 	}
-	if params.MinAvmVersion == nil {
-		return false, nil, errors.New("no min avm version in signature eval")
-	}
 	cx := EvalContext{
 		EvalParams: params,
 		runMode:    ModeSig,
@@ -1105,7 +1119,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	// Avoid returning for any reason until after cx.debugState is setup. That
 	// require cx to be minimally setup, too.
 
-	version, _, pc, perr := preambleCheck(program, cx.Proto, cx.runMode)
+	version, pc, perr := versionCheck(program, cx.Proto)
 	// defer perr check until after cx and debugState is setup
 
 	cx.version = version
@@ -1219,7 +1233,7 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 		return errLogicSigNotSupported
 	}
 
-	version, _, pc, err := preambleCheck(program, params.Proto, mode)
+	version, pc, err := versionCheck(program, params.Proto)
 	if err != nil {
 		return err
 	}
@@ -1260,28 +1274,19 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	return nil
 }
 
-func preambleCheck(program []byte, proto *config.ConsensusParams, mode RunMode) (version uint64, expects uint64, pc int, err error) {
+func versionCheck(program []byte, proto *config.ConsensusParams) (version uint64, pc int, err error) {
 	version, pc, err = transactions.ProgramVersion(program)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, err
 	}
 	if version > LogicVersion {
-		return 0, 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, LogicVersion)
+		return 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, LogicVersion)
 	}
 	if version > proto.LogicSigVersion {
-		return 0, 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, proto.LogicSigVersion)
+		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, proto.LogicSigVersion)
 	}
 
-	expects = 15000 // TODO: need a way to annotate programs with expected cost
-	/*
-		if version >= pairingVersion && mode == ModeSig {
-			expects, pc = binary.Uvarint(program[pc:])
-			if pc <= 0 {
-				return 0, 0, 0, errors.New("invalid budget expectation")
-			}
-		}
-	*/
-	return version, expects, pc, nil
+	return version, pc, nil
 }
 
 func opCompat(expected, got avmType) bool {
@@ -1321,8 +1326,8 @@ func (cx *EvalContext) AppID() basics.AppIndex {
 
 func (cx *EvalContext) remainingBudget() int {
 	if cx.runMode == ModeSig {
-		if cx.groupIndex < len(cx.logicSigBudgets) {
-			return cx.logicSigBudgets[cx.groupIndex] - cx.cost
+		if cx.PooledLogicSigBudget != nil {
+			return *cx.PooledLogicSigBudget
 		}
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
@@ -1391,21 +1396,19 @@ func (cx *EvalContext) step() error {
 			return fmt.Errorf("%3d %s returned 0 cost", cx.pc, spec.Name)
 		}
 	}
-	cx.cost += opcost
-	if cx.PooledApplicationBudget != nil {
-		*cx.PooledApplicationBudget -= opcost
-	}
 
-	if cx.remainingBudget() < 0 {
-		// We're not going to execute the instruction, so give the cost back.
-		// This only matters if this is an inner ClearState - the caller should
-		// not be over debited. (Normally, failure causes total txtree failure.)
-		cx.cost -= opcost
-		if cx.PooledApplicationBudget != nil {
-			*cx.PooledApplicationBudget += opcost
-		}
+	if opcost > cx.remainingBudget() {
 		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
 			cx.pc, spec.Name, cx.cost)
+	}
+
+	cx.cost += opcost
+	// Only one of these pooled budgets will be non-nil, perhaps we could collapse to one variable.
+	if cx.PooledLogicSigBudget != nil {
+		*cx.PooledLogicSigBudget -= opcost
+	}
+	if cx.PooledApplicationBudget != nil {
+		*cx.PooledApplicationBudget -= opcost
 	}
 
 	preheight := len(cx.Stack)
@@ -1933,11 +1936,11 @@ func opShiftRight(cx *EvalContext) error {
 
 func opSqrt(cx *EvalContext) error {
 	/*
-		        It would not be safe to use math.Sqrt, because we would have to
-			convert our u64 to an f64, but f64 cannot represent all u64s exactly.
+			        It would not be safe to use math.Sqrt, because we would have to
+				convert our u64 to an f64, but f64 cannot represent all u64s exactly.
 
-			This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
-			http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
+				This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
+		    http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
 	*/
 
 	last := len(cx.Stack) - 1

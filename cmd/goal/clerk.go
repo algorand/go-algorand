@@ -1118,7 +1118,6 @@ var dryrunCmd = &cobra.Command{
 	Long:  "Test a TEAL program offline under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
 		stxns := decodeTxnsFromFile(txFilename)
-		txgroup := transactions.WrapSignedTxnsWithAD(stxns)
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
 			// Write dryrun data to file
@@ -1139,15 +1138,14 @@ var dryrunCmd = &cobra.Command{
 		if timeStamp <= 0 {
 			timeStamp = time.Now().Unix()
 		}
-		for i, txn := range txgroup {
+		for i, txn := range stxns {
 			if txn.Lsig.Blank() {
 				continue
 			}
 			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
-			ep := logic.NewEvalParams(txgroup, &params, nil)
-			ep.SigLedger = logic.NoHeaderLedger{}
+			ep := logic.NewSigEvalParams(stxns, &params, logic.NoHeaderLedger{})
 			err := logic.CheckSignature(i, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)

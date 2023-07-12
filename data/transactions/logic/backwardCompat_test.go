@@ -327,7 +327,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 
 	// Cost remains the same, because v0 does not get dynamic treatment
 	ep.Proto.LogicSigMaxCost = 2139
-	ep.MinAvmVersion = new(uint64) // Was higher because sample txn has a rekey
+	ep.minAvmVersion = 0 // Was higher because sample txn has a rekey
 	testLogicBytes(t, program, ep, "static cost", "")
 
 	ep.Proto.LogicSigMaxCost = 2140

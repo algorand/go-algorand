@@ -421,7 +421,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			txgroup = append(txgroup, sample)
 		}
 	}
-	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
 	if ledger == nil {
 		ledger = NewLedger(nil)
 	}

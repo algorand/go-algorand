@@ -137,14 +137,13 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 		empty = true
 		txns = []transactions.SignedTxn{{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}}
 	}
-	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txns), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), makeTestProtoV(version), &transactions.SpecialAddresses{})
 	ep.Trace = &strings.Builder{}
 	ep.SigLedger = NewLedger(nil)
 	if empty {
 		// We made an app type in order to get a full ep, but that sets MinTealVersion=2
 		ep.TxnGroup[0].Txn.Type = "" // set it back
-		zero := uint64(0)
-		ep.MinAvmVersion = &zero
+		ep.minAvmVersion = 0
 	}
 	return ep
 }
@@ -171,7 +170,7 @@ func (ep *EvalParams) reset() {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 	}
 	if ep.available != nil {
-		available := NewEvalParams(ep.TxnGroup, ep.Proto, ep.Specials).available
+		available := NewAppEvalParams(ep.TxnGroup, ep.Proto, ep.Specials).available
 		if available != nil {
 			ep.available = available
 		}
@@ -211,14 +210,13 @@ func TestEmptyProgram(t *testing.T) {
 	testLogicBytes(t, nil, defaultEvalParams(), "invalid", "invalid program (empty)")
 }
 
-// TestMinAvmVersionParamEval tests eval/check reading the MinAvmVersion from the param
+// TestMinAvmVersionParamEval tests eval/check reading the minAvmVersion from the param
 func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 	params := defaultEvalParams()
-	version2 := uint64(rekeyingEnabledVersion)
-	params.MinAvmVersion = &version2
+	params.minAvmVersion = uint64(rekeyingEnabledVersion)
 	program := make([]byte, binary.MaxVarintLen64)
 	// set the program version to 1
 	binary.PutUvarint(program, 1)
@@ -4276,7 +4274,7 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 			ep := defaultEvalParams(cse.group...)
 
 			// Computed MinAvmVersion should be == validFromVersion
-			calc := ComputeMinAvmVersion(ep.TxnGroup)
+			calc := computeMinAvmVersion(ep.TxnGroup)
 			require.Equal(t, calc, cse.validFromVersion)
 
 			// Should fail for all versions < validFromVersion

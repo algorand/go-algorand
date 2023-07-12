@@ -103,7 +103,7 @@ func TestDebuggerSimple(t *testing.T) {
 	da := makeTestDbgAdapter(t)
 	debugger.AddAdapter(da)
 
-	ep := logic.NewEvalParams(make([]transactions.SignedTxnWithAD, 1), &proto, nil)
+	ep := logic.NewAppEvalParams(make([]transactions.SignedTxnWithAD, 1), &proto, nil)
 	ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(debugger)
 	ep.SigLedger = logic.NoHeaderLedger{}
 

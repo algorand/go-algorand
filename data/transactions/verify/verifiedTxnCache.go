@@ -22,7 +22,6 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -127,7 +126,6 @@ func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]
 	for txnGroupIndex := 0; txnGroupIndex < len(txnGroups); txnGroupIndex++ {
 		signedTxnGroup := txnGroups[txnGroupIndex]
 		verifiedTxn := 0
-		groupCtx.minAvmVersion = logic.ComputeMinAvmVersion(transactions.WrapSignedTxnsWithAD(signedTxnGroup))
 
 		baseBucket := v.base
 		for txnIdx := 0; txnIdx < len(signedTxnGroup); txnIdx++ {

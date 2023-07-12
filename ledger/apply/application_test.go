@@ -401,7 +401,7 @@ func TestAppCallCheckPrograms(t *testing.T) {
 	var ac transactions.ApplicationCallTxnFields
 	// This check is for static costs. v26 is last with static cost checking
 	proto := config.Consensus[protocol.ConsensusV26]
-	ep := logic.NewEvalParams(nil, &proto, nil)
+	ep := logic.NewAppEvalParams(nil, &proto, nil)
 
 	proto.MaxAppProgramCost = 1
 	err := checkPrograms(&ac, ep)
@@ -485,7 +485,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 	b := newTestBalances()
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep := logic.NewEvalParams(nil, &proto, nil)
+	ep := logic.NewAppEvalParams(nil, &proto, nil)
 
 	var txnCounter uint64 = 1
 
@@ -585,7 +585,7 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 	b := newTestBalancesPass()
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep := logic.NewEvalParams(nil, &proto, nil)
+	ep := logic.NewAppEvalParams(nil, &proto, nil)
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
@@ -739,7 +739,7 @@ func TestAppCallClearState(t *testing.T) {
 	b := newTestBalances()
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep := logic.NewEvalParams(nil, &proto, nil)
+	ep := logic.NewAppEvalParams(nil, &proto, nil)
 
 	ad := &transactions.ApplyData{}
 	b.appCreators = make(map[basics.AppIndex]basics.Address)
@@ -1020,7 +1020,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b := newTestBalances()
 	b.SetProto(protocol.ConsensusV28)
 	proto := b.ConsensusParams()
-	ep := logic.NewEvalParams(nil, &proto, nil)
+	ep := logic.NewAppEvalParams(nil, &proto, nil)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	cbr := basics.AccountData{
@@ -1285,7 +1285,7 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 	b := newTestBalancesPass()
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep := logic.NewEvalParams(nil, &proto, nil)
+	ep := logic.NewAppEvalParams(nil, &proto, nil)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
@@ -1334,7 +1334,7 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	b := newTestBalancesPass()
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep := logic.NewEvalParams(nil, &proto, nil)
+	ep := logic.NewAppEvalParams(nil, &proto, nil)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
