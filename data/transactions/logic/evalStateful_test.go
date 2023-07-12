@@ -2874,9 +2874,9 @@ func TestReturnTypes(t *testing.T) {
 						require.NoError(t, err, "%s: %s\n%s", name, err, ep.Trace)
 					}
 				}
-				require.Len(t, cx.stack, len(spec.Return.Types), "%s", ep.Trace)
+				require.Len(t, cx.Stack, len(spec.Return.Types), "%s", ep.Trace)
 				for i := 0; i < len(spec.Return.Types); i++ {
-					stackType := cx.stack[i].stackType()
+					stackType := cx.Stack[i].stackType()
 					retType := spec.Return.Types[i]
 					require.True(
 						t, stackType.overlaps(retType),

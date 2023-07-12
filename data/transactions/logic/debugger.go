@@ -285,8 +285,8 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 		ds.Error = evalError.Error()
 	}
 
-	stack := make([]basics.TealValue, len(cx.stack))
-	for i, sv := range cx.stack {
+	stack := make([]basics.TealValue, len(cx.Stack))
+	for i, sv := range cx.Stack {
 		stack[i] = sv.toEncodedTealValue()
 	}
 
