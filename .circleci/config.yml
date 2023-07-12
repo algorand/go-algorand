@@ -12,7 +12,7 @@ orbs:
 parameters:
   ubuntu_image:
     type: string
-    default: "ubuntu-2204:2023.04.2"
+    default: "ubuntu-2004:2023.04.2"
   build_dir:
     type: string
     default: "/opt/cibuild"
@@ -86,7 +86,7 @@ workflows:
           name: << matrix.platform >>_build_nightly
           matrix: &matrix-nightly
             parameters:
-              platform: ["amd64"]
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
           filters: &filters-nightly
             branches:
               only:
@@ -137,7 +137,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64"]
+              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
               job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
