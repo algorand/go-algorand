@@ -288,8 +288,6 @@ type GroupResourceAssignment struct {
 	startingBoxes int
 }
 
-const maxCrossProductsPerAppCall = 16
-
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -467,7 +465,7 @@ func (a *GroupResourceAssignment) hasHolding(addr basics.Address, aid basics.Ass
 }
 
 func (a *GroupResourceAssignment) addHolding(addr basics.Address, aid basics.AssetIndex) bool {
-	if len(a.AssetHoldings) >= a.MaxAssetHoldings {
+	if len(a.AssetHoldings)+len(a.AppLocals) >= a.MaxAssetHoldings {
 		return false
 	}
 	if a.AssetHoldings == nil {
@@ -488,7 +486,7 @@ func (a *GroupResourceAssignment) hasLocal(addr basics.Address, aid basics.AppIn
 }
 
 func (a *GroupResourceAssignment) addLocal(addr basics.Address, aid basics.AppIndex) bool {
-	if len(a.AppLocals) >= a.MaxAppLocals {
+	if len(a.AssetHoldings)+len(a.AppLocals) >= a.MaxAppLocals {
 		return false
 	}
 	if a.AppLocals == nil {

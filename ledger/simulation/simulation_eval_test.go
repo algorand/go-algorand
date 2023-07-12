@@ -4909,6 +4909,11 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 		MaxAssetHoldings: proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
 		MaxAppLocals:     proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
 	}
+	expectedAccounts := mapWithKeys(resources.accounts(), struct{}{})
+	// If present, delete the sender, since it's accessible normally.
+	delete(expectedAccounts, env.Accounts[0].Addr)
+	expectedAssets := mapWithKeys(resources.assets(), struct{}{})
+	expectedApps := mapWithKeys(resources.apps(), struct{}{})
 	if appVersion < 9 {
 		// No shared resources
 		localResources := simulation.ResourceAssignment{
@@ -4918,9 +4923,9 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			MaxBoxes:     proto.MaxAppBoxReferences,
 			MaxTotalRefs: proto.MaxAppTotalTxnReferences,
 
-			Accounts: mapWithKeys(resources.accounts(), struct{}{}),
-			Assets:   mapWithKeys(resources.assets(), struct{}{}),
-			Apps:     mapWithKeys(resources.apps(), struct{}{}),
+			Accounts: expectedAccounts,
+			Assets:   expectedAssets,
+			Apps:     expectedApps,
 		}
 		expectedGroupResources.Resources.MaxAccounts -= len(localResources.Accounts)
 		expectedGroupResources.Resources.MaxAssets -= len(localResources.Assets)
@@ -4931,9 +4936,9 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 		}
 	} else {
 		// Shared resources
-		expectedGroupResources.Resources.Accounts = mapWithKeys(resources.accounts(), struct{}{})
-		expectedGroupResources.Resources.Assets = mapWithKeys(resources.assets(), struct{}{})
-		expectedGroupResources.Resources.Apps = mapWithKeys(resources.apps(), struct{}{})
+		expectedGroupResources.Resources.Accounts = expectedAccounts
+		expectedGroupResources.Resources.Assets = expectedAssets
+		expectedGroupResources.Resources.Apps = expectedApps
 		expectedGroupResources.AssetHoldings = mapWithKeys(resources.assetHoldings(), struct{}{})
 		expectedGroupResources.AppLocals = mapWithKeys(resources.appLocals(), struct{}{})
 	}
@@ -5115,25 +5120,82 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				)
 			}
 
-			// Exactly at asset holding limit
-			testResourceAccess(
-				unnamedResourceArguments{}.
-					addAssetHoldings(assets[0], otherAccounts[1:5]...).
-					addAssetHoldings(assets[1], otherAccounts[1:5]...).
-					addAssetHoldings(assets[2], otherAccounts[1:5]...).
-					addAssetHoldings(assets[3], otherAccounts[1:5]...),
-			)
+			if v >= 9 {
+				// Exactly at asset holding limit
+				testResourceAccess(
+					unnamedResourceArguments{}.
+						addAssetHoldings(assets[0], otherAccounts[1:5]...).
+						addAssetHoldings(assets[1], otherAccounts[1:5]...).
+						addAssetHoldings(assets[2], otherAccounts[1:5]...).
+						addAssetHoldings(assets[3], otherAccounts[1:5]...),
+				)
 
-			// Exactly at app local limit
-			testResourceAccess(
-				unnamedResourceArguments{}.
-					addAppLocals(otherApps[0], otherAccounts[1:5]...).
-					addAppLocals(otherApps[1], otherAccounts[1:5]...).
-					addAppLocals(otherApps[2], otherAccounts[1:5]...).
-					addAppLocals(otherApps[3], otherAccounts[1:5]...),
-			)
+				// Exactly at app local limit
+				testResourceAccess(
+					unnamedResourceArguments{}.
+						addAppLocals(otherApps[0], otherAccounts[1:5]...).
+						addAppLocals(otherApps[1], otherAccounts[1:5]...).
+						addAppLocals(otherApps[2], otherAccounts[1:5]...).
+						addAppLocals(otherApps[3], otherAccounts[1:5]...),
+				)
 
-			// TODO: test exceeding asset holding and app local limits
+				// Exactly at total cross-product limit
+				testResourceAccess(
+					unnamedResourceArguments{}.
+						addAssetHoldings(assets[0], otherAccounts[1:5]...).
+						addAssetHoldings(assets[1], otherAccounts[1:5]...).
+						addAppLocals(otherApps[0], otherAccounts[1:5]...).
+						addAppLocals(otherApps[1], otherAccounts[1:5]...),
+				)
+
+				// Over asset holding limit
+				testResourceAccess(
+					unnamedResourceArguments{}.
+						addAssetHoldings(assets[0], otherAccounts[1:5]...).
+						addAssetHoldings(assets[1], otherAccounts[1:5]...).
+						addAssetHoldings(assets[2], otherAccounts[1:5]...).
+						addAssetHoldings(assets[3], otherAccounts[1:5]...).
+						addAssetHoldings(assets[0], sender.Addr).
+						markLimitExceeded(),
+					fmt.Sprintf("logic eval error: unavailable Holding %s x %d", sender.Addr, assets[0]),
+				)
+
+				// Over app local limit
+				testResourceAccess(
+					unnamedResourceArguments{}.
+						addAppLocals(otherApps[0], otherAccounts[1:5]...).
+						addAppLocals(otherApps[1], otherAccounts[1:5]...).
+						addAppLocals(otherApps[2], otherAccounts[1:5]...).
+						addAppLocals(otherApps[3], otherAccounts[1:5]...).
+						addAppLocals(otherApps[0], sender.Addr).
+						markLimitExceeded(),
+					fmt.Sprintf("logic eval error: unavailable Local State %s x %d", sender.Addr, otherApps[0]),
+				)
+
+				// Over total cross-product limit with asset holding
+				testResourceAccess(
+					unnamedResourceArguments{}.
+						addAssetHoldings(assets[0], otherAccounts[1:5]...).
+						addAssetHoldings(assets[1], otherAccounts[1:5]...).
+						addAppLocals(otherApps[0], otherAccounts[1:5]...).
+						addAppLocals(otherApps[1], otherAccounts[1:5]...).
+						addAssetHoldings(assets[0], sender.Addr).
+						markLimitExceeded(),
+					fmt.Sprintf("logic eval error: unavailable Holding %s x %d", sender.Addr, assets[0]),
+				)
+
+				// Over total cross-product limit with app local
+				testResourceAccess(
+					unnamedResourceArguments{}.
+						addAssetHoldings(assets[0], otherAccounts[1:5]...).
+						addAssetHoldings(assets[1], otherAccounts[1:5]...).
+						addAppLocals(otherApps[0], otherAccounts[1:5]...).
+						addAppLocals(otherApps[1], otherAccounts[1:5]...).
+						addAppLocals(otherApps[0], sender.Addr).
+						markLimitExceeded(),
+					fmt.Sprintf("logic eval error: unavailable Local State %s x %d", sender.Addr, otherApps[0]),
+				)
+			}
 		})
 	}
 }
