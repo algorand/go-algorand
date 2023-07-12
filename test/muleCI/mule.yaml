@@ -40,6 +40,8 @@ agents:
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
       - GOHOSTARCH=amd64
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64

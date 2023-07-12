@@ -1751,6 +1751,7 @@ func isFullSpec(spec OpSpec) bool {
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	var args StackTypes
 	var returns StackTypes
+	var debugExplainFuncPtr debugStackExplain
 	var minVersion uint64
 	i := 0
 	for _, spec := range specs {
@@ -1776,9 +1777,16 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 				}
 			}
 		}
+		if debugExplainFuncPtr == nil {
+			debugExplainFuncPtr = spec.Explain
+		}
 		i++
 	}
-	return Proto{typedList{args, ""}, typedList{returns, ""}}, minVersion, true
+	return Proto{
+		Arg:     typedList{args, ""},
+		Return:  typedList{returns, ""},
+		Explain: debugExplainFuncPtr,
+	}, minVersion, true
 }
 
 func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
