@@ -509,27 +509,28 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 	return
 }
 
-// StoreNewValue ...
-func (cx *EvalContext) StoreNewValue() (uint64, basics.TealValue, basics.TealValue, bool) {
+// CurrentScratchChange returns
+func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, oldValue, newValue basics.TealValue, isScratchChange bool) {
 	currentOpcodeName := opsByOpcode[cx.version][cx.program[cx.pc]].Name
+	last := len(cx.Stack) - 1
+
 	if currentOpcodeName == "store" {
-		scratchSlotID := uint64(cx.pc + 1)
-		oldValue := cx.scratch[scratchSlotID].ToTealValue()
-		newValue := cx.Stack[len(cx.Stack)-1].ToTealValue()
-		return scratchSlotID, oldValue, newValue, true
+		scratchSlot = uint64(cx.pc + 1)
 	} else if currentOpcodeName == "stores" {
-		last := len(cx.Stack) - 1
 		prev := last - 1
-		scratchSlotID := cx.Stack[prev].Uint
-		if scratchSlotID >= uint64(len(cx.scratch)) {
-			return 0, basics.TealValue{}, basics.TealValue{}, true
+		scratchSlot = cx.Stack[prev].Uint
+
+		// If something goes wrong for `stores`, we don't have to error here
+		// for in runtime already has evalError
+		if scratchSlot >= uint64(len(cx.scratch)) {
+			return
 		}
-		oldValue := cx.scratch[scratchSlotID].ToTealValue()
-		newValue := cx.Stack[last].ToTealValue()
-		return scratchSlotID, oldValue, newValue, true
-	} else {
-		return 0, basics.TealValue{}, basics.TealValue{}, false
 	}
+
+	newValue = cx.Stack[last].ToTealValue()
+	oldValue = cx.scratch[scratchSlot].ToTealValue()
+	isScratchChange = true
+	return
 }
 
 func proto(signature string, effects ...string) Proto {

@@ -315,15 +315,14 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
 		}
 
+		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 		if tracer.result.ReturnStackChange() {
-			latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 			latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
 		}
 
 		if tracer.result.ReturnScratchChange() {
-			scratchSlotID, oldValue, newValue, isStoreAlike := cx.StoreNewValue()
+			scratchSlotID, oldValue, newValue, isStoreAlike := cx.CurrentScratchChange()
 			if isStoreAlike {
-				latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 				latestOpcodeTraceUnit.ScratchSlotChange = &ScratchChange{ScratchSlot: scratchSlotID}
 				if oldValue != newValue {
 					latestOpcodeTraceUnit.ScratchSlotChange.Value = newValue
