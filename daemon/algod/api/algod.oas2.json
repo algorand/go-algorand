@@ -3108,8 +3108,8 @@
         }
       }
     },
-    "StackValue": {
-      "description": "Represents a TEAL value over the stack.",
+    "AvmValue": {
+      "description": "Represents an AVM value.",
       "type": "object",
       "required": [
         "type"
@@ -3906,7 +3906,7 @@
           "description": "The values added by this opcode to the stack.",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/StackValue"
+            "$ref": "#/definitions/AvmValue"
           }
         }
       }

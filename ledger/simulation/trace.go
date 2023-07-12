@@ -144,7 +144,7 @@ func validateSimulateRequest(request Request, developerAPI bool) error {
 	if !request.TraceConfig.Enable && request.TraceConfig.Stack {
 		return InvalidRequestError{
 			SimulatorError{
-				err: fmt.Errorf("the request didn't ask for enabling returning basic trace, but ask for returning stack change"),
+				err: fmt.Errorf("basic trace must be enabled when enabling stack tracing"),
 			},
 		}
 	}

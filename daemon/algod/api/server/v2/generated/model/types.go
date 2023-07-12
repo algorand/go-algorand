@@ -407,6 +407,18 @@ type AssetParams struct {
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
 }
 
+// AvmValue Represents an AVM value.
+type AvmValue struct {
+	// Bytes bytes value.
+	Bytes *[]byte `json:"bytes,omitempty"`
+
+	// Type value type. Value `1` refers to **bytes**, value `2` refers to **uint64**
+	Type uint64 `json:"type"`
+
+	// Uint uint value.
+	Uint *uint64 `json:"uint,omitempty"`
+}
+
 // Box Box name and its content.
 type Box struct {
 	// Name \[name\] box name, base64 encoded
@@ -720,7 +732,7 @@ type SimulationOpcodeTraceUnit struct {
 	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`
 
 	// StackAdditions The values added by this opcode to the stack.
-	StackAdditions *[]StackValue `json:"stack-additions,omitempty"`
+	StackAdditions *[]AvmValue `json:"stack-additions,omitempty"`
 
 	// StackPopCount The number of deleted stack values by this opcode.
 	StackPopCount *uint64 `json:"stack-pop-count,omitempty"`
@@ -739,18 +751,6 @@ type SimulationTransactionExecTrace struct {
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
-}
-
-// StackValue Represents a TEAL value over the stack.
-type StackValue struct {
-	// Bytes bytes value.
-	Bytes *[]byte `json:"bytes,omitempty"`
-
-	// Type value type. Value `1` refers to **bytes**, value `2` refers to **uint64**
-	Type uint64 `json:"type"`
-
-	// Uint uint value.
-	Uint *uint64 `json:"uint,omitempty"`
 }
 
 // StateDelta Application state delta.

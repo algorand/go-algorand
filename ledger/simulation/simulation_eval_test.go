@@ -319,7 +319,7 @@ int 0`,
 
 	_, err := simulation.MakeSimulator(env.Ledger, true).Simulate(simRequest)
 	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
-	require.ErrorContains(t, err, "the request didn't ask for enabling returning basic trace, but ask for returning stack change")
+	require.ErrorContains(t, err, "basic trace must be enabled when enabling stack tracing")
 }
 
 func TestWrongAuthorizerTxn(t *testing.T) {

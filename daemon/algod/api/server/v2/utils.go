@@ -346,13 +346,13 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.StackValue {
+func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.AvmValue {
 	if len(tvs) == 0 {
 		return nil
 	}
-	modelTvs := make([]model.StackValue, len(tvs))
+	modelTvs := make([]model.AvmValue, len(tvs))
 	for i := range tvs {
-		modelTvs[i] = model.StackValue{
+		modelTvs[i] = model.AvmValue{
 			Type:  uint64(tvs[i].Type),
 			Uint:  omitEmpty(tvs[i].Uint),
 			Bytes: byteOrNil([]byte(tvs[i].Bytes)),

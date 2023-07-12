@@ -2067,7 +2067,7 @@ main_l6:
 int 1
 return`
 
-func goValuesToStackValues(goValues ...interface{}) *[]model.StackValue {
+func goValuesToAvmValues(goValues ...interface{}) *[]model.AvmValue {
 	if len(goValues) == 0 {
 		return nil
 	}
@@ -2079,34 +2079,34 @@ func goValuesToStackValues(goValues ...interface{}) *[]model.StackValue {
 		return 0
 	}
 
-	modelValues := make([]model.StackValue, len(goValues))
+	modelValues := make([]model.AvmValue, len(goValues))
 	for i, goValue := range goValues {
 		switch converted := goValue.(type) {
 		case []byte:
-			modelValues[i] = model.StackValue{
+			modelValues[i] = model.AvmValue{
 				Type:  uint64(basics.TealBytesType),
 				Bytes: &converted,
 			}
 		case bool:
 			convertedUint := boolToUint64(converted)
-			modelValues[i] = model.StackValue{
+			modelValues[i] = model.AvmValue{
 				Type: uint64(basics.TealUintType),
 				Uint: valToNil(&convertedUint),
 			}
 		case int:
 			convertedUint := uint64(converted)
-			modelValues[i] = model.StackValue{
+			modelValues[i] = model.AvmValue{
 				Type: uint64(basics.TealUintType),
 				Uint: valToNil(&convertedUint),
 			}
 		case basics.AppIndex:
 			convertedUint := uint64(converted)
-			modelValues[i] = model.StackValue{
+			modelValues[i] = model.AvmValue{
 				Type: uint64(basics.TealUintType),
 				Uint: valToNil(&convertedUint),
 			}
 		case uint64:
-			modelValues[i] = model.StackValue{
+			modelValues[i] = model.AvmValue{
 				Type: uint64(basics.TealUintType),
 				Uint: valToNil(&converted),
 			}
@@ -2114,7 +2114,7 @@ func goValuesToStackValues(goValues ...interface{}) *[]model.StackValue {
 			panic("unexpected type inferred from interface{}")
 		}
 	}
-	return toPtr(modelValues)
+	return &modelValues
 }
 
 func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
@@ -2245,18 +2245,18 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		// txn ApplicationID
 		{
 			Pc:             6,
-			StackAdditions: goValuesToStackValues(0),
+			StackAdditions: goValuesToAvmValues(0),
 		},
 		// int 0
 		{
 			Pc:             8,
-			StackAdditions: goValuesToStackValues(0),
+			StackAdditions: goValuesToAvmValues(0),
 		},
 		// ==
 		{
 			Pc:             9,
 			StackPopCount:  toPtr[uint64](2),
-			StackAdditions: goValuesToStackValues(1),
+			StackAdditions: goValuesToAvmValues(1),
 		},
 		// bnz main_l6
 		{
@@ -2266,12 +2266,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 		// int 1
 		{
 			Pc:             149,
-			StackAdditions: goValuesToStackValues(1),
+			StackAdditions: goValuesToAvmValues(1),
 		},
 		// return
 		{
 			Pc:             150,
-			StackAdditions: goValuesToStackValues(1),
+			StackAdditions: goValuesToAvmValues(1),
 			StackPopCount:  toPtr[uint64](1),
 		},
 	}
@@ -2286,17 +2286,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// txn ApplicationID
 			{
 				Pc:             6,
-				StackAdditions: goValuesToStackValues(appID),
+				StackAdditions: goValuesToAvmValues(appID),
 			},
 			// int 0
 			{
 				Pc:             8,
-				StackAdditions: goValuesToStackValues(0),
+				StackAdditions: goValuesToAvmValues(0),
 			},
 			// ==
 			{
 				Pc:             9,
-				StackAdditions: goValuesToStackValues(false),
+				StackAdditions: goValuesToAvmValues(false),
 				StackPopCount:  toPtr[uint64](2),
 			},
 			// bnz main_l6
@@ -2307,18 +2307,18 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// txn NumAppArgs
 			{
 				Pc:             13,
-				StackAdditions: goValuesToStackValues(NumArgs),
+				StackAdditions: goValuesToAvmValues(NumArgs),
 			},
 			// int 1
 			{
 				Pc:             15,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// ==
 			{
 				Pc:             16,
 				StackPopCount:  toPtr[uint64](2),
-				StackAdditions: goValuesToStackValues(true),
+				StackAdditions: goValuesToAvmValues(true),
 			},
 			// bnz main_l3
 			{
@@ -2328,12 +2328,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// global CurrentApplicationID
 			{
 				Pc:             21,
-				StackAdditions: goValuesToStackValues(appID),
+				StackAdditions: goValuesToAvmValues(appID),
 			},
 			// app_params_get AppApprovalProgram
 			{
 				Pc:             23,
-				StackAdditions: goValuesToStackValues(approval, 1),
+				StackAdditions: goValuesToAvmValues(approval, 1),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 1
@@ -2349,12 +2349,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// global CurrentApplicationID
 			{
 				Pc:             29,
-				StackAdditions: goValuesToStackValues(appID),
+				StackAdditions: goValuesToAvmValues(appID),
 			},
 			// app_params_get AppClearStateProgram
 			{
 				Pc:             31,
-				StackAdditions: goValuesToStackValues(clearState, 1),
+				StackAdditions: goValuesToAvmValues(clearState, 1),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 3
@@ -2370,12 +2370,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// global CurrentApplicationAddress
 			{
 				Pc:             37,
-				StackAdditions: goValuesToStackValues(crypto.Digest(appID.Address()).ToSlice()),
+				StackAdditions: goValuesToAvmValues(crypto.Digest(appID.Address()).ToSlice()),
 			},
 			// acct_params_get AcctBalance
 			{
 				Pc:             39,
-				StackAdditions: goValuesToStackValues(uint64(3-layer)*MinBalance, 1),
+				StackAdditions: goValuesToAvmValues(uint64(3-layer)*MinBalance, 1),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 5
@@ -2391,7 +2391,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// load 1
 			{
 				Pc:             45,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// assert
 			{
@@ -2401,7 +2401,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// load 3
 			{
 				Pc:             48,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// assert
 			{
@@ -2411,7 +2411,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// load 5
 			{
 				Pc:             51,
-				StackAdditions: goValuesToStackValues(uint64(1)),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// assert
 			{
@@ -2421,29 +2421,29 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int 2
 			{
 				Pc:             54,
-				StackAdditions: goValuesToStackValues(uint64(2)),
+				StackAdditions: goValuesToAvmValues(2),
 			},
 			// txna ApplicationArgs 0
 			{
 				Pc:             56,
-				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
 				Pc:             59,
-				StackAdditions: goValuesToStackValues(uint64(MaxDepth - layer)),
+				StackAdditions: goValuesToAvmValues(uint64(MaxDepth - layer)),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// exp
 			{
 				Pc:             60,
-				StackAdditions: goValuesToStackValues(1 << (MaxDepth - layer)),
+				StackAdditions: goValuesToAvmValues(1 << (MaxDepth - layer)),
 				StackPopCount:  toPtr[uint64](2),
 			},
 			// itob
 			{
 				Pc:             61,
-				StackAdditions: goValuesToStackValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// log
@@ -2454,23 +2454,23 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// txna ApplicationArgs 0
 			{
 				Pc:             63,
-				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
 				Pc:             66,
-				StackAdditions: goValuesToStackValues(MaxDepth - layer),
+				StackAdditions: goValuesToAvmValues(MaxDepth - layer),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// int 0
 			{
 				Pc:             67,
-				StackAdditions: goValuesToStackValues(0),
+				StackAdditions: goValuesToAvmValues(0),
 			},
 			// >
 			{
 				Pc:             68,
-				StackAdditions: goValuesToStackValues(MaxDepth-layer > 0),
+				StackAdditions: goValuesToAvmValues(MaxDepth-layer > 0),
 				StackPopCount:  toPtr[uint64](2),
 			},
 			// bnz main_l5
@@ -2485,7 +2485,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int appl
 			{
 				Pc:             75,
-				StackAdditions: goValuesToStackValues(6),
+				StackAdditions: goValuesToAvmValues(6),
 			},
 			// itxn_field TypeEnum
 			{
@@ -2495,7 +2495,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int 0
 			{
 				Pc:             78,
-				StackAdditions: goValuesToStackValues(0),
+				StackAdditions: goValuesToAvmValues(0),
 			},
 			// itxn_field Fee
 			{
@@ -2505,7 +2505,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// load 0
 			{
 				Pc:             81,
-				StackAdditions: goValuesToStackValues(approval),
+				StackAdditions: goValuesToAvmValues(approval),
 			},
 			// itxn_field ApprovalProgram
 			{
@@ -2515,7 +2515,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// load 2
 			{
 				Pc:             85,
-				StackAdditions: goValuesToStackValues(clearState),
+				StackAdditions: goValuesToAvmValues(clearState),
 			},
 			// itxn_field ClearStateProgram
 			{
@@ -2534,7 +2534,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int pay
 			{
 				Pc:             91,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// itxn_field TypeEnum
 			{
@@ -2544,7 +2544,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int 0
 			{
 				Pc:             94,
-				StackAdditions: goValuesToStackValues(0),
+				StackAdditions: goValuesToAvmValues(0),
 			},
 			// itxn_field Fee
 			{
@@ -2554,18 +2554,18 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// load 4
 			{
 				Pc:             97,
-				StackAdditions: goValuesToStackValues(uint64(3-layer) * MinBalance),
+				StackAdditions: goValuesToAvmValues(uint64(3-layer) * MinBalance),
 			},
 			// int 100000
 			{
 				Pc:             99,
-				StackAdditions: goValuesToStackValues(MinBalance),
+				StackAdditions: goValuesToAvmValues(MinBalance),
 			},
 			// -
 			{
 				Pc:             103,
 				StackPopCount:  toPtr[uint64](2),
-				StackAdditions: goValuesToStackValues(uint64(2-layer) * MinBalance),
+				StackAdditions: goValuesToAvmValues(uint64(2-layer) * MinBalance),
 			},
 			// itxn_field Amount
 			{
@@ -2575,29 +2575,29 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// byte "appID"
 			{
 				Pc:             106,
-				StackAdditions: goValuesToStackValues([]byte("appID")),
+				StackAdditions: goValuesToAvmValues([]byte("appID")),
 			},
 			// gitxn 0 CreatedApplicationID
 			{
 				Pc:             113,
-				StackAdditions: goValuesToStackValues(appID + 3),
+				StackAdditions: goValuesToAvmValues(appID + 3),
 			},
 			// itob
 			{
 				Pc:             116,
-				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(appID) + 3)),
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(appID) + 3)),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// concat
 			{
 				Pc:             117,
-				StackAdditions: goValuesToStackValues([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
+				StackAdditions: goValuesToAvmValues([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
 				StackPopCount:  toPtr[uint64](2),
 			},
 			// sha512_256
 			{
 				Pc:             118,
-				StackAdditions: goValuesToStackValues(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
+				StackAdditions: goValuesToAvmValues(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// itxn_field Receiver
@@ -2611,7 +2611,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int appl
 			{
 				Pc:             122,
-				StackAdditions: goValuesToStackValues(6),
+				StackAdditions: goValuesToAvmValues(6),
 			},
 			// itxn_field TypeEnum
 			{
@@ -2621,29 +2621,29 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// txna ApplicationArgs 0
 			{
 				Pc:             125,
-				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
 				Pc:             128,
-				StackAdditions: goValuesToStackValues(MaxDepth - layer),
+				StackAdditions: goValuesToAvmValues(MaxDepth - layer),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// int 1
 			{
 				Pc:             129,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// -
 			{
 				Pc:             130,
-				StackAdditions: goValuesToStackValues(MaxDepth - layer - 1),
+				StackAdditions: goValuesToAvmValues(MaxDepth - layer - 1),
 				StackPopCount:  toPtr[uint64](2),
 			},
 			// itob
 			{
 				Pc:             131,
-				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer - 1))),
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer - 1))),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// itxn_field ApplicationArgs
@@ -2654,7 +2654,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// itxn CreatedApplicationID
 			{
 				Pc:             134,
-				StackAdditions: goValuesToStackValues(appID + 3),
+				StackAdditions: goValuesToAvmValues(appID + 3),
 			},
 			// itxn_field ApplicationID
 			{
@@ -2664,7 +2664,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int 0
 			{
 				Pc:             138,
-				StackAdditions: goValuesToStackValues(0),
+				StackAdditions: goValuesToAvmValues(0),
 			},
 			// itxn_field Fee
 			{
@@ -2674,7 +2674,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int DeleteApplication
 			{
 				Pc:             141,
-				StackAdditions: goValuesToStackValues(5),
+				StackAdditions: goValuesToAvmValues(5),
 			},
 			// itxn_field OnCompletion
 			{
@@ -2693,12 +2693,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int 1
 			{
 				Pc:             72,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// return
 			{
 				Pc:             73,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 				StackPopCount:  toPtr[uint64](1),
 			},
 		}
@@ -2712,17 +2712,17 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// txn ApplicationID
 			{
 				Pc:             6,
-				StackAdditions: goValuesToStackValues(appID),
+				StackAdditions: goValuesToAvmValues(appID),
 			},
 			// int 0
 			{
 				Pc:             8,
-				StackAdditions: goValuesToStackValues(0),
+				StackAdditions: goValuesToAvmValues(0),
 			},
 			// ==
 			{
 				Pc:             9,
-				StackAdditions: goValuesToStackValues(false),
+				StackAdditions: goValuesToAvmValues(false),
 				StackPopCount:  toPtr[uint64](2),
 			},
 			// bnz main_l6
@@ -2733,18 +2733,18 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// txn NumAppArgs
 			{
 				Pc:             13,
-				StackAdditions: goValuesToStackValues(NumArgs),
+				StackAdditions: goValuesToAvmValues(NumArgs),
 			},
 			// int 1
 			{
 				Pc:             15,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// ==
 			{
 				Pc:             16,
 				StackPopCount:  toPtr[uint64](2),
-				StackAdditions: goValuesToStackValues(true),
+				StackAdditions: goValuesToAvmValues(true),
 			},
 			// bnz main_l3
 			{
@@ -2754,12 +2754,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// global CurrentApplicationID
 			{
 				Pc:             21,
-				StackAdditions: goValuesToStackValues(appID),
+				StackAdditions: goValuesToAvmValues(appID),
 			},
 			// app_params_get AppApprovalProgram
 			{
 				Pc:             23,
-				StackAdditions: goValuesToStackValues(approval, 1),
+				StackAdditions: goValuesToAvmValues(approval, 1),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 1
@@ -2775,12 +2775,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// global CurrentApplicationID
 			{
 				Pc:             29,
-				StackAdditions: goValuesToStackValues(appID),
+				StackAdditions: goValuesToAvmValues(appID),
 			},
 			// app_params_get AppClearStateProgram
 			{
 				Pc:             31,
-				StackAdditions: goValuesToStackValues(clearState, 1),
+				StackAdditions: goValuesToAvmValues(clearState, 1),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 3
@@ -2796,12 +2796,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// global CurrentApplicationAddress
 			{
 				Pc:             37,
-				StackAdditions: goValuesToStackValues(crypto.Digest(appID.Address()).ToSlice()),
+				StackAdditions: goValuesToAvmValues(crypto.Digest(appID.Address()).ToSlice()),
 			},
 			// acct_params_get AcctBalance
 			{
 				Pc:             39,
-				StackAdditions: goValuesToStackValues(uint64(3-layer)*MinBalance, 1),
+				StackAdditions: goValuesToAvmValues(uint64(3-layer)*MinBalance, 1),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// store 5
@@ -2817,7 +2817,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// load 1
 			{
 				Pc:             45,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// assert
 			{
@@ -2827,7 +2827,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// load 3
 			{
 				Pc:             48,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// assert
 			{
@@ -2837,7 +2837,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// load 5
 			{
 				Pc:             51,
-				StackAdditions: goValuesToStackValues(uint64(1)),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// assert
 			{
@@ -2847,29 +2847,29 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int 2
 			{
 				Pc:             54,
-				StackAdditions: goValuesToStackValues(uint64(2)),
+				StackAdditions: goValuesToAvmValues(2),
 			},
 			// txna ApplicationArgs 0
 			{
 				Pc:             56,
-				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
 				Pc:             59,
-				StackAdditions: goValuesToStackValues(uint64(MaxDepth - layer)),
+				StackAdditions: goValuesToAvmValues(uint64(MaxDepth - layer)),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// exp
 			{
 				Pc:             60,
-				StackAdditions: goValuesToStackValues(1 << (MaxDepth - layer)),
+				StackAdditions: goValuesToAvmValues(1 << (MaxDepth - layer)),
 				StackPopCount:  toPtr[uint64](2),
 			},
 			// itob
 			{
 				Pc:             61,
-				StackAdditions: goValuesToStackValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// log
@@ -2880,23 +2880,23 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// txna ApplicationArgs 0
 			{
 				Pc:             63,
-				StackAdditions: goValuesToStackValues(uint64ToBytes(uint64(MaxDepth - layer))),
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
 			},
 			// btoi
 			{
 				Pc:             66,
-				StackAdditions: goValuesToStackValues(MaxDepth - layer),
+				StackAdditions: goValuesToAvmValues(MaxDepth - layer),
 				StackPopCount:  toPtr[uint64](1),
 			},
 			// int 0
 			{
 				Pc:             67,
-				StackAdditions: goValuesToStackValues(0),
+				StackAdditions: goValuesToAvmValues(0),
 			},
 			// >
 			{
 				Pc:             68,
-				StackAdditions: goValuesToStackValues(MaxDepth-layer > 0),
+				StackAdditions: goValuesToAvmValues(MaxDepth-layer > 0),
 				StackPopCount:  toPtr[uint64](2),
 			},
 			// bnz main_l5
@@ -2907,12 +2907,12 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// int 1
 			{
 				Pc:             72,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 			},
 			// return
 			{
 				Pc:             73,
-				StackAdditions: goValuesToStackValues(1),
+				StackAdditions: goValuesToAvmValues(1),
 				StackPopCount:  toPtr[uint64](1),
 			},
 		}
