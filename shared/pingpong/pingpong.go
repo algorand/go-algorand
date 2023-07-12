@@ -815,7 +815,14 @@ func (pps *WorkerState) sendFromTo(
 			sentCount++
 			pps.schedule(1)
 			var txid string
-			txid, sendErr = client.BroadcastTransaction(stxn)
+			if pps.cfg.AsyncSending {
+				sendErr = client.BroadcastTransactionAsync(stxn)
+				if sendErr == nil {
+					txid = stxn.Txn.ID().String()
+				}
+			} else {
+				txid, sendErr = client.BroadcastTransaction(stxn)
+			}
 			pps.recordTxidSent(txid, sendErr)
 		} else {
 			// Generate txn group

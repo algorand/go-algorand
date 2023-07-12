@@ -673,7 +673,7 @@ var errBackLogFullLocal = errors.New("backlog full")
 func (handler *TxHandler) LocalTransaction(txgroup []transactions.SignedTxn) error {
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
-		rawmsg:                nil,
+		rawmsg:                &network.IncomingMessage{},
 		unverifiedTxGroup:     txgroup,
 		rawmsgDataHash:        nil,
 		unverifiedTxGroupHash: nil,
