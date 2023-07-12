@@ -1934,25 +1934,20 @@
         ],
         "type": "object"
       },
-      "ScratchChangeUnit": {
+      "ScratchChange": {
         "description": "The write operation into a scratch slot.",
         "properties": {
+          "new-value": {
+            "$ref": "#/components/schemas/AvmValue"
+          },
           "scratch-slot-id": {
             "description": "The scratch slot id indicating where the value writes to.",
             "type": "integer"
-          },
-          "type": {
-            "description": "Scratch change type. Value `1` refers to load, value `2` refers to store",
-            "type": "integer"
-          },
-          "value": {
-            "$ref": "#/components/schemas/AvmValue"
           }
         },
         "required": [
-          "scratch-slot-id",
-          "type",
-          "value"
+          "new-value",
+          "scratch-slot-id"
         ],
         "type": "object"
       },
@@ -2112,7 +2107,7 @@
             "type": "integer"
           },
           "scratch-change": {
-            "$ref": "#/components/schemas/ScratchChangeUnit"
+            "$ref": "#/components/schemas/ScratchChange"
           },
           "spawned-inners": {
             "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",

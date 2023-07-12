@@ -180,22 +180,8 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 	}, nil
 }
 
-// ScratchOperationType is an enum of the types for scratch slot operation: Load and Store
-type ScratchOperationType uint64
-
-const (
-	// Load represents the loading operation from a scratch slot
-	Load ScratchOperationType = 1
-
-	// Store represents the storing operation into a scratch slot
-	Store ScratchOperationType = 2
-)
-
 // ScratchChange represents a write operation into a scratch slot
 type ScratchChange struct {
-	// OperationType stands fpr the scratch slot operation type
-	OperationType ScratchOperationType
-
 	// ScratchSlot stands for the scratch slot id get written to
 	ScratchSlot uint64
 
