@@ -346,11 +346,11 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertScratchWrite(scratchWrite *simulation.ScratchChange) *model.ScratchChange {
+func convertScratchWrite(scratchWrite *simulation.ScratchChange) *model.ScratchSlotWrite {
 	if scratchWrite == nil {
 		return nil
 	}
-	return &model.ScratchChange{
+	return &model.ScratchSlotWrite{
 		ScratchSlotId: scratchWrite.ScratchSlot,
 		NewValue: model.AvmValue{
 			Type:  uint64(scratchWrite.Value.Type),
@@ -390,11 +390,11 @@ func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.Sim
 			spawnedInnersPtr = &spawnedInners
 		}
 		modelProgramTrace[i] = model.SimulationOpcodeTraceUnit{
-			Pc:             programTrace[i].PC,
-			SpawnedInners:  spawnedInnersPtr,
-			StackAdditions: convertTealValueSliceToModel(programTrace[i].StackAdded),
-			StackPopCount:  omitEmpty(programTrace[i].StackPopCount),
-			ScratchChange:  convertScratchWrite(programTrace[i].ScratchSlotChange),
+			Pc:               programTrace[i].PC,
+			SpawnedInners:    spawnedInnersPtr,
+			StackAdditions:   convertTealValueSliceToModel(programTrace[i].StackAdded),
+			StackPopCount:    omitEmpty(programTrace[i].StackPopCount),
+			ScratchSlotWrite: convertScratchWrite(programTrace[i].ScratchSlotChange),
 		}
 	}
 	return &modelProgramTrace

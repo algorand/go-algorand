@@ -3163,7 +3163,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 			{Pc: 9},
 			{
 				Pc: 10,
-				ScratchChange: &model.ScratchChange{
+				ScratchSlotWrite: &model.ScratchSlotWrite{
 					ScratchSlotId: 1,
 					NewValue: model.AvmValue{
 						Type: 2,
@@ -3175,7 +3175,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 			{Pc: 14},
 			{
 				Pc: 15,
-				ScratchChange: &model.ScratchChange{
+				ScratchSlotWrite: &model.ScratchSlotWrite{
 					ScratchSlotId: 1,
 					NewValue: model.AvmValue{
 						Type: 2,

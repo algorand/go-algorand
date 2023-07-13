@@ -642,8 +642,8 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
-// ScratchChange The write operation into a scratch slot.
-type ScratchChange struct {
+// ScratchSlotWrite The write operation into a scratch slot.
+type ScratchSlotWrite struct {
 	// NewValue Represents an AVM value.
 	NewValue AvmValue `json:"new-value"`
 
@@ -740,8 +740,8 @@ type SimulationOpcodeTraceUnit struct {
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`
 
-	// ScratchChange The write operation into a scratch slot.
-	ScratchChange *ScratchChange `json:"scratch-change,omitempty"`
+	// ScratchSlotWrite The write operation into a scratch slot.
+	ScratchSlotWrite *ScratchSlotWrite `json:"scratch-slot-write,omitempty"`
 
 	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
 	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`
