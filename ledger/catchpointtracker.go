@@ -935,7 +935,7 @@ func (ct *catchpointTracker) handleUnorderedCommitOrError(dcc *deferredCommitCon
 	// in cases where the commitRound fails, it is not certain that the merkle trie is in a clean state, and should be cleared.
 	// Specifically, modifications to the trie happen through accountsUpdateBalances,
 	// which happens before comit to disk. Errors in this tracker, subsequent trackers, or the commit to disk may cause the trie cache to be incorrect,
-	// affecting the percieved root on subsequent rounds
+	// affecting the perceived root on subsequent rounds
 	ct.balancesTrie = nil
 	// if the node is configured to generate catchpoint files, we might need to update the catchpointWriting variable.
 	if ct.enableGeneratingCatchpointFiles {
