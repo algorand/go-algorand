@@ -2564,8 +2564,9 @@ int 1`,
 					{signedCreate, signedPay, signedAppCall},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable: true,
-					Stack:  true,
+					Enable:        true,
+					Stack:         true,
+					ScratchChange: true,
 				},
 			},
 			developerAPI: true,
@@ -2573,8 +2574,9 @@ int 1`,
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable: true,
-					Stack:  true,
+					Enable:        true,
+					Stack:         true,
+					ScratchChange: true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{

@@ -284,9 +284,19 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		}
 		*txnTrace.programTraceRef = append(*txnTrace.programTraceRef, tracer.makeOpcodeTraceUnit(cx))
 
+		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 		if tracer.result.ReturnStackChange() {
-			latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 			latestOpcodeTraceUnit.computeStackValueDeletions(cx, tracer)
+		}
+
+		if tracer.result.ReturnScratchChange() {
+			scratchSlotID, oldValue, newValue, isStoreAlike := cx.CurrentScratchChange()
+			if isStoreAlike {
+				latestOpcodeTraceUnit.ScratchSlotChange = &ScratchChange{ScratchSlot: scratchSlotID}
+				if oldValue != newValue {
+					latestOpcodeTraceUnit.ScratchSlotChange.Value = newValue
+				}
+			}
 		}
 	}
 }
@@ -307,7 +317,7 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 
 	// NOTE: only when we have no evalError on current opcode,
 	// we can proceed for recording stack chaange
-	if evalError == nil && tracer.result.ReturnStackChange() {
+	if evalError == nil && tracer.result.ReturnTrace() {
 		var txnTrace *TransactionTrace
 		if cx.RunMode() == logic.ModeSig {
 			txnTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
@@ -318,16 +328,6 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 		if tracer.result.ReturnStackChange() {
 			latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
-		}
-
-		if tracer.result.ReturnScratchChange() {
-			scratchSlotID, oldValue, newValue, isStoreAlike := cx.CurrentScratchChange()
-			if isStoreAlike {
-				latestOpcodeTraceUnit.ScratchSlotChange = &ScratchChange{ScratchSlot: scratchSlotID}
-				if oldValue != newValue {
-					latestOpcodeTraceUnit.ScratchSlotChange.Value = newValue
-				}
-			}
 		}
 	}
 

@@ -514,9 +514,10 @@ func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, oldValue, new
 	currentOpcodeName := opsByOpcode[cx.version][cx.program[cx.pc]].Name
 	last := len(cx.Stack) - 1
 
-	if currentOpcodeName == "store" {
+	switch currentOpcodeName {
+	case "store":
 		scratchSlot = uint64(cx.pc + 1)
-	} else if currentOpcodeName == "stores" {
+	case "stores":
 		prev := last - 1
 		scratchSlot = cx.Stack[prev].Uint
 
@@ -525,6 +526,8 @@ func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, oldValue, new
 		if scratchSlot >= uint64(len(cx.scratch)) {
 			return
 		}
+	default:
+		return
 	}
 
 	newValue = cx.Stack[last].ToTealValue()
