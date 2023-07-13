@@ -71,15 +71,16 @@ def main():
                 for k,v in rec.items():
                     if k in _meta_cols:
                         continue
-                    if k in _metrics_cols:
-                        v = float(v)
-                        metric = k
-                        add_metric(fvals, row_nick, metric, xround, v)
-                    else:
-                        v = float(v)
+                    v = float(v)
+                    parts = k.split('#')
+                    if len(parts) == 2:
+                        row_nick = parts[0]
+                        metric = parts[1]
+                    else :
+                        print(f"unknown column {k}")
                         row_nick = k
-                        metric = 'inuse_space'
-                        add_metric(fvals, row_nick, metric, xround, v)
+                        metric = k
+                    add_metric(fvals, row_nick, metric, xround, v)
 
                     minv = smin(minv, v)
                     maxv = smax(maxv, v)

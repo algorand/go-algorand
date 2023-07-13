@@ -162,9 +162,11 @@ def maybe_load_tf_nicks(args):
     return ip_to_name
 
 
-def hostports_to_nicks(args, hostports):
+def hostports_to_nicks(args, hostports, metrics=None):
     ip_to_nick = maybe_load_tf_nicks(args)
     if not ip_to_nick:
+        if metrics:
+            return ['{}#{}'.format(hp, m) for hp in hostports for m in metrics]
         return hostports
     out = []
     for hp in hostports:
@@ -179,6 +181,8 @@ def hostports_to_nicks(args, hostports):
         if not hit:
             hit = hp
         out.append(hit)
+    if metrics:
+        return ['{}#{}'.format(hp, m) for hp in hostports for m in metrics]
     return out
 
 
@@ -204,15 +208,18 @@ def main():
             csvf = open(args.csv, 'wt')
         writer = csv.writer(csvf)
         whens = set()
-        meta_cols_target = heap_totals if heap_totals else heap_details
-        for nick, recs in meta_cols_target.items():
+        col_names_target = heap_totals if heap_totals else heap_details
+        for nick, recs in col_names_target.items():
             # {k: {t: v}}
             for ts in recs.keys():
                 whens.add(ts)
         whens = sorted(whens)
-        nodes = sorted(meta_cols_target.keys())
+        nodes = sorted(col_names_target.keys())
         metrics = list(heap_details[nodes[0]].values())[0]
-        writer.writerow(['when','dt','round'] + hostports_to_nicks(args, nodes) + list(metrics))
+        writer.writerow(
+            ['when','dt','round'] +
+            hostports_to_nicks(args, nodes, metrics=['pprof_inuse_space'] + list(metrics.keys()))
+        )
         first = None
         for ts in whens:
             tv = time.mktime(time.strptime(ts, '%Y%m%d_%H%M%S'))
@@ -224,7 +231,7 @@ def main():
                 bi = json.load(open(bipath))
                 rnd = str(bi['block']['rnd'])
             except:
-                rnd = ''
+                rnd = '0'
             row = [ts, tv-first, rnd]
             for nick in nodes:
                 # {k: {t: v}}
@@ -233,8 +240,7 @@ def main():
                 vals = heap_details[nick].get(ts)
                 # {k: {t: {m: v}}}
                 if vals:
-                    for val in vals.values():
-                        row.append(val)
+                    row.extend(vals.values())
             writer.writerow(row)
 
     return 0
