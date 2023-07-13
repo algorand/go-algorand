@@ -346,16 +346,16 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertScratchChange(scratchWrite *simulation.ScratchChange) *model.ScratchChange {
-	if scratchWrite == nil {
+func convertScratchChange(scratchChange *simulation.ScratchChange) *model.ScratchChange {
+	if scratchChange == nil {
 		return nil
 	}
 	return &model.ScratchChange{
-		Slot: scratchWrite.Slot,
+		Slot: scratchChange.Slot,
 		NewValue: model.AvmValue{
-			Type:  uint64(scratchWrite.Value.Type),
-			Uint:  omitEmpty(scratchWrite.Value.Uint),
-			Bytes: byteOrNil([]byte(scratchWrite.Value.Bytes)),
+			Type:  uint64(scratchChange.NewValue.Type),
+			Uint:  omitEmpty(scratchChange.NewValue.Uint),
+			Bytes: byteOrNil([]byte(scratchChange.NewValue.Bytes)),
 		},
 	}
 }

@@ -313,8 +313,8 @@ func (tracer *evalTracer) recordCurrentScratchChange(cx *logic.EvalContext) {
 	scratchSlotID, newValue, isStoreAlike := cx.CurrentScratchChange()
 	if isStoreAlike {
 		tracer.scratchChange = &ScratchChange{
-			Slot:  scratchSlotID,
-			Value: newValue,
+			Slot:     scratchSlotID,
+			NewValue: newValue,
 		}
 	}
 }

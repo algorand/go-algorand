@@ -194,8 +194,8 @@ type ScratchChange struct {
 	// Slot stands for the scratch slot id get written to
 	Slot uint64
 
-	// Value is the stack value written to scratch slot
-	Value basics.TealValue
+	// NewValue is the stack value written to scratch slot
+	NewValue basics.TealValue
 }
 
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
