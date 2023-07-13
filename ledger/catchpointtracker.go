@@ -507,14 +507,6 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx trackerdb.Trans
 	dbRound := dcc.oldBase
 
 	defer func() {
-		// in cases where the commitRound fails, it is not certain that the merkle trie is in a clean state.
-		// Specifically, modifications to the trie happen through accountsUpdateBalances,
-		// which happens before comit to disk. Errors in the commit process may cause the trie cache to be incorrect,
-		// which may affect subsequent rounds.
-		// by resetting the trie, we drop any potentially harmful updates
-		if err != nil {
-			ct.balancesTrie = nil
-		}
 		if err != nil && dcc.catchpointFirstStage && ct.enableGeneratingCatchpointFiles {
 			atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		}
@@ -940,6 +932,11 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 // Tracker might update own state in this case. For example, account catchpoint tracker cancels
 // scheduled catchpoint writing that deferred commit.
 func (ct *catchpointTracker) handleUnorderedCommitOrError(dcc *deferredCommitContext) {
+	// in cases where the commitRound fails, it is not certain that the merkle trie is in a clean state, and should be cleared.
+	// Specifically, modifications to the trie happen through accountsUpdateBalances,
+	// which happens before comit to disk. Errors in this tracker, subsequent trackers, or the commit to disk may cause the trie cache to be incorrect,
+	// affecting the percieved root on subsequent rounds
+	ct.balancesTrie = nil
 	// if the node is configured to generate catchpoint files, we might need to update the catchpointWriting variable.
 	if ct.enableGeneratingCatchpointFiles {
 		// determine if this was a catchpoint round
