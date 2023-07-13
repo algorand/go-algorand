@@ -3126,8 +3126,8 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 
 	// construct simulation request, with scratch slot change enabled
 	execTraceConfig := simulation.ExecTraceConfig{
-		Enable:        true,
-		ScratchChange: true,
+		Enable:  true,
+		Scratch: true,
 	}
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
@@ -3151,7 +3151,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
 		},
-		ExecTraceConfig: simulation.ExecTraceConfig{ScratchChange: true},
+		ExecTraceConfig: simulation.ExecTraceConfig{Scratch: true},
 	})
 	a.ErrorContains(err, "basic trace must be enabled when enabling scratch slot change tracing")
 
@@ -3173,8 +3173,8 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 			{Pc: 9},
 			{
 				Pc: 10,
-				ScratchSlotWrite: &model.ScratchSlotWrite{
-					ScratchSlotId: 1,
+				ScratchChange: &model.ScratchChange{
+					Slot: 1,
 					NewValue: model.AvmValue{
 						Type: 2,
 						Uint: toPtr[uint64](1),
@@ -3185,8 +3185,8 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 			{Pc: 14},
 			{
 				Pc: 15,
-				ScratchSlotWrite: &model.ScratchSlotWrite{
-					ScratchSlotId: 1,
+				ScratchChange: &model.ScratchChange{
+					Slot: 1,
 					NewValue: model.AvmValue{
 						Type: 2,
 						Uint: toPtr[uint64](1),

@@ -642,13 +642,13 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
-// ScratchSlotWrite The write operation into a scratch slot.
-type ScratchSlotWrite struct {
+// ScratchChange The write operation into a scratch slot.
+type ScratchChange struct {
 	// NewValue Represents an AVM value.
 	NewValue AvmValue `json:"new-value"`
 
-	// ScratchSlotId The scratch slot id indicating where the value writes to.
-	ScratchSlotId uint64 `json:"scratch-slot-id"`
+	// Slot The scratch slot written.
+	Slot uint64 `json:"slot"`
 }
 
 // SimulateRequest Request type for simulation endpoint.
@@ -680,7 +680,7 @@ type SimulateTraceConfig struct {
 	// Enable A boolean option for opting in execution trace features simulation endpoint.
 	Enable *bool `json:"enable,omitempty"`
 
-	// ScratchChange A boolean option enabling returning scratch slot changes.
+	// ScratchChange A boolean option enabling returning scratch slot changes together with execution trace during simulation.
 	ScratchChange *bool `json:"scratch-change,omitempty"`
 
 	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
@@ -740,8 +740,8 @@ type SimulationOpcodeTraceUnit struct {
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`
 
-	// ScratchSlotWrite The write operation into a scratch slot.
-	ScratchSlotWrite *ScratchSlotWrite `json:"scratch-slot-write,omitempty"`
+	// ScratchChange The write operation into a scratch slot.
+	ScratchChange *ScratchChange `json:"scratch-change,omitempty"`
 
 	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
 	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`

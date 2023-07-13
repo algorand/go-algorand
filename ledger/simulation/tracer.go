@@ -290,13 +290,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		}
 
 		if tracer.result.ReturnScratchChange() {
-			scratchSlotID, _, newValue, isStoreAlike := cx.CurrentScratchChange()
-			if isStoreAlike {
-				latestOpcodeTraceUnit.ScratchSlotChange = &ScratchChange{
-					ScratchSlot: scratchSlotID,
-					Value:       newValue,
-				}
-			}
+			latestOpcodeTraceUnit.recordCurrentScratchChange(cx)
 		}
 	}
 }
@@ -309,6 +303,16 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 			Uint:  tealValue.Uint,
 			Bytes: tealValue.Bytes,
 		})
+	}
+}
+
+func (o *OpcodeTraceUnit) recordCurrentScratchChange(cx *logic.EvalContext) {
+	scratchSlotID, newValue, isStoreAlike := cx.CurrentScratchChange()
+	if isStoreAlike {
+		o.ScratchSlotChange = &ScratchChange{
+			Slot:  scratchSlotID,
+			Value: newValue,
+		}
 	}
 }
 

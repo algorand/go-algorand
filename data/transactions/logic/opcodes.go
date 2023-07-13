@@ -512,7 +512,7 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 // CurrentScratchChange tells if current opcode is storing value to a scratch slot,
 // and if so, it returns scratch slot id, previous value, new value to be written;
 // otherwise, it indicates the current opcode is not a scratch slot chagne.
-func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, oldValue, newValue basics.TealValue, isScratchChange bool) {
+func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, newValue basics.TealValue, isScratchChange bool) {
 	currentOpcodeName := opsByOpcode[cx.version][cx.program[cx.pc]].Name
 	last := len(cx.Stack) - 1
 
@@ -533,7 +533,6 @@ func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, oldValue, new
 	}
 
 	newValue = cx.Stack[last].ToTealValue()
-	oldValue = cx.scratch[scratchSlot].ToTealValue()
 	isScratchChange = true
 	return
 }

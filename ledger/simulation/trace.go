@@ -108,9 +108,9 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 type ExecTraceConfig struct {
 	_struct struct{} `codec:",omitempty"`
 
-	Enable        bool `codec:"enable"`
-	Stack         bool `codec:"stack-change"`
-	ScratchChange bool `codec:"scratch-change,omitempty"`
+	Enable  bool `codec:"enable"`
+	Stack   bool `codec:"stack-change"`
+	Scratch bool `codec:"scratch-change"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -132,7 +132,7 @@ func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
 
 // ReturnScratchChange tells if the simulation runs with scratch-change enabled.
-func (r Result) ReturnScratchChange() bool { return r.TraceConfig.ScratchChange }
+func (r Result) ReturnScratchChange() bool { return r.TraceConfig.Scratch }
 
 // validateSimulateRequest first checks relation between request and config variables, including developerAPI:
 // if `developerAPI` provided is turned off, this method would:
@@ -152,7 +152,8 @@ func validateSimulateRequest(request Request, developerAPI bool) error {
 					err: fmt.Errorf("basic trace must be enabled when enabling stack tracing"),
 				},
 			}
-		} else if request.TraceConfig.ScratchChange {
+		}
+		if request.TraceConfig.Scratch {
 			return InvalidRequestError{
 				SimulatorError{
 					err: fmt.Errorf("basic trace must be enabled when enabling scratch slot change tracing"),
@@ -190,8 +191,8 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 
 // ScratchChange represents a write operation into a scratch slot
 type ScratchChange struct {
-	// ScratchSlot stands for the scratch slot id get written to
-	ScratchSlot uint64
+	// Slot stands for the scratch slot id get written to
+	Slot uint64
 
 	// Value is the stack value written to scratch slot
 	Value basics.TealValue

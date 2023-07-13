@@ -3520,7 +3520,7 @@
           "type": "boolean"
         },
         "scratch-change": {
-          "description": "A boolean option enabling returning scratch slot changes.",
+          "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
           "type": "boolean"
         }
       }
@@ -3884,16 +3884,16 @@
         }
       }
     },
-    "ScratchSlotWrite": {
+    "ScratchChange": {
       "description": "The write operation into a scratch slot.",
       "type": "object",
       "required": [
-        "scratch-slot-id",
+        "slot",
         "new-value"
       ],
       "properties": {
-        "scratch-slot-id": {
-          "description": "The scratch slot id indicating where the value writes to.",
+        "slot": {
+          "description": "The scratch slot written.",
           "type": "integer"
         },
         "new-value": {
@@ -3912,8 +3912,8 @@
           "description": "The program counter of the current opcode being evaluated.",
           "type": "integer"
         },
-        "scratch-slot-write": {
-          "$ref": "#/definitions/ScratchSlotWrite"
+        "scratch-change": {
+          "$ref": "#/definitions/ScratchChange"
         },
         "spawned-inners": {
           "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
