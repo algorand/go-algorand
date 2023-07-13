@@ -2439,7 +2439,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	wg.Add(1)
 	done := make(chan struct{})
 	go func() {
-		ad, _, _, err = au.lookupLatest(addr1)
+		/*xxxxx*/ ad, _, _, err = au.lookupLatest(addr1)
 		close(done)
 		wg.Done()
 	}()
