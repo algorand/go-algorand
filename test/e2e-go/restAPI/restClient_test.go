@@ -3146,6 +3146,16 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	require.NoError(t, err)
 	fixture.Start()
 
+	// simulate with wrong config (not enabled trace), see expected error
+	_, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+		},
+		ExecTraceConfig: simulation.ExecTraceConfig{ScratchChange: true},
+	})
+	a.ErrorContains(err, "basic trace must be enabled when enabling scratch slot change tracing")
+
+	// start real simulating
 	resp, err := testClient.SimulateTransactions(simulateRequest)
 	a.NoError(err)
 
