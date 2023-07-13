@@ -288,10 +288,6 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		if tracer.result.ReturnStackChange() {
 			latestOpcodeTraceUnit.computeStackValueDeletions(cx, tracer)
 		}
-
-		if tracer.result.ReturnScratchChange() {
-			latestOpcodeTraceUnit.recordCurrentScratchChange(cx)
-		}
 	}
 }
 
@@ -332,6 +328,9 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 		if tracer.result.ReturnStackChange() {
 			latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
+		}
+		if tracer.result.ReturnScratchChange() {
+			latestOpcodeTraceUnit.recordCurrentScratchChange(cx)
 		}
 	}
 
