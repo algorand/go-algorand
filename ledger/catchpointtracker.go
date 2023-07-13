@@ -507,6 +507,14 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx trackerdb.Trans
 	dbRound := dcc.oldBase
 
 	defer func() {
+		// in cases where the commitRound fails, it is not certain that the merkle trie is in a clean state.
+		// Specifically, modifications to the trie happen through accountsUpdateBalances,
+		// which happens before comit to disk. Errors in the commit process may cause the trie cache to be incorrect,
+		// which may affect subsequent rounds.
+		// by resetting the trie, we drop any potentially harmful updates
+		if err != nil {
+			ct.balancesTrie = nil
+		}
 		if err != nil && dcc.catchpointFirstStage && ct.enableGeneratingCatchpointFiles {
 			atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		}
