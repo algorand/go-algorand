@@ -290,11 +290,11 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		}
 
 		if tracer.result.ReturnScratchChange() {
-			scratchSlotID, oldValue, newValue, isStoreAlike := cx.CurrentScratchChange()
+			scratchSlotID, _, newValue, isStoreAlike := cx.CurrentScratchChange()
 			if isStoreAlike {
-				latestOpcodeTraceUnit.ScratchSlotChange = &ScratchChange{ScratchSlot: scratchSlotID}
-				if oldValue != newValue {
-					latestOpcodeTraceUnit.ScratchSlotChange.Value = newValue
+				latestOpcodeTraceUnit.ScratchSlotChange = &ScratchChange{
+					ScratchSlot: scratchSlotID,
+					Value:       newValue,
 				}
 			}
 		}

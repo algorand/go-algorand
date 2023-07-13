@@ -145,11 +145,13 @@ func validateSimulateRequest(request Request, developerAPI bool) error {
 			},
 		}
 	}
-	if !request.TraceConfig.Enable && request.TraceConfig.Stack {
-		return InvalidRequestError{
-			SimulatorError{
-				err: fmt.Errorf("basic trace must be enabled when enabling stack tracing"),
-			},
+	if !request.TraceConfig.Enable {
+		if request.TraceConfig.Stack || request.TraceConfig.ScratchChange {
+			return InvalidRequestError{
+				SimulatorError{
+					err: fmt.Errorf("basic trace must be enabled when enabling stack tracing"),
+				},
+			}
 		}
 	}
 	return nil

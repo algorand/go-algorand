@@ -2810,7 +2810,7 @@ int 1`,
 											StackPopCount: 1,
 											ScratchSlotChange: &simulation.ScratchChange{
 												ScratchSlot: 1,
-												Value:       basics.TealValue{},
+												Value:       goValuesToTealValues(uint64(math.MaxUint64))[0],
 											},
 										},
 										// retsub

@@ -3177,6 +3177,10 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 				Pc: 15,
 				ScratchChange: &model.ScratchChange{
 					ScratchSlotId: 1,
+					NewValue: model.AvmValue{
+						Type: 2,
+						Uint: toPtr[uint64](1),
+					},
 				},
 			},
 			{Pc: 16},
