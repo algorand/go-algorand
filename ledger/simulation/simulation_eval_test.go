@@ -2514,6 +2514,11 @@ subroutine_manipulating_stack:
   +                                       // [arg_0 * 3]
   pushbytess "1!" "5!"                    // [arg_0 * 3, "1!", "5!"]
   pushints 0 2 1 1 5 18446744073709551615 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5, 18446744073709551615]
+  store 1                                 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5]
+  load 1                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5, 18446744073709551615]
+  stores                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1]
+  load 1                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 18446744073709551615]
+  store 1                                 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1]
   retsub
 
 end:
@@ -2602,11 +2607,11 @@ int 1`,
 											StackPopCount: 1,
 										},
 										{
-											PC:         81,
+											PC:         90,
 											StackAdded: goValuesToTealValues(1),
 										},
 										{
-											PC:            82,
+											PC:            91,
 											StackAdded:    goValuesToTealValues(1),
 											StackPopCount: 1,
 										},
@@ -2626,7 +2631,7 @@ int 1`,
 										},
 									},
 								},
-								AppBudgetConsumed: 34,
+								AppBudgetConsumed: 39,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 										{
@@ -2771,11 +2776,48 @@ int 1`,
 											PC:         63,
 											StackAdded: goValuesToTealValues(0, 2, 1, 1, 5, uint64(math.MaxUint64)),
 										},
-										// retsub
+										// store 1
 										{
 											PC:            80,
+											StackPopCount: 1,
+											ScratchSlotChange: &simulation.ScratchChange{
+												ScratchSlot: 1,
+												Value:       goValuesToTealValues(uint64(math.MaxUint64))[0],
+											},
+										},
+										// load 1
+										{
+											PC:         82,
+											StackAdded: goValuesToTealValues(uint64(math.MaxUint64)),
+										},
+										// stores
+										{
+											PC:            84,
+											StackPopCount: 2,
+											ScratchSlotChange: &simulation.ScratchChange{
+												ScratchSlot: 5,
+												Value:       goValuesToTealValues(uint64(math.MaxUint64))[0],
+											},
+										},
+										// load 1
+										{
+											PC:         85,
+											StackAdded: goValuesToTealValues(uint64(math.MaxUint64)),
+										},
+										// store 1
+										{
+											PC:            87,
+											StackPopCount: 1,
+											ScratchSlotChange: &simulation.ScratchChange{
+												ScratchSlot: 1,
+												Value:       basics.TealValue{},
+											},
+										},
+										// retsub
+										{
+											PC:            89,
 											StackAdded:    goValuesToTealValues(applicationArg * 3),
-											StackPopCount: 10,
+											StackPopCount: 8,
 										},
 										// itob
 										{
@@ -2794,12 +2836,12 @@ int 1`,
 										},
 										// int 1
 										{
-											PC:         81,
+											PC:         90,
 											StackAdded: goValuesToTealValues(1),
 										},
 										// return
 										{
-											PC:            82,
+											PC:            91,
 											StackAdded:    goValuesToTealValues(1),
 											StackPopCount: 1,
 										},
@@ -2808,7 +2850,7 @@ int 1`,
 							},
 						},
 						AppBudgetAdded:    1400,
-						AppBudgetConsumed: 39,
+						AppBudgetConsumed: 44,
 					},
 				},
 			},
