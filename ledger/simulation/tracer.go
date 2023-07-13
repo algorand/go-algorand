@@ -96,6 +96,10 @@ type evalTracer struct {
 	// stackHeightAfterDeletion is calculated by stack height before opcode - stack element deletion number.
 	// NOTE: both stackChangeExplanation and stackHeightAfterDeletion are used only for Stack exposure.
 	stackHeightAfterDeletion int
+
+	// scratchChange is calculated by cx.CurrentScratchChange() on `store` or `stores` opcode for changes in scratch slots.
+	// NOTE: this field scratchChange is used only for scratch change exposure
+	scratchChange *ScratchChange
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
@@ -288,9 +292,8 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		if tracer.result.ReturnStackChange() {
 			latestOpcodeTraceUnit.computeStackValueDeletions(cx, tracer)
 		}
-
 		if tracer.result.ReturnScratchChange() {
-			latestOpcodeTraceUnit.recordCurrentScratchChange(cx)
+			tracer.recordCurrentScratchChange(cx)
 		}
 	}
 }
@@ -306,14 +309,20 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 	}
 }
 
-func (o *OpcodeTraceUnit) recordCurrentScratchChange(cx *logic.EvalContext) {
+func (tracer *evalTracer) recordCurrentScratchChange(cx *logic.EvalContext) {
 	scratchSlotID, newValue, isStoreAlike := cx.CurrentScratchChange()
 	if isStoreAlike {
-		o.ScratchSlotChange = &ScratchChange{
+		tracer.scratchChange = &ScratchChange{
 			Slot:  scratchSlotID,
 			Value: newValue,
 		}
 	}
+}
+
+func (tracer *evalTracer) releaseCurrentScratchChange() *ScratchChange {
+	currentScratchChange := tracer.scratchChange
+	tracer.scratchChange = nil
+	return currentScratchChange
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
@@ -332,6 +341,9 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 		if tracer.result.ReturnStackChange() {
 			latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
+		}
+		if tracer.result.ReturnScratchChange() {
+			latestOpcodeTraceUnit.ScratchSlotChange = tracer.releaseCurrentScratchChange()
 		}
 	}
 
