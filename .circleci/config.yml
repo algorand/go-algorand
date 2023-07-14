@@ -5,14 +5,14 @@
 version: 2.1
 
 orbs:
-  win: circleci/windows@2.3.0
+  win: circleci/windows@5.0.0
   go: circleci/go@1.7.3
-  slack: circleci/slack@4.10.1
+  slack: circleci/slack@4.12.5
 
 parameters:
   ubuntu_image:
     type: string
-    default: "ubuntu-2004:202104-01"
+    default: "ubuntu-2004:2023.04.2"
   build_dir:
     type: string
     default: "/opt/cibuild"
