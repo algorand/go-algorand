@@ -194,13 +194,13 @@ func (t *txTail) close() {
 func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	if _, has := t.recent[rnd]; has {
 		// Repeat, ignore
 		return
 	}
-
-	t.tailMu.Lock()
-	defer t.tailMu.Unlock()
 
 	var tail trackerdb.TxTailRound
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
@@ -280,9 +280,6 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 }
 
 func (t *txTail) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) error {
-	t.tailMu.Lock()
-	defer t.tailMu.Unlock()
-
 	aw, err := tx.MakeAccountsWriter()
 	if err != nil {
 		return err
@@ -343,6 +340,9 @@ func (t errTxTailMissingRound) Error() string {
 // checkDup test to see if the given transaction id/lease already exists. It returns nil if neither exists, or
 // TransactionInLedgerError / LeaseInLedgerError respectively.
 func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	// txTail does not use l.trackerMu, instead uses t.tailMu to make it thread-safe
+	// t.tailMu is sufficient because the state of txTail does not depend on any outside data field
+
 	t.tailMu.RLock()
 	defer t.tailMu.RUnlock()
 
@@ -373,6 +373,8 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 }
 
 func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
+	// lock should be held by the caller
+	// do not lock here
 	if _, ok := t.lastValid[lastValid]; !ok {
 		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
 	}
