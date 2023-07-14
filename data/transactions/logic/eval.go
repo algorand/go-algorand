@@ -436,11 +436,6 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 		EvalConstants:           RuntimeEvalConstants(),
 	}
-	// resources are computed after ep is constructed because app addresses are
-	// calculated there, and we'd like to use the caching mechanism built into
-	// the EvalParams. Perhaps we can make the computation even lazier, so it is
-	// only computed if needed.
-	ep.available = ep.computeAvailability()
 	return ep
 }
 
@@ -984,6 +979,10 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
 			return false, nil, fmt.Errorf("Attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
 		}
+	}
+
+	if cx.EvalParams.available == nil {
+		cx.EvalParams.available = cx.EvalParams.computeAvailability()
 	}
 
 	// If this is a creation...

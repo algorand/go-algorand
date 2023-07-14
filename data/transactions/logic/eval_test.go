@@ -142,7 +142,7 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 	ep.SigLedger = NewLedger(nil)
 	if empty {
 		// We made an app type in order to get a full ep, but that sets MinTealVersion=2
-		ep.TxnGroup[0].Txn.Type = "" // set it back
+		ep.TxnGroup[0].Txn.Type = protocol.PaymentTx // set it to something boring
 		ep.minAvmVersion = 0
 	}
 	return ep
@@ -165,17 +165,11 @@ func (ep *EvalParams) reset() {
 		inners := ep.Proto.MaxTxGroupSize * ep.Proto.MaxInnerTransactions
 		ep.pooledAllowedInners = &inners
 	}
-	ep.pastScratch = make([]*scratchSpace, ep.Proto.MaxTxGroupSize)
+	ep.pastScratch = make([]*scratchSpace, len(ep.TxnGroup))
 	for i := range ep.TxnGroup {
 		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 	}
-	if ep.available != nil {
-		available := NewAppEvalParams(ep.TxnGroup, ep.Proto, ep.Specials).available
-		if available != nil {
-			ep.available = available
-		}
-		ep.available.dirtyBytes = 0
-	}
+	ep.available = nil
 	ep.readBudgetChecked = false
 	ep.appAddrCache = make(map[basics.AppIndex]basics.Address)
 	if ep.Trace != nil {

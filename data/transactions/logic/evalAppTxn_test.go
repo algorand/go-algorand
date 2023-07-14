@@ -592,7 +592,6 @@ func TestNumInnerShallow(t *testing.T) {
 
 	ep, tx, ledger := MakeSampleEnv()
 	ep.Proto.EnableInnerTransactionPooling = false
-	ep.Reset()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1000000)
 	TestApp(t, pay+";int 1", ep)

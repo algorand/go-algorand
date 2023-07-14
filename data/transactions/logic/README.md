@@ -122,21 +122,21 @@ A program can either authorize some delegated action on a normal
 signature-based or multisignature-based account or be wholly in charge
 of a contract account.
 
-* *Delegated Smart Signatures* --- If the account has signed the
-  program (by providing a valid ed25519 signature or valid
-  multisignature for the authorizer address on the string "Program"
-  concatenated with the program bytecode) then: if the program returns
-  true the transaction is authorized as if the account had signed
-  it. This allows an account to hand out a signed program so that
-  other users can carry out delegated actions which are approved by
-  the program. Note that Smart Signature Args are _not_ signed.
+* If the account has signed the program (by providing a valid ed25519
+  signature or valid multisignature for the authorizer address on the
+  string "Program" concatenated with the program bytecode) then: if the
+  program returns true the transaction is authorized as if the account
+  had signed it. This allows an account to hand out a signed program
+  so that other users can carry out delegated actions which are
+  approved by the program. Note that Smart Signature Args are _not_
+  signed.
 
-* *Contract Smart Signatures* -- If the SHA512_256 hash of the program
-  (prefixed by "Program") is equal to authorizer address of the
-  transaction sender then this is a contract account wholly controlled
-  by the program. No other signature is necessary or possible. The
-  only way to execute a transaction against the contract account is
-  for the program to approve it.
+* If the SHA512_256 hash of the program (prefixed by "Program") is
+  equal to authorizer address of the transaction sender then this is a
+  contract account wholly controlled by the program. No other
+  signature is necessary or possible. The only way to execute a
+  transaction against the contract account is for the program to
+  approve it.
 
 The bytecode plus the length of all Args must add up to no more than
 1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an
@@ -147,18 +147,9 @@ executed or not). Beginning with v4, the program's cost is tracked
 dynamically, while being evaluated. If the program exceeds its budget,
 it fails.
 
-The total program cost of a _delegated_ Smart Signature program must
-no exceed 20,000 (consensus parameter LogicSigMaxCost).
-
-The total program cost of all _contract_ signatures in a group must
-not exceed 20,000 (consensus parameter LogicSigMaxCost) times the
-number of transactions in the group that are not signed by delegated
-Smart Signatures.
-
-More intuitively --- Delegated Smart Signatures receive 20,000 opcode
-units, which they are free to use, but are not shared. All other
-transactions receive 20,000 opcode units each, which are shared among
-the Contract Smart Signatures.
+The total program cost of all Smart Signatures in a group must not
+exceed 20,000 (consensus parameter LogicSigMaxCost) times the number
+of transactions in the group.
 
 
 ## Execution Environment for Smart Contracts (Applications)

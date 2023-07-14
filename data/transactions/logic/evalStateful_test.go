@@ -2799,26 +2799,28 @@ func TestReturnTypes(t *testing.T) {
 				sb.WriteString(cmd + "\n")
 				ops := testProg(t, sb.String(), AssemblerMaxVersion)
 
-				ep, tx, ledger := makeSampleEnv()
-
-				tx.Type = protocol.ApplicationCallTx
-				tx.ApplicationID = 300
-				tx.ForeignApps = []basics.AppIndex{tx.ApplicationID}
-				tx.ForeignAssets = []basics.AssetIndex{400}
-				tx.Boxes = []transactions.BoxRef{{
-					Name: []byte("3456"),
-				}}
-				ep.TxnGroup[0].Lsig.Args = [][]byte{
+				tx0 := makeSampleTxn()
+				tx0.Txn.Type = protocol.ApplicationCallTx
+				tx0.Txn.ApplicationID = 300
+				tx0.Txn.ForeignApps = []basics.AppIndex{300}
+				tx0.Txn.ForeignAssets = []basics.AssetIndex{400}
+				tx0.Txn.Boxes = []transactions.BoxRef{{Name: []byte("3456")}}
+				tx0.Lsig.Args = [][]byte{
 					[]byte("aoeu"),
 					[]byte("aoeu"),
 					[]byte("aoeu2"),
 					[]byte("aoeu3"),
 				}
+				tx0.Lsig.Logic = ops.Program
 				// We are going to run with GroupIndex=1, so make tx1 interesting too (so
-				// txn can look at things)
-				ep.TxnGroup[1] = ep.TxnGroup[0]
+				// `txn` opcode can look at things)
+				tx1 := tx0
 
-				ep.pastScratch[0] = &scratchSpace{} // for gload
+				ep := defaultEvalParams(tx0, tx1)
+				ledger := ep.SigLedger.(*Ledger)
+				ep.Ledger = ledger
+
+				tx := tx0.Txn
 				ledger.NewAccount(tx.Sender, 1)
 				params := basics.AssetParams{
 					Total:         1000,
@@ -2842,35 +2844,30 @@ func TestReturnTypes(t *testing.T) {
 				ledger.NewLocal(tx.Receiver, 300, string(key), algoValue)
 				ledger.NewAccount(appAddr(300), 1000000)
 
-				ep.reset()                          // for Trace and budget isolation
-				ep.pastScratch[0] = &scratchSpace{} // for gload
 				// these allows the box_* opcodes that to work
 				ledger.CreateBox(300, "3456", 10)
-				ep.ioBudget = 50
 
-				cx := EvalContext{
-					EvalParams: ep,
-					runMode:    m,
-					groupIndex: 1,
-					txn:        &ep.TxnGroup[1],
-					appID:      300,
+				// We are running gi=1, but we never ran gi=0.  Set things up as
+				// if we did, so they can be accessed with gtxn, gload, gaid
+				ep.pastScratch[0] = &scratchSpace{}
+				ep.TxnGroup[0].ConfigAsset = 100
+
+				var cx *EvalContext
+				if m == ModeApp {
+					_, cx, err = EvalContract(ops.Program, 1, 300, ep)
+				} else {
+					_, cx, err = EvalSignatureFull(1, ep)
 				}
-
-				// These set conditions for some ops that examine the group.
-				// This convinces them all to work.  Revisit.
-				cx.TxnGroup[0].ConfigAsset = 100
-
-				// These little programs need not pass. Since the returned stack
-				// is checked for typing, we can't get hung up on whether it is
-				// exactly one positive int. But if it fails for any *other*
-				// reason, we're not doing a good test.
-				_, err = eval(ops.Program, &cx)
+				// These little programs need not pass. We are just trying to
+				// examine cx.Stack for proper types/size after executing the
+				// opcode. But if it fails for any *other* reason, we're not
+				// doing a good test.
 				if err != nil {
 					// Allow the kinds of errors we expect, but fail for stuff
 					// that indicates the opcode itself failed.
 					reason := err.Error()
-					if reason != "stack finished with bytes not int" &&
-						!strings.HasPrefix(reason, "stack len is") {
+					if !strings.Contains(reason, "stack finished with bytes not int") &&
+						!strings.Contains(reason, "stack len is") {
 						require.NoError(t, err, "%s: %s\n%s", name, err, ep.Trace)
 					}
 				}

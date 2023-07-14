@@ -24,10 +24,6 @@ import "github.com/algorand/go-algorand/data/basics"
 // we export some extra things to make testing easier there. But we do it in a
 // _test.go file, so they are only exported during testing.
 
-func (ep *EvalParams) Reset() {
-	ep.reset()
-}
-
 // Inefficient (hashing), just a testing convenience
 func (l *Ledger) CreateBox(app basics.AppIndex, name string, size uint64) {
 	l.NewBox(app, name, make([]byte, size), app.Address())
