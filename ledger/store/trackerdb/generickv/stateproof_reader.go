@@ -43,7 +43,8 @@ func (r *stateproofReader) LookupSPContext(stateProofLastAttestedRound basics.Ro
 	// FROM stateproofverification
 	// WHERE lastattestedround=?
 
-	value, closer, err := r.kvr.Get(stateproofKey(stateProofLastAttestedRound))
+	key := stateproofKey(stateProofLastAttestedRound)
+	value, closer, err := r.kvr.Get(key[:])
 	if err != nil {
 		return nil, err
 	}

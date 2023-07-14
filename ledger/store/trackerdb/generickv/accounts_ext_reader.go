@@ -36,7 +36,8 @@ func (r *accountsReader) AccountsRound() (rnd basics.Round, err error) {
 	// "SELECT rnd FROM acctrounds WHERE id='acctbase'"
 
 	// read round entry
-	value, closer, err := r.kvr.Get(roundKey())
+	key := roundKey()
+	value, closer, err := r.kvr.Get(key[:])
 	if err != nil {
 		return
 	}
@@ -50,7 +51,8 @@ func (r *accountsReader) AccountsRound() (rnd basics.Round, err error) {
 
 func (r *accountsReader) AccountsTotals(ctx context.Context, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
 	// read round entry
-	value, closer, err := r.kvr.Get(totalsKey(catchpointStaging))
+	key := totalsKey(catchpointStaging)
+	value, closer, err := r.kvr.Get(key[:])
 	if err != nil {
 		return
 	}
@@ -97,7 +99,8 @@ func (r *accountsReader) LookupResourceDataByAddrID(accRef trackerdb.AccountRef,
 	}
 	xref := accRef.(accountRef)
 
-	value, closer, err := r.kvr.Get(resourceKey(xref.addr, aidx))
+	key := resourceKey(xref.addr, aidx)
+	value, closer, err := r.kvr.Get(key[:])
 	if err != nil {
 		return
 	}
@@ -123,10 +126,8 @@ func (r *accountsReader) TotalKVs(ctx context.Context) (total uint64, err error)
 
 // TODO: this replicates some functionality from LookupOnlineHistory, implemented for onlineAccountsReader
 func (r *accountsReader) LookupOnlineAccountDataByAddress(addr basics.Address) (ref trackerdb.OnlineAccountRef, data []byte, err error) {
-	low := onlineAccountOnlyPartialKey(addr)
-	high := onlineAccountOnlyPartialKey(addr)
-	high[len(high)-1]++
-	iter := r.kvr.NewIter(low, high, true)
+	low, high := onlineAccountRangePrefix(addr)
+	iter := r.kvr.NewIter(low[:], high[:], true)
 	defer iter.Close()
 
 	if iter.Next() {
@@ -187,12 +188,9 @@ func (r *accountsReader) AccountsOnlineTop(rnd basics.Round, offset uint64, n ui
 	data = make(map[basics.Address]*ledgercore.OnlineAccount)
 
 	// prepare iter over online accounts (by balance)
-	low := []byte(kvPrefixOnlineAccountBalance)
-	low = append(low, "-"...)
-	high := onlineAccountBalanceOnlyPartialKey(rnd)
-	high[len(high)-1]++
+	low, high := onlineAccountBalanceForRoundRangePrefix(rnd)
 	// reverse order iterator to get high-to-low
-	iter := r.kvr.NewIter(low, high, true)
+	iter := r.kvr.NewIter(low[:], high[:], true)
 	defer iter.Close()
 
 	var value []byte
@@ -392,12 +390,9 @@ func (r *accountsReader) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd
 	expired := make(map[basics.Address]struct{})
 
 	// prepare iter over online accounts (by balance)
-	low := []byte(kvPrefixOnlineAccountBalance)
-	low = append(low, "-"...)
-	high := onlineAccountBalanceOnlyPartialKey(rnd)
-	high[len(high)-1]++
+	low, high := onlineAccountBalanceForRoundRangePrefix(rnd)
 	// reverse order iterator to get high-to-low
-	iter := r.kvr.NewIter(low, high, true)
+	iter := r.kvr.NewIter(low[:], high[:], true)
 	defer iter.Close()
 
 	var value []byte

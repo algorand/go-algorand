@@ -51,16 +51,16 @@ func (w *accountsWriter) TxtailNewRound(ctx context.Context, baseRound basics.Ro
 	// insert the new txTail's
 	for i, data := range roundData {
 		rnd := basics.Round(int(baseRound) + i)
-		err := w.kvw.Set(txTailKey(rnd), data)
+		key := txTailKey(rnd)
+		err := w.kvw.Set(key[:], data)
 		if err != nil {
 			return err
 		}
 	}
 
 	// delete old ones
-	start := []byte(kvTxTail + "-")
-	end := txTailKey(forgetBeforeRound)
-	err := w.kvw.DeleteRange(start, end)
+	start, end := txTailRangePrefix(forgetBeforeRound)
+	err := w.kvw.DeleteRange(start[:], end[:])
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,8 @@ func (w *accountsWriter) UpdateAccountsRound(rnd basics.Round) (err error) {
 
 	// write round entry
 	raw := bigEndianUint64(uint64(rnd))
-	err = w.kvw.Set(roundKey(), raw)
+	key := roundKey()
+	err = w.kvw.Set(key[:], raw[:])
 	if err != nil {
 		return err
 	}
@@ -104,7 +105,8 @@ func (w *accountsWriter) AccountsPutTotals(totals ledgercore.AccountTotals, catc
 
 	// write totals entry
 	raw := protocol.Encode(&totals)
-	err = w.kvw.Set(totalsKey(catchpointStaging), raw)
+	key := totalsKey(catchpointStaging)
+	err = w.kvw.Set(key[:], raw)
 	if err != nil {
 		return err
 	}
@@ -134,7 +136,8 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 	// 1. read from the `onlineAccountBalanceKey` range since we can the addr's that will need to be deleted
 	start := []byte(kvPrefixOnlineAccountBalance + "-")
 	end := []byte(kvPrefixOnlineAccountBalance + "-")
-	end = append(end, bigEndianUint64(uint64(forgetBefore))...)
+	forgetBefore8 := bigEndianUint64(uint64(forgetBefore))
+	end = append(end, forgetBefore8[:]...)
 	iter := w.kvr.NewIter(start, end, true)
 	defer iter.Close()
 
@@ -208,7 +211,8 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 	// 2. delete the individual addr+round entries
 	for _, item := range toDeletePrimaryIndex {
 		// TODO: [perf] we might be able to optimize this with a SingleDelete call
-		err = w.kvw.Delete(onlineAccountKey(item.Address, item.Round))
+		key := onlineAccountKey(item.Address, item.Round)
+		err = w.kvw.Delete(key[:])
 		if err != nil {
 			return
 		}
@@ -239,7 +243,8 @@ func (w *accountsWriter) AccountsPutOnlineRoundParams(onlineRoundParamsData []le
 	for i := range onlineRoundParamsData {
 		rnd := basics.Round(int(startRound) + i)
 		raw := protocol.Encode(&onlineRoundParamsData[i])
-		err := w.kvw.Set(onlineAccountRoundParamsKey(rnd), raw)
+		key := onlineAccountRoundParamsKey(rnd)
+		err := w.kvw.Set(key[:], raw)
 		if err != nil {
 			return err
 		}
@@ -254,9 +259,8 @@ func (w *accountsWriter) AccountsPruneOnlineRoundParams(deleteBeforeRound basics
 	// DELETE FROM onlineroundparamstail WHERE rnd<?
 
 	// delete old ones
-	start := []byte(kvOnlineAccountRoundParams + "-")
-	end := onlineAccountRoundParamsKey(deleteBeforeRound)
-	err := w.kvw.DeleteRange(start, end)
+	start, end := onlineAccountRoundParamsRangePrefix(deleteBeforeRound)
+	err := w.kvw.DeleteRange(start[:], end[:])
 	if err != nil {
 		return err
 	}

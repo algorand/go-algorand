@@ -81,7 +81,8 @@ func (r *accountsReader) LookupAccount(addr basics.Address) (data trackerdb.Pers
 		return
 	}
 
-	value, closer, err := r.kvr.Get(accountKey(addr))
+	key := accountKey(addr)
+	value, closer, err := r.kvr.Get(key[:])
 	if err == trackerdb.ErrNotFound {
 		// Note: the SQL implementation returns a data value and no error even when the account does not exist.
 		return data, nil
@@ -109,7 +110,8 @@ func (r *accountsReader) LookupResources(addr basics.Address, aidx basics.Creata
 		return
 	}
 
-	value, closer, err := r.kvr.Get(resourceKey(addr, aidx))
+	key := resourceKey(addr, aidx)
+	value, closer, err := r.kvr.Get(key[:])
 	if err == trackerdb.ErrNotFound {
 		// Note: the SQL implementation returns a data value and no error even when the account does not exist.
 		data.Data = trackerdb.MakeResourcesData(0)
@@ -139,11 +141,9 @@ func (r *accountsReader) LookupResources(addr basics.Address, aidx basics.Creata
 }
 
 func (r *accountsReader) LookupAllResources(addr basics.Address) (data []trackerdb.PersistedResourcesData, rnd basics.Round, err error) {
-	low := resourceAddrOnlyPartialKey(addr)
-	high := resourceAddrOnlyPartialKey(addr)
-	high[len(high)-1]++
+	low, high := resourceAddrOnlyRangePrefix(addr)
 
-	iter := r.kvr.NewIter(low, high, false)
+	iter := r.kvr.NewIter(low[:], high[:], false)
 	defer iter.Close()
 
 	var value []byte
@@ -284,7 +284,8 @@ func (r *accountsReader) LookupCreator(cidx basics.CreatableIndex, ctype basics.
 		return
 	}
 
-	value, closer, err := r.kvr.Get(creatableKey(cidx))
+	key := creatableKey(cidx)
+	value, closer, err := r.kvr.Get(key[:])
 	if err == trackerdb.ErrNotFound {
 		// the record does not exist
 		// clean up the error and just return ok=false

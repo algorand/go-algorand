@@ -23,149 +23,284 @@ import (
 )
 
 const (
-	kvPrefixAccount              = "account"
-	kvPrefixResource             = "resource"
-	kvPrefixAppKv                = "appkv"
-	kvPrefixCreatorIndex         = "creator"
-	kvPrefixOnlineAccount        = "online_account_base"
-	kvPrefixOnlineAccountBalance = "online_account_balance"
-	kvRoundKey                   = "global_round"
-	kvSchemaVersionKey           = "global_schema_version"
-	kvTotalsKey                  = "global_total"
-	kvTxTail                     = "txtail"
-	kvOnlineAccountRoundParams   = "online_account_round_params"
-	kvPrefixStateproof           = "stateproofs"
+	prefixLength    = 2
+	separatorLength = 1
+	addressLength   = 32
+)
+
+const (
+	kvPrefixAccount              = "xa"
+	kvPrefixResource             = "xb"
+	kvPrefixAppKv                = "xc"
+	kvPrefixCreatorIndex         = "xd"
+	kvPrefixOnlineAccount        = "xe"
+	kvPrefixOnlineAccountBalance = "xf"
+	kvRoundKey                   = "xg"
+	kvSchemaVersionKey           = "xh"
+	kvTotalsKey                  = "xi"
+	kvTxTail                     = "xj"
+	kvOnlineAccountRoundParams   = "xk"
+	kvPrefixStateproof           = "xl"
+)
+
+const (
+	// this is the true separator used in the keys
+	separator = '-'
+	// this is used as a value greather than the `separator` to get all the keys with a given prefix
+	endRangeSeparattor = '.'
 )
 
 // return the big-endian binary encoding of a uint64
-func bigEndianUint64(v uint64) []byte {
-	ret := make([]byte, 8)
-	binary.BigEndian.PutUint64(ret, v)
+func bigEndianUint64(v uint64) [8]byte {
+	var ret [8]byte
+	binary.BigEndian.PutUint64(ret[:], v)
 	return ret
 }
 
 // return the big-endian binary encoding of a uint32
-func bigEndianUint32(v uint32) []byte {
-	ret := make([]byte, 4)
-	binary.BigEndian.PutUint32(ret, v)
+func bigEndianUint32(v uint32) [4]byte {
+	var ret [4]byte
+	binary.BigEndian.PutUint32(ret[:], v)
 	return ret
 }
 
-// accountKey: 4-byte prefix + 32-byte address
-func accountKey(address basics.Address) []byte {
-	ret := []byte(kvPrefixAccount)
-	ret = append(ret, "-"...)
-	ret = append(ret, address[:]...)
-	return ret
+func accountKey(address basics.Address) [35]byte {
+	var key [prefixLength + separatorLength + addressLength]byte
+
+	copy(key[0:], kvPrefixAccount)
+	key[prefixLength] = separator
+	copy(key[prefixLength+separatorLength:], address[:])
+
+	return key
 }
 
-// resourceKey: 4-byte prefix + 32-byte address + 8-byte big-endian uint64
-func resourceKey(address basics.Address, aidx basics.CreatableIndex) []byte {
-	ret := []byte(kvPrefixResource)
-	ret = append(ret, "-"...)
-	ret = append(ret, address[:]...)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(uint64(aidx))...)
-	return ret
+func resourceKey(address basics.Address, aidx basics.CreatableIndex) [44]byte {
+	var key [prefixLength + separatorLength + addressLength + separatorLength + 8]byte
+
+	copy(key[0:], kvPrefixResource)
+	key[prefixLength] = separator
+	copy(key[prefixLength+separatorLength:], address[:])
+	key[prefixLength+separatorLength+addressLength] = separator
+
+	aidx8 := bigEndianUint64(uint64(aidx))
+	copy(key[prefixLength+separatorLength+addressLength+separatorLength:], aidx8[:])
+
+	return key
 }
 
-func resourceAddrOnlyPartialKey(address basics.Address) []byte {
-	ret := []byte(kvPrefixResource)
-	ret = append(ret, "-"...)
-	ret = append(ret, address[:]...)
-	ret = append(ret, "-"...)
-	return ret
+func resourceAddrOnlyRangePrefix(address basics.Address) ([36]byte, [36]byte) {
+	var low, high [prefixLength + separatorLength + addressLength + separatorLength]byte
+
+	// low
+	copy(low[0:], kvPrefixResource)
+	low[prefixLength] = separator
+	copy(low[prefixLength+separatorLength:], address[:])
+	low[prefixLength+separatorLength+addressLength] = separator
+	// high
+	copy(high[:], low[:])
+	high[prefixLength+separatorLength+addressLength] = endRangeSeparattor
+
+	return low, high
 }
 
-func appKvKey(key string) []byte {
-	ret := []byte(kvPrefixAppKv)
-	ret = append(ret, "-"...)
-	ret = append(ret, key...)
-	return ret
+func appKvKey(kvKey string) []byte {
+	key := make([]byte, 0, prefixLength+separatorLength+len(kvKey))
+
+	key = append(key, kvPrefixAppKv...)
+	key = append(key, separator)
+	key = append(key, kvKey...)
+
+	return key
 }
 
-func creatableKey(cidx basics.CreatableIndex) []byte {
-	ret := []byte(kvPrefixCreatorIndex)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(uint64(cidx))...)
-	return ret
+func creatableKey(cidx basics.CreatableIndex) [11]byte {
+	var key [prefixLength + separatorLength + 8]byte
+
+	copy(key[0:], kvPrefixCreatorIndex)
+	key[prefixLength] = separator
+
+	cidx8 := bigEndianUint64(uint64(cidx))
+	copy(key[prefixLength+separatorLength:], cidx8[:])
+
+	return key
 }
 
-func onlineAccountKey(address basics.Address, round basics.Round) []byte {
-	ret := []byte(kvPrefixOnlineAccount)
-	ret = append(ret, "-"...)
-	ret = append(ret, address[:]...)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(uint64(round))...)
-	return ret
+func creatableMaxRangePrefix(maxIdx basics.CreatableIndex) ([3]byte, [11]byte) {
+	var low [prefixLength + separatorLength]byte
+
+	copy(low[0:], kvPrefixCreatorIndex)
+	low[prefixLength] = separator
+
+	high := creatableKey(basics.CreatableIndex(uint64(maxIdx) + 1))
+
+	return low, high
 }
 
-func onlineAccountOnlyPartialKey(address basics.Address) []byte {
-	ret := []byte(kvPrefixOnlineAccount)
-	ret = append(ret, "-"...)
-	ret = append(ret, address[:]...)
-	ret = append(ret, "-"...)
-	return ret
+func onlineAccountKey(address basics.Address, round basics.Round) [44]byte {
+	var key [prefixLength + separatorLength + addressLength + separatorLength + 8]byte
+
+	copy(key[0:], kvPrefixOnlineAccount)
+	key[prefixLength] = separator
+	copy(key[prefixLength+separatorLength:], address[:])
+	key[prefixLength+separatorLength+addressLength] = separator
+
+	round8 := bigEndianUint64(uint64(round))
+	copy(key[prefixLength+separatorLength+addressLength+separatorLength:], round8[:])
+
+	return key
 }
 
-// TODO: use basics.Round
-func onlineAccountBalanceKey(round uint64, normBalance uint64, address basics.Address) []byte {
-	ret := []byte(kvPrefixOnlineAccountBalance)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(round)...)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(normBalance)...)
-	ret = append(ret, "-"...)
-	ret = append(ret, address[:]...)
-	return ret
+func onlineAccountLatestRangePrefix(address basics.Address, round basics.Round) ([36]byte, [44]byte) {
+	low := onlineAccountOnlyPartialKey(address)
+	high := onlineAccountKey(address, round)
+
+	return low, high
 }
 
-func onlineAccountBalanceOnlyPartialKey(round basics.Round) []byte {
-	ret := []byte(kvPrefixOnlineAccountBalance)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(uint64(round))...)
-	ret = append(ret, "-"...)
-	return ret
+func onlineAccountRangePrefix(address basics.Address) ([36]byte, [36]byte) {
+	low := onlineAccountOnlyPartialKey(address)
+	high := onlineAccountOnlyPartialKey(address)
+	high[prefixLength+separatorLength+addressLength] = endRangeSeparattor
+
+	return low, high
 }
 
-func roundKey() []byte {
-	ret := []byte(kvRoundKey)
-	return ret
+func onlineAccountOnlyPartialKey(address basics.Address) [36]byte {
+	var key [prefixLength + separatorLength + addressLength + separatorLength]byte
+
+	copy(key[0:], kvPrefixOnlineAccount)
+	key[prefixLength] = separator
+	copy(key[prefixLength+separatorLength:], address[:])
+	key[prefixLength+separatorLength+addressLength] = separator
+
+	return key
 }
 
-func schemaVersionKey() []byte {
-	ret := []byte(kvSchemaVersionKey)
-	return ret
+func onlineAccountBalanceKey(round basics.Round, normBalance uint64, address basics.Address) [53]byte {
+	var key [prefixLength + separatorLength + 8 + separatorLength + 8 + separatorLength + addressLength]byte
+
+	round8 := bigEndianUint64(uint64(round))
+	normBalance8 := bigEndianUint64(normBalance)
+
+	copy(key[0:], kvPrefixOnlineAccountBalance)
+	key[prefixLength] = separator
+	copy(key[prefixLength+separatorLength:], round8[:])
+	key[prefixLength+separatorLength+8] = separator
+	copy(key[prefixLength+separatorLength+8+separatorLength:], normBalance8[:])
+	key[prefixLength+separatorLength+8+separatorLength+8] = separator
+	copy(key[prefixLength+separatorLength+8+separatorLength+8+separatorLength:], address[:])
+
+	return key
 }
 
-func totalsKey(catchpointStaging bool) []byte {
-	ret := []byte(kvTotalsKey)
-	ret = append(ret, "-"...)
+func onlineAccountBalanceForRoundRangePrefix(round basics.Round) ([3]byte, [12]byte) {
+	var low [prefixLength + separatorLength]byte
+	copy(low[0:], kvPrefixOnlineAccountBalance)
+	low[prefixLength] = separator
+
+	var high [prefixLength + separatorLength + 8 + separatorLength]byte
+
+	round8 := bigEndianUint64(uint64(round))
+
+	copy(high[0:], kvPrefixOnlineAccountBalance)
+	high[prefixLength] = separator
+	copy(high[prefixLength+separatorLength:], round8[:])
+	high[prefixLength+separatorLength+8] = separator
+
+	return low, high
+}
+
+func roundKey() [2]byte {
+	var key [prefixLength]byte
+	copy(key[0:], kvRoundKey)
+	return key
+}
+
+func schemaVersionKey() [2]byte {
+	var key [prefixLength]byte
+	copy(key[0:], kvSchemaVersionKey)
+	return key
+}
+
+func totalsKey(catchpointStaging bool) [4]byte {
+	var key [prefixLength + separatorLength + 1]byte
+
+	copy(key[0:], kvTotalsKey)
+	key[prefixLength] = separator
 	if catchpointStaging {
-		ret = append(ret, "staging"...)
+		key[prefixLength+separatorLength] = 's'
 	} else {
-		ret = append(ret, "live"...)
+		key[prefixLength+separatorLength] = 'l'
 	}
-	return ret
+
+	return key
 }
 
-func txTailKey(rnd basics.Round) []byte {
-	ret := []byte(kvTxTail)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(uint64(rnd))...)
-	return ret
+func txTailKey(rnd basics.Round) [11]byte {
+	var key [prefixLength + separatorLength + 8]byte
+
+	rnd8 := bigEndianUint64(uint64(rnd))
+
+	copy(key[0:], kvTxTail)
+	key[prefixLength] = separator
+	copy(key[prefixLength+separatorLength:], rnd8[:])
+
+	return key
 }
 
-func onlineAccountRoundParamsKey(rnd basics.Round) []byte {
-	ret := []byte(kvOnlineAccountRoundParams)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(uint64(rnd))...)
-	return ret
+func txTailRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
+	var low [prefixLength + separatorLength]byte
+
+	copy(low[0:], kvTxTail)
+	low[prefixLength] = separator
+
+	high := txTailKey(rnd)
+
+	return low, high
 }
 
-func stateproofKey(rnd basics.Round) []byte {
-	ret := []byte(kvPrefixStateproof)
-	ret = append(ret, "-"...)
-	ret = append(ret, bigEndianUint64(uint64(rnd))...)
-	return ret
+func onlineAccountRoundParamsKey(rnd basics.Round) [11]byte {
+	var key [prefixLength + separatorLength + 8]byte
+
+	rnd8 := bigEndianUint64(uint64(rnd))
+
+	copy(key[0:], kvOnlineAccountRoundParams)
+	key[prefixLength] = separator
+	copy(key[prefixLength+separatorLength:], rnd8[:])
+
+	return key
+}
+
+func onlineAccountRoundParamsRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
+	var low [prefixLength + separatorLength]byte
+
+	copy(low[0:], kvOnlineAccountRoundParams)
+	low[prefixLength] = separator
+
+	high := onlineAccountRoundParamsKey(rnd)
+
+	return low, high
+}
+
+func stateproofKey(rnd basics.Round) [11]byte {
+	var key [prefixLength + separatorLength + 8]byte
+
+	rnd8 := bigEndianUint64(uint64(rnd))
+
+	copy(key[0:], kvPrefixStateproof)
+	key[prefixLength] = separator
+	copy(key[prefixLength+separatorLength:], rnd8[:])
+
+	return key
+}
+
+func stateproofRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
+	var low [prefixLength + separatorLength]byte
+
+	copy(low[0:], kvPrefixStateproof)
+	low[prefixLength] = separator
+
+	high := stateproofKey(rnd)
+
+	return low, high
 }

@@ -45,11 +45,8 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 	}
 
 	// read latest account up to `rnd``
-	low := onlineAccountOnlyPartialKey(addr)
-	high := onlineAccountKey(addr, rnd)
-	// inc the last byte to make it inclusive
-	high[len(high)-1]++
-	iter := r.kvr.NewIter(low, high, true)
+	low, high := onlineAccountLatestRangePrefix(addr, rnd)
+	iter := r.kvr.NewIter(low[:], high[:], true)
 	defer iter.Close()
 
 	var value []byte
@@ -93,10 +90,8 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 }
 
 func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trackerdb.PersistedOnlineAccountData, rnd basics.Round, err error) {
-	low := onlineAccountOnlyPartialKey(addr)
-	high := onlineAccountOnlyPartialKey(addr)
-	high[len(high)-1]++
-	iter := r.kvr.NewIter(low, high, false)
+	low, high := onlineAccountRangePrefix(addr)
+	iter := r.kvr.NewIter(low[:], high[:], false)
 	defer iter.Close()
 
 	var value []byte
