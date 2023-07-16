@@ -93,7 +93,7 @@ func BenchmarkSign(b *testing.B) {
 	s := randString()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i+ {
+	for i := 0; i < b.N; i++ {
 		_ = c.Sign(s)
 	}
 }
