@@ -532,9 +532,7 @@ func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, newValue basi
 		return
 	}
 
-	newValue = cx.Stack[last].ToTealValue()
-	isScratchChange = true
-	return
+	return scratchSlot, cx.Stack[last].ToTealValue(), true
 }
 
 func proto(signature string, effects ...string) Proto {
