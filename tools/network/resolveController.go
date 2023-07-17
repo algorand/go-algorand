@@ -20,6 +20,8 @@ import (
 	"net"
 	"time"
 
+	madns "github.com/multiformats/go-multiaddr-dns"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
 )
@@ -84,4 +86,24 @@ func (c *ResolveController) DefaultResolver() ResolverIf {
 		return dnssec.MakeDnssecResolver(dnssec.DefaultDnssecAwareNSServers, dnssec.DefaultTimeout)
 	}
 	return &Resolver{}
+}
+
+func (c *ResolveController) SystemDnsaddrResolver() *madns.Resolver {
+	resolver := c.SystemResolver()
+	// ignore errors here since we madns.WithDefaultResolver can't error
+	mResv, _ := madns.NewResolver(madns.WithDefaultResolver(resolver))
+	return mResv
+}
+
+func (c *ResolveController) FallbackDnsaddrResolver() *madns.Resolver {
+	resolver := c.FallbackResolver()
+	// ignore errors here since we madns.WithDefaultResolver can't error
+	mResv, _ := madns.NewResolver(madns.WithDefaultResolver(resolver))
+	return mResv
+}
+
+func (c *ResolveController) DefaultDnsaddrResolver() *madns.Resolver {
+	resolver := c.DefaultResolver()
+	mResv, _ := madns.NewResolver(madns.WithDefaultResolver(resolver))
+	return mResv
 }
