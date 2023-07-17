@@ -328,14 +328,27 @@ func TestRecordCatchpointFile(t *testing.T) {
 }
 
 func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.Round, ml *mockLedgerForTracker, round basics.Round) {
+	ctx := context.Background()
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
-	_, _, _, biggestChunkLen, stateProofVerificationHash, err := ct.generateCatchpointData(
-		context.Background(), accountsRound, &catchpointGenerationStats)
+	_, _, _, biggestChunkLen, err := ct.generateCatchpointData(ctx, accountsRound, &catchpointGenerationStats)
+	require.NoError(t, err)
+
+	var stateProofVerificationHash crypto.Digest
+	err = ct.dbs.TransactionContext(ctx, func(dbCtx context.Context, tx trackerdb.TransactionScope) (err error) {
+		rawData, err := tx.MakeSpVerificationCtxReader().GetAllSPContexts(dbCtx)
+		if err != nil {
+			return err
+		}
+
+		wrappedContext := catchpointStateProofVerificationContext{Data: rawData}
+		stateProofVerificationHash = crypto.HashObj(wrappedContext)
+		return nil
+	})
 	require.NoError(t, err)
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
 
-	err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+	err = ct.createCatchpoint(ctx, accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
 	require.NoError(t, err)
 }
 
@@ -592,7 +605,12 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 		ml2 := ledgerHistory[rnd]
 		require.NotNil(t, ml2)
 
-		ct2 := newCatchpointTracker(t, ml2, cfg, ".")
+		cfg2 := cfg
+		// every other iteration modify CatchpointTracking to ensure labels generation does not depends on catchpoint file creation
+		if rnd%2 == 0 {
+			cfg2.CatchpointTracking = int64(crypto.RandUint63())%2 + 1 //values 1 or 2
+		}
+		ct2 := newCatchpointTracker(t, ml2, cfg2, ".")
 		defer ct2.close()
 		for i := rnd + 1; i <= lastRound; i++ {
 			blk := bookkeeping.Block{

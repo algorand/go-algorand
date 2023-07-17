@@ -160,14 +160,14 @@ func (cw *catchpointWriter) Abort() error {
 	return os.Remove(cw.filePath)
 }
 
-func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest, error) {
+func (cw *catchpointWriter) WriteStateProofVerificationContext() error {
 	rawData, err := cw.tx.MakeSpVerificationCtxReader().GetAllSPContexts(cw.ctx)
 	if err != nil {
-		return crypto.Digest{}, err
+		return err
 	}
 
 	wrappedData := catchpointStateProofVerificationContext{Data: rawData}
-	dataHash, encodedData := crypto.EncodeAndHash(wrappedData)
+	_, encodedData := crypto.EncodeAndHash(wrappedData)
 
 	err = cw.tar.WriteHeader(&tar.Header{
 		Name: catchpointSPVerificationFileName,
@@ -176,19 +176,19 @@ func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest,
 	})
 
 	if err != nil {
-		return crypto.Digest{}, err
+		return err
 	}
 
 	_, err = cw.tar.Write(encodedData)
 	if err != nil {
-		return crypto.Digest{}, err
+		return err
 	}
 
 	if chunkLen := uint64(len(encodedData)); cw.biggestChunkLen < chunkLen {
 		cw.biggestChunkLen = chunkLen
 	}
 
-	return dataHash, nil
+	return nil
 }
 
 // WriteStep works for a short period of time (determined by stepCtx) to get
