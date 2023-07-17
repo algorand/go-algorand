@@ -385,6 +385,18 @@ func TestCatchpointCommitErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, root1, root2)
 
+	// demonstrate that handleUnordered does not restore the trie
+	ct.handleUnorderedCommit(&dcc)
+	root2a, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root2a)
+
+	// demonstrate that handlePrepareCommitError does not restore the trie
+	ct.handlePrepareCommitError(&dcc)
+	root2b, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root2b)
+
 	// now have the ct handle a commit error
 	ct.handleCommitError(&dcc)
 	// after error handling, the trie should be nil
