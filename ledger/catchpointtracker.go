@@ -944,12 +944,8 @@ func (ct *catchpointTracker) handleCommitError(dcc *deferredCommitContext) {
 	// Specifically, modifications to the trie happen through accountsUpdateBalances,
 	// which happens before comit to disk. Errors in this tracker, subsequent trackers, or the commit to disk may cause the trie cache to be incorrect,
 	// affecting the perceived root on subsequent rounds
-	ct.clearBalancesTrie()
-	ct.cancelWrite(dcc)
-}
-
-func (ct *catchpointTracker) clearBalancesTrie() {
 	ct.balancesTrie = nil
+	ct.cancelWrite(dcc)
 }
 
 func (ct *catchpointTracker) cancelWrite(dcc *deferredCommitContext) {
