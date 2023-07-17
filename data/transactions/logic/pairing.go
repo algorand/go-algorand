@@ -65,10 +65,10 @@ func bN254G1ToBytes(g1 *bn254.G1Affine) (ret []byte) {
 }
 
 func opBn256Add(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	aBytes := cx.stack[prev].Bytes
-	bBytes := cx.stack[last].Bytes
+	aBytes := cx.Stack[prev].Bytes
+	bBytes := cx.Stack[last].Bytes
 	if len(aBytes) != 64 || len(bBytes) != 64 {
 		return errors.New("expect G1 in 64 bytes")
 	}
@@ -76,40 +76,40 @@ func opBn256Add(cx *EvalContext) error {
 	b := bytesToBN254G1(bBytes)
 	res := new(bn254.G1Affine).Add(&a, &b)
 	resBytes := bN254G1ToBytes(res)
-	cx.stack = cx.stack[:last]
-	cx.stack[prev].Bytes = resBytes
+	cx.Stack = cx.Stack[:last]
+	cx.Stack[prev].Bytes = resBytes
 	return nil
 }
 
 func opBn256ScalarMul(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	aBytes := cx.stack[prev].Bytes
+	aBytes := cx.Stack[prev].Bytes
 	if len(aBytes) != 64 {
 		return errors.New("expect G1 in 64 bytes")
 	}
 	a := bytesToBN254G1(aBytes)
-	kBytes := cx.stack[last].Bytes
+	kBytes := cx.Stack[last].Bytes
 	k := new(big.Int).SetBytes(kBytes[:])
 	res := new(bn254.G1Affine).ScalarMultiplication(&a, k)
 	resBytes := bN254G1ToBytes(res)
-	cx.stack = cx.stack[:last]
-	cx.stack[prev].Bytes = resBytes
+	cx.Stack = cx.Stack[:last]
+	cx.Stack[prev].Bytes = resBytes
 	return nil
 }
 
 func opBn256Pairing(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	g1Bytes := cx.stack[prev].Bytes
-	g2Bytes := cx.stack[last].Bytes
+	g1Bytes := cx.Stack[prev].Bytes
+	g2Bytes := cx.Stack[last].Bytes
 	g1 := bytesToBN254G1s(g1Bytes)
 	g2 := bytesToBN254G2s(g2Bytes)
 	ok, err := bn254.PairingCheck(g1, g2)
 	if err != nil {
 		return errors.New("pairing failed")
 	}
-	cx.stack = cx.stack[:last]
-	cx.stack[prev] = boolToSV(ok)
+	cx.Stack = cx.Stack[:last]
+	cx.Stack[prev] = boolToSV(ok)
 	return nil
 }

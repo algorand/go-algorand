@@ -106,7 +106,10 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 
 // ExecTraceConfig gathers all execution trace related configs for simulation result
 type ExecTraceConfig struct {
-	Enable bool `codec:"enable,omitempty"`
+	_struct struct{} `codec:",omitempty"`
+
+	Enable bool `codec:"enable"`
+	Stack  bool `codec:"stack-change"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -124,6 +127,9 @@ type Result struct {
 // The other invalid options would be eliminated in validateSimulateRequest early.
 func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 
+// ReturnStackChange reads from Result object and decides if simulation return stack changes.
+func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
+
 // validateSimulateRequest first checks relation between request and config variables, including developerAPI:
 // if `developerAPI` provided is turned off, this method would:
 // - error on asking for exec trace
@@ -132,6 +138,13 @@ func validateSimulateRequest(request Request, developerAPI bool) error {
 		return InvalidRequestError{
 			SimulatorError{
 				err: fmt.Errorf("the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace"),
+			},
+		}
+	}
+	if !request.TraceConfig.Enable && request.TraceConfig.Stack {
+		return InvalidRequestError{
+			SimulatorError{
+				err: fmt.Errorf("basic trace must be enabled when enabling stack tracing"),
 			},
 		}
 	}
@@ -163,7 +176,7 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 	}, nil
 }
 
-// OpcodeTraceUnit contains the trace effects of a single opcode evaluation
+// OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
 	PC uint64
@@ -172,6 +185,12 @@ type OpcodeTraceUnit struct {
 	// if any. These indexes refer to the InnerTraces array of the TransactionTrace object containing
 	// this OpcodeTraceUnit.
 	SpawnedInners []int
+
+	// what has been added to stack
+	StackAdded []basics.TealValue
+
+	// deleted element number from stack
+	StackPopCount uint64
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
