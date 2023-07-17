@@ -70,10 +70,17 @@ func init() {
 type Seed ed25519Seed
 
 /* Classical signatures */
-type ed25519Signature [64]byte
-type ed25519PublicKey [32]byte
-type ed25519PrivateKey [64]byte
-type ed25519Seed [32]byte
+const (
+	ed25519SignatureSize  = 64
+	ed25519PublicKeySize  = 32
+	ed25519PrivateKeySize = 64
+	ed25519SeedSize       = 32
+)
+
+type ed25519Signature [ed25519SignatureSize]byte
+type ed25519PublicKey [ed25519PublicKeySize]byte
+type ed25519PrivateKey [ed25519PrivateKeySize]byte
+type ed25519Seed [ed25519SeedSize]byte
 
 // MasterDerivationKey is used to derive ed25519 keys for use in wallets
 type MasterDerivationKey [masterDerivationKeyLenBytes]byte

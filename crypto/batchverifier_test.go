@@ -145,6 +145,14 @@ func BenchmarkBatchVerifierBig(b *testing.B) {
 	}
 }
 
+func (b *BatchVerifier) getSignature(i int) Signature {
+	if i > len(b.messages) {
+		panic("getSignature for i greater than length of messages")
+	}
+	sigbuf := b.signatures[i*ed25519SignatureSize : (i+1)*ed25519SignatureSize]
+	return *(*[ed25519SignatureSize]byte)(sigbuf)
+}
+
 // BenchmarkBatchVerifierBigWithInvalid builds over BenchmarkBatchVerifierBig by introducing
 // invalid sigs to even numbered batch sizes. This shows the impact of invalid sigs on the
 // performance. Basically, all the gains from batching disappear.
@@ -171,7 +179,7 @@ func BenchmarkBatchVerifierBigWithInvalid(b *testing.B) {
 				failed, err := bv.VerifyWithFeedback()
 				if err != nil {
 					for i, f := range failed {
-						if bv.signatures[i] == badSig {
+						if bv.getSignature(i) == badSig {
 							require.True(b, f)
 						} else {
 							require.False(b, f)
