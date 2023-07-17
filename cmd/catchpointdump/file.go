@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/avm-abi/apps"
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
@@ -213,7 +214,8 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 					if err != nil {
 						return fileHeader, err
 					}
-					balanceHash, spverHash, _, err := catchupAccessor.GetVerifyData(ctx)
+					var balanceHash, spverHash crypto.Digest
+					balanceHash, spverHash, _, err = catchupAccessor.GetVerifyData(ctx)
 					if err != nil {
 						return fileHeader, err
 					}
