@@ -3957,6 +3957,187 @@ int 1
 	}
 }
 
+// TestUnnamedResourcesCreatedAppsAndAssets tests cross-product availability for newly created apps
+// and assets.
+func TestUnnamedResourcesCreatedAppsAndAssets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with v9, since that's when we first track cross-product references indepdently.
+	for v := 9; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
+				otherResourceCreator := env.Accounts[1]
+				otherAccount := env.Accounts[2].Addr
+
+				otherAssetID := env.CreateAsset(otherResourceCreator.Addr, basics.AssetParams{Total: 100})
+				otherAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					ApprovalProgram:   fmt.Sprintf("#pragma version %d\n int 1", v),
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+				})
+
+				program := fmt.Sprintf(`#pragma version %d
+txn ApplicationID
+bz end // Do nothing during create
+
+gtxn 0 CreatedAssetID
+store 0 // new asset
+
+gtxn 1 CreatedApplicationID
+dup
+store 1 // new app
+app_params_get AppAddress
+assert
+store 2 // new app account
+
+addr %s
+store 10 // other account
+
+int %d
+store 11 // other asset
+
+int %d
+store 12 // other app
+
+// Asset holding lookup for newly created asset
+load 10
+load 0
+asset_holding_get AssetBalance
+!
+assert
+!
+assert
+
+// App local lookup for newly created app
+load 10
+load 1
+app_opted_in
+!
+assert
+
+// Asset holding lookup for newly created app account
+load 2
+load 11
+asset_holding_get AssetBalance
+!
+assert
+!
+assert
+
+// App local lookup for newly created app account
+load 2
+load 12
+app_opted_in
+!
+assert
+
+end:
+int 1
+`, v, otherAccount, otherAssetID, otherAppID)
+
+				testAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					ApprovalProgram:   program,
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+				})
+
+				assetCreateTxn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:   protocol.AssetConfigTx,
+					Sender: otherResourceCreator.Addr,
+					AssetParams: basics.AssetParams{
+						Total: 1,
+					},
+				})
+				appCreateTxn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:              protocol.ApplicationCallTx,
+					Sender:            otherResourceCreator.Addr,
+					ApprovalProgram:   fmt.Sprintf("#pragma version %d\n int 1", v),
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+				})
+				appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: testAppID,
+				})
+				txntest.Group(&assetCreateTxn, &appCreateTxn, &appCallTxn)
+				assetCreateStxn := assetCreateTxn.Txn().Sign(otherResourceCreator.Sk)
+				appCreateStxn := appCreateTxn.Txn().Sign(otherResourceCreator.Sk)
+				appCallStxn := appCallTxn.Txn().Sign(sender.Sk)
+
+				proto := env.TxnInfo.CurrentProtocolParams()
+				expectedUnnamedResourceAssignment := simulation.GroupResourceAssignment{
+					Resources: simulation.ResourceAssignment{
+						MaxAccounts:  (proto.MaxTxGroupSize - 1) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
+						MaxAssets:    (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignAssets,
+						MaxApps:      (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignApps,
+						MaxBoxes:     (proto.MaxTxGroupSize - 1) * proto.MaxAppBoxReferences,
+						MaxTotalRefs: (proto.MaxTxGroupSize - 1) * proto.MaxAppTotalTxnReferences,
+
+						Accounts: map[basics.Address]struct{}{
+							otherAccount: {},
+						},
+						Assets: map[basics.AssetIndex]struct{}{
+							otherAssetID: {},
+						},
+						Apps: map[basics.AppIndex]struct{}{
+							otherAppID: {},
+						},
+					},
+					MaxCrossProductReferences: (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
+					// These should remain nil, since cross-product references for newly created
+					// resources should not be counted against the group's resource limits.
+					AssetHoldings: nil,
+					AppLocals:     nil,
+				}
+
+				return simulationTestCase{
+					input: simulation.Request{
+						TxnGroups: [][]transactions.SignedTxn{
+							{assetCreateStxn, appCreateStxn, appCallStxn},
+						},
+						AllowUnnamedResources: true,
+					},
+					expected: simulation.Result{
+						Version:   simulation.ResultLatestVersion,
+						LastRound: env.TxnInfo.LatestRound(),
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ConfigAsset: basics.AssetIndex(testAppID) + 1,
+											},
+										},
+									},
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ApplicationID: testAppID + 2,
+											},
+										},
+										AppBudgetConsumed: ignoreAppBudgetConsumed,
+									},
+									{
+										AppBudgetConsumed: ignoreAppBudgetConsumed,
+									},
+								},
+								AppBudgetAdded:    1400,
+								AppBudgetConsumed: ignoreAppBudgetConsumed,
+								UnnamedResources:  &expectedUnnamedResourceAssignment,
+							},
+						},
+						EvalOverrides: simulation.ResultEvalOverrides{
+							AllowUnnamedResources: true,
+						},
+					},
+				}
+			})
+		})
+	}
+}
+
 const boxTestProgram = `#pragma version %d
 txn ApplicationID
 bz end // Do nothing during create
