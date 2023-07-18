@@ -471,9 +471,8 @@ func convertUnnamedGroupResources(resources *simulation.GroupResourceAssignment)
 		return nil
 	}
 	converted := model.SimulationUnnamedGroupResources{
-		Resources:        *convertUnnamedResourceAssignment(&resources.Resources),
-		MaxAssetHoldings: uint64(resources.MaxAssetHoldings),
-		MaxAppLocals:     uint64(resources.MaxAppLocals),
+		Resources:           *convertUnnamedResourceAssignment(&resources.Resources),
+		MaxCrossProductRefs: uint64(resources.MaxCrossProductReferences),
 	}
 	if len(resources.AssetHoldings) != 0 {
 		convertedHoldings := make([]model.AssetHoldingReference, 0, len(resources.AssetHoldings))

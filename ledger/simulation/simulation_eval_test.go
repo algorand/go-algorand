@@ -3603,21 +3603,20 @@ func TestUnnamedResources(t *testing.T) {
 				proto := env.TxnInfo.CurrentProtocolParams()
 				expectedUnnamedResourceGroupAssignment := simulation.GroupResourceAssignment{
 					Resources: simulation.ResourceAssignment{
-						MaxAccounts:  proto.MaxTxGroupSize * proto.MaxAppTxnAccounts,
+						MaxAccounts:  proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 						MaxAssets:    proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
 						MaxApps:      proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
 						MaxBoxes:     proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
 						MaxTotalRefs: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
 					},
-					MaxAssetHoldings: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
-					MaxAppLocals:     proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
+					MaxCrossProductReferences: proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 				}
 				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment
 				var expectedResources *simulation.ResourceAssignment
 				if v < 9 {
 					// no shared resources
 					expectedUnnamedResourceTxnAssignment = &simulation.ResourceAssignment{
-						MaxAccounts:  proto.MaxAppTxnAccounts,
+						MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
 						MaxAssets:    proto.MaxAppTxnForeignAssets,
 						MaxApps:      proto.MaxAppTxnForeignApps,
 						MaxBoxes:     proto.MaxAppBoxReferences,
@@ -3773,7 +3772,7 @@ func TestUnnamedResources(t *testing.T) {
 					localAssets := len(expectedUnnamedResourceTxnAssignment.Assets)
 					localApps := len(expectedUnnamedResourceTxnAssignment.Apps)
 					// Skip boxes, they are global only
-					expectedUnnamedResourceGroupAssignment.Resources.MaxAccounts -= localAccounts
+					expectedUnnamedResourceGroupAssignment.Resources.MaxAccounts -= localAccounts + localApps
 					expectedUnnamedResourceGroupAssignment.Resources.MaxAssets -= localAssets
 					expectedUnnamedResourceGroupAssignment.Resources.MaxApps -= localApps
 					expectedUnnamedResourceGroupAssignment.Resources.MaxTotalRefs -= localAccounts + localAssets + localApps
@@ -3871,14 +3870,13 @@ int 1
 				proto := env.TxnInfo.CurrentProtocolParams()
 				expectedUnnamedResourceAssignment := simulation.GroupResourceAssignment{
 					Resources: simulation.ResourceAssignment{
-						MaxAccounts:  proto.MaxTxGroupSize * proto.MaxAppTxnAccounts,
+						MaxAccounts:  proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 						MaxAssets:    proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
 						MaxApps:      proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
 						MaxBoxes:     proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
 						MaxTotalRefs: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
 					},
-					MaxAssetHoldings: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
-					MaxAppLocals:     proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
+					MaxCrossProductReferences: proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 				}
 				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment
 
@@ -3908,7 +3906,7 @@ int 1
 					expectedError = fmt.Sprintf("logic eval error: invalid Account reference for mutation %s", testAppUser)
 					expectedFailedAt = simulation.TxnPath{0}
 					expectedUnnamedResourceTxnAssignment = &simulation.ResourceAssignment{
-						MaxAccounts:  proto.MaxAppTxnAccounts,
+						MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
 						MaxAssets:    proto.MaxAppTxnForeignAssets,
 						MaxApps:      proto.MaxAppTxnForeignApps,
 						MaxBoxes:     proto.MaxAppBoxReferences,
@@ -4111,7 +4109,7 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 					AppBudgetConsumed: ignoreAppBudgetConsumed,
 					UnnamedResources: &simulation.GroupResourceAssignment{
 						Resources: simulation.ResourceAssignment{
-							MaxAccounts:  len(boxOps) * proto.MaxAppTxnAccounts,
+							MaxAccounts:  len(boxOps) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 							MaxAssets:    len(boxOps)*proto.MaxAppTxnForeignAssets - otherAssets,
 							MaxApps:      len(boxOps) * proto.MaxAppTxnForeignApps,
 							MaxBoxes:     len(boxOps) * proto.MaxAppBoxReferences,
@@ -4120,8 +4118,7 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 							Boxes:           expected.Boxes,
 							NumEmptyBoxRefs: expected.NumEmptyBoxRefs,
 						},
-						MaxAssetHoldings: len(boxOps) * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
-						MaxAppLocals:     len(boxOps) * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
+						MaxCrossProductReferences: len(boxOps) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 					},
 					FailedAt: failedAt,
 				},
@@ -4585,11 +4582,17 @@ asset_holding_loop:
 load 3
 len
 bz asset_holding_loop_end
+txn Note
 load 3
 dup
-extract 32 0
+extract 1 0
 store 3
-extract 0 32
+int 0
+getbyte
+int 32
+*
+int 32
+extract
 load 2
 asset_holding_get AssetBalance
 !
@@ -4611,11 +4614,17 @@ app_local_loop:
 load 3
 len
 bz app_local_loop_end
+txn Note
 load 3
 dup
-extract 32 0
+extract 1 0
 store 3
-extract 0 32
+int 0
+getbyte
+int 32
+*
+int 32
+extract
 load 2
 app_opted_in
 !
@@ -4660,8 +4669,9 @@ type unnamedResourceArgument struct {
 type unnamedResourceArguments []unnamedResourceArgument
 
 func (resources unnamedResourceArguments) markLimitExceeded() unnamedResourceArguments {
-	resources[len(resources)-1].limitExceeded = true
-	return resources
+	modified := slices.Clone(resources)
+	modified[len(modified)-1].limitExceeded = true
+	return modified
 }
 
 func (resources unnamedResourceArguments) addAccounts(accounts ...basics.Address) unnamedResourceArguments {
@@ -4717,8 +4727,8 @@ func (resources unnamedResourceArguments) accounts() []basics.Address {
 		if !resources[i].account.IsZero() {
 			accounts = append(accounts, resources[i].account)
 		}
-		accounts = append(accounts, resources[i].assetHoldingAccounts...)
-		accounts = append(accounts, resources[i].appLocalAccounts...)
+		// accounts = append(accounts, resources[i].assetHoldingAccounts...)
+		// accounts = append(accounts, resources[i].appLocalAccounts...)
 	}
 	return accounts
 }
@@ -4794,39 +4804,57 @@ func (resources unnamedResourceArguments) appLocals() []ledgercore.AccountApp {
 	return appLocals
 }
 
-func (resources unnamedResourceArguments) toAppArgs() [][]byte {
-	encoded := make([][]byte, len(resources))
+func (resources unnamedResourceArguments) addToTxn(txn *txntest.Txn) {
+	encodedArgs := make([][]byte, len(resources))
+	crossProductAccounts := make(map[basics.Address]int)
+	var crossProductAccountsOrder []basics.Address
 	for i, resource := range resources {
 		switch {
 		case len(resource.assetHoldingAccounts) != 0:
-			encoding := make([]byte, 1+8+32*len(resource.assetHoldingAccounts))
+			encoding := make([]byte, 1+8+len(resource.assetHoldingAccounts))
 			encoding[0] = 4
 			copy(encoding[1:9], uint64ToBytes(uint64(resource.asset)))
-			for accountIndex, account := range resource.assetHoldingAccounts {
-				copy(encoding[9+32*accountIndex:], account[:])
+			for j, account := range resource.assetHoldingAccounts {
+				accountIndex, ok := crossProductAccounts[account]
+				if !ok {
+					accountIndex = len(crossProductAccounts)
+					crossProductAccounts[account] = accountIndex
+					crossProductAccountsOrder = append(crossProductAccountsOrder, account)
+				}
+				encoding[9+j] = byte(accountIndex)
 			}
-			encoded[i] = encoding
+			encodedArgs[i] = encoding
 		case len(resource.appLocalAccounts) != 0:
-			encoding := make([]byte, 1+8+32*len(resource.appLocalAccounts))
+			encoding := make([]byte, 1+8+len(resource.appLocalAccounts))
 			encoding[0] = 5
 			copy(encoding[1:9], uint64ToBytes(uint64(resource.app)))
-			for accountIndex, account := range resource.appLocalAccounts {
-				copy(encoding[9+32*accountIndex:], account[:])
+			for j, account := range resource.appLocalAccounts {
+				accountIndex, ok := crossProductAccounts[account]
+				if !ok {
+					accountIndex = len(crossProductAccounts)
+					crossProductAccounts[account] = accountIndex
+					crossProductAccountsOrder = append(crossProductAccountsOrder, account)
+				}
+				encoding[9+j] = byte(accountIndex)
 			}
-			encoded[i] = encoding
+			encodedArgs[i] = encoding
 		case !resource.account.IsZero():
-			encoded[i] = append([]byte{0}, resource.account[:]...)
+			encodedArgs[i] = append([]byte{0}, resource.account[:]...)
 		case resource.asset != 0:
-			encoded[i] = append([]byte{1}, uint64ToBytes(uint64(resource.asset))...)
+			encodedArgs[i] = append([]byte{1}, uint64ToBytes(uint64(resource.asset))...)
 		case resource.app != 0:
-			encoded[i] = append([]byte{2}, uint64ToBytes(uint64(resource.app))...)
+			encodedArgs[i] = append([]byte{2}, uint64ToBytes(uint64(resource.app))...)
 		case resource.box != "":
-			encoded[i] = append([]byte{3}, []byte(resource.box)...)
+			encodedArgs[i] = append([]byte{3}, []byte(resource.box)...)
 		default:
 			panic(fmt.Sprintf("empty resource at index %d", i))
 		}
 	}
-	return encoded
+	txn.ApplicationArgs = encodedArgs
+	txn.Note = make([]byte, 32*len(crossProductAccountsOrder))
+	for i, account := range crossProductAccountsOrder {
+		copy(txn.Note[32*i:], account[:])
+	}
 }
 
 func mapWithKeys[K comparable, V any](keys []K, defaultValue V) map[K]V {
@@ -4856,18 +4884,22 @@ func boxNamesToRefs(app basics.AppIndex, names []string) []logic.BoxRef {
 	return refs
 }
 
-func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, appVersion int, app basics.AppIndex, resources unnamedResourceArguments, expectedError string) {
+func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, appVersion int, app basics.AppIndex, resources unnamedResourceArguments, otherTxns []txntest.Txn, extraBudget uint64, expectedError string) {
 	t.Helper()
 	maxGroupSize := env.TxnInfo.CurrentProtocolParams().MaxTxGroupSize
 	txns := make([]*txntest.Txn, maxGroupSize)
 	appCall := env.TxnInfo.NewTxn(txntest.Txn{
-		Type:            protocol.ApplicationCallTx,
-		Sender:          env.Accounts[0].Addr,
-		ApplicationID:   app,
-		ApplicationArgs: resources.toAppArgs(),
+		Type:          protocol.ApplicationCallTx,
+		Sender:        env.Accounts[0].Addr,
+		ApplicationID: app,
 	})
+	resources.addToTxn(&appCall)
 	txns[0] = &appCall
-	for i := 1; i < maxGroupSize; i++ {
+	for i := range otherTxns {
+		txn := env.TxnInfo.NewTxn(otherTxns[i])
+		txns[i+1] = &txn
+	}
+	for i := 1 + len(otherTxns); i < maxGroupSize; i++ {
 		// Fill out the rest of the group with non-app transactions. This reduces the amount of
 		// unnamed global resources available.
 		txn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -4898,7 +4930,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 
 	expectedGroupResources := simulation.GroupResourceAssignment{
 		Resources: simulation.ResourceAssignment{
-			MaxAccounts:  proto.MaxAppTxnAccounts,
+			MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
 			MaxAssets:    proto.MaxAppTxnForeignAssets,
 			MaxApps:      proto.MaxAppTxnForeignApps,
 			MaxBoxes:     proto.MaxAppBoxReferences,
@@ -4906,18 +4938,30 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 
 			Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), uint64(0)),
 		},
-		MaxAssetHoldings: proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
-		MaxAppLocals:     proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4,
+		MaxCrossProductReferences: proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 	}
 	expectedAccounts := mapWithKeys(resources.accounts(), struct{}{})
 	// If present, delete the sender, since it's accessible normally.
 	delete(expectedAccounts, env.Accounts[0].Addr)
+	if len(expectedAccounts) == 0 {
+		expectedAccounts = nil
+	}
 	expectedAssets := mapWithKeys(resources.assets(), struct{}{})
+	for _, txn := range otherTxns {
+		delete(expectedAssets, txn.XferAsset)
+	}
+	if len(expectedAssets) == 0 {
+		expectedAssets = nil
+	}
 	expectedApps := mapWithKeys(resources.apps(), struct{}{})
+	delete(expectedApps, app)
+	if len(expectedApps) == 0 {
+		expectedApps = nil
+	}
 	if appVersion < 9 {
 		// No shared resources
 		localResources := simulation.ResourceAssignment{
-			MaxAccounts:  proto.MaxAppTxnAccounts,
+			MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
 			MaxAssets:    proto.MaxAppTxnForeignAssets,
 			MaxApps:      proto.MaxAppTxnForeignApps,
 			MaxBoxes:     proto.MaxAppBoxReferences,
@@ -4927,7 +4971,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			Assets:   expectedAssets,
 			Apps:     expectedApps,
 		}
-		expectedGroupResources.Resources.MaxAccounts -= len(localResources.Accounts)
+		expectedGroupResources.Resources.MaxAccounts -= len(localResources.Accounts) + len(localResources.Apps)
 		expectedGroupResources.Resources.MaxAssets -= len(localResources.Assets)
 		expectedGroupResources.Resources.MaxApps -= len(localResources.Apps)
 		expectedGroupResources.Resources.MaxTotalRefs -= len(localResources.Accounts) + len(localResources.Assets) + len(localResources.Apps)
@@ -4947,6 +4991,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 		input: simulation.Request{
 			TxnGroups:             [][]transactions.SignedTxn{stxns},
 			AllowUnnamedResources: true,
+			ExtraOpcodeBudget:     extraBudget,
 		},
 		expectedError: expectedError,
 		expected: simulation.Result{
@@ -4955,7 +5000,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			TxnGroups: []simulation.TxnGroupResult{
 				{
 					Txns:              expectedTxnResults,
-					AppBudgetAdded:    uint64(700),
+					AppBudgetAdded:    uint64(700) + extraBudget,
 					AppBudgetConsumed: ignoreAppBudgetConsumed,
 					UnnamedResources:  &expectedGroupResources,
 					FailedAt:          failedAt,
@@ -4963,6 +5008,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			},
 			EvalOverrides: simulation.ResultEvalOverrides{
 				AllowUnnamedResources: true,
+				ExtraOpcodeBudget:     extraBudget,
 			},
 		},
 	}
@@ -5021,7 +5067,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				if len(extra) != 0 {
 					expectedError = extra[0]
 				}
-				testUnnamedResourceLimits(t, env, v, appID, resources, expectedError)
+				testUnnamedResourceLimits(t, env, v, appID, resources, nil, 0, expectedError)
 			}
 
 			// Each test below will run against the environment we just set up. They will each run
@@ -5030,14 +5076,14 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 
 			// Exactly at account limit
 			testResourceAccess(
-				unnamedResourceArguments{}.addAccounts(otherAccounts[:proto.MaxAppTxnAccounts]...),
+				unnamedResourceArguments{}.addAccounts(otherAccounts[:proto.MaxAppTotalTxnReferences]...),
 			)
 			// Over account limit
 			testResourceAccess(
 				unnamedResourceArguments{}.
-					addAccounts(otherAccounts[:proto.MaxAppTxnAccounts+1]...).
+					addAccounts(otherAccounts[:proto.MaxAppTotalTxnReferences+1]...).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[proto.MaxAppTxnAccounts]),
+				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[proto.MaxAppTotalTxnReferences]),
 			)
 
 			// Exactly at asset limit
@@ -5100,7 +5146,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 			// Exactly at limit for total references
 			testResourceAccess(atLimit)
 
-			// Adding 1 more of each is over the limit
+			// Adding 1 more of any is over the limit
 			testResourceAccess(
 				atLimit.addAccounts(otherAccounts[len(otherAccounts)-1]).markLimitExceeded(),
 				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[len(otherAccounts)-1]),
@@ -5119,83 +5165,164 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 					fmt.Sprintf("logic eval error: invalid Box reference %#x", boxes[len(boxes)-1]),
 				)
 			}
+		})
+	}
+}
 
-			if v >= 9 {
-				// Exactly at asset holding limit
-				testResourceAccess(
-					unnamedResourceArguments{}.
-						addAssetHoldings(assets[0], otherAccounts[1:5]...).
-						addAssetHoldings(assets[1], otherAccounts[1:5]...).
-						addAssetHoldings(assets[2], otherAccounts[1:5]...).
-						addAssetHoldings(assets[3], otherAccounts[1:5]...),
-				)
+// PROBLEM: for newly created assets/apps (and app accounts), cross-product refs with unnamed resources
+// SHOULD NOT count against the cross product limit. This is because just including the other resource
+// anywhere in the group is enough to grant access.
 
-				// Exactly at app local limit
-				testResourceAccess(
-					unnamedResourceArguments{}.
-						addAppLocals(otherApps[0], otherAccounts[1:5]...).
-						addAppLocals(otherApps[1], otherAccounts[1:5]...).
-						addAppLocals(otherApps[2], otherAccounts[1:5]...).
-						addAppLocals(otherApps[3], otherAccounts[1:5]...),
-				)
+func excludingIndex[S []V, V any](slice S, index int) S {
+	if index == 0 {
+		return slice[1:]
+	}
+	if index == len(slice)-1 {
+		return slice[:len(slice)-1]
+	}
+	return append(slices.Clone(slice[:index]), slice[index+1:]...)
+}
 
-				// Exactly at total cross-product limit
-				testResourceAccess(
-					unnamedResourceArguments{}.
-						addAssetHoldings(assets[0], otherAccounts[1:5]...).
-						addAssetHoldings(assets[1], otherAccounts[1:5]...).
-						addAppLocals(otherApps[0], otherAccounts[1:5]...).
-						addAppLocals(otherApps[1], otherAccounts[1:5]...),
-				)
+func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with v9, since that's when we first track cross-product references indepdently.
+	for v := 9; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			env := simulationtesting.PrepareSimulatorTest(t)
+			defer env.Close()
 
-				// Over asset holding limit
-				testResourceAccess(
-					unnamedResourceArguments{}.
-						addAssetHoldings(assets[0], otherAccounts[1:5]...).
-						addAssetHoldings(assets[1], otherAccounts[1:5]...).
-						addAssetHoldings(assets[2], otherAccounts[1:5]...).
-						addAssetHoldings(assets[3], otherAccounts[1:5]...).
-						addAssetHoldings(assets[0], sender.Addr).
-						markLimitExceeded(),
-					fmt.Sprintf("logic eval error: unavailable Holding %s x %d", sender.Addr, assets[0]),
-				)
+			proto := env.TxnInfo.CurrentProtocolParams()
 
-				// Over app local limit
-				testResourceAccess(
-					unnamedResourceArguments{}.
-						addAppLocals(otherApps[0], otherAccounts[1:5]...).
-						addAppLocals(otherApps[1], otherAccounts[1:5]...).
-						addAppLocals(otherApps[2], otherAccounts[1:5]...).
-						addAppLocals(otherApps[3], otherAccounts[1:5]...).
-						addAppLocals(otherApps[0], sender.Addr).
-						markLimitExceeded(),
-					fmt.Sprintf("logic eval error: unavailable Local State %s x %d", sender.Addr, otherApps[0]),
-				)
-
-				// Over total cross-product limit with asset holding
-				testResourceAccess(
-					unnamedResourceArguments{}.
-						addAssetHoldings(assets[0], otherAccounts[1:5]...).
-						addAssetHoldings(assets[1], otherAccounts[1:5]...).
-						addAppLocals(otherApps[0], otherAccounts[1:5]...).
-						addAppLocals(otherApps[1], otherAccounts[1:5]...).
-						addAssetHoldings(assets[0], sender.Addr).
-						markLimitExceeded(),
-					fmt.Sprintf("logic eval error: unavailable Holding %s x %d", sender.Addr, assets[0]),
-				)
-
-				// Over total cross-product limit with app local
-				testResourceAccess(
-					unnamedResourceArguments{}.
-						addAssetHoldings(assets[0], otherAccounts[1:5]...).
-						addAssetHoldings(assets[1], otherAccounts[1:5]...).
-						addAppLocals(otherApps[0], otherAccounts[1:5]...).
-						addAppLocals(otherApps[1], otherAccounts[1:5]...).
-						addAppLocals(otherApps[0], sender.Addr).
-						markLimitExceeded(),
-					fmt.Sprintf("logic eval error: unavailable Local State %s x %d", sender.Addr, otherApps[0]),
-				)
+			sender := env.Accounts[0]
+			otherAccounts := make([]basics.Address, proto.MaxTxGroupSize)
+			for i := range otherAccounts {
+				otherAccounts[i][0] = byte(i + 1)
 			}
+
+			assets := make([]basics.AssetIndex, proto.MaxTxGroupSize-1)
+			for i := range assets {
+				assets[i] = env.CreateAsset(sender.Addr, basics.AssetParams{Total: 100})
+			}
+
+			otherApps := make([]basics.AppIndex, proto.MaxAppTxnForeignApps)
+			for i := range otherApps {
+				otherApps[i] = env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					// The program version here doesn't matter
+					ApprovalProgram:   "#pragma version 8\nint 1",
+					ClearStateProgram: "#pragma version 8\nint 1",
+				})
+			}
+			otherAppAccounts := make([]basics.Address, len(otherApps))
+			for i := range otherAppAccounts {
+				otherAppAccounts[i] = otherApps[i].Address()
+			}
+
+			appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+				ApprovalProgram:   resourceLimitsTestProgram(v),
+				ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+			})
+
+			otherAccounts[len(otherAccounts)-1] = appID.Address()
+
+			assetFillingTxns := make([]txntest.Txn, proto.MaxTxGroupSize-1)
+			for i := range assetFillingTxns {
+				assetFillingTxns[i] = txntest.Txn{
+					Type:          protocol.AssetTransferTx,
+					XferAsset:     assets[i],
+					Sender:        sender.Addr,
+					AssetReceiver: otherAccounts[i],
+				}
+			}
+
+			testResourceAccess := func(resources unnamedResourceArguments, extra ...string) {
+				t.Helper()
+				var expectedError string
+				if len(extra) != 0 {
+					expectedError = extra[0]
+				}
+				testUnnamedResourceLimits(t, env, v, appID, resources, assetFillingTxns, 2000, expectedError)
+			}
+
+			// Each test below will run against the environment we just set up. They will each run
+			// in separate simulations, so we can reuse the same environment and not have to worry
+			// about the effects of one test interfering with another.
+
+			maxCrossProducts := proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2)
+
+			var atAssetHoldingLimit unnamedResourceArguments
+			var assetHoldingLimitIndex int
+			for i := range assets {
+				accounts := excludingIndex(otherAccounts, i)
+				end := false
+				if (i+1)*(proto.MaxTxGroupSize-1) >= maxCrossProducts {
+					remaining := maxCrossProducts - i*(proto.MaxTxGroupSize-1)
+					accounts = accounts[:remaining]
+					assetHoldingLimitIndex = i + 1
+					end = true
+				}
+				atAssetHoldingLimit = atAssetHoldingLimit.addAssetHoldings(assets[i], accounts...)
+				if end {
+					break
+				}
+			}
+
+			var atAppLocalLimit unnamedResourceArguments
+			for i := range otherApps {
+				accounts := []basics.Address{sender.Addr, appID.Address()}
+				accounts = append(accounts, excludingIndex(otherAppAccounts, i)...)
+				atAppLocalLimit = atAppLocalLimit.addAppLocals(otherApps[i], accounts...)
+			}
+			atAppLocalLimit = atAppLocalLimit.addAppLocals(appID, otherAppAccounts...)
+
+			// Hitting the limit with a combined number of asset holdings and app locals. We reuse
+			// most of atAppLocalLimit, but remove the last app locals and replace them with asset
+			// holdings.
+			atCombinedLimit := atAppLocalLimit[:len(atAppLocalLimit)-1]
+			atCombinedLimit = atCombinedLimit.addAssetHoldings(assets[0], otherAccounts[1:proto.MaxAppTxnForeignApps+1]...)
+
+			// Exactly at asset holding limit
+			testResourceAccess(atAssetHoldingLimit)
+
+			// Exactly at app local limit
+			testResourceAccess(atAppLocalLimit)
+
+			// Exactly at total cross-product limit with both resource types
+			testResourceAccess(atCombinedLimit)
+
+			// Over asset holding limit
+			testResourceAccess(
+				atAssetHoldingLimit.
+					addAssetHoldings(assets[assetHoldingLimitIndex], otherAccounts[0]).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[assetHoldingLimitIndex]),
+			)
+
+			// Over app local limit
+			testResourceAccess(
+				atAppLocalLimit.
+					addAppLocals(appID, otherAccounts[0]).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+			)
+
+			// Over total cross-product limit with asset holding
+			testResourceAccess(
+				atCombinedLimit.
+					addAssetHoldings(assets[1], otherAccounts[0]).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[1]),
+			)
+
+			// Over total cross-product limit with app local
+			testResourceAccess(
+				atCombinedLimit.
+					addAppLocals(appID, otherAccounts[0]).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+			)
 		})
 	}
 }

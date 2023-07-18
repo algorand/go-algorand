@@ -3253,7 +3253,7 @@ int 1
 		Resources: model.SimulationUnnamedResourceAssignment{
 			MaxTotalRefs: uint64(proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences),
 			Accounts:     &[]string{otherAddress},
-			MaxAccounts:  uint64(proto.MaxTxGroupSize * proto.MaxAppTxnAccounts),
+			MaxAccounts:  uint64(proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps)),
 			Assets:       &[]uint64{assetID},
 			MaxAssets:    uint64(proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets),
 			Apps:         &[]uint64{uint64(otherAppID)},
@@ -3261,11 +3261,10 @@ int 1
 			Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
 			MaxBoxes:     uint64(proto.MaxTxGroupSize * proto.MaxAppBoxReferences),
 		},
-		MaxAssetHoldings: uint64(proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4),
+		MaxCrossProductRefs: uint64(proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * (proto.MaxAppTotalTxnReferences + 2)),
 		AssetHoldings: &[]model.AssetHoldingReference{
 			{Account: otherAddress, Asset: assetID},
 		},
-		MaxAppLocals: uint64(proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * proto.MaxAppTotalTxnReferences / 4),
 		AppLocals: &[]model.ApplicationLocalReference{
 			{Account: otherAddress, App: uint64(otherAppID)},
 		},

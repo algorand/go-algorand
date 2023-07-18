@@ -4021,15 +4021,14 @@
       "type": "object",
       "required": [
         "resources",
-        "max-asset-holdings",
-        "max-app-locals"
+        "max-cross-product-refs"
       ],
       "properties": {
         "resources": {
           "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
         },
-        "max-asset-holdings": {
-          "description": "The maximum allowed number of unnamed asset holdings.",
+        "max-cross-product-refs": {
+          "description": "The maximum allowed number of asset holding and app local references.",
           "type": "integer"
         },
         "asset-holdings": {
@@ -4038,10 +4037,6 @@
           "items": {
             "$ref": "#/definitions/AssetHoldingReference"
           }
-        },
-        "max-app-locals": {
-          "description": "The maximum allowed number of unnamed app local states.",
-          "type": "integer"
         },
         "app-locals": {
           "description": "The unnamed app local states that were referenced. The order of this array is arbitrary.",

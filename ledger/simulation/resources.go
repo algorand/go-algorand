@@ -54,7 +54,10 @@ func makeTxnResourceAssignment(txn *transactions.Transaction, proto *config.Cons
 		return ResourceAssignment{}
 	}
 	return ResourceAssignment{
-		MaxAccounts:  proto.MaxAppTxnAccounts - len(txn.Accounts),
+		// Use MaxAppTxnAccounts + MaxAppTxnForeignApps for the account limit because app references
+		// also make their accounts available, and since we can't know if an unknown account is an
+		// app account, we assume it is.
+		MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps - len(txn.Accounts) - len(txn.ForeignApps),
 		MaxAssets:    proto.MaxAppTxnForeignAssets - len(txn.ForeignAssets),
 		MaxApps:      proto.MaxAppTxnForeignApps - len(txn.ForeignApps),
 		MaxBoxes:     proto.MaxAppBoxReferences - len(txn.Boxes),
@@ -67,7 +70,7 @@ func makeGlobalResourceAssignment(perTxnResources []ResourceAssignment, proto *c
 	globalResources := ResourceAssignment{
 		// If there are fewer than MaxTxGroupSize transactions, then we can make more resources
 		// available as if the remaining transactions were empty app calls.
-		MaxAccounts:  unusedTxns * proto.MaxAppTxnAccounts,
+		MaxAccounts:  unusedTxns * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 		MaxAssets:    unusedTxns * proto.MaxAppTxnForeignAssets,
 		MaxApps:      unusedTxns * proto.MaxAppTxnForeignApps,
 		MaxBoxes:     unusedTxns * proto.MaxAppBoxReferences,
@@ -172,6 +175,9 @@ func (a *ResourceAssignment) addApp(aid basics.AppIndex, ep *logic.EvalParams, p
 		if ok {
 			// remove the account reference, since it will be made available by this app reference
 			delete(a.Accounts, appAddr)
+			if len(a.Accounts) == 0 {
+				a.Accounts = nil
+			}
 		}
 	}
 
@@ -191,6 +197,9 @@ func (a *ResourceAssignment) removeAppSlot() bool {
 	}
 	a.MaxApps--
 	a.MaxTotalRefs--
+	if a.MaxAccounts > 0 {
+		a.MaxAccounts--
+	}
 	return true
 }
 
@@ -274,11 +283,9 @@ type GroupResourceAssignment struct {
 	// Resources specifies global resources for the entire group.
 	Resources ResourceAssignment
 
-	AssetHoldings    map[ledgercore.AccountAsset]struct{}
-	MaxAssetHoldings int
-
-	AppLocals    map[ledgercore.AccountApp]struct{}
-	MaxAppLocals int
+	AssetHoldings             map[ledgercore.AccountAsset]struct{}
+	AppLocals                 map[ledgercore.AccountApp]struct{}
+	MaxCrossProductReferences int
 
 	// localTxnResources specifies local resources for each transaction in the group. This will only
 	// be populated if a top-level transaction executes AVM programs prior to v9 (when resource
@@ -286,13 +293,6 @@ type GroupResourceAssignment struct {
 	localTxnResources []ResourceAssignment
 
 	startingBoxes int
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func makeGroupResourceAssignment(txns []transactions.SignedTxnWithAD, proto *config.ConsensusParams) GroupResourceAssignment {
@@ -306,14 +306,24 @@ func makeGroupResourceAssignment(txns []transactions.SignedTxnWithAD, proto *con
 			nonAppCalls++
 		}
 	}
-	maxAssetHoldingsPerAppCall := min(proto.MaxAppTxnForeignAssets, proto.MaxAppTotalTxnReferences/2) * min(proto.MaxAppTxnAccounts, proto.MaxAppTotalTxnReferences/2)
-	maxAppLocalsPerAppCall := min(proto.MaxAppTxnForeignApps, proto.MaxAppTotalTxnReferences/2) * min(proto.MaxAppTxnAccounts, proto.MaxAppTotalTxnReferences/2)
+	// Calculate the maximum number of cross-product resources that can be accessed by one app call
+	// under normal circumstances. This is calculated using the case of an app call with a full set
+	// of foreign apps. Including the app being called, there are (MaxAppTxnForeignApps + 1) apps,
+	// crossed with (MaxAppTxnForeignAssets + 2) accounts (the called app's account, the sender's
+	// account, and the foreign app accounts). We then subtract out the app local of sender's
+	// account and the called app, and each app local of an app and its own account, or
+	// (MaxAppTxnForeignApps + 2) references. So we end up with:
+	//
+	// (MaxAppTxnForeignApps + 1) * (MaxAppTxnForeignApps + 2) - (MaxAppTxnForeignApps + 2)
+	// <=> MaxAppTxnForeignApps^2 + 3*MaxAppTxnForeignApps + 2 - MaxAppTxnForeignApps - 2
+	// <=> MaxAppTxnForeignApps^2 + 2*MaxAppTxnForeignApps
+	// <=> MaxAppTxnForeignApps * (MaxAppTxnForeignApps + 2)
+	maxCrossProductsPerAppCall := proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2)
 	return GroupResourceAssignment{
-		Resources:         makeGlobalResourceAssignment(localTxnResources, proto),
-		MaxAssetHoldings:  maxAssetHoldingsPerAppCall * (proto.MaxTxGroupSize - nonAppCalls),
-		MaxAppLocals:      maxAppLocalsPerAppCall * (proto.MaxTxGroupSize - nonAppCalls),
-		localTxnResources: localTxnResources,
-		startingBoxes:     startingBoxes,
+		Resources:                 makeGlobalResourceAssignment(localTxnResources, proto),
+		MaxCrossProductReferences: maxCrossProductsPerAppCall * (proto.MaxTxGroupSize - nonAppCalls),
+		localTxnResources:         localTxnResources,
+		startingBoxes:             startingBoxes,
 	}
 }
 
@@ -465,7 +475,7 @@ func (a *GroupResourceAssignment) hasHolding(addr basics.Address, aid basics.Ass
 }
 
 func (a *GroupResourceAssignment) addHolding(addr basics.Address, aid basics.AssetIndex) bool {
-	if len(a.AssetHoldings)+len(a.AppLocals) >= a.MaxAssetHoldings {
+	if len(a.AssetHoldings)+len(a.AppLocals) >= a.MaxCrossProductReferences {
 		return false
 	}
 	if a.AssetHoldings == nil {
@@ -486,7 +496,7 @@ func (a *GroupResourceAssignment) hasLocal(addr basics.Address, aid basics.AppIn
 }
 
 func (a *GroupResourceAssignment) addLocal(addr basics.Address, aid basics.AppIndex) bool {
-	if len(a.AssetHoldings)+len(a.AppLocals) >= a.MaxAppLocals {
+	if len(a.AssetHoldings)+len(a.AppLocals) >= a.MaxCrossProductReferences {
 		return false
 	}
 	if a.AppLocals == nil {

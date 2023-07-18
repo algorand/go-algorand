@@ -800,11 +800,8 @@ type SimulationUnnamedGroupResources struct {
 	// AssetHoldings The unnamed asset holdings that were referenced. The order of this array is arbitrary.
 	AssetHoldings *[]AssetHoldingReference `json:"asset-holdings,omitempty"`
 
-	// MaxAppLocals The maximum allowed number of unnamed app local states.
-	MaxAppLocals uint64 `json:"max-app-locals"`
-
-	// MaxAssetHoldings The maximum allowed number of unnamed asset holdings.
-	MaxAssetHoldings uint64 `json:"max-asset-holdings"`
+	// MaxCrossProductRefs The maximum allowed number of asset holding and app local references.
+	MaxCrossProductRefs uint64 `json:"max-cross-product-refs"`
 
 	// Resources This object contains a set of unnamed resources that were accessed during a simulation call.
 	Resources SimulationUnnamedResourceAssignment `json:"resources"`
