@@ -231,6 +231,10 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		return fmt.Errorf("couldn't initialize the node: %s", err)
 	}
 	s.node = serverNode
+
+	// When a caller to logging uses Fatal, we want to stop the node before os.Exit is called.
+	logging.RegisterExitHandler(s.Stop)
+
 	return nil
 }
 

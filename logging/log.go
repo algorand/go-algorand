@@ -359,6 +359,7 @@ func Base() Logger {
 // NewLogger returns a new Logger logging to out.
 func NewLogger() Logger {
 	l := logrus.New()
+	l.ExitFunc = func(code int) {}
 	return NewWrappedLogger(l)
 }
 
@@ -374,6 +375,12 @@ func NewWrappedLogger(l *logrus.Logger) Logger {
 		tf.TimestampFormat = "2006-01-02T15:04:05.000000 -0700"
 	}
 	return out
+}
+
+// RegisterExitHandler registers a function to be called on exit by logrus
+// Exit handling happens when logrus.Exit is called, which is called by logrus.Fatal
+func RegisterExitHandler(handler func()) {
+	logrus.RegisterExitHandler(handler)
 }
 
 func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
