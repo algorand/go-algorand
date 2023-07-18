@@ -148,6 +148,8 @@ var checkCmd = &cobra.Command{
 				checkDNSRecord(keyName)
 			case "DNSADDR":
 				checkDnsaddrRecord(keyName)
+			case "TXT":
+				checkTxtRecord(keyName)
 			default:
 				fmt.Printf("Unrecognized check for dns record type %s\n", recordType)
 			}
@@ -219,6 +221,10 @@ func doAddDNS(from string, to string, recordType string) (err error) {
 
 	const priority = 1
 	const proxied = false
+	if recordType == "TXT" {
+		err = cloudflareDNS.CreateDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
+		return
+	}
 
 	// If we need to register anything, first register a DNS entry
 	// to map our network DNS name to our public name (or IP) provided to nodecfg
@@ -292,6 +298,23 @@ func checkDnsaddrRecord(name string) {
 		fmt.Printf("%s\n", maddr.String())
 	}
 
+}
+
+func checkTxtRecord(name string) {
+	fmt.Printf("------------------------\nTXT Lookup: %s\n", name)
+
+	records, err := net.LookupTXT(name)
+	if err != nil {
+		if !strings.HasSuffix(err.Error(), "cannot unmarshal DNS message") {
+			// we weren't able to get the TXT records.
+			fmt.Printf("Cannot lookup TXT record for %s: %v\n", name, err)
+			return
+		}
+
+		for _, record := range records {
+			fmt.Printf("%s\n", record)
+		}
+	}
 }
 
 func checkSrvRecord(dnsBootstrap string) {
@@ -420,7 +443,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 		networkSuffix = "." + network + ".algodev.network"
 	}
 
-	for _, recordType := range []string{"A", "CNAME"} {
+	for _, recordType := range []string{"A", "CNAME", "TXT"} {
 		records, err := cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error listing DNS '%s' entries: %v\n", recordType, err)
