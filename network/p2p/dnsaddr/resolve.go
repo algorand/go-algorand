@@ -29,7 +29,11 @@ func isDnsaddr(maddr multiaddr.Multiaddr) bool {
 	return first.Protocol().Code == multiaddr.P_DNSADDR
 }
 
-func MultiaddrsFromResolver(domain string, controller *DnsaddrResolveController) ([]multiaddr.Multiaddr, error) {
+// MultiaddrsFromResolver attempts to recurse through dnsaddrs starting at domain.
+// Any further dnsaddrs will be looked up until all TXT records have been fetched,
+// and the full list of resulting Multiaddrs is returned.
+// It uses the MultiaddrDnsResolveController to cycle through DNS resolvers on failure.
+func MultiaddrsFromResolver(domain string, controller *MultiaddrDnsResolveController) ([]multiaddr.Multiaddr, error) {
 	resolver := controller.Resolver()
 	if resolver == nil {
 		return nil, errors.New("passed controller has no resolvers MultiaddrsFromResolver")

@@ -62,7 +62,7 @@ func TestMultiaddrsFromResolver(t *testing.T) {
 	t.Parallel()
 
 	controller := network.NewResolveController(false, "", log.Base())
-	dnsaddrCont := NewDnsaddrResolveController(controller)
+	dnsaddrCont := NewMultiaddrDnsResolveController(controller)
 
 	// Fail on bad dnsaddr domain
 	maddrs, err := MultiaddrsFromResolver("/bogus/foobar", dnsaddrCont)
@@ -90,7 +90,7 @@ func TestMultiaddrsFromResolverDnsFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	dnsaddrCont := &DnsaddrResolveController{
+	dnsaddrCont := &MultiaddrDnsResolveController{
 		resolver:      nil,
 		nextResolvers: nil,
 	}
@@ -101,7 +101,7 @@ func TestMultiaddrsFromResolverDnsFailure(t *testing.T) {
 	assert.ErrorContains(t, err, fmt.Sprintf("passed controller has no resolvers MultiaddrsFromResolver"))
 
 	resolver, _ := madns.NewResolver(madns.WithDefaultResolver(&failureResolver{}))
-	dnsaddrCont = &DnsaddrResolveController{
+	dnsaddrCont = &MultiaddrDnsResolveController{
 		resolver:      resolver,
 		nextResolvers: nil,
 		controller:    network.ResolveController{},

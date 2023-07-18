@@ -31,7 +31,7 @@ func TestDnsAddrResolveController(t *testing.T) {
 	t.Parallel()
 
 	controller := network.NewResolveController(true, "127.0.0.1", log.Base())
-	dnsaddrCont := NewDnsaddrResolveController(controller)
+	dnsaddrCont := NewMultiaddrDnsResolveController(controller)
 
 	// Assert that the dnsaddr resolver cycles through the dns resolvers properly
 	assert.Equal(t, controller.SystemDnsaddrResolver(), dnsaddrCont.Resolver())
