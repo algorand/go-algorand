@@ -97,9 +97,9 @@ type evalTracer struct {
 	// NOTE: both stackChangeExplanation and stackHeightAfterDeletion are used only for Stack exposure.
 	stackHeightAfterDeletion int
 
-	// scratchSlot is the scratch slot changed on current opcode (either `store` or `stores`).
-	// NOTE: this field scratchSlot is used only for scratch change exposure
-	scratchSlot *uint64
+	// scratchSlots are the scratch slots changed on current opcode (currently either `store` or `stores`).
+	// NOTE: this field scratchSlots is used only for scratch change exposure
+	scratchSlot []uint64
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
@@ -311,20 +311,23 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 
 func (tracer *evalTracer) recordChangedScratchSlot(cx *logic.EvalContext) {
 	if scratchSlot, isStoreAlike := cx.CurrentScratchChange(); isStoreAlike {
-		tracer.scratchSlot = &scratchSlot
+		tracer.scratchSlot = append(tracer.scratchSlot, scratchSlot)
 	}
 }
 
-func (tracer *evalTracer) recordUpdatedScratchVar(cx *logic.EvalContext) *ScratchChange {
-	if tracer.scratchSlot == nil {
+func (tracer *evalTracer) recordUpdatedScratchVar(cx *logic.EvalContext) []ScratchChange {
+	if len(tracer.scratchSlot) == 0 {
 		return nil
 	}
-	slot := *tracer.scratchSlot
-	tracer.scratchSlot = nil
-	return &ScratchChange{
-		Slot:     slot,
-		NewValue: cx.ScratchVar(slot),
+	changes := make([]ScratchChange, len(tracer.scratchSlot))
+	for i, slot := range tracer.scratchSlot {
+		changes[i] = ScratchChange{
+			Slot:     slot,
+			NewValue: cx.ScratchVar(slot),
+		}
 	}
+	tracer.scratchSlot = nil
+	return changes
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
@@ -345,7 +348,7 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
 		}
 		if tracer.result.ReturnScratchChange() {
-			latestOpcodeTraceUnit.ScratchSlotChange = tracer.recordUpdatedScratchVar(cx)
+			latestOpcodeTraceUnit.ScratchSlotChanges = tracer.recordUpdatedScratchVar(cx)
 		}
 	}
 

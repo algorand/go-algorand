@@ -2780,9 +2780,11 @@ int 1`,
 										{
 											PC:            80,
 											StackPopCount: 1,
-											ScratchSlotChange: &simulation.ScratchChange{
-												Slot:     1,
-												NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+											ScratchSlotChanges: []simulation.ScratchChange{
+												{
+													Slot:     1,
+													NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+												},
 											},
 										},
 										// load 1
@@ -2794,9 +2796,11 @@ int 1`,
 										{
 											PC:            84,
 											StackPopCount: 2,
-											ScratchSlotChange: &simulation.ScratchChange{
-												Slot:     5,
-												NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+											ScratchSlotChanges: []simulation.ScratchChange{
+												{
+													Slot:     5,
+													NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+												},
 											},
 										},
 										// load 1
@@ -2808,9 +2812,11 @@ int 1`,
 										{
 											PC:            87,
 											StackPopCount: 1,
-											ScratchSlotChange: &simulation.ScratchChange{
-												Slot:     1,
-												NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+											ScratchSlotChanges: []simulation.ScratchChange{
+												{
+													Slot:     1,
+													NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+												},
 											},
 										},
 										// retsub

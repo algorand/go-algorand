@@ -3912,8 +3912,12 @@
           "description": "The program counter of the current opcode being evaluated.",
           "type": "integer"
         },
-        "scratch-change": {
-          "$ref": "#/definitions/ScratchChange"
+        "scratch-changes": {
+          "description": "The writes into scratch slots.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ScratchChange"
+          }
         },
         "spawned-inners": {
           "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",

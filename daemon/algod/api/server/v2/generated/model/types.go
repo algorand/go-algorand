@@ -740,8 +740,8 @@ type SimulationOpcodeTraceUnit struct {
 	// Pc The program counter of the current opcode being evaluated.
 	Pc uint64 `json:"pc"`
 
-	// ScratchChange The write operation into a scratch slot.
-	ScratchChange *ScratchChange `json:"scratch-change,omitempty"`
+	// ScratchChanges The writes into scratch slots.
+	ScratchChanges *[]ScratchChange `json:"scratch-changes,omitempty"`
 
 	// SpawnedInners The indexes of the traces for inner transactions spawned by this opcode, if any.
 	SpawnedInners *[]uint64 `json:"spawned-inners,omitempty"`

@@ -214,8 +214,8 @@ type OpcodeTraceUnit struct {
 	// deleted element number from stack
 	StackPopCount uint64
 
-	// ScratchSlotChange stands for a write operation into a scratch slot
-	ScratchSlotChange *ScratchChange
+	// ScratchSlotChanges stands for write operations into scratch slots
+	ScratchSlotChanges []ScratchChange
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
