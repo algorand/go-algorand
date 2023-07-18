@@ -253,8 +253,8 @@ func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Roun
 }
 
 func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
-	t.tailMu.RLock()
 	dcc.txTailDeltas = make([][]byte, 0, dcc.offset)
+	t.tailMu.RLock()
 	for i := uint64(0); i < dcc.offset; i++ {
 		dcc.txTailDeltas = append(dcc.txTailDeltas, t.roundTailSerializedDeltas[i])
 	}
