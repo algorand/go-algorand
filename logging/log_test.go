@@ -119,3 +119,20 @@ func TestSetJSONFormatter(t *testing.T) {
 	a.True(isJSON(bufNewLogger.String()))
 
 }
+
+func TestFatalExitHandler(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	nl := NewLogger()
+
+	// Make an exit handler that sets a flag to demonstrate it was called
+	flag := false
+	RegisterExitHandler(func() {
+		flag = true
+	})
+	nl.Fatal("OH NO")
+
+	// Check that the exit handler was called
+	require.True(t, flag)
+
+}
