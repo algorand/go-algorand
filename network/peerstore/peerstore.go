@@ -47,11 +47,11 @@ func NewPeerStore(ctx context.Context, path string, peerAddresses []string) (*Pe
 		}
 		ps.AddAddrs(info.ID, info.Addrs, libp2p.PermanentAddrTTL)
 	}
-	store := &PeerStore{ps}
-	return store, nil
+	pstore := &PeerStore{ps}
+	return pstore, nil
 }
 
-// PeerInfoFromAddrString extracts the AddrInfo from the multiaddr.
+// PeerInfoFromAddrString extracts the AddrInfo from the multiaddr string.
 func (ps PeerStore) PeerInfoFromAddrString(addr string) (*peer.AddrInfo, error) {
 	maddr, err := multiaddr.NewMultiaddr(addr)
 	if err != nil {
