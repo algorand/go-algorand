@@ -507,30 +507,31 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 	return
 }
 
-// CurrentScratchChange tells if current opcode is storing value to a scratch slot,
-// and if so, it returns scratch slot id;
-// otherwise, it indicates the current opcode is not a scratch slot change.
-func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, isScratchChange bool) {
+// CurrentChangedScratches tells if current opcode is storing value to a scratch slot,
+// and it tries to return all changed slots in a uint64 slice.
+func (cx *EvalContext) CurrentChangedScratches() (slots []uint64) {
 	currentOpcodeName := opsByOpcode[cx.version][cx.program[cx.pc]].Name
 	last := len(cx.Stack) - 1
 
 	switch currentOpcodeName {
 	case "store":
-		scratchSlot = uint64(cx.program[cx.pc+1])
+		slot := uint64(cx.program[cx.pc+1])
+		slots = append(slots, slot)
 	case "stores":
 		prev := last - 1
-		scratchSlot = cx.Stack[prev].Uint
+		slot := cx.Stack[prev].Uint
 
 		// If something goes wrong for `stores`, we don't have to error here
 		// for in runtime already has evalError
-		if scratchSlot >= uint64(len(cx.scratch)) {
+		if slot >= uint64(len(cx.scratch)) {
 			return
 		}
+		slots = append(slots, slot)
 	default:
 		return
 	}
 
-	return scratchSlot, true
+	return slots
 }
 
 func proto(signature string, effects ...string) Proto {
