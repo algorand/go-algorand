@@ -30,6 +30,9 @@ import (
 // ErrNotFound is returned when a record is not found.
 var ErrNotFound = errors.New("trackerdb: not found")
 
+// ErrIoErr is returned when a Disk/IO error is encountered
+var ErrIoErr = errors.New("trackerdb: io error")
+
 // AccountRef is an opaque ref to an account in the db.
 type AccountRef interface {
 	AccountRefMarker()

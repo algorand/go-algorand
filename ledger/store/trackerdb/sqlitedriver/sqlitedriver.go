@@ -19,6 +19,7 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/mattn/go-sqlite3"
 )
 
 type trackerSQLStore struct {
@@ -66,9 +68,9 @@ func (s *trackerSQLStore) Batch(fn trackerdb.BatchFn) (err error) {
 }
 
 func (s *trackerSQLStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
-	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
+	return maybeIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlBatchScope{tx, false, &sqlWriter{tx}})
-	})
+	}))
 }
 
 func (s *trackerSQLStore) BeginBatch(ctx context.Context) (trackerdb.Batch, error) {
@@ -84,9 +86,9 @@ func (s *trackerSQLStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 }
 
 func (s *trackerSQLStore) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
-	return s.pair.Rdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
+	return maybeIOError(s.pair.Rdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, sqlSnapshotScope{tx, &sqlReader{tx}})
-	})
+	}))
 }
 
 func (s *trackerSQLStore) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {
@@ -102,9 +104,9 @@ func (s *trackerSQLStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 }
 
 func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
-	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
+	return maybeIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
-	})
+	}))
 }
 
 func (s *trackerSQLStore) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
@@ -116,10 +118,10 @@ func (s *trackerSQLStore) BeginTransaction(ctx context.Context) (trackerdb.Trans
 }
 
 func (s trackerSQLStore) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
-	err = s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
+	err = maybeIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		mgr, err = RunMigrations(ctx, tx, params, log, targetVersion)
 		return err
-	})
+	}))
 	return
 }
 
@@ -283,7 +285,7 @@ func (bs *sqlBatchScope) ResetTransactionWarnDeadline(ctx context.Context, deadl
 
 func (bs *sqlBatchScope) Close() error {
 	if !bs.committed {
-		return bs.tx.Rollback()
+		return maybeIOError(bs.tx.Rollback())
 	}
 	return nil
 }
@@ -291,7 +293,7 @@ func (bs *sqlBatchScope) Close() error {
 func (bs *sqlBatchScope) Commit() error {
 	err := bs.tx.Commit()
 	if err != nil {
-		return err
+		return maybeIOError(err)
 	}
 	bs.committed = true
 	return nil
@@ -303,7 +305,7 @@ type sqlSnapshotScope struct {
 }
 
 func (ss sqlSnapshotScope) Close() error {
-	return ss.tx.Rollback()
+	return maybeIOError(ss.tx.Rollback())
 }
 
 type sqlTransactionScope struct {
@@ -324,7 +326,7 @@ func (txs *sqlTransactionScope) ResetTransactionWarnDeadline(ctx context.Context
 
 func (txs *sqlTransactionScope) Close() error {
 	if !txs.committed {
-		return txs.tx.Rollback()
+		return maybeIOError(txs.tx.Rollback())
 	}
 	return nil
 }
@@ -332,8 +334,18 @@ func (txs *sqlTransactionScope) Close() error {
 func (txs *sqlTransactionScope) Commit() error {
 	err := txs.tx.Commit()
 	if err != nil {
-		return err
+		return maybeIOError(err)
 	}
 	txs.committed = true
 	return nil
+}
+
+// maybeIOError allows for SQL IO Errors to be represented as trackerdb.ErrIoErr
+// in places which may enconter them.
+func maybeIOError(err error) error {
+	ioErr := &sqlite3.ErrIoErr
+	if errors.As(err, ioErr) {
+		return trackerdb.ErrIoErr
+	}
+	return err
 }
