@@ -38,10 +38,6 @@ const (
 	// noPeersAvailableSleepInterval is the sleep interval that the node would wait if no peers are available to download the next block from.
 	// this delay is intended to ensure to give the network package some time to download the list of relays.
 	noPeersAvailableSleepInterval = 50 * time.Millisecond
-
-	// checkLedgerDownloadRetries is the number of times the catchpoint service will attempt to HEAD request the
-	// ledger from peers when `Start`ing catchpoint catchup
-	checkLedgerDownloadRetries = 10
 )
 
 // CatchpointCatchupNodeServices defines the external node support needed
@@ -826,7 +822,7 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	}
 	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
-	for i := 0; i < checkLedgerDownloadRetries; i++ {
+	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
 		psp, peerError := peerSelector.getNextPeer()
 		if peerError != nil {
 			return err
