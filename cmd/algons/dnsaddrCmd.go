@@ -54,7 +54,7 @@ var dnsaddrTreeCmd = &cobra.Command{
 	Short: "Recursively resolves and lists the dnsaddr entries of the given domain",
 	Long:  "Recursively resolves and lists the dnsaddr entries of the given domain",
 	Run: func(cmd *cobra.Command, args []string) {
-		controller := dnsaddr.NewMultiaddrDnsResolveController(network.NewResolveController(secure, "127.0.0.1", log.Base()))
+		controller := dnsaddr.NewMultiaddrDNSResolveController(network.NewResolveController(secure, "127.0.0.1", log.Base()))
 		addrs, err := dnsaddr.MultiaddrsFromResolver(dnsaddrDomain, controller)
 		if err != nil {
 			fmt.Printf("%s\n", err.Error())

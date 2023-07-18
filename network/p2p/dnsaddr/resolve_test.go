@@ -62,12 +62,12 @@ func TestMultiaddrsFromResolver(t *testing.T) {
 	t.Parallel()
 
 	controller := network.NewResolveController(false, "", log.Base())
-	dnsaddrCont := NewMultiaddrDnsResolveController(controller)
+	dnsaddrCont := NewMultiaddrDNSResolveController(controller)
 
 	// Fail on bad dnsaddr domain
 	maddrs, err := MultiaddrsFromResolver("/bogus/foobar", dnsaddrCont)
 	assert.Empty(t, maddrs)
-	assert.ErrorContains(t, err, fmt.Sprintf("Unable to construct multiaddr for %s", "/bogus/foobar"))
+	assert.ErrorContains(t, err, fmt.Sprintf("unable to construct multiaddr for %s", "/bogus/foobar"))
 
 	// Success on a dnsaddr that needs to resolve recursively
 	maddrs, err = MultiaddrsFromResolver("bootstrap.libp2p.io", dnsaddrCont)
@@ -90,7 +90,7 @@ func TestMultiaddrsFromResolverDnsFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	dnsaddrCont := &MultiaddrDnsResolveController{
+	dnsaddrCont := &MultiaddrDNSResolveController{
 		resolver:      nil,
 		nextResolvers: nil,
 	}
@@ -101,7 +101,7 @@ func TestMultiaddrsFromResolverDnsFailure(t *testing.T) {
 	assert.ErrorContains(t, err, fmt.Sprintf("passed controller has no resolvers MultiaddrsFromResolver"))
 
 	resolver, _ := madns.NewResolver(madns.WithDefaultResolver(&failureResolver{}))
-	dnsaddrCont = &MultiaddrDnsResolveController{
+	dnsaddrCont = &MultiaddrDNSResolveController{
 		resolver:      resolver,
 		nextResolvers: nil,
 		controller:    network.ResolveController{},
