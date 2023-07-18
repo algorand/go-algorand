@@ -77,11 +77,6 @@ ifeq ($(SHORT_PART_PERIOD), 1)
 export SHORT_PART_PERIOD_FLAG := -s
 endif
 
-# Disable go experiments during build as of go 1.20.5 due to
-# https://github.com/golang/go/issues/60825
-# Likely fix: https://go-review.googlesource.com/c/go/+/503937/6/src/runtime/race_arm64.s
-export GOEXPERIMENT=none
-
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
