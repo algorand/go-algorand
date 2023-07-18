@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
+	"github.com/mattn/go-sqlite3"
 )
 
 // ledgerTracker defines part of the API for any state machine that
@@ -576,10 +577,18 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
 	if err != nil {
+
 		for _, lt := range tr.trackers {
 			lt.handleCommitError(dcc)
 		}
 		tr.log.Warnf("unable to advance tracker db snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
+
+		// if the error is an IO error, shut down the node.
+		ioErr := &sqlite3.ErrIoErr
+		if errors.As(err, ioErr) {
+			tr.log.Fatalf("Fatal IO error, exiting: %v", err)
+		}
+
 		return err
 	}
 
