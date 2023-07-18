@@ -97,9 +97,9 @@ type evalTracer struct {
 	// NOTE: both stackChangeExplanation and stackHeightAfterDeletion are used only for Stack exposure.
 	stackHeightAfterDeletion int
 
-	// scratchChange is calculated by cx.CurrentScratchChange() on `store` or `stores` opcode for changes in scratch slots.
-	// NOTE: this field scratchChange is used only for scratch change exposure
-	scratchChange *ScratchChange
+	// scratchSlot is the scratch slot changed on current opcode (either `store` or `stores`).
+	// NOTE: this field scratchSlot is used only for scratch change exposure
+	scratchSlot *uint64
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
@@ -293,7 +293,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 			latestOpcodeTraceUnit.computeStackValueDeletions(cx, tracer)
 		}
 		if tracer.result.ReturnScratchChange() {
-			tracer.recordCurrentScratchChange(cx)
+			tracer.recordChangedScratchSlot(cx)
 		}
 	}
 }
@@ -309,20 +309,22 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 	}
 }
 
-func (tracer *evalTracer) recordCurrentScratchChange(cx *logic.EvalContext) {
-	scratchSlotID, newValue, isStoreAlike := cx.CurrentScratchChange()
-	if isStoreAlike {
-		tracer.scratchChange = &ScratchChange{
-			Slot:     scratchSlotID,
-			NewValue: newValue,
-		}
+func (tracer *evalTracer) recordChangedScratchSlot(cx *logic.EvalContext) {
+	if scratchSlot, isStoreAlike := cx.CurrentScratchChange(); isStoreAlike {
+		tracer.scratchSlot = &scratchSlot
 	}
 }
 
-func (tracer *evalTracer) releaseCurrentScratchChange() *ScratchChange {
-	currentScratchChange := tracer.scratchChange
-	tracer.scratchChange = nil
-	return currentScratchChange
+func (tracer *evalTracer) recordUpdatedScratchVar(cx *logic.EvalContext) *ScratchChange {
+	if tracer.scratchSlot == nil {
+		return nil
+	}
+	slot := *tracer.scratchSlot
+	tracer.scratchSlot = nil
+	return &ScratchChange{
+		Slot:     slot,
+		NewValue: cx.ScratchVar(slot),
+	}
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
@@ -343,7 +345,7 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
 		}
 		if tracer.result.ReturnScratchChange() {
-			latestOpcodeTraceUnit.ScratchSlotChange = tracer.releaseCurrentScratchChange()
+			latestOpcodeTraceUnit.ScratchSlotChange = tracer.recordUpdatedScratchVar(cx)
 		}
 	}
 

@@ -23,8 +23,6 @@ import (
 	"strings"
 
 	"golang.org/x/exp/maps"
-
-	"github.com/algorand/go-algorand/data/basics"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -510,9 +508,9 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 }
 
 // CurrentScratchChange tells if current opcode is storing value to a scratch slot,
-// and if so, it returns scratch slot id, previous value, new value to be written;
-// otherwise, it indicates the current opcode is not a scratch slot chagne.
-func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, newValue basics.TealValue, isScratchChange bool) {
+// and if so, it returns scratch slot id;
+// otherwise, it indicates the current opcode is not a scratch slot change.
+func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, isScratchChange bool) {
 	currentOpcodeName := opsByOpcode[cx.version][cx.program[cx.pc]].Name
 	last := len(cx.Stack) - 1
 
@@ -532,7 +530,7 @@ func (cx *EvalContext) CurrentScratchChange() (scratchSlot uint64, newValue basi
 		return
 	}
 
-	return scratchSlot, cx.Stack[last].ToTealValue(), true
+	return scratchSlot, true
 }
 
 func proto(signature string, effects ...string) Proto {

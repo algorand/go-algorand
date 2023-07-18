@@ -631,6 +631,11 @@ func (cx *EvalContext) RunMode() RunMode {
 // PC returns the program counter of the current application being evaluated
 func (cx *EvalContext) PC() int { return cx.pc }
 
+// ScratchVar queries for scratch variable by scratch slot id.
+func (cx *EvalContext) ScratchVar(slot uint64) basics.TealValue {
+	return cx.scratch[slot].ToTealValue()
+}
+
 // avmType describes the type of a value on the operand stack
 // avmTypes are a subset of StackTypes
 type avmType byte
