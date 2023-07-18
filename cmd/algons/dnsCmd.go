@@ -26,8 +26,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/multiformats/go-multiaddr"
-	madns "github.com/multiformats/go-multiaddr-dns"
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/tools/network"
@@ -45,7 +43,6 @@ var (
 	includePattern string
 	exportNetwork  string
 	outputFilename string
-	keyName        string
 )
 
 func init() {
@@ -62,7 +59,6 @@ func init() {
 	addCmd.MarkFlagRequired("from")
 	addCmd.Flags().StringVarP(&addToAddress, "to", "t", "", "To address to map new DNS entry to")
 	addCmd.MarkFlagRequired("to")
-	addCmd.Flags().StringVarP(&recordType, "recordType", "r", "", "DNS record type add (A, CNAME, SRV)")
 
 	deleteCmd.Flags().StringVarP(&deleteNetwork, "network", "n", "", "Network name for records to delete")
 	deleteCmd.Flags().BoolVarP(&noPrompt, "no-prompt", "y", false, "No prompting for records deletion")
@@ -76,9 +72,6 @@ func init() {
 	exportCmd.Flags().StringVarP(&exportNetwork, "network", "n", "", "Domain name to export")
 	exportCmd.MarkFlagRequired("network")
 	exportCmd.Flags().StringVarP(&outputFilename, "zonefile", "z", "", "Output file for backup ( intead of outputing it to stdout ) ")
-
-	checkCmd.Flags().StringVarP(&recordType, "recordType", "t", "", "DNS record type to check value of")
-	checkCmd.Flags().StringVarP(&keyName, "key", "k", "", "DNS record key to check")
 }
 
 type byIP []net.IP
@@ -108,11 +101,11 @@ var listCmd = &cobra.Command{
 
 var listRecordsCmd = &cobra.Command{
 	Use:   "records",
-	Short: "List the A/SRV/TXT entries of the given network",
-	Long:  "List the A/SRV/TXT entries of the given network",
+	Short: "List the A/SRV entries of the given network",
+	Long:  "List the A/SRV entries of the given network",
 	Run: func(cmd *cobra.Command, args []string) {
 		recordType = strings.ToUpper(recordType)
-		if recordType == "" || recordType == "A" || recordType == "CNAME" || recordType == "SRV" || recordType == "TXT" {
+		if recordType == "" || recordType == "A" || recordType == "CNAME" || recordType == "SRV" {
 			listEntries(listNetwork, recordType)
 		} else {
 			fmt.Fprintf(os.Stderr, "Invalid recordType specified.\n")
@@ -137,24 +130,6 @@ var checkCmd = &cobra.Command{
 	Short: "Check the status",
 	Long:  "Check the status",
 	Run: func(cmd *cobra.Command, args []string) {
-		if (keyName != "" && recordType == "") || (keyName == "" && recordType != "") {
-			fmt.Printf("You must supply both or none of --key and --recordType")
-		}
-		if keyName != "" && recordType != "" {
-			switch recordType {
-			case "SRV":
-				checkSrvRecord(keyName)
-			case "CNAME":
-				checkDNSRecord(keyName)
-			case "DNSADDR":
-				checkDnsaddrRecord(keyName)
-			case "TXT":
-				checkTxtRecord(keyName)
-			default:
-				fmt.Printf("Unrecognized check for dns record type %s\n", recordType)
-			}
-			return
-		}
 		checkDNSRecord("relay-us-ea-1.algorand.network")
 		checkDNSRecord("relay-us-ea-2.algorand.network")
 		checkDNSRecord("relay-us-ea-3.algorand.network")
@@ -166,22 +141,17 @@ var checkCmd = &cobra.Command{
 		checkSrvRecord("testnet.algorand.network")
 		checkSrvRecord("bogus.algorand.network")
 		fmt.Printf("------------------------\n")
-
-		fmt.Printf("------------------------\n")
-		checkDnsaddrRecord("devnet.algorand.network")
-		fmt.Printf("------------------------\n")
 	},
 }
 
 var addCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add a DNS record",
-	Long:  "Adds a DNS record to map --from to --to, using A if to == IP or CNAME otherwise\nYou can also set the desired type with -r\n",
+	Long:  "Adds a DNS record to map --from to --to, using A if to == IP or CNAME otherwise\n",
 	Example: "algons dns add -f a.test.algodev.network -t r1.algodev.network\n" +
-		"algons dns add -f a.test.algodev.network -t 192.168.100.10\n" +
-		"algons dns add -r TXT -f _dnsaddr.a.test.algodev.network -t \"dnsaddr=/ip4/192.168.100.10/tcp/4001/ws\"",
+		"algons dns add -f a.test.algodev.network -t 192.168.100.10",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := doAddDNS(addFromName, addToAddress, recordType)
+		err := doAddDNS(addFromName, addToAddress)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error adding DNS entry: %v\n", err)
 			os.Exit(1)
@@ -211,7 +181,7 @@ var exportCmd = &cobra.Command{
 	},
 }
 
-func doAddDNS(from string, to string, recordType string) (err error) {
+func doAddDNS(from string, to string) (err error) {
 	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
 		return fmt.Errorf("error getting DNS credentials: %v", err)
@@ -221,22 +191,16 @@ func doAddDNS(from string, to string, recordType string) (err error) {
 
 	const priority = 1
 	const proxied = false
-	if recordType == "TXT" {
-		err = cloudflareDNS.CreateDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
-		return
-	}
 
 	// If we need to register anything, first register a DNS entry
 	// to map our network DNS name to our public name (or IP) provided to nodecfg
 	// Network HostName = eg r1.testnet.algorand.network
 	isIP := net.ParseIP(to) != nil
-	// Preserves backwards compatibility for tools using existing algons functionality
-	if recordType == "" {
-		if isIP {
-			recordType = "A"
-		} else {
-			recordType = "CNAME"
-		}
+	var recordType string
+	if isIP {
+		recordType = "A"
+	} else {
+		recordType = "CNAME"
 	}
 	err = cloudflareDNS.SetDNSRecord(context.Background(), recordType, from, to, cloudflare.AutomaticTTL, priority, proxied)
 
@@ -273,46 +237,6 @@ func checkDNSRecord(dnsName string) {
 		sort.Sort(byIP(ips))
 		for _, ip := range ips {
 			fmt.Printf("-> %s\n", ip.String())
-		}
-	}
-}
-
-func checkDnsaddrRecord(name string) {
-	fmt.Printf("------------------------\nDnsaddr Lookup: %s\n", name)
-
-	resolver, err := madns.NewResolver(madns.WithDefaultResolver(net.DefaultResolver))
-	if err != nil {
-		fmt.Printf("Unable to construct multiaddr dns resolver: %v\n", err)
-		return
-	}
-	dnsaddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dnsaddr/%s", name))
-	if err != nil {
-		fmt.Printf("Unable to construct multiaddr for %s : %v\n", name, err)
-		return
-	}
-	maddrs, err := resolver.Resolve(context.Background(), dnsaddr)
-	if err != nil {
-		fmt.Printf("Unable to resolve dnsaddr: %s\n", err)
-	}
-	for _, maddr := range maddrs {
-		fmt.Printf("%s\n", maddr.String())
-	}
-
-}
-
-func checkTxtRecord(name string) {
-	fmt.Printf("------------------------\nTXT Lookup: %s\n", name)
-
-	records, err := net.LookupTXT(name)
-	if err != nil {
-		if !strings.HasSuffix(err.Error(), "cannot unmarshal DNS message") {
-			// we weren't able to get the TXT records.
-			fmt.Printf("Cannot lookup TXT record for %s: %v\n", name, err)
-			return
-		}
-
-		for _, record := range records {
-			fmt.Printf("%s\n", record)
 		}
 	}
 }
@@ -443,7 +367,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 		networkSuffix = "." + network + ".algodev.network"
 	}
 
-	for _, recordType := range []string{"A", "CNAME", "TXT"} {
+	for _, recordType := range []string{"A", "CNAME"} {
 		records, err := cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error listing DNS '%s' entries: %v\n", recordType, err)
@@ -501,7 +425,7 @@ func listEntries(listNetwork string, recordType string) {
 	}
 
 	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
-	recordTypes := []string{"A", "CNAME", "SRV", "TXT"}
+	recordTypes := []string{"A", "CNAME", "SRV"}
 	if recordType != "" {
 		recordTypes = []string{recordType}
 	}
