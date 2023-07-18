@@ -215,7 +215,7 @@ func (ct *catchpointTracker) getSPVerificationData() (encodedData []byte, spVeri
 	if err != nil {
 		return nil, crypto.Digest{}, err
 	}
-   return encodedData, spVerificationHash, nil
+	return encodedData, spVerificationHash, nil
 }
 
 func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basics.Round, updatingBalancesDuration time.Duration) error {
