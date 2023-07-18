@@ -20,13 +20,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/multiformats/go-multiaddr"
 	"net"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/multiformats/go-multiaddr"
 	madns "github.com/multiformats/go-multiaddr-dns"
 	"github.com/spf13/cobra"
 
