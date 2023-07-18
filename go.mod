@@ -24,6 +24,7 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/google/go-querystring v1.0.0
 	github.com/gorilla/mux v1.8.0
+	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-ds-leveldb v0.5.0
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/usb v0.0.2
@@ -31,6 +32,7 @@ require (
 	github.com/libp2p/go-libp2p v0.29.0
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/miekg/dns v1.1.55
+	github.com/multiformats/go-multiaddr v0.10.1
 	github.com/olivere/elastic v6.2.14+incompatible
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.3.0
@@ -57,7 +59,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/invopop/yaml v0.1.0 // indirect
 	github.com/ipfs/go-cid v0.4.1 // indirect
-	github.com/ipfs/go-datastore v0.6.0 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
 	github.com/jmespath/go-jmespath v0.3.0 // indirect
@@ -74,7 +75,6 @@ require (
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-base36 v0.2.0 // indirect
-	github.com/multiformats/go-multiaddr v0.10.1 // indirect
 	github.com/multiformats/go-multiaddr-fmt v0.1.0 // indirect
 	github.com/multiformats/go-multibase v0.2.0 // indirect
 	github.com/multiformats/go-multicodec v0.9.0 // indirect

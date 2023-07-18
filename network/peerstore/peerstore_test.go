@@ -21,8 +21,8 @@ func TestPeerstore(t *testing.T) {
 	}
 
 	ps, err := NewPeerStore(context.Background(), "", peerAddrs)
-	defer ps.Close()
 	require.NoError(t, err)
+	defer ps.Close()
 
 	// peerstore is initialized with addresses
 	peers := ps.PeersWithAddrs()
