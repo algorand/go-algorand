@@ -19,15 +19,17 @@ package dnsaddr
 import (
 	"context"
 	"fmt"
-	log "github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/tools/network"
+	"net"
+	"testing"
+
 	"github.com/multiformats/go-multiaddr"
 	madns "github.com/multiformats/go-multiaddr-dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"net"
-	"testing"
+
+	log "github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/tools/network"
 )
 
 func TestIsDnsaddr(t *testing.T) {
