@@ -242,10 +242,6 @@ func (ml *mockLedgerForTracker) Block(rnd basics.Round) (bookkeeping.Block, erro
 }
 
 func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return ml.blockHdr(rnd)
-}
-
-func (ml *mockLedgerForTracker) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	if rnd > ml.Latest() {
 		return bookkeeping.BlockHeader{}, fmt.Errorf("rnd %d out of bounds", rnd)
 	}
