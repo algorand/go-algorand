@@ -3885,7 +3885,7 @@
       }
     },
     "ScratchChange": {
-      "description": "The write operation into a scratch slot.",
+      "description": "A write operation into a scratch slot.",
       "type": "object",
       "required": [
         "slot",

@@ -642,7 +642,7 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
-// ScratchChange The write operation into a scratch slot.
+// ScratchChange A write operation into a scratch slot.
 type ScratchChange struct {
 	// NewValue Represents an AVM value.
 	NewValue AvmValue `json:"new-value"`

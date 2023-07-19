@@ -1935,7 +1935,7 @@
         "type": "object"
       },
       "ScratchChange": {
-        "description": "The write operation into a scratch slot.",
+        "description": "A write operation into a scratch slot.",
         "properties": {
           "new-value": {
             "$ref": "#/components/schemas/AvmValue"
