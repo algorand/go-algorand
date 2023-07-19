@@ -55,3 +55,20 @@ func TestPeerInfoFromAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestPeerInfoFromAddrs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	addrs := []string{
+		"/ip4/1.2.3.4/tcp/4041/p2p/AAAAAAA",
+		"/ip4/1.2.3.4/tcp/AAAAAAA",
+		"/dns4/ams-2.bootstrap.libp2p.io/tcp/443/wss/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+		"/ip4/147.75.83.83/tcp/4001/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Na",
+	}
+	peerInfos, malformedAddrs := PeerInfoFromAddrs(addrs)
+	require.Len(t, peerInfos, 2)
+	require.Len(t, malformedAddrs, 2)
+	require.Contains(t, malformedAddrs["/ip4/1.2.3.4/tcp/4041/p2p/AAAAAAA"], "failed to parse multiaddr")
+	require.Contains(t, malformedAddrs["/ip4/1.2.3.4/tcp/AAAAAAA"], "failed to parse port addr")
+}

@@ -22,17 +22,19 @@ import (
 )
 
 // PeerInfoFromAddrs extracts the AddrInfo from a multiaddr string slice.
-func PeerInfoFromAddrs(addrs []string) ([]*peer.AddrInfo, error) {
+func PeerInfoFromAddrs(addrs []string) ([]*peer.AddrInfo, map[string]string) {
 	var addrInfo []*peer.AddrInfo
+	malformedAddrs := make(map[string]string)
 	for _, addr := range addrs {
 		info, err := PeerInfoFromAddr(addr)
+		// track malformed addresses
 		if err != nil {
-			return nil, err
+			malformedAddrs[addr] = err.Error()
+			continue
 		}
 		addrInfo = append(addrInfo, info)
 	}
-
-	return addrInfo, nil
+	return addrInfo, malformedAddrs
 }
 
 // PeerInfoFromAddr extracts the AddrInfo from a multiaddr string.

@@ -40,7 +40,7 @@ func TestPeerstore(t *testing.T) {
 		"/ip4/198.51.100.0/tcp/4242/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N",
 	}
 
-	addrInfo, err := PeerInfoFromAddrs(peerAddrs)
+	addrInfo, _ := PeerInfoFromAddrs(peerAddrs)
 	dir := t.TempDir()
 	ps, err := NewPeerStore(context.Background(), dir, addrInfo)
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestPeerstore(t *testing.T) {
 		maddrStr := fmt.Sprintf("/ip4/1.2.3.4/tcp/%d/p2p/%s", 4000+i, peerID.String())
 		addrs = append(addrs, maddrStr)
 	}
-	addrInfo, err = PeerInfoFromAddrs(addrs)
+	addrInfo, _ = PeerInfoFromAddrs(addrs)
 	require.NoError(t, err)
 	for i := 0; i < len(addrInfo); i++ {
 		info := addrInfo[i]
@@ -85,6 +85,6 @@ func TestPeerStoreInitErrors(t *testing.T) {
 	t.Parallel()
 	// bad datastore path
 	_, err := NewPeerStore(context.Background(), "//", []*peer.AddrInfo{})
-	require.Contains(t, err.Error(), "invalid file path")
+	require.Contains(t, err.Error(), "invalid path for datastore")
 
 }
