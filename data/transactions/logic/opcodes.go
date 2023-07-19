@@ -391,11 +391,6 @@ func defaultDebugExplain(argCount, retCount int) debugStackExplain {
 	}
 }
 
-// NextStackChange is a helper function that queries EvalContext for the coming stack change of the current PC.
-func (cx *EvalContext) NextStackChange() (deletions, additions int) {
-	return (opsByOpcode[cx.version][cx.program[cx.pc]].Explain)(cx)
-}
-
 func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
 	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
 	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
@@ -505,33 +500,6 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 
 	deletions = labelNum + 1
 	return
-}
-
-// CurrentChangedScratches tells if current opcode is storing value to a scratch slot,
-// and it tries to return all changed slots in a uint64 slice.
-func (cx *EvalContext) CurrentChangedScratches() (slots []uint64) {
-	currentOpcodeName := opsByOpcode[cx.version][cx.program[cx.pc]].Name
-	last := len(cx.Stack) - 1
-
-	switch currentOpcodeName {
-	case "store":
-		slot := uint64(cx.program[cx.pc+1])
-		slots = append(slots, slot)
-	case "stores":
-		prev := last - 1
-		slot := cx.Stack[prev].Uint
-
-		// If something goes wrong for `stores`, we don't have to error here
-		// for in runtime already has evalError
-		if slot >= uint64(len(cx.scratch)) {
-			return
-		}
-		slots = append(slots, slot)
-	default:
-		return
-	}
-
-	return slots
 }
 
 func proto(signature string, effects ...string) Proto {

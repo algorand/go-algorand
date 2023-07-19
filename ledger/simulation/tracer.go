@@ -98,7 +98,7 @@ type evalTracer struct {
 	stackHeightAfterDeletion int
 
 	// scratchSlots are the scratch slots changed on current opcode (currently either `store` or `stores`).
-	// NOTE: this field scratchSlots is used only for scratch change exposure
+	// NOTE: this field scratchSlots is used only for scratch change exposure.
 	scratchSlots []uint64
 }
 
@@ -258,7 +258,7 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
-	tracer.popCount, tracer.addCount = cx.NextStackChange()
+	tracer.popCount, tracer.addCount = cx.GetOpSpec().Explain(cx)
 	o.StackPopCount = uint64(tracer.popCount)
 
 	stackHeight := len(cx.Stack)
@@ -310,7 +310,25 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 }
 
 func (tracer *evalTracer) recordChangedScratchSlots(cx *logic.EvalContext) {
-	tracer.scratchSlots = cx.CurrentChangedScratches()
+	currentOpcodeName := cx.GetOpSpec().Name
+	last := len(cx.Stack) - 1
+	tracer.scratchSlots = nil
+
+	switch currentOpcodeName {
+	case "store":
+		slot := uint64(cx.GetProgram()[cx.PC()+1])
+		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+	case "stores":
+		prev := last - 1
+		slot := cx.Stack[prev].Uint
+
+		// If something goes wrong for `stores`, we don't have to error here
+		// for in runtime already has evalError
+		if slot >= uint64(len(cx.Scratch)) {
+			return
+		}
+		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+	}
 }
 
 func (tracer *evalTracer) recordUpdatedScratchVars(cx *logic.EvalContext) []ScratchChange {
@@ -321,7 +339,7 @@ func (tracer *evalTracer) recordUpdatedScratchVars(cx *logic.EvalContext) []Scra
 	for i, slot := range tracer.scratchSlots {
 		changes[i] = ScratchChange{
 			Slot:     slot,
-			NewValue: cx.ScratchVar(slot),
+			NewValue: cx.Scratch[slot].ToTealValue(),
 		}
 	}
 	return changes
