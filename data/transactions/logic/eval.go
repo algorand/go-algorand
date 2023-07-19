@@ -364,9 +364,6 @@ func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusP
 			lsigs++
 		}
 	}
-	if lsigs == 0 {
-		return nil // won't actually be used
-	}
 
 	var pooledLogicBudget *int
 	if proto.EnableLogicSigCostPooling {
@@ -394,23 +391,23 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		}
 	}
 
-	if apps == 0 {
-		return nil // Won't actually be used
-	}
-
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
+	var credit *uint64
 
-	credit := feeCredit(txgroup, proto.MinTxnFee)
+	if apps > 0 { // none of these allocations needed if no apps
+		credit = new(uint64)
+		*credit = feeCredit(txgroup, proto.MinTxnFee)
 
-	if proto.EnableAppCostPooling {
-		pooledApplicationBudget = new(int)
-		*pooledApplicationBudget = apps * proto.MaxAppProgramCost
-	}
+		if proto.EnableAppCostPooling {
+			pooledApplicationBudget = new(int)
+			*pooledApplicationBudget = apps * proto.MaxAppProgramCost
+		}
 
-	if proto.EnableInnerTransactionPooling {
-		pooledAllowedInners = new(int)
-		*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
+		if proto.EnableInnerTransactionPooling {
+			pooledAllowedInners = new(int)
+			*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
+		}
 	}
 
 	ep := &EvalParams{
@@ -420,7 +417,7 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		Specials:                specials,
 		pastScratch:             make([]*scratchSpace, len(txgroup)),
 		minAvmVersion:           computeMinAvmVersion(txgroup),
-		FeeCredit:               &credit,
+		FeeCredit:               credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),

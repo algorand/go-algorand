@@ -84,14 +84,10 @@ func TestNewAppEvalParams(t *testing.T) {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				t.Parallel()
 				ep := logic.NewAppEvalParams(testCase.group, &param, nil)
-				if testCase.numAppCalls == 0 {
-					require.Nil(t, ep)
-					return
-				}
 				require.NotNil(t, ep)
 				require.Equal(t, ep.TxnGroup, testCase.group)
 				require.Equal(t, *ep.Proto, param)
-				if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
+				if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) || testCase.numAppCalls == 0 {
 					require.Nil(t, ep.PooledApplicationBudget)
 				} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
 					require.Equal(t, *ep.PooledApplicationBudget, param.MaxAppProgramCost*testCase.numAppCalls)
