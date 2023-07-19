@@ -520,6 +520,17 @@ type Local struct {
 	// BlockServiceMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
 	// When it exceeds this capacity, it redirects the block requests to a different node
 	BlockServiceMemCap uint64 `version[28]:"500000000"`
+
+	// P2PEnable turns on the peer to peer network
+	P2PEnable bool `version[28]:"false"`
+
+	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
+	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
+	P2PPersistPeerID bool `version[28]:"true"`
+
+	// P2PPrivateKeyLocation allows the user to specify a custom path to the private key used for the node's PeerID.
+	// This is only used when P2PEnable is true. If the parameter is not set, it uses the default location.
+	P2PPrivateKeyLocation string `version[28]:""`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
