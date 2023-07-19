@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	libp2p_crypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2p "github.com/libp2p/go-libp2p/core/peerstore"
@@ -29,6 +30,9 @@ import (
 )
 
 func TestPeerstore(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	peerAddrs := []string{
 		"/dns4/ams-2.bootstrap.libp2p.io/tcp/443/wss/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
 		"/ip4/147.75.83.83/tcp/4001/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Na",
@@ -72,5 +76,14 @@ func TestPeerstore(t *testing.T) {
 	ps.Peerstore.ClearAddrs(peerIDS[0])
 	peers = ps.PeersWithAddrs()
 	require.Equal(t, 7, len(peers))
+
+}
+
+func TestPeerStoreInitErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// bad datastore path
+	_, err := NewPeerStore(context.Background(), "//", []*peer.AddrInfo{})
+	require.Contains(t, err.Error(), "invalid file path")
 
 }

@@ -18,6 +18,7 @@ package peerstore
 
 import (
 	"context"
+	"fmt"
 
 	ds "github.com/ipfs/go-datastore"
 	leveldb "github.com/ipfs/go-ds-leveldb"
@@ -42,11 +43,11 @@ func initDBStore(path string) (ds.Batching, error) {
 func NewPeerStore(ctx context.Context, path string, addrInfo []*peer.AddrInfo) (*PeerStore, error) {
 	datastore, err := initDBStore(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot initialize a peerstore, invalid path for datastore: %w", err)
 	}
 	ps, err := pstoreds.NewPeerstore(ctx, datastore, pstoreds.DefaultOpts())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot initialize a peerstore: %w", err)
 	}
 
 	// initialize peerstore with addresses
