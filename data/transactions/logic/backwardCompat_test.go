@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -282,17 +283,20 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	stxn.Txn.RekeyTo = basics.Address{}
 	stxn.Lsig.Logic = program
 	stxn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], stxn.Txn.Sender[:], stxn.Txn.Note}
-	ep := defaultSigParams(stxn)
 
 	// ensure v1 program runs well on latest evaluator
 	require.Equal(t, uint8(1), program[0])
 
-	// Cost should stay exactly 2140
-	ep.Proto.LogicSigMaxCost = 2139
-	err = CheckSignature(0, ep)
-	require.ErrorContains(t, err, "static cost")
+	maxCost := func(cost uint64) protoOpt {
+		return func(p *config.ConsensusParams) {
+			p.LogicSigMaxCost = cost
+		}
+	}
 
-	ep.Proto.LogicSigMaxCost = 2140
+	// Cost should stay be exactly 2140 for v1
+	err = CheckSignature(0, optSigParams(maxCost(2139), stxn))
+	require.ErrorContains(t, err, "static cost")
+	ep := optSigParams(maxCost(2140), stxn)
 	err = CheckSignature(0, ep)
 	require.NoError(t, err)
 
@@ -304,14 +308,10 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	// Costs for v2 should be higher because of hash opcode cost changes
-	ep2 := defaultSigParamsWithVersion(2, stxn)
-	ep2.Proto.LogicSigMaxCost = 2307
+	// Costs for v2 programs should be higher because of hash opcode cost changes
 	// Eval doesn't fail, but it would be ok (better?) if it did
-	testLogicBytes(t, opsV2.Program, ep2, "static cost", "")
-
-	ep2.Proto.LogicSigMaxCost = 2308
-	testLogicBytes(t, opsV2.Program, ep2)
+	testLogicBytes(t, opsV2.Program, optSigParams(maxCost(2307), stxn), "static cost", "")
+	testLogicBytes(t, opsV2.Program, optSigParams(maxCost(2308), stxn))
 
 	// ensure v0 program runs well on latest evaluator
 	program[0] = 0
@@ -321,23 +321,16 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	})
 	stxn.Lsig.Logic = program
 	stxn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], stxn.Txn.Sender[:], stxn.Txn.Note}
-	ep = defaultSigParams(stxn)
 
 	// Cost remains the same, because v0 does not get dynamic treatment
-	ep.Proto.LogicSigMaxCost = 2139
-	testLogicBytes(t, program, ep, "static cost", "")
-
-	ep.Proto.LogicSigMaxCost = 2140
-	testLogicBytes(t, program, ep)
+	testLogicBytes(t, program, optSigParams(maxCost(2139), stxn), "static cost", "")
+	testLogicBytes(t, program, optSigParams(maxCost(2140), stxn))
 
 	// But in v4, cost is now dynamic and exactly 1 less than v2/v3,
 	// because bnz skips "err". It's caught during Eval
 	program[0] = 4
-	ep.Proto.LogicSigMaxCost = 2306
-	testLogicBytes(t, program, ep, "dynamic cost")
-
-	ep.Proto.LogicSigMaxCost = 2307
-	testLogicBytes(t, program, ep)
+	testLogicBytes(t, program, optSigParams(maxCost(2306), stxn), "dynamic cost")
+	testLogicBytes(t, program, optSigParams(maxCost(2307), stxn))
 }
 
 // ensure v2 fields error on pre v2 logicsig version

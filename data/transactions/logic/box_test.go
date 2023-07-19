@@ -148,12 +148,12 @@ func TestBoxAcrossTxns(t *testing.T) {
 	ledger := NewLedger(nil)
 	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
 	// After creation in first txn, second one can read it (though it's empty)
-	TestApps(t, []string{
+	TryApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "self"; int 10; int 4; box_extract; byte 0x00000000; ==`,
 	}, nil, 8, ledger)
 	// after creation, modification, the third can read it
-	TestApps(t, []string{
+	TryApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "self"; int 2; byte "hi"; box_replace; int 1`,
 		`byte "self"; int 1; int 4; box_extract; byte 0x00686900; ==`, // "\0hi\0"
@@ -238,8 +238,8 @@ func TestBoxAvailability(t *testing.T) {
 	ledger := NewLedger(nil)
 	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
 
-	// B is not available (recall that "self" is set up by MakeSampleEnv, in TestApps)
-	TestApps(t, []string{
+	// B is not available (recall that "self" is set up by MakeSampleEnv, in TryApps)
+	TryApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
 	}, nil, 8, ledger, Exp(1, fmt.Sprintf("invalid Box reference %#x", 'B')))
@@ -251,7 +251,7 @@ func TestBoxAvailability(t *testing.T) {
 		Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("B")}},
 	}.SignedTxn())
 	group[0].Txn.Type = protocol.ApplicationCallTx
-	TestApps(t, []string{
+	TryApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
 	}, group, 8, ledger, Exp(1, "no such box"))
@@ -264,7 +264,7 @@ func TestBoxAvailability(t *testing.T) {
 		Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("B")}},
 	}.SignedTxn())
 	group[0].Txn.Type = protocol.ApplicationCallTx
-	TestApps(t, []string{
+	TryApps(t, []string{
 		`byte "self"; int 64; box_create`,
 		`byte "B"; int 10; int 4; box_extract; byte 0x00000000; ==`,
 	}, group, 8, ledger, Exp(1, "no such box"))

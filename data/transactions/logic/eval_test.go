@@ -43,17 +43,24 @@ import (
 	"pgregory.net/rapid"
 )
 
-// Note that most of the tests use makeTestProto/defaultEvalParams as evaluator version so that
-// we check that v1 and v2 programs are compatible with the latest evaluator
-func makeTestProto() *config.ConsensusParams {
-	return makeTestProtoV(LogicVersion)
+type protoOpt func(*config.ConsensusParams)
+
+func protoVer(version uint64) protoOpt {
+	return func(p *config.ConsensusParams) {
+		p.LogicSigVersion = version
+		p.Application = version >= appsEnabledVersion
+	}
 }
 
 func makeTestProtoV(version uint64) *config.ConsensusParams {
-	return &config.ConsensusParams{
-		LogicSigVersion:   version,
+	return makeTestProto(protoVer(version))
+}
+
+func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
+	p := config.ConsensusParams{
+		LogicSigVersion:   LogicVersion,
 		LogicSigMaxCost:   20000,
-		Application:       version >= appsEnabledVersion,
+		Application:       true,
 		MaxAppProgramCost: 700,
 
 		MaxAppKeyLen:          64,
@@ -103,10 +110,11 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		MaxGlobalSchemaEntries: 30,
 		MaxLocalSchemaEntries:  13,
 
-		EnableAppCostPooling:          true,
-		EnableInnerTransactionPooling: true,
+		EnableAppCostPooling:      true,
+		EnableLogicSigCostPooling: true,
 
-		MinInnerApplVersion: 4,
+		EnableInnerTransactionPooling: true,
+		MinInnerApplVersion:           4,
 
 		SupportBecomeNonParticipatingTransactions: true,
 
@@ -115,6 +123,12 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 		MaxBoxSize:           1000,
 		BytesPerBoxReference: 100,
 	}
+	for _, opt := range opts {
+		if opt != nil { // so some callsites can take one arg and pass it in
+			opt(&p)
+		}
+	}
+	return &p
 }
 
 func benchmarkSigParams(txns ...transactions.SignedTxn) *EvalParams {
@@ -128,9 +142,12 @@ func benchmarkSigParams(txns ...transactions.SignedTxn) *EvalParams {
 }
 
 func defaultSigParams(txns ...transactions.SignedTxn) *EvalParams {
-	return defaultSigParamsWithVersion(LogicVersion, txns...)
+	return optSigParams(nil, txns...)
 }
 func defaultSigParamsWithVersion(version uint64, txns ...transactions.SignedTxn) *EvalParams {
+	return optSigParams(protoVer(version), txns...)
+}
+func optSigParams(opt protoOpt, txns ...transactions.SignedTxn) *EvalParams {
 	if len(txns) == 0 {
 		// We need a transaction to exist, because we'll be stuffing the
 		// logicsig into it in order to test them, and we need the next clause
@@ -143,7 +160,7 @@ func defaultSigParamsWithVersion(version uint64, txns ...transactions.SignedTxn)
 		txns[0].Lsig.Logic = []byte{LogicVersion + 1} // make sure it fails if used
 	}
 
-	ep := NewSigEvalParams(txns, makeTestProtoV(version), &NoHeaderLedger{})
+	ep := NewSigEvalParams(txns, makeTestProto(opt), &NoHeaderLedger{})
 	ep.Trace = &strings.Builder{}
 	return ep
 }
@@ -184,26 +201,34 @@ func defaultEvalParamsWithVersion(version uint64, txns ...transactions.SignedTxn
 // no real code should ever need this. EvalParams should be created to evaluate
 // a group, and then thrown away.
 func (ep *EvalParams) reset() {
-	if ep.Proto.EnableAppCostPooling {
-		budget := ep.Proto.MaxAppProgramCost
-		ep.PooledApplicationBudget = &budget
+	switch ep.runMode {
+	case ModeSig:
+		if ep.Proto.EnableLogicSigCostPooling {
+			budget := int(ep.Proto.LogicSigMaxCost) * len(ep.TxnGroup)
+			ep.PooledLogicSigBudget = &budget
+		}
+	case ModeApp:
+		if ep.Proto.EnableAppCostPooling {
+			budget := ep.Proto.MaxAppProgramCost
+			ep.PooledApplicationBudget = &budget
+		}
+		if ep.Proto.EnableInnerTransactionPooling {
+			inners := ep.Proto.MaxTxGroupSize * ep.Proto.MaxInnerTransactions
+			ep.pooledAllowedInners = &inners
+		}
+		ep.pastScratch = make([]*scratchSpace, len(ep.TxnGroup))
+		for i := range ep.TxnGroup {
+			ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
+		}
+		ep.available = nil
+		ep.readBudgetChecked = false
+		ep.appAddrCache = make(map[basics.AppIndex]basics.Address)
+		if ep.Trace != nil {
+			ep.Trace = &strings.Builder{}
+		}
+		ep.txidCache = nil
+		ep.innerTxidCache = nil
 	}
-	if ep.Proto.EnableInnerTransactionPooling {
-		inners := ep.Proto.MaxTxGroupSize * ep.Proto.MaxInnerTransactions
-		ep.pooledAllowedInners = &inners
-	}
-	ep.pastScratch = make([]*scratchSpace, len(ep.TxnGroup))
-	for i := range ep.TxnGroup {
-		ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
-	}
-	ep.available = nil
-	ep.readBudgetChecked = false
-	ep.appAddrCache = make(map[basics.AppIndex]basics.Address)
-	if ep.Trace != nil {
-		ep.Trace = &strings.Builder{}
-	}
-	ep.txidCache = nil
-	ep.innerTxidCache = nil
 }
 
 func TestTooManyArgs(t *testing.T) {
@@ -1879,7 +1904,6 @@ func TestTxn(t *testing.T) {
 			}
 			txn.Txn.ApprovalProgram = ops.Program
 			txn.Txn.ClearStateProgram = clearOps.Program
-			txn.Lsig.Logic = ops.Program
 			txn.Txn.ExtraProgramPages = 2
 			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
@@ -2131,15 +2155,17 @@ func testLogic(t *testing.T, program string, v uint64, ep *EvalParams, problems 
 
 func testLogicBytes(t *testing.T, program []byte, ep *EvalParams, problems ...string) {
 	t.Helper()
+	if ep == nil {
+		ep = defaultSigParams()
+	} else {
+		ep.reset()
+	}
 	testLogicFull(t, program, 0, ep, problems...)
 }
 
+// testLogicFull is the lowest-level so it does not create an ep or reset it.
 func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problems ...string) {
 	t.Helper()
-
-	if ep == nil {
-		ep = defaultSigParams()
-	}
 
 	var checkProblem string
 	var evalProblem string
@@ -2154,15 +2180,14 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 		require.Fail(t, "Misused testLogic: %d problems", len(problems))
 	}
 
-	sb := &strings.Builder{}
-	ep.Trace = sb
+	ep.Trace = &strings.Builder{}
 
-	ep.TxnGroup[0].Lsig.Logic = program
+	ep.TxnGroup[gi].Lsig.Logic = program
 	err := CheckSignature(gi, ep)
 	if checkProblem == "" {
-		require.NoError(t, err, "Error in CheckSignature %v", sb)
+		require.NoError(t, err, "Error in CheckSignature %v", ep.Trace)
 	} else {
-		require.ErrorContains(t, err, checkProblem, "Wrong error in CheckSignature %v", sb)
+		require.ErrorContains(t, err, checkProblem, "Wrong error in CheckSignature %v", ep.Trace)
 	}
 
 	// We continue on to check Eval() of things that failed Check() because it's
@@ -2172,18 +2197,37 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 
 	pass, err := EvalSignature(gi, ep)
 	if evalProblem == "" {
-		require.NoError(t, err, "Eval%s\nExpected: PASS", sb)
-		assert.True(t, pass, "Eval%s\nExpected: PASS", sb)
+		require.NoError(t, err, "Eval\n%sExpected: PASS", ep.Trace)
+		assert.True(t, pass, "Eval\n%sExpected: PASS", ep.Trace)
 		return
 	}
 
 	// There is an evalProblem to check. REJECT is special and only means that
 	// the app didn't accept.  Maybe it's an error, maybe it's just !pass.
 	if evalProblem == "REJECT" {
-		require.True(t, err != nil || !pass, "Eval%s\nExpected: REJECT", sb)
+		require.True(t, err != nil || !pass, "Eval\n%sExpected: REJECT", ep.Trace)
 	} else {
-		require.ErrorContains(t, err, evalProblem, sb)
+		require.ErrorContains(t, err, evalProblem, "Wrong error in EvalSignature %v", ep.Trace)
 	}
+}
+
+func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) *EvalParams {
+	t.Helper()
+	proto := makeTestProto(opt)
+
+	if txgroup == nil {
+		for range programs {
+			txgroup = append(txgroup, makeSampleTxn())
+		}
+	}
+	ep := NewSigEvalParams(txgroup, proto, &NoHeaderLedger{})
+	for i, program := range programs {
+		if program != "" {
+			code := testProg(t, program, proto.LogicSigVersion).Program
+			testLogicFull(t, code, i, ep)
+		}
+	}
+	return ep
 }
 
 func TestTxna(t *testing.T) {
@@ -2760,9 +2804,9 @@ func TestGload(t *testing.T) {
 			}
 
 			if testCase.errContains != "" {
-				testApps(t, sources, txgroup, LogicVersion, nil, exp(testCase.errTxn, testCase.errContains))
+				testApps(t, sources, txgroup, nil, nil, exp(testCase.errTxn, testCase.errContains))
 			} else {
-				testApps(t, sources, txgroup, LogicVersion, nil)
+				testApps(t, sources, txgroup, nil, nil)
 			}
 		})
 	}
@@ -2865,7 +2909,7 @@ int 1
 		txgroup[j].Txn.Type = protocol.ApplicationCallTx
 	}
 
-	testApps(t, sources, txgroup, LogicVersion, nil)
+	testApps(t, sources, txgroup, nil, nil)
 }
 
 const testCompareProgramText = `int 35
@@ -2972,6 +3016,31 @@ func TestSlowLogic(t *testing.T) {
 
 	ops = testProg(t, v2overspend, 4)
 	testLogicBytes(t, ops.Program, ep4, "dynamic cost")
+}
+
+func TestSigBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := func(budget int) string {
+		return fmt.Sprintf(`
+global OpcodeBudget
+int %d
+==
+assert
+global OpcodeBudget
+int %d
+==
+`, budget-1, budget-5)
+	}
+	testLogic(t, source(20000), LogicVersion, nil)
+
+	testLogics(t, []string{source(40000), source(39993)}, nil, nil)
+
+	testLogics(t, []string{source(60000), source(59993), ""}, nil, nil)
+
+	testLogics(t, []string{source(20000), source(20000)}, nil,
+		func(p *config.ConsensusParams) { p.EnableLogicSigCostPooling = false })
 }
 
 func isNotPanic(t *testing.T, err error) {

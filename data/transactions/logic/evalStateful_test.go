@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -419,13 +420,14 @@ func TestBalance(t *testing.T) {
 	})
 }
 
-func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, version uint64, ledger *Ledger,
+func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, ledger *Ledger,
 	expected ...expect) *EvalParams {
 	t.Helper()
+	proto := makeTestProto(opt)
 	codes := make([][]byte, len(programs))
 	for i, program := range programs {
 		if program != "" {
-			codes[i] = testProg(t, program, version).Program
+			codes[i] = testProg(t, program, proto.LogicSigVersion).Program
 		}
 	}
 	if txgroup == nil {
@@ -437,7 +439,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			txgroup = append(txgroup, sample)
 		}
 	}
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), proto, &transactions.SpecialAddresses{})
 	if ledger == nil {
 		ledger = NewLedger(nil)
 	}
@@ -519,15 +521,13 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 		require.Fail(t, "Misused testApp: %d problems", len(problems))
 	}
 
-	sb := &strings.Builder{}
-	ep.Trace = sb
+	ep.Trace = &strings.Builder{}
 
 	err := CheckContract(program, ep)
 	if checkProblem == "" {
-		require.NoError(t, err, sb.String())
+		require.NoError(t, err, "Error in CheckContract %v", ep.Trace)
 	} else {
-		require.Error(t, err, "Check\n%s\nExpected: %v", sb, checkProblem)
-		require.Contains(t, err.Error(), checkProblem, sb.String())
+		require.ErrorContains(t, err, checkProblem, "Wrong error in CheckContract %v", ep.Trace)
 	}
 
 	// We continue on to check Eval() of things that failed Check() because it's
@@ -542,18 +542,17 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 	pass, err := EvalApp(program, gi, aid, ep)
 	delta := ep.TxnGroup[gi].EvalDelta
 	if evalProblem == "" {
-		require.NoError(t, err, "Eval%s\nExpected: PASS", sb)
-		require.True(t, pass, "Eval%s\nExpected: PASS", sb)
+		require.NoError(t, err, "Eval\n%sExpected: PASS", ep.Trace)
+		require.True(t, pass, "Eval\n%sExpected: PASS", ep.Trace)
 		return delta
 	}
 
 	// There is an evalProblem to check. REJECT is special and only means that
 	// the app didn't accept.  Maybe it's an error, maybe it's just !pass.
 	if evalProblem == "REJECT" {
-		require.True(t, err != nil || !pass, "Eval%s\nExpected: REJECT", sb)
+		require.True(t, err != nil || !pass, "Eval%s\nExpected: REJECT", ep.Trace)
 	} else {
-		require.Error(t, err, "Eval\n%s\nExpected: %v", sb, evalProblem)
-		require.Contains(t, err.Error(), evalProblem)
+		require.ErrorContains(t, err, evalProblem, "Wrong error in EvalContract %v", ep.Trace)
 	}
 	return delta
 }
@@ -2920,16 +2919,16 @@ func TestTxnEffects(t *testing.T) {
 	testApp(t, "byte 0x32; log; gtxn 0 LastLog; byte 0x32; ==", ep, "txn effects can only be read from past txns")
 
 	// Look at the logs of tx 0
-	testApps(t, []string{"", "byte 0x32; log; gtxn 0 LastLog; byte 0x; =="}, nil, AssemblerMaxVersion, nil)
-	testApps(t, []string{"byte 0x33; log; int 1", "gtxn 0 LastLog; byte 0x33; =="}, nil, AssemblerMaxVersion, nil)
-	testApps(t, []string{"byte 0x33; dup; log; log; int 1", "gtxn 0 NumLogs; int 2; =="}, nil, AssemblerMaxVersion, nil)
-	testApps(t, []string{"byte 0x37; log; int 1", "gtxn 0 Logs 0; byte 0x37; =="}, nil, AssemblerMaxVersion, nil)
-	testApps(t, []string{"byte 0x37; log; int 1", "int 0; gtxnas 0 Logs; byte 0x37; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"", "byte 0x32; log; gtxn 0 LastLog; byte 0x; =="}, nil, nil, nil)
+	testApps(t, []string{"byte 0x33; log; int 1", "gtxn 0 LastLog; byte 0x33; =="}, nil, nil, nil)
+	testApps(t, []string{"byte 0x33; dup; log; log; int 1", "gtxn 0 NumLogs; int 2; =="}, nil, nil, nil)
+	testApps(t, []string{"byte 0x37; log; int 1", "gtxn 0 Logs 0; byte 0x37; =="}, nil, nil, nil)
+	testApps(t, []string{"byte 0x37; log; int 1", "int 0; gtxnas 0 Logs; byte 0x37; =="}, nil, nil, nil)
 
 	// Look past the logs of tx 0
-	testApps(t, []string{"byte 0x37; log; int 1", "gtxna 0 Logs 1; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
+	testApps(t, []string{"byte 0x37; log; int 1", "gtxna 0 Logs 1; byte 0x37; =="}, nil, nil, nil,
 		exp(1, "invalid Logs index 1"))
-	testApps(t, []string{"byte 0x37; log; int 1", "int 6; gtxnas 0 Logs; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
+	testApps(t, []string{"byte 0x37; log; int 1", "int 6; gtxnas 0 Logs; byte 0x37; =="}, nil, nil, nil,
 		exp(1, "invalid Logs index 6"))
 }
 func TestLog(t *testing.T) {
@@ -3159,11 +3158,11 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	ledger := NewLedger(nil)
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
-	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, LogicVersion, ledger,
+	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, nil, ledger,
 		exp(0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"))
 
 	// Simulate test with 3 grouped txn
-	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, LogicVersion, ledger)
+	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, nil, ledger)
 }
 
 func appAddr(id int) basics.Address {
@@ -3191,20 +3190,30 @@ func TestAppInfo(t *testing.T) {
 	testApp(t, source, ep)
 }
 
-func TestBudget(t *testing.T) {
+func TestAppBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	source := `
+	source := func(budget int) string {
+		return fmt.Sprintf(`
 global OpcodeBudget
-int 699
+int %d
 ==
 assert
 global OpcodeBudget
-int 695
+int %d
 ==
-`
-	testApp(t, source, nil)
+`, budget-1, budget-5)
+	}
+	testApp(t, source(700), nil)
+
+	// with pooling a two app call starts with 1400
+	testApps(t, []string{source(1400), source(1393)}, nil, nil, nil)
+
+	// without, they get base 700
+	testApps(t, []string{source(700), source(700)}, nil,
+		func(p *config.ConsensusParams) { p.EnableAppCostPooling = false }, nil)
+
 }
 
 func TestSelfMutateV8(t *testing.T) {

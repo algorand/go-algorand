@@ -642,17 +642,17 @@ func TestNumInnerPooled(t *testing.T) {
 	long := strings.Repeat(pay, 17) + ";int 1" // More than half allowed
 
 	grp := MakeSampleTxnGroup(tx)
-	TestApps(t, []string{short, ""}, grp, LogicVersion, ledger)
-	TestApps(t, []string{short, short}, grp, LogicVersion, ledger)
-	TestApps(t, []string{long, ""}, grp, LogicVersion, ledger)
-	TestApps(t, []string{short, long}, grp, LogicVersion, ledger)
-	TestApps(t, []string{long, short}, grp, LogicVersion, ledger)
-	TestApps(t, []string{long, long}, grp, LogicVersion, ledger,
+	TryApps(t, []string{short, ""}, grp, LogicVersion, ledger)
+	TryApps(t, []string{short, short}, grp, LogicVersion, ledger)
+	TryApps(t, []string{long, ""}, grp, LogicVersion, ledger)
+	TryApps(t, []string{short, long}, grp, LogicVersion, ledger)
+	TryApps(t, []string{long, short}, grp, LogicVersion, ledger)
+	TryApps(t, []string{long, long}, grp, LogicVersion, ledger,
 		Exp(1, "too many inner transactions"))
 	grp = append(grp, grp[0])
-	TestApps(t, []string{short, long, long}, grp, LogicVersion, ledger,
+	TryApps(t, []string{short, long, long}, grp, LogicVersion, ledger,
 		Exp(2, "too many inner transactions"))
-	TestApps(t, []string{long, long, long}, grp, LogicVersion, ledger,
+	TryApps(t, []string{long, long, long}, grp, LogicVersion, ledger,
 		Exp(1, "too many inner transactions"))
 }
 

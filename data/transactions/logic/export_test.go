@@ -16,7 +16,12 @@
 
 package logic
 
-import "github.com/algorand/go-algorand/data/basics"
+import (
+	"testing"
+
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+)
 
 // Export for testing only.  See
 // https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
@@ -48,10 +53,16 @@ var NoTrack = notrack
 var TestLogic = testLogic
 var TestApp = testApp
 var TestAppBytes = testAppBytes
-var TestApps = testApps
 var TestLogicRange = testLogicRange
 var TestProg = testProg
 var WithPanicOpcode = withPanicOpcode
+
+// TryApps exports "testApps" while accepting a simple uint64. Annoying, we
+// can't export this as "TestApps" because it looks like a Test function with
+// the wrong signature.
+func TryApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, ver uint64, ledger *Ledger, expected ...expect) *EvalParams {
+	return testApps(t, programs, txgroup, protoVer(ver), ledger, expected...)
+}
 
 const CreatedResourcesVersion = createdResourcesVersion
 const AssemblerNoVersion = assemblerNoVersion
