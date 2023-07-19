@@ -36,7 +36,8 @@ func TestPeerstore(t *testing.T) {
 		"/ip4/198.51.100.0/tcp/4242/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N",
 	}
 
-	ps, err := NewPeerStore(context.Background(), "", peerAddrs)
+	addrInfo, err := PeerInfoFromAddrs(peerAddrs)
+	ps, err := NewPeerStore(context.Background(), "", addrInfo)
 	require.NoError(t, err)
 	defer ps.Close()
 
@@ -56,9 +57,10 @@ func TestPeerstore(t *testing.T) {
 		maddrStr := fmt.Sprintf("/ip4/1.2.3.4/tcp/%d/p2p/%s", 4000+i, peerID.String())
 		addrs = append(addrs, maddrStr)
 	}
-	for _, addr := range addrs {
-		info, err := ps.PeerInfoFromAddrString(addr)
-		require.NoError(t, err)
+	addrInfo, err = PeerInfoFromAddrs(addrs)
+	require.NoError(t, err)
+	for i := 0; i < len(addrInfo); i++ {
+		info := addrInfo[i]
 		ps.AddAddrs(info.ID, info.Addrs, libp2p.PermanentAddrTTL)
 	}
 
