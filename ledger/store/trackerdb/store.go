@@ -59,6 +59,8 @@ type Reader interface {
 	// catchpoint
 	// Note: BuildMerkleTrie() needs this on the reader handle in sqlite to not get locked by write txns
 	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
+	// Note: Catchpoint tracker needs this on the reader handle in sqlite to not get locked by write txns
+	MakeCatchpointReader() (CatchpointReader, error)
 }
 
 // Writer is the interface for the trackerdb write operations.
@@ -82,7 +84,6 @@ type Writer interface {
 //	we should split these two sets of methods into two separate interfaces
 type Catchpoint interface {
 	// reader
-	MakeCatchpointReader() (CatchpointReader, error)
 	MakeOrderedAccountsIter(accountCount int) OrderedAccountsIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
 	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter

@@ -183,6 +183,11 @@ func (r *sqlReader) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb
 	return MakeCatchpointPendingHashesIterator(hashCount, r.q)
 }
 
+// MakeCatchpointReader implements trackerdb.Reader
+func (r *sqlReader) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
+	return makeCatchpointReader(r.q), nil
+}
+
 type sqlWriter struct {
 	e db.Executable
 }
@@ -234,11 +239,6 @@ func (w *sqlWriter) ModifyAcctBaseTest() error {
 
 type sqlCatchpoint struct {
 	e db.Executable
-}
-
-// MakeCatchpointReader implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
-	return NewCatchpointSQLReaderWriter(c.e), nil
 }
 
 // MakeCatchpointReaderWriter implements trackerdb.Catchpoint

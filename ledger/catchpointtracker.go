@@ -1316,7 +1316,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	ledgerGetcatchpointCount.Inc(nil)
 	// TODO: we need to generalize this, check @cce PoC PR, he has something
 	//       somewhat broken for some KVs..
-	err := ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
 		cr, err := tx.MakeCatchpointReader()
 		if err != nil {
 			return err
