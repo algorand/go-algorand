@@ -277,12 +277,12 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 		Data:        data[:],
 	})
 
-	ep, tx, _ := makeSampleEnvWithVersion(1)
+	stxn := makeSampleTxn()
 	// RekeyTo disallowed on AVM v0/v1
-	tx.RekeyTo = basics.Address{}
-
-	ep.TxnGroup[0].Lsig.Logic = program
-	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
+	stxn.Txn.RekeyTo = basics.Address{}
+	stxn.Lsig.Logic = program
+	stxn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], stxn.Txn.Sender[:], stxn.Txn.Note}
+	ep := defaultSigParams(stxn)
 
 	// ensure v1 program runs well on latest evaluator
 	require.Equal(t, uint8(1), program[0])
@@ -290,8 +290,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	// Cost should stay exactly 2140
 	ep.Proto.LogicSigMaxCost = 2139
 	err = CheckSignature(0, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "static cost")
+	require.ErrorContains(t, err, "static cost")
 
 	ep.Proto.LogicSigMaxCost = 2140
 	err = CheckSignature(0, ep)
@@ -306,9 +305,8 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.True(t, pass)
 
 	// Costs for v2 should be higher because of hash opcode cost changes
-	ep2, tx, _ := makeSampleEnvWithVersion(2)
+	ep2 := defaultSigParamsWithVersion(2, stxn)
 	ep2.Proto.LogicSigMaxCost = 2307
-	ep2.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
 	// Eval doesn't fail, but it would be ok (better?) if it did
 	testLogicBytes(t, opsV2.Program, ep2, "static cost", "")
 
@@ -316,18 +314,17 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	testLogicBytes(t, opsV2.Program, ep2)
 
 	// ensure v0 program runs well on latest evaluator
-	ep, tx, _ = makeSampleEnv()
 	program[0] = 0
 	sig = c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
 		Data:        data[:],
 	})
-	ep.TxnGroup[0].Lsig.Logic = program
-	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
+	stxn.Lsig.Logic = program
+	stxn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], stxn.Txn.Sender[:], stxn.Txn.Note}
+	ep = defaultSigParams(stxn)
 
 	// Cost remains the same, because v0 does not get dynamic treatment
 	ep.Proto.LogicSigMaxCost = 2139
-	ep.minAvmVersion = 0 // Was higher because sample txn has a rekey
 	testLogicBytes(t, program, ep, "static cost", "")
 
 	ep.Proto.LogicSigMaxCost = 2140
@@ -367,23 +364,22 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 
 		ops := testProg(t, text, AssemblerMaxVersion)
 
-		ep, _, _ := makeSampleEnvWithVersion(1)
-		ep.TxnGroup[0].Lsig.Logic = ops.Program
+		stxn := makeSampleTxn()
+		stxn.Txn.RekeyTo = basics.Address{} // would mess up minavmversion
+		stxn.Lsig.Logic = ops.Program
+		ep := defaultSigParamsWithVersion(1, stxn)
 		_, err := EvalSignature(0, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "greater than protocol supported version")
+		require.ErrorContains(t, err, "greater than protocol supported version")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 1 // set version to 1
 		_, err = EvalSignature(0, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
+		require.ErrorContains(t, err, "invalid global field")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 0 // set version to 0
 		_, err = EvalSignature(0, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
+		require.ErrorContains(t, err, "invalid global field")
 	}
 }
 
@@ -430,25 +426,22 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			ep, _, _ := makeSampleEnvWithVersion(1)
+			ep := defaultSigParamsWithVersion(1)
 			ep.TxnGroup[0].Lsig.Logic = ops.Program
 
 			// check failure with version check
 			_, err = EvalSignature(0, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "greater than protocol supported version")
+			require.ErrorContains(t, err, "greater than protocol supported version")
 
 			// check opcodes failures
 			ops.Program[0] = 1 // set version to 1
 			_, err = EvalSignature(0, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
+			require.ErrorContains(t, err, "invalid txn field")
 
 			// check opcodes failures
 			ops.Program[0] = 0 // set version to 0
 			_, err = EvalSignature(0, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
+			require.ErrorContains(t, err, "invalid txn field")
 		}
 	}
 }
@@ -480,7 +473,7 @@ func TestBackwardCompatAssemble(t *testing.T) {
 		v := v
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Parallel()
-			testLogic(t, source, v, defaultEvalParams())
+			testLogic(t, source, v, nil)
 		})
 	}
 }

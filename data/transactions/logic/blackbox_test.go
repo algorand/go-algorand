@@ -36,12 +36,6 @@ func TestNewAppEvalParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	params := []config.ConsensusParams{
-		{Application: true, MaxAppProgramCost: 700},
-		config.Consensus[protocol.ConsensusV29],
-		config.Consensus[protocol.ConsensusFuture],
-	}
-
 	// Create some sample transactions. The main reason this a blackbox test
 	// (_test package) is to have access to txntest.
 	payment := txntest.Txn{
@@ -78,6 +72,11 @@ func TestNewAppEvalParams(t *testing.T) {
 		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, 2},
 	}
 
+	params := []config.ConsensusParams{
+		{Application: true, MaxAppProgramCost: 700},
+		config.Consensus[protocol.ConsensusV29],
+		config.Consensus[protocol.ConsensusFuture],
+	}
 	for i, param := range params {
 		param := param
 		for j, testCase := range cases {
@@ -85,10 +84,14 @@ func TestNewAppEvalParams(t *testing.T) {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				t.Parallel()
 				ep := logic.NewAppEvalParams(testCase.group, &param, nil)
+				if testCase.numAppCalls == 0 {
+					require.Nil(t, ep)
+					return
+				}
 				require.NotNil(t, ep)
 				require.Equal(t, ep.TxnGroup, testCase.group)
 				require.Equal(t, *ep.Proto, param)
-				if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) || testCase.numAppCalls == 0 {
+				if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusV29]) {
 					require.Nil(t, ep.PooledApplicationBudget)
 				} else if reflect.DeepEqual(param, config.Consensus[protocol.ConsensusFuture]) {
 					require.Equal(t, *ep.PooledApplicationBudget, param.MaxAppProgramCost*testCase.numAppCalls)

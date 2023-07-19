@@ -2753,20 +2753,17 @@ func TestNumInnerDeep(t *testing.T) {
   itxn_submit
 `
 
-	tx := txntest.Txn{
-		Type:          protocol.ApplicationCallTx,
-		ApplicationID: 888,
-		ForeignApps:   []basics.AppIndex{basics.AppIndex(222)},
-	}.SignedTxnWithAD()
-	require.Equal(t, 888, int(tx.Txn.ApplicationID))
-	ledger := NewLedger(nil)
+	ep, tx, ledger := MakeSampleEnv()
 
-	pay3 := TestProg(t, pay+pay+pay+"int 1;", AssemblerMaxVersion).Program
-	ledger.NewApp(tx.Txn.Receiver, 222, basics.AppParams{
-		ApprovalProgram: pay3,
+	tx.Type = protocol.ApplicationCallTx
+	tx.ApplicationID = 888
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+		ApprovalProgram: TestProg(t, pay+pay+pay+"int 1;", AssemblerMaxVersion).Program,
 	})
 
-	ledger.NewApp(tx.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1_000_000)
 
 	callpay3 := `itxn_begin
@@ -2774,10 +2771,6 @@ int appl;    itxn_field TypeEnum
 int 222;     itxn_field ApplicationID
 itxn_submit
 `
-	txg := []transactions.SignedTxnWithAD{tx}
-	ep := NewAppEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{})
-	ep.Ledger = ledger
-	ep.SigLedger = ledger
 	TestApp(t, callpay3+"int 1", ep, "insufficient balance") // inner contract needs money
 
 	ledger.NewAccount(appAddr(222), 1_000_000)

@@ -273,6 +273,8 @@ func RuntimeEvalConstants() EvalConstants {
 
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
+	runMode RunMode
+
 	Proto *config.ConsensusParams
 
 	Trace *strings.Builder
@@ -374,6 +376,7 @@ func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusP
 
 	withADs := transactions.WrapSignedTxnsWithAD(txgroup)
 	return &EvalParams{
+		runMode:              ModeSig,
 		TxnGroup:             withADs,
 		Proto:                proto,
 		minAvmVersion:        computeMinAvmVersion(withADs),
@@ -385,28 +388,14 @@ func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusP
 // NewAppEvalParams creates an EvalParams to use while evaluating a top-level txgroup.
 func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
-	lsigs := 0
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
 			apps++
 		}
-		if !tx.Lsig.Blank() {
-			lsigs++
-		}
 	}
 
-	minAvmVersion := computeMinAvmVersion(txgroup)
-
-	// Make a simpler EvalParams that is good enough to evaluate LogicSigs.
-	// TODO: Can we make all LogisSig callers use the new NewSigEvalParams? The
-	// problem seems to be in test/dryrun/goal/simulate type situations, where we
-	// want a single ep that can evaluate anything.
 	if apps == 0 {
-		return &EvalParams{
-			TxnGroup:      txgroup,
-			Proto:         proto,
-			minAvmVersion: minAvmVersion,
-		}
+		return nil // Won't actually be used
 	}
 
 	var pooledApplicationBudget *int
@@ -425,11 +414,12 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 	}
 
 	ep := &EvalParams{
+		runMode:                 ModeApp,
 		TxnGroup:                copyWithClearAD(txgroup),
 		Proto:                   proto,
 		Specials:                specials,
 		pastScratch:             make([]*scratchSpace, len(txgroup)),
-		minAvmVersion:           minAvmVersion,
+		minAvmVersion:           computeMinAvmVersion(txgroup),
 		FeeCredit:               &credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
@@ -500,6 +490,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 	}
 
 	ep := &EvalParams{
+		runMode:                 ModeApp,
 		Proto:                   caller.Proto,
 		Trace:                   caller.Trace,
 		TxnGroup:                txg,
@@ -571,19 +562,25 @@ func (ep *EvalParams) log() logging.Logger {
 // package. For example, after a acfg transaction is processed, the AD created
 // by the acfg is added to the EvalParams this way.
 func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
-	if ep.available == nil {
+	if ep.pastScratch == nil {
 		// This is a simplified ep. It won't be used for app evaluation, and
 		// shares the TxnGroup memory with the caller.  Don't touch anything!
 		return
 	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
+		if ep.available == nil { // here, and below, we may need to make `ep.available`
+			ep.available = ep.computeAvailability()
+		}
 		if ep.available.createdAsas == nil {
 			ep.available.createdAsas = make(map[basics.AssetIndex]struct{})
 		}
 		ep.available.createdAsas[aid] = struct{}{}
 	}
 	if aid := ad.ApplicationID; aid != 0 {
+		if ep.available == nil {
+			ep.available = ep.computeAvailability()
+		}
 		if ep.available.createdApps == nil {
 			ep.available.createdApps = make(map[basics.AppIndex]struct{})
 		}
@@ -967,6 +964,9 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
 	}
+	if params.runMode != ModeApp {
+		return false, nil, fmt.Errorf("attempt to evaluate a contract with %s mode EvalParams", params.runMode)
+	}
 	cx := EvalContext{
 		EvalParams: params,
 		runMode:    ModeApp,
@@ -1073,6 +1073,9 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 	if params.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in signature eval")
+	}
+	if params.runMode != ModeSig {
+		return false, nil, fmt.Errorf("attempt to evaluate a signature with %s mode EvalParams", params.runMode)
 	}
 	cx := EvalContext{
 		EvalParams: params,
