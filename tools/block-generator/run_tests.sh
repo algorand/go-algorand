@@ -6,6 +6,7 @@ REPORT_DIR=""
 DURATION="1h"
 LOG_LEVEL="error"
 SCENARIOS=""
+GENESIS_HASH=""
 
 help() {
   echo "Usage:"
@@ -53,6 +54,10 @@ while :; do
     LOG_LEVEL="${2-}"
     shift
     ;;
+  --gh)
+    GENESIS_HASH="--genesis-file ${2-}"
+    shift
+    ;;
   -?*) echo "Unknown option: $1" && exit 1;;
   *) break ;;
   esac
@@ -93,5 +98,6 @@ echo "Log Level: $LOG_LEVEL"
   -c "$CONNECTION_STRING" \
   --report-directory "$REPORT_DIR" \
   --conduit-log-level "$LOG_LEVEL" \
-  --reset-report-dir
+  --reset-report-dir \
+  $GENESIS_HASH
 
