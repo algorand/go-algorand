@@ -22,7 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -3198,7 +3198,7 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 	// tests fail. So it's pretty annoying to run `go test` on the whole
 	// package.  `logSink` swallows log messages.
 	logSink := logging.NewLogger()
-	logSink.SetOutput(ioutil.Discard)
+	logSink.SetOutput(io.Discard)
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		v := v
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
