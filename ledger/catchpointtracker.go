@@ -1126,7 +1126,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = ct.dbs.TransactionContext(ctx, func(dbCtx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err = ct.dbs.SnapshotContext(ctx, func(dbCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
 		catchpointWriter, err = makeCatchpointWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return

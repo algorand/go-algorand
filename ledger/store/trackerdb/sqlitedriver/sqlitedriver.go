@@ -85,7 +85,7 @@ func (s *trackerSQLStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 
 func (s *trackerSQLStore) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
 	return s.pair.Rdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		return fn(ctx, sqlSnapshotScope{tx, &sqlReader{tx}})
+		return fn(ctx, &sqlSnapshotScope{tx, &sqlReader{tx}})
 	})
 }
 
@@ -188,6 +188,16 @@ func (r *sqlReader) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
 	return makeCatchpointReader(r.q), nil
 }
 
+// MakeEncodedAccoutsBatchIter implements trackerdb.Reader
+func (r *sqlReader) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
+	return MakeEncodedAccoutsBatchIter(r.q)
+}
+
+// MakeKVsIter implements trackerdb.Reader
+func (r *sqlReader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
+	return MakeKVsIter(ctx, r.q)
+}
+
 type sqlWriter struct {
 	e db.Executable
 }
@@ -251,16 +261,6 @@ func (c *sqlCatchpoint) MakeCatchpointWriter() (trackerdb.CatchpointWriter, erro
 	return NewCatchpointSQLReaderWriter(c.e), nil
 }
 
-// MakeEncodedAccoutsBatchIter implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
-	return MakeEncodedAccoutsBatchIter(c.e)
-}
-
-// MakeKVsIter implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
-	return MakeKVsIter(ctx, c.e)
-}
-
 // MakeMerkleCommitter implements trackerdb.Catchpoint
 func (c *sqlCatchpoint) MakeMerkleCommitter(staging bool) (trackerdb.MerkleCommitter, error) {
 	return MakeMerkleCommitter(c.e, staging)
@@ -302,7 +302,11 @@ type sqlSnapshotScope struct {
 	trackerdb.Reader
 }
 
-func (ss sqlSnapshotScope) Close() error {
+func (ss *sqlSnapshotScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
+	return db.ResetTransactionWarnDeadline(ctx, ss.tx, deadline)
+}
+
+func (ss *sqlSnapshotScope) Close() error {
 	return ss.tx.Rollback()
 }
 
