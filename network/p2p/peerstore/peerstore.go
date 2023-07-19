@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	ds "github.com/ipfs/go-datastore"
-	leveldb "github.com/ipfs/go-ds-leveldb"
+	pebbledb "github.com/ipfs/go-ds-pebble"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2p "github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoreds"
@@ -33,7 +33,7 @@ type PeerStore struct {
 }
 
 func initDBStore(path string) (ds.Batching, error) {
-	store, err := leveldb.NewDatastore(path, nil)
+	store, err := pebbledb.NewDatastore(path, nil)
 	return store, err
 }
 

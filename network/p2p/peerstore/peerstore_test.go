@@ -41,7 +41,8 @@ func TestPeerstore(t *testing.T) {
 	}
 
 	addrInfo, err := PeerInfoFromAddrs(peerAddrs)
-	ps, err := NewPeerStore(context.Background(), "", addrInfo)
+	dir := t.TempDir()
+	ps, err := NewPeerStore(context.Background(), dir, addrInfo)
 	require.NoError(t, err)
 	defer ps.Close()
 
