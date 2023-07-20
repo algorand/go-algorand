@@ -201,6 +201,23 @@ func (ct *catchpointTracker) GetLastCatchpointLabel() string {
 	return ct.lastCatchpointLabel
 }
 
+func (ct *catchpointTracker) getSPVerificationData() (encodedData []byte, spVerificationHash crypto.Digest, err error) {
+	err = ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		rawData, dbErr := tx.MakeSpVerificationCtxReader().GetAllSPContexts(ctx)
+		if dbErr != nil {
+			return dbErr
+		}
+
+		wrappedData := catchpointStateProofVerificationContext{Data: rawData}
+		spVerificationHash, encodedData = crypto.EncodeAndHash(wrappedData)
+		return nil
+	})
+	if err != nil {
+		return nil, crypto.Digest{}, err
+	}
+	return encodedData, spVerificationHash, nil
+}
+
 func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basics.Round, updatingBalancesDuration time.Duration) error {
 	ct.log.Infof("finishing catchpoint's first stage dbRound: %d", dbRound)
 
@@ -209,7 +226,15 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	var totalChunks uint64
 	var biggestChunkLen uint64
 	var spVerificationHash crypto.Digest
+	var spVerificationEncodedData []byte
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
+
+	// Generate the SP Verification hash and encoded data. The hash is used in the label when tracking catchpoints,
+	// and the encoded data for that hash will be added to the catchpoint file if catchpoint generation is enabled.
+	spVerificationEncodedData, spVerificationHash, err := ct.getSPVerificationData()
+	if err != nil {
+		return err
+	}
 
 	if ct.enableGeneratingCatchpointFiles {
 		// Generate the catchpoint file. This is done inline so that it will
@@ -219,8 +244,8 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		var err error
 
 		catchpointGenerationStats.BalancesWriteTime = uint64(updatingBalancesDuration.Nanoseconds())
-		totalKVs, totalAccounts, totalChunks, biggestChunkLen, spVerificationHash, err = ct.generateCatchpointData(
-			ctx, dbRound, &catchpointGenerationStats)
+		totalKVs, totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
+			ctx, dbRound, &catchpointGenerationStats, spVerificationEncodedData)
 		atomic.StoreInt32(&ct.catchpointDataWriting, 0)
 		if err != nil {
 			return err
@@ -1102,7 +1127,7 @@ func (ct *catchpointTracker) isWritingCatchpointDataFile() bool {
 //   - Balance and KV chunk (named balances.x.msgpack).
 //     ...
 //   - Balance and KV chunk (named balances.x.msgpack).
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails) (totalKVs, totalAccounts, totalChunks, biggestChunkLen uint64, spVerificationHash crypto.Digest, err error) {
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, encodedSPData []byte) (totalKVs, totalAccounts, totalChunks, biggestChunkLen uint64, err error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
@@ -1132,7 +1157,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 			return
 		}
 
-		spVerificationHash, err = catchpointWriter.WriteStateProofVerificationContext()
+		err = catchpointWriter.WriteStateProofVerificationContext(encodedSPData)
 		if err != nil {
 			return
 		}
@@ -1187,7 +1212,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
-		return 0, 0, 0, 0, crypto.Digest{}, err
+		return 0, 0, 0, 0, err
 	}
 
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.writtenBytes)
@@ -1196,7 +1221,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	catchpointGenerationStats.KVsCount = catchpointWriter.totalKVs
 	catchpointGenerationStats.AccountsRound = uint64(accountsRound)
 
-	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, spVerificationHash, nil
+	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx trackerdb.TransactionScope, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64, stateProofVerificationHash crypto.Digest) error {

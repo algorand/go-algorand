@@ -328,9 +328,12 @@ func TestRecordCatchpointFile(t *testing.T) {
 }
 
 func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.Round, ml *mockLedgerForTracker, round basics.Round) {
+	spVerificationEncodedData, stateProofVerificationHash, err := ct.getSPVerificationData()
+	require.NoError(t, err)
+
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
-	_, _, _, biggestChunkLen, stateProofVerificationHash, err := ct.generateCatchpointData(
-		context.Background(), accountsRound, &catchpointGenerationStats)
+	_, _, _, biggestChunkLen, err := ct.generateCatchpointData(
+		context.Background(), accountsRound, &catchpointGenerationStats, spVerificationEncodedData)
 	require.NoError(t, err)
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
@@ -460,8 +463,10 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	require.NoError(b, err)
 
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
+	encodedSPData, _, err := ct.getSPVerificationData()
+	require.NoError(b, err)
 	b.ResetTimer()
-	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats)
+	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats, encodedSPData)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
@@ -469,7 +474,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 func TestCatchpointReproducibleLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	if runtime.GOARCH == "arm" {
 		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
 
@@ -592,7 +597,12 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 		ml2 := ledgerHistory[rnd]
 		require.NotNil(t, ml2)
 
-		ct2 := newCatchpointTracker(t, ml2, cfg, ".")
+		cfg2 := cfg
+		// every other iteration modify CatchpointTracking to ensure labels generation does not depends on catchpoint file creation
+		if rnd%2 == 0 {
+			cfg2.CatchpointTracking = int64(crypto.RandUint63())%2 + 1 //values 1 or 2
+		}
+		ct2 := newCatchpointTracker(t, ml2, cfg2, ".")
 		defer ct2.close()
 		for i := rnd + 1; i <= lastRound; i++ {
 			blk := bookkeeping.Block{
