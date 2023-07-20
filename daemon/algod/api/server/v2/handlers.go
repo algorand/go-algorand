@@ -66,6 +66,7 @@ const MaxTealSourceBytes = 200_000
 // become quite large, so we allow up to 1MB
 const MaxTealDryrunBytes = 1_000_000
 
+// WaitForBlockTimeout is the timeout for the WaitForBlock endpoint.
 var WaitForBlockTimeout = 1 * time.Minute
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
