@@ -29,6 +29,8 @@ import (
 	"github.com/algorand/go-algorand/config"
 )
 
+// DefaultPrivKeyPath is the default path inside the node's root directory at which the private key
+// for p2p identity is found and persisted to when a new one is generated.
 const DefaultPrivKeyPath = "peerIDPrivKey.pem"
 
 // GetPrivKey manages loading and creation of private keys for network PeerIDs
