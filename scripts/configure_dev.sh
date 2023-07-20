@@ -79,7 +79,7 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade pkg-config
     install_or_upgrade libtool
     install_or_upgrade shellcheck
-    if [ "${CIRCLECI}" != "true" ]; then
+    if [ "${CIRCLECI}" == "true" ]; then
         install_or_upgrade jq
         install_or_upgrade autoconf
         install_or_upgrade automake
