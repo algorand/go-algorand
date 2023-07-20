@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/algorand/go-algorand/util"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -27,17 +26,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
+
 	"github.com/algorand/go-deadlock"
 	"github.com/gofrs/flock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/protocol"
 	toolsnet "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -63,9 +64,64 @@ func main() {
 	os.Exit(exitCode)
 }
 
+// printGenesisOnly attempts to load and parse the genesis file without checking any other config
+// it is used when the run parameter is set to -G for genesisPrint
+func printGenesisIDOnly() int {
+	genesisPath := filepath.Join(*dataDirectory, config.GenesisJSONFile)
+	genesisText, err := os.ReadFile(genesisPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisPath, err)
+		return 1
+	}
+
+	var genesis bookkeeping.Genesis
+	err = protocol.DecodeJSON(genesisText, &genesis)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot parse genesis file %s: %v\n", genesisPath, err)
+		return 1
+	}
+	fmt.Println(genesis.ID())
+	return 0
+}
+
+func loadGenesis(dataDir string) (bookkeeping.Genesis, string, error) {
+	genesisPath := *genesisFile
+	if genesisPath == "" {
+		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
+	}
+	genesisText, err := os.ReadFile(genesisPath)
+	if err != nil {
+		return bookkeeping.Genesis{}, "", err
+	}
+	var genesis bookkeeping.Genesis
+	err = protocol.DecodeJSON(genesisText, &genesis)
+	if err != nil {
+		return bookkeeping.Genesis{}, "", err
+	}
+	return genesis, string(genesisText), nil
+}
+
 func run() int {
-	dataDir := resolveDataDir()
-	absolutePath, absPathErr := filepath.Abs(dataDir)
+	if *genesisPrint {
+		return printGenesisIDOnly()
+	}
+	cfg, err := config.InitializeDataDirs(dataDirectory, genesisFile)
+	// if all that is needed is to print the genesis ID, we can ignore potential load errors and just try to access genesis.ID
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing directories: %v\n", err)
+		return 1
+	}
+
+	absolutePath := config.GetFileResource("absolutePath")
+
+	genesis, genesisText, err := loadGenesis(absolutePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading genesis: %v\n", err)
+		return 1
+	}
+
+	// Update the Version with the Data Directory
+	// TODO: Use the path provider instead of loading to version
 	config.UpdateVersionDataDir(absolutePath)
 
 	if *seed != "" {
@@ -102,47 +158,6 @@ func run() int {
 		return 0
 	}
 
-	// Don't fallback anymore - if not specified, we want to panic to force us to update our tooling and/or processes
-	if len(dataDir) == 0 {
-		fmt.Fprintln(os.Stderr, "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment.")
-		return 1
-	}
-
-	if absPathErr != nil {
-		fmt.Fprintf(os.Stderr, "Can't convert data directory's path to absolute, %v\n", dataDir)
-		return 1
-	}
-
-	genesisPath := *genesisFile
-	if genesisPath == "" {
-		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
-	}
-
-	// Load genesis
-	genesisText, err := os.ReadFile(genesisPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisPath, err)
-		return 1
-	}
-
-	var genesis bookkeeping.Genesis
-	err = protocol.DecodeJSON(genesisText, &genesis)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse genesis file %s: %v\n", genesisPath, err)
-		return 1
-	}
-
-	if *genesisPrint {
-		fmt.Println(genesis.ID())
-		return 0
-	}
-
-	// If data directory doesn't exist, we can't run. Don't bother trying.
-	if _, err := os.Stat(absolutePath); err != nil {
-		fmt.Fprintf(os.Stderr, "Data directory %s does not appear to be valid\n", dataDir)
-		return 1
-	}
-
 	log := logging.Base()
 	// before doing anything further, attempt to acquire the algod lock
 	// to ensure this is the only node running against this data directory
@@ -176,12 +191,6 @@ func run() int {
 	checkAndDeleteIndexerFile("indexer.sqlite-shm")
 	checkAndDeleteIndexerFile("indexer.sqlite-wal")
 
-	cfg, err := config.LoadConfigFromDisk(absolutePath)
-	if err != nil && !os.IsNotExist(err) {
-		// log is not setup yet, this will log to stderr
-		log.Fatalf("Cannot load config: %v", err)
-	}
-
 	_, err = cfg.ValidateDNSBootstrapArray(genesis.Network)
 	if err != nil {
 		// log is not setup yet, this will log to stderr
@@ -199,7 +208,7 @@ func run() int {
 	isTest := os.Getenv("ALGOTEST") != ""
 	remoteTelemetryEnabled := false
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
+		telemetryConfig, err := logging.EnsureTelemetryConfig(&absolutePath, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		}
@@ -308,7 +317,7 @@ func run() int {
 		if err != nil {
 			log.Errorf("cannot locate node executable: %s", err)
 		} else {
-			phonebookDirs := []string{filepath.Dir(ex), dataDir}
+			phonebookDirs := []string{filepath.Dir(ex), absolutePath}
 			for _, phonebookDir := range phonebookDirs {
 				phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
 				if err == nil {
@@ -325,7 +334,7 @@ func run() int {
 		cfg.LogSizeLimit = 0
 	}
 
-	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
+	err = s.Initialize(cfg, phonebookAddresses, genesisText)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)
@@ -435,16 +444,4 @@ var startupConfigCheckFields = []string{
 	"TxPoolExponentialIncreaseFactor",
 	"TxPoolSize",
 	"VerifiedTranscationsCacheSize",
-}
-
-func resolveDataDir() string {
-	// Figure out what data directory to tell algod to use.
-	// If not specified on cmdline with '-d', look for default in environment.
-	var dir string
-	if dataDirectory == nil || *dataDirectory == "" {
-		dir = os.Getenv("ALGORAND_DATA")
-	} else {
-		dir = *dataDirectory
-	}
-	return dir
 }
