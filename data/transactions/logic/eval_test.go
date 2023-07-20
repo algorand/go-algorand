@@ -132,12 +132,10 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 }
 
 func benchmarkSigParams(txns ...transactions.SignedTxn) *EvalParams {
-	ep := defaultSigParams(txns...)
+	ep := optSigParams(func(p *config.ConsensusParams) {
+		p.LogicSigMaxCost = 1_000_000_000
+	}, txns...)
 	ep.Trace = nil // Tracing would slow down benchmarks
-	clone := *ep.Proto
-	bigBudget := 1000 * 1000 * 1000 // Allow long run times
-	clone.LogicSigMaxCost = uint64(bigBudget)
-	ep.Proto = &clone
 	return ep
 }
 
