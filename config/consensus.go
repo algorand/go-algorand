@@ -1363,6 +1363,7 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.EnableLogicSigCostPooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
