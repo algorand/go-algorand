@@ -646,13 +646,15 @@ func TestGetStatusAfterBlockTimeout(t *testing.T) {
 	before := v2.WaitForBlockTimeout
 	defer func() { v2.WaitForBlockTimeout = before }()
 	v2.WaitForBlockTimeout = 1 * time.Millisecond
-	err := handler.WaitForBlock(c, 0)
+	err := handler.WaitForBlock(c, 1000)
 	require.NoError(t, err)
 
-	require.Equal(t, 404, rec.Code)
-	msg, err := io.ReadAll(rec.Body)
+	require.Equal(t, 200, rec.Code)
+	dec := json.NewDecoder(rec.Body)
+	var resp model.NodeStatusResponse
+	err = dec.Decode(&resp)
 	require.NoError(t, err)
-	require.Contains(t, string(msg), "block still unavailable after timeout")
+	require.Equal(t, uint64(1), resp.LastRound)
 }
 
 func TestGetTransactionParams(t *testing.T) {
