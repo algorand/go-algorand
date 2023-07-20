@@ -864,6 +864,7 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	case <-v2.Shutdown:
 		return internalError(ctx, err, errServiceShuttingDown, v2.Log)
 	case <-time.After(1 * time.Minute):
+		return notFound(ctx, err, errWaitForBlockTimeout, v2.Log)
 	case <-ledger.Wait(basics.Round(round + 1)):
 	}
 
