@@ -384,3 +384,50 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; t
     date '+app-simulate-test FAIL the app call to generated large TEAL should be consuming 804 budget %Y%m%d_%H%M%S'
     false
 fi
+
+###############################################################
+# WE WANT TO TEST STACK AND SCRATCH TRACE IN SIMULATION WORKS #
+###############################################################
+
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${DIR}/tealprogs/stack-scratch.teal" --clear-prog "${TEMPDIR}/simple-v8.teal" --extra-pages 1 2>&1 || true)
+
+EXPSUCCESS='Created app with app index'
+if [[ $RES != *"${EXPSUCCESS}"* ]]; then
+    date '+app-simulate-test FAIL the app creation for generated large TEAL should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
+
+${gcmd} app call --app-id $APPID --app-arg "int:10" --from $ACCOUNT 2>&1 -o "${TEMPDIR}/stack-and-scratch.tx"
+${gcmd} clerk sign -i "${TEMPDIR}/stack-and-scratch.tx" -o "${TEMPDIR}/stack-and-scratch.stx"
+RES=$(${gcmd} clerk simulate --trace --stack --scratch -t "${TEMPDIR}/stack-and-scratch.stx")
+
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the app call for stack and scratch trace should pass %Y%m%d_%H%M%S'
+    false
+fi
+
+SCRATCH_STORE_UNIT=$(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."exec-trace"."approval-program-trace"[-7]')
+
+if [[ $(echo "$SCRATCH_STORE_UNIT" | jq 'has("scratch-changes")') != $CONST_TRUE ]]; then
+    data '+app-simulate-test FAIL the app call for stack and scratch trace should return scratch changes at this unit %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$SCRATCH_STORE_UNIT" | jq '."scratch-changes" | length') != 1 ]]; then
+    data '+app-simulate-test FAIL the app call for stack and scratch trace should return scratch changes with length 1 at this unit %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$SCRATCH_STORE_UNIT" | jq 'has("stack-pop-count")') != $CONST_TRUE ]]; then
+    data '+app-simulate-test FAIL the app call for stack and scratch trace should return stack pop count at this unit %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$SCRATCH_STORE_UNIT" | jq '."stack-pop-count"') != 1 ]]; then
+    data '+app-simulate-test FAIL the app call for stack and scratch trace should return stack pop count being 1 at this unit %Y%m%d_%H%M%S'
+    false
+fi
+
+# WE DON'T TEST IN DETAILS ABOUT SCRATCH AND TRACE IN E2E SCRIPT TESTS, SEE RESTCLIENT TEST FOR DETAILS
