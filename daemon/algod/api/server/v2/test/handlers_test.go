@@ -72,16 +72,19 @@ import (
 const stateProofInterval = uint64(256)
 
 func setupMockNodeForMethodGet(t *testing.T, status node.StatusReport, devmode bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+	return setupMockNodeForMethodGetWithShutdown(t, status, devmode, make(chan struct{}))
+}
+
+func setupMockNodeForMethodGetWithShutdown(t *testing.T, status node.StatusReport, devmode bool, shutdown chan struct{}) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, devmode)
-	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
+		Shutdown: shutdown,
 	}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -588,6 +591,69 @@ func TestGetStatusAfterBlock(t *testing.T) {
 	// Expect 400 - the test ledger will always cause "errRequestedRoundInUnsupportedRound",
 	// as it has not participated in agreement to build blockheaders
 	require.Equal(t, 400, rec.Code)
+}
+
+func TestGetStatusAfterBlockShutdown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	catchup := cannedStatusReportGolden
+	catchup.StoppedAtUnsupportedRound = false
+	shutdownChan := make(chan struct{})
+	handler, c, rec, _, _, releasefunc := setupMockNodeForMethodGetWithShutdown(t, catchup, false, shutdownChan)
+	defer releasefunc()
+
+	close(shutdownChan)
+	err := handler.WaitForBlock(c, 0)
+	require.NoError(t, err)
+
+	// Expect a timeout
+	require.Equal(t, 500, rec.Code)
+	msg, err := io.ReadAll(rec.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(msg), "operation aborted as server is shutting down")
+}
+
+func TestGetStatusAfterBlockDuringCatchup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	catchup := cannedStatusReportGolden
+	catchup.StoppedAtUnsupportedRound = false
+	catchup.Catchpoint = "catchpoint"
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, catchup)
+	defer releasefunc()
+
+	err := handler.WaitForBlock(c, 0)
+	require.NoError(t, err)
+
+	// Expect a timeout
+	require.Equal(t, 503, rec.Code)
+	msg, err := io.ReadAll(rec.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(msg), "operation not available during catchup")
+}
+
+func TestGetStatusAfterBlockTimeout(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	supported := cannedStatusReportGolden
+	supported.StoppedAtUnsupportedRound = false
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, supported)
+	defer releasefunc()
+
+	before := v2.WaitForBlockTimeout
+	defer func() { v2.WaitForBlockTimeout = before }()
+	v2.WaitForBlockTimeout = 1 * time.Millisecond
+	err := handler.WaitForBlock(c, 0)
+	require.NoError(t, err)
+
+	// Expect a timeout
+	require.Equal(t, 404, rec.Code)
+	msg, err := io.ReadAll(rec.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(msg), "block still unavailable after timeout")
 }
 
 func TestGetTransactionParams(t *testing.T) {

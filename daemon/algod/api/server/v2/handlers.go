@@ -66,6 +66,8 @@ const MaxTealSourceBytes = 200_000
 // become quite large, so we allow up to 1MB
 const MaxTealDryrunBytes = 1_000_000
 
+var WaitForBlockTimeout = 1 * time.Minute
+
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
 	Node     NodeInterface
@@ -863,7 +865,7 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	select {
 	case <-v2.Shutdown:
 		return internalError(ctx, err, errServiceShuttingDown, v2.Log)
-	case <-time.After(1 * time.Minute):
+	case <-time.After(WaitForBlockTimeout):
 		return notFound(ctx, err, errWaitForBlockTimeout, v2.Log)
 	case <-ledger.Wait(basics.Round(round + 1)):
 	}
