@@ -113,10 +113,7 @@ type ConsensusParams struct {
 	EnableAppCostPooling bool
 
 	// EnableLogicSigCostPooling specifies LogicSig budgets are pooled across a
-	// group. The total available is (len(group) * LogicSigMaxCost) - a penalty
-	// for verifies that must be performed in signatures (normal, or in
-	// delegated logicsigs). In any event, the budget is always at least
-	// #lsigsInGroup * LogicSigMaxCost.
+	// group. The total available is len(group) * LogicSigMaxCost)
 	EnableLogicSigCostPooling bool
 
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
