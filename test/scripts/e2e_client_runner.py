@@ -449,7 +449,7 @@ def main():
     nodeDataDir = os.path.join(netdir, 'Node')
     primaryDataDir = os.path.join(netdir, 'Primary')
 
-    # Set EnableSimulationUnlimitedResourceAccess to true for both nodes
+    # Set EnableDeveloperAPI to true for both nodes
     for dataDir in (nodeDataDir, primaryDataDir):
         configFile = os.path.join(dataDir, 'config.json')
         with open(configFile, 'r') as f:
