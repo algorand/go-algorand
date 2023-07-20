@@ -685,6 +685,9 @@ type SimulateTraceConfig struct {
 
 	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
 	StackChange *bool `json:"stack-change,omitempty"`
+
+	// StateChange A boolean option enabling returning app state changes together with execution trace during simulation.
+	StateChange *bool `json:"state-change,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group

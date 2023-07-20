@@ -2015,6 +2015,10 @@
           "stack-change": {
             "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
             "type": "boolean"
+          },
+          "state-change": {
+            "description": "A boolean option enabling returning app state changes together with execution trace during simulation.",
+            "type": "boolean"
           }
         },
         "type": "object"

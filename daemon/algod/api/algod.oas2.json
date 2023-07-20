@@ -3522,6 +3522,10 @@
         "scratch-change": {
           "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
           "type": "boolean"
+        },
+        "state-change": {
+          "description": "A boolean option enabling returning app state changes together with execution trace during simulation.",
+          "type": "boolean"
         }
       }
     },

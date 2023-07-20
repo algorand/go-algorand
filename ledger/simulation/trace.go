@@ -111,6 +111,7 @@ type ExecTraceConfig struct {
 	Enable  bool `codec:"enable"`
 	Stack   bool `codec:"stack-change"`
 	Scratch bool `codec:"scratch-change"`
+	State   bool `codec:"state-change"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -133,6 +134,9 @@ func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
 
 // ReturnScratchChange tells if the simulation runs with scratch-change enabled.
 func (r Result) ReturnScratchChange() bool { return r.TraceConfig.Scratch }
+
+// ReturnStateChange tells if the simulation runs with state-change enabled.
+func (r Result) ReturnStateChange() bool { return r.TraceConfig.State }
 
 // validateSimulateRequest first checks relation between request and config variables, including developerAPI:
 // if `developerAPI` provided is turned off, this method would:
