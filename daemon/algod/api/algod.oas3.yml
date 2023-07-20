@@ -1934,6 +1934,23 @@
         ],
         "type": "object"
       },
+      "ScratchChange": {
+        "description": "A write operation into a scratch slot.",
+        "properties": {
+          "new-value": {
+            "$ref": "#/components/schemas/AvmValue"
+          },
+          "slot": {
+            "description": "The scratch slot written.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "new-value",
+          "slot"
+        ],
+        "type": "object"
+      },
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
@@ -1989,6 +2006,10 @@
         "properties": {
           "enable": {
             "description": "A boolean option for opting in execution trace features simulation endpoint.",
+            "type": "boolean"
+          },
+          "scratch-change": {
+            "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
             "type": "boolean"
           },
           "stack-change": {
@@ -2084,6 +2105,13 @@
           "pc": {
             "description": "The program counter of the current opcode being evaluated.",
             "type": "integer"
+          },
+          "scratch-changes": {
+            "description": "The writes into scratch slots.",
+            "items": {
+              "$ref": "#/components/schemas/ScratchChange"
+            },
+            "type": "array"
           },
           "spawned-inners": {
             "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",

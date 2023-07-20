@@ -3031,3 +3031,174 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	a.Equal(execTraceConfig, resp.ExecTraceConfig)
 }
+
+func TestSimulateScratchSlotChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
+
+	// Get primary node
+	primaryNode, err := fixture.GetNodeController("Primary")
+	a.NoError(err)
+
+	fixture.Start()
+	defer primaryNode.FullStop()
+
+	// get lib goal client
+	testClient := fixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	_, err = testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(senderAddress, "no addr with funds")
+	a.NoError(err)
+
+	ops, err := logic.AssembleString(
+		`#pragma version 8
+		 global CurrentApplicationID
+		 bz end
+		 int 1
+		 store 1
+		 load 1
+		 dup
+		 stores
+		end:
+		 int 1`)
+	a.NoError(err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	MinFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
+	MinBalance := config.Consensus[protocol.ConsensusFuture].MinBalance
+
+	// create app and get the application ID
+	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
+		transactions.NoOpOC, approval, clearState, gl,
+		lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+
+	// fund app account
+	appFundTxn, err := testClient.SendPaymentFromWallet(
+		wh, nil, senderAddress, futureAppID.Address().String(),
+		0, MinBalance, nil, "", 0, 0,
+	)
+	a.NoError(err)
+
+	// construct app calls
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(futureAppID), [][]byte{}, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallTxn)
+	a.NoError(err)
+
+	// Group the transactions
+	gid, err := testClient.GroupID([]transactions.Transaction{appFundTxn, appCallTxn})
+	a.NoError(err)
+	appFundTxn.Group = gid
+	appCallTxn.Group = gid
+
+	appFundTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appFundTxn)
+	a.NoError(err)
+	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
+	a.NoError(err)
+
+	// construct simulation request, with scratch slot change enabled
+	execTraceConfig := simulation.ExecTraceConfig{
+		Enable:  true,
+		Scratch: true,
+	}
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+		},
+		ExecTraceConfig: execTraceConfig,
+	}
+
+	// update the configuration file to enable EnableDeveloperAPI
+	err = primaryNode.FullStop()
+	a.NoError(err)
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	cfg.EnableDeveloperAPI = true
+	err = cfg.SaveToDisk(primaryNode.GetDataDir())
+	require.NoError(t, err)
+	fixture.Start()
+
+	// simulate with wrong config (not enabled trace), see expected error
+	_, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+		},
+		ExecTraceConfig: simulation.ExecTraceConfig{Scratch: true},
+	})
+	a.ErrorContains(err, "basic trace must be enabled when enabling scratch slot change tracing")
+
+	// start real simulating
+	resp, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	// check if resp match expected result
+	a.Equal(execTraceConfig, resp.ExecTraceConfig)
+	a.Len(resp.TxnGroups[0].Txns, 2)
+	a.Nil(resp.TxnGroups[0].Txns[0].TransactionTrace)
+	a.NotNil(resp.TxnGroups[0].Txns[1].TransactionTrace)
+
+	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
+		ApprovalProgramTrace: &[]model.SimulationOpcodeTraceUnit{
+			{Pc: 1},
+			{Pc: 4},
+			{Pc: 6},
+			{Pc: 9},
+			{
+				Pc: 10,
+				ScratchChanges: &[]model.ScratchChange{
+					{
+						Slot: 1,
+						NewValue: model.AvmValue{
+							Type: 2,
+							Uint: toPtr[uint64](1),
+						},
+					},
+				},
+			},
+			{Pc: 12},
+			{Pc: 14},
+			{
+				Pc: 15,
+				ScratchChanges: &[]model.ScratchChange{
+					{
+						Slot: 1,
+						NewValue: model.AvmValue{
+							Type: 2,
+							Uint: toPtr[uint64](1),
+						},
+					},
+				},
+			},
+			{Pc: 16},
+		},
+	}
+	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
+}

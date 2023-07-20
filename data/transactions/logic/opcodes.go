@@ -391,11 +391,6 @@ func defaultDebugExplain(argCount, retCount int) debugStackExplain {
 	}
 }
 
-// NextStackChange is a helper function that queries EvalContext for the coming stack change of the current PC.
-func (cx *EvalContext) NextStackChange() (deletions, additions int) {
-	return (opsByOpcode[cx.version][cx.program[cx.pc]].Explain)(cx)
-}
-
 func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
 	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
 	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
