@@ -588,9 +588,11 @@ func TestGetStatusAfterBlock(t *testing.T) {
 	defer releasefunc()
 	err := handler.WaitForBlock(c, 0)
 	require.NoError(t, err)
-	// Expect 400 - the test ledger will always cause "errRequestedRoundInUnsupportedRound",
-	// as it has not participated in agreement to build blockheaders
+
 	require.Equal(t, 400, rec.Code)
+	msg, err := io.ReadAll(rec.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(msg), "requested round would reach only after the protocol upgrade which isn't supported")
 }
 
 func TestGetStatusAfterBlockShutdown(t *testing.T) {
@@ -607,7 +609,6 @@ func TestGetStatusAfterBlockShutdown(t *testing.T) {
 	err := handler.WaitForBlock(c, 0)
 	require.NoError(t, err)
 
-	// Expect a timeout
 	require.Equal(t, 500, rec.Code)
 	msg, err := io.ReadAll(rec.Body)
 	require.NoError(t, err)
@@ -627,7 +628,6 @@ func TestGetStatusAfterBlockDuringCatchup(t *testing.T) {
 	err := handler.WaitForBlock(c, 0)
 	require.NoError(t, err)
 
-	// Expect a timeout
 	require.Equal(t, 503, rec.Code)
 	msg, err := io.ReadAll(rec.Body)
 	require.NoError(t, err)
@@ -649,7 +649,6 @@ func TestGetStatusAfterBlockTimeout(t *testing.T) {
 	err := handler.WaitForBlock(c, 0)
 	require.NoError(t, err)
 
-	// Expect a timeout
 	require.Equal(t, 404, rec.Code)
 	msg, err := io.ReadAll(rec.Body)
 	require.NoError(t, err)
