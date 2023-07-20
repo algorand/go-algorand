@@ -291,8 +291,8 @@ type EvalParams struct {
 	// optional tracer
 	Tracer EvalTracer
 
-	// minAvmVersion is the minimum allowed AVM version of this program.
-	// The program must reject if its version is less than this version.
+	// minAvmVersion is the minimum allowed AVM version of a program to be
+	// evaluated in TxnGroup.
 	minAvmVersion uint64
 
 	// Amount "overpaid" by the transactions of the group.  Often 0.  When
@@ -366,9 +366,11 @@ func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusP
 	}
 
 	var pooledLogicBudget *int
-	if proto.EnableLogicSigCostPooling {
-		pooledLogicBudget = new(int)
-		*pooledLogicBudget = len(txgroup) * int(proto.LogicSigMaxCost)
+	if lsigs > 0 { // don't allocate if no lsigs
+		if proto.EnableLogicSigCostPooling {
+			pooledLogicBudget = new(int)
+			*pooledLogicBudget = len(txgroup) * int(proto.LogicSigMaxCost)
+		}
 	}
 
 	withADs := transactions.WrapSignedTxnsWithAD(txgroup)
@@ -442,7 +444,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 }
 
 func (cx *EvalContext) minAvmVersionCheck() error {
-	if cx.version < cx.minAvmVersion {
+	if cx.version < cx.EvalParams.minAvmVersion {
 		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d",
 			cx.minAvmVersion, cx.version)
 	}
@@ -559,10 +561,10 @@ func (ep *EvalParams) log() logging.Logger {
 // package. For example, after a acfg transaction is processed, the AD created
 // by the acfg is added to the EvalParams this way.
 func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
-	if ep.pastScratch == nil {
-		// This is a simplified ep. It won't be used for app evaluation, and
-		// shares the TxnGroup memory with the caller.  Don't touch anything!
-		return
+	if ep.runMode == ModeSig {
+		// We should not be touching a signature mode EvalParams as it shares
+		// memory with its caller.  LogicSigs are supposed to be stateless!
+		panic("RecordAD called in signature mode")
 	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
@@ -1118,11 +1120,11 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	// Avoid returning for any reason until after cx.debugState is setup. That
 	// require cx to be minimally setup, too.
 
-	version, pc, perr := versionCheck(program, cx.Proto)
-	// defer perr check until after cx and debugState is setup
+	version, vlen, verr := versionCheck(program, cx.Proto)
+	// defer verr check until after cx and debugState is setup
 
 	cx.version = version
-	cx.pc = pc
+	cx.pc = vlen
 	// 16 is chosen to avoid growth for small programs, and so that repeated
 	// doublings lead to a number just a bit above 1000, the max stack height.
 	cx.Stack = make([]stackValue, 0, 16)
@@ -1158,8 +1160,8 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	if cx.txn.Lsig.Args != nil && len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
 		return false, errTooManyArgs
 	}
-	if perr != nil {
-		return false, perr
+	if verr != nil {
+		return false, verr
 	}
 
 	if err = cx.minAvmVersionCheck(); err != nil {
@@ -1273,8 +1275,8 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	return nil
 }
 
-func versionCheck(program []byte, proto *config.ConsensusParams) (version uint64, pc int, err error) {
-	version, pc, err = transactions.ProgramVersion(program)
+func versionCheck(program []byte, proto *config.ConsensusParams) (version uint64, vlen int, err error) {
+	version, vlen, err = transactions.ProgramVersion(program)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1285,7 +1287,7 @@ func versionCheck(program []byte, proto *config.ConsensusParams) (version uint64
 		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, proto.LogicSigVersion)
 	}
 
-	return version, pc, nil
+	return version, vlen, nil
 }
 
 func opCompat(expected, got avmType) bool {
@@ -1935,11 +1937,11 @@ func opShiftRight(cx *EvalContext) error {
 
 func opSqrt(cx *EvalContext) error {
 	/*
-			        It would not be safe to use math.Sqrt, because we would have to
-				convert our u64 to an f64, but f64 cannot represent all u64s exactly.
+		It would not be safe to use math.Sqrt, because we would have to convert our
+		u64 to an f64, but f64 cannot represent all u64s exactly.
 
-				This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
-		    http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
+		This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
+		http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
 	*/
 
 	last := len(cx.Stack) - 1

@@ -150,8 +150,7 @@ func defaultSigParamsWithVersion(version uint64, txns ...transactions.SignedTxn)
 func optSigParams(opt protoOpt, txns ...transactions.SignedTxn) *EvalParams {
 	if len(txns) == 0 {
 		// We need a transaction to exist, because we'll be stuffing the
-		// logicsig into it in order to test them, and we need the next clause
-		// to have a chance to convince NewSigEval to return non-nil.
+		// logicsig into it in order to test them.
 		txns = make([]transactions.SignedTxn, 1)
 	}
 	// Make it non-Blank so NewSigEval does not short-circuit (but try to avoid
@@ -2220,11 +2219,17 @@ func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTx
 			txgroup = append(txgroup, makeSampleTxn())
 		}
 	}
-	ep := NewSigEvalParams(txgroup, proto, &NoHeaderLedger{})
+	// Place the logicsig code first, so NewSigEvalParams calcs budget
 	for i, program := range programs {
 		if program != "" {
 			code := testProg(t, program, proto.LogicSigVersion).Program
-			testLogicFull(t, code, i, ep)
+			txgroup[i].Lsig.Logic = code
+		}
+	}
+	ep := NewSigEvalParams(txgroup, proto, &NoHeaderLedger{})
+	for i, program := range programs {
+		if program != "" {
+			testLogicFull(t, txgroup[i].Lsig.Logic, i, ep)
 		}
 	}
 	return ep
@@ -4303,29 +4308,21 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 			calc := computeMinAvmVersion(sep.TxnGroup)
 			require.Equal(t, calc, cse.validFromVersion)
 
-			if aep != nil {
-				// A nil aep happens when no apps present. No need to check
-				// minversion if NewAppEvalParams won't even give an ep!
-				calc = computeMinAvmVersion(aep.TxnGroup)
-				require.Equal(t, calc, cse.validFromVersion)
-			}
+			calc = computeMinAvmVersion(aep.TxnGroup)
+			require.Equal(t, calc, cse.validFromVersion)
 
 			// Should fail for all versions < validFromVersion
 			expected := fmt.Sprintf("program version must be >= %d", cse.validFromVersion)
 			for v := uint64(0); v < cse.validFromVersion; v++ {
 				ops := testProg(t, source, v)
-				if aep != nil {
-					testAppBytes(t, ops.Program, aep, expected, expected)
-				}
+				testAppBytes(t, ops.Program, aep, expected, expected)
 				testLogicBytes(t, ops.Program, sep, expected, expected)
 			}
 
 			// Should succeed for all versions >= validFromVersion
 			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
 				ops := testProg(t, source, v)
-				if aep != nil {
-					testAppBytes(t, ops.Program, aep)
-				}
+				testAppBytes(t, ops.Program, aep)
 				testLogicBytes(t, ops.Program, sep)
 			}
 		})
