@@ -366,7 +366,8 @@ func TestConsensusVersion(t *testing.T) {
 	require.NotNil(t, &l)
 
 	blk := genesisInitState.Block
-	flushOffset := uint64(100) // 38 is normally needed to flush txTail, 100 for time triggered flushes
+	flushOffset := uint64(129) // pendingDeltasFlushThreshold = 128 will flush every 128 rounds (RewardsPool acct)
+	// txTailRetainSize = MaxTxnLife + DeeperBlockHeaderHistory = 1000 + 1
 
 	// add 5 blocks.
 	for rnd := basics.Round(1); rnd < basics.Round(consensusParams.MaxTxnLife+flushOffset); rnd++ {
