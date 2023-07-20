@@ -5620,7 +5620,7 @@
                 }
               }
             },
-            "description": "Bad Request -- number must be non-negative integer "
+            "description": "Bad Request -- number must be non-negative integer"
           },
           "401": {
             "content": {
@@ -5631,6 +5631,16 @@
               }
             },
             "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The desired round to wait until was not reached, this typically happens after a 1 minute timeout"
           },
           "500": {
             "content": {
