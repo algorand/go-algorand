@@ -51,8 +51,7 @@ func GetPrivKey(cfg config.Local, dataDir string) (crypto.PrivKey, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("failed to stat %s %w", defaultPrivKeyPath, err)
 	}
-	defaultPrivKeyExists := !os.IsNotExist(err)
-	if defaultPrivKeyExists {
+	if !os.IsNotExist(err) {
 		return loadPrivateKeyFromFile(defaultPrivKeyPath)
 	}
 	// generate a new key
