@@ -206,15 +206,14 @@ func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more boo
 		// writerResponse is drained, ensuring any problems from asyncWriter are
 		// noted (and that the writing is done).
 		close(writerRequest)
-	drain:
+
+		// drain the writerResponse queue
 		for {
-			select {
-			case writerError, open := <-writerResponse:
-				if open {
-					err = writerError
-				} else {
-					break drain
-				}
+			writerError, open := <-writerResponse
+			if open {
+				err = writerError
+			} else {
+				break
 			}
 		}
 		if !more {
