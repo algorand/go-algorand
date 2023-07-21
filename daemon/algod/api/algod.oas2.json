@@ -1147,12 +1147,6 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
-          "404": {
-            "description": "The desired round to wait until was not reached, this typically happens after a 1 minute timeout",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
           "500": {
             "description": "Internal Error",
             "schema": {

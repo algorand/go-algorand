@@ -40,7 +40,6 @@ var (
 	errInvalidHashType                         = "invalid hash type"
 	errTransactionNotFound                     = "could not find the transaction in the transaction pool or in the last 1000 confirmed rounds"
 	errServiceShuttingDown                     = "operation aborted as server is shutting down"
-	errWaitForBlockTimeout                     = "block still unavailable after timeout"
 	errRequestedRoundInUnsupportedRound        = "requested round would reach only after the protocol upgrade which isn't supported"
 	errFailedToParseCatchpoint                 = "failed to parse catchpoint"
 	errFailedToAbortCatchup                    = "failed to abort catchup : %v"
