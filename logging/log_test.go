@@ -120,6 +120,9 @@ func TestSetJSONFormatter(t *testing.T) {
 
 }
 
+// This test ensures that handler functions registered to Fatal Logging trigger
+// when Fatal logs are emitted. We attach graceful service shutdown to Fatal logging,
+// and we want to notice if changes to our logging dependencies change how these handlers are called
 func TestFatalExitHandler(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
