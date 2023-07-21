@@ -202,7 +202,7 @@ func (ct *catchpointTracker) GetLastCatchpointLabel() string {
 }
 
 func (ct *catchpointTracker) getSPVerificationData() (encodedData []byte, spVerificationHash crypto.Digest, err error) {
-	err = ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+	err = ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 		rawData, dbErr := tx.MakeSpVerificationCtxReader().GetAllSPContexts(ctx)
 		if dbErr != nil {
 			return dbErr
