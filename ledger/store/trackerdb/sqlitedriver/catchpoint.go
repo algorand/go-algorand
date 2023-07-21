@@ -52,6 +52,10 @@ func NewCatchpointSQLReaderWriter(e db.Executable) *catchpointReaderWriter {
 	}
 }
 
+func makeCatchpointReader(e db.Queryable) trackerdb.CatchpointReader {
+	return &catchpointReader{q: e}
+}
+
 func (cr *catchpointReader) GetCatchpoint(ctx context.Context, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
 	err = cr.q.QueryRowContext(ctx, "SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
 	return
