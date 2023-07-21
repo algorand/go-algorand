@@ -40,6 +40,7 @@ type trackerSQLStore struct {
 // Open opens the sqlite database store
 func Open(dbFilename string, dbMem bool, log logging.Logger) (store trackerdb.Store, err error) {
 	pair, err := db.OpenPair(dbFilename, dbMem)
+	log.Warn("AXELAXEL, dbFilename: ", dbFilename)
 	if err != nil {
 		return
 	}

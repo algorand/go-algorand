@@ -304,7 +304,10 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging
 			fallthrough
 		// anything else will initialize a sqlite engine.
 		default:
-			file := dbPathPrefix + ".tracker.sqlite"
+			file := config.GetFileResource("trackerdb") + "tracker.sqlite"
+			file2 := dbPathPrefix + ".tracker.sqlite"
+			log.Warn("AXELAXEL file: ", file)
+			log.Warn("AXELAXEL file2: ", file2)
 			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
 		}
 

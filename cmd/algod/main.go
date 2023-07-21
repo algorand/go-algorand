@@ -58,8 +58,29 @@ var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
 var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
 
+// Define a custom flag type that implements flag.Value interface
+type stringMapFlag map[string]string
+
+func (m *stringMapFlag) String() string {
+	return fmt.Sprintf("%v", *m)
+}
+
+// Set is called for each flag value passed on the command line.
+func (m *stringMapFlag) Set(value string) error {
+	parts := strings.Split(value, "=")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid format: %s. Use key=value", value)
+	}
+	(*m)[parts[0]] = parts[1]
+	return nil
+}
+
+var dataDirsMap = stringMapFlag{}
+
 func main() {
+	flag.Var(&dataDirsMap, "data-dirs", "")
 	flag.Parse()
+	fmt.Println("dataDirsMap:", dataDirsMap)
 	exitCode := run()
 	os.Exit(exitCode)
 }
@@ -102,23 +123,25 @@ func loadGenesis(dataDir string) (bookkeeping.Genesis, string, error) {
 }
 
 func run() int {
+	// if all that is needed is to print the genesis ID, we can ignore potential load errors and just try to access genesis.ID
 	if *genesisPrint {
 		return printGenesisIDOnly()
 	}
-	cfg, err := config.InitializeDataDirs(dataDirectory, genesisFile)
-	// if all that is needed is to print the genesis ID, we can ignore potential load errors and just try to access genesis.ID
+	cfg, err := config.InitializeDataDirs(dataDirectory, dataDirsMap, genesisFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing directories: %v\n", err)
 		return 1
 	}
 
-	absolutePath := config.GetFileResource("absolutePath")
+	absolutePath := config.GetFileResource("dataDir")
 
 	genesis, genesisText, err := loadGenesis(absolutePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading genesis: %v\n", err)
 		return 1
 	}
+
+	config.SetGenesisDir(genesis.ID())
 
 	// Update the Version with the Data Directory
 	// TODO: Use the path provider instead of loading to version
@@ -176,7 +199,7 @@ func run() int {
 
 	// Delete legacy indexer.sqlite files if they happen to exist
 	checkAndDeleteIndexerFile := func(fileName string) {
-		indexerDBFilePath := filepath.Join(absolutePath, genesis.ID(), fileName)
+		indexerDBFilePath := filepath.Join(config.GetFileResource("genesisDir"), fileName)
 
 		if util.FileExists(indexerDBFilePath) {
 			if idxFileRemoveErr := os.Remove(indexerDBFilePath); idxFileRemoveErr != nil {

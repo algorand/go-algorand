@@ -179,7 +179,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
-	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
 	node.config = cfg
@@ -194,8 +193,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.net = p2pNode
 
 	// load stored data
-	genesisDir := filepath.Join(rootDir, genesis.ID())
+	genesisDir := config.GetFileResource("genesisDir")
 	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
+	log.Warn("AXELAXEL ledgerPathnamePrefix: ", ledgerPathnamePrefix)
 
 	// create initial ledger, if it doesn't exist
 	err = os.Mkdir(genesisDir, 0700)
