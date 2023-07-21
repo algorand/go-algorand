@@ -48,8 +48,11 @@ func MultiaddrsFromResolver(domain string, controller *MultiaddrDNSResolveContro
 		curr := toResolve[0]
 		maddrs, resolveErr := resolver.Resolve(context.Background(), curr)
 		if resolveErr != nil {
-			err = resolveErr
 			resolver = controller.NextResolver()
+			// If we errored, and have exhausted all resolvers, just return
+			if resolver == nil {
+				return resolved, resolveErr
+			}
 			continue
 		}
 		for _, maddr := range maddrs {
@@ -61,5 +64,5 @@ func MultiaddrsFromResolver(domain string, controller *MultiaddrDNSResolveContro
 		}
 		toResolve = toResolve[1:]
 	}
-	return resolved, err
+	return resolved, nil
 }
