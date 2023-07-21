@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -74,6 +75,11 @@ func (m *catchpointCatchupAccessorMock) GetCatchupBlockRound(ctx context.Context
 
 func (m *catchpointCatchupAccessorMock) Ledger() (l ledger.CatchupAccessorClientLedger) {
 	return m.l
+}
+
+// GetVerifyData returns the balances hash, spver hash and totals used by VerifyCatchpoint
+func (m *catchpointCatchupAccessorMock) GetVerifyData(ctx context.Context) (balancesHash crypto.Digest, spverHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
+	return crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, nil
 }
 
 // TestCatchpointServicePeerRank ensures CatchpointService does not crash when a block fetched

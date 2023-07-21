@@ -3518,6 +3518,10 @@
         "stack-change": {
           "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
           "type": "boolean"
+        },
+        "scratch-change": {
+          "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
+          "type": "boolean"
         }
       }
     },
@@ -3880,6 +3884,23 @@
         }
       }
     },
+    "ScratchChange": {
+      "description": "A write operation into a scratch slot.",
+      "type": "object",
+      "required": [
+        "slot",
+        "new-value"
+      ],
+      "properties": {
+        "slot": {
+          "description": "The scratch slot written.",
+          "type": "integer"
+        },
+        "new-value": {
+          "$ref": "#/definitions/AvmValue"
+        }
+      }
+    },
     "SimulationOpcodeTraceUnit": {
       "description": "The set of trace information and effect from evaluating a single opcode.",
       "type": "object",
@@ -3890,6 +3911,13 @@
         "pc": {
           "description": "The program counter of the current opcode being evaluated.",
           "type": "integer"
+        },
+        "scratch-changes": {
+          "description": "The writes into scratch slots.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ScratchChange"
+          }
         },
         "spawned-inners": {
           "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
