@@ -38,8 +38,6 @@ func initDBStore(path string) (ds.Batching, error) {
 }
 
 // NewPeerStore creates a new peerstore backed by a datastore.
-// TODO: consider using PebbleDB in the future.
-// it is currently still in experimental state. https://github.com/ipfs/go-ds-pebble
 func NewPeerStore(ctx context.Context, path string, addrInfo []*peer.AddrInfo) (*PeerStore, error) {
 	datastore, err := initDBStore(path)
 	if err != nil {
@@ -53,7 +51,7 @@ func NewPeerStore(ctx context.Context, path string, addrInfo []*peer.AddrInfo) (
 	// initialize peerstore with addresses
 	for i := 0; i < len(addrInfo); i++ {
 		info := addrInfo[i]
-		ps.AddAddrs(info.ID, info.Addrs, libp2p.PermanentAddrTTL)
+		ps.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 	}
 	pstore := &PeerStore{ps}
 	return pstore, nil
