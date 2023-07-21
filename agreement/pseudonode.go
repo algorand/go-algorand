@@ -304,17 +304,17 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 	votes := make([]unauthenticatedVote, 0, len(accounts))
 	proposals := make([]proposal, 0, len(accounts))
 	for _, acc := range accounts {
-		payload, proposal, err := proposalForBlock(acc.Account, acc.VRF, ve, period, n.ledger)
-		if err != nil {
-			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", acc.Account, err)
+		payload, proposal, pErr := proposalForBlock(acc.Account, acc.VRF, ve, period, n.ledger)
+		if pErr != nil {
+			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", acc.Account, pErr)
 			continue
 		}
 
 		// attempt to make the vote
 		rv := rawVote{Sender: acc.Account, Round: round, Period: period, Step: propose, Proposal: proposal}
-		uv, err := makeVote(rv, acc.VotingSigner(), acc.VRF, n.ledger)
-		if err != nil {
-			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", err)
+		uv, vErr := makeVote(rv, acc.VotingSigner(), acc.VRF, n.ledger)
+		if vErr != nil {
+			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", vErr)
 			continue
 		}
 

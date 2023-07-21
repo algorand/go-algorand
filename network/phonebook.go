@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"golang.org/x/exp/slices"
 )
 
 // when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
@@ -30,6 +31,8 @@ const getAllAddresses = math.MaxInt32
 
 // PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
 // currently, we have two roles : relay role and archiver role, which are mutually exclusive.
+//
+//msgp:ignore PhoneBookEntryRoles
 type PhoneBookEntryRoles int
 
 // PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
@@ -285,8 +288,7 @@ func shuffleStrings(set []string) {
 func shuffleSelect(set []string, n int) []string {
 	if n >= len(set) || n == getAllAddresses {
 		// return shuffled copy of everything
-		out := make([]string, len(set))
-		copy(out, set)
+		out := slices.Clone(set)
 		shuffleStrings(out)
 		return out
 	}

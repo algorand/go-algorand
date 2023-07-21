@@ -50,7 +50,7 @@ const (
 // a longer output is introduced.
 const MaxHashDigestSize = SumhashDigestSize
 
-//size of each hash
+// size of each hash
 const (
 	Sha512_256Size    = sha512.Size256
 	SumhashDigestSize = sumhash.Sumhash512DigestSize
@@ -58,6 +58,7 @@ const (
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
+//
 //msgp:postunmarshalcheck HashFactory Validate
 type HashFactory struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

@@ -26,10 +26,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+const netPrioChallengeSize = 32
+
 type netPrioResponse struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Nonce string
+	Nonce string `codec:"Nonce,allocbound=netPrioChallengeSize"`
 }
 
 type netPrioResponseSigned struct {
@@ -47,7 +49,7 @@ func (npr netPrioResponse) ToBeHashed() (protocol.HashID, []byte) {
 
 // NewPrioChallenge implements the network.NetPrioScheme interface
 func (node *AlgorandFullNode) NewPrioChallenge() string {
-	var rand [32]byte
+	var rand [netPrioChallengeSize]byte
 	crypto.RandBytes(rand[:])
 	return base64.StdEncoding.EncodeToString(rand[:])
 }

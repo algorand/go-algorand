@@ -131,9 +131,9 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 				if err != nil {
 					warnMsg := fmt.Sprintf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
 					// check protocol version
-					cv, err := d.ledger.ConsensusVersion(d.ledger.NextRound())
-					if err == nil {
-						if _, ok := config.Consensus[cv]; !ok {
+					cv, cvErr := d.ledger.ConsensusVersion(d.ledger.NextRound())
+					if cvErr == nil {
+						if _, found := config.Consensus[cv]; !found {
 							warnMsg = fmt.Sprintf("received proposal message was ignored. The node binary doesn't support the next network consensus (%v) and would no longer be able to process agreement messages", cv)
 						}
 					}
@@ -207,7 +207,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		switch e.t() {
 		case payloadVerified:
 			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
-		case payloadPresent:
+		case payloadPresent, votePresent:
 			e = e.(messageEvent).AttachReceivedAt(s.Clock.Since())
 		}
 	}()

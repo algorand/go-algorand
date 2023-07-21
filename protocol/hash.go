@@ -48,6 +48,9 @@ const (
 	MerkleArrayNode                  HashID = "MA"
 	MerkleVectorCommitmentBottomLeaf HashID = "MB"
 	Message                          HashID = "MX"
+	NetIdentityChallenge             HashID = "NIC"
+	NetIdentityChallengeResponse     HashID = "NIR"
+	NetIdentityVerificationMessage   HashID = "NIV"
 	NetPrioResponse                  HashID = "NPR"
 	OneTimeSigKey1                   HashID = "OT1"
 	OneTimeSigKey2                   HashID = "OT2"
@@ -65,6 +68,7 @@ const (
 	StateProofMessage HashID = "spm"
 	StateProofPart    HashID = "spp"
 	StateProofSig     HashID = "sps"
+	StateProofVerCtx  HashID = "spv"
 
 	TestHashable  HashID = "TE"
 	TxGroup       HashID = "TG"

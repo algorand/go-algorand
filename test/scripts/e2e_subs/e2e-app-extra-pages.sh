@@ -52,7 +52,7 @@ generate_teal "$APPR_PROG" 4 3072 1 "int 0\nbalance\npop\n"
 generate_teal "$BIG_APPR_PROG" 4 4098 1 "int 0\nbalance\npop\n"
 
 # App create fails. Approval program too long
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --global-byteslices 1 2>&1 || true)
 EXPERROR="approval program too long. max len 2048 bytes"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-extra-pages-test FAIL the application creation should fail %Y%m%d_%H%M%S'
@@ -60,7 +60,7 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
 fi
 
 # App create fails. Clear state program too long
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${SMALL_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${SMALL_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --global-byteslices 1 2>&1 || true)
 EXPERROR="clear state program too long. max len 2048 bytes"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-extra-pages-test FAIL the application creation should fail %Y%m%d_%H%M%S'
@@ -68,7 +68,7 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
 fi
 
 # App create with extra pages, v3 teal
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --extra-pages 3 --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_FILE}" --clear-prog "${BIG_TEAL_FILE}" --extra-pages 3 --global-byteslices 1 2>&1 || true)
 EXPERROR="pc=705 static cost budget of 700 exceeded"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-extra-pages-test FAIL the application creation should fail %Y%m%d_%H%M%S'
@@ -76,7 +76,7 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
 fi
 
 # App create with extra pages, v4 teal
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_V4_FILE}" --clear-prog "${BIG_TEAL_V4_FILE}" --extra-pages 3 --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${BIG_TEAL_V4_FILE}" --clear-prog "${BIG_TEAL_V4_FILE}" --extra-pages 3 --global-byteslices 1 2>&1 || true)
 EXPERROR="pc=704 dynamic cost budget exceeded, executing intc_0: local program cost was 700"
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-extra-pages-test FAIL the application creation should fail %Y%m%d_%H%M%S'
@@ -84,7 +84,7 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
 fi
 
 # App create with extra pages, succeeded
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${SMALL_TEAL_FILE}" --clear-prog "${SMALL_TEAL_FILE}" --extra-pages 1 --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${SMALL_TEAL_FILE}" --clear-prog "${SMALL_TEAL_FILE}" --extra-pages 1 --global-byteslices 1 2>&1 || true)
 EXP="Created app"
 APPID=$(echo $RES | awk '{print $NF}')
 if [[ $RES != *"${EXP}"* ]]; then

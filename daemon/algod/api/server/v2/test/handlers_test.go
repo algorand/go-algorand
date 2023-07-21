@@ -23,10 +23,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/daemon/algod/api/server"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"golang.org/x/exp/slices"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -50,6 +58,9 @@ import (
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
+	"github.com/algorand/go-algorand/data/txntest"
+	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -58,14 +69,14 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-const stateProofIntervalForHandlerTests = uint64(256)
+const stateProofInterval = uint64(256)
 
-func setupTestForMethodGet(t *testing.T, consensusUpgrade bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+func setupMockNodeForMethodGet(t *testing.T, status node.StatusReport, devmode bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, consensusUpgrade)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, devmode)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -79,17 +90,28 @@ func setupTestForMethodGet(t *testing.T, consensusUpgrade bool) (v2.Handlers, ec
 	return handler, c, rec, rootkeys, stxns, releasefunc
 }
 
+func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+	return setupMockNodeForMethodGet(t, status, false)
+}
+
+func numOrNil(n uint64) *uint64 {
+	if n == 0 {
+		return nil
+	}
+	return &n
+}
+
 func TestSimpleMockBuilding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, _, _, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, _, _, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	require.Equal(t, t.Name(), handler.Node.GenesisID())
 }
 
 func accountInformationTest(t *testing.T, address string, expectedCode int) {
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.AccountInformation(c, address, model.AccountInformationParams{})
 	require.NoError(t, err)
@@ -112,7 +134,7 @@ func TestAccountInformation(t *testing.T) {
 }
 
 func getBlockTest(t *testing.T, blockNum uint64, format string, expectedCode int) {
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.GetBlock(c, blockNum, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format)})
 	require.NoError(t, err)
@@ -130,30 +152,42 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "bad format", 400)
 }
 
+func testGetLedgerStateDelta(t *testing.T, round uint64, format string, expectedCode int) {
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+	insertRounds(require.New(t), handler, 3)
+	err := handler.GetLedgerStateDelta(c, round, model.GetLedgerStateDeltaParams{Format: (*model.GetLedgerStateDeltaParamsFormat)(&format)})
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
+}
+
 func TestGetLedgerStateDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
-	a := require.New(t)
+	t.Run("json-200", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 1, "json", 200)
+	})
+	t.Run("msgpack-200", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 2, "msgpack", 200)
+	})
+	t.Run("msgp-200", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 3, "msgp", 200)
+	})
+	t.Run("json-404", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 0, "json", 404)
+	})
+	t.Run("msgpack-404", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 9999, "msgpack", 404)
+	})
+	t.Run("format-400", func(t *testing.T) {
+		t.Parallel()
+		testGetLedgerStateDelta(t, 1, "bad format", 400)
+	})
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
-	defer releasefunc()
-	insertRounds(a, handler, 3)
-
-	err := handler.GetLedgerStateDelta(c, 2)
-	require.NoError(t, err)
-	require.Equal(t, 200, rec.Code)
-
-	actualResponse := model.LedgerStateDelta{}
-	expectedResponse := poolDeltaResponseGolden
-	(*expectedResponse.Accts.Accounts)[0].AccountData.Round = 2
-	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
-	require.NoError(t, err)
-	require.Equal(t, poolDeltaResponseGolden.Accts, actualResponse.Accts)
-	require.Equal(t, poolDeltaResponseGolden.KvMods, actualResponse.KvMods)
-	require.Equal(t, poolDeltaResponseGolden.ModifiedAssets, actualResponse.ModifiedAssets)
-	require.Equal(t, poolDeltaResponseGolden.ModifiedApps, actualResponse.ModifiedApps)
-	require.Equal(t, poolDeltaResponseGolden.TxLeases, actualResponse.TxLeases)
-	require.Equal(t, poolDeltaResponseGolden.Totals, actualResponse.Totals)
 }
 
 func TestSyncRound(t *testing.T) {
@@ -164,7 +198,7 @@ func TestSyncRound(t *testing.T) {
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -219,13 +253,12 @@ func TestSyncRound(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	mockCall.Unset()
-	c, rec = newReq(t)
 
 	mock.AssertExpectationsForObjects(t, mockNode)
 }
 
 func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, transactions.SignedTxn, func()) {
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 
 	l := handler.Node.LedgerForAPI()
 
@@ -309,7 +342,7 @@ func TestGetBlockHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	err := handler.GetBlockHash(c, 0)
@@ -327,7 +360,7 @@ func TestGetBlockGetBlockHash(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	insertRounds(a, handler, 2)
 
@@ -399,7 +432,7 @@ func TestGetSupply(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.GetSupply(c)
 	require.NoError(t, err)
@@ -409,7 +442,7 @@ func TestGetStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.GetStatus(c)
 	require.NoError(t, err)
@@ -440,17 +473,72 @@ func TestGetStatus(t *testing.T) {
 	require.Equal(t, expectedResult, actualResult)
 }
 
+func TestGetStatusConsensusUpgradeUnderflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Setup status report with unanimous YES votes.
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	currentRound := basics.Round(1000000)
+	stat := node.StatusReport{
+		LastRound:              currentRound - 1,
+		LastVersion:            protocol.ConsensusCurrentVersion,
+		NextVersion:            protocol.ConsensusCurrentVersion,
+		UpgradePropose:         "upgradePropose",
+		NextProtocolVoteBefore: currentRound,
+		NextProtocolApprovals:  proto.UpgradeVoteRounds,
+	}
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, stat)
+	defer releasefunc()
+	err := handler.GetStatus(c)
+	require.NoError(t, err)
+	actualResult := model.NodeStatusResponse{}
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResult)
+	require.NoError(t, err)
+
+	// Make sure the votes are all yes, and 0 no.
+	require.Equal(t, uint64(0), *actualResult.UpgradeNoVotes)
+	require.Equal(t, proto.UpgradeVoteRounds, *actualResult.UpgradeYesVotes)
+	require.Equal(t, proto.UpgradeVoteRounds, *actualResult.UpgradeVotes)
+	require.Equal(t, proto.UpgradeThreshold, *actualResult.UpgradeVotesRequired)
+}
+
 func TestGetStatusConsensusUpgrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, true)
+	cannedStatusReportConsensusUpgradeGolden := node.StatusReport{
+		LastRound:                          basics.Round(97000),
+		LastVersion:                        protocol.ConsensusCurrentVersion,
+		NextVersion:                        protocol.ConsensusCurrentVersion,
+		NextVersionRound:                   200000,
+		NextVersionSupported:               true,
+		StoppedAtUnsupportedRound:          true,
+		Catchpoint:                         "",
+		CatchpointCatchupAcquiredBlocks:    0,
+		CatchpointCatchupProcessedAccounts: 0,
+		CatchpointCatchupVerifiedAccounts:  0,
+		CatchpointCatchupTotalAccounts:     0,
+		CatchpointCatchupTotalKVs:          0,
+		CatchpointCatchupProcessedKVs:      0,
+		CatchpointCatchupVerifiedKVs:       0,
+		CatchpointCatchupTotalBlocks:       0,
+		LastCatchpoint:                     "",
+		UpgradePropose:                     "upgradePropose",
+		UpgradeApprove:                     false,
+		UpgradeDelay:                       0,
+		NextProtocolVoteBefore:             100000,
+		NextProtocolApprovals:              5000,
+	}
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportConsensusUpgradeGolden)
 	defer releasefunc()
 	err := handler.GetStatus(c)
 	require.NoError(t, err)
 	stat := cannedStatusReportConsensusUpgradeGolden
 	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
-	votesToGo := uint64(stat.NextProtocolVoteBefore) - uint64(stat.LastRound)
+	votesToGo := uint64(stat.NextProtocolVoteBefore) - uint64(stat.LastRound) - 1
 	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
 	votes := uint64(consensus.UpgradeVoteRounds) - votesToGo
 	votesNo := votes - stat.NextProtocolApprovals
@@ -493,7 +581,7 @@ func TestGetStatusAfterBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.WaitForBlock(c, 0)
 	require.NoError(t, err)
@@ -506,7 +594,7 @@ func TestGetTransactionParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.TransactionParams(c)
 	require.NoError(t, err)
@@ -514,7 +602,7 @@ func TestGetTransactionParams(t *testing.T) {
 }
 
 func pendingTransactionInformationTest(t *testing.T, txidToUse int, format string, expectedCode int) {
-	handler, c, rec, _, stxns, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, stxns, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	txid := "bad txid"
 	if txidToUse >= 0 {
@@ -537,7 +625,7 @@ func TestPendingTransactionInformation(t *testing.T) {
 }
 
 func getPendingTransactionsTest(t *testing.T, format string, max uint64, expectedCode int) {
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	params := model.GetPendingTransactionsParams{Format: (*model.GetPendingTransactionsParamsFormat)(&format), Max: &max}
 	err := handler.GetPendingTransactions(c, params)
@@ -616,7 +704,7 @@ func TestPendingTransactions(t *testing.T) {
 }
 
 func pendingTransactionsByAddressTest(t *testing.T, rootkeyToUse int, format string, expectedCode int) {
-	handler, c, rec, rootkeys, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, c, rec, rootkeys, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	address := "bad address"
 	if rootkeyToUse >= 0 {
@@ -638,14 +726,13 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
-func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
+func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transactions.SignedTxn) []byte) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
 	numAccounts := 5
 	numTransactions := 5
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
-	mockNode.config.EnableExperimentalAPI = enableTransactionSimulator
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler = v2.Handlers{
 
 		Node:     mockNode,
@@ -656,7 +743,7 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTran
 	var body io.Reader
 	if txnToUse >= 0 {
 		stxn := stxns[txnToUse]
-		bodyBytes := protocol.Encode(&stxn)
+		bodyBytes := txnPrep(stxn)
 		body = bytes.NewReader(bodyBytes)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", body)
@@ -666,7 +753,10 @@ func prepareTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTran
 }
 
 func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, false)
+	txnPrep := func(stxn transactions.SignedTxn) []byte {
+		return protocol.Encode(&stxn)
+	}
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
 	defer releasefunc()
 	err := handler.RawTransaction(c)
 	require.NoError(t, err)
@@ -681,21 +771,425 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200)
 }
 
-func simulateTransactionTest(t *testing.T, txnToUse, expectedCode int, enableTransactionSimulator bool) {
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, expectedCode, enableTransactionSimulator)
+func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
+	txnPrep := func(stxn transactions.SignedTxn) []byte {
+		request := v2.PreEncodedSimulateRequest{
+			TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+				{
+					Txns: []transactions.SignedTxn{stxn},
+				},
+			},
+		}
+		return protocol.EncodeReflect(&request)
+	}
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
 	defer releasefunc()
-	err := handler.SimulateTransaction(c)
+	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: (*model.SimulateTransactionParamsFormat)(&format)})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+}
+
+func TestPostSimulateTransaction(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testCases := []struct {
+		txnIndex       int
+		format         string
+		expectedStatus int
+	}{
+		{
+			txnIndex:       -1,
+			format:         "json",
+			expectedStatus: 400,
+		},
+		{
+			txnIndex:       0,
+			format:         "json",
+			expectedStatus: 200,
+		},
+		{
+			txnIndex:       0,
+			format:         "msgpack",
+			expectedStatus: 200,
+		},
+		{
+			txnIndex:       0,
+			format:         "bad format",
+			expectedStatus: 400,
+		},
+	}
+
+	for i, testCase := range testCases {
+		testCase := testCase
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			t.Parallel()
+			simulateTransactionTest(t, testCase.txnIndex, testCase.format, testCase.expectedStatus)
+		})
+	}
+}
+
+func copyInnerTxnGroupIDs(t *testing.T, dst, src *v2.PreEncodedTxInfo) {
+	t.Helper()
+
+	if !src.Txn.Txn.Group.IsZero() {
+		dst.Txn.Txn.Group = src.Txn.Txn.Group
+	}
+
+	if dst.Inners == nil || src.Inners == nil {
+		return
+	}
+
+	assert.Equal(t, len(*dst.Inners), len(*src.Inners))
+
+	for innerIndex := range *dst.Inners {
+		if innerIndex == len(*src.Inners) {
+			break
+		}
+		dstInner := &(*dst.Inners)[innerIndex]
+		srcInner := &(*src.Inners)[innerIndex]
+		copyInnerTxnGroupIDs(t, dstInner, srcInner)
+	}
+}
+
+func assertSimulationResultsEqual(t *testing.T, expectedError string, expected, actual v2.PreEncodedSimulateResponse) {
+	t.Helper()
+
+	if len(expectedError) != 0 {
+		require.NotNil(t, actual.TxnGroups[0].FailureMessage)
+		require.Contains(t, *actual.TxnGroups[0].FailureMessage, expectedError)
+		// if it matched the expected error, copy the actual one so it will pass the equality check below
+		expected.TxnGroups[0].FailureMessage = actual.TxnGroups[0].FailureMessage
+	}
+
+	// Copy inner txn groups IDs, since the mocktracer scenarios don't populate them
+	assert.Equal(t, len(expected.TxnGroups), len(actual.TxnGroups))
+	for groupIndex := range expected.TxnGroups {
+		if groupIndex == len(actual.TxnGroups) {
+			break
+		}
+		expectedGroup := &expected.TxnGroups[groupIndex]
+		actualGroup := &actual.TxnGroups[groupIndex]
+		assert.Equal(t, len(expectedGroup.Txns), len(actualGroup.Txns))
+		for txnIndex := range expectedGroup.Txns {
+			if txnIndex == len(actualGroup.Txns) {
+				break
+			}
+			expectedTxn := &expectedGroup.Txns[txnIndex]
+			actualTxn := &actualGroup.Txns[txnIndex]
+			if expectedTxn.Txn.Inners == nil || actualTxn.Txn.Inners == nil {
+				continue
+			}
+			assert.Equal(t, len(*expectedTxn.Txn.Inners), len(*actualTxn.Txn.Inners))
+			for innerIndex := range *expectedTxn.Txn.Inners {
+				if innerIndex == len(*actualTxn.Txn.Inners) {
+					break
+				}
+				expectedInner := &(*expectedTxn.Txn.Inners)[innerIndex]
+				actualInner := &(*actualTxn.Txn.Inners)[innerIndex]
+				copyInnerTxnGroupIDs(t, expectedInner, actualInner)
+			}
+		}
+	}
+
+	require.Equal(t, expected, actual)
+}
+
+func makePendingTxnResponse(t *testing.T, txn transactions.SignedTxnWithAD) v2.PreEncodedTxInfo {
+	t.Helper()
+	preEncoded := v2.ConvertInnerTxn(&txn)
+
+	// In theory we could return preEncoded directly, but there appears to be some subtle differences
+	// once you encode and decode the object, such as *uint64 fields turning from 0 to nil. So to be
+	// safe, let's encode and decode the object.
+
+	// Encode to bytes
+	encodedBytes := protocol.EncodeReflect(&preEncoded)
+
+	// Decode to v2.PreEncodedTxInfo
+	var response v2.PreEncodedTxInfo
+	err := protocol.DecodeReflect(encodedBytes, &response)
+	require.NoError(t, err)
+
+	return response
 }
 
 func TestSimulateTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	simulateTransactionTest(t, -1, 400, true)
-	simulateTransactionTest(t, 0, 404, false)
-	simulateTransactionTest(t, 0, 200, true)
+	// prepare node and handler
+	numAccounts := 5
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_998, 999_999, numAccounts, 1, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+
+	scenarios := mocktracer.GetTestScenarios()
+
+	for name, scenarioFn := range scenarios {
+		t.Run(name, func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
+			sender := roots[0]
+			futureAppID := basics.AppIndex(1002)
+
+			payTxn := txnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   sender.Address(),
+				Receiver: futureAppID.Address(),
+				Amount:   700_000,
+			})
+			appCallTxn := txnInfo.NewTxn(txntest.Txn{
+				Type:   protocol.ApplicationCallTx,
+				Sender: sender.Address(),
+				ClearStateProgram: `#pragma version 6
+int 1`,
+			})
+			scenario := scenarioFn(mocktracer.TestScenarioInfo{
+				CallingTxn:   appCallTxn.Txn(),
+				MinFee:       basics.MicroAlgos{Raw: txnInfo.CurrentProtocolParams().MinTxnFee},
+				CreatedAppID: futureAppID,
+			})
+			appCallTxn.ApprovalProgram = scenario.Program
+
+			txntest.Group(&payTxn, &appCallTxn)
+
+			stxns := []transactions.SignedTxn{
+				payTxn.Txn().Sign(sender.Secrets()),
+				appCallTxn.Txn().Sign(sender.Secrets()),
+			}
+
+			// build request body
+			var body io.Reader
+			request := v2.PreEncodedSimulateRequest{
+				TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+					{
+						Txns: stxns,
+					},
+				},
+			}
+			bodyBytes := protocol.EncodeReflect(&request)
+
+			msgpackFormat := model.SimulateTransactionParamsFormatMsgpack
+			jsonFormat := model.SimulateTransactionParamsFormatJson
+			responseFormats := []struct {
+				name   string
+				params model.SimulateTransactionParams
+				handle codec.Handle
+			}{
+				{
+					name: "msgpack",
+					params: model.SimulateTransactionParams{
+						Format: &msgpackFormat,
+					},
+					handle: protocol.CodecHandle,
+				},
+				{
+					name: "json",
+					params: model.SimulateTransactionParams{
+						Format: &jsonFormat,
+					},
+					handle: protocol.JSONStrictHandle,
+				},
+				{
+					name: "default",
+					params: model.SimulateTransactionParams{
+						Format: nil, // should default to JSON
+					},
+					handle: protocol.JSONStrictHandle,
+				},
+			}
+
+			for _, responseFormat := range responseFormats {
+				t.Run(string(responseFormat.name), func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
+					body = bytes.NewReader(bodyBytes)
+					req := httptest.NewRequest(http.MethodPost, "/", body)
+					rec := httptest.NewRecorder()
+
+					e := echo.New()
+					c := e.NewContext(req, rec)
+
+					// simulate transaction
+					err := handler.SimulateTransaction(c, responseFormat.params)
+					require.NoError(t, err)
+					require.Equal(t, 200, rec.Code, rec.Body.String())
+
+					// decode actual response
+					var actualBody v2.PreEncodedSimulateResponse
+					decoder := codec.NewDecoderBytes(rec.Body.Bytes(), responseFormat.handle)
+					err = decoder.Decode(&actualBody)
+					require.NoError(t, err)
+
+					var expectedFailedAt *[]uint64
+					if len(scenario.FailedAt) != 0 {
+						clone := slices.Clone(scenario.FailedAt)
+						clone[0]++
+						expectedFailedAt = &clone
+					}
+
+					var txnAppBudgetUsed []*uint64
+					appBudgetAdded := numOrNil(scenario.AppBudgetAdded)
+					appBudgetConsumed := numOrNil(scenario.AppBudgetConsumed)
+					for i := range scenario.TxnAppBudgetConsumed {
+						txnAppBudgetUsed = append(txnAppBudgetUsed, numOrNil(scenario.TxnAppBudgetConsumed[i]))
+					}
+					expectedBody := v2.PreEncodedSimulateResponse{
+						Version: 2,
+						TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+							{
+								AppBudgetAdded:    appBudgetAdded,
+								AppBudgetConsumed: appBudgetConsumed,
+								FailedAt:          expectedFailedAt,
+								Txns: []v2.PreEncodedSimulateTxnResult{
+									{
+										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+											SignedTxn: stxns[0],
+											// expect no ApplyData info
+										}),
+										AppBudgetConsumed: txnAppBudgetUsed[0],
+									},
+									{
+										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
+											SignedTxn: stxns[1],
+											ApplyData: scenario.ExpectedSimulationAD,
+										}),
+										AppBudgetConsumed: txnAppBudgetUsed[1],
+									},
+								},
+							},
+						},
+					}
+					assertSimulationResultsEqual(t, scenario.ExpectedError, expectedBody, actualBody)
+				})
+			}
+		})
+	}
+}
+
+func TestSimulateTransactionVerificationFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// prepare node and handler
+	numAccounts := 5
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+
+	sender := roots[0]
+	receiver := roots[1]
+
+	txn := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   0,
+	})
+
+	stxn := txn.Txn().Sign(sender.Secrets())
+	// make signature invalid
+	stxn.Sig[0] += byte(1) // will wrap if > 255
+
+	// build request body
+	bodyBytes := protocol.Encode(&stxn)
+	body := bytes.NewReader(bodyBytes)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	rec := httptest.NewRecorder()
+
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// simulate transaction
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{})
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code, rec.Body.String())
+}
+
+func TestSimulateTransactionMultipleGroups(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// prepare node and handler
+	numAccounts := 5
+	offlineAccounts := true
+	mockLedger, roots, _, _, releasefunc := testingenv(t, numAccounts, 1, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+
+	hdr, err := mockLedger.BlockHdr(mockLedger.Latest())
+	require.NoError(t, err)
+	txnInfo := simulationtesting.TxnInfo{LatestHeader: hdr}
+
+	sender := roots[0]
+	receiver := roots[1]
+
+	txn1 := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   1,
+	})
+	txn2 := txnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Address(),
+		Receiver: receiver.Address(),
+		Amount:   2,
+	})
+
+	stxn1 := txn1.Txn().Sign(sender.Secrets())
+	stxn2 := txn2.Txn().Sign(sender.Secrets())
+
+	// build request body
+	request := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn1},
+			},
+			{
+				Txns: []transactions.SignedTxn{stxn2},
+			},
+		},
+	}
+	bodyBytes := protocol.EncodeReflect(&request)
+	body := bytes.NewReader(bodyBytes)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	rec := httptest.NewRecorder()
+
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// simulate transaction
+	err = handler.SimulateTransaction(c, model.SimulateTransactionParams{})
+	require.NoError(t, err)
+	bodyString := rec.Body.String()
+	require.Equal(t, 400, rec.Code, bodyString)
+	require.Contains(t, bodyString, "expected 1 transaction group, got 2")
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
@@ -705,12 +1199,8 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nodeError, false)
-	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
-	}
+	mockNode := makeMockNode(mockLedger, t.Name(), nodeError, cannedStatusReportGolden, false)
+	handler := v2.Handlers{Node: mockNode, Log: logging.Base(), Shutdown: dummyShutdownChan}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
@@ -746,7 +1236,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -781,7 +1271,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int,
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -852,7 +1342,7 @@ func tealDisassembleTest(t *testing.T, program []byte, expectedCode int,
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -903,6 +1393,11 @@ func TestTealDisassemble(t *testing.T) {
 	// Test bad program.
 	badProgram := []byte{1, 99}
 	tealDisassembleTest(t, badProgram, 400, "invalid opcode", true)
+
+	// Create a program with MaxTealSourceBytes+1 bytes
+	// This should fail inside the handler when reading the bytes from the request body.
+	largeProgram := []byte(strings.Repeat("a", v2.MaxTealSourceBytes+1))
+	tealDisassembleTest(t, largeProgram, 400, "http: request body too large", true)
 }
 
 func tealDryrunTest(
@@ -915,7 +1410,7 @@ func tealDryrunTest(
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -949,6 +1444,12 @@ func tealDryrunTest(
 		messages := *response.Txns[0].AppCallMessages
 		require.GreaterOrEqual(t, len(messages), 1)
 		require.Equal(t, expResult, messages[len(messages)-1])
+	} else if rec.Code == 400 {
+		var response model.ErrorResponse
+		data := rec.Body.Bytes()
+		err = protocol.DecodeJSON(data, &response)
+		require.NoError(t, err, string(data))
+		require.Contains(t, response.Message, expResult)
 	}
 	return
 }
@@ -1014,11 +1515,11 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "msgp", 404, "", false)
 
 	gdr.ProtocolVersion = "unk"
-	tealDryrunTest(t, &gdr, "json", 400, "", true)
+	tealDryrunTest(t, &gdr, "json", 400, "unsupported protocol version", true)
 	gdr.ProtocolVersion = ""
 
 	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
-	require.Equal(t, string(protocol.ConsensusCurrentVersion), ddr.ProtocolVersion)
+	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
 	gdr.ProtocolVersion = string(protocol.ConsensusFuture)
 	ddr = tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
 	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
@@ -1027,6 +1528,10 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "json", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "msgp", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "json", 404, "", false)
+
+	// This should fail inside the handler when reading the bytes from the request body.
+	gdr.ProtocolVersion = strings.Repeat("a", v2.MaxTealDryrunBytes+1)
+	tealDryrunTest(t, &gdr, "json", 400, "http: request body too large", true)
 }
 
 func TestAppendParticipationKeys(t *testing.T) {
@@ -1034,7 +1539,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 
 	mockLedger, _, _, _, releasefunc := testingenv(t, 1, 1, true)
 	defer releasefunc()
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, false)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -1118,7 +1623,7 @@ func TestAppendParticipationKeys(t *testing.T) {
 	t.Run("Internal error", func(t *testing.T) {
 		// Create mock node with an error.
 		expectedErr := errors.New("expected error")
-		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr, false)
+		mockNode := makeMockNode(mockLedger, t.Name(), expectedErr, cannedStatusReportGolden, false)
 		handler := v2.Handlers{
 			Node:     mockNode,
 			Log:      logging.Base(),
@@ -1216,12 +1721,13 @@ func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bo
 
 	var blk bookkeeping.Block
 	blk.BlockHeader = bookkeeping.BlockHeader{
-		GenesisID:    genBlk.GenesisID(),
-		GenesisHash:  genBlk.GenesisHash(),
-		Round:        l.Latest() + 1,
-		Branch:       latestBlock.Hash(),
-		RewardsState: latestBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
-		UpgradeState: latestBlock.UpgradeState,
+		GenesisID:          genBlk.GenesisID(),
+		GenesisHash:        genBlk.GenesisHash(),
+		Round:              l.Latest() + 1,
+		Branch:             latestBlock.Hash(),
+		RewardsState:       latestBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
+		UpgradeState:       latestBlock.UpgradeState,
+		StateProofTracking: latestBlock.StateProofTracking,
 	}
 
 	blk.BlockHeader.TxnCounter = latestBlock.TxnCounter
@@ -1238,22 +1744,19 @@ func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bo
 	return blk
 }
 
-func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
+func addStateProof(blk bookkeeping.Block) bookkeeping.Block {
 	round := uint64(blk.Round())
-	if round%stateProofIntervalForHandlerTests == (stateProofIntervalForHandlerTests/2+18) && round > stateProofIntervalForHandlerTests*2 {
-		return blk
-	}
-	stateProofRound := (round - round%stateProofIntervalForHandlerTests) - stateProofIntervalForHandlerTests
+	stateProofRound := (round/stateProofInterval - 1) * stateProofInterval
 	tx := transactions.SignedTxn{
 		Txn: transactions.Transaction{
 			Type:   protocol.StateProofTx,
-			Header: transactions.Header{Sender: transactions.StateProofSender},
+			Header: transactions.Header{Sender: transactions.StateProofSender, FirstValid: blk.Round()},
 			StateProofTxnFields: transactions.StateProofTxnFields{
 				StateProofType: 0,
 				Message: stateproofmsg.Message{
 					BlockHeadersCommitment: []byte{0x0, 0x1, 0x2},
 					FirstAttestedRound:     stateProofRound + 1,
-					LastAttestedRound:      stateProofRound + stateProofIntervalForHandlerTests,
+					LastAttestedRound:      stateProofRound + stateProofInterval,
 				},
 			},
 		},
@@ -1261,19 +1764,39 @@ func addStateProofIfNeeded(blk bookkeeping.Block) bookkeeping.Block {
 	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: tx}}
 	blk.Payset = append(blk.Payset, txnib)
 
+	updatedStateProofTracking := bookkeeping.StateProofTrackingData{
+		StateProofVotersCommitment:  blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		StateProofOnlineTotalWeight: blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		StateProofNextRound:         blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofNextRound + basics.Round(stateProofInterval),
+	}
+	blk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	blk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = updatedStateProofTracking
+
 	return blk
 }
 
 func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
 	ledger := h.Node.LedgerForAPI()
 
+	firstStateProof := basics.Round(stateProofInterval * 2)
 	genBlk, err := ledger.Block(0)
 	a.NoError(err)
+	genBlk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	genBlk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = bookkeeping.StateProofTrackingData{
+		StateProofVotersCommitment:  nil,
+		StateProofOnlineTotalWeight: basics.MicroAlgos{},
+		StateProofNextRound:         firstStateProof,
+	}
 
 	lastBlk := genBlk
 	for i := 0; i < numRounds; i++ {
 		blk := newEmptyBlock(a, lastBlk, genBlk, ledger)
-		blk = addStateProofIfNeeded(blk)
+		round := uint64(blk.Round())
+		// Add a StateProof transaction after half of the interval has passed (128 rounds) and add another 18 round for good measure
+		// First StateProof should be 2*Interval, since the first commitment cannot be in genesis
+		if blk.Round() > firstStateProof && (round%stateProofInterval == (stateProofInterval/2 + 18)) {
+			blk = addStateProof(blk)
+		}
 		blk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
 		a.NoError(ledger.(*data.Ledger).AddBlock(blk, agreement.Certificate{}))
 		lastBlk = blk
@@ -1284,7 +1807,7 @@ func TestStateProofNotFound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	insertRounds(a, handler, 700)
@@ -1297,7 +1820,7 @@ func TestStateProofHigherRoundThanLatest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	a.NoError(handler.GetStateProof(ctx, 2))
@@ -1308,12 +1831,12 @@ func TestStateProof200(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	insertRounds(a, handler, 1000)
 
-	a.NoError(handler.GetStateProof(ctx, stateProofIntervalForHandlerTests+1))
+	a.NoError(handler.GetStateProof(ctx, stateProofInterval+1))
 	a.Equal(200, responseRecorder.Code)
 
 	stprfResp := model.StateProofResponse{}
@@ -1326,7 +1849,7 @@ func TestHeaderProofRoundTooHigh(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	a.NoError(handler.GetLightBlockHeaderProof(ctx, 2))
@@ -1337,7 +1860,7 @@ func TestHeaderProofStateProofNotFound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	insertRounds(a, handler, 700)
@@ -1350,18 +1873,18 @@ func TestGetBlockProof200(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, false)
+	handler, ctx, responseRecorder, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
 	insertRounds(a, handler, 1000)
 
-	a.NoError(handler.GetLightBlockHeaderProof(ctx, stateProofIntervalForHandlerTests*2+2))
+	a.NoError(handler.GetLightBlockHeaderProof(ctx, stateProofInterval*2+2))
 	a.Equal(200, responseRecorder.Code)
 
-	blkHdrArr, err := stateproof.FetchLightHeaders(handler.Node.LedgerForAPI(), stateProofIntervalForHandlerTests, basics.Round(stateProofIntervalForHandlerTests*3))
+	blkHdrArr, err := stateproof.FetchLightHeaders(handler.Node.LedgerForAPI(), stateProofInterval, basics.Round(stateProofInterval*3))
 	a.NoError(err)
 
-	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofIntervalForHandlerTests, blkHdrArr, 1)
+	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofInterval, blkHdrArr, 1)
 	a.NoError(err)
 
 	proofResp := model.LightBlockHeaderProofResponse{}
@@ -1383,27 +1906,27 @@ func TestStateproofTransactionForRound(t *testing.T) {
 				CurrentProtocol: protocol.ConsensusCurrentVersion,
 			},
 		}
-		blk = addStateProofIfNeeded(blk)
+		blk = addStateProof(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
 	ctx, cncl := context.WithTimeout(context.Background(), time.Minute*2)
 	defer cncl()
-	txn, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
+	txn, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofInterval*2+1), 1000, nil)
 	a.NoError(err)
-	a.Equal(2*stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
-	a.Equal(3*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+	a.Equal(2*stateProofInterval+1, txn.Message.FirstAttestedRound)
+	a.Equal(3*stateProofInterval, txn.Message.LastAttestedRound)
 	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
 
-	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofIntervalForHandlerTests), 1000, nil)
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofInterval), 1000, nil)
 	a.NoError(err)
-	a.Equal(stateProofIntervalForHandlerTests+1, txn.Message.FirstAttestedRound)
-	a.Equal(2*stateProofIntervalForHandlerTests, txn.Message.LastAttestedRound)
+	a.Equal(stateProofInterval+1, txn.Message.FirstAttestedRound)
+	a.Equal(2*stateProofInterval, txn.Message.LastAttestedRound)
 
 	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, 999, 1000, nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 
-	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofIntervalForHandlerTests), basics.Round(2*stateProofIntervalForHandlerTests), nil)
+	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofInterval), basics.Round(2*stateProofInterval), nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }
 
@@ -1420,12 +1943,12 @@ func TestStateproofTransactionForRoundWithoutStateproofs(t *testing.T) {
 				CurrentProtocol: protocol.ConsensusV30, // should have StateProofInterval == 0 .
 			},
 		}
-		blk = addStateProofIfNeeded(blk)
+		blk = addStateProof(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 	ctx, cncl := context.WithTimeout(context.Background(), time.Minute)
 	defer cncl()
-	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofInterval*2+1), 1000, nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
 }
 
@@ -1442,13 +1965,13 @@ func TestStateproofTransactionForRoundTimeouts(t *testing.T) {
 				CurrentProtocol: protocol.ConsensusCurrentVersion, // should have StateProofInterval != 0 .
 			},
 		}
-		blk = addStateProofIfNeeded(blk)
+		blk = addStateProof(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
 	ctx, cncl := context.WithTimeout(context.Background(), time.Nanosecond)
 	defer cncl()
-	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, nil)
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofInterval*2+1), 1000, nil)
 	a.ErrorIs(err, v2.ErrTimeout)
 }
 
@@ -1465,7 +1988,7 @@ func TestStateproofTransactionForRoundShutsDown(t *testing.T) {
 				CurrentProtocol: protocol.ConsensusCurrentVersion, // should have StateProofInterval != 0 .
 			},
 		}
-		blk = addStateProofIfNeeded(blk)
+		blk = addStateProof(blk)
 		ledger.blocks = append(ledger.blocks, blk)
 	}
 
@@ -1473,6 +1996,243 @@ func TestStateproofTransactionForRoundShutsDown(t *testing.T) {
 	close(stoppedChan)
 	ctx, cncl := context.WithTimeout(context.Background(), time.Minute)
 	defer cncl()
-	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofIntervalForHandlerTests*2+1), 1000, stoppedChan)
+	_, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofInterval*2+1), 1000, stoppedChan)
 	a.ErrorIs(err, v2.ErrShutdown)
+}
+
+func TestExperimentalCheck(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	// Since we are invoking the method directly, it doesn't matter if EnableExperimentalAPI is true.
+	// When this is false, the router never even registers this endpoint.
+	err := handler.ExperimentalCheck(c)
+	require.NoError(t, err)
+
+	require.Equal(t, 200, rec.Code)
+	require.Equal(t, "true\n", string(rec.Body.Bytes()))
+}
+
+func TestTimestampOffsetNotInDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	// TestGetBlockTimeStampOffset 400 - offset is not set and mock node is
+	// not in dev mode
+	err := handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed retrieving timestamp offset from node: cannot get block timestamp offset because we are not in dev mode\"}\n", rec.Body.String())
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 400 - cannot set timestamp offset when not
+	// in dev mode
+	err = handler.SetBlockTimeStampOffset(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: cannot set block timestamp when not in dev mode\"}\n", rec.Body.String())
+}
+
+func TestTimestampOffsetInDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupMockNodeForMethodGet(t, cannedStatusReportGolden, true)
+	defer releasefunc()
+
+	// TestGetBlockTimeStampOffset 404
+	err := handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+	require.Equal(t, "{\"message\":\"failed retrieving timestamp offset from node: block timestamp offset was never set, using real clock for timestamps\"}\n", rec.Body.String())
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 200
+	err = handler.SetBlockTimeStampOffset(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	c, rec = newReq(t)
+
+	// TestGetBlockTimeStampOffset 200
+	err = handler.GetBlockTimeStampOffset(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	c, rec = newReq(t)
+
+	// TestSetBlockTimeStampOffset 400
+	err = handler.SetBlockTimeStampOffset(c, math.MaxUint64)
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: block timestamp offset cannot be larger than max int64 value\"}\n", rec.Body.String())
+}
+
+func TestDeltasForTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	blk1 := bookkeeping.BlockHeader{Round: 1}
+	blk2 := bookkeeping.BlockHeader{Round: 2}
+	delta1 := ledgercore.StateDelta{Hdr: &blk1}
+	delta2 := ledgercore.StateDelta{Hdr: &blk2, KvMods: map[string]ledgercore.KvValueDelta{"bx1": {Data: []byte("foobar")}}}
+	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+	groupID1, err := crypto.DigestFromString(crypto.Hash([]byte("hello")).String())
+	require.NoError(t, err)
+	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{
+		Type:   protocol.AssetTransferTx,
+		Header: transactions.Header{Group: groupID1}},
+	}}
+
+	tracer := eval.MakeTxnGroupDeltaTracer(2)
+	handlers := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: tracer,
+			},
+		},
+		Log: logging.Base(),
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	// Add blocks to tracer
+	tracer.BeforeBlock(&blk1)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil)
+	tracer.BeforeBlock(&blk2)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil)
+
+	// Test /v2/deltas/{round}/txn/group
+	jsonFormatForRound := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(1),
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+
+	var roundResponse model.TransactionGroupLedgerStateDeltasForRoundResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &roundResponse)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(roundResponse.Deltas))
+	require.Equal(t, []string{txn1.ID().String()}, roundResponse.Deltas[0].Ids)
+	hdr, ok := roundResponse.Deltas[0].Delta["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
+
+	// Test invalid round parameter
+	c, rec = newReq(t)
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(4),
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	// Test /v2/deltas/txn/group/{id}
+	jsonFormatForTxn := model.GetLedgerStateDeltaForTransactionGroupParamsFormatJson
+	c, rec = newReq(t)
+	// Use TxID
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		txn2.Txn.ID().String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	var groupResponse model.LedgerStateDeltaForTransactionGroupResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	groupHdr, ok := groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Use Group ID
+	c, rec = newReq(t)
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	require.NotNil(t, groupResponse["KvMods"])
+	groupHdr, ok = groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Test invalid ID
+	c, rec = newReq(t)
+	badID := crypto.Hash([]byte("invalidID")).String()
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		badID,
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	// Test nil Tracer
+	nilTracerHandler := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: nil,
+			},
+		},
+		Log: logging.Base(),
+	}
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 501, rec.Code)
+
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		0,
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 501, rec.Code)
+}
+
+func TestRouterRequestBody(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	mockLedger, _, _, _, _ := testingenv(t, 1, 1, true)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	dummyShutdownChan := make(chan struct{})
+	l, err := net.Listen("tcp", ":0") // create listener so requests are buffered
+	e := server.NewRouter(logging.TestingLog(t), mockNode, dummyShutdownChan, "", "", l, 1000)
+	go e.Start(":0")
+	defer e.Close()
+
+	// Admin API call greater than max body bytes should succeed
+	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
+	stringReader := strings.NewReader(strings.Repeat("a", 50_000_000))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("https://%s/v2/participation", e.Listener.Addr().String()), stringReader)
+	assert.NoError(t, err)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Public API call greater than max body bytes fails
+	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
+	stringReader = strings.NewReader(strings.Repeat("a", 50_000_000))
+	req, err = http.NewRequest(http.MethodPost, fmt.Sprintf("https://%s/v2/transactions", e.Listener.Addr().String()), stringReader)
+	assert.NoError(t, err)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
 }

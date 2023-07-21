@@ -1,0 +1,15 @@
+name: "Asset Xfer"
+genesis_accounts: 10000
+genesis_account_balance: 1000000000000
+tx_per_block: 5000
+
+# transaction distribution
+tx_asset_fraction: 1.0
+
+# asset config
+asset_create_fraction: 0.001
+asset_optin_fraction: 0.10
+asset_xfer_fraction: 0.899
+
+# pay config must equal 1.0
+pay_xfer_fraction: 1.0

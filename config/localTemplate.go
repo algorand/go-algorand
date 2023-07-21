@@ -41,7 +41,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitely, otherwise, only the most recent blocks
@@ -56,7 +56,11 @@ type Local struct {
 	// 1 * time.Minute = 60000000000 ns
 	ReconnectTime time.Duration `version[0]:"60" version[1]:"60000000000"`
 
-	// what we should tell people to connect to
+	// The public address to connect to that is advertised to other nodes.
+	// For MainNet relays, make sure this entry includes the full SRV host name
+	// plus the publicly-accessible port number.
+	// A valid entry will avoid "self-gossip" and is used for identity exchange
+	// to deduplicate redundant connections
 	PublicAddress string `version[0]:""`
 
 	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15"`
@@ -103,6 +107,8 @@ type Local struct {
 	// that RLIMIT_NOFILE >= IncomingConnectionsLimit + RestConnectionsHardLimit +
 	// ReservedFDs. ReservedFDs are meant to leave room for short-lived FDs like
 	// DNS queries, SQLite files, etc. This parameter shouldn't be changed.
+	// If RLIMIT_NOFILE < IncomingConnectionsLimit + RestConnectionsHardLimit + ReservedFDs
+	// then either RestConnectionsHardLimit or IncomingConnectionsLimit decreased.
 	ReservedFDs uint64 `version[2]:"256"`
 
 	// local server
@@ -114,7 +120,7 @@ type Local struct {
 	RestWriteTimeoutSeconds int `version[4]:"120"`
 
 	// SRV-based phonebook
-	DNSBootstrapID string `version[0]:"<network>.algorand.network"`
+	DNSBootstrapID string `version[0]:"<network>.algorand.network" version[28]:"<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"`
 
 	// Log file size limit in bytes. When set to 0 logs will be written to stdout.
 	LogSizeLimit uint64 `version[0]:"1073741824"`
@@ -230,10 +236,6 @@ type Local struct {
 
 	// the max size the sync server would return
 	TxSyncServeResponseSize int `version[3]:"1000000"`
-
-	// IsIndexerActive indicates whether to activate the indexer for fast retrieval of transactions
-	// Note -- Indexer cannot operate on non Archival nodes
-	IsIndexerActive bool `version[3]:"false"`
 
 	// UseXForwardedForAddress indicates whether or not the node should use the X-Forwarded-For HTTP Header when
 	// determining the source of a connection.  If used, it should be set to the string "X-Forwarded-For", unless the
@@ -359,7 +361,7 @@ type Local struct {
 	// MaxCatchpointDownloadDuration defines the maximum duration a client will be keeping the outgoing connection of a catchpoint download request open for processing before
 	// shutting it down. Networks that have large catchpoint files, slow connection or slow storage could be a good reason to increase this value. Note that this is a client-side only
 	// configuration value, and it's independent of the actual catchpoint file size.
-	MaxCatchpointDownloadDuration time.Duration `version[13]:"7200000000000"`
+	MaxCatchpointDownloadDuration time.Duration `version[13]:"7200000000000" version[28]:"43200000000000"`
 
 	// MinCatchpointFileDownloadBytesPerSecond defines the minimal download speed that would be considered to be "acceptable" by the catchpoint file fetcher, measured in bytes per seconds. If the
 	// provided stream speed drops below this threshold, the connection would be recycled. Note that this field is evaluated per catchpoint "chunk" and not on it's own. If this field is zero,
@@ -491,41 +493,74 @@ type Local struct {
 	// guarantees in terms of functionality or future support.
 	EnableExperimentalAPI bool `version[26]:"false"`
 
+	// DisableLedgerLRUCache disables LRU caches in ledger.
+	// Setting it to TRUE might result in significant performance degradation
+	// and SHOULD NOT be used for other reasons than testing.
+	DisableLedgerLRUCache bool `version[27]:"false"`
+
+	// EnableFollowMode launches the node in "follower" mode. This turns off the agreement service,
+	// and APIs related to broadcasting transactions, and enables APIs which can retrieve detailed information
+	// from ledger caches and can control the ledger round.
+	EnableFollowMode bool `version[27]:"false"`
+
+	// EnableTxnEvalTracer turns on features in the BlockEvaluator which collect data on transactions, exposing them via algod APIs.
+	// It will store txn deltas created during block evaluation, potentially consuming much larger amounts of memory,
+	EnableTxnEvalTracer bool `version[27]:"false"`
+
+	// StorageEngine allows to control which type of storage to use for the ledger.
+	// Available options are:
+	// - sqlite (default)
+	// - pebbledb (experimental, in development)
+	StorageEngine string `version[28]:"sqlite"`
+
+	// TxIncomingFilterMaxSize sets the maximum size for the de-duplication cache used by the incoming tx filter
+	// only relevant if TxIncomingFilteringFlags is non-zero
+	TxIncomingFilterMaxSize uint64 `version[28]:"500000"`
+
+	// BlockServiceMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
+	// When it exceeds this capacity, it redirects the block requests to a different node
+	BlockServiceMemCap uint64 `version[28]:"500000000"`
+
 	// SpeculativeAsmTimeOffset defines when speculative block assembly first starts, nanoseconds before consensus AgreementFilterTimeoutPeriod0 or AgreementFilterTimeout
 	// A huge value (greater than either AgreementFilterTimeout) disables this event.
-	SpeculativeAsmTimeOffset time.Duration `version[27]:"400000000"`
+	SpeculativeAsmTimeOffset time.Duration `version[28]:"400000000"`
 
-	SpeculativeAssemblyDisable bool `version[27]:"false"`
+	SpeculativeAssemblyDisable bool `version[28]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
-func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
-	dnsBootstrapString := cfg.DNSBootstrap(networkID)
-	bootstrapArray = strings.Split(dnsBootstrapString, ";")
-	// omit zero length entries from the result set.
-	for i := len(bootstrapArray) - 1; i >= 0; i-- {
-		if len(bootstrapArray[i]) == 0 {
-			bootstrapArray = append(bootstrapArray[:i], bootstrapArray[i+1:]...)
-		}
-	}
-	return
+func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) []*DNSBootstrap {
+	// Should never return an error here, as the config has already been validated at init
+	result, _ := cfg.internalValidateDNSBootstrapArray(networkID)
+
+	return result
 }
 
-// DNSBootstrap returns the network-specific DNSBootstrap identifier
-func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
-	// if user hasn't modified the default DNSBootstrapID in the configuration
-	// file and we're targeting a devnet ( via genesis file ), we the
-	// explicit devnet network bootstrap.
-	if defaultLocal.DNSBootstrapID == cfg.DNSBootstrapID {
-		if network == Devnet {
-			return "devnet.algodev.network"
-		} else if network == Betanet {
-			return "betanet.algodev.network"
-		} else if network == Alphanet {
-			return "alphanet.algodev.network"
+// ValidateDNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers or an error if any
+// one fails to parse
+func (cfg Local) ValidateDNSBootstrapArray(networkID protocol.NetworkID) ([]*DNSBootstrap, error) {
+	return cfg.internalValidateDNSBootstrapArray(networkID)
+}
+
+// internalValidateDNSBootstrapArray handles the base functionality of parsing the DNSBootstrapID string.
+// The function will return an error on the first failure encountered, or an array of DNSBootstrap entries.
+func (cfg Local) internalValidateDNSBootstrapArray(networkID protocol.NetworkID) (
+	bootstrapArray []*DNSBootstrap, err error) {
+
+	bootstrapStringArray := strings.Split(cfg.DNSBootstrapID, ";")
+	for _, bootstrapString := range bootstrapStringArray {
+		if len(strings.TrimSpace(bootstrapString)) == 0 {
+			continue
 		}
+
+		bootstrapEntry, err1 := parseDNSBootstrap(bootstrapString, networkID, defaultLocal.DNSBootstrapID != cfg.DNSBootstrapID)
+		if err1 != nil {
+			return nil, err1
+		}
+
+		bootstrapArray = append(bootstrapArray, bootstrapEntry)
 	}
-	return strings.Replace(cfg.DNSBootstrapID, "<network>", string(network), -1)
+	return
 }
 
 // SaveToDisk writes the non-default Local settings into a root/ConfigFilename file
@@ -593,4 +628,38 @@ func (cfg Local) TxFilterRawMsgEnabled() bool {
 // TxFilterCanonicalEnabled returns true if canonical tx group filtering is enabled
 func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
+}
+
+// IsGossipServer returns true if NetAddress is set and this node supposed
+// to start websocket server
+func (cfg Local) IsGossipServer() bool {
+	return cfg.NetAddress != ""
+}
+
+// AdjustConnectionLimits updates RestConnectionsSoftLimit, RestConnectionsHardLimit, IncomingConnectionsLimit
+// if requiredFDs greater than maxFDs
+func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
+	if maxFDs >= requiredFDs {
+		return false
+	}
+	const reservedRESTConns = 10
+	diff := requiredFDs - maxFDs
+
+	if cfg.RestConnectionsHardLimit <= diff+reservedRESTConns {
+		restDelta := diff + reservedRESTConns - cfg.RestConnectionsHardLimit
+		cfg.RestConnectionsHardLimit = reservedRESTConns
+		if cfg.IncomingConnectionsLimit > int(restDelta) {
+			cfg.IncomingConnectionsLimit -= int(restDelta)
+		} else {
+			cfg.IncomingConnectionsLimit = 0
+		}
+	} else {
+		cfg.RestConnectionsHardLimit -= diff
+	}
+
+	if cfg.RestConnectionsSoftLimit > cfg.RestConnectionsHardLimit {
+		cfg.RestConnectionsSoftLimit = cfg.RestConnectionsHardLimit
+	}
+
+	return true
 }

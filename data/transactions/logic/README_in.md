@@ -40,6 +40,17 @@ has fewer than two elements, the operation fails. Some operations, like
 `frame_dig` and `proto` could fail because of an attempt to access
 above the current stack.
 
+## Stack Types
+
+While every element of the stack is restricted to the types `uint64` and `bytes`, 
+the values of these types may be known to be bounded.  The more common bounded types are 
+named to provide more semantic information in the documentation. They're also used during
+assembly time to do type checking and to provide more informative error messages.
+
+
+@@ named_stack_types.md @@
+
+
 ## Scratch Space
 
 In addition to the stack there are 256 positions of scratch
@@ -193,6 +204,41 @@ _available_.
 
  * Since v7, the account associated with any contract present in the
    `txn.ForeignApplications` field is _available_.
+   
+ * Since v9, there is group-level resource sharing. Any resource that
+   is available in _some_ top-level transaction in a transaction group
+   is available in _all_ v9 or later application calls in the group,
+   whether those application calls are top-level or inner.
+   
+ * When considering whether an asset holding or application local
+   state is available by group-level resource sharing, the holding or
+   local state must be available in a top-level transaction without
+   considering group sharing. For example, if account A is made
+   available in one transaction, and asset X is made available in
+   another, group resource sharing does _not_ make A's X holding
+   available.
+     
+ * Top-level transactions that are not application calls also make
+   resources available to group-level resource sharing. The following
+   resources are made available by other transaction types.
+
+     1. `pay` - `txn.Sender`, `txn.Receiver`, and
+        `txn.CloseRemainderTo` (if set).
+
+     1. `keyreg` - `txn.Sender`
+
+     1. `acfg` - `txn.Sender`, `txn.ConfigAsset`, and the
+        `txn.ConfigAsset` holding of `txn.Sender`.
+
+     1. `axfer` - `txn.Sender`, `txn.AssetReceiver`, `txn.AssetSender`
+        (if set), `txnAssetCloseTo` (if set), `txn.XferAsset`, and the
+        `txn.XferAsset` holding of each of those accounts.
+
+     1. `afrz` - `txn.Sender`, `txn.FreezeAccount`, `txn.FreezeAsset`,
+        and the `txn.FreezeAsset` holding of `txn.FreezeAccount`. The
+        `txn.FreezeAsset` holding of `txn.Sender` is _not_ made
+        available.
+
 
  * A Box is _available_ to an Approval Program if _any_ transaction in
    the same group contains a box reference (`txn.Boxes`) that denotes
@@ -201,6 +247,18 @@ _available_.
    ForeignApplications array, with the usual convention that 0
    indicates the application ID of the app called by that
    transaction. No box is ever _available_ to a ClearStateProgram.
+
+Regardless of _availability_, any attempt to access an Asset or
+Application with an ID less than 256 from within a Contract will fail
+immediately. This avoids any ambiguity in opcodes that interpret their
+integer arguments as resource IDs _or_ indexes into the
+`txn.ForeignAssets` or `txn.ForeignApplications` arrays.
+
+It is recommended that contract authors avoid supplying array indexes
+to these opcodes, and always use explicit resource IDs. By using
+explicit IDs, contracts will better take advantage of group resource
+sharing.  The array indexing interpretation may be deprecated in a
+future version.
 
 ## Constants
 
@@ -212,7 +270,7 @@ Constants can be pushed onto the stack in two different ways:
 
 2. Constants can be loaded into storage separate from the stack and
    scratch space, using two opcodes `intcblock` and
-   `bytecblock`. Then, constants from this storage can be pushed
+   `bytecblock`. Then, constants from this storage can be
    pushed onto the stack by referring to the type and index using
    `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. This method is
    more efficient for constants that are used multiple times.

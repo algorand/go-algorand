@@ -23,6 +23,7 @@ type NodeConfig struct {
 	NetAddress         string `json:",omitempty"`
 	APIEndpoint        string `json:",omitempty"`
 	APIToken           string `json:",omitempty"`
+	AdminAPIToken      string `json:",omitempty"`
 	EnableTelemetry    bool   // Needs to also be configured host-wide (assign logging host name)
 	TelemetryURI       string `json:",omitempty"` // Needs to be HostConfig
 	EnableMetrics      bool   // Needs to also be configured host-wide (register DNS entry)
@@ -53,8 +54,9 @@ func (nc NodeConfig) IsRelay() bool {
 
 // NodeConfigGoal represents is a simplified version of NodeConfig used with 'goal network' commands
 type NodeConfigGoal struct {
-	Name              string
-	IsRelay           bool `json:",omitempty"`
-	Wallets           []NodeWalletData
-	DeadlockDetection int `json:"-"`
+	Name               string
+	IsRelay            bool `json:",omitempty"`
+	Wallets            []NodeWalletData
+	DeadlockDetection  int    `json:"-"`
+	ConfigJSONOverride string `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
 }

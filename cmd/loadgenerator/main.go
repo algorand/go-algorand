@@ -69,14 +69,14 @@ func findRootKeys(algodDir string) []*crypto.SignatureSecrets {
 		var handle db.Accessor
 		handle, err := db.MakeErasableAccessor(path)
 		if err != nil {
-			return nil // don't care, move on
+			return nil //nolint:nilerr // don't care, move on
 		}
 		defer handle.Close()
 
 		// Fetch an account.Participation from the database
 		root, err := algodAcct.RestoreRoot(handle)
 		if err != nil {
-			return nil // don't care, move on
+			return nil //nolint:nilerr // don't care, move on
 		}
 		keylist = append(keylist, root.Secrets())
 		return nil
@@ -106,11 +106,11 @@ func main() {
 	if (cfg.ClientURL == nil || cfg.ClientURL.String() == "") || cfg.APIToken == "" {
 		if algodDir != "" {
 			path := filepath.Join(algodDir, "algod.net")
-			net, err := os.ReadFile(path)
-			maybefail(err, "%s: %v\n", path, err)
+			net, osErr := os.ReadFile(path)
+			maybefail(osErr, "%s: %v\n", path, osErr)
 			path = filepath.Join(algodDir, "algod.token")
-			token, err := os.ReadFile(path)
-			maybefail(err, "%s: %v\n", path, err)
+			token, osErr := os.ReadFile(path)
+			maybefail(osErr, "%s: %v\n", path, osErr)
 			cfg.ClientURL, err = url.Parse(fmt.Sprintf("http://%s", string(strings.TrimSpace(string(net)))))
 			maybefail(err, "bad net url %v\n", err)
 			cfg.APIToken = string(token)

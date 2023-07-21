@@ -133,14 +133,17 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 		if importKeys && hasWallet {
 			var client libgoal.Client
 			client, err = libgoal.MakeClientWithBinDir(binDir, nodeDir, "", libgoal.KmdClient)
+			if err != nil {
+				return
+			}
 			_, err = client.CreateWallet(libgoal.UnencryptedWalletName, nil, crypto.MasterDerivationKey{})
 			if err != nil {
 				return
 			}
 
-			_, _, err = util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
-			if err != nil {
-				return
+			stdout, stderr, execErr := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
+			if execErr != nil {
+				return nil, nil, fmt.Errorf("goal account importrootkey failed: %w\nstdout: %s\nstderr: %s", execErr, stdout, stderr)
 			}
 		}
 
@@ -162,16 +165,16 @@ func loadTemplate(templateFile string) (NetworkTemplate, error) {
 	}
 	defer f.Close()
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		// for arm machines, use smaller key dilution
-		template.Genesis.PartKeyDilution = 100
-	}
-
 	err = loadTemplateFromReader(f, &template)
 	return template, err
 }
 
 func loadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
+
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		// for arm machines, use smaller key dilution
+		template.Genesis.PartKeyDilution = 100
+	}
 	dec := json.NewDecoder(reader)
 	return dec.Decode(template)
 }
@@ -206,7 +209,6 @@ func (t NetworkTemplate) Validate() error {
 	}
 
 	// No wallet can be assigned to more than one node
-	// At least one relay is required
 	wallets := make(map[string]bool)
 	for _, cfg := range t.Nodes {
 		for _, wallet := range cfg.Wallets {
@@ -218,15 +220,47 @@ func (t NetworkTemplate) Validate() error {
 		}
 	}
 
+	// At least one relay is required
 	if len(t.Nodes) > 1 && countRelayNodes(t.Nodes) == 0 {
 		return fmt.Errorf("invalid template: at least one relay is required when more than a single node presents")
 	}
 
+	// Validate JSONOverride decoding
+	for _, cfg := range t.Nodes {
+		local := config.GetDefaultLocal()
+		err := decodeJSONOverride(cfg.ConfigJSONOverride, &local)
+		if err != nil {
+			return fmt.Errorf("invalid template: unable to decode JSONOverride: %w", err)
+		}
+	}
+
+	// Follow nodes cannot be relays
+	for _, cfg := range t.Nodes {
+		if cfg.IsRelay && isEnableFollowMode(cfg.ConfigJSONOverride) {
+			return fmt.Errorf("invalid template: follower nodes may not be relays")
+		}
+	}
+
 	if t.Genesis.DevMode && len(t.Nodes) != 1 {
-		return fmt.Errorf("invalid template: DevMode should only have a single node")
+		if countRelayNodes(t.Nodes) != 1 {
+			return fmt.Errorf("invalid template: devmode configurations may have at most one relay")
+		}
+
+		for _, cfg := range t.Nodes {
+			if !cfg.IsRelay && !isEnableFollowMode(cfg.ConfigJSONOverride) {
+				return fmt.Errorf("invalid template: devmode configurations may only contain one relay and follower nodes")
+			}
+		}
 	}
 
 	return nil
+}
+
+func isEnableFollowMode(JSONOverride string) bool {
+	local := config.GetDefaultLocal()
+	// decode error is checked elsewhere
+	_ = decodeJSONOverride(JSONOverride, &local)
+	return local.EnableFollowMode
 }
 
 // countRelayNodes counts the total number of relays
@@ -237,6 +271,18 @@ func countRelayNodes(nodeCfgs []remote.NodeConfigGoal) (relayCount int) {
 		}
 	}
 	return
+}
+
+func decodeJSONOverride(override string, cfg *config.Local) error {
+	if override != "" {
+		reader := strings.NewReader(override)
+		dec := json.NewDecoder(reader)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&cfg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int, relaysCount int) error {
@@ -262,5 +308,11 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	if node.DeadlockDetection != 0 {
 		cfg.DeadlockDetection = node.DeadlockDetection
 	}
+
+	err := decodeJSONOverride(node.ConfigJSONOverride, &cfg)
+	if err != nil {
+		return err
+	}
+
 	return cfg.SaveToFile(configFile)
 }

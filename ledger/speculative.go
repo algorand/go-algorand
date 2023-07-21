@@ -25,24 +25,25 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 )
 
 // LedgerForEvaluator defines the ledger interface needed by the evaluator.
 type LedgerForEvaluator interface { //nolint:revive //LedgerForEvaluator is a long established but newly leaking-out name, and there really isn't a better name for it despite how lint dislikes ledger.LedgerForEvaluator
-	internal.LedgerForEvaluator
+	eval.LedgerForEvaluator
 	LookupKv(rnd basics.Round, key string) ([]byte, error)
 	FlushCaches()
 
 	// and a few more Ledger functions
-
 	Block(basics.Round) (bookkeeping.Block, error)
 	Latest() basics.Round
 	VerifiedTransactionCache() verify.VerifiedTransactionCache
-	StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error)
+	StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error)
+	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
 }
 
 // ErrRoundTooHigh "round too high" try to get ledger record in the future
@@ -53,11 +54,11 @@ var ErrRoundTooHigh = errors.New("round too high")
 // on top, which in turn allows speculatively constructing a subsequent
 // block, before the ValidatedBlock is committed to the ledger.
 //
-//	ledger	ValidatedBlock -------> Block
-//      |                     ^          blk
-//      |                     | vb
-//      |     l               |
-//      \---------- validatedBlockAsLFE
+//		ledger	ValidatedBlock -------> Block
+//	     |                     ^          blk
+//	     |                     | vb
+//	     |     l               |
+//	     \---------- validatedBlockAsLFE
 //
 // where ledger is the full ledger.
 type validatedBlockAsLFE struct {
@@ -255,21 +256,28 @@ func (v *validatedBlockAsLFE) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.
 }
 
 // StartEvaluator implements the ledgerForEvaluator interface.
-func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error) {
+func (v *validatedBlockAsLFE) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
 	if hdr.Round.SubSaturate(1) != v.Latest() {
 		return nil, fmt.Errorf("StartEvaluator: LFE round %d mismatches next block round %d", v.Latest(), hdr.Round)
 	}
 
-	return internal.StartEvaluator(v, hdr,
-		internal.EvaluatorOptions{
+	return eval.StartEvaluator(v, hdr,
+		eval.EvaluatorOptions{
 			PaysetHint:          paysetHint,
+			Tracer:              tracer,
 			Generate:            true,
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
 		})
 }
 
-// FlushCaches is part of ledger/internal.LedgerForEvaluator interface
+// GetStateProofVerificationContext implements the ledgerForEvaluator interface.
+func (v *validatedBlockAsLFE) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	//TODO(yg): is this behavior correct? what happens if round is the last block's round?
+	return v.l.GetStateProofVerificationContext(stateProofLastAttestedRound)
+}
+
+// FlushCaches is part of ledger/eval.LedgerForEvaluator interface
 func (v *validatedBlockAsLFE) FlushCaches() {
 }
 

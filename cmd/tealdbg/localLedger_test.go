@@ -36,6 +36,8 @@ import (
 // intermediate changes.
 func TestBalanceAdapterStateChanges(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	source := `#pragma version 2
@@ -81,7 +83,7 @@ int 2
 	a.NoError(err)
 
 	assetIdx := basics.AssetIndex(50)
-	appIdx := basics.AppIndex(100)
+	appIdx := basics.AppIndex(1001)
 	br := makeSampleBalanceRecord(addr, assetIdx, appIdx)
 	balances := map[basics.Address]basics.AccountData{
 		addr: br.AccountData,

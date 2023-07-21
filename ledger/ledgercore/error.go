@@ -28,6 +28,7 @@ import (
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
 // TxnNotWellFormedError indicates a transaction was not well-formed when evaluated by the BlockEvaluator
+//
 //msgp:ignore TxnNotWellFormedError
 type TxnNotWellFormedError string
 
@@ -93,21 +94,6 @@ func (err ErrNoEntry) Error() string {
 	return fmt.Sprintf("ledger does not have entry %d (latest %d, committed %d)", err.Round, err.Latest, err.Committed)
 }
 
-// LogicEvalError indicates TEAL evaluation failure
-type LogicEvalError struct {
-	Err     error
-	Details string
-}
-
-// Error satisfies builtin interface `error`
-func (err LogicEvalError) Error() string {
-	msg := fmt.Sprintf("logic eval error: %v", err.Err)
-	if len(err.Details) > 0 {
-		msg = fmt.Sprintf("%s. Details: %s", msg, err.Details)
-	}
-	return msg
-}
-
 // ErrNonSequentialBlockEval provides feedback when the evaluator cannot be created for
 // stale/future rounds.
 type ErrNonSequentialBlockEval struct {
@@ -121,6 +107,7 @@ func (err ErrNonSequentialBlockEval) Error() string {
 }
 
 // TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
+//
 //msgp:ignore TxGroupMalformedErrorReasonCode
 type TxGroupMalformedErrorReasonCode int
 

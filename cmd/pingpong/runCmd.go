@@ -153,14 +153,14 @@ var runCmd = &cobra.Command{
 			reportErrorf("Cannot make temp dir: %v\n", err)
 		}
 		if cpuprofile != "" {
-			proff, err := os.Create(cpuprofile)
-			if err != nil {
-				reportErrorf("%s: %v\n", cpuprofile, err)
+			proff, profErr := os.Create(cpuprofile)
+			if profErr != nil {
+				reportErrorf("%s: %v\n", cpuprofile, profErr)
 			}
 			defer proff.Close()
-			err = pprof.StartCPUProfile(proff)
-			if err != nil {
-				reportErrorf("%s: StartCPUProfile %v\n", cpuprofile, err)
+			profErr = pprof.StartCPUProfile(proff)
+			if profErr != nil {
+				reportErrorf("%s: StartCPUProfile %v\n", cpuprofile, profErr)
 			}
 			defer pprof.StopCPUProfile()
 		}
@@ -172,18 +172,18 @@ var runCmd = &cobra.Command{
 		}
 
 		if pidFile != "" {
-			pidf, err := os.Create(pidFile)
-			if err != nil {
-				reportErrorf("%s: %v\n", pidFile, err)
+			pidf, pidErr := os.Create(pidFile)
+			if pidErr != nil {
+				reportErrorf("%s: %v\n", pidFile, pidErr)
 			}
 			defer os.Remove(pidFile)
-			_, err = fmt.Fprintf(pidf, "%d", os.Getpid())
-			if err != nil {
-				reportErrorf("%s: %v\n", pidFile, err)
+			_, pidErr = fmt.Fprintf(pidf, "%d", os.Getpid())
+			if pidErr != nil {
+				reportErrorf("%s: %v\n", pidFile, pidErr)
 			}
-			err = pidf.Close()
-			if err != nil {
-				reportErrorf("%s: %v\n", pidFile, err)
+			pidErr = pidf.Close()
+			if pidErr != nil {
+				reportErrorf("%s: %v\n", pidFile, pidErr)
 			}
 		}
 
@@ -438,7 +438,9 @@ var runCmd = &cobra.Command{
 			cfg.GeneratedAccountSampleMethod = generatedAccountSampleMethod
 		}
 		// check if numAccounts is greater than the length of the mnemonic list, if provided
-		if cfg.DeterministicKeys && cfg.NumPartAccounts > uint32(len(cfg.GeneratedAccountsMnemonics)) {
+		if cfg.DeterministicKeys &&
+			len(cfg.GeneratedAccountsMnemonics) > 0 &&
+			cfg.NumPartAccounts > uint32(len(cfg.GeneratedAccountsMnemonics)) {
 			reportErrorf("numAccounts is greater than number of account mnemonics provided")
 		}
 

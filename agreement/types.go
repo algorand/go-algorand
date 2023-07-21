@@ -77,9 +77,9 @@ const (
 )
 
 func (s step) nextVoteRanges() (lower, upper time.Duration) {
-	extra := recoveryExtraTimeout // eg  2500 ms
-	lower = deadlineTimeout       // eg 17500 ms (15000 + 2500)
-	upper = lower + extra         // eg 20000 ms
+	extra := recoveryExtraTimeout // eg  2000 ms
+	lower = deadlineTimeout       // eg 17000 ms (15000 + 2000)
+	upper = lower + extra         // eg 19000 ms
 
 	for i := next; i < s; i++ {
 		extra *= 2
@@ -87,8 +87,8 @@ func (s step) nextVoteRanges() (lower, upper time.Duration) {
 		upper = lower + extra
 	}
 
-	// e.g. if s == 14
-	// extra = 2 ^ 8 * 2500ms = 256 * 2.5 = 512 + 128 = 640s
+	// e.g. if s == 11
+	// extra = 2 ^ 8 * 2000ms = 256 * 2.0 = 512s
 
 	return lower, upper
 }

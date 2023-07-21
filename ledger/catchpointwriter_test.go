@@ -41,14 +41,140 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/msgp/msgp"
 )
+
+type decodedCatchpointChunkData struct {
+	headerName string
+	data       []byte
+}
+
+func readCatchpointContent(t *testing.T, tarReader *tar.Reader) []decodedCatchpointChunkData {
+	result := make([]decodedCatchpointChunkData, 0)
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			break
+		}
+		data := make([]byte, header.Size)
+		readComplete := int64(0)
+
+		for readComplete < header.Size {
+			bytesRead, err := tarReader.Read(data[readComplete:])
+			readComplete += int64(bytesRead)
+			if err != nil {
+				if err == io.EOF {
+					if readComplete == header.Size {
+						break
+					}
+					require.NoError(t, err)
+				}
+				break
+			}
+		}
+
+		result = append(result, decodedCatchpointChunkData{headerName: header.Name, data: data})
+	}
+
+	return result
+}
+
+func readCatchpointDataFile(t *testing.T, catchpointDataPath string) []decodedCatchpointChunkData {
+	fileContent, err := os.ReadFile(catchpointDataPath)
+	require.NoError(t, err)
+
+	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+
+	tarReader := tar.NewReader(compressorReader)
+	return readCatchpointContent(t, tarReader)
+}
+
+func readCatchpointFile(t *testing.T, catchpointPath string) []decodedCatchpointChunkData {
+	fileContent, err := os.ReadFile(catchpointPath)
+	require.NoError(t, err)
+
+	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+	defer gzipReader.Close()
+
+	tarReader := tar.NewReader(gzipReader)
+	return readCatchpointContent(t, tarReader)
+}
+
+func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.StateProofVerificationContext) {
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.CatchpointLookback = 32
+	config.Consensus[testProtocolVersion] = protoParams
+	temporaryDirectory := t.TempDir()
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+	accts := ledgertesting.RandomAccounts(300, false)
+
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion, []map[basics.Address]basics.AccountData{accts})
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au, _ := newAcctUpdates(t, ml, conf)
+	err := au.loadFromDisk(ml, 0)
+	require.NoError(t, err)
+	au.close()
+	fileName := filepath.Join(temporaryDirectory, "15.data")
+
+	mockCommitData := make([]verificationCommitContext, 0)
+	for _, element := range data {
+		mockCommitData = append(mockCommitData, verificationCommitContext{verificationContext: element})
+	}
+
+	err = ml.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		return commitSPContexts(ctx, tx, mockCommitData)
+	})
+
+	require.NoError(t, err)
+
+	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
+		if err != nil {
+			return err
+		}
+		_, err = writer.WriteStateProofVerificationContext()
+		if err != nil {
+			return err
+		}
+		for {
+			more, err := writer.WriteStep(context.Background())
+			require.NoError(t, err)
+			if !more {
+				break
+			}
+		}
+		return
+	})
+
+	catchpointData := readCatchpointDataFile(t, fileName)
+	require.Equal(t, catchpointSPVerificationFileName, catchpointData[0].headerName)
+	var wrappedData catchpointStateProofVerificationContext
+	err = protocol.Decode(catchpointData[0].data, &wrappedData)
+	require.NoError(t, err)
+
+	for index, verificationContext := range wrappedData.Data {
+		require.Equal(t, data[index], verificationContext)
+	}
+}
 
 func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -129,9 +255,12 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	au.close()
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
-	readDb := ml.trackerDB().Rdb
-	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
+		if err != nil {
+			return err
+		}
+		_, err = writer.WriteStateProofVerificationContext()
 		if err != nil {
 			return err
 		}
@@ -144,48 +273,18 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		}
 		return
 	})
-	require.NoError(t, err)
 
-	// load the file from disk.
-	fileContent, err := os.ReadFile(fileName)
-	require.NoError(t, err)
-	compressorReader, err := catchpointStage1Decoder(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	defer compressorReader.Close()
-	tarReader := tar.NewReader(compressorReader)
-
-	header, err := tarReader.Next()
-	require.NoError(t, err)
-
-	balancesBlockBytes := make([]byte, header.Size)
-	readComplete := int64(0)
-
-	for readComplete < header.Size {
-		bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-		readComplete += int64(bytesRead)
-		if err != nil {
-			if err == io.EOF {
-				if readComplete == header.Size {
-					break
-				}
-				require.NoError(t, err)
-			}
-			break
-		}
-	}
-
-	require.Equal(t, "balances.1.msgpack", header.Name)
+	catchpointContent := readCatchpointDataFile(t, fileName)
+	balanceFileName := fmt.Sprintf(catchpointBalancesFileNameTemplate, 1)
+	require.Equal(t, balanceFileName, catchpointContent[1].headerName)
 
 	var chunk catchpointFileChunkV6
-	err = protocol.Decode(balancesBlockBytes, &chunk)
+	err = protocol.Decode(catchpointContent[1].data, &chunk)
 	require.NoError(t, err)
 	require.Equal(t, uint64(len(accts)), uint64(len(chunk.Balances)))
-
-	_, err = tarReader.Next()
-	require.Equal(t, io.EOF, err)
 }
 
-func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepath string, maxResourcesPerChunk int) CatchpointFileHeader {
+func testWriteCatchpoint(t *testing.T, rdb trackerdb.Store, datapath string, filepath string, maxResourcesPerChunk int) CatchpointFileHeader {
 	var totalAccounts uint64
 	var totalChunks uint64
 	var biggestChunkLen uint64
@@ -195,10 +294,17 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 		maxResourcesPerChunk = ResourcesPerCatchpointFileChunk
 	}
 
-	err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := rdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		writer, err := makeCatchpointWriter(context.Background(), datapath, tx, maxResourcesPerChunk)
-		arw := store.NewAccountsSQLReaderWriter(tx)
+		if err != nil {
+			return err
+		}
 
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+		_, err = writer.WriteStateProofVerificationContext()
 		if err != nil {
 			return err
 		}
@@ -212,11 +318,11 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 		totalAccounts = writer.totalAccounts
 		totalChunks = writer.chunkNum
 		biggestChunkLen = writer.biggestChunkLen
-		accountsRnd, err = arw.AccountsRound()
+		accountsRnd, err = ar.AccountsRound()
 		if err != nil {
 			return
 		}
-		totals, err = arw.AccountsTotals(ctx, false)
+		totals, err = ar.AccountsTotals(ctx, false)
 		return
 	})
 	require.NoError(t, err)
@@ -224,7 +330,7 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
 	catchpointFileHeader := CatchpointFileHeader{
-		Version:           CatchpointFileVersionV6,
+		Version:           CatchpointFileVersionV7,
 		BalancesRound:     accountsRnd,
 		BlocksRound:       blocksRound,
 		Totals:            totals,
@@ -242,6 +348,26 @@ func testWriteCatchpoint(t *testing.T, rdb db.Accessor, datapath string, filepat
 	defer l.Close()
 
 	return catchpointFileHeader
+}
+
+func TestStateProofVerificationContextWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	//t.Parallel() verifyStateProofVerificationContextWrite changes consensus
+
+	verificationContext := ledgercore.StateProofVerificationContext{
+		LastAttestedRound: 120,
+		VotersCommitment:  nil,
+		OnlineTotalWeight: basics.MicroAlgos{Raw: 100},
+	}
+
+	verifyStateProofVerificationContextWrite(t, []ledgercore.StateProofVerificationContext{verificationContext})
+}
+
+func TestEmptyStateProofVerificationContextWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	//t.Parallel() verifyStateProofVerificationContextWrite changes consensus
+
+	verifyStateProofVerificationContextWrite(t, []ledgercore.StateProofVerificationContext{})
 }
 
 func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
@@ -285,23 +411,29 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 	require.NoError(t, err)
 	au.close()
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
-	readDb := ml.trackerDB().Rdb
 
-	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		expectedTotalAccounts := uint64(1)
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		totalChunks := 0
-		var expectedTotalResources int
 		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
-		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
+		require.NoError(t, err)
+
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
+
+		expectedTotalResources, err := ar.TotalResources(ctx)
+		if err != nil {
+			return err
+		}
+
 		// repeat this until read all accts
 		for totalAccountsWritten < expectedTotalAccounts {
 			cw.chunk.Balances = nil
-			err := cw.readDatabaseStep(cw.ctx, cw.tx)
+			err := cw.readDatabaseStep(cw.ctx)
 			if err != nil {
 				return err
 			}
@@ -321,7 +453,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 			return fmt.Errorf("expected more than one chunk due to overflow")
 		}
 
-		if expectedTotalResources != totalResources {
+		if expectedTotalResources != uint64(totalResources) {
 			return fmt.Errorf("total resources did not match: expected %d, actual %d", expectedTotalResources, totalResources)
 		}
 
@@ -372,27 +504,32 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	require.NoError(t, err)
 	au.close()
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
-	readDb := ml.trackerDB().Rdb
 
-	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		arw := store.NewAccountsSQLReaderWriter(tx)
-		expectedTotalAccounts, err := arw.TotalAccounts(ctx)
+	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
+
+		expectedTotalAccounts, err := ar.TotalAccounts(ctx)
+		if err != nil {
+			return err
+		}
+
+		expectedTotalResources, err := ar.TotalResources(ctx)
+		if err != nil {
+			return err
+		}
+
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
-		var expectedTotalResources int
 		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
 		require.NoError(t, err)
-		err = cw.tx.QueryRowContext(cw.ctx, "SELECT count(1) FROM resources").Scan(&expectedTotalResources)
-		if err != nil {
-			return err
-		}
+
 		// repeat this until read all accts
 		for totalAccountsWritten < expectedTotalAccounts {
 			cw.chunk.Balances = nil
-			err := cw.readDatabaseStep(cw.ctx, cw.tx)
+			err := cw.readDatabaseStep(cw.ctx)
 			if err != nil {
 				return err
 			}
@@ -407,7 +544,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 			totalResources += numResources
 		}
 
-		if expectedTotalResources != totalResources {
+		if expectedTotalResources != uint64(totalResources) {
 			return fmt.Errorf("total resources did not match: expected %d, actual %d", expectedTotalResources, totalResources)
 		}
 
@@ -444,9 +581,9 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
 	const maxResourcesPerChunk = 5
-	testWriteCatchpoint(t, ml.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, maxResourcesPerChunk)
+	testWriteCatchpoint(t, ml.trackerDB(), catchpointDataFilePath, catchpointFilePath, maxResourcesPerChunk)
 
-	l := testNewLedgerFromCatchpoint(t, ml.trackerDB().Rdb, catchpointFilePath)
+	l := testNewLedgerFromCatchpoint(t, ml.trackerDB(), catchpointFilePath)
 	defer l.Close()
 
 	// verify that the account data aligns with what we originally stored :
@@ -463,65 +600,71 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	// now manually construct the MT and ensure the reading makeOrderedAccountsIter works as expected:
 	// no errors on read, hashes match
 	ctx := context.Background()
-	tx, err := l.trackerDBs.Wdb.Handle.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	require.NoError(t, err)
-	defer tx.Rollback()
 
-	arw := store.NewAccountsSQLReaderWriter(tx)
-
-	// save the existing hash
-	committer, err := store.MakeMerkleCommitter(tx, false)
-	require.NoError(t, err)
-	trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
-	require.NoError(t, err)
-
-	h1, err := trie.RootHash()
-	require.NoError(t, err)
-	require.NotEmpty(t, h1)
-
-	// reset hashes
-	err = arw.ResetAccountHashes(ctx)
-	require.NoError(t, err)
-
-	// rebuild the MT
-	committer, err = store.MakeMerkleCommitter(tx, false)
-	require.NoError(t, err)
-	trie, err = merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
-	require.NoError(t, err)
-
-	h, err := trie.RootHash()
-	require.NoError(t, err)
-	require.Zero(t, h)
-
-	iter := store.MakeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
-	defer iter.Close(ctx)
-	for {
-		accts, _, err := iter.Next(ctx)
-		if err == sql.ErrNoRows {
-			// the account builder would return sql.ErrNoRows when no more data is available.
-			err = nil
-			break
-		} else if err != nil {
-			require.NoError(t, err)
+	err = l.trackerDBs.TransactionContext(ctx, func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		aw, err := tx.MakeAccountsWriter()
+		if err != nil {
+			return nil
 		}
 
-		if len(accts) > 0 {
-			for _, acct := range accts {
-				added, err := trie.Add(acct.Digest)
+		// save the existing hash
+		committer, err := tx.MakeMerkleCommitter(false)
+		require.NoError(t, err)
+		trie, err := merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
+		require.NoError(t, err)
+
+		h1, err := trie.RootHash()
+		require.NoError(t, err)
+		require.NotEmpty(t, h1)
+
+		// reset hashes
+		err = aw.ResetAccountHashes(ctx)
+		require.NoError(t, err)
+
+		// rebuild the MT
+		committer, err = tx.MakeMerkleCommitter(false)
+		require.NoError(t, err)
+		trie, err = merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
+		require.NoError(t, err)
+
+		h, err := trie.RootHash()
+		require.NoError(t, err)
+		require.Zero(t, h)
+
+		iter := tx.MakeOrderedAccountsIter(trieRebuildAccountChunkSize)
+		defer iter.Close(ctx)
+		for {
+			accts, _, err := iter.Next(ctx)
+			if err == sql.ErrNoRows {
+				// the account builder would return sql.ErrNoRows when no more data is available.
+				err = nil
+				break
+			} else if err != nil {
 				require.NoError(t, err)
-				require.True(t, added)
+			}
+
+			if len(accts) > 0 {
+				for _, acct := range accts {
+					added, err := trie.Add(acct.Digest)
+					require.NoError(t, err)
+					require.True(t, added)
+				}
 			}
 		}
-	}
-	require.NoError(t, err)
-	h2, err := trie.RootHash()
-	require.NoError(t, err)
-	require.NotEmpty(t, h2)
 
-	require.Equal(t, h1, h2)
+		require.NoError(t, err)
+		h2, err := trie.RootHash()
+		require.NoError(t, err)
+		require.NotEmpty(t, h2)
+
+		require.Equal(t, h1, h2)
+
+		return nil
+	})
+	require.NoError(t, err)
 }
 
-func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess db.Accessor, filepath string) *Ledger {
+func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess trackerdb.Store, filepath string) *Ledger {
 	// create a ledger.
 	var initState ledgercore.InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
@@ -533,61 +676,34 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess db.Acc
 	err = accessor.ResetStagingBalances(context.Background(), true)
 	require.NoError(t, err)
 
-	// load the file from disk.
-	fileContent, err := os.ReadFile(filepath)
-	require.NoError(t, err)
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
-	require.NoError(t, err)
-	tarReader := tar.NewReader(gzipReader)
 	var catchupProgress CatchpointCatchupAccessorProgress
-	defer gzipReader.Close()
-	for {
-		header, err := tarReader.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			require.NoError(t, err)
-			break
-		}
-		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					require.NoError(t, err)
-				}
-				break
-			}
-		}
-		err = accessor.ProcessStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
+	catchpointContent := readCatchpointFile(t, filepath)
+	for _, catchpointData := range catchpointContent {
+		err = accessor.ProcessStagingBalances(context.Background(), catchpointData.headerName, catchpointData.data, &catchupProgress)
 		require.NoError(t, err)
 	}
 
 	err = accessor.BuildMerkleTrie(context.Background(), nil)
 	require.NoError(t, err)
 
-	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		crw := store.NewCatchpointSQLReaderWriter(tx)
-		err := crw.ApplyCatchpointStagingBalances(ctx, 0, 0)
-		return err
+	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		cw, err := tx.MakeCatchpointWriter()
+		if err != nil {
+			return err
+		}
+
+		return cw.ApplyCatchpointStagingBalances(ctx, 0, 0)
 	})
 	require.NoError(t, err)
 
-	balanceTrieStats := func(db db.Accessor) merkletrie.Stats {
+	balanceTrieStats := func(db trackerdb.Store) merkletrie.Stats {
 		var stats merkletrie.Stats
-		err = db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			committer, err := store.MakeMerkleCommitter(tx, false)
+		err = db.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+			committer, err := tx.MakeMerkleCommitter(false)
 			if err != nil {
 				return err
 			}
-			trie, err := merkletrie.MakeTrie(committer, store.TrieMemoryConfig)
+			trie, err := merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
 			if err != nil {
 				return err
 			}
@@ -606,7 +722,7 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess db.Acc
 	// Skip invariant check for tests using mocks that do _not_ update
 	// balancesTrie by checking for zero value stats.
 	if ws != (merkletrie.Stats{}) {
-		require.Equal(t, ws, balanceTrieStats(l.trackerDBs.Rdb), "Invariant broken - Catchpoint writer and reader merkle tries should _always_ agree")
+		require.Equal(t, ws, balanceTrieStats(l.trackerDBs), "Invariant broken - Catchpoint writer and reader merkle tries should _always_ agree")
 	}
 
 	return l
@@ -640,9 +756,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
-	testWriteCatchpoint(t, ml.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	testWriteCatchpoint(t, ml.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 
-	l := testNewLedgerFromCatchpoint(t, ml.trackerDB().Rdb, catchpointFilePath)
+	l := testNewLedgerFromCatchpoint(t, ml.trackerDB(), catchpointFilePath)
 	defer l.Close()
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
@@ -658,7 +774,8 @@ func TestExactAccountChunk(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer dl.Close()
 
 	pay := txntest.Txn{
@@ -688,10 +805,10 @@ func TestExactAccountChunk(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-	cph := testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	cph := testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, cph.TotalChunks, 1)
 
-	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointFilePath)
+	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 }
 
@@ -702,7 +819,8 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer dl.Close()
 
 	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
@@ -739,10 +857,10 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-	cph := testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	cph := testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, 2, cph.TotalChunks)
 
-	l := testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
+	l := testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 	require.NoError(t, err)
@@ -755,12 +873,12 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	dl.fullBlock(&newacctpay)
 
 	// Write and read back in, and ensure even the last effect exists.
-	cph = testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	cph = testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, cph.TotalChunks, 2) // Still only 2 chunks, as last was in a recent block
 
 	// Drive home the point that `last` is _not_ included in the catchpoint by inspecting balance read from catchpoint.
 	{
-		l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
+		l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
 		defer l.Close()
 		_, _, algos, err := l.LookupLatest(last)
 		require.NoError(t, err)
@@ -771,10 +889,10 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
 
-	cph = testWriteCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	cph = testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, cph.TotalChunks, 3)
 
-	l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB().Rdb, catchpointFilePath)
+	l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 	values, err = l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 	require.NoError(t, err)
@@ -805,7 +923,8 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture)
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
 	defer dl.Close()
 
 	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
@@ -860,10 +979,10 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-	cph := testWriteCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointDataFilePath, catchpointFilePath, 0)
+	cph := testWriteCatchpoint(t, dl.generator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, 2, cph.TotalChunks)
 
-	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB().Rdb, catchpointFilePath)
+	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 
 	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)

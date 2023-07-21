@@ -77,21 +77,30 @@ type StateProofStats struct {
 	TxnSize        int
 }
 
-// AssembleBlockTimeout represents AssemblePayset exiting due to timeout
+// AssembleBlockTimeout represents AssembleBlock exiting due to timeout
 const AssembleBlockTimeout = "timeout"
 
-// AssembleBlockFull represents AssemblePayset exiting due to block being full
+// AssembleBlockTimeoutEmpty represents AssembleBlock giving up after a timeout and returning an empty block
+const AssembleBlockTimeoutEmpty = "timeout-empty"
+
+// AssembleBlockFull represents AssembleBlock exiting due to block being full
 const AssembleBlockFull = "block-full"
 
-// AssembleBlockEmpty represents AssemblePayset exiting due to no more txns
+// AssembleBlockEmpty represents AssembleBlock exiting due to no more txns
 const AssembleBlockEmpty = "pool-empty"
+
+// AssembleBlockPoolBehind represents the transaction pool being more than two roudns behind
+const AssembleBlockPoolBehind = "pool-behind"
+
+// AssembleBlockEvalOld represents the assembled block that was returned being a round too old
+const AssembleBlockEvalOld = "eval-old"
 
 // AssembleBlockAbandon represents the block generation being abandoned since it won't be needed.
 const AssembleBlockAbandon = "block-abandon"
 
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
 
-// AssembleBlockMetrics is the set of metrics captured when we compute AssemblePayset
+// AssembleBlockMetrics is the set of metrics captured when we compute AssembleBlock
 type AssembleBlockMetrics struct {
 	AssembleBlockStats
 }
@@ -193,7 +202,7 @@ func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
 }
 
-//-------------------------------------------------------
+// -------------------------------------------------------
 // AccountsUpdate
 const accountsUpdateMetricsIdentifier Metric = "AccountsUpdate"
 

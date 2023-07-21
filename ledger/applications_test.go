@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -203,10 +203,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// opt-in, do no write
 	txHeader.Sender = userOptin
@@ -430,10 +429,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first txn => idx = 1001 since AppForbidLowResources sets tx counter to 1000
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// opt-in, write to local
 	txHeader.Sender = userLocal
@@ -673,10 +671,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// opt-in, write to local
 	txHeader.Sender = userLocal
@@ -757,12 +754,12 @@ return`
 
 	pad, err := l.accts.accountsq.LookupAccount(userLocal)
 	a.NoError(err)
-	a.Equal(store.BaseAccountData{}, pad.AccountData)
-	a.Zero(pad.Rowid)
+	a.Equal(trackerdb.BaseAccountData{}, pad.AccountData)
+	a.Nil(pad.Ref)
 	prd, err := l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.Addrid)
-	emptyResourceData := store.MakeResourcesData(0)
+	a.Nil(prd.AcctRef)
+	emptyResourceData := trackerdb.MakeResourcesData(0)
 	a.Equal(emptyResourceData, prd.Data)
 }
 
@@ -827,10 +824,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// destoy the app
 	txHeader.Sender = creator
@@ -894,11 +890,11 @@ return`
 	pad, err := l.accts.accountsq.LookupAccount(creator)
 	a.NoError(err)
 	a.Empty(pad.AccountData)
-	a.Zero(pad.Rowid)
+	a.Nil(pad.Ref)
 	prd, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.Addrid)
-	emptyResourceData := store.MakeResourcesData(0)
+	a.Nil(prd.AcctRef)
+	emptyResourceData := trackerdb.MakeResourcesData(0)
 	a.Equal(emptyResourceData, prd.Data)
 }
 
@@ -1150,7 +1146,7 @@ int 1
 			}
 
 			// create application
-			appIdx := basics.AppIndex(1) // first tnx => idx = 1
+			appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
 
 			approvalProgram := program
 			clearStateProgram := []byte("\x02") // empty
@@ -1331,8 +1327,8 @@ return
 	a.Greater(len(ops.Program), 1)
 	program := ops.Program
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1000000)
+	proto := config.Consensus[protocol.ConsensusFuture]
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 1000000)
 
 	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
 	a.NoError(err)
@@ -1357,7 +1353,7 @@ return
 		GenesisHash: genesisInitState.GenesisHash,
 	}
 
-	appIdx := basics.AppIndex(2) // second tnx => idx = 2
+	appIdx := basics.AppIndex(1002) // second tnx => idx = 1002
 
 	// fund app account
 	fundingPayment := transactions.Transaction{
@@ -1386,7 +1382,7 @@ return
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l1.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 2})
+	err = l1.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
 
 	// few empty blocks to reset deltas and flush

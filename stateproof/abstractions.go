@@ -41,6 +41,8 @@ type Ledger interface {
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	VotersForStateProof(basics.Round) (*ledgercore.VotersForRound, error)
+	RegisterVotersCommitListener(listener ledgercore.VotersCommitListener)
+	UnregisterVotersCommitListener()
 }
 
 // Network captures the aspects of the gossip network protocol that are

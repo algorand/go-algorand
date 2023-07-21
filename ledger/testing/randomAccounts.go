@@ -100,7 +100,7 @@ func RandomAssetParams() basics.AssetParams {
 		DefaultFrozen: crypto.RandUint64()%2 == 0,
 	}
 	if crypto.RandUint64()%5 != 0 {
-		ap.UnitName = fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffffff))
+		ap.UnitName = fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffff))
 	}
 	if crypto.RandUint64()%5 != 0 {
 		ap.AssetName = fmt.Sprintf("an%x", uint32(crypto.RandUint64()%0x7fffffff))

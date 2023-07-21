@@ -72,7 +72,7 @@ const StateProofFileName = "stateproof.sqlite"
 // It is used for tracking participation key metadata.
 const ParticipationRegistryFilename = "partregistry.sqlite"
 
-// ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
+// ConfigurableConsensusProtocolsFilename defines a set of consensus protocols that
 // are to be loaded from the data directory ( if present ), to override the
 // built-in supported consensus protocols.
 const ConfigurableConsensusProtocolsFilename = "consensus.json"
@@ -80,6 +80,14 @@ const ConfigurableConsensusProtocolsFilename = "consensus.json"
 // The default gossip fanout setting when configured as a relay (here, as we
 // do not expose in normal config so it is not in code generated local_defaults.go
 const defaultRelayGossipFanout = 8
+
+// MaxGenesisIDLen is the maximum length of the genesis ID set for purpose of setting
+// allocbounds on structs containing GenesisID and for purposes of calculating MaxSize functions
+// on those types. Current value is larger than the existing network IDs and the ones used in testing
+const MaxGenesisIDLen = 128
+
+// MaxEvalDeltaTotalLogSize is the maximum size of the sum of all log sizes in a single eval delta.
+const MaxEvalDeltaTotalLogSize = 1024
 
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file

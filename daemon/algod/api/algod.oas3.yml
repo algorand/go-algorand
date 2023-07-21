@@ -103,7 +103,7 @@
         }
       },
       "format": {
-        "description": "Configures whether the response object is JSON or MessagePack encoded.",
+        "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
         "in": "query",
         "name": "format",
         "schema": {
@@ -497,6 +497,25 @@
         },
         "description": "DryrunResponse contains per-txn debug information from a dryrun."
       },
+      "GetBlockTimeStampOffsetResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "offset": {
+                  "description": "Timestamp offset in seconds.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "offset"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing the timestamp offset in seconds"
+      },
       "GetSyncRoundResponse": {
         "content": {
           "application/json": {
@@ -515,6 +534,16 @@
           }
         },
         "description": "Response containing the ledger's minimum sync round"
+      },
+      "LedgerStateDeltaForTransactionGroupResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/LedgerStateDelta"
+            }
+          }
+        },
+        "description": "Response containing a ledger state delta for a single transaction group."
       },
       "LedgerStateDeltaResponse": {
         "content": {
@@ -631,7 +660,7 @@
                   "type": "boolean"
                 },
                 "upgrade-vote-rounds": {
-                  "description": "Total voting ounds for current upgrade",
+                  "description": "Total voting rounds for current upgrade",
                   "type": "integer"
                 },
                 "upgrade-votes": {
@@ -753,23 +782,37 @@
         },
         "description": "Transaction ID of the submission."
       },
-      "SimulationResponse": {
+      "SimulateResponse": {
         "content": {
           "application/json": {
             "schema": {
               "properties": {
-                "failure-message": {
-                  "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-                  "type": "string"
+                "eval-overrides": {
+                  "$ref": "#/components/schemas/SimulationEvalOverrides"
                 },
-                "missing-signatures": {
-                  "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
-                  "type": "boolean"
+                "exec-trace-config": {
+                  "$ref": "#/components/schemas/SimulateTraceConfig"
+                },
+                "last-round": {
+                  "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                  "type": "integer"
+                },
+                "txn-groups": {
+                  "description": "A result object for each transaction group that was simulated.",
+                  "items": {
+                    "$ref": "#/components/schemas/SimulateTransactionGroupResult"
+                  },
+                  "type": "array"
+                },
+                "version": {
+                  "description": "The version of this response object.",
+                  "type": "integer"
                 }
               },
               "required": [
-                "failure-message",
-                "missing-signatures"
+                "last-round",
+                "txn-groups",
+                "version"
               ],
               "type": "object"
             }
@@ -816,6 +859,27 @@
           }
         },
         "description": "Supply represents the current supply of MicroAlgos in the system."
+      },
+      "TransactionGroupLedgerStateDeltasForRoundResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "Deltas": {
+                  "items": {
+                    "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "Deltas"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing all ledger state deltas for transaction groups, with their associated Ids, in a single round."
       },
       "TransactionParametersResponse": {
         "content": {
@@ -1055,50 +1119,6 @@
         ],
         "type": "object"
       },
-      "AccountBalanceRecord": {
-        "description": "Account and its address",
-        "properties": {
-          "account-data": {
-            "$ref": "#/components/schemas/Account"
-          },
-          "address": {
-            "description": "Address of the updated account.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account-data",
-          "address"
-        ],
-        "type": "object"
-      },
-      "AccountDeltas": {
-        "description": "Exposes deltas for account based resources in a single round",
-        "properties": {
-          "accounts": {
-            "description": "Array of Account updates for the round",
-            "items": {
-              "$ref": "#/components/schemas/AccountBalanceRecord"
-            },
-            "type": "array"
-          },
-          "apps": {
-            "description": "Array of App updates for the round.",
-            "items": {
-              "$ref": "#/components/schemas/AppResourceRecord"
-            },
-            "type": "array"
-          },
-          "assets": {
-            "description": "Array of Asset updates for the round.",
-            "items": {
-              "$ref": "#/components/schemas/AssetResourceRecord"
-            },
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
       "AccountParticipation": {
         "description": "AccountParticipation describes the parameters used by this account in consensus protocol.",
         "properties": {
@@ -1155,69 +1175,6 @@
         "required": [
           "address",
           "delta"
-        ],
-        "type": "object"
-      },
-      "AccountTotals": {
-        "description": "Total Algos in the system grouped by account status",
-        "properties": {
-          "not-participating": {
-            "description": "Amount of stake in non-participating accounts",
-            "type": "integer"
-          },
-          "offline": {
-            "description": "Amount of stake in offline accounts",
-            "type": "integer"
-          },
-          "online": {
-            "description": "Amount of stake in online accounts",
-            "type": "integer"
-          },
-          "rewards-level": {
-            "description": "Total number of algos received per reward unit since genesis",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "not-participating",
-          "offline",
-          "online",
-          "rewards-level"
-        ],
-        "type": "object"
-      },
-      "AppResourceRecord": {
-        "description": "Represents AppParams and AppLocalStateDelta in deltas",
-        "properties": {
-          "address": {
-            "description": "App account address",
-            "type": "string"
-          },
-          "app-deleted": {
-            "description": "Whether the app was deleted",
-            "type": "boolean"
-          },
-          "app-index": {
-            "description": "App index",
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          },
-          "app-local-state": {
-            "$ref": "#/components/schemas/ApplicationLocalState"
-          },
-          "app-local-state-deleted": {
-            "description": "Whether the app local state was deleted",
-            "type": "boolean"
-          },
-          "app-params": {
-            "$ref": "#/components/schemas/ApplicationParams"
-          }
-        },
-        "required": [
-          "address",
-          "app-deleted",
-          "app-index",
-          "app-local-state-deleted"
         ],
         "type": "object"
       },
@@ -1443,38 +1400,27 @@
         ],
         "type": "object"
       },
-      "AssetResourceRecord": {
-        "description": "Represents AssetParams and AssetHolding in deltas",
+      "AvmValue": {
+        "description": "Represents an AVM value.",
         "properties": {
-          "address": {
-            "description": "Account address of the asset",
+          "bytes": {
+            "description": "bytes value.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
           },
-          "asset-deleted": {
-            "description": "Whether the asset was deleted",
-            "type": "boolean"
+          "type": {
+            "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint64**",
+            "type": "integer"
           },
-          "asset-holding": {
-            "$ref": "#/components/schemas/AssetHolding"
-          },
-          "asset-holding-deleted": {
-            "description": "Whether the asset holding was deleted",
-            "type": "boolean"
-          },
-          "asset-index": {
-            "description": "Index of the asset",
+          "uint": {
+            "description": "uint value.",
             "type": "integer",
             "x-algorand-format": "uint64"
-          },
-          "asset-params": {
-            "$ref": "#/components/schemas/AssetParams"
           }
         },
         "required": [
-          "address",
-          "asset-deleted",
-          "asset-holding-deleted",
-          "asset-index"
+          "type"
         ],
         "type": "object"
       },
@@ -1487,6 +1433,10 @@
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
           },
+          "round": {
+            "description": "The round for which this information is relevant",
+            "type": "integer"
+          },
           "value": {
             "description": "\\[value\\] box value, base64 encoded.",
             "format": "byte",
@@ -1496,6 +1446,7 @@
         },
         "required": [
           "name",
+          "round",
           "value"
         ],
         "type": "object"
@@ -1812,51 +1763,27 @@
         "type": "object"
       },
       "LedgerStateDelta": {
-        "description": "Contains ledger updates.",
+        "description": "Ledger StateDelta object",
+        "type": "object",
+        "x-algorand-format": "StateDelta"
+      },
+      "LedgerStateDeltaForTransactionGroup": {
+        "description": "Contains a ledger delta for a single transaction group",
         "properties": {
-          "accts": {
-            "$ref": "#/components/schemas/AccountDeltas"
+          "Delta": {
+            "$ref": "#/components/schemas/LedgerStateDelta"
           },
-          "kv-mods": {
-            "description": "Array of KV Deltas",
+          "Ids": {
             "items": {
-              "$ref": "#/components/schemas/KvDelta"
-            },
-            "type": "array"
-          },
-          "modified-apps": {
-            "description": "List of modified Apps",
-            "items": {
-              "$ref": "#/components/schemas/ModifiedApp"
-            },
-            "type": "array"
-          },
-          "modified-assets": {
-            "description": "List of modified Assets",
-            "items": {
-              "$ref": "#/components/schemas/ModifiedAsset"
-            },
-            "type": "array"
-          },
-          "prev-timestamp": {
-            "description": "Previous block timestamp",
-            "type": "integer"
-          },
-          "state-proof-next": {
-            "description": "Next round for which we expect a state proof",
-            "type": "integer"
-          },
-          "totals": {
-            "$ref": "#/components/schemas/AccountTotals"
-          },
-          "tx-leases": {
-            "description": "List of transaction leases",
-            "items": {
-              "$ref": "#/components/schemas/TxLease"
+              "type": "string"
             },
             "type": "array"
           }
         },
+        "required": [
+          "Delta",
+          "Ids"
+        ],
         "type": "object"
       },
       "LightBlockHeaderProof": {
@@ -1881,52 +1808,6 @@
           "index",
           "proof",
           "treedepth"
-        ],
-        "type": "object"
-      },
-      "ModifiedApp": {
-        "description": "App which was created or deleted.",
-        "properties": {
-          "created": {
-            "description": "Created if true, deleted if false",
-            "type": "boolean"
-          },
-          "creator": {
-            "description": "Address of the creator.",
-            "type": "string"
-          },
-          "id": {
-            "description": "App Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "created",
-          "creator",
-          "id"
-        ],
-        "type": "object"
-      },
-      "ModifiedAsset": {
-        "description": "Asset which was created or deleted.",
-        "properties": {
-          "created": {
-            "description": "Created if true, deleted if false",
-            "type": "boolean"
-          },
-          "creator": {
-            "description": "Address of the creator.",
-            "type": "string"
-          },
-          "id": {
-            "description": "Asset Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "created",
-          "creator",
-          "id"
         ],
         "type": "object"
       },
@@ -2013,14 +1894,14 @@
             "type": "array"
           },
           "local-state-delta": {
-            "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+            "description": "Local state key/value changes for the application being executed by this transaction.",
             "items": {
               "$ref": "#/components/schemas/AccountStateDelta"
             },
             "type": "array"
           },
           "logs": {
-            "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+            "description": "Logs for the application being executed by this transaction.",
             "items": {
               "format": "byte",
               "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
@@ -2051,6 +1932,215 @@
           "pool-error",
           "txn"
         ],
+        "type": "object"
+      },
+      "SimulateRequest": {
+        "description": "Request type for simulation endpoint.",
+        "properties": {
+          "allow-empty-signatures": {
+            "description": "Allow transactions without signatures to be simulated as if they had correct signatures.",
+            "type": "boolean"
+          },
+          "allow-more-logging": {
+            "description": "Lifts limits on log opcode usage during simulation.",
+            "type": "boolean"
+          },
+          "exec-trace-config": {
+            "$ref": "#/components/schemas/SimulateTraceConfig"
+          },
+          "extra-opcode-budget": {
+            "description": "Applies extra opcode budget during simulation for each transaction group.",
+            "type": "integer"
+          },
+          "txn-groups": {
+            "description": "The transaction groups to simulate.",
+            "items": {
+              "$ref": "#/components/schemas/SimulateRequestTransactionGroup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txn-groups"
+        ],
+        "type": "object"
+      },
+      "SimulateRequestTransactionGroup": {
+        "description": "A transaction group to simulate.",
+        "properties": {
+          "txns": {
+            "description": "An atomic transaction group.",
+            "items": {
+              "description": "SignedTxn object. Must be canonically encoded.",
+              "format": "json",
+              "type": "string",
+              "x-algorand-format": "SignedTransaction"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txns"
+        ],
+        "type": "object"
+      },
+      "SimulateTraceConfig": {
+        "description": "An object that configures simulation execution trace.",
+        "properties": {
+          "enable": {
+            "description": "A boolean option for opting in execution trace features simulation endpoint.",
+            "type": "boolean"
+          },
+          "stack-change": {
+            "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SimulateTransactionGroupResult": {
+        "description": "Simulation result for an atomic transaction group",
+        "properties": {
+          "app-budget-added": {
+            "description": "Total budget added during execution of app calls in the transaction group.",
+            "type": "integer"
+          },
+          "app-budget-consumed": {
+            "description": "Total budget consumed during execution of app calls in the transaction group.",
+            "type": "integer"
+          },
+          "failed-at": {
+            "description": "If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "failure-message": {
+            "description": "If present, indicates that the transaction group failed and specifies why that happened",
+            "type": "string"
+          },
+          "txn-results": {
+            "description": "Simulation result for individual transactions",
+            "items": {
+              "$ref": "#/components/schemas/SimulateTransactionResult"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "txn-results"
+        ],
+        "type": "object"
+      },
+      "SimulateTransactionResult": {
+        "description": "Simulation result for an individual transaction",
+        "properties": {
+          "app-budget-consumed": {
+            "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
+            "type": "integer"
+          },
+          "exec-trace": {
+            "$ref": "#/components/schemas/SimulationTransactionExecTrace"
+          },
+          "logic-sig-budget-consumed": {
+            "description": "Budget used during execution of a logic sig transaction.",
+            "type": "integer"
+          },
+          "txn-result": {
+            "$ref": "#/components/schemas/PendingTransactionResponse"
+          }
+        },
+        "required": [
+          "txn-result"
+        ],
+        "type": "object"
+      },
+      "SimulationEvalOverrides": {
+        "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
+        "properties": {
+          "allow-empty-signatures": {
+            "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
+            "type": "boolean"
+          },
+          "extra-opcode-budget": {
+            "description": "The extra opcode budget added to each transaction group during simulation",
+            "type": "integer"
+          },
+          "max-log-calls": {
+            "description": "The maximum log calls one can make during simulation",
+            "type": "integer"
+          },
+          "max-log-size": {
+            "description": "The maximum byte number to log during simulation",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SimulationOpcodeTraceUnit": {
+        "description": "The set of trace information and effect from evaluating a single opcode.",
+        "properties": {
+          "pc": {
+            "description": "The program counter of the current opcode being evaluated.",
+            "type": "integer"
+          },
+          "spawned-inners": {
+            "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "stack-additions": {
+            "description": "The values added by this opcode to the stack.",
+            "items": {
+              "$ref": "#/components/schemas/AvmValue"
+            },
+            "type": "array"
+          },
+          "stack-pop-count": {
+            "description": "The number of deleted stack values by this opcode.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pc"
+        ],
+        "type": "object"
+      },
+      "SimulationTransactionExecTrace": {
+        "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
+        "properties": {
+          "approval-program-trace": {
+            "description": "Program trace that contains a trace of opcode effects in an approval program.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          },
+          "clear-state-program-trace": {
+            "description": "Program trace that contains a trace of opcode effects in a clear state program.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          },
+          "inner-trace": {
+            "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationTransactionExecTrace"
+            },
+            "type": "array"
+          },
+          "logic-sig-trace": {
+            "description": "Program trace that contains a trace of opcode effects in a logic sig.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          }
+        },
         "type": "object"
       },
       "StateDelta": {
@@ -2163,31 +2253,6 @@
           "bytes",
           "type",
           "uint"
-        ],
-        "type": "object"
-      },
-      "TxLease": {
-        "description": "",
-        "properties": {
-          "expiration": {
-            "description": "Round that the lease expires",
-            "type": "integer"
-          },
-          "lease": {
-            "description": "Lease data",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
-          },
-          "sender": {
-            "description": "Address of the lease sender",
-            "type": "string"
-          }
-        },
-        "required": [
-          "expiration",
-          "lease",
-          "sender"
         ],
         "type": "object"
       },
@@ -2310,6 +2375,34 @@
         ]
       }
     },
+    "/ready": {
+      "get": {
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK."
+          },
+          "500": {
+            "content": {},
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {},
+            "description": "Node not ready yet"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns OK if healthy and fully caught up.",
+        "tags": [
+          "public",
+          "common"
+        ]
+      }
+    },
     "/swagger.json": {
       "get": {
         "description": "Returns the entire swagger spec in json.",
@@ -2343,7 +2436,7 @@
         "operationId": "AccountInformation",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2456,7 +2549,7 @@
         "operationId": "AccountApplicationInformation",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2596,7 +2689,7 @@
         "operationId": "AccountAssetInformation",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2754,7 +2847,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -2974,7 +3067,7 @@
     },
     "/v2/applications/{application-id}/box": {
       "get": {
-        "description": "Given an application ID and box name, it returns the box name and value (each base64 encoded). Box names must be in the goal app call arg encoding form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.",
+        "description": "Given an application ID and box name, it returns the round, box name, and value (each base64 encoded). Box names must be in the goal app call arg encoding form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.",
         "operationId": "GetApplicationBoxByName",
         "parameters": [
           {
@@ -3229,7 +3322,7 @@
         "operationId": "GetBlock",
         "parameters": [
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -3584,7 +3677,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -3853,6 +3946,16 @@
             },
             "description": "Invalid API Token"
           },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -3875,6 +3978,137 @@
         ]
       }
     },
+    "/v2/deltas/txn/group/{id}": {
+      "get": {
+        "description": "Get a ledger delta for a given transaction group.",
+        "operationId": "GetLedgerStateDeltaForTransactionGroup",
+        "parameters": [
+          {
+            "description": "A transaction ID, or transaction group ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]+",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerStateDelta"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerStateDelta"
+                }
+              }
+            },
+            "description": "Response containing a ledger state delta for a single transaction group."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not find a delta for transaction ID or group ID"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Implemented"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get a LedgerStateDelta object for a given transaction group",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
     "/v2/deltas/{round}": {
       "get": {
         "description": "Get ledger deltas for a round.",
@@ -3889,12 +4123,29 @@
               "minimum": 0,
               "type": "integer"
             }
+          },
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerStateDelta"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/LedgerStateDelta"
                 }
@@ -3908,6 +4159,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             },
             "description": "Invalid API Token"
@@ -3915,6 +4171,11 @@
           "404": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -3928,6 +4189,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             },
             "description": "timed out on request"
@@ -3938,6 +4204,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             },
             "description": "Internal Error"
@@ -3945,6 +4216,11 @@
           "503": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -3960,7 +4236,293 @@
         "summary": "Get a LedgerStateDelta object for a given round",
         "tags": [
           "public",
-          "data"
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/deltas/{round}/txn/group": {
+      "get": {
+        "description": "Get ledger deltas for transaction groups in a given round.",
+        "operationId": "GetTransactionGroupLedgerStateDeltasForRound",
+        "parameters": [
+          {
+            "description": "The round for which the deltas are desired.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "Deltas": {
+                      "items": {
+                        "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "Deltas"
+                  ],
+                  "type": "object"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "Deltas": {
+                      "items": {
+                        "$ref": "#/components/schemas/LedgerStateDeltaForTransactionGroup"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "Deltas"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing all ledger state deltas for transaction groups, with their associated Ids, in a single round."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Could not find deltas for round"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "timed out on request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Implemented"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get LedgerStateDelta objects for all transaction groups in a given round",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/devmode/blocks/offset": {
+      "get": {
+        "description": "Gets the current timestamp offset.",
+        "operationId": "GetBlockTimeStampOffset",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "offset": {
+                      "description": "Timestamp offset in seconds.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "offset"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing the timestamp offset in seconds"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "TimeStamp offset not set."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns the timestamp offset. Timestamp offsets can only be set in dev mode.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/devmode/blocks/offset/{offset}": {
+      "post": {
+        "description": "Sets the timestamp offset (seconds) for blocks in dev mode. Providing an offset of 0 will unset this value and try to use the real clock for the timestamp.",
+        "operationId": "SetBlockTimeStampOffset",
+        "parameters": [
+          {
+            "description": "The timestamp offset for blocks in dev mode.",
+            "in": "path",
+            "name": "offset",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Cannot set timestamp offset to a negative integer."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/experimental": {
+      "get": {
+        "operationId": "ExperimentalCheck",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "Experimental API enabled"
+          },
+          "404": {
+            "content": {},
+            "description": "Experimental API not enabled"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns OK if experimental API is enabled.",
+        "tags": [
+          "public",
+          "experimental"
         ]
       }
     },
@@ -4844,7 +5406,7 @@
                       "type": "boolean"
                     },
                     "upgrade-vote-rounds": {
-                      "description": "Total voting ounds for current upgrade",
+                      "description": "Total voting rounds for current upgrade",
                       "type": "integer"
                     },
                     "upgrade-votes": {
@@ -5019,7 +5581,7 @@
                       "type": "boolean"
                     },
                     "upgrade-vote-rounds": {
-                      "description": "Total voting ounds for current upgrade",
+                      "description": "Total voting rounds for current upgrade",
                       "type": "integer"
                     },
                     "upgrade-votes": {
@@ -5581,7 +6143,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -5722,7 +6284,7 @@
             }
           },
           {
-            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -5810,36 +6372,101 @@
     "/v2/transactions/simulate": {
       "post": {
         "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
-            "application/x-binary": {
+            "application/json": {
               "schema": {
-                "format": "binary",
-                "type": "string"
+                "$ref": "#/components/schemas/SimulateRequest"
+              }
+            },
+            "application/msgpack": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateRequest"
               }
             }
           },
-          "description": "The byte encoded transaction to simulate",
+          "description": "The transactions to simulate, along with any other inputs.",
           "required": true
         },
         "responses": {
           "200": {
             "content": {
-              "application/msgpack": {
+              "application/json": {
                 "schema": {
                   "properties": {
-                    "failure-message": {
-                      "description": "\\[fm\\] Failure message, if the transaction would have failed during a live broadcast.",
-                      "type": "string"
+                    "eval-overrides": {
+                      "$ref": "#/components/schemas/SimulationEvalOverrides"
                     },
-                    "missing-signatures": {
-                      "description": "\\[ms\\] Whether any transactions would have failed during a live broadcast because they were missing signatures.",
-                      "type": "boolean"
+                    "exec-trace-config": {
+                      "$ref": "#/components/schemas/SimulateTraceConfig"
+                    },
+                    "last-round": {
+                      "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "type": "integer"
+                    },
+                    "txn-groups": {
+                      "description": "A result object for each transaction group that was simulated.",
+                      "items": {
+                        "$ref": "#/components/schemas/SimulateTransactionGroupResult"
+                      },
+                      "type": "array"
+                    },
+                    "version": {
+                      "description": "The version of this response object.",
+                      "type": "integer"
                     }
                   },
                   "required": [
-                    "failure-message",
-                    "missing-signatures"
+                    "last-round",
+                    "txn-groups",
+                    "version"
+                  ],
+                  "type": "object"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "eval-overrides": {
+                      "$ref": "#/components/schemas/SimulationEvalOverrides"
+                    },
+                    "exec-trace-config": {
+                      "$ref": "#/components/schemas/SimulateTraceConfig"
+                    },
+                    "last-round": {
+                      "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "type": "integer"
+                    },
+                    "txn-groups": {
+                      "description": "A result object for each transaction group that was simulated.",
+                      "items": {
+                        "$ref": "#/components/schemas/SimulateTransactionGroupResult"
+                      },
+                      "type": "array"
+                    },
+                    "version": {
+                      "description": "The version of this response object.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "last-round",
+                    "txn-groups",
+                    "version"
                   ],
                   "type": "object"
                 }
@@ -5849,16 +6476,26 @@
           },
           "400": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             },
-            "description": "Bad Request - Malformed Algorand transaction"
+            "description": "Bad Request"
           },
           "401": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -5869,6 +6506,11 @@
           },
           "500": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -5879,6 +6521,11 @@
           },
           "503": {
             "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
               "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
@@ -5892,12 +6539,12 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. WARNING: This endpoint is experimental and under active development. There are no guarantees in terms of functionality or future support.",
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.",
         "tags": [
           "public",
-          "experimental"
+          "nonparticipating"
         ],
-        "x-codegen-request-body-name": "rawtxn"
+        "x-codegen-request-body-name": "request"
       }
     },
     "/versions": {

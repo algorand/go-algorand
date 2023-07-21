@@ -191,6 +191,9 @@ type multicastParams struct {
 	exclude nodeID
 }
 
+// UnknownMsgTag ensures the testingNetwork implementation below will drop a message.
+const UnknownMsgTag protocol.Tag = "??"
+
 func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID, exclude nodeID) {
 	// fmt.Println("mc", source, "x", exclude)
 	n.mu.Lock()
@@ -263,7 +266,7 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 		msgChans = n.bundleMessages
 	case protocol.ProposalPayloadTag:
 		msgChans = n.payloadMessages
-	case protocol.UnknownMsgTag:
+	case UnknownMsgTag:
 		// We use this intentionally - just drop it
 		return
 	default:
@@ -1699,7 +1702,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 		// intercept all proposals for the next period; replace with unexpected
 		baseNetwork.intercept(func(params multicastParams) multicastParams {
 			if params.tag == protocol.ProposalPayloadTag {
-				params.tag = protocol.UnknownMsgTag
+				params.tag = UnknownMsgTag
 			}
 			return params
 		})
@@ -2298,7 +2301,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 					return params
 				}
 			}
-			params.tag = protocol.UnknownMsgTag
+			params.tag = UnknownMsgTag
 		}
 
 		return params

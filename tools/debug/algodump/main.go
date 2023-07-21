@@ -149,7 +149,6 @@ func setDumpHandlers(n network.GossipNode) {
 		{Tag: protocol.ProposalPayloadTag, MessageHandler: &dh},
 		{Tag: protocol.TopicMsgRespTag, MessageHandler: &dh},
 		{Tag: protocol.TxnTag, MessageHandler: &dh},
-		{Tag: protocol.UniCatchupReqTag, MessageHandler: &dh},
 		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: &dh},
 		{Tag: protocol.VoteBundleTag, MessageHandler: &dh},
 	}

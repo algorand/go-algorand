@@ -55,6 +55,8 @@ var (
 	OutgoingNetworkMessageFilteredOutTotal = MetricName{Name: "algod_outgoing_network_message_filtered_out_total", Description: "Total number of messages that were not sent per peer request"}
 	// OutgoingNetworkMessageFilteredOutBytesTotal Total number of bytes saved by not sending messages that were asked not to be sent by peer
 	OutgoingNetworkMessageFilteredOutBytesTotal = MetricName{Name: "algod_outgoing_network_message_filtered_out_bytes_total", Description: "Total number of bytes saved by not sending messages that were asked not to be sent by peer"}
+	// UnknownProtocolTagMessagesTotal Total number of out-of-protocol tag messages received from the network
+	UnknownProtocolTagMessagesTotal = MetricName{Name: "algod_network_unk_tag_messages_total", Description: "Total number of unknown protocol tag messages received from the network"}
 	// CryptoGenSigSecretsTotal Total number of calls to GenerateSignatureSecrets()
 	CryptoGenSigSecretsTotal = MetricName{Name: "algod_crypto_signature_secrets_generate_total", Description: "Total number of calls to GenerateSignatureSecrets"}
 	// CryptoSigSecretsSignTotal Total number of calls to SignatureSecrets.Sign
@@ -79,6 +81,8 @@ var (
 	LedgerRewardClaimsTotal = MetricName{Name: "algod_ledger_reward_claims_total", Description: "Total number of reward claims written to the ledger"}
 	// LedgerRound Last round written to ledger
 	LedgerRound = MetricName{Name: "algod_ledger_round", Description: "Last round written to ledger"}
+	// LedgerDBRound Last round written to ledger
+	LedgerDBRound = MetricName{Name: "algod_ledger_dbround", Description: "Last round written to the ledger DB"}
 
 	// AgreementMessagesHandled "Number of agreement messages handled"
 	AgreementMessagesHandled = MetricName{Name: "algod_agreement_handled", Description: "Number of agreement messages handled"}

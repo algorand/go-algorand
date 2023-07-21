@@ -182,7 +182,7 @@ if { [catch {
     # once the node is started we can clear the ::GLOBAL_TEST_ALGO_DIR, so that shutdown would be done as a network.
     set ::GLOBAL_TEST_ALGO_DIR ""
 
-    ::AlgorandGoal::WaitForRound 38 $TEST_ROOT_DIR/Node
+    ::AlgorandGoal::WaitForRound $CATCHPOINT_ROUND $TEST_ROOT_DIR/Node
 
     ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
 

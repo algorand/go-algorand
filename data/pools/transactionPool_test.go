@@ -122,7 +122,7 @@ func newBlockEvaluator(t TestingT, l *ledger.Ledger) BlockEvaluator {
 	require.NoError(t, err)
 
 	next := bookkeeping.MakeBlock(prev)
-	eval, err := l.StartEvaluator(next.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(next.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	return eval
@@ -588,7 +588,7 @@ func TestRememberForget(t *testing.T) {
 	require.Len(t, pending, 0)
 }
 
-//	Test that clean up works
+// Test that clean up works
 func TestCleanUp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1456,7 +1456,7 @@ func TestStateProofLogging(t *testing.T) {
 	require.NoError(t, err)
 	b.BlockHeader.Branch = phdr.Hash()
 
-	_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
+	_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000, nil)
 	require.NoError(t, err)
 
 	// Simulate the blocks up to round 512 without any transactions
@@ -1480,7 +1480,7 @@ func TestStateProofLogging(t *testing.T) {
 			break
 		}
 
-		_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
+		_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000, nil)
 		require.NoError(t, err)
 	}
 
@@ -1502,7 +1502,7 @@ func TestStateProofLogging(t *testing.T) {
 	require.NotNil(t, voters)
 
 	// Get the message
-	msg, err := stateproof.GenerateStateProofMessage(mockLedger, uint64(votersRound), spRoundHdr)
+	msg, err := stateproof.GenerateStateProofMessage(mockLedger, round)
 
 	// Get the SP
 	proof := generateProofForTesting(uint64(round), msg, provenWeight, voters.Participants, voters.Tree, allKeys, t)
@@ -1523,7 +1523,7 @@ func TestStateProofLogging(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add it to the transaction pool and assemble the block
-	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000)
+	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000, nil)
 	require.NoError(t, err)
 
 	err = eval.Transaction(stxn, transactions.ApplyData{})
@@ -1589,7 +1589,7 @@ func generateProofForTesting(
 
 	// Prepare the builder
 	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusCurrentVersion].StateProofStrengthTarget
-	b, err := cryptostateproof.MakeBuilder(data, round, provenWeight,
+	b, err := cryptostateproof.MakeProver(data, round, provenWeight,
 		partArray, partTree, stateProofStrengthTargetForTests)
 	require.NoError(t, err)
 
@@ -1610,7 +1610,7 @@ func generateProofForTesting(
 	}
 
 	// Build the SP
-	proof, err := b.Build()
+	proof, err := b.CreateProof()
 	require.NoError(t, err)
 
 	return proof
@@ -1698,13 +1698,15 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Logf("prev block digest %s", block.Block().Digest().String())
-	t.Logf("prev block   hash %s", block.Block().Hash().String())
+	t.Logf("prev block hash %s", block.Block().Hash().String())
 
 	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
+	// TODO(yg): shouldn't we wait for it to finish?
 	//<-transactionPool.specAsmDone
 
 	// add the block
-	mockLedger.AddBlock(block.Block(), agreement.Certificate{})
+	err = mockLedger.AddBlock(block.Block(), agreement.Certificate{})
+	require.NoError(t, err)
 
 	// empty tx pool
 	transactionPool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)

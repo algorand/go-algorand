@@ -24,6 +24,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -45,7 +46,7 @@ var resetCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
 		anyError := false
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			cfg, err := config.LoadConfigFromDisk(dataDir)
 			if err != nil && !os.IsNotExist(err) {
 				reportWarnf("Error loading config file from '%s' - %s", dataDir, err)

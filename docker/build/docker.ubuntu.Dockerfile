@@ -1,6 +1,6 @@
 ARG ARCH="amd64"
 
-FROM ${ARCH}/ubuntu:18.04
+FROM ${ARCH}/ubuntu:22.04
 ARG GOLANG_VERSION
 ARG ARCH="amd64"
 RUN apt-get update && apt-get install curl python python3.7 python3-pip build-essential apt-transport-https ca-certificates software-properties-common -y && \
@@ -14,7 +14,7 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python2.7 1 &&
     update-alternatives --set python /usr/bin/python3.7 && \
     pip3 install mulecli
 
-RUN apt-get update && apt-get install -y autoconf bsdmainutils git libboost-all-dev && \
+RUN apt-get update && apt-get install -y autoconf bsdmainutils git && \
     curl https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz | tar -xzf - && \
     mv go /usr/local
 

@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/algorand/go-algorand/util"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -158,10 +159,33 @@ func run() int {
 	}
 	defer fileLock.Unlock()
 
+	// Delete legacy indexer.sqlite files if they happen to exist
+	checkAndDeleteIndexerFile := func(fileName string) {
+		indexerDBFilePath := filepath.Join(absolutePath, genesis.ID(), fileName)
+
+		if util.FileExists(indexerDBFilePath) {
+			if idxFileRemoveErr := os.Remove(indexerDBFilePath); idxFileRemoveErr != nil {
+				fmt.Fprintf(os.Stderr, "Error removing %s file from data directory: %v\n", fileName, idxFileRemoveErr)
+			} else {
+				fmt.Fprintf(os.Stdout, "Removed legacy %s file from data directory\n", fileName)
+			}
+		}
+	}
+
+	checkAndDeleteIndexerFile("indexer.sqlite")
+	checkAndDeleteIndexerFile("indexer.sqlite-shm")
+	checkAndDeleteIndexerFile("indexer.sqlite-wal")
+
 	cfg, err := config.LoadConfigFromDisk(absolutePath)
 	if err != nil && !os.IsNotExist(err) {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Cannot load config: %v", err)
+	}
+
+	_, err = cfg.ValidateDNSBootstrapArray(genesis.Network)
+	if err != nil {
+		// log is not setup yet, this will log to stderr
+		log.Fatalf("Error validating DNSBootstrap input: %v", err)
 	}
 
 	err = config.LoadConfigurableConsensusProtocols(absolutePath)
@@ -284,10 +308,15 @@ func run() int {
 		if err != nil {
 			log.Errorf("cannot locate node executable: %s", err)
 		} else {
-			phonebookDir := filepath.Dir(ex)
-			phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
-			if err != nil {
-				log.Debugf("Cannot load static phonebook: %v", err)
+			phonebookDirs := []string{filepath.Dir(ex), dataDir}
+			for _, phonebookDir := range phonebookDirs {
+				phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
+				if err == nil {
+					log.Debugf("Static phonebook loaded from %s", phonebookDir)
+					break
+				} else {
+					log.Debugf("Cannot load static phonebook from %s dir: %v", phonebookDir, err)
+				}
 			}
 		}
 	}

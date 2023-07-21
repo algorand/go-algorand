@@ -13,6 +13,13 @@ ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
 S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
+GOLANG_VERSIONS				:= $(shell ./scripts/get_golang_version.sh all)
+GOLANG_VERSION_BUILD		:= $(firstword $(GOLANG_VERSIONS))
+GOLANG_VERSION_SUPPORT		:= $(lastword $(GOLANG_VERSIONS))
+GOLANG_VERSION_BUILD_MAJOR	:= $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
+CURRENT_GO_VERSION			:= $(shell go version | cut -d " " -f 3 | tr -d 'go')
+CURRENT_GO_VERSION_MAJOR	:= $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
+
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
@@ -70,6 +77,11 @@ ifeq ($(SHORT_PART_PERIOD), 1)
 export SHORT_PART_PERIOD_FLAG := -s
 endif
 
+# Disable go experiments during build as of go 1.20.5 due to
+# https://github.com/golang/go/issues/60825
+# Likely fix: https://go-review.googlesource.com/c/go/+/503937/6/src/runtime/race_arm64.s
+export GOEXPERIMENT=none
+
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
@@ -85,7 +97,9 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./node ./ledger ./ledger/ledgercore ./ledger/store ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
+GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types
+
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
 
 default: build
 
@@ -101,10 +115,24 @@ fix: build
 lint: deps
 	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
 
+check_go_version:
+	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
+		echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)"; \
+		exit 1; \
+	fi
+
+tidy: check_go_version
+	@echo "Tidying go-algorand"
+	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
+	@for dir in $(GOMOD_DIRS); do \
+		echo "Tidying $$dir" && \
+		(cd $$dir && go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)); \
+	done
+
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
 
-sanity: fix lint fmt
+sanity: fix lint fmt tidy
 
 cover:
 	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
@@ -135,7 +163,7 @@ ALWAYS:
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
 crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
-	cp -R crypto/libsodium-fork crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
+	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
 		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
 		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" && \
@@ -186,7 +214,7 @@ rebuild_kmd_swagger: deps
 
 # develop
 
-build: buildsrc
+build: buildsrc buildsrc-special
 
 # We're making an empty file in the go-cache dir to
 # get around a bug in go build where it will fail
@@ -195,6 +223,10 @@ build: buildsrc
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
 	mkdir -p "${GOCACHE}" && \
 	touch "${GOCACHE}"/file.txt && \
+	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+
+buildsrc-special:
+	cd tools/block-generator && \
 	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:

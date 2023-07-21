@@ -39,6 +39,19 @@ type OnlineAccountsFetcher interface {
 	TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params *config.ConsensusParams, rewardsLevel uint64) (topOnlineAccounts []*OnlineAccount, totalOnlineStake basics.MicroAlgos, err error)
 }
 
+// LedgerForSPBuilder captures the functionality needed for the creation of the cryptographic state proof builder.
+type LedgerForSPBuilder interface {
+	VotersForStateProof(rnd basics.Round) (*VotersForRound, error)
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+}
+
+// VotersCommitListener represents an object that needs to get notified on commit stages in the voters tracker.
+type VotersCommitListener interface {
+	// OnPrepareVoterCommit gives the listener the opportunity to backup VotersForRound data related to rounds  (oldBase, newBase] before it is being removed.
+	// The implementation should log any errors that might occur.
+	OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, voters LedgerForSPBuilder)
+}
+
 // VotersForRound tracks the top online voting accounts as of a particular
 // round, along with a Merkle tree commitment to those voting accounts.
 type VotersForRound struct {
@@ -157,7 +170,7 @@ func (tr *VotersForRound) BroadcastError(err error) {
 	tr.mu.Unlock()
 }
 
-//Wait waits for the tree to get constructed.
+// Wait waits for the tree to get constructed.
 func (tr *VotersForRound) Wait() error {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()

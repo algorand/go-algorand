@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/slices"
 )
 
 // Txid is a hash used to uniquely identify individual transactions
@@ -58,7 +59,7 @@ type Header struct {
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
 	Note        []byte            `codec:"note,allocbound=config.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
-	GenesisID   string            `codec:"gen"`
+	GenesisID   string            `codec:"gen,allocbound=config.MaxGenesisIDLen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
 
 	// Group specifies that this transaction is part of a
@@ -118,7 +119,7 @@ type ApplyData struct {
 
 	// If asa or app is being created, the id used. Else 0.
 	// Names chosen to match naming the corresponding txn.
-	// These are populated on when MaxInnerTransactions > 0 (TEAL 5)
+	// These are populated only when MaxInnerTransactions > 0 (TEAL 5)
 	ConfigAsset   basics.AssetIndex `codec:"caid"`
 	ApplicationID basics.AppIndex   `codec:"apid"`
 }
@@ -272,12 +273,7 @@ func (tx Header) Alive(tc TxnContext) error {
 
 // MatchAddress checks if the transaction touches a given address.
 func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
-	for _, candidate := range tx.RelevantAddrs(spec) {
-		if addr == candidate {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(tx.RelevantAddrs(spec), addr)
 }
 
 var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")
@@ -476,6 +472,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			// recall 0 is the current app so indexes are shifted, thus test is for greater than, not gte.
 			if br.Index > uint64(len(tx.ForeignApps)) {
 				return fmt.Errorf("tx.Boxes[%d].Index is %d. Exceeds len(tx.ForeignApps)", i, br.Index)
+			}
+			if proto.EnableBoxRefNameError && len(br.Name) > proto.MaxAppKeyLen {
+				return fmt.Errorf("tx.Boxes[%d].Name too long, max len %d bytes", i, proto.MaxAppKeyLen)
 			}
 		}
 
