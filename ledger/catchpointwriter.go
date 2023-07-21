@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -160,35 +159,27 @@ func (cw *catchpointWriter) Abort() error {
 	return os.Remove(cw.filePath)
 }
 
-func (cw *catchpointWriter) WriteStateProofVerificationContext() (crypto.Digest, error) {
-	rawData, err := cw.tx.MakeSpVerificationCtxReader().GetAllSPContexts(cw.ctx)
-	if err != nil {
-		return crypto.Digest{}, err
-	}
-
-	wrappedData := catchpointStateProofVerificationContext{Data: rawData}
-	dataHash, encodedData := crypto.EncodeAndHash(wrappedData)
-
-	err = cw.tar.WriteHeader(&tar.Header{
+func (cw *catchpointWriter) WriteStateProofVerificationContext(encodedData []byte) error {
+	err := cw.tar.WriteHeader(&tar.Header{
 		Name: catchpointSPVerificationFileName,
 		Mode: 0600,
 		Size: int64(len(encodedData)),
 	})
 
 	if err != nil {
-		return crypto.Digest{}, err
+		return err
 	}
 
 	_, err = cw.tar.Write(encodedData)
 	if err != nil {
-		return crypto.Digest{}, err
+		return err
 	}
 
 	if chunkLen := uint64(len(encodedData)); cw.biggestChunkLen < chunkLen {
 		cw.biggestChunkLen = chunkLen
 	}
 
-	return dataHash, nil
+	return nil
 }
 
 // WriteStep works for a short period of time (determined by stepCtx) to get

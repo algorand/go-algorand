@@ -96,6 +96,10 @@ type evalTracer struct {
 	// stackHeightAfterDeletion is calculated by stack height before opcode - stack element deletion number.
 	// NOTE: both stackChangeExplanation and stackHeightAfterDeletion are used only for Stack exposure.
 	stackHeightAfterDeletion int
+
+	// scratchSlots are the scratch slots changed on current opcode (currently either `store` or `stores`).
+	// NOTE: this field scratchSlots is used only for scratch change exposure.
+	scratchSlots []uint64
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
@@ -254,7 +258,7 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
-	tracer.popCount, tracer.addCount = cx.NextStackChange()
+	tracer.popCount, tracer.addCount = cx.GetOpSpec().Explain(cx)
 	o.StackPopCount = uint64(tracer.popCount)
 
 	stackHeight := len(cx.Stack)
@@ -284,9 +288,12 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		}
 		*txnTrace.programTraceRef = append(*txnTrace.programTraceRef, tracer.makeOpcodeTraceUnit(cx))
 
+		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 		if tracer.result.ReturnStackChange() {
-			latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
 			latestOpcodeTraceUnit.computeStackValueDeletions(cx, tracer)
+		}
+		if tracer.result.ReturnScratchChange() {
+			tracer.recordChangedScratchSlots(cx)
 		}
 	}
 }
@@ -302,12 +309,48 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 	}
 }
 
+func (tracer *evalTracer) recordChangedScratchSlots(cx *logic.EvalContext) {
+	currentOpcodeName := cx.GetOpSpec().Name
+	last := len(cx.Stack) - 1
+	tracer.scratchSlots = nil
+
+	switch currentOpcodeName {
+	case "store":
+		slot := uint64(cx.GetProgram()[cx.PC()+1])
+		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+	case "stores":
+		prev := last - 1
+		slot := cx.Stack[prev].Uint
+
+		// If something goes wrong for `stores`, we don't have to error here
+		// for in runtime already has evalError
+		if slot >= uint64(len(cx.Scratch)) {
+			return
+		}
+		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+	}
+}
+
+func (tracer *evalTracer) recordUpdatedScratchVars(cx *logic.EvalContext) []ScratchChange {
+	if len(tracer.scratchSlots) == 0 {
+		return nil
+	}
+	changes := make([]ScratchChange, len(tracer.scratchSlots))
+	for i, slot := range tracer.scratchSlots {
+		changes[i] = ScratchChange{
+			Slot:     slot,
+			NewValue: cx.Scratch[slot].ToTealValue(),
+		}
+	}
+	return changes
+}
+
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	groupIndex := cx.GroupIndex()
 
 	// NOTE: only when we have no evalError on current opcode,
 	// we can proceed for recording stack chaange
-	if evalError == nil && tracer.result.ReturnStackChange() {
+	if evalError == nil && tracer.result.ReturnTrace() {
 		var txnTrace *TransactionTrace
 		if cx.RunMode() == logic.ModeSig {
 			txnTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
@@ -316,7 +359,12 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 		}
 
 		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
-		latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
+		if tracer.result.ReturnStackChange() {
+			latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
+		}
+		if tracer.result.ReturnScratchChange() {
+			latestOpcodeTraceUnit.ScratchSlotChanges = tracer.recordUpdatedScratchVars(cx)
+		}
 	}
 
 	if cx.RunMode() != logic.ModeApp {

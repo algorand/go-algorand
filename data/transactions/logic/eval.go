@@ -599,7 +599,7 @@ type EvalContext struct {
 	intc    []uint64
 	bytec   [][]byte
 	version uint64
-	scratch scratchSpace
+	Scratch scratchSpace
 
 	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
 	cost    int                            // cost incurred so far
@@ -631,14 +631,11 @@ func (cx *EvalContext) RunMode() RunMode {
 // PC returns the program counter of the current application being evaluated
 func (cx *EvalContext) PC() int { return cx.pc }
 
-// DisassembleLine disassembles the line pointing to current PC
-func (cx *EvalContext) DisassembleLine() (string, error) {
-	currentDisassembleState := &disassembleState{
-		program: cx.program, pc: cx.pc, numericTargets: true, intc: cx.intc, bytec: cx.bytec,
-	}
-	currentOpSpec := &opsByOpcode[cx.version][cx.program[cx.pc]]
-	return disassemble(currentDisassembleState, currentOpSpec)
-}
+// GetOpSpec queries for the OpSpec w.r.t. current program byte.
+func (cx *EvalContext) GetOpSpec() OpSpec { return opsByOpcode[cx.version][cx.program[cx.pc]] }
+
+// GetProgram queries for the current program
+func (cx *EvalContext) GetProgram() []byte { return cx.program }
 
 // avmType describes the type of a value on the operand stack
 // avmTypes are a subset of StackTypes
@@ -1015,7 +1012,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	// Save scratch for `gload`. We used to copy, but cx.scratch is quite large,
 	// about 8k, and caused measurable CPU and memory demands.  Of course, these
 	// should never be changed by later transactions.
-	cx.pastScratch[cx.groupIndex] = &cx.scratch
+	cx.pastScratch[cx.groupIndex] = &cx.Scratch
 
 	return pass, &cx, err
 }
@@ -3833,24 +3830,24 @@ func opEcdsaPkRecover(cx *EvalContext) error {
 
 func opLoad(cx *EvalContext) error {
 	n := cx.program[cx.pc+1]
-	cx.Stack = append(cx.Stack, cx.scratch[n])
+	cx.Stack = append(cx.Stack, cx.Scratch[n])
 	return nil
 }
 
 func opLoads(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	n := cx.Stack[last].Uint
-	if n >= uint64(len(cx.scratch)) {
+	if n >= uint64(len(cx.Scratch)) {
 		return fmt.Errorf("invalid Scratch index %d", n)
 	}
-	cx.Stack[last] = cx.scratch[n]
+	cx.Stack[last] = cx.Scratch[n]
 	return nil
 }
 
 func opStore(cx *EvalContext) error {
 	n := cx.program[cx.pc+1]
 	last := len(cx.Stack) - 1
-	cx.scratch[n] = cx.Stack[last]
+	cx.Scratch[n] = cx.Stack[last]
 	cx.Stack = cx.Stack[:last]
 	return nil
 }
@@ -3859,10 +3856,10 @@ func opStores(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 	n := cx.Stack[prev].Uint
-	if n >= uint64(len(cx.scratch)) {
+	if n >= uint64(len(cx.Scratch)) {
 		return fmt.Errorf("invalid Scratch index %d", n)
 	}
-	cx.scratch[n] = cx.Stack[last]
+	cx.Scratch[n] = cx.Stack[last]
 	cx.Stack = cx.Stack[:prev]
 	return nil
 }
@@ -3872,7 +3869,7 @@ func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stack
 	if gi >= len(cx.TxnGroup) {
 		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, gi, len(cx.TxnGroup))
 	}
-	if int(scratchIdx) >= len(cx.scratch) {
+	if int(scratchIdx) >= len(cx.Scratch) {
 		return none, fmt.Errorf("invalid Scratch index %d", scratchIdx)
 	}
 	if cx.TxnGroup[gi].Txn.Type != protocol.ApplicationCallTx {

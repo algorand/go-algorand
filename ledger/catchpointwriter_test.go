@@ -151,7 +151,13 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 		if err != nil {
 			return err
 		}
-		_, err = writer.WriteStateProofVerificationContext()
+		rawData, err := tx.MakeSpVerificationCtxReader().GetAllSPContexts(ctx)
+		if err != nil {
+			return err
+		}
+		_, encodedData := crypto.EncodeAndHash(catchpointStateProofVerificationContext{Data: rawData})
+
+		err = writer.WriteStateProofVerificationContext(encodedData)
 		if err != nil {
 			return err
 		}
@@ -260,7 +266,12 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = writer.WriteStateProofVerificationContext()
+		rawData, err := tx.MakeSpVerificationCtxReader().GetAllSPContexts(ctx)
+		if err != nil {
+			return err
+		}
+		_, encodedData := crypto.EncodeAndHash(catchpointStateProofVerificationContext{Data: rawData})
+		err = writer.WriteStateProofVerificationContext(encodedData)
 		if err != nil {
 			return err
 		}
@@ -304,7 +315,12 @@ func testWriteCatchpoint(t *testing.T, rdb trackerdb.Store, datapath string, fil
 		if err != nil {
 			return err
 		}
-		_, err = writer.WriteStateProofVerificationContext()
+		rawData, err := tx.MakeSpVerificationCtxReader().GetAllSPContexts(ctx)
+		if err != nil {
+			return err
+		}
+		_, encodedData := crypto.EncodeAndHash(catchpointStateProofVerificationContext{Data: rawData})
+		err = writer.WriteStateProofVerificationContext(encodedData)
 		if err != nil {
 			return err
 		}
