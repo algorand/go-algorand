@@ -118,7 +118,7 @@ func init() {
 	signCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "Partially-signed transaction file to add signature to")
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
 	signCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
-	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to use as account logic, should point to a file")
+	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source file to use as account logic")
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	signCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "Consensus protocol version id string")
