@@ -80,7 +80,7 @@ if [ "${OS}" = "linux" ]; then
 elif [ "${OS}" = "darwin" ]; then
     if [ "${CIRCLECI}" != "true" ]; then
         brew update
-        if [[ $(brew --version | cut -d' ' -f2) < "2.5.0" ]]; then
+       if [[ $(brew --version | head -1 | cut -d' ' -f2) < "2.5.0" ]]; then
             brew tap homebrew/cask
         fi
     fi
