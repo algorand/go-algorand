@@ -5,7 +5,7 @@ ARG GOLANG_VERSION
 ARG ARCH="amd64"
 ARG GOARCH="amd64"
 ENV DEBIAN_FRONTEND noninteractive
-RUN apt-get update && apt-get install -y build-essential git wget sqlite3 autoconf jq bsdmainutils shellcheck awscli libtool
+RUN apt-get update && apt-get install -y build-essential git wget autoconf jq bsdmainutils shellcheck awscli libtool
 WORKDIR /root
 RUN wget https://dl.google.com/go/go${GOLANG_VERSION}.linux-${GOARCH}.tar.gz \
     && tar -xvf go${GOLANG_VERSION}.linux-${GOARCH}.tar.gz && \

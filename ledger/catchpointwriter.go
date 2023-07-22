@@ -52,7 +52,7 @@ const (
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	ctx                  context.Context
-	tx                   trackerdb.TransactionScope
+	tx                   trackerdb.SnapshotScope
 	filePath             string
 	totalAccounts        uint64
 	totalKVs             uint64
@@ -106,7 +106,7 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx trackerdb.TransactionScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
+func makeCatchpointWriter(ctx context.Context, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
 	aw, err := tx.MakeAccountsReader()
 	if err != nil {
 		return nil, err
