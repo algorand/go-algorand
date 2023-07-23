@@ -359,7 +359,7 @@ func TestAppBoxesOptin(t *testing.T) {
 	g.finishRound()
 	// 2nd attempt to optin (with new sender) doesn't get replaced
 	g.startRound()
-	intra += 1
+	intra++
 	hint.sender = 8
 
 	actual, sgnTxns, appID, err = g.generateAppCallInternal(appBoxesOptin, round, intra, &hint)

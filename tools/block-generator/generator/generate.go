@@ -793,7 +793,7 @@ func track(id TxTypeID) (TxTypeID, time.Time) {
 func (g *generator) recordData(id TxTypeID, start time.Time) {
 	g.latestData[id]++
 	data := g.reportData[id]
-	data.GenerationCount += 1
+	data.GenerationCount++
 	data.GenerationTime += time.Since(start)
 	g.reportData[id] = data
 }
