@@ -348,7 +348,9 @@ func maybeIOError(err error) error {
 	}
 	var sqliteErr sqlite3.Error
 	if errors.As(err, &sqliteErr) {
-		return &trackerdb.ErrIoErr{InnerError: err}
+		if sqliteErr.Code == sqlite3.ErrIoErr {
+			return &trackerdb.ErrIoErr{InnerError: err}
+		}
 	}
 	return err
 }
