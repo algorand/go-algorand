@@ -88,6 +88,14 @@ type evalTracer struct {
 	// from top level transaction to the current inner txn that contains latest TransactionTrace.
 	// NOTE: execTraceStack is used only for PC/Stack/Storage exposure.
 	execTraceStack []*TransactionTrace
+
+	// addCount and popCount keep track of the latest opcode change explanation from opcode.
+	addCount int
+	popCount int
+
+	// stackHeightAfterDeletion is calculated by stack height before opcode - stack element deletion number.
+	// NOTE: both stackChangeExplanation and stackHeightAfterDeletion are used only for Stack exposure.
+	stackHeightAfterDeletion int
 }
 
 func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
@@ -176,7 +184,7 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 	if tracer.result.ReturnTrace() {
 		var txnTraceStackElem *TransactionTrace
 
-		// The last question is, where should this transaction trace attach to:
+		// Where should the current transaction trace attach to:
 		// - if it is a top level transaction, then attach to TxnResult level
 		// - if it is an inner transaction, then refer to the stack for latest exec trace,
 		//   and attach to inner array
@@ -245,6 +253,14 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 	return OpcodeTraceUnit{PC: uint64(cx.PC())}
 }
 
+func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
+	tracer.popCount, tracer.addCount = cx.NextStackChange()
+	o.StackPopCount = uint64(tracer.popCount)
+
+	stackHeight := len(cx.Stack)
+	tracer.stackHeightAfterDeletion = stackHeight - int(o.StackPopCount)
+}
+
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 	groupIndex := cx.GroupIndex()
 
@@ -267,10 +283,42 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
 		}
 		*txnTrace.programTraceRef = append(*txnTrace.programTraceRef, tracer.makeOpcodeTraceUnit(cx))
+
+		if tracer.result.ReturnStackChange() {
+			latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
+			latestOpcodeTraceUnit.computeStackValueDeletions(cx, tracer)
+		}
+	}
+}
+
+func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
+	for i := tracer.stackHeightAfterDeletion; i < len(cx.Stack); i++ {
+		tealValue := cx.Stack[i].ToTealValue()
+		o.StackAdded = append(o.StackAdded, basics.TealValue{
+			Type:  tealValue.Type,
+			Uint:  tealValue.Uint,
+			Bytes: tealValue.Bytes,
+		})
 	}
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
+	groupIndex := cx.GroupIndex()
+
+	// NOTE: only when we have no evalError on current opcode,
+	// we can proceed for recording stack chaange
+	if evalError == nil && tracer.result.ReturnStackChange() {
+		var txnTrace *TransactionTrace
+		if cx.RunMode() == logic.ModeSig {
+			txnTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+		} else {
+			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
+		}
+
+		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
+		latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
+	}
+
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig ops
 		return

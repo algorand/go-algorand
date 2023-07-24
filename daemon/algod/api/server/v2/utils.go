@@ -346,11 +346,25 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
+func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.AvmValue {
+	if len(tvs) == 0 {
+		return nil
+	}
+	modelTvs := make([]model.AvmValue, len(tvs))
+	for i := range tvs {
+		modelTvs[i] = model.AvmValue{
+			Type:  uint64(tvs[i].Type),
+			Uint:  omitEmpty(tvs[i].Uint),
+			Bytes: byteOrNil([]byte(tvs[i].Bytes)),
+		}
+	}
+	return &modelTvs
+}
+
 func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.SimulationOpcodeTraceUnit {
 	if len(programTrace) == 0 {
 		return nil
 	}
-
 	modelProgramTrace := make([]model.SimulationOpcodeTraceUnit, len(programTrace))
 	for i := range programTrace {
 		var spawnedInnersPtr *[]uint64
@@ -362,11 +376,12 @@ func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.Sim
 			spawnedInnersPtr = &spawnedInners
 		}
 		modelProgramTrace[i] = model.SimulationOpcodeTraceUnit{
-			Pc:            programTrace[i].PC,
-			SpawnedInners: spawnedInnersPtr,
+			Pc:             programTrace[i].PC,
+			SpawnedInners:  spawnedInnersPtr,
+			StackAdditions: convertTealValueSliceToModel(programTrace[i].StackAdded),
+			StackPopCount:  omitEmpty(programTrace[i].StackPopCount),
 		}
 	}
-
 	return &modelProgramTrace
 }
 
@@ -375,20 +390,18 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 		return nil
 	}
 
-	var execTraceModel model.SimulationTransactionExecTrace
-
-	execTraceModel.LogicSigTrace = convertProgramTrace(txnTrace.LogicSigTrace)
-	execTraceModel.ClearStateProgramTrace = convertProgramTrace(txnTrace.ClearStateProgramTrace)
-	execTraceModel.ApprovalProgramTrace = convertProgramTrace(txnTrace.ApprovalProgramTrace)
+	execTraceModel := model.SimulationTransactionExecTrace{
+		ApprovalProgramTrace:   convertProgramTrace(txnTrace.ApprovalProgramTrace),
+		ClearStateProgramTrace: convertProgramTrace(txnTrace.ClearStateProgramTrace),
+		LogicSigTrace:          convertProgramTrace(txnTrace.LogicSigTrace),
+	}
 
 	if len(txnTrace.InnerTraces) > 0 {
-		innerTrace := make([]model.SimulationTransactionExecTrace, len(txnTrace.InnerTraces))
-
+		innerTraces := make([]model.SimulationTransactionExecTrace, len(txnTrace.InnerTraces))
 		for i := range txnTrace.InnerTraces {
-			innerTrace[i] = *convertTxnTrace(&txnTrace.InnerTraces[i])
+			innerTraces[i] = *convertTxnTrace(&txnTrace.InnerTraces[i])
 		}
-
-		execTraceModel.InnerTrace = &innerTrace
+		execTraceModel.InnerTrace = &innerTraces
 	}
 
 	return &execTraceModel

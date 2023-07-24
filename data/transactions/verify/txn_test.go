@@ -72,9 +72,6 @@ type DummyLedgerForSignature struct {
 	badHdr bool
 }
 
-func (d *DummyLedgerForSignature) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
-	return createDummyBlockHeader(), nil
-}
 func (d *DummyLedgerForSignature) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
 	if d.badHdr {
 		return bookkeeping.BlockHeader{}, fmt.Errorf("test error block hdr")

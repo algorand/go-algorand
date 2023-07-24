@@ -215,8 +215,8 @@ func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
-// BlockHdrCached returns the block header for the given round, if it is available
-func (l *Ledger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+// BlockHdr returns the block header for the given round, if it is available
+func (l *Ledger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
 	hdr := bookkeeping.BlockHeader{}
 	// Return a fake seed that is different for each round
 	seed := committee.Seed{}

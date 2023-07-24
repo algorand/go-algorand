@@ -3108,6 +3108,29 @@
         }
       }
     },
+    "AvmValue": {
+      "description": "Represents an AVM value.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint64**",
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "bytes value.",
+          "type": "string",
+          "format": "byte"
+        },
+        "uint": {
+          "description": "uint value.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
     "StateDelta": {
       "description": "Application state delta.",
       "type": "array",
@@ -3491,6 +3514,10 @@
         "enable": {
           "description": "A boolean option for opting in execution trace features simulation endpoint.",
           "type": "boolean"
+        },
+        "stack-change": {
+          "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
+          "type": "boolean"
         }
       }
     },
@@ -3869,6 +3896,17 @@
           "type": "array",
           "items": {
             "type": "integer"
+          }
+        },
+        "stack-pop-count": {
+          "description": "The number of deleted stack values by this opcode.",
+          "type": "integer"
+        },
+        "stack-additions": {
+          "description": "The values added by this opcode to the stack.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AvmValue"
           }
         }
       }
