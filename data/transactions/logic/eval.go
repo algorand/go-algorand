@@ -227,7 +227,6 @@ type LedgerForLogic interface {
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	PrevTimestamp() int64
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)

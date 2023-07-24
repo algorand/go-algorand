@@ -92,11 +92,6 @@ func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockH
 	return l.il.LatestBlockHdr()
 }
 
-// BlockHdrCached is part of LedgerForEvaluator interface.
-//func (l indexerLedgerConnector) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-//	return l.il.BlockHdrCached(round)
-//}
-
 // CheckDup is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	// This function is not used by evaluator.

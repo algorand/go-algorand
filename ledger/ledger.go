@@ -648,6 +648,17 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 
 // BlockHdr returns the BlockHeader of the block for round rnd.
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
+
+	// Expected availability range in txTail.blockHeader is [Latest - MaxTxnLife, Latest]
+	// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+	// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
+	// and currently set to 1.
+	// Explanation:
+	// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
+	// and because a txn is alive when the current round <= txn.LastValid
+	// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
+	// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
+	// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
 	hdr, ok := l.txTail.blockHeader(rnd)
 	if !ok {
 		hdr, err = l.blockQ.getBlockHdr(rnd)

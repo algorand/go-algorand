@@ -1041,10 +1041,6 @@ func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, err
 	return bookkeeping.BlockHeader{}, errors.New("not implemented")
 }
 
-//func (l *testCowBaseLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-//	return l.BlockHdr(rnd)
-//}
-
 func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return errors.New("not implemented")
 }
