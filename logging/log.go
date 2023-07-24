@@ -359,7 +359,6 @@ func Base() Logger {
 // NewLogger returns a new Logger logging to out.
 func NewLogger() Logger {
 	l := logrus.New()
-	l.ExitFunc = func(code int) {}
 	return NewWrappedLogger(l)
 }
 

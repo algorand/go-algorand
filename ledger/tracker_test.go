@@ -367,7 +367,7 @@ func TestCommitRoundIOError(t *testing.T) {
 
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1)
 	const inMem = true
-	log := logging.TestingLog(t)
+	log := logging.TestingLogWithoutFatalExit(t)
 	log.SetLevel(logging.Warn)
 	cfg := config.GetDefaultLocal()
 	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)

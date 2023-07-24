@@ -126,7 +126,7 @@ func TestSetJSONFormatter(t *testing.T) {
 func TestFatalExitHandler(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	nl := NewLogger()
+	nl := TestingLogWithoutFatalExit(t)
 
 	// Make an exit handler that sets a flag to demonstrate it was called
 	flag := false
