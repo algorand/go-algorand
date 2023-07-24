@@ -261,7 +261,7 @@ func (z *spProver) MarshalMsg(b []byte) (o []byte) {
 			for zb0001 := range (*z).AddrToPos {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
-			sort.Sort((zb0001_keys))
+			sort.Sort(SortAddress(zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).AddrToPos[zb0001]
 				_ = zb0002
@@ -369,6 +369,10 @@ func (z *spProver) unmarshalMsg(bts []byte, validate bool) (o []byte, err error)
 					err = msgp.WrapError(err, "struct-from-array", "AddrToPos")
 					return
 				}
+				if validate && zb0010 && basics.AddressLess(zb0001, zb0009) {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				zb0009 = zb0001
 				zb0010 = true
 				zb0002, bts, err = msgp.ReadUint64Bytes(bts)
@@ -473,6 +477,10 @@ func (z *spProver) unmarshalMsg(bts []byte, validate bool) (o []byte, err error)
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "AddrToPos")
+						return
+					}
+					if validate && zb0014 && basics.AddressLess(zb0001, zb0013) {
+						err = &msgp.ErrNonCanonical{}
 						return
 					}
 					zb0013 = zb0001
