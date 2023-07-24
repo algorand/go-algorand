@@ -19,9 +19,11 @@ package mocks
 import (
 	"context"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // MockCatchpointCatchupAccessor is a dummy CatchpointCatchupAccessor implementation which doesn't do anything.
@@ -65,6 +67,11 @@ func (m *MockCatchpointCatchupAccessor) BuildMerkleTrie(ctx context.Context, pro
 // GetCatchupBlockRound returns the latest block round matching the current catchpoint
 func (m *MockCatchpointCatchupAccessor) GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error) {
 	return basics.Round(0), nil
+}
+
+// GetVerifyData returns the balances hash, spver hash and totals used by VerifyCatchpoint
+func (m *MockCatchpointCatchupAccessor) GetVerifyData(ctx context.Context) (balancesHash crypto.Digest, spverHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
+	return crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, nil
 }
 
 // VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.

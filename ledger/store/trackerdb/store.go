@@ -59,6 +59,10 @@ type Reader interface {
 	// catchpoint
 	// Note: BuildMerkleTrie() needs this on the reader handle in sqlite to not get locked by write txns
 	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
+	// Note: Catchpoint tracker needs this on the reader handle in sqlite to not get locked by write txns
+	MakeCatchpointReader() (CatchpointReader, error)
+	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
+	MakeKVsIter(ctx context.Context) (KVsIter, error)
 }
 
 // Writer is the interface for the trackerdb write operations.
@@ -82,10 +86,7 @@ type Writer interface {
 //	we should split these two sets of methods into two separate interfaces
 type Catchpoint interface {
 	// reader
-	MakeCatchpointReader() (CatchpointReader, error)
 	MakeOrderedAccountsIter(accountCount int) OrderedAccountsIter
-	MakeKVsIter(ctx context.Context) (KVsIter, error)
-	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
 	// writer
 	MakeCatchpointWriter() (CatchpointWriter, error)
 	// reader/writer
@@ -122,6 +123,7 @@ type Batch interface {
 // SnapshotScope is an atomic read-only scope to the store.
 type SnapshotScope interface {
 	Reader
+	ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error)
 }
 
 // Snapshot is an atomic read-only accecssor to the store.

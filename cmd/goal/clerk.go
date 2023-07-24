@@ -75,6 +75,7 @@ var (
 	simulateExtraOpcodeBudget     uint64
 	simulateEnableRequestTrace    bool
 	simulateStackChange           bool
+	simulateScratchChange         bool
 	simulateAllowUnnamedResources bool
 )
 
@@ -99,7 +100,7 @@ func init() {
 	sendCmd.Flags().Uint64VarP(&amount, "amount", "a", 0, "The amount to be transferred (required), in microAlgos")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
 	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
-	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
+	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source file to use as account logic")
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	sendCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
@@ -119,7 +120,7 @@ func init() {
 	signCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "Partially-signed transaction file to add signature to")
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
 	signCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
-	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to use as account logic")
+	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source file to use as account logic")
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	signCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "Consensus protocol version id string")
@@ -166,6 +167,7 @@ func init() {
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
 	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
 	simulateCmd.Flags().BoolVar(&simulateStackChange, "stack", false, "Report stack change during simulation time")
+	simulateCmd.Flags().BoolVar(&simulateScratchChange, "scratch", false, "Report scratch change during simulation time")
 	simulateCmd.Flags().BoolVar(&simulateAllowUnnamedResources, "allow-unnamed-resources", false, "Allow access to unnamed resources during simulation")
 }
 
@@ -1371,7 +1373,8 @@ func decodeTxnsFromFile(file string) []transactions.SignedTxn {
 
 func traceCmdOptionToSimulateTraceConfigModel() simulation.ExecTraceConfig {
 	return simulation.ExecTraceConfig{
-		Enable: simulateEnableRequestTrace,
-		Stack:  simulateStackChange,
+		Enable:  simulateEnableRequestTrace,
+		Stack:   simulateStackChange,
+		Scratch: simulateScratchChange,
 	}
 }

@@ -12,7 +12,7 @@ clean-generator:
 	rm -f block-generator
 
 debug-blockgen:
-	python run_runner.py \
+	python scripts/run_runner.py \
 	--conduit-binary ./conduit \
 	--scenario $(SCENARIO) \
 	--report-directory $(REPORTS) \
@@ -38,7 +38,7 @@ run-runner: block-generator
 	--report-directory $(REPORTS)
 
 clean-reports:
-	rm -rf $(REPORTS) 
+	rm -rf $(REPORTS)
 
 pre-git-push:
 	mv _go.mod go.mod
