@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+source ./scripts/compare_semantic_versions.sh
 set -e
 
 ./scripts/check_golang_version.sh dev
@@ -80,7 +81,10 @@ if [ "${OS}" = "linux" ]; then
 elif [ "${OS}" = "darwin" ]; then
     if [ "${CIRCLECI}" != "true" ]; then
         brew update
-       if [[ $(brew --version | head -1 | cut -d' ' -f2) < "2.5.0" ]]; then
+        brew_version=$(brew --version | head -1 | cut -d' ' -f2)
+        compare_semantic_versions "$brew_version" "2.5.0"
+        result=$?
+        if [[ $result -eq 1 ]]; then
             brew tap homebrew/cask
         fi
     fi
