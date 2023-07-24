@@ -295,17 +295,19 @@ func (pps *WorkerState) scheduleAction() bool {
 		}
 		pps.refreshPos = 0
 	}
-	addr := pps.refreshAddrs[pps.refreshPos]
-	ai, err := pps.client.AccountInformation(addr, true)
-	if err == nil {
-		ppa := pps.accounts[addr]
+	if pps.cfg.NumApp > 0 || pps.cfg.NumAsset > 0 {
+		addr := pps.refreshAddrs[pps.refreshPos]
+		ai, err := pps.client.AccountInformation(addr, true)
+		if err == nil {
+			ppa := pps.accounts[addr]
 
-		pps.integrateAccountInfo(addr, ppa, ai)
-	} else {
-		if !pps.cfg.Quiet {
-			fmt.Printf("background refresh err: %v\n", err)
+			pps.integrateAccountInfo(addr, ppa, ai)
+		} else {
+			if !pps.cfg.Quiet {
+				fmt.Printf("background refresh err: %v\n", err)
+			}
+			return false
 		}
-		return false
 	}
 	pps.refreshPos++
 	return true

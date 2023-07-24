@@ -10,7 +10,6 @@ RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.n
     libffi-devel openssl-devel
 RUN dnf install -y epel-release && \
     dnf update && \
-    dnf -y install sqlite && \
     dnf -y --enablerepo=powertools install libstdc++-static && \
     dnf -y install make
 RUN echo "${BOLD}Downloading and installing binaries...${RESET}" && \
@@ -28,6 +27,7 @@ COPY . $GOPATH/src/github.com/algorand/go-algorand
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     GOPROXY=https://proxy.golang.org,https://pkg.go.dev,https://goproxy.io,direct
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
+RUN git config --global --add safe.directory '*'
 RUN make clean
 RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
     mkdir -p $GOPATH/src/github.com/algorand/go-algorand
