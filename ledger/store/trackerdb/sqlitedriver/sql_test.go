@@ -23,8 +23,10 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -80,4 +82,23 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	require.Nil(t, qs.lookupAccountStmt)
 	qs.Close()
 	require.Nil(t, qs.lookupAccountStmt)
+}
+
+// TestMaybeIOError ensures that SQL ErrIOErr is converted to trackerdb.ErrIoErr
+// github.com/mattn/go-sqlite3/blob/master/error.go
+// github.com/mattn/go-sqlite3/blob/master/sqlite3.go#L830
+func TestMaybeIOError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// This structure is how sqlite3 returns Errors
+	err := sqlite3.Error{Code: sqlite3.ErrIoErr}
+	require.Equal(t, trackerdb.ErrIoErr, maybeIOError(err))
+
+	// ErrNo10 is a sqlite3 error code for ErrIoErr
+	err = sqlite3.Error{Code: sqlite3.ErrNo(10)}
+	require.Equal(t, trackerdb.ErrIoErr, maybeIOError(err))
+
+	err = sqlite3.Error{Code: sqlite3.ErrSchema}
+	require.NotEqual(t, trackerdb.ErrIoErr, maybeIOError(err))
 }

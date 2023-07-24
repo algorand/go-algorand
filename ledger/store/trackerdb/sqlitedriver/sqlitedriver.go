@@ -19,7 +19,6 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"testing"
 	"time"
 
@@ -343,8 +342,11 @@ func (txs *sqlTransactionScope) Commit() error {
 // maybeIOError allows for SQL IO Errors to be represented as trackerdb.ErrIoErr
 // in places which may enconter them.
 func maybeIOError(err error) error {
-	ioErr := &sqlite3.ErrIoErr
-	if errors.As(err, ioErr) {
+	if err == nil {
+		return nil
+	}
+	serr, ok := err.(sqlite3.Error)
+	if !ok || serr.Code == sqlite3.ErrIoErr {
 		return trackerdb.ErrIoErr
 	}
 	return err
