@@ -88,7 +88,7 @@ func (s *trackerSQLStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 func (s *trackerSQLStore) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
 	return maybeIOError(s.pair.Rdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlSnapshotScope{tx, &sqlReader{tx}})
-  }))
+	}))
 }
 
 func (s *trackerSQLStore) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {

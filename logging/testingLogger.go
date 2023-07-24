@@ -41,6 +41,9 @@ func (tb TestLogWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+// TestingLogWithoutFatalExit is a test-only convenience function to configure logging for testing in situations where Fatal() may be called
+// (e.g. in the case of an expected failure)
+// Calls to Fatal() will still call any registered exit handlers
 func TestingLogWithoutFatalExit(tb testing.TB) Logger {
 	l := logrus.New()
 	l.ExitFunc = func(code int) {}
