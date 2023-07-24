@@ -3510,7 +3510,7 @@
           }
         },
         "allow-empty-signatures": {
-          "description": "Allow transactions without signatures to be simulated as if they had correct signatures.",
+          "description": "Allows transactions without signatures to be simulated as if they had correct signatures.",
           "type": "boolean"
         },
         "allow-more-logging": {
@@ -3518,7 +3518,7 @@
           "type": "boolean"
         },
         "allow-unnamed-resources": {
-          "description": "Allow access to unnamed resources during simulation.",
+          "description": "Allows access to unnamed resources during simulation.",
           "type": "boolean"
         },
         "extra-opcode-budget": {
@@ -3607,7 +3607,7 @@
       }
     },
     "BoxReference": {
-      "description": "Box descriptor describes a Box.",
+      "description": "References a box of an application.",
       "type": "object",
       "required": [
         "app",
@@ -3818,7 +3818,7 @@
           "description": "Total budget consumed during execution of app calls in the transaction group.",
           "type": "integer"
         },
-        "unnamed-resources": {
+        "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulationUnnamedGroupResources"
         }
       }
@@ -3844,7 +3844,7 @@
         "exec-trace": {
           "$ref": "#/definitions/SimulationTransactionExecTrace"
         },
-        "unnamed-resources": {
+        "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
         }
       }
@@ -4045,7 +4045,7 @@
       }
     },
     "SimulationUnnamedGroupResources": {
-      "description": "If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and benefit from group resource sharing. Also see property 'unnamed-resources' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing.",
+      "description": "If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and could benefit from group resource sharing. In other words, there are no restrictions on where these resources must be placed in the transaction group. Also see property 'unnamed-resources-accessed' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing; in contrast, these resources must be placed local to that transaction.",
       "type": "object",
       "required": [
         "resources",
@@ -4076,7 +4076,7 @@
       }
     },
     "SimulationUnnamedResourceAssignment": {
-      "description": "This object contains a set of unnamed resources that were accessed during a simulation call.",
+      "description": "The set of unnamed resources that were accessed during a simulation call.",
       "type": "object",
       "required": [
         "max-total-refs",

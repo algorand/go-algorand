@@ -3847,13 +3847,13 @@ func TestUnnamedResources(t *testing.T) {
 												},
 											},
 										},
-										AppBudgetConsumed: ignoreAppBudgetConsumed,
-										UnnamedResources:  expectedUnnamedResourceTxnAssignment,
+										AppBudgetConsumed:        ignoreAppBudgetConsumed,
+										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
 									},
 								},
-								AppBudgetAdded:    700 + 700*uint64(innerCount),
-								AppBudgetConsumed: ignoreAppBudgetConsumed,
-								UnnamedResources:  &expectedUnnamedResourceGroupAssignment,
+								AppBudgetAdded:           700 + 700*uint64(innerCount),
+								AppBudgetConsumed:        ignoreAppBudgetConsumed,
+								UnnamedResourcesAccessed: &expectedUnnamedResourceGroupAssignment,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -3987,14 +3987,14 @@ int 1
 												EvalDelta: expectedEvalDelta,
 											},
 										},
-										AppBudgetConsumed: ignoreAppBudgetConsumed,
-										UnnamedResources:  expectedUnnamedResourceTxnAssignment,
+										AppBudgetConsumed:        ignoreAppBudgetConsumed,
+										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
 									},
 								},
-								FailedAt:          expectedFailedAt,
-								AppBudgetAdded:    700,
-								AppBudgetConsumed: ignoreAppBudgetConsumed,
-								UnnamedResources:  &expectedUnnamedResourceAssignment,
+								FailedAt:                 expectedFailedAt,
+								AppBudgetAdded:           700,
+								AppBudgetConsumed:        ignoreAppBudgetConsumed,
+								UnnamedResourcesAccessed: &expectedUnnamedResourceAssignment,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -4173,9 +4173,9 @@ int 1
 										AppBudgetConsumed: ignoreAppBudgetConsumed,
 									},
 								},
-								AppBudgetAdded:    1400,
-								AppBudgetConsumed: ignoreAppBudgetConsumed,
-								UnnamedResources:  &expectedUnnamedResourceAssignment,
+								AppBudgetAdded:           1400,
+								AppBudgetConsumed:        ignoreAppBudgetConsumed,
+								UnnamedResourcesAccessed: &expectedUnnamedResourceAssignment,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -4338,7 +4338,7 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 					Txns:              expectedTxnResults,
 					AppBudgetAdded:    uint64(700 * len(boxOps)),
 					AppBudgetConsumed: ignoreAppBudgetConsumed,
-					UnnamedResources: &simulation.GroupResourceAssignment{
+					UnnamedResourcesAccessed: &simulation.GroupResourceAssignment{
 						Resources: simulation.ResourceAssignment{
 							MaxAccounts:  len(boxOps) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 							MaxAssets:    len(boxOps)*proto.MaxAppTxnForeignAssets - otherAssets,
@@ -5207,7 +5207,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 		expectedGroupResources.Resources.MaxApps -= len(localResources.Apps)
 		expectedGroupResources.Resources.MaxTotalRefs -= len(localResources.Accounts) + len(localResources.Assets) + len(localResources.Apps)
 		if localResources.HasResources() {
-			expectedTxnResults[0].UnnamedResources = &localResources
+			expectedTxnResults[0].UnnamedResourcesAccessed = &localResources
 		}
 	} else {
 		// Shared resources
@@ -5230,11 +5230,11 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			LastRound: env.TxnInfo.LatestRound(),
 			TxnGroups: []simulation.TxnGroupResult{
 				{
-					Txns:              expectedTxnResults,
-					AppBudgetAdded:    uint64(700) + extraBudget,
-					AppBudgetConsumed: ignoreAppBudgetConsumed,
-					UnnamedResources:  &expectedGroupResources,
-					FailedAt:          failedAt,
+					Txns:                     expectedTxnResults,
+					AppBudgetAdded:           uint64(700) + extraBudget,
+					AppBudgetConsumed:        ignoreAppBudgetConsumed,
+					UnnamedResourcesAccessed: &expectedGroupResources,
+					FailedAt:                 failedAt,
 				},
 			},
 			EvalOverrides: simulation.ResultEvalOverrides{

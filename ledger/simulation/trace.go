@@ -37,7 +37,13 @@ type TxnResult struct {
 	LogicSigBudgetConsumed uint64
 	Trace                  *TransactionTrace
 
-	UnnamedResources *ResourceAssignment
+	// UnnamedResourcesAccessed is present if all of the following are true:
+	//  * AllowUnnamedResources is true
+	//  * The transaction cannot use shared resources (pre-v9 program)
+	//  * The transaction accessed unnamed resources.
+	//
+	// In that case, it will be populated with the unnamed resources accessed by this transaction.
+	UnnamedResourcesAccessed *ResourceAssignment
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group
@@ -53,9 +59,14 @@ type TxnGroupResult struct {
 	// AppBudgetConsumed is the total opcode cost used for this group
 	AppBudgetConsumed uint64
 
-	// UnnamedResources contains all of the unnamed resources that were accessed by this group
-	// if AllowUnnamedResources is true. Otherwise this will be nil.
-	UnnamedResources *GroupResourceAssignment
+	// UnnamedResourcesAccessed will be present if AllowUnnamedResources is true. In that case, it
+	// will be populated with the unnamed resources accessed by this transaction group from
+	// transactions which can benefit from shared resources (v9 or higher programs).
+	//
+	// Any unnamed resources accessed from transactions which cannot benefit from shared resources
+	// will be placed in the corresponding `UnnamedResourcesAccessed` field in the appropriate
+	// TxnResult struct.
+	UnnamedResourcesAccessed *GroupResourceAssignment
 }
 
 func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {

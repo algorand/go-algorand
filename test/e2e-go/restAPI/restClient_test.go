@@ -956,7 +956,7 @@ return
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.Greater(uint64(createdAppID), uint64(0))
+	a.NotZero(createdAppID)
 
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, createdAppID.Address().String(), 0, 1_000_000, nil, "", 0, 0)
@@ -988,7 +988,7 @@ return
 	a.Nil(innerTxn.ApplicationIndex)
 	a.NotNil(innerTxn.AssetIndex)
 	createdAssetID := *innerTxn.AssetIndex
-	a.Greater(createdAssetID, uint64(0))
+	a.NotZero(createdAssetID)
 
 	createdAssetInfo, err := testClient.AssetInformation(createdAssetID)
 	a.NoError(err)
@@ -1262,7 +1262,7 @@ end:
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.Greater(uint64(createdAppID), uint64(0))
+	a.NotZero(createdAppID)
 
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(
@@ -1870,7 +1870,7 @@ int 1`
 	// get app ID
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.Greater(uint64(createdAppID), uint64(0))
+	a.NotZero(createdAppID)
 
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(
@@ -1998,7 +1998,7 @@ int 1`
 	// get app ID
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.Greater(uint64(createdAppID), uint64(0))
+	a.NotZero(createdAppID)
 
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(
@@ -3252,7 +3252,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// get asset ID
 	a.NotNil(confirmedTxn.AssetIndex)
 	assetID := *confirmedTxn.AssetIndex
-	a.Greater(assetID, uint64(0))
+	a.NotZero(assetID)
 
 	// opt-in to asset
 	txn, err = testClient.MakeUnsignedAssetSendTx(assetID, 0, otherAddress, "", "")
@@ -3296,7 +3296,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// get app ID
 	a.NotNil(confirmedTxn.ApplicationIndex)
 	otherAppID := basics.AppIndex(*confirmedTxn.ApplicationIndex)
-	a.Greater(uint64(otherAppID), uint64(0))
+	a.NotZero(otherAppID)
 
 	prog := fmt.Sprintf(`#pragma version 9
 txn ApplicationID
@@ -3374,7 +3374,7 @@ int 1
 	// get app ID
 	a.NotNil(confirmedTxn.ApplicationIndex)
 	testAppID := basics.AppIndex(*confirmedTxn.ApplicationIndex)
-	a.Greater(uint64(testAppID), uint64(0))
+	a.NotZero(testAppID)
 
 	// fund app account
 	txn, err = testClient.SendPaymentFromWallet(
@@ -3458,9 +3458,9 @@ int 1
 						AppBudgetConsumed: &budgetUsed,
 					},
 				},
-				AppBudgetAdded:    &budgetAdded,
-				AppBudgetConsumed: &budgetUsed,
-				UnnamedResources:  &expectedUnnamedGroupResources,
+				AppBudgetAdded:           &budgetAdded,
+				AppBudgetConsumed:        &budgetUsed,
+				UnnamedResourcesAccessed: &expectedUnnamedGroupResources,
 			},
 		},
 	}

@@ -26,11 +26,14 @@ import (
 
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -67,12 +70,27 @@ func notImplemented(ctx echo.Context, internal error, external string, log loggi
 	return returnError(ctx, http.StatusNotImplemented, internal, external, log)
 }
 
-func uint64MapKeys[M ~map[K]V, K ~uint64, V any](m M) []uint64 {
-	r := make([]uint64, 0, len(m))
-	for k := range m {
-		r = append(r, uint64(k))
+func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
+	output := make([]Y, len(input))
+	for i := range input {
+		output[i] = fn(input[i])
 	}
-	return r
+	return output
+}
+
+func uint64Slice[T ~uint64](s []T) []uint64 {
+	return convertSlice(s, func(t T) uint64 { return uint64(t) })
+}
+
+func stringSlice[T interface{ String() string }](s []T) []string {
+	return convertSlice(s, func(t T) string { return t.String() })
+}
+
+func sliceOrNil[T any](s []T) *[]T {
+	if len(s) == 0 {
+		return nil
+	}
+	return &s
 }
 
 func addrOrNil(addr basics.Address) *string {
@@ -436,11 +454,11 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
-		Txn:                    ConvertInnerTxn(&txnResult.Txn),
-		AppBudgetConsumed:      omitEmpty(txnResult.AppBudgetConsumed),
-		LogicSigBudgetConsumed: omitEmpty(txnResult.LogicSigBudgetConsumed),
-		TransactionTrace:       convertTxnTrace(txnResult.Trace),
-		UnnamedResources:       convertUnnamedResourceAssignment(txnResult.UnnamedResources),
+		Txn:                      ConvertInnerTxn(&txnResult.Txn),
+		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
+		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
+		TransactionTrace:         convertTxnTrace(txnResult.Trace),
+		UnnamedResourcesAccessed: convertUnnamedResourceAssignment(txnResult.UnnamedResourcesAccessed),
 	}
 }
 
@@ -448,74 +466,47 @@ func convertUnnamedResourceAssignment(assignment *simulation.ResourceAssignment)
 	if assignment == nil {
 		return nil
 	}
-	converted := model.SimulationUnnamedResourceAssignment{
+	return &model.SimulationUnnamedResourceAssignment{
 		MaxTotalRefs: uint64(assignment.MaxTotalRefs),
 		MaxAccounts:  uint64(assignment.MaxAccounts),
 		MaxAssets:    uint64(assignment.MaxAssets),
 		MaxApps:      uint64(assignment.MaxApps),
 		MaxBoxes:     uint64(assignment.MaxBoxes),
 		EmptyBoxRefs: omitEmpty(uint64(assignment.NumEmptyBoxRefs)),
-	}
-	if len(assignment.Accounts) != 0 {
-		accountStrings := make([]string, 0, len(assignment.Accounts))
-		for account := range assignment.Accounts {
-			accountStrings = append(accountStrings, account.String())
-		}
-		converted.Accounts = &accountStrings
-	}
-	if len(assignment.Assets) != 0 {
-		keys := uint64MapKeys(assignment.Assets)
-		converted.Assets = &keys
-	}
-	if len(assignment.Apps) != 0 {
-		keys := uint64MapKeys(assignment.Apps)
-		converted.Apps = &keys
-	}
-	if len(assignment.Boxes) != 0 {
-		boxes := make([]model.BoxReference, 0, len(assignment.Boxes))
-		for box := range assignment.Boxes {
-			convertedBoxRef := model.BoxReference{
+
+		Accounts: sliceOrNil(stringSlice(maps.Keys(assignment.Accounts))),
+		Assets:   sliceOrNil(uint64Slice(maps.Keys(assignment.Assets))),
+		Apps:     sliceOrNil(uint64Slice(maps.Keys(assignment.Apps))),
+		Boxes: sliceOrNil(convertSlice(maps.Keys(assignment.Boxes), func(box logic.BoxRef) model.BoxReference {
+			return model.BoxReference{
 				App:  uint64(box.App),
 				Name: []byte(box.Name),
 			}
-			boxes = append(boxes, convertedBoxRef)
-		}
-		converted.Boxes = &boxes
+		})),
 	}
-	return &converted
 }
 
 func convertUnnamedGroupResources(resources *simulation.GroupResourceAssignment) *model.SimulationUnnamedGroupResources {
 	if resources == nil {
 		return nil
 	}
-	converted := model.SimulationUnnamedGroupResources{
+	return &model.SimulationUnnamedGroupResources{
 		Resources:           *convertUnnamedResourceAssignment(&resources.Resources),
 		MaxCrossProductRefs: uint64(resources.MaxCrossProductReferences),
-	}
-	if len(resources.AssetHoldings) != 0 {
-		convertedHoldings := make([]model.AssetHoldingReference, 0, len(resources.AssetHoldings))
-		for holding := range resources.AssetHoldings {
-			convertedHolding := model.AssetHoldingReference{
+
+		AssetHoldings: sliceOrNil(convertSlice(maps.Keys(resources.AssetHoldings), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
+			return model.AssetHoldingReference{
 				Account: holding.Address.String(),
 				Asset:   uint64(holding.Asset),
 			}
-			convertedHoldings = append(convertedHoldings, convertedHolding)
-		}
-		converted.AssetHoldings = &convertedHoldings
-	}
-	if len(resources.AppLocals) != 0 {
-		convertedLocals := make([]model.ApplicationLocalReference, 0, len(resources.AppLocals))
-		for local := range resources.AppLocals {
-			convertedLocal := model.ApplicationLocalReference{
+		})),
+		AppLocals: sliceOrNil(convertSlice(maps.Keys(resources.AppLocals), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
+			return model.ApplicationLocalReference{
 				Account: local.Address.String(),
 				App:     uint64(local.App),
 			}
-			convertedLocals = append(convertedLocals, convertedLocal)
-		}
-		converted.AppLocals = &convertedLocals
+		})),
 	}
-	return &converted
 }
 
 func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
@@ -525,11 +516,11 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	}
 
 	encoded := PreEncodedSimulateTxnGroupResult{
-		Txns:              txnResults,
-		FailureMessage:    omitEmpty(txnGroupResult.FailureMessage),
-		AppBudgetAdded:    omitEmpty(txnGroupResult.AppBudgetAdded),
-		AppBudgetConsumed: omitEmpty(txnGroupResult.AppBudgetConsumed),
-		UnnamedResources:  convertUnnamedGroupResources(txnGroupResult.UnnamedResources),
+		Txns:                     txnResults,
+		FailureMessage:           omitEmpty(txnGroupResult.FailureMessage),
+		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
+		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
+		UnnamedResourcesAccessed: convertUnnamedGroupResources(txnGroupResult.UnnamedResourcesAccessed),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {

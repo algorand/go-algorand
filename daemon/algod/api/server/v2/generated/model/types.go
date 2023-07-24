@@ -455,7 +455,7 @@ type BoxDescriptor struct {
 	Name []byte `json:"name"`
 }
 
-// BoxReference Box descriptor describes a Box.
+// BoxReference References a box of an application.
 type BoxReference struct {
 	// App App ID which this box belongs to
 	App uint64 `json:"app"`
@@ -680,13 +680,13 @@ type ScratchChange struct {
 
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
-	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
+	// AllowEmptySignatures Allows transactions without signatures to be simulated as if they had correct signatures.
 	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
 
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
 
-	// AllowUnnamedResources Allow access to unnamed resources during simulation.
+	// AllowUnnamedResources Allows access to unnamed resources during simulation.
 	AllowUnnamedResources *bool `json:"allow-unnamed-resources,omitempty"`
 
 	// ExecTraceConfig An object that configures simulation execution trace.
@@ -734,8 +734,8 @@ type SimulateTransactionGroupResult struct {
 	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulateTransactionResult `json:"txn-results"`
 
-	// UnnamedResources If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and benefit from group resource sharing. Also see property 'unnamed-resources' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing.
-	UnnamedResources *SimulationUnnamedGroupResources `json:"unnamed-resources,omitempty"`
+	// UnnamedResourcesAccessed If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and could benefit from group resource sharing. In other words, there are no restrictions on where these resources must be placed in the transaction group. Also see property 'unnamed-resources-accessed' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing; in contrast, these resources must be placed local to that transaction.
+	UnnamedResourcesAccessed *SimulationUnnamedGroupResources `json:"unnamed-resources-accessed,omitempty"`
 }
 
 // SimulateTransactionResult Simulation result for an individual transaction
@@ -752,8 +752,8 @@ type SimulateTransactionResult struct {
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`
 
-	// UnnamedResources This object contains a set of unnamed resources that were accessed during a simulation call.
-	UnnamedResources *SimulationUnnamedResourceAssignment `json:"unnamed-resources,omitempty"`
+	// UnnamedResourcesAccessed The set of unnamed resources that were accessed during a simulation call.
+	UnnamedResourcesAccessed *SimulationUnnamedResourceAssignment `json:"unnamed-resources-accessed,omitempty"`
 }
 
 // SimulationEvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
@@ -807,7 +807,7 @@ type SimulationTransactionExecTrace struct {
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
 }
 
-// SimulationUnnamedGroupResources If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and benefit from group resource sharing. Also see property 'unnamed-resources' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing.
+// SimulationUnnamedGroupResources If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and could benefit from group resource sharing. In other words, there are no restrictions on where these resources must be placed in the transaction group. Also see property 'unnamed-resources-accessed' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing; in contrast, these resources must be placed local to that transaction.
 type SimulationUnnamedGroupResources struct {
 	// AppLocals The unnamed app local states that were referenced. The order of this array is arbitrary.
 	AppLocals *[]ApplicationLocalReference `json:"app-locals,omitempty"`
@@ -818,11 +818,11 @@ type SimulationUnnamedGroupResources struct {
 	// MaxCrossProductRefs The maximum allowed number of asset holding and app local references.
 	MaxCrossProductRefs uint64 `json:"max-cross-product-refs"`
 
-	// Resources This object contains a set of unnamed resources that were accessed during a simulation call.
+	// Resources The set of unnamed resources that were accessed during a simulation call.
 	Resources SimulationUnnamedResourceAssignment `json:"resources"`
 }
 
-// SimulationUnnamedResourceAssignment This object contains a set of unnamed resources that were accessed during a simulation call.
+// SimulationUnnamedResourceAssignment The set of unnamed resources that were accessed during a simulation call.
 type SimulationUnnamedResourceAssignment struct {
 	// Accounts The unnamed accounts that were referenced. The order of this array is arbitrary.
 	Accounts *[]string `json:"accounts,omitempty"`

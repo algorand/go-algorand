@@ -929,21 +929,21 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 
 // PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type PreEncodedSimulateTxnResult struct {
-	Txn                    PreEncodedTxInfo                           `codec:"txn-result"`
-	AppBudgetConsumed      *uint64                                    `codec:"app-budget-consumed,omitempty"`
-	LogicSigBudgetConsumed *uint64                                    `codec:"logic-sig-budget-consumed,omitempty"`
-	TransactionTrace       *model.SimulationTransactionExecTrace      `codec:"exec-trace,omitempty"`
-	UnnamedResources       *model.SimulationUnnamedResourceAssignment `codec:"unnamed-resources,omitempty"`
+	Txn                      PreEncodedTxInfo                           `codec:"txn-result"`
+	AppBudgetConsumed        *uint64                                    `codec:"app-budget-consumed,omitempty"`
+	LogicSigBudgetConsumed   *uint64                                    `codec:"logic-sig-budget-consumed,omitempty"`
+	TransactionTrace         *model.SimulationTransactionExecTrace      `codec:"exec-trace,omitempty"`
+	UnnamedResourcesAccessed *model.SimulationUnnamedResourceAssignment `codec:"unnamed-resources-accessed,omitempty"`
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
 type PreEncodedSimulateTxnGroupResult struct {
-	AppBudgetAdded    *uint64                                `codec:"app-budget-added,omitempty"`
-	AppBudgetConsumed *uint64                                `codec:"app-budget-consumed,omitempty"`
-	FailedAt          *[]uint64                              `codec:"failed-at,omitempty"`
-	FailureMessage    *string                                `codec:"failure-message,omitempty"`
-	UnnamedResources  *model.SimulationUnnamedGroupResources `codec:"unnamed-resources,omitempty"`
-	Txns              []PreEncodedSimulateTxnResult          `codec:"txn-results"`
+	AppBudgetAdded           *uint64                                `codec:"app-budget-added,omitempty"`
+	AppBudgetConsumed        *uint64                                `codec:"app-budget-consumed,omitempty"`
+	FailedAt                 *[]uint64                              `codec:"failed-at,omitempty"`
+	FailureMessage           *string                                `codec:"failure-message,omitempty"`
+	UnnamedResourcesAccessed *model.SimulationUnnamedGroupResources `codec:"unnamed-resources-accessed,omitempty"`
+	Txns                     []PreEncodedSimulateTxnResult          `codec:"txn-results"`
 }
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse

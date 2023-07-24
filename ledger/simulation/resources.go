@@ -521,9 +521,9 @@ func newResourcePolicy(ep *logic.EvalParams, groupResult *TxnGroupResult) *resou
 		assignment: makeGroupResourceAssignment(ep.TxnGroup, ep.Proto),
 		ep:         ep,
 	}
-	groupResult.UnnamedResources = &policy.assignment
+	groupResult.UnnamedResourcesAccessed = &policy.assignment
 	for i := range groupResult.Txns {
-		groupResult.Txns[i].UnnamedResources = &policy.assignment.localTxnResources[i]
+		groupResult.Txns[i].UnnamedResourcesAccessed = &policy.assignment.localTxnResources[i]
 	}
 	return &policy
 }
