@@ -339,6 +339,10 @@ type EvalParams struct {
 
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
+
+	// SurplusReadBudget is the number of bytes from the IO budget that were not used for reading
+	// in boxes before evaluation began. In other words, the txn group could have read in
+	// SurplusReadBudget more box bytes, but did not.
 	SurplusReadBudget uint64
 
 	EvalConstants

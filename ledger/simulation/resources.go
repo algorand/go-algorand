@@ -574,7 +574,7 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operatio
 	}
 	box, ok, err := p.ep.Ledger.GetBox(app, name)
 	if err != nil {
-		panic(err)
+		panic(err.Error())
 	}
 	var readSize uint64
 	if ok {

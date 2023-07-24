@@ -180,7 +180,7 @@ func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore
 	tracer.cursorEvalTracer.AfterTxnGroup(ep, deltas, evalError)
 
 	if ep.GetCaller() == nil && tracer.unnamedResourcePolicy != nil {
-		tracer.unnamedResourcePolicy.ep = nil
+		tracer.unnamedResourcePolicy = nil
 	}
 }
 
@@ -429,7 +429,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	groupIndex := cx.GroupIndex()
 
-	if cx.RunMode() != logic.ModeApp {
+	if cx.RunMode() == logic.ModeSig {
 		// Report cost for LogicSig program and exit
 		tracer.result.TxnGroups[0].Txns[groupIndex].LogicSigBudgetConsumed = uint64(cx.Cost())
 		if tracer.result.ReturnTrace() {
