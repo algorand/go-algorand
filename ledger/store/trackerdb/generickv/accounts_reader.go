@@ -147,7 +147,6 @@ func (r *accountsReader) LookupAllResources(addr basics.Address) (data []tracker
 	defer iter.Close()
 
 	var value []byte
-	var aidx uint64
 
 	// read the current db round
 	rnd, err = r.AccountsRound()
@@ -158,13 +157,10 @@ func (r *accountsReader) LookupAllResources(addr basics.Address) (data []tracker
 	for iter.Next() {
 		pitem := trackerdb.PersistedResourcesData{AcctRef: accountRef{addr}, Round: rnd}
 
-		// read the key to parse the aidx
-		// key is <prefix>-<addr>-<aidx> = <content>
 		key := iter.Key()
 
-		aidxOffset := len(kvPrefixResource) + 1 + 32 + 1
-		aidx = binary.BigEndian.Uint64(key[aidxOffset : aidxOffset+8])
-		pitem.Aidx = basics.CreatableIndex(aidx)
+		// extract aidx from key
+		pitem.Aidx = extractResourceAidx(key)
 
 		// get value for current item in the iterator
 		value, err = iter.Value()

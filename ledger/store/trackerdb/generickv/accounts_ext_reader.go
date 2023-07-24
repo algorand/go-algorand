@@ -77,17 +77,7 @@ func (r *accountsReader) LookupAccountAddressFromAddressID(ctx context.Context, 
 }
 
 func (r *accountsReader) LookupAccountRowID(addr basics.Address) (ref trackerdb.AccountRef, err error) {
-	// Note: [perf] this is not a very cheap operation since we have to pull up the entire record
-	acc, err := r.LookupAccount(addr)
-	if err != nil {
-		return
-	}
-
-	if acc.Ref == nil {
-		return nil, trackerdb.ErrNotFound
-	}
-
-	return acc.Ref, nil
+	return accountRef{addr}, nil
 }
 
 func (r *accountsReader) LookupResourceDataByAddrID(accRef trackerdb.AccountRef, aidx basics.CreatableIndex) (data []byte, err error) {
@@ -131,15 +121,11 @@ func (r *accountsReader) LookupOnlineAccountDataByAddress(addr basics.Address) (
 	defer iter.Close()
 
 	if iter.Next() {
-		// key is <prefix>-<addr>-<rnd> = <content>
 		key := iter.Key()
 
-		rndOffset := len(kvPrefixOnlineAccount) + 1 + 32 + 1
-		u64Rnd := binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
-
-		addrOffset := len(kvPrefixOnlineAccount) + 1
-		var addr basics.Address
-		copy(addr[:], key[addrOffset:addrOffset+32])
+		// extract the round and address from the key
+		addr := extractOnlineAccountAddress(key)
+		rnd := extractOnlineAccountRound(key)
 
 		data, err = iter.Value()
 		if err != nil {
@@ -154,7 +140,7 @@ func (r *accountsReader) LookupOnlineAccountDataByAddress(addr basics.Address) (
 
 		ref = onlineAccountRef{
 			addr:        addr,
-			round:       basics.Round(u64Rnd),
+			round:       rnd,
 			normBalance: oa.NormalizedOnlineBalance(r.proto),
 		}
 	} else {
@@ -207,16 +193,10 @@ func (r *accountsReader) AccountsOnlineTop(rnd basics.Round, offset uint64, n ui
 			return
 		}
 
-		// key is <prefix>-<rnd>-<balance>-<addr> = <content>
 		key := iter.Key()
 
-		// TODO: make this cleaner
-		// get the offset where the address starts
-		offset := len(kvPrefixOnlineAccountBalance) + 1 + 8 + 1 + 8 + 1
-
 		// extract address
-		var addr basics.Address
-		copy(addr[:], key[offset:])
+		addr := extractOnlineAccountBalanceAddress(key)
 
 		// skip if already in map
 		if _, ok := data[addr]; ok {
@@ -260,15 +240,10 @@ func (r *accountsReader) AccountsOnlineRoundParams() (onlineRoundParamsData []le
 	var value []byte
 
 	for iter.Next() {
-		// read the key
-		// schema: <prefix>-<rnd>
 		key := iter.Key()
 
-		// extract the round from the key
-		rndOffset := len(kvOnlineAccountRoundParams) + 1
-		u64Rnd := binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
-		// assign current item round as endRound
-		endRound = basics.Round(u64Rnd)
+		// extract the round from the key & assign current item round as endRound
+		endRound = extractOnlineAccountRoundParamsRoundPart(key)
 
 		// get value for current item in the iterator
 		value, err = iter.Value()
@@ -318,7 +293,6 @@ func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pers
 	result := make([]trackerdb.PersistedOnlineAccountData, 0, maxAccounts)
 
 	var value []byte
-	var updround uint64
 
 	// keep track of the most recently seen account so we can tally up the total number seen
 	lastAddr := basics.Address{}
@@ -327,20 +301,15 @@ func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pers
 	for iter.Next() {
 		pitem := trackerdb.PersistedOnlineAccountData{Round: round}
 
-		// schema: <prefix>-<addr>-<rnd>
 		key := iter.Key()
 
-		addrOffset := len(kvPrefixOnlineAccount) + 1
-		var addr basics.Address
-		copy(addr[:], key[addrOffset:addrOffset+32])
-		// extract updround, it's the last section after the "-"
-
-		rndOffset := addrOffset + 32 + 1
-		updround = binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
+		// extract addr & round
+		addr := extractOnlineAccountAddress(key)
+		updRound := extractOnlineAccountRound(key)
 
 		// load addr, round and data into the persisted item
 		pitem.Addr = addr
-		pitem.UpdRound = basics.Round(updround)
+		pitem.UpdRound = updRound
 		// get value for current item in the iterator
 		value, err = iter.Value()
 		if err != nil {
@@ -399,15 +368,10 @@ func (r *accountsReader) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd
 
 	// add the other results to the map
 	for iter.Next() {
-		// key is <prefix>-<rnd>-<balance>-<addr> = <content>
 		key := iter.Key()
 
-		// get the addrOffset where the address starts
-		addrOffset := len(kvPrefixOnlineAccountBalance) + 1 + 8 + 1 + 8 + 1
-
 		// extract address
-		var addr basics.Address
-		copy(addr[:], key[addrOffset:])
+		addr := extractOnlineAccountBalanceAddress(key)
 
 		// skip if already in map
 		// we keep only the one with `max(updround)`
@@ -463,13 +427,11 @@ func (r *accountsReader) LoadTxTail(ctx context.Context, dbRound basics.Round) (
 
 	expectedRound := dbRound
 	for iter.Next() {
-		// read the key
 		key := iter.Key()
 
 		// extract the txTail round from the key
-		rndOffset := len(kvTxTail) + 1
-		u64Rnd := binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
-		round := basics.Round(u64Rnd)
+		round := extractTxTailRoundPart(key)
+
 		// check that we are on the right round
 		if round != expectedRound {
 			return nil, nil, 0, fmt.Errorf("txtail table contain unexpected round %d; round %d was expected", round, expectedRound)

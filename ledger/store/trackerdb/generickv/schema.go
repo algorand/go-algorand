@@ -26,6 +26,7 @@ const (
 	prefixLength    = 2
 	separatorLength = 1
 	addressLength   = 32
+	roundLength     = 8
 )
 
 const (
@@ -72,6 +73,12 @@ func accountKey(address basics.Address) [35]byte {
 	copy(key[prefixLength+separatorLength:], address[:])
 
 	return key
+}
+
+func extractResourceAidx(key []byte) basics.CreatableIndex {
+	const offset int = prefixLength + separatorLength + addressLength + separatorLength
+	aidx64 := binary.BigEndian.Uint64(key[offset : offset+8])
+	return basics.CreatableIndex(aidx64)
 }
 
 func resourceKey(address basics.Address, aidx basics.CreatableIndex) [44]byte {
@@ -136,6 +143,18 @@ func creatableMaxRangePrefix(maxIdx basics.CreatableIndex) ([3]byte, [11]byte) {
 	return low, high
 }
 
+func extractOnlineAccountAddress(key []byte) (addr basics.Address) {
+	const offset int = prefixLength + separatorLength
+	copy(addr[:], key[offset:])
+	return
+}
+
+func extractOnlineAccountRound(key []byte) basics.Round {
+	const offset int = prefixLength + separatorLength + addressLength + separatorLength
+	u64Rnd := binary.BigEndian.Uint64(key[offset : offset+roundLength])
+	return basics.Round(u64Rnd)
+}
+
 func onlineAccountKey(address basics.Address, round basics.Round) [44]byte {
 	var key [prefixLength + separatorLength + addressLength + separatorLength + 8]byte
 
@@ -174,6 +193,18 @@ func onlineAccountOnlyPartialKey(address basics.Address) [36]byte {
 	key[prefixLength+separatorLength+addressLength] = separator
 
 	return key
+}
+
+func extractOnlineAccountBalanceAddress(key []byte) (addr basics.Address) {
+	const offset int = prefixLength + separatorLength + 8 + separatorLength + 8 + separatorLength
+	copy(addr[:], key[offset:])
+	return
+}
+
+func extractOnlineAccountBalanceRound(key []byte) basics.Round {
+	const offset int = prefixLength + separatorLength
+	u64Rnd := binary.BigEndian.Uint64(key[offset : offset+roundLength])
+	return basics.Round(u64Rnd)
 }
 
 func onlineAccountBalanceKey(round basics.Round, normBalance uint64, address basics.Address) [53]byte {
@@ -236,6 +267,12 @@ func totalsKey(catchpointStaging bool) [4]byte {
 	return key
 }
 
+func extractTxTailRoundPart(key []byte) basics.Round {
+	const offset int = prefixLength + separatorLength
+	u64Rnd := binary.BigEndian.Uint64(key[offset : offset+roundLength])
+	return basics.Round(u64Rnd)
+}
+
 func txTailKey(rnd basics.Round) [11]byte {
 	var key [prefixLength + separatorLength + 8]byte
 
@@ -257,6 +294,12 @@ func txTailRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
 	high := txTailKey(rnd)
 
 	return low, high
+}
+
+func extractOnlineAccountRoundParamsRoundPart(key []byte) basics.Round {
+	const offset int = prefixLength + separatorLength
+	u64Rnd := binary.BigEndian.Uint64(key[offset : offset+roundLength])
+	return basics.Round(u64Rnd)
 }
 
 func onlineAccountRoundParamsKey(rnd basics.Round) [11]byte {

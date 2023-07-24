@@ -18,7 +18,6 @@ package generickv
 
 import (
 	"context"
-	"encoding/binary"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -151,19 +150,11 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 	var prevAddr basics.Address
 
 	for iter.Next() {
-		// read the key
-		// schema: <prefix>-<rnd>-<balance>-<addr>
 		key := iter.Key()
 
-		// extract the round from the key (offset: 1)
-		rndOffset := len(kvPrefixOnlineAccountBalance) + 1
-		u64Rnd := binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
-		round := basics.Round(u64Rnd)
-
-		// get the offset where the address starts
-		addrOffset := len(kvPrefixOnlineAccountBalance) + 1 + 8 + 1 + 8 + 1
-		var addr basics.Address
-		copy(addr[:], key[addrOffset:addrOffset+32])
+		// extract address & round from the key
+		addr := extractOnlineAccountBalanceAddress(key)
+		round := extractOnlineAccountBalanceRound(key)
 
 		if addr != prevAddr {
 			// new address
