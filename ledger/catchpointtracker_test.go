@@ -360,7 +360,10 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
 
-	err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+	err = ct.createCatchpoint(
+		context.Background(), accountsRound, round,
+		trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen},
+		crypto.Digest{}, protocol.ConsensusCurrentVersion)
 	require.NoError(t, err)
 }
 
@@ -760,8 +763,10 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 
 	// test to see that after loadFromDisk, all the tracker content is lost ( as expected )
 	require.NotZero(t, len(ct.roundDigest))
+	require.NotZero(t, len(ct.consensusVersion))
 	require.NoError(t, ct.loadFromDisk(ml, ml.Latest()))
 	require.Zero(t, len(ct.roundDigest))
+	require.Zero(t, len(ct.consensusVersion))
 	require.Zero(t, ct.catchpointDataWriting.Load())
 	select {
 	case _, closed := <-ct.catchpointDataSlowWriting:
