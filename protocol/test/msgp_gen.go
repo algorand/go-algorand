@@ -11,6 +11,7 @@ import (
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalValidateMsg
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
@@ -40,7 +41,7 @@ func (_ testSlice) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *testSlice) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *testSlice) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -71,6 +72,12 @@ func (z *testSlice) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *testSlice) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *testSlice) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *testSlice) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*testSlice)
 	return ok

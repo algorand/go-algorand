@@ -13,6 +13,7 @@ import (
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalValidateMsg
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
@@ -83,11 +84,15 @@ func (_ *Message) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Message) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
+	var zb0003 string
+	var zb0004 bool
 	var zb0002 bool
+	_ = zb0003
+	_ = zb0004
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -95,16 +100,20 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
+			return
+		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0003 int
-			zb0003, err = msgp.ReadBytesBytesHeader(bts)
+			var zb0005 int
+			zb0005, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "BlockHeadersCommitment")
 				return
 			}
-			if zb0003 > crypto.Sha256Size {
-				err = msgp.ErrOverflow(uint64(zb0003), uint64(crypto.Sha256Size))
+			if zb0005 > crypto.Sha256Size {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(crypto.Sha256Size))
 				return
 			}
 			(*z).BlockHeadersCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).BlockHeadersCommitment)
@@ -115,14 +124,14 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			var zb0004 int
-			zb0004, err = msgp.ReadBytesBytesHeader(bts)
+			var zb0006 int
+			zb0006, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VotersCommitment")
 				return
 			}
-			if zb0004 > crypto.SumhashDigestSize {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(crypto.SumhashDigestSize))
+			if zb0006 > crypto.SumhashDigestSize {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(crypto.SumhashDigestSize))
 				return
 			}
 			(*z).VotersCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).VotersCommitment)
@@ -179,14 +188,18 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "b":
-				var zb0005 int
-				zb0005, err = msgp.ReadBytesBytesHeader(bts)
+				if validate && zb0004 && "b" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
+				var zb0007 int
+				zb0007, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "BlockHeadersCommitment")
 					return
 				}
-				if zb0005 > crypto.Sha256Size {
-					err = msgp.ErrOverflow(uint64(zb0005), uint64(crypto.Sha256Size))
+				if zb0007 > crypto.Sha256Size {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(crypto.Sha256Size))
 					return
 				}
 				(*z).BlockHeadersCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).BlockHeadersCommitment)
@@ -194,15 +207,20 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "BlockHeadersCommitment")
 					return
 				}
+				zb0003 = "b"
 			case "v":
-				var zb0006 int
-				zb0006, err = msgp.ReadBytesBytesHeader(bts)
+				if validate && zb0004 && "v" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
+				var zb0008 int
+				zb0008, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VotersCommitment")
 					return
 				}
-				if zb0006 > crypto.SumhashDigestSize {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(crypto.SumhashDigestSize))
+				if zb0008 > crypto.SumhashDigestSize {
+					err = msgp.ErrOverflow(uint64(zb0008), uint64(crypto.SumhashDigestSize))
 					return
 				}
 				(*z).VotersCommitment, bts, err = msgp.ReadBytesBytes(bts, (*z).VotersCommitment)
@@ -210,24 +228,40 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "VotersCommitment")
 					return
 				}
+				zb0003 = "v"
 			case "P":
+				if validate && zb0004 && "P" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).LnProvenWeight, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LnProvenWeight")
 					return
 				}
+				zb0003 = "P"
 			case "f":
+				if validate && zb0004 && "f" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).FirstAttestedRound, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstAttestedRound")
 					return
 				}
+				zb0003 = "f"
 			case "l":
+				if validate && zb0004 && "l" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).LastAttestedRound, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LastAttestedRound")
 					return
 				}
+				zb0003 = "l"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -235,12 +269,19 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0004 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *Message) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *Message) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Message)
 	return ok

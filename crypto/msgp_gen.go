@@ -15,6 +15,7 @@ import (
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalValidateMsg
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
@@ -24,6 +25,7 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalValidateMsg
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
@@ -33,6 +35,7 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalValidateMsg
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
@@ -42,6 +45,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalValidateMsg
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -51,6 +55,7 @@ import (
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalValidateMsg
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
@@ -60,6 +65,7 @@ import (
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalValidateMsg
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
@@ -69,6 +75,7 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalValidateMsg
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
@@ -78,6 +85,7 @@ import (
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalValidateMsg
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> Msgsize
 //       |-----> MsgIsZero
@@ -87,6 +95,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalValidateMsg
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -96,6 +105,7 @@ import (
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalValidateMsg
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
@@ -105,6 +115,7 @@ import (
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
 //          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalValidateMsg
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
@@ -114,6 +125,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalValidateMsg
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -123,6 +135,7 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalValidateMsg
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
@@ -132,6 +145,7 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalValidateMsg
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
@@ -141,6 +155,7 @@ import (
 //            |-----> (*) MarshalMsg
 //            |-----> (*) CanMarshalMsg
 //            |-----> (*) UnmarshalMsg
+//            |-----> (*) UnmarshalValidateMsg
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
@@ -150,6 +165,7 @@ import (
 //                 |-----> (*) MarshalMsg
 //                 |-----> (*) CanMarshalMsg
 //                 |-----> (*) UnmarshalMsg
+//                 |-----> (*) UnmarshalValidateMsg
 //                 |-----> (*) CanUnmarshalMsg
 //                 |-----> (*) Msgsize
 //                 |-----> (*) MsgIsZero
@@ -159,6 +175,7 @@ import (
 //               |-----> (*) MarshalMsg
 //               |-----> (*) CanMarshalMsg
 //               |-----> (*) UnmarshalMsg
+//               |-----> (*) UnmarshalValidateMsg
 //               |-----> (*) CanUnmarshalMsg
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
@@ -168,6 +185,7 @@ import (
 //                |-----> (*) MarshalMsg
 //                |-----> (*) CanMarshalMsg
 //                |-----> (*) UnmarshalMsg
+//                |-----> (*) UnmarshalValidateMsg
 //                |-----> (*) CanUnmarshalMsg
 //                |-----> (*) Msgsize
 //                |-----> (*) MsgIsZero
@@ -177,6 +195,7 @@ import (
 //             |-----> (*) MarshalMsg
 //             |-----> (*) CanMarshalMsg
 //             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalValidateMsg
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
@@ -186,6 +205,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalValidateMsg
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -195,6 +215,7 @@ import (
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalValidateMsg
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
@@ -204,6 +225,7 @@ import (
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalValidateMsg
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
@@ -213,6 +235,7 @@ import (
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalValidateMsg
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
@@ -222,6 +245,7 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalValidateMsg
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
@@ -231,6 +255,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalValidateMsg
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -240,6 +265,7 @@ import (
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalValidateMsg
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
@@ -249,6 +275,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalValidateMsg
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -258,6 +285,7 @@ import (
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalValidateMsg
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
@@ -267,6 +295,7 @@ import (
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalValidateMsg
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
@@ -276,6 +305,7 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalValidateMsg
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
@@ -285,6 +315,7 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalValidateMsg
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
@@ -294,6 +325,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalValidateMsg
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -303,6 +335,7 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalValidateMsg
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
@@ -312,6 +345,7 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalValidateMsg
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
@@ -331,7 +365,7 @@ func (_ *Digest) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Digest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Digest) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -341,6 +375,12 @@ func (z *Digest) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Digest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *Digest) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *Digest) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Digest)
 	return ok
@@ -377,7 +417,7 @@ func (_ *FalconPrivateKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconPrivateKey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -387,6 +427,12 @@ func (z *FalconPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *FalconPrivateKey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *FalconPrivateKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconPrivateKey)
 	return ok
@@ -423,7 +469,7 @@ func (_ *FalconPublicKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconPublicKey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -433,6 +479,12 @@ func (z *FalconPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *FalconPublicKey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *FalconPublicKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconPublicKey)
 	return ok
@@ -469,7 +521,7 @@ func (_ *FalconSeed) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconSeed) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -479,6 +531,12 @@ func (z *FalconSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *FalconSeed) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *FalconSeed) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconSeed)
 	return ok
@@ -518,7 +576,7 @@ func (_ FalconSignature) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconSignature) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 []byte
 		var zb0002 int
@@ -542,6 +600,12 @@ func (z *FalconSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *FalconSignature) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *FalconSignature) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconSignature)
 	return ok
@@ -601,16 +665,24 @@ func (_ *FalconSigner) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconSigner) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0003 int
+	var zb0005 string
+	var zb0006 bool
 	var zb0004 bool
+	_ = zb0005
+	_ = zb0006
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0003 > 0 {
@@ -653,17 +725,27 @@ func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "pk":
+				if validate && zb0006 && "pk" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PublicKey")
 					return
 				}
+				zb0005 = "pk"
 			case "sk":
+				if validate && zb0006 && "sk" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PrivateKey)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PrivateKey")
 					return
 				}
+				zb0005 = "sk"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -671,12 +753,19 @@ func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0006 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *FalconSigner) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *FalconSigner) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconSigner)
 	return ok
@@ -732,16 +821,24 @@ func (_ *FalconVerifier) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconVerifier) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
+	var zb0004 string
+	var zb0005 bool
 	var zb0003 bool
+	_ = zb0004
+	_ = zb0005
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0002 > 0 {
@@ -776,11 +873,16 @@ func (z *FalconVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "k":
+				if validate && zb0005 && "k" < zb0004 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PublicKey)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PublicKey")
 					return
 				}
+				zb0004 = "k"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -788,12 +890,19 @@ func (z *FalconVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0005 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *FalconVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *FalconVerifier) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *FalconVerifier) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconVerifier)
 	return ok
@@ -834,7 +943,7 @@ func (_ GenericDigest) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *GenericDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *GenericDigest) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 []byte
 		var zb0002 int
@@ -858,6 +967,12 @@ func (z *GenericDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *GenericDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *GenericDigest) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *GenericDigest) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*GenericDigest)
 	return ok
@@ -908,11 +1023,15 @@ func (_ *HashFactory) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *HashFactory) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
+	var zb0003 string
+	var zb0004 bool
 	var zb0002 bool
+	_ = zb0003
+	_ = zb0004
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -920,16 +1039,20 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
+			return
+		}
 		if zb0001 > 0 {
 			zb0001--
 			{
-				var zb0003 uint16
-				zb0003, bts, err = msgp.ReadUint16Bytes(bts)
+				var zb0005 uint16
+				zb0005, bts, err = msgp.ReadUint16Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "HashType")
 					return
 				}
-				(*z).HashType = HashType(zb0003)
+				(*z).HashType = HashType(zb0005)
 			}
 		}
 		if zb0001 > 0 {
@@ -956,15 +1079,20 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "t":
+				if validate && zb0004 && "t" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				{
-					var zb0004 uint16
-					zb0004, bts, err = msgp.ReadUint16Bytes(bts)
+					var zb0006 uint16
+					zb0006, bts, err = msgp.ReadUint16Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "HashType")
 						return
 					}
-					(*z).HashType = HashType(zb0004)
+					(*z).HashType = HashType(zb0006)
 				}
+				zb0003 = "t"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -972,6 +1100,7 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0004 = true
 		}
 	}
 	o = bts
@@ -981,6 +1110,12 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *HashFactory) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *HashFactory) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*HashFactory)
 	return ok
@@ -1019,7 +1154,7 @@ func (_ HashType) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *HashType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *HashType) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 uint16
 		zb0001, bts, err = msgp.ReadUint16Bytes(bts)
@@ -1033,6 +1168,12 @@ func (z *HashType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *HashType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *HashType) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *HashType) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*HashType)
 	return ok
@@ -1068,7 +1209,7 @@ func (_ *MasterDerivationKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *MasterDerivationKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *MasterDerivationKey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -1078,6 +1219,12 @@ func (z *MasterDerivationKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *MasterDerivationKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *MasterDerivationKey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *MasterDerivationKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*MasterDerivationKey)
 	return ok
@@ -1154,16 +1301,24 @@ func (_ *MultisigSig) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *MultisigSig) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
+	var zb0004 string
+	var zb0005 bool
 	var zb0003 bool
+	_ = zb0004
+	_ = zb0005
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0002 > 0 {
@@ -1184,24 +1339,24 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			var zb0004 int
-			var zb0005 bool
-			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0006 int
+			var zb0007 bool
+			zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
-			if zb0004 > maxMultisig {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(maxMultisig))
+			if zb0006 > maxMultisig {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(maxMultisig))
 				err = msgp.WrapError(err, "struct-from-array", "Subsigs")
 				return
 			}
-			if zb0005 {
+			if zb0007 {
 				(*z).Subsigs = nil
-			} else if (*z).Subsigs != nil && cap((*z).Subsigs) >= zb0004 {
-				(*z).Subsigs = ((*z).Subsigs)[:zb0004]
+			} else if (*z).Subsigs != nil && cap((*z).Subsigs) >= zb0006 {
+				(*z).Subsigs = ((*z).Subsigs)[:zb0006]
 			} else {
-				(*z).Subsigs = make([]MultisigSubsig, zb0004)
+				(*z).Subsigs = make([]MultisigSubsig, zb0006)
 			}
 			for zb0001 := range (*z).Subsigs {
 				bts, err = (*z).Subsigs[zb0001].UnmarshalMsg(bts)
@@ -1235,36 +1390,50 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "v":
+				if validate && zb0005 && "v" < zb0004 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).Version, bts, err = msgp.ReadUint8Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Version")
 					return
 				}
+				zb0004 = "v"
 			case "thr":
+				if validate && zb0005 && "thr" < zb0004 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).Threshold, bts, err = msgp.ReadUint8Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Threshold")
 					return
 				}
+				zb0004 = "thr"
 			case "subsig":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if validate && zb0005 && "subsig" < zb0004 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
+				var zb0008 int
+				var zb0009 bool
+				zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
-				if zb0006 > maxMultisig {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(maxMultisig))
+				if zb0008 > maxMultisig {
+					err = msgp.ErrOverflow(uint64(zb0008), uint64(maxMultisig))
 					err = msgp.WrapError(err, "Subsigs")
 					return
 				}
-				if zb0007 {
+				if zb0009 {
 					(*z).Subsigs = nil
-				} else if (*z).Subsigs != nil && cap((*z).Subsigs) >= zb0006 {
-					(*z).Subsigs = ((*z).Subsigs)[:zb0006]
+				} else if (*z).Subsigs != nil && cap((*z).Subsigs) >= zb0008 {
+					(*z).Subsigs = ((*z).Subsigs)[:zb0008]
 				} else {
-					(*z).Subsigs = make([]MultisigSubsig, zb0006)
+					(*z).Subsigs = make([]MultisigSubsig, zb0008)
 				}
 				for zb0001 := range (*z).Subsigs {
 					bts, err = (*z).Subsigs[zb0001].UnmarshalMsg(bts)
@@ -1273,6 +1442,7 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				}
+				zb0004 = "subsig"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -1280,12 +1450,19 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0005 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *MultisigSig) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *MultisigSig) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*MultisigSig)
 	return ok
@@ -1350,16 +1527,24 @@ func (_ *MultisigSubsig) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *MultisigSubsig) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0003 int
+	var zb0005 string
+	var zb0006 bool
 	var zb0004 bool
+	_ = zb0005
+	_ = zb0006
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0003 > 0 {
@@ -1402,17 +1587,27 @@ func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "pk":
+				if validate && zb0006 && "pk" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).Key)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "Key")
 					return
 				}
+				zb0005 = "pk"
 			case "s":
+				if validate && zb0006 && "s" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
+				zb0005 = "s"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -1420,12 +1615,19 @@ func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0006 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *MultisigSubsig) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *MultisigSubsig) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*MultisigSubsig)
 	return ok
@@ -1484,16 +1686,24 @@ func (_ *OneTimeSignature) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignature) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0007 int
+	var zb0009 string
+	var zb0010 bool
 	var zb0008 bool
+	_ = zb0009
+	_ = zb0010
 	zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0007 > 0 {
@@ -1568,41 +1778,71 @@ func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "s":
+				if validate && zb0010 && "s" < zb0009 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
+				zb0009 = "s"
 			case "p":
+				if validate && zb0010 && "p" < zb0009 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PK")
 					return
 				}
+				zb0009 = "p"
 			case "ps":
+				if validate && zb0010 && "ps" < zb0009 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PKSigOld")
 					return
 				}
+				zb0009 = "ps"
 			case "p2":
+				if validate && zb0010 && "p2" < zb0009 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PK2")
 					return
 				}
+				zb0009 = "p2"
 			case "p1s":
+				if validate && zb0010 && "p1s" < zb0009 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PK1Sig")
 					return
 				}
+				zb0009 = "p1s"
 			case "p2s":
+				if validate && zb0010 && "p2s" < zb0009 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PK2Sig")
 					return
 				}
+				zb0009 = "p2s"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -1610,12 +1850,19 @@ func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0010 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *OneTimeSignature) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *OneTimeSignature) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignature)
 	return ok
@@ -1751,16 +1998,24 @@ func (_ *OneTimeSignatureSecrets) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureSecrets) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0006 int
+	var zb0008 string
+	var zb0009 bool
 	var zb0007 bool
+	_ = zb0008
+	_ = zb0009
 	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0006 > 0 {
@@ -1781,19 +2036,19 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 		}
 		if zb0006 > 0 {
 			zb0006--
-			var zb0008 int
-			var zb0009 bool
-			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0010 int
+			var zb0011 bool
+			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Batches")
 				return
 			}
-			if zb0009 {
+			if zb0011 {
 				(*z).OneTimeSignatureSecretsPersistent.Batches = nil
-			} else if (*z).OneTimeSignatureSecretsPersistent.Batches != nil && cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0008 {
-				(*z).OneTimeSignatureSecretsPersistent.Batches = ((*z).OneTimeSignatureSecretsPersistent.Batches)[:zb0008]
+			} else if (*z).OneTimeSignatureSecretsPersistent.Batches != nil && cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0010 {
+				(*z).OneTimeSignatureSecretsPersistent.Batches = ((*z).OneTimeSignatureSecretsPersistent.Batches)[:zb0010]
 			} else {
-				(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0008)
+				(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0010)
 			}
 			for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
 				bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsg(bts)
@@ -1813,19 +2068,19 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 		}
 		if zb0006 > 0 {
 			zb0006--
-			var zb0010 int
-			var zb0011 bool
-			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0012 int
+			var zb0013 bool
+			zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Offsets")
 				return
 			}
-			if zb0011 {
+			if zb0013 {
 				(*z).OneTimeSignatureSecretsPersistent.Offsets = nil
-			} else if (*z).OneTimeSignatureSecretsPersistent.Offsets != nil && cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= zb0010 {
-				(*z).OneTimeSignatureSecretsPersistent.Offsets = ((*z).OneTimeSignatureSecretsPersistent.Offsets)[:zb0010]
+			} else if (*z).OneTimeSignatureSecretsPersistent.Offsets != nil && cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= zb0012 {
+				(*z).OneTimeSignatureSecretsPersistent.Offsets = ((*z).OneTimeSignatureSecretsPersistent.Offsets)[:zb0012]
 			} else {
-				(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0010)
+				(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0012)
 			}
 			for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
 				bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsg(bts)
@@ -1875,31 +2130,45 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 			}
 			switch string(field) {
 			case "OneTimeSignatureVerifier":
+				if validate && zb0009 && "OneTimeSignatureVerifier" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "OneTimeSignatureVerifier")
 					return
 				}
+				zb0008 = "OneTimeSignatureVerifier"
 			case "First":
+				if validate && zb0009 && "First" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).OneTimeSignatureSecretsPersistent.FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstBatch")
 					return
 				}
+				zb0008 = "First"
 			case "Sub":
-				var zb0012 int
-				var zb0013 bool
-				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if validate && zb0009 && "Sub" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
+				var zb0014 int
+				var zb0015 bool
+				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Batches")
 					return
 				}
-				if zb0013 {
+				if zb0015 {
 					(*z).OneTimeSignatureSecretsPersistent.Batches = nil
-				} else if (*z).OneTimeSignatureSecretsPersistent.Batches != nil && cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0012 {
-					(*z).OneTimeSignatureSecretsPersistent.Batches = ((*z).OneTimeSignatureSecretsPersistent.Batches)[:zb0012]
+				} else if (*z).OneTimeSignatureSecretsPersistent.Batches != nil && cap((*z).OneTimeSignatureSecretsPersistent.Batches) >= zb0014 {
+					(*z).OneTimeSignatureSecretsPersistent.Batches = ((*z).OneTimeSignatureSecretsPersistent.Batches)[:zb0014]
 				} else {
-					(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0012)
+					(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0014)
 				}
 				for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
 					bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsg(bts)
@@ -1908,26 +2177,36 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 						return
 					}
 				}
+				zb0008 = "Sub"
 			case "firstoff":
+				if validate && zb0009 && "firstoff" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).OneTimeSignatureSecretsPersistent.FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstOffset")
 					return
 				}
+				zb0008 = "firstoff"
 			case "offkeys":
-				var zb0014 int
-				var zb0015 bool
-				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if validate && zb0009 && "offkeys" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
+				var zb0016 int
+				var zb0017 bool
+				zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Offsets")
 					return
 				}
-				if zb0015 {
+				if zb0017 {
 					(*z).OneTimeSignatureSecretsPersistent.Offsets = nil
-				} else if (*z).OneTimeSignatureSecretsPersistent.Offsets != nil && cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= zb0014 {
-					(*z).OneTimeSignatureSecretsPersistent.Offsets = ((*z).OneTimeSignatureSecretsPersistent.Offsets)[:zb0014]
+				} else if (*z).OneTimeSignatureSecretsPersistent.Offsets != nil && cap((*z).OneTimeSignatureSecretsPersistent.Offsets) >= zb0016 {
+					(*z).OneTimeSignatureSecretsPersistent.Offsets = ((*z).OneTimeSignatureSecretsPersistent.Offsets)[:zb0016]
 				} else {
-					(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0014)
+					(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0016)
 				}
 				for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
 					bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsg(bts)
@@ -1936,18 +2215,29 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 						return
 					}
 				}
+				zb0008 = "offkeys"
 			case "offpk2":
+				if validate && zb0009 && "offpk2" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "OffsetsPK2")
 					return
 				}
+				zb0008 = "offpk2"
 			case "offpk2sig":
+				if validate && zb0009 && "offpk2sig" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "OffsetsPK2Sig")
 					return
 				}
+				zb0008 = "offpk2sig"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -1955,12 +2245,19 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 					return
 				}
 			}
+			zb0009 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *OneTimeSignatureSecrets) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *OneTimeSignatureSecrets) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureSecrets)
 	return ok
@@ -2101,16 +2398,24 @@ func (_ *OneTimeSignatureSecretsPersistent) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureSecretsPersistent) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0006 int
+	var zb0008 string
+	var zb0009 bool
 	var zb0007 bool
+	_ = zb0008
+	_ = zb0009
 	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0006 > 0 {
@@ -2131,19 +2436,19 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 		}
 		if zb0006 > 0 {
 			zb0006--
-			var zb0008 int
-			var zb0009 bool
-			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0010 int
+			var zb0011 bool
+			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Batches")
 				return
 			}
-			if zb0009 {
+			if zb0011 {
 				(*z).Batches = nil
-			} else if (*z).Batches != nil && cap((*z).Batches) >= zb0008 {
-				(*z).Batches = ((*z).Batches)[:zb0008]
+			} else if (*z).Batches != nil && cap((*z).Batches) >= zb0010 {
+				(*z).Batches = ((*z).Batches)[:zb0010]
 			} else {
-				(*z).Batches = make([]ephemeralSubkey, zb0008)
+				(*z).Batches = make([]ephemeralSubkey, zb0010)
 			}
 			for zb0002 := range (*z).Batches {
 				bts, err = (*z).Batches[zb0002].UnmarshalMsg(bts)
@@ -2163,19 +2468,19 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 		}
 		if zb0006 > 0 {
 			zb0006--
-			var zb0010 int
-			var zb0011 bool
-			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0012 int
+			var zb0013 bool
+			zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Offsets")
 				return
 			}
-			if zb0011 {
+			if zb0013 {
 				(*z).Offsets = nil
-			} else if (*z).Offsets != nil && cap((*z).Offsets) >= zb0010 {
-				(*z).Offsets = ((*z).Offsets)[:zb0010]
+			} else if (*z).Offsets != nil && cap((*z).Offsets) >= zb0012 {
+				(*z).Offsets = ((*z).Offsets)[:zb0012]
 			} else {
-				(*z).Offsets = make([]ephemeralSubkey, zb0010)
+				(*z).Offsets = make([]ephemeralSubkey, zb0012)
 			}
 			for zb0003 := range (*z).Offsets {
 				bts, err = (*z).Offsets[zb0003].UnmarshalMsg(bts)
@@ -2225,31 +2530,45 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 			}
 			switch string(field) {
 			case "OneTimeSignatureVerifier":
+				if validate && zb0009 && "OneTimeSignatureVerifier" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).OneTimeSignatureVerifier)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "OneTimeSignatureVerifier")
 					return
 				}
+				zb0008 = "OneTimeSignatureVerifier"
 			case "First":
+				if validate && zb0009 && "First" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).FirstBatch, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstBatch")
 					return
 				}
+				zb0008 = "First"
 			case "Sub":
-				var zb0012 int
-				var zb0013 bool
-				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if validate && zb0009 && "Sub" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
+				var zb0014 int
+				var zb0015 bool
+				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Batches")
 					return
 				}
-				if zb0013 {
+				if zb0015 {
 					(*z).Batches = nil
-				} else if (*z).Batches != nil && cap((*z).Batches) >= zb0012 {
-					(*z).Batches = ((*z).Batches)[:zb0012]
+				} else if (*z).Batches != nil && cap((*z).Batches) >= zb0014 {
+					(*z).Batches = ((*z).Batches)[:zb0014]
 				} else {
-					(*z).Batches = make([]ephemeralSubkey, zb0012)
+					(*z).Batches = make([]ephemeralSubkey, zb0014)
 				}
 				for zb0002 := range (*z).Batches {
 					bts, err = (*z).Batches[zb0002].UnmarshalMsg(bts)
@@ -2258,26 +2577,36 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 						return
 					}
 				}
+				zb0008 = "Sub"
 			case "firstoff":
+				if validate && zb0009 && "firstoff" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).FirstOffset, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstOffset")
 					return
 				}
+				zb0008 = "firstoff"
 			case "offkeys":
-				var zb0014 int
-				var zb0015 bool
-				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if validate && zb0009 && "offkeys" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
+				var zb0016 int
+				var zb0017 bool
+				zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Offsets")
 					return
 				}
-				if zb0015 {
+				if zb0017 {
 					(*z).Offsets = nil
-				} else if (*z).Offsets != nil && cap((*z).Offsets) >= zb0014 {
-					(*z).Offsets = ((*z).Offsets)[:zb0014]
+				} else if (*z).Offsets != nil && cap((*z).Offsets) >= zb0016 {
+					(*z).Offsets = ((*z).Offsets)[:zb0016]
 				} else {
-					(*z).Offsets = make([]ephemeralSubkey, zb0014)
+					(*z).Offsets = make([]ephemeralSubkey, zb0016)
 				}
 				for zb0003 := range (*z).Offsets {
 					bts, err = (*z).Offsets[zb0003].UnmarshalMsg(bts)
@@ -2286,18 +2615,29 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 						return
 					}
 				}
+				zb0008 = "offkeys"
 			case "offpk2":
+				if validate && zb0009 && "offpk2" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "OffsetsPK2")
 					return
 				}
+				zb0008 = "offpk2"
 			case "offpk2sig":
+				if validate && zb0009 && "offpk2sig" < zb0008 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).OffsetsPK2Sig)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "OffsetsPK2Sig")
 					return
 				}
+				zb0008 = "offpk2sig"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -2305,12 +2645,19 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 					return
 				}
 			}
+			zb0009 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *OneTimeSignatureSecretsPersistent) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *OneTimeSignatureSecretsPersistent) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureSecretsPersistent)
 	return ok
@@ -2374,16 +2721,24 @@ func (_ *OneTimeSignatureSubkeyBatchID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureSubkeyBatchID) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
+	var zb0004 string
+	var zb0005 bool
 	var zb0003 bool
+	_ = zb0004
+	_ = zb0005
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0002 > 0 {
@@ -2426,17 +2781,27 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err 
 			}
 			switch string(field) {
 			case "pk":
+				if validate && zb0005 && "pk" < zb0004 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "SubKeyPK")
 					return
 				}
+				zb0004 = "pk"
 			case "batch":
+				if validate && zb0005 && "batch" < zb0004 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Batch")
 					return
 				}
+				zb0004 = "batch"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -2444,12 +2809,19 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err 
 					return
 				}
 			}
+			zb0005 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *OneTimeSignatureSubkeyBatchID) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *OneTimeSignatureSubkeyBatchID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureSubkeyBatchID)
 	return ok
@@ -2497,16 +2869,24 @@ func (_ *OneTimeSignatureSubkeyOffsetID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureSubkeyOffsetID) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0002 int
+	var zb0004 string
+	var zb0005 bool
 	var zb0003 bool
+	_ = zb0004
+	_ = zb0005
 	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0002 > 0 {
@@ -2557,23 +2937,38 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err
 			}
 			switch string(field) {
 			case "pk":
+				if validate && zb0005 && "pk" < zb0004 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).SubKeyPK)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "SubKeyPK")
 					return
 				}
+				zb0004 = "pk"
 			case "batch":
+				if validate && zb0005 && "batch" < zb0004 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).Batch, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Batch")
 					return
 				}
+				zb0004 = "batch"
 			case "off":
+				if validate && zb0005 && "off" < zb0004 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).Offset, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Offset")
 					return
 				}
+				zb0004 = "off"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -2581,12 +2976,19 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err
 					return
 				}
 			}
+			zb0005 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *OneTimeSignatureSubkeyOffsetID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureSubkeyOffsetID)
 	return ok
@@ -2625,7 +3027,7 @@ func (_ *OneTimeSignatureVerifier) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureVerifier) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2635,6 +3037,12 @@ func (z *OneTimeSignatureVerifier) UnmarshalMsg(bts []byte) (o []byte, err error
 	return
 }
 
+func (z *OneTimeSignatureVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *OneTimeSignatureVerifier) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *OneTimeSignatureVerifier) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureVerifier)
 	return ok
@@ -2671,7 +3079,7 @@ func (_ *PrivateKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *PrivateKey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2681,6 +3089,12 @@ func (z *PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *PrivateKey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *PrivateKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*PrivateKey)
 	return ok
@@ -2717,7 +3131,7 @@ func (_ *PublicKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *PublicKey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2727,6 +3141,12 @@ func (z *PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *PublicKey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *PublicKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*PublicKey)
 	return ok
@@ -2763,7 +3183,7 @@ func (_ *Seed) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Seed) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2773,6 +3193,12 @@ func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *Seed) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *Seed) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Seed)
 	return ok
@@ -2809,7 +3235,7 @@ func (_ *Signature) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Signature) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2819,6 +3245,12 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *Signature) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *Signature) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Signature)
 	return ok
@@ -2861,16 +3293,24 @@ func (_ *SignatureSecrets) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *SignatureSecrets) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0003 int
+	var zb0005 string
+	var zb0006 bool
 	var zb0004 bool
+	_ = zb0005
+	_ = zb0006
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0003 > 0 {
@@ -2913,17 +3353,27 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "SignatureVerifier":
+				if validate && zb0006 && "SignatureVerifier" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).SignatureVerifier)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "SignatureVerifier")
 					return
 				}
+				zb0005 = "SignatureVerifier"
 			case "SK":
+				if validate && zb0006 && "SK" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "SK")
 					return
 				}
+				zb0005 = "SK"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -2931,12 +3381,19 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0006 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *SignatureSecrets) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *SignatureSecrets) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*SignatureSecrets)
 	return ok
@@ -2983,16 +3440,24 @@ func (_ *VRFSecrets) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VRFSecrets) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0003 int
+	var zb0005 string
+	var zb0006 bool
 	var zb0004 bool
+	_ = zb0005
+	_ = zb0006
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0003 > 0 {
@@ -3035,17 +3500,27 @@ func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "PK":
+				if validate && zb0006 && "PK" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PK")
 					return
 				}
+				zb0005 = "PK"
 			case "SK":
+				if validate && zb0006 && "SK" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "SK")
 					return
 				}
+				zb0005 = "SK"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -3053,12 +3528,19 @@ func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0006 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *VRFSecrets) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *VRFSecrets) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VRFSecrets)
 	return ok
@@ -3099,7 +3581,7 @@ func (_ *VrfOutput) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VrfOutput) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VrfOutput) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3109,6 +3591,12 @@ func (z *VrfOutput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *VrfOutput) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *VrfOutput) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *VrfOutput) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VrfOutput)
 	return ok
@@ -3145,7 +3633,7 @@ func (_ *VrfPrivkey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VrfPrivkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VrfPrivkey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3155,6 +3643,12 @@ func (z *VrfPrivkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *VrfPrivkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *VrfPrivkey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *VrfPrivkey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VrfPrivkey)
 	return ok
@@ -3191,7 +3685,7 @@ func (_ *VrfProof) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VrfProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VrfProof) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3201,6 +3695,12 @@ func (z *VrfProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *VrfProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *VrfProof) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *VrfProof) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VrfProof)
 	return ok
@@ -3237,7 +3737,7 @@ func (_ *VrfPubkey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VrfPubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VrfPubkey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3247,6 +3747,12 @@ func (z *VrfPubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *VrfPubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *VrfPubkey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *VrfPubkey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VrfPubkey)
 	return ok
@@ -3283,7 +3789,7 @@ func (_ *ed25519PrivateKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ed25519PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ed25519PrivateKey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3293,6 +3799,12 @@ func (z *ed25519PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ed25519PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *ed25519PrivateKey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *ed25519PrivateKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ed25519PrivateKey)
 	return ok
@@ -3329,7 +3841,7 @@ func (_ *ed25519PublicKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ed25519PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ed25519PublicKey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3339,6 +3851,12 @@ func (z *ed25519PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ed25519PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *ed25519PublicKey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *ed25519PublicKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ed25519PublicKey)
 	return ok
@@ -3375,7 +3893,7 @@ func (_ *ed25519Seed) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ed25519Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ed25519Seed) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3385,6 +3903,12 @@ func (z *ed25519Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ed25519Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *ed25519Seed) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *ed25519Seed) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ed25519Seed)
 	return ok
@@ -3421,7 +3945,7 @@ func (_ *ed25519Signature) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ed25519Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ed25519Signature) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3431,6 +3955,12 @@ func (z *ed25519Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ed25519Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *ed25519Signature) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *ed25519Signature) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ed25519Signature)
 	return ok
@@ -3479,16 +4009,24 @@ func (_ *ephemeralSubkey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ephemeralSubkey) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0005 int
+	var zb0007 string
+	var zb0008 bool
 	var zb0006 bool
+	_ = zb0007
+	_ = zb0008
 	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0005 > 0 {
@@ -3547,29 +4085,49 @@ func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "PK":
+				if validate && zb0008 && "PK" < zb0007 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PK")
 					return
 				}
+				zb0007 = "PK"
 			case "SK":
+				if validate && zb0008 && "SK" < zb0007 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "SK")
 					return
 				}
+				zb0007 = "SK"
 			case "PKSig":
+				if validate && zb0008 && "PKSig" < zb0007 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigOld)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PKSigOld")
 					return
 				}
+				zb0007 = "PKSig"
 			case "sig2":
+				if validate && zb0008 && "sig2" < zb0007 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = msgp.ReadExactBytes(bts, ((*z).PKSigNew)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "PKSigNew")
 					return
 				}
+				zb0007 = "sig2"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -3577,12 +4135,19 @@ func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0008 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *ephemeralSubkey) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *ephemeralSubkey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ephemeralSubkey)
 	return ok

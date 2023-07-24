@@ -19,6 +19,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalValidateMsg
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -28,6 +29,7 @@ import (
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalValidateMsg
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
@@ -80,16 +82,24 @@ func (_ *sigFromAddr) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *sigFromAddr) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *sigFromAddr) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
+	var zb0003 string
+	var zb0004 bool
 	var zb0002 bool
+	_ = zb0003
+	_ = zb0004
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0001 > 0 {
@@ -140,23 +150,38 @@ func (z *sigFromAddr) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "a":
+				if validate && zb0004 && "a" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).SignerAddress.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "SignerAddress")
 					return
 				}
+				zb0003 = "a"
 			case "r":
+				if validate && zb0004 && "r" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).Round.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Round")
 					return
 				}
+				zb0003 = "r"
 			case "s":
+				if validate && zb0004 && "s" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).Sig.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
+				zb0003 = "s"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -164,12 +189,19 @@ func (z *sigFromAddr) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0004 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *sigFromAddr) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *sigFromAddr) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *sigFromAddr) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*sigFromAddr)
 	return ok
@@ -229,7 +261,7 @@ func (z *spProver) MarshalMsg(b []byte) (o []byte) {
 			for zb0001 := range (*z).AddrToPos {
 				zb0001_keys = append(zb0001_keys, zb0001)
 			}
-			sort.Sort(SortAddress(zb0001_keys))
+			sort.Sort((zb0001_keys))
 			for _, zb0001 := range zb0001_keys {
 				zb0002 := (*z).AddrToPos[zb0001]
 				_ = zb0002
@@ -266,16 +298,24 @@ func (_ *spProver) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *spProver) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0003 int
+	var zb0005 string
+	var zb0006 bool
 	var zb0004 bool
+	_ = zb0005
+	_ = zb0006
 	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0003 > 0 {
@@ -299,32 +339,38 @@ func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			var zb0005 int
-			var zb0006 bool
-			zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0007 int
+			var zb0008 bool
+			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AddrToPos")
 				return
 			}
-			if zb0005 > stateproof.VotersAllocBound {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(stateproof.VotersAllocBound))
+			if zb0007 > stateproof.VotersAllocBound {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(stateproof.VotersAllocBound))
 				err = msgp.WrapError(err, "struct-from-array", "AddrToPos")
 				return
 			}
-			if zb0006 {
+			if zb0008 {
 				(*z).AddrToPos = nil
 			} else if (*z).AddrToPos == nil {
-				(*z).AddrToPos = make(map[Address]uint64, zb0005)
+				(*z).AddrToPos = make(map[Address]uint64, zb0007)
 			}
-			for zb0005 > 0 {
+			var zb0009 basics.Address
+			_ = zb0009
+			var zb0010 bool
+			_ = zb0010
+			for zb0007 > 0 {
 				var zb0001 basics.Address
 				var zb0002 uint64
-				zb0005--
+				zb0007--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AddrToPos")
 					return
 				}
+				zb0009 = zb0001
+				zb0010 = true
 				zb0002, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AddrToPos", zb0001)
@@ -373,6 +419,10 @@ func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "prv":
+				if validate && zb0006 && "prv" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				if msgp.IsNil(bts) {
 					bts, err = msgp.ReadNilBytes(bts)
 					if err != nil {
@@ -389,33 +439,44 @@ func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 				}
+				zb0005 = "prv"
 			case "addr":
-				var zb0007 int
-				var zb0008 bool
-				zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if validate && zb0006 && "addr" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
+				var zb0011 int
+				var zb0012 bool
+				zb0011, zb0012, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AddrToPos")
 					return
 				}
-				if zb0007 > stateproof.VotersAllocBound {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(stateproof.VotersAllocBound))
+				if zb0011 > stateproof.VotersAllocBound {
+					err = msgp.ErrOverflow(uint64(zb0011), uint64(stateproof.VotersAllocBound))
 					err = msgp.WrapError(err, "AddrToPos")
 					return
 				}
-				if zb0008 {
+				if zb0012 {
 					(*z).AddrToPos = nil
 				} else if (*z).AddrToPos == nil {
-					(*z).AddrToPos = make(map[Address]uint64, zb0007)
+					(*z).AddrToPos = make(map[Address]uint64, zb0011)
 				}
-				for zb0007 > 0 {
+				var zb0013 basics.Address
+				_ = zb0013
+				var zb0014 bool
+				_ = zb0014
+				for zb0011 > 0 {
 					var zb0001 basics.Address
 					var zb0002 uint64
-					zb0007--
+					zb0011--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "AddrToPos")
 						return
 					}
+					zb0013 = zb0001
+					zb0014 = true
 					zb0002, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "AddrToPos", zb0001)
@@ -423,18 +484,29 @@ func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					(*z).AddrToPos[zb0001] = zb0002
 				}
+				zb0005 = "addr"
 			case "hdr":
+				if validate && zb0006 && "hdr" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).VotersHdr.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VotersHdr")
 					return
 				}
+				zb0005 = "hdr"
 			case "msg":
+				if validate && zb0006 && "msg" < zb0005 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).Message.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Message")
 					return
 				}
+				zb0005 = "msg"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -442,12 +514,19 @@ func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0006 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *spProver) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *spProver) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *spProver) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*spProver)
 	return ok

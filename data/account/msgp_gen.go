@@ -15,6 +15,7 @@ import (
 //             |-----> (*) MarshalMsg
 //             |-----> (*) CanMarshalMsg
 //             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalValidateMsg
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
@@ -24,6 +25,7 @@ import (
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalValidateMsg
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
@@ -103,16 +105,24 @@ func (_ *ParticipationKeyIdentity) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ParticipationKeyIdentity) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
+	var zb0003 string
+	var zb0004 bool
 	var zb0002 bool
+	_ = zb0003
+	_ = zb0004
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0001 > 0 {
@@ -187,41 +197,71 @@ func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error
 			}
 			switch string(field) {
 			case "addr":
+				if validate && zb0004 && "addr" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).Parent.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Parent")
 					return
 				}
+				zb0003 = "addr"
 			case "vrfsk":
+				if validate && zb0004 && "vrfsk" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).VRFSK.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VRFSK")
 					return
 				}
+				zb0003 = "vrfsk"
 			case "vote-id":
+				if validate && zb0004 && "vote-id" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).VoteID.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteID")
 					return
 				}
+				zb0003 = "vote-id"
 			case "fv":
+				if validate && zb0004 && "fv" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).FirstValid.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
+				zb0003 = "fv"
 			case "lv":
+				if validate && zb0004 && "lv" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).LastValid.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
+				zb0003 = "lv"
 			case "kd":
+				if validate && zb0004 && "kd" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).KeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "KeyDilution")
 					return
 				}
+				zb0003 = "kd"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -229,12 +269,19 @@ func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error
 					return
 				}
 			}
+			zb0004 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *ParticipationKeyIdentity) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *ParticipationKeyIdentity) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ParticipationKeyIdentity)
 	return ok
@@ -280,7 +327,7 @@ func (_ StateProofKeys) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofKeys) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -311,6 +358,12 @@ func (z *StateProofKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *StateProofKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *StateProofKeys) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *StateProofKeys) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*StateProofKeys)
 	return ok

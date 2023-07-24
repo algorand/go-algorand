@@ -11,6 +11,7 @@ import (
 //         |-----> MarshalMsg
 //         |-----> CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalValidateMsg
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> Msgsize
 //         |-----> MsgIsZero
@@ -20,6 +21,7 @@ import (
 //   |-----> MarshalMsg
 //   |-----> CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalValidateMsg
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
@@ -29,6 +31,7 @@ import (
 //    |-----> MarshalMsg
 //    |-----> CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalValidateMsg
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
@@ -38,6 +41,7 @@ import (
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalValidateMsg
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
@@ -47,6 +51,7 @@ import (
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalValidateMsg
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
@@ -56,6 +61,7 @@ import (
 //  |-----> MarshalMsg
 //  |-----> CanMarshalMsg
 //  |-----> (*) UnmarshalMsg
+//  |-----> (*) UnmarshalValidateMsg
 //  |-----> (*) CanUnmarshalMsg
 //  |-----> Msgsize
 //  |-----> MsgIsZero
@@ -65,6 +71,7 @@ import (
 //    |-----> MarshalMsg
 //    |-----> CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalValidateMsg
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
@@ -87,7 +94,7 @@ func (_ ConsensusVersion) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ConsensusVersion) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 string
 		var zb0002 int
@@ -111,6 +118,12 @@ func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *ConsensusVersion) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *ConsensusVersion) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ConsensusVersion)
 	return ok
@@ -149,7 +162,7 @@ func (_ Error) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Error) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -163,6 +176,12 @@ func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *Error) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *Error) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Error)
 	return ok
@@ -201,7 +220,7 @@ func (_ HashID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *HashID) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -215,6 +234,12 @@ func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *HashID) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *HashID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*HashID)
 	return ok
@@ -253,7 +278,7 @@ func (_ NetworkID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *NetworkID) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -267,6 +292,12 @@ func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *NetworkID) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *NetworkID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*NetworkID)
 	return ok
@@ -305,7 +336,7 @@ func (_ StateProofType) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofType) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 uint64
 		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
@@ -319,6 +350,12 @@ func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *StateProofType) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *StateProofType) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*StateProofType)
 	return ok
@@ -357,7 +394,7 @@ func (_ Tag) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Tag) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -371,6 +408,12 @@ func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *Tag) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *Tag) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Tag)
 	return ok
@@ -409,7 +452,7 @@ func (_ TxType) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *TxType) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	{
 		var zb0001 string
 		var zb0002 int
@@ -433,6 +476,12 @@ func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *TxType) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *TxType) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*TxType)
 	return ok
