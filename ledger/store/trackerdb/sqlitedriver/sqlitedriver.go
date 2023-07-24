@@ -19,6 +19,7 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -345,9 +346,9 @@ func maybeIOError(err error) error {
 	if err == nil {
 		return nil
 	}
-	serr, ok := err.(sqlite3.Error)
-	if !ok || serr.Code == sqlite3.ErrIoErr {
-		return trackerdb.ErrIoErr
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		return &trackerdb.ErrIoErr{InnerError: err}
 	}
 	return err
 }

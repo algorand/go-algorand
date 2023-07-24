@@ -583,7 +583,8 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 		tr.log.Warnf("unable to advance tracker db snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
 
 		// if the error is an IO error, shut down the node.
-		if errors.Is(err, trackerdb.ErrIoErr) {
+		var trackerIOErr *trackerdb.ErrIoErr
+		if errors.As(err, &trackerIOErr) {
 			tr.log.Fatalf("Fatal IO error during CommitRound, exiting: %v", err)
 		}
 

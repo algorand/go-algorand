@@ -19,6 +19,7 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -93,12 +94,13 @@ func TestMaybeIOError(t *testing.T) {
 
 	// This structure is how sqlite3 returns Errors
 	err := sqlite3.Error{Code: sqlite3.ErrIoErr}
-	require.Equal(t, trackerdb.ErrIoErr, maybeIOError(err))
+	var trackerIOErr *trackerdb.ErrIoErr
+	require.ErrorAs(t, maybeIOError(err), &trackerIOErr)
 
 	// ErrNo10 is a sqlite3 error code for ErrIoErr
 	err = sqlite3.Error{Code: sqlite3.ErrNo(10)}
-	require.Equal(t, trackerdb.ErrIoErr, maybeIOError(err))
+	require.ErrorAs(t, maybeIOError(err), &trackerIOErr)
 
 	err = sqlite3.Error{Code: sqlite3.ErrSchema}
-	require.NotEqual(t, trackerdb.ErrIoErr, maybeIOError(err))
+	require.False(t, errors.As(maybeIOError(err), &trackerIOErr))
 }
