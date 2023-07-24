@@ -940,10 +940,6 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 	return block.BlockHeader, nil
 }
 
-func (ledger *evalTestLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return ledger.BlockHdr(rnd)
-}
-
 func (ledger *evalTestLedger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, errors.New("untested code path")
 }
