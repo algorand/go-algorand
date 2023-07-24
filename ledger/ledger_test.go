@@ -2589,7 +2589,7 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 
 	latest := l.Latest()
 	for i := latest - basics.Round(proto.MaxTxnLife); i <= latest; i++ {
-		blk, err := l.BlockHdrCached(i)
+		blk, err := l.BlockHdr(i)
 		require.NoError(t, err)
 		require.Equal(t, blk.Round, i)
 	}
@@ -2603,13 +2603,13 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	start := dbRound - basics.Round(proto.MaxTxnLife)
 	end := latest - basics.Round(proto.MaxTxnLife)
 	for i := start; i < end; i++ {
-		blk, err := l.BlockHdrCached(i)
+		blk, err := l.BlockHdr(i)
 		require.NoError(t, err)
 		require.Equal(t, blk.Round, i)
 	}
 
-	_, err = l.BlockHdrCached(start - 1)
-	require.Error(t, err)
+	_, ok := l.txTail.blockHeader(start - 1)
+	require.False(t, ok)
 }
 
 // TestLedgerKeyregFlip generates keyreg transactions for flipping genesis accounts state.

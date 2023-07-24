@@ -208,7 +208,7 @@ func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 // only exposes things that consensus has already agreed upon, so it is
 // "stateless" for signature purposes.
 type LedgerForSignature interface {
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 // NoHeaderLedger is intended for debugging situations in which it is reasonable
@@ -2919,7 +2919,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		if err != nil {
 			return sv, err
 		}
-		hdr, err := cx.SigLedger.BlockHdrCached(rnd)
+		hdr, err := cx.SigLedger.BlockHdr(rnd)
 		if err != nil {
 			return sv, err
 		}
@@ -5797,7 +5797,7 @@ func opBlock(cx *EvalContext) error {
 		return fmt.Errorf("invalid block field %s", f)
 	}
 
-	hdr, err := cx.SigLedger.BlockHdrCached(round)
+	hdr, err := cx.SigLedger.BlockHdr(round)
 	if err != nil {
 		return err
 	}

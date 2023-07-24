@@ -130,7 +130,7 @@ func (cs *roundCowState) SetLocal(addr basics.Address, appIdx basics.AppIndex, k
 }
 
 func (cs *roundCowState) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return cs.blockHdrCached(round)
+	return cs.BlockHdr(round)
 }
 
 func (cs *roundCowState) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {

@@ -758,6 +758,10 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 	if r == aul.prevHeader.Round {
 		return aul.prevHeader, nil
 	}
+	hdr, ok := aul.tail.blockHeader(r)
+	if ok {
+		return hdr, nil
+	}
 	return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{}
 }
 

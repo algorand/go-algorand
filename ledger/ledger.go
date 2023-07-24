@@ -754,13 +754,13 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 // and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
 // the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
 // that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
-func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
-	hdr, ok := l.txTail.blockHeader(rnd)
-	if !ok {
-		err = fmt.Errorf("no cached header data for round %d", rnd)
-	}
-	return hdr, err
-}
+//func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
+//	hdr, ok := l.txTail.blockHeader(rnd)
+//	if !ok {
+//		err = fmt.Errorf("no cached header data for round %d", rnd)
+//	}
+//	return hdr, err
+//}
 
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
 func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {

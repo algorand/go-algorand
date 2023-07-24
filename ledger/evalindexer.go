@@ -45,7 +45,7 @@ type indexerLedgerForEval interface {
 	LatestTotals() (ledgercore.AccountTotals, error)
 	LookupKv(basics.Round, string) ([]byte, error)
 
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 // FoundAddress is a wrapper for an address and a boolean.
@@ -93,9 +93,9 @@ func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockH
 }
 
 // BlockHdrCached is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return l.il.BlockHdrCached(round)
-}
+//func (l indexerLedgerConnector) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+//	return l.il.BlockHdrCached(round)
+//}
 
 // CheckDup is part of LedgerForEvaluator interface.
 func (l indexerLedgerConnector) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {

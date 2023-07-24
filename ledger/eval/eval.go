@@ -40,7 +40,7 @@ import (
 // LedgerForCowBase represents subset of Ledger functionality needed for cow business
 type LedgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
+	//	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -342,9 +342,9 @@ func (x *roundCowBase) GetStateProofVerificationContext(stateProofLastAttestedRo
 	return x.l.GetStateProofVerificationContext(stateProofLastAttestedRound)
 }
 
-func (x *roundCowBase) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
-	return x.l.BlockHdrCached(r)
-}
+//func (x *roundCowBase) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
+//	return x.l.BlockHdrCached(r)
+//}
 
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	// For global, check if app params exist
