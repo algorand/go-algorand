@@ -162,7 +162,7 @@ func (spw *Worker) Stop() {
 // SortAddress implements sorting by Address keys for
 // canonical encoding of maps in msgpack format.
 //
-//msgp:sort basics.Address SortAddress
+//msgp:sort basics.Address SortAddress basics.AddressLess
 type SortAddress = basics.SortAddress
 
 // Address is required for the msgpack sort binding, since it looks for Address and not basics.Address
