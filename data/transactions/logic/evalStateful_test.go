@@ -3098,6 +3098,8 @@ func TestReturnTypes(t *testing.T) {
 		"err":    true,
 		"return": true,
 
+		// these have unusual input sizew requirements not encoded in proto
+		"falcon_verify":       true,
 		"ecdsa_pk_decompress": true,
 
 		"frame_dig":  true, // would need a "proto" subroutine

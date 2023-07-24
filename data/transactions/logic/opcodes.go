@@ -77,6 +77,8 @@ const sharedResourcesVersion = 9 // apps can access resources from other transac
 const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
 const spliceVersion = 10  // box splicing/resizing
 
+const spOpcodesVersion = 11 // falcon_verify, sumhash512
+
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
 
@@ -503,9 +505,9 @@ var OpSpecs = []OpSpec{
 		is currently a useful pattern that requires hashes on long slices to
 		creating logicsigs in apps.
 
-		{0x01, "sha256", opSHA256, proto("b:b"), unlimitedStorage, costByLength(12, 6, 8)},
-		{0x02, "keccak256", opKeccak256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},
-		{0x03, "sha512_256", opSHA512_256, proto("b:b"), 7, unlimitedStorage, costByLength(17, 5, 8)},
+		{0x01, "sha256", opSHA256, proto("b:b"), ?, costByLength(...)},
+		{0x02, "keccak256", opKeccak256, proto("b:b"), ?, costByLength(...)},
+		{0x03, "sha512_256", opSHA512_256, proto("b:b"), ?, costByLength(...)},
 	*/
 
 	{0x04, "ed25519verify", opEd25519Verify, proto("b63:T"), 1, costly(1900).only(ModeSig)},
@@ -647,6 +649,8 @@ var OpSpecs = []OpSpec{
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("b63:T"), 7, costly(1900)},
+	{0x85, "falcon_verify", opFalconVerify, proto("bbb:T"), spOpcodesVersion, costly(1700)}, // dynamic for internal hash?
+	{0x86, "sumhash512", opSumhash512, proto("b:b"), spOpcodesVersion, costByLength(150, 7, 4, 0)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
@@ -669,7 +673,7 @@ var OpSpecs = []OpSpec{
 	{0x97, "divw", opDivw, proto("iii:i"), 6, detDefault()},
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), 7, costly(130)},
 	/* Will end up following keccak256 -
-	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
+	{0x98, "sha3_256", opSHA3_256, proto("b:b"), ?, costByLength(...)},},
 	*/
 
 	// Byteslice math.
