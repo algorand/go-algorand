@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/avm-abi/apps"
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
@@ -48,11 +49,13 @@ import (
 var catchpointFile string
 var outFileName string
 var excludedFields = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
+var printDigests bool
 
 func init() {
 	fileCmd.Flags().StringVarP(&catchpointFile, "tar", "t", "", "Specify the catchpoint file (either .tar or .tar.gz) to process")
 	fileCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. tracker.dump.txt )")
 	fileCmd.Flags().BoolVarP(&loadOnly, "load", "l", false, "Load only, do not dump")
+	fileCmd.Flags().BoolVarP(&printDigests, "digest", "d", false, "Print balances and spver digests")
 	fileCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
 }
 
@@ -206,6 +209,18 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		header, err := tarReader.Next()
 		if err != nil {
 			if err == io.EOF {
+				if printDigests {
+					err = catchupAccessor.BuildMerkleTrie(ctx, func(uint64, uint64) {})
+					if err != nil {
+						return fileHeader, err
+					}
+					var balanceHash, spverHash crypto.Digest
+					balanceHash, spverHash, _, err = catchupAccessor.GetVerifyData(ctx)
+					if err != nil {
+						return fileHeader, err
+					}
+					fmt.Printf("accounts digest=%s, spver digest=%s\n\n", balanceHash, spverHash)
+				}
 				return fileHeader, nil
 			}
 			return fileHeader, err
