@@ -151,9 +151,13 @@ type catchpointTracker struct {
 	// catchpoint files even before the protocol upgrade took place.
 	forceCatchpointFileWriting bool
 
-	// catchpointsMu protects `roundDigest`, `reenableCatchpointsRound` and
+	// catchpointsMu protects roundDigest, reenableCatchpointsRound, cachedDBRound and
 	// `lastCatchpointLabel`.
 	catchpointsMu deadlock.RWMutex
+
+	// cachedDBRound is always exactly tracker DB round (and therefore, accountsRound()),
+	// cached to use in lookup functions
+	cachedDBRound basics.Round
 }
 
 // initialize initializes the catchpointTracker structure
@@ -350,6 +354,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 		return err
 	}
 
+	ct.cachedDBRound = dbRound
 	ct.roundDigest = nil
 	ct.consensusVersion = nil
 	ct.catchpointDataWriting.Store(0)
@@ -402,7 +407,10 @@ func (ct *catchpointTracker) newBlock(blk bookkeeping.Block, delta ledgercore.St
 // number that can be removed from the blocks database as well as the lookback that this
 // tracker maintains.
 func (ct *catchpointTracker) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
-	return rnd, basics.Round(0)
+	ct.catchpointsMu.RLock()
+	defer ct.catchpointsMu.RUnlock()
+	retRound = ct.cachedDBRound
+	return retRound, basics.Round(0)
 }
 
 // Calculate whether we have intermediate first stage catchpoint rounds and the
@@ -610,6 +618,7 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 	ct.catchpointsMu.Lock()
 	ct.roundDigest = ct.roundDigest[dcc.offset:]
 	ct.consensusVersion = ct.consensusVersion[dcc.offset:]
+	ct.cachedDBRound = dcc.newBase()
 	ct.catchpointsMu.Unlock()
 
 	dcc.updatingBalancesDuration = time.Since(dcc.flushTime)
