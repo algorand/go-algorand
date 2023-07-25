@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/datadir"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
@@ -193,7 +194,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.net = p2pNode
 
 	// load stored data
-	genesisDir := config.GetFileResource("genesisDir")
+	genesisDir := datadir.Get("genesisDir")
 	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
 	log.Warn("AXELAXEL ledgerPathnamePrefix: ", ledgerPathnamePrefix)
 

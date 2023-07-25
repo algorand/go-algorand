@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package config
+package datadir
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 var baseDataDirKey = "ALGORAND_DATA"
@@ -44,37 +48,51 @@ type fileResources struct {
 	catchpointPath  string
 }
 
+// when loaded, store the genesis text for use by other packages
+var genesisText string
+
 var fr fileResources
 
-// genesis directory is the dataDir + genesisID
-// can only be set once the genesisID is known (genesis file is loaded)
-func SetGenesisDir(genesisID string) {
-	fr.genesisDirPath = filepath.Join(fr.dataDirPath, genesisID)
+func LoadGenesis(dataDir string, genesisPath string) (bookkeeping.Genesis, string, error) {
+	if genesisPath == "" {
+		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
+	}
+	genText, err := os.ReadFile(genesisPath)
+	if err != nil {
+		return bookkeeping.Genesis{}, "", err
+	}
+	genesisText = string(genText)
+	var genesis bookkeeping.Genesis
+	err = protocol.DecodeJSON(genText, &genesis)
+	if err != nil {
+		return bookkeeping.Genesis{}, "", err
+	}
+	return genesis, string(genesisText), nil
 }
 
-func InitializeDataDirs(dataDirectory *string, dataDirsMap map[string]string, genesisFile *string) (cfg Local, retErr error) {
+func InitializeDataDirs(dataDirectory *string, dataDirsMap map[string]string, genesisFile *string) (config.Local, bookkeeping.Genesis, error) {
 	// first, ensure data directory is defined and valid
 	dataDir := ResolveDataDir(dataDirectory)
 	if len(dataDir) == 0 {
-		retErr = fmt.Errorf("data directory not specified")
-		return
+		return config.Local{}, bookkeeping.Genesis{}, fmt.Errorf("data directory not specified")
 	}
 	// ensure path can be made absolute
-	absolutePath, absPathErr := filepath.Abs(dataDir)
-	if absPathErr != nil {
-		retErr = fmt.Errorf("can't convert data directory's path to absolute, %v", dataDir)
-		return
+	absolutePath, err := filepath.Abs(dataDir)
+	if err != nil {
+		return config.Local{}, bookkeeping.Genesis{}, err
 	}
 	// If data directory doesn't exist, we can't run
 	if _, err := os.Stat(absolutePath); err != nil {
-		retErr = err
-		return
+		return config.Local{}, bookkeeping.Genesis{}, err
 	}
 	// load the config
-	cfg, err := LoadConfigFromDisk(absolutePath)
+	cfg, err := config.LoadConfigFromDisk(absolutePath)
 	if err != nil && !os.IsNotExist(err) {
-		retErr = err
-		return
+		return config.Local{}, bookkeeping.Genesis{}, err
+	}
+	genesis, _, err := LoadGenesis(*dataDirectory, *genesisFile)
+	if err != nil {
+		return config.Local{}, bookkeeping.Genesis{}, err
 	}
 
 	// resolve data directory paths for each resource
@@ -87,12 +105,23 @@ func InitializeDataDirs(dataDirectory *string, dataDirsMap map[string]string, ge
 	fr.dataDirColdPath = resolve(dataDirsMap["ALGORAND_DATA_COLD"], "ALGORAND_DATA_COLD", cfg.ColdDataDir, fr.dataDirPath)
 
 	// these resources fallback to hot data directory
-	fr.trackerdbPath = resolve(dataDirsMap["ALGORAND_DATA_LEDGER_TRACKERDB"], "ALGORAND_DATA_LEDGER_TRACKERDB", cfg.TrackerDbDir, fr.dataDirHotPath)
+	// trackerdbPath can only be known once the Genesis ID is known, as the default location includes reference to it
+	fr.trackerdbPath = "" //resolve(dataDirsMap["ALGORAND_DATA_LEDGER_TRACKERDB"], "ALGORAND_DATA_LEDGER_TRACKERDB", cfg.TrackerDbDir, fr.dataDirHotPath)
 
 	// these resources fallback to cold data directory
 	fr.catchpointPath = resolve(dataDirsMap["ALGORAND_DATA_LEDGER_CATCHPOINT"], "ALGORAND_DATA_LEDGER_CATCHPOINT", cfg.CatchpointDir, fr.dataDirColdPath)
 
-	return
+	// the default genesis path is a folder named after the genesis ID in the root data directory
+	fr.genesisDirPath = resolve(dataDirsMap["ALGORAND_DATA_LEDGER_CATCHPOINT"], "ALGORAND_DATA_LEDGER_CATCHPOINT", cfg.CatchpointDir, filepath.Join(fr.dataDirPath, genesis.ID()))
+
+	fr.trackerdbPath = resolve(dataDirsMap["ALGORAND_DATA_LEDGER_TRACKERDB"], "ALGORAND_DATA_LEDGER_TRACKERDB", cfg.TrackerDbDir, fr.genesisDirPath)
+
+	return cfg, genesis, nil
+}
+
+// InitialiseDataDirsWithGenesis sets the data paths which require the genesis ID to be known
+func InitialiseDataDirsWithGenesis(genesisID string) {
+	fr.genesisDirPath = filepath.Join(fr.dataDirPath, genesisID)
 }
 
 // TODO: func (fr *fileResources) Validate() error{
@@ -112,9 +141,10 @@ func resolve(cli string, env string, cfg string, fallback string) string {
 	return fallback
 }
 
-// GetFileResource returns the path to a file resource, given a resource name.
+// Get returns the stored content of an artifact (usually a path string), given a resource name.
 // these names are collected from existing code
-func GetFileResource(resource string) string {
+// once we have them all as we like them, we should consider changing this to be 1:1, or use a map
+func Get(resource string) string {
 	switch resource {
 	case "absolutePath", "root", "dataDir":
 		return fr.dataDirPath
@@ -122,6 +152,8 @@ func GetFileResource(resource string) string {
 		return fr.trackerdbPath
 	case "genesisDir":
 		return fr.genesisDirPath
+	case "genesisText":
+		return genesisText
 	}
 	return ""
 }

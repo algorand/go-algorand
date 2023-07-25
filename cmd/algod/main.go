@@ -26,8 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/config/datadir"
 	"github.com/algorand/go-algorand/util"
 
 	"github.com/algorand/go-deadlock"
@@ -58,9 +57,10 @@ var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
 var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
 
-// Define a custom flag type that implements flag.Value interface
+// a flag.Value that parses a string of the form key=value into a map[string]string
 type stringMapFlag map[string]string
 
+// String implements the flag.Value interface.
 func (m *stringMapFlag) String() string {
 	return fmt.Sprintf("%v", *m)
 }
@@ -88,64 +88,32 @@ func main() {
 // printGenesisOnly attempts to load and parse the genesis file without checking any other config
 // it is used when the run parameter is set to -G for genesisPrint
 func printGenesisIDOnly() int {
-	genesisPath := filepath.Join(*dataDirectory, config.GenesisJSONFile)
-	genesisText, err := os.ReadFile(genesisPath)
+	genesis, _, err := datadir.LoadGenesis(*dataDirectory, *genesisFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisPath, err)
-		return 1
-	}
-
-	var genesis bookkeeping.Genesis
-	err = protocol.DecodeJSON(genesisText, &genesis)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse genesis file %s: %v\n", genesisPath, err)
+		fmt.Fprintf(os.Stderr, "Error loading genesis: %v\n", err)
 		return 1
 	}
 	fmt.Println(genesis.ID())
 	return 0
 }
 
-func loadGenesis(dataDir string) (bookkeeping.Genesis, string, error) {
-	genesisPath := *genesisFile
-	if genesisPath == "" {
-		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
-	}
-	genesisText, err := os.ReadFile(genesisPath)
-	if err != nil {
-		return bookkeeping.Genesis{}, "", err
-	}
-	var genesis bookkeeping.Genesis
-	err = protocol.DecodeJSON(genesisText, &genesis)
-	if err != nil {
-		return bookkeeping.Genesis{}, "", err
-	}
-	return genesis, string(genesisText), nil
-}
-
 func run() int {
-	// if all that is needed is to print the genesis ID, we can ignore potential load errors and just try to access genesis.ID
 	if *genesisPrint {
 		return printGenesisIDOnly()
 	}
-	cfg, err := config.InitializeDataDirs(dataDirectory, dataDirsMap, genesisFile)
+
+	// Initialize the data directories, and return the loaded config and genesis file
+	cfg, genesis, err := datadir.InitializeDataDirs(dataDirectory, dataDirsMap, genesisFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing directories: %v\n", err)
 		return 1
 	}
 
-	absolutePath := config.GetFileResource("dataDir")
-
-	genesis, genesisText, err := loadGenesis(absolutePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading genesis: %v\n", err)
-		return 1
-	}
-
-	config.SetGenesisDir(genesis.ID())
+	rootDirAbs := datadir.Get("dataDir")
 
 	// Update the Version with the Data Directory
 	// TODO: Use the path provider instead of loading to version
-	config.UpdateVersionDataDir(absolutePath)
+	config.UpdateVersionDataDir(rootDirAbs)
 
 	if *seed != "" {
 		seedVal, err := strconv.ParseInt(*seed, 10, 64)
@@ -184,7 +152,7 @@ func run() int {
 	log := logging.Base()
 	// before doing anything further, attempt to acquire the algod lock
 	// to ensure this is the only node running against this data directory
-	lockPath := filepath.Join(absolutePath, "algod.lock")
+	lockPath := filepath.Join(rootDirAbs, "algod.lock")
 	fileLock := flock.New(lockPath)
 	locked, err := fileLock.TryLock()
 	if err != nil {
@@ -199,7 +167,7 @@ func run() int {
 
 	// Delete legacy indexer.sqlite files if they happen to exist
 	checkAndDeleteIndexerFile := func(fileName string) {
-		indexerDBFilePath := filepath.Join(config.GetFileResource("genesisDir"), fileName)
+		indexerDBFilePath := filepath.Join(datadir.Get("genesisDir"), fileName)
 
 		if util.FileExists(indexerDBFilePath) {
 			if idxFileRemoveErr := os.Remove(indexerDBFilePath); idxFileRemoveErr != nil {
@@ -220,7 +188,7 @@ func run() int {
 		log.Fatalf("Error validating DNSBootstrap input: %v", err)
 	}
 
-	err = config.LoadConfigurableConsensusProtocols(absolutePath)
+	err = config.LoadConfigurableConsensusProtocols(rootDirAbs)
 	if err != nil {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Unable to load optional consensus protocols file: %v", err)
@@ -231,7 +199,7 @@ func run() int {
 	isTest := os.Getenv("ALGOTEST") != ""
 	remoteTelemetryEnabled := false
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(&absolutePath, genesis.ID())
+		telemetryConfig, err := logging.EnsureTelemetryConfig(&rootDirAbs, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 		}
@@ -262,7 +230,7 @@ func run() int {
 	}
 
 	s := algod.Server{
-		RootPath: absolutePath,
+		RootPath: rootDirAbs,
 		Genesis:  genesis,
 	}
 
@@ -340,7 +308,7 @@ func run() int {
 		if err != nil {
 			log.Errorf("cannot locate node executable: %s", err)
 		} else {
-			phonebookDirs := []string{filepath.Dir(ex), absolutePath}
+			phonebookDirs := []string{filepath.Dir(ex), rootDirAbs}
 			for _, phonebookDir := range phonebookDirs {
 				phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
 				if err == nil {
@@ -357,7 +325,7 @@ func run() int {
 		cfg.LogSizeLimit = 0
 	}
 
-	err = s.Initialize(cfg, phonebookAddresses, genesisText)
+	err = s.Initialize(cfg, phonebookAddresses, datadir.Get("genesisText"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)
@@ -397,7 +365,7 @@ func run() int {
 			CommitHash:   currentVersion.CommitHash,
 			Branch:       currentVersion.Branch,
 			Channel:      currentVersion.Channel,
-			InstanceHash: crypto.Hash([]byte(absolutePath)).String(),
+			InstanceHash: crypto.Hash([]byte(rootDirAbs)).String(),
 			Overrides:    overrides,
 		}
 

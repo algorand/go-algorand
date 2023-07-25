@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/datadir"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -304,7 +305,7 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging
 			fallthrough
 		// anything else will initialize a sqlite engine.
 		default:
-			file := config.GetFileResource("trackerdb") + "tracker.sqlite"
+			file := datadir.Get("trackerdb") + "tracker.sqlite"
 			file2 := dbPathPrefix + ".tracker.sqlite"
 			log.Warn("AXELAXEL file: ", file)
 			log.Warn("AXELAXEL file2: ", file2)
