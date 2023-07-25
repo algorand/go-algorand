@@ -40,7 +40,9 @@ const (
 //msgp:sort StateProofType SortStateProofType StateProofTypeLess
 type SortStateProofType []StateProofType
 
-func (a SortStateProofType) Len() int             { return len(a) }
-func (a SortStateProofType) Less(i, j int) bool   { return a[i] < a[j] }
-func (a SortStateProofType) Swap(i, j int)        { a[i], a[j] = a[j], a[i] }
+func (a SortStateProofType) Len() int           { return len(a) }
+func (a SortStateProofType) Less(i, j int) bool { return a[i] < a[j] }
+func (a SortStateProofType) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+// StateProofTypeLess is a function required for msgp:sort directive
 func StateProofTypeLess(a, b StateProofType) bool { return a < b }

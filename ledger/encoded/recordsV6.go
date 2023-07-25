@@ -43,7 +43,8 @@ const (
 // encoding the resources map below.
 type SortUint64 = basics.SortUint64
 
-// Uint64Less is necessary for UnmarshalValidateMsg functionality
+// Uint64Less is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
 func Uint64Less(a, b uint64) bool { return a < b }
 
 // BalanceRecordV6 is the encoded account balance record.

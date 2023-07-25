@@ -26,7 +26,10 @@ type SortUint64 []uint64
 func (a SortUint64) Len() int           { return len(a) }
 func (a SortUint64) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortUint64) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func Uint64Less(a, b uint64) bool       { return a < b }
+
+// Uint64Less is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func Uint64Less(a, b uint64) bool { return a < b }
 
 // SortString implements sorting by string keys for
 // canonical encoding of maps in msgpack format.

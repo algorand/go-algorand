@@ -30,7 +30,10 @@ type SortUint64 []uint64
 func (a SortUint64) Len() int           { return len(a) }
 func (a SortUint64) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortUint64) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func Uint64Less(a, b uint64) bool       { return a < b }
+
+// Uint64Less is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func Uint64Less(a, b uint64) bool { return a < b }
 
 // SortAssetIndex implements sorting by AssetIndex keys for
 // canonical encoding of maps in msgpack format.
@@ -42,7 +45,10 @@ type SortAssetIndex []AssetIndex
 func (a SortAssetIndex) Len() int           { return len(a) }
 func (a SortAssetIndex) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortAssetIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func AssetIndexLess(a, b AssetIndex) bool   { return a < b }
+
+// AssetIndexLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func AssetIndexLess(a, b AssetIndex) bool { return a < b }
 
 // SortAppIndex implements sorting by AppIndex keys for
 // canonical encoding of maps in msgpack format.
@@ -54,7 +60,10 @@ type SortAppIndex []AppIndex
 func (a SortAppIndex) Len() int           { return len(a) }
 func (a SortAppIndex) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortAppIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func AppIndexLess(a, b AppIndex) bool     { return a < b }
+
+// AppIndexLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func AppIndexLess(a, b AppIndex) bool { return a < b }
 
 // SortString implements sorting by string keys for
 // canonical encoding of maps in msgpack format.
@@ -66,7 +75,10 @@ type SortString []string
 func (a SortString) Len() int           { return len(a) }
 func (a SortString) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortString) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func StringLess(a, b string) bool       { return a < b }
+
+// StringLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func StringLess(a, b string) bool { return a < b }
 
 // SortAddress implements sorting by Address keys for
 // canonical encoding of maps in msgpack format.
@@ -78,4 +90,7 @@ type SortAddress []Address
 func (a SortAddress) Len() int           { return len(a) }
 func (a SortAddress) Less(i, j int) bool { return bytes.Compare(a[i][:], a[j][:]) < 0 }
 func (a SortAddress) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func AddressLess(a, b Address) bool      { return bytes.Compare(a[:], b[:]) < 0 }
+
+// AddressLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func AddressLess(a, b Address) bool { return bytes.Compare(a[:], b[:]) < 0 }

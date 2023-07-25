@@ -22,7 +22,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// Uint64Less is necessary for UnmarshalValidateMsg functionality
+// Uint64Less is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
 func Uint64Less(a, b uint64) bool { return a < b }
 
 // These types are defined to satisfy SortInterface used by msgp
