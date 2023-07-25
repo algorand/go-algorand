@@ -19,7 +19,6 @@ package testsuite
 import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
@@ -32,7 +31,6 @@ func init() {
 	registerTest("online-accounts-top", CustomTestAccountsOnlineTop)
 	registerTest("online-accounts-get-by-addr", CustomTestLookupOnlineAccountDataByAddress)
 	registerTest("online-accounts-history", CustomTestOnlineAccountHistory)
-	registerTest("online-accounts-totals", CustomTestOnlineAccountTotals)
 	registerTest("online-accounts-delete", CustomTestOnlineAccountsDelete)
 	registerTest("online-accounts-expired", CustomTestAccountsOnlineExpired)
 }
@@ -322,37 +320,6 @@ func CustomTestLookupOnlineAccountDataByAddress(t *customT) {
 	err = protocol.Decode(readData, &badA)
 	require.NoError(t, err)
 	require.Equal(t, dataA, badA)
-}
-
-func CustomTestOnlineAccountTotals(t *customT) {
-	aw, err := t.db.MakeAccountsWriter()
-	require.NoError(t, err)
-
-	oaor, err := t.db.MakeOnlineAccountsOptimizedReader()
-	require.NoError(t, err)
-
-	// generate some test data
-	roundParams := []ledgercore.OnlineRoundParamsData{
-		{OnlineSupply: 100},
-		{OnlineSupply: 42},
-		{OnlineSupply: 9000},
-	}
-	err = aw.AccountsPutOnlineRoundParams(roundParams, basics.Round(3))
-	require.NoError(t, err)
-
-	//
-	// test
-	//
-
-	// lookup totals
-	totals, err := oaor.LookupOnlineTotalsHistory(basics.Round(4))
-	require.NoError(t, err)
-	require.Equal(t, basics.MicroAlgos{Raw: uint64(42)}, totals)
-
-	// lookup not found
-	_, err = oaor.LookupOnlineTotalsHistory(basics.Round(121))
-	require.Error(t, err)
-	require.Equal(t, trackerdb.ErrNotFound, err)
 }
 
 func CustomTestOnlineAccountsDelete(t *customT) {

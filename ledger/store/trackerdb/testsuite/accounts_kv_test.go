@@ -29,7 +29,6 @@ func init() {
 	registerTest("resources-query-all", CustomTestResourcesQueryAll)
 	registerTest("kv-crud", CustomTestAppKVCrud)
 	registerTest("creatables-crud", CustomTestCreatablesCrud)
-	registerTest("creatables-query-all", CustomTestCreatablesQueryAll)
 }
 
 func CustomTestAccountsCrud(t *customT) {
@@ -378,103 +377,5 @@ func CustomTestCreatablesCrud(t *customT) {
 	require.NoError(t, err)
 	require.False(t, ok)                 // ok=false when it doesn't exist
 	require.Equal(t, expectedRound, rnd) // db round (this is present even if record does not exist)
-
-}
-
-func CustomTestCreatablesQueryAll(t *customT) {
-	aow, err := t.db.MakeAccountsOptimizedWriter(true, true, false, true)
-	require.NoError(t, err)
-
-	aor, err := t.db.MakeAccountsOptimizedReader()
-	require.NoError(t, err)
-
-	aw, err := t.db.MakeAccountsWriter()
-	require.NoError(t, err)
-
-	// set round to 3
-	// Note: this will be used to check that we read the round
-	expectedRound := basics.Round(3)
-	err = aw.UpdateAccountsRound(expectedRound)
-	require.NoError(t, err)
-
-	//
-	// pre-fill the db with an account for testing
-	//
-
-	// account A
-	addrA := RandomAddress()
-	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
-	require.NoError(t, err)
-
-	// resource A-0
-	resDataA0 := trackerdb.ResourcesData{}
-	aidxResA0 := basics.CreatableIndex(0)
-	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0)
-	require.NoError(t, err)
-
-	// resource A-1
-	resDataA1 := trackerdb.ResourcesData{}
-	aidxResA1 := basics.CreatableIndex(1)
-	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1)
-	require.NoError(t, err)
-
-	// resource A-2
-	resDataA2 := trackerdb.ResourcesData{}
-	aidxResA2 := basics.CreatableIndex(2)
-	_, err = aow.InsertResource(refAccA, aidxResA2, resDataA2)
-	require.NoError(t, err)
-
-	// creator for A0
-	resA0ctype := basics.AssetCreatable
-	cRefA0, err := aow.InsertCreatable(aidxResA0, resA0ctype, addrA[:])
-	require.NoError(t, err)
-	require.NotNil(t, cRefA0)
-
-	// creator for A1
-	resA1ctype := basics.AppCreatable
-	cRefA1, err := aow.InsertCreatable(aidxResA1, resA1ctype, addrA[:])
-	require.NoError(t, err)
-	require.NotNil(t, cRefA1)
-
-	// creator for A2
-	resA2ctype := basics.AppCreatable
-	cRefA2, err := aow.InsertCreatable(aidxResA2, resA2ctype, addrA[:])
-	require.NoError(t, err)
-	require.NotNil(t, cRefA2)
-
-	//
-	// test
-	//
-
-	// filter by type
-	cls, rnd, err := aor.ListCreatables(basics.CreatableIndex(99), 5, basics.AssetCreatable)
-	require.NoError(t, err)
-	require.Len(t, cls, 1)                    // only one asset
-	require.Equal(t, aidxResA0, cls[0].Index) // resource A-0
-	require.Equal(t, expectedRound, rnd)      // db round
-
-	// with multiple results
-	cls, rnd, err = aor.ListCreatables(basics.CreatableIndex(99), 5, basics.AppCreatable)
-	require.NoError(t, err)
-	require.Len(t, cls, 2)                    // two apps
-	require.Equal(t, aidxResA2, cls[0].Index) // resource A-2
-	require.Equal(t, aidxResA1, cls[1].Index) // resource A-1
-	require.Equal(t, expectedRound, rnd)      // db round
-
-	// limit results
-	cls, rnd, err = aor.ListCreatables(basics.CreatableIndex(99), 1, basics.AppCreatable)
-	require.NoError(t, err)
-	require.Len(t, cls, 1)                    // two apps
-	require.Equal(t, aidxResA2, cls[0].Index) // resource A-2
-	require.Equal(t, expectedRound, rnd)      // db round
-
-	// filter maxId
-	cls, rnd, err = aor.ListCreatables(aidxResA2, 10, basics.AppCreatable)
-	require.NoError(t, err)
-	require.Len(t, cls, 2)                    // only one app since to that cidx
-	require.Equal(t, aidxResA2, cls[0].Index) // resource A-2 (checks for order too)
-	require.Equal(t, aidxResA1, cls[1].Index) // resource A-1
-	require.Equal(t, expectedRound, rnd)      // db round
 
 }

@@ -17,6 +17,8 @@
 package generickv
 
 import (
+	"context"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
@@ -49,4 +51,28 @@ func (r *reader) MakeOnlineAccountsOptimizedReader() (trackerdb.OnlineAccountsRe
 // MakeSpVerificationCtxReader implements trackerdb.Reader
 func (r *reader) MakeSpVerificationCtxReader() trackerdb.SpVerificationCtxReader {
 	return MakeStateproofReader(r)
+}
+
+// MakeCatchpointPendingHashesIterator implements trackerdb.Reader
+func (r *reader) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
+	// TODO: catchpoint
+	panic("unimplemented")
+}
+
+// MakeCatchpointReader implements trackerdb.Reader
+func (r *reader) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
+	// TODO: catchpoint
+	panic("unimplemented")
+}
+
+// MakeEncodedAccoutsBatchIter implements trackerdb.Reader
+func (r *reader) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
+	// TODO: catchpoint
+	panic("unimplemented")
+}
+
+// MakeKVsIter implements trackerdb.Reader
+func (r *reader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
+	// TODO: catchpoint
+	panic("unimplemented")
 }
