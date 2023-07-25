@@ -17,8 +17,6 @@
 package generickv
 
 import (
-	"context"
-
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
@@ -29,16 +27,6 @@ func MakeCatchpoint() trackerdb.Catchpoint {
 	return &catchpoint{}
 }
 
-// MakeCatchpointPendingHashesIterator implements trackerdb.Catchpoint
-func (*catchpoint) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb.CatchpointPendingHashesIter {
-	panic("unimplemented")
-}
-
-// MakeCatchpointReader implements trackerdb.Catchpoint
-func (*catchpoint) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
-	panic("unimplemented")
-}
-
 // MakeCatchpointReaderWriter implements trackerdb.Catchpoint
 func (*catchpoint) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	panic("unimplemented")
@@ -46,16 +34,6 @@ func (*catchpoint) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWrite
 
 // MakeCatchpointWriter implements trackerdb.Catchpoint
 func (*catchpoint) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
-	panic("unimplemented")
-}
-
-// MakeEncodedAccoutsBatchIter implements trackerdb.Catchpoint
-func (*catchpoint) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
-	panic("unimplemented")
-}
-
-// MakeKVsIter implements trackerdb.Catchpoint
-func (*catchpoint) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
 	panic("unimplemented")
 }
 

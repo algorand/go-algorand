@@ -163,3 +163,24 @@ func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trac
 
 	return
 }
+
+func (r *accountsReader) LookupOnlineRoundParams(rnd basics.Round) (onlineRoundParamsData ledgercore.OnlineRoundParamsData, err error) {
+	// SQL impl at time of writing:
+	//
+	// SELECT data
+	// FROM onlineroundparamstail
+	// WHERE rnd=?
+
+	value, closer, err := r.kvr.Get(onlineAccountRoundParamsKey(rnd))
+	if err != nil {
+		return
+	}
+	defer closer.Close()
+
+	err = protocol.Decode(value, &onlineRoundParamsData)
+	if err != nil {
+		return
+	}
+
+	return
+}

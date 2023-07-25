@@ -324,6 +324,11 @@ func (ss mockSnapshot) Get(key []byte) (value []byte, closer io.Closer, err erro
 func (ss mockSnapshot) NewIter(low, high []byte, reverse bool) generickv.KvIter {
 	return ss.db.kvs.NewIter(low, high, reverse)
 }
+
+func (ss mockSnapshot) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
+	return time.Now(), nil
+}
+
 func (ss mockSnapshot) Close() error {
 	return nil
 }
