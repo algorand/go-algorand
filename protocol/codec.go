@@ -171,7 +171,7 @@ func DecodeReflect(b []byte, objptr interface{}) error {
 // DecodeMsgp attempts to decode a msgpack-encoded byte buffer into
 // an object instance pointed to by objptr, requiring that we pre-
 // generated the code for doing so using msgp.
-func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) (err error) {
+func DecodeMsgp(b []byte, objptr msgp.UnmarshalerValidator) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = fmt.Errorf("DecodeMsgp: %v", x)
