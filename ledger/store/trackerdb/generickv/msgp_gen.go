@@ -4,6 +4,8 @@ package generickv
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -14,6 +16,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> CreatableEntryMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -143,4 +146,11 @@ func (z *creatableEntry) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *creatableEntry) MsgIsZero() bool {
 	return ((*z).Ctype.MsgIsZero()) && (len((*z).CreatorAddr) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func CreatableEntryMaxSize() (s int) {
+	s = 1 + 6 + basics.CreatableTypeMaxSize() + 12
+	panic("Unable to determine max size: Byteslice type z.CreatorAddr is unbounded")
+	return
 }
