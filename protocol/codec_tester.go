@@ -464,6 +464,17 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 		return fmt.Errorf("re-encoding mismatch: e1 != ee2")
 	}
 
+	if _, ok := v1.(msgp.UnmarshalerValidator); ok {
+		vValidate := reflect.New(reflect.TypeOf(template).Elem()).Interface().(msgp.UnmarshalerValidator)
+		err = (DecodeValidate(ee1, vValidate))
+		if err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(v1, vValidate) {
+			return fmt.Errorf("DecodeValidate mismatch v1 != vValidate")
+		}
+	}
+
 	return nil
 }
 
