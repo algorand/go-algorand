@@ -46,7 +46,10 @@ type SortStep []step
 func (a SortStep) Len() int           { return len(a) }
 func (a SortStep) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortStep) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func StepLess(a, b step) bool         { return a < b }
+
+// StepLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func StepLess(a, b step) bool { return a < b }
 
 // SortPeriod defines SortInterface used by msgp to consistently sort maps with this type as key.
 //
@@ -57,7 +60,10 @@ type SortPeriod []period
 func (a SortPeriod) Len() int           { return len(a) }
 func (a SortPeriod) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortPeriod) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func PeriodLess(a, b period) bool       { return a < b }
+
+// PeriodLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func PeriodLess(a, b period) bool { return a < b }
 
 // SortRound defines SortInterface used by msgp to consistently sort maps with this type as key.
 // note, for type aliases the base type is used for the interface
@@ -69,7 +75,10 @@ type SortRound []basics.Round
 func (a SortRound) Len() int           { return len(a) }
 func (a SortRound) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortRound) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func RoundLess(a, b round) bool        { return a < b }
+
+// RoundLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func RoundLess(a, b round) bool { return a < b }
 
 // SortProposalValue defines SortInterface used by msgp to consistently sort maps with this type as key.
 //
@@ -96,6 +105,8 @@ func (a SortProposalValue) Less(i, j int) bool {
 
 func (a SortProposalValue) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 
+// ProposalLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
 func ProposalValueLess(a, b proposalValue) bool {
 	if a.OriginalPeriod != b.OriginalPeriod {
 		return a.OriginalPeriod < b.OriginalPeriod

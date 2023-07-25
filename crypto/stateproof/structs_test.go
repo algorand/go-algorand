@@ -156,14 +156,14 @@ func (z *StateProof) marshalWrongOrder(b []byte, mode marshalMode) (o []byte) {
 			} else {
 				o = msgp.AppendMapHeader(o, uint32(len((*z).Reveals)))
 			}
-			zb0001_keys := make([]uint64, 0, len((*z).Reveals))
+			zb0001Keys := make([]uint64, 0, len((*z).Reveals))
 			for zb0001 := range (*z).Reveals {
-				zb0001_keys = append(zb0001_keys, zb0001)
+				zb0001Keys = append(zb0001Keys, zb0001)
 			}
 			if mode != wrongMapOrder { // manually added to produce wrong sort
-				sort.Sort(SortUint64(zb0001_keys))
+				sort.Sort(SortUint64(zb0001Keys))
 			}
-			for _, zb0001 := range zb0001_keys {
+			for _, zb0001 := range zb0001Keys {
 				zb0002 := (*z).Reveals[zb0001]
 				_ = zb0002
 				o = msgp.AppendUint64(o, zb0001)

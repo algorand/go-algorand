@@ -41,4 +41,7 @@ type SortString []string
 func (a SortString) Len() int           { return len(a) }
 func (a SortString) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortString) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func StringLess(a, b string) bool       { return a < b }
+
+// StringLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func StringLess(a, b string) bool { return a < b }
