@@ -84,7 +84,7 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 		// buffers are taken from this too. Assign all available
 		// memory allowance for cache.
 		Cache:        pebble.NewCache(int64(cache * 1024 * 1024)), // default: 8 MB
-		MaxOpenFiles: handles,                                     // deafult: 1000
+		MaxOpenFiles: handles,                                     // default: 1000
 
 		// The size of memory table(as well as the write buffer).
 		// Note, there may have more than two memory tables in the system.
