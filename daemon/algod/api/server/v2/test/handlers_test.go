@@ -338,6 +338,23 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 	return handler, c, rec, stx, releasefunc
 }
 
+func TestGetBlockTxids(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	err := handler.GetBlockTxids(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+
+	c, rec = newReq(t)
+	err = handler.GetBlockTxids(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+}
+
 func TestGetBlockHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
