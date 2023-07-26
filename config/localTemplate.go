@@ -529,6 +529,7 @@ type Local struct {
 	P2PPersistPeerID bool `version[29]:"true"`
 
 	// P2PPrivateKeyLocation allows the user to specify a custom path to the private key used for the node's PeerID.
+	// The private key provided must be an ed25519 private key.
 	// This is only used when P2PEnable is true. If the parameter is not set, it uses the default location.
 	P2PPrivateKeyLocation string `version[29]:""`
 }
