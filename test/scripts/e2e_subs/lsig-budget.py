@@ -83,5 +83,5 @@ stx1 = goal.sign_with_program(tx1, code, [(92).to_bytes(8, "big")])
 txinfo, err = goal.send_group([stx0, stx1])
 assert err, txinfo
 
-
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

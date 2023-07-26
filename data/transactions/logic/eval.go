@@ -1404,14 +1404,15 @@ func (cx *EvalContext) step() error {
 	}
 
 	cx.cost += opcost
-	// Only one of these pooled budgets will be non-nil, perhaps we could collapse to one variable.
-	if cx.PooledLogicSigBudget != nil {
+	// At most one of these pooled budgets will be non-nil, perhaps we could
+	// collapse to one variable, but there are some complex callers trying to
+	// set up big budgets for debugging runs that would have to be looked at.
+	switch {
+	case cx.PooledApplicationBudget != nil:
+		*cx.PooledApplicationBudget -= opcost
+	case cx.PooledLogicSigBudget != nil:
 		*cx.PooledLogicSigBudget -= opcost
 	}
-	if cx.PooledApplicationBudget != nil {
-		*cx.PooledApplicationBudget -= opcost
-	}
-
 	preheight := len(cx.Stack)
 	err := spec.op(cx)
 
