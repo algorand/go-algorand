@@ -98,7 +98,8 @@ type Ledger struct {
 
 	cfg config.Local
 
-	dbPathPrefix string
+	hotPrefix  string
+	coldPrefix string
 
 	tracer logic.EvalTracer
 }
@@ -108,7 +109,7 @@ type Ledger struct {
 // genesisInitState.Accounts specify the initial blocks and accounts to use if the
 // database wasn't initialized before.
 func OpenLedger(
-	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
+	log logging.Logger, hotPrefix string, coldPrefix string, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
 	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
@@ -132,7 +133,8 @@ func OpenLedger(
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
-		dbPathPrefix:                   dbPathPrefix,
+		hotPrefix:                      hotPrefix,
+		coldPrefix:                     coldPrefix,
 		tracer:                         tracer,
 	}
 
@@ -142,7 +144,7 @@ func OpenLedger(
 		}
 	}()
 
-	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem, cfg, log)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(hotPrefix, coldPrefix, dbMem, cfg, log)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
@@ -222,7 +224,7 @@ func (l *Ledger) reloadLedger() error {
 
 	l.accts.initialize(l.cfg)
 	l.acctsOnline.initialize(l.cfg)
-	l.catchpoint.initialize(l.cfg, l.dbPathPrefix)
+	l.catchpoint.initialize(l.cfg, l.coldPrefix)
 
 	err = l.trackers.initialize(l, trackers, l.cfg)
 	if err != nil {
@@ -280,11 +282,11 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
+func openLedgerDB(hotPrefix string, coldPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
 	if !dbMem {
-		commonDBFilename := dbPathPrefix + ".sqlite"
+		commonDBFilename := hotPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
 		if !os.IsNotExist(err) {
 			// before launch, we used to have both blocks and tracker
@@ -306,7 +308,11 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging
 		case "sqlite":
 			fallthrough
 		default:
-			file := dbPathPrefix + ".tracker.sqlite"
+			// before using dbPathPrefix, check if there is a hot data dir or a tracker db path defined in cfg
+			file := hotPrefix + ".tracker.sqlite"
+			if cfg.TrackerDbPath != "" {
+				file = cfg.TrackerDbPath
+			}
 			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
 		}
 
@@ -315,7 +321,11 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging
 
 	go func() {
 		var lerr error
-		blockDBFilename := dbPathPrefix + ".block.sqlite"
+		// before using dbPathPrefix, check if there is a hot data dir or a tracker db path defined in cfg
+		blockDBFilename := coldPrefix + ".block.sqlite"
+		if cfg.TrackerDbPath != "" {
+			blockDBFilename = cfg.BlockDbPath
+		}
 		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
 		if lerr != nil {
 			outErr <- lerr

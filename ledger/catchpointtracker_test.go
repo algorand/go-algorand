@@ -815,7 +815,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	cfg.CatchpointInterval = 2
-	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	ledger, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer ledger.Close()
 
@@ -952,7 +952,7 @@ func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
 	log.SetLevel(logging.Warn)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	ledger, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 

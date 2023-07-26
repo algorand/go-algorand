@@ -71,7 +71,7 @@ func TestPutBlockTooOld(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -100,7 +100,7 @@ func TestGetEncodedBlockCert(t *testing.T) {
 
 	const inMem = true
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 

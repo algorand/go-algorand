@@ -66,7 +66,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	ledger, err = data.LoadLedger(
-		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
+		log, t.Name(), t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
 		nil, cfg,
 	)
 	if err != nil {

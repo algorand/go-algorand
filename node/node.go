@@ -193,15 +193,31 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
 
-	// load stored data
-	genesisDir := filepath.Join(rootDir, genesis.ID())
-	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
+	// by default, hot and cold genesis directories are based in the supplied rootDir
+	rootGenesisDir := filepath.Join(rootDir, node.genesisID)
+	hotGenesisDir := filepath.Join(rootDir, node.genesisID)
+	hotPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
+	coldGenesisDir := filepath.Join(rootDir, node.genesisID)
+	coldPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
 
-	// create initial ledger, if it doesn't exist
-	err = os.Mkdir(genesisDir, 0700)
-	if err != nil && !os.IsExist(err) {
-		log.Errorf("Unable to create genesis directory: %v", err)
-		return nil, err
+	// if hot/cold data directories are configured, load them
+	if cfg.HotDataDir != "" {
+		hotGenesisDir = filepath.Join(cfg.HotDataDir, node.genesisID)
+		hotPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
+	}
+	if cfg.ColdDataDir != "" {
+		coldGenesisDir = filepath.Join(cfg.ColdDataDir, node.genesisID)
+		coldPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
+	}
+
+	// create initial genesis dir(s), if it doesn't exist
+	for _, dir := range []string{hotGenesisDir, coldGenesisDir} {
+		err = os.Mkdir(dir, 0700)
+		if err != nil && !os.IsExist(err) {
+			log.Errorf("Unable to create genesis directory: %v", err)
+			return nil, err
+		}
+
 	}
 	genalloc, err := genesis.Balances()
 	if err != nil {
@@ -212,9 +228,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, hotPrefix, coldPrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
-		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
+		log.Errorf("Cannot initialize ledger (hot: %s, cold: %s ): %v", hotPrefix, coldPrefix, err)
 		return nil, err
 	}
 
@@ -245,7 +261,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
-	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
+	crashPathname := filepath.Join(coldGenesisDir, config.CrashFilename)
 	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
 	if err != nil {
 		log.Errorf("Cannot load crash data: %v", err)
@@ -283,7 +299,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
-	registry, err := ensureParticipationDB(genesisDir, node.log)
+	registry, err := ensureParticipationDB(coldGenesisDir, node.log)
 	if err != nil {
 		log.Errorf("unable to initialize the participation registry database: %v", err)
 		return nil, err
@@ -316,7 +332,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
-	node.stateProofWorker = stateproof.NewWorker(genesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	node.stateProofWorker = stateproof.NewWorker(hotGenesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }

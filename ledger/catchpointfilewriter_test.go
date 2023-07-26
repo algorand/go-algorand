@@ -685,7 +685,7 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess tracke
 	var initState ledgercore.InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	conf := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.TestingLog(t), t.Name()+"FromCatchpoint", true, initState, conf)
+	l, err := OpenLedger(logging.TestingLog(t), t.Name()+"FromCatchpoint", t.Name()+"FromCatchpoint", true, initState, conf)
 	require.NoError(t, err)
 	accessor := MakeCatchpointCatchupAccessor(l, l.log)
 

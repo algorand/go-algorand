@@ -131,7 +131,7 @@ func TestLedgerCirculation(t *testing.T) {
 	cfg.Archival = true
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
-	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	realLedger, err := ledger.OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer realLedger.Close()
 
@@ -270,7 +270,7 @@ func TestLedgerSeed(t *testing.T) {
 	cfg.Archival = true
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
-	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	realLedger, err := ledger.OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer realLedger.Close()
 
@@ -358,7 +358,7 @@ func TestConsensusVersion(t *testing.T) {
 	cfg.Archival = false
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
-	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	realLedger, err := ledger.OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer realLedger.Close()
 
@@ -530,7 +530,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 	cfg.Archival = true
 	log := loggedMessages{Logger: logging.TestingLog(t), expectedMessages: expectedMessages, unexpectedMessages: unexpectedMessages}
 	log.SetLevel(logging.Debug)
-	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	realLedger, err := ledger.OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer realLedger.Close()
 

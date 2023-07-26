@@ -439,12 +439,12 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 	cfg.Archival = false
 	testingLog := logging.TestingLog(b)
 	testingLog.SetLevel(logging.Error)
-	l, err := OpenLedger(testingLog, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(testingLog, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer testLedgerCleanup(l, dbName, inMem)
 
 	dbName2 := dbName + "_2"
-	l2, err := OpenLedger(testingLog, dbName2, inMem, genesisInitState, cfg)
+	l2, err := OpenLedger(testingLog, dbName2, dbName2, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer testLedgerCleanup(l2, dbName2, inMem)
 

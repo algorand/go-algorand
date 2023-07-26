@@ -78,6 +78,15 @@ type Local struct {
 	CadaverSizeTarget uint64 `version[0]:"1073741824" version[24]:"0"`
 	CadaverDirectory  string `version[27]:""`
 
+	// Data directories
+	// HotDataDir is an alternative to DataDir for storing data that is frequently accessed
+	HotDataDir string `version[0]:""`
+	// ColdDataDir is an alternative to DataDir for storing data that is infrequently accessed
+	ColdDataDir   string `version[0]:""`
+	TrackerDbPath string `version[0]:""`
+	BlockDbPath   string `version[0]:""`
+	CatchpointDir string `version[0]:""`
+
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.
 	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB

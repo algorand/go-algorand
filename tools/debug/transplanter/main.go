@@ -369,7 +369,7 @@ func main() {
 
 	log := logging.Base()
 
-	l, err := ledger.OpenLedger(log, ledgerPathnamePrefix, false, genesisInitState, cfg)
+	l, err := ledger.OpenLedger(log, ledgerPathnamePrefix, ledgerPathnamePrefix, false, genesisInitState, cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot open ledger config: %v", err)
 		os.Exit(1)
@@ -403,7 +403,7 @@ func main() {
 		followerNode.Stop()
 
 		fmt.Printf("Caught up to %d\n", *roundStart)
-		l, err = ledger.OpenLedger(log, ledgerPathnamePrefix, false, genesisInitState, cfg)
+		l, err = ledger.OpenLedger(log, ledgerPathnamePrefix, ledgerPathnamePrefix, false, genesisInitState, cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot open ledger config: %v", err)
 			os.Exit(1)

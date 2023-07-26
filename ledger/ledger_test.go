@@ -203,7 +203,7 @@ func testLedgerBasic(t *testing.T, cfg config.Local) {
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	const inMem = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer l.Close()
 }
@@ -225,7 +225,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -372,7 +372,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -575,7 +575,7 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -749,7 +749,7 @@ func TestLedgerAppCrossRoundWrites(t *testing.T) {
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -883,7 +883,7 @@ func TestLedgerAppMultiTxnWrites(t *testing.T) {
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -1044,7 +1044,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -1331,7 +1331,7 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -1409,7 +1409,7 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 	cfg.Archival = true
 	log := logging.TestingLog(b)
 	log.SetOutput(nullWriter{})
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	a.NoError(err)
 	defer func() { // close ledger and remove temporary DB file
 		l.Close()
@@ -1475,7 +1475,7 @@ func testLedgerReload(t *testing.T, cfg config.Local) {
 	const inMem = true
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -1518,7 +1518,7 @@ func TestGetLastCatchpointLabel(t *testing.T) {
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	ledger, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer ledger.Close()
 
@@ -1614,7 +1614,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	const inMem = false
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
 		l.Close()
@@ -1755,7 +1755,7 @@ func TestLedgerMemoryLeak(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)   // prevent spamming with ledger.AddValidatedBlock debug message
 	deadlock.Opts.Disable = true // catchpoint writing might take long
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -1908,7 +1908,7 @@ func TestLookupAgreement(t *testing.T) {
 	log := logging.TestingLog(t)
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	ledger, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer ledger.Close()
 
@@ -1940,7 +1940,7 @@ func BenchmarkLedgerStartup(b *testing.B) {
 	testOpenLedger := func(b *testing.B, memory bool, cfg config.Local) {
 		b.StartTimer()
 		for n := 0; n < b.N; n++ {
-			ledger, err := OpenLedger(log, tmpDir, memory, genesisInitState, cfg)
+			ledger, err := OpenLedger(log, tmpDir, tmpDir, memory, genesisInitState, cfg)
 			require.NoError(b, err)
 			ledger.Close()
 			os.RemoveAll(tmpDir)
@@ -1979,7 +1979,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = proto.MaxBalLookback
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
 		l.Close()
@@ -2164,7 +2164,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
 		l.Close()
@@ -2334,7 +2334,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = proto.MaxBalLookback
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
-	trackerDB, blockDB, err := openLedgerDB(dbName, inMem, cfg, log)
+	trackerDB, blockDB, err := openLedgerDB(dbName, dbName, inMem, cfg, log)
 	require.NoError(t, err)
 	defer func() {
 		trackerDB.Close()
@@ -2346,7 +2346,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
 		l.Close()
@@ -2518,7 +2518,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	err = trackerDB.ResetToV6Test(context.Background())
 	require.NoError(t, err)
 
-	l2, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l2, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
 		l2.Close()
@@ -2573,7 +2573,7 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -2623,7 +2623,7 @@ func TestLedgerKeyregFlip(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer func() {
 		l.Close()
@@ -2772,7 +2772,7 @@ func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -2820,7 +2820,7 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -2886,7 +2886,7 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -2960,7 +2960,7 @@ func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -2988,7 +2988,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	cfg.Archival = false
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -3071,7 +3071,7 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 	cfg.Archival = false
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -3139,7 +3139,7 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	cfg.MaxAcctLookback = 4
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 
 	firstStateProofDataConfirmedRound := proto.StateProofInterval
@@ -3163,7 +3163,7 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, any)
 	l.Close()
 
-	l, err = OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err = OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -3197,7 +3197,7 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	cfg.Archival = true
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
 	a.NoError(err)
 	defer l.Close()
 

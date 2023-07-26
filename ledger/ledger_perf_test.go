@@ -170,13 +170,13 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	const inMem = false // use persistent storage
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	l0, err := OpenLedger(logging.Base(), dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// open second ledger
 	dbName = fmt.Sprintf("%s.%d.2", b.Name(), crypto.RandUint64())
 	dbPrefix = filepath.Join(dbTempDir, dbName)
-	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	l1, err := OpenLedger(logging.Base(), dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	blk := genesisInitState.Block

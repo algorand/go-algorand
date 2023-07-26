@@ -79,7 +79,7 @@ type roundSeed struct {
 // LoadLedger creates a Ledger object to represent the ledger with the
 // specified database file prefix, initializing it if necessary.
 func LoadLedger(
-	log logging.Logger, dbFilenamePrefix string, memory bool,
+	log logging.Logger, hotPrefix string, coldPrefix string, memory bool,
 	genesisProto protocol.ConsensusVersion, genesisBal bookkeeping.GenesisBalances, genesisID string, genesisHash crypto.Digest,
 	blockListeners []ledgercore.BlockListener, cfg config.Local,
 ) (*Ledger, error) {
@@ -107,9 +107,9 @@ func LoadLedger(
 		Accounts:    genesisBal.Balances,
 		GenesisHash: genesisHash,
 	}
-	l.log.Debugf("Initializing Ledger(%s)", dbFilenamePrefix)
+	l.log.Debugf("Initializing Ledger(hot:%s, cold:%s)", hotPrefix, coldPrefix)
 
-	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genesisInitState, cfg)
+	ll, err := ledger.OpenLedger(log, hotPrefix, coldPrefix, memory, genesisInitState, cfg)
 	if err != nil {
 		return nil, err
 	}
