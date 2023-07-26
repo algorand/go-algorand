@@ -21,6 +21,7 @@ package p2p
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/algorand/go-algorand/util"
 	"os"
 	"path"
 
@@ -47,11 +48,7 @@ func GetPrivKey(cfg config.Local, dataDir string) (crypto.PrivKey, error) {
 	}
 	// if a default path key exists load it
 	defaultPrivKeyPath := path.Join(dataDir, DefaultPrivKeyPath)
-	_, err := os.Stat(defaultPrivKeyPath)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to stat %s %w", defaultPrivKeyPath, err)
-	}
-	if !os.IsNotExist(err) {
+	if util.FileExists(defaultPrivKeyPath) {
 		return loadPrivateKeyFromFile(defaultPrivKeyPath)
 	}
 	// generate a new key
