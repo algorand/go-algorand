@@ -17,7 +17,6 @@
 package p2p
 
 import (
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"os"
 	"path"
 	"testing"
@@ -26,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestGetPrivKeyUserSupplied(t *testing.T) {
