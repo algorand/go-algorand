@@ -342,7 +342,7 @@ func TestGetBlockTxids(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	handler, c, rec, stx, releasefunc := addBlockHelper(t)
 	defer releasefunc()
 
 	err := handler.GetBlockTxids(c, 0)
@@ -350,9 +350,20 @@ func TestGetBlockTxids(t *testing.T) {
 	require.Equal(t, 200, rec.Code)
 
 	c, rec = newReq(t)
-	err = handler.GetBlockTxids(c, 1)
+	err = handler.GetBlockTxids(c, 2)
 	require.NoError(t, err)
 	require.Equal(t, 404, rec.Code)
+
+	c, rec = newReq(t)
+	err = handler.GetBlockTxids(c, 1)
+	require.NoError(t, err)
+
+	var response model.BlockTxidsResponse
+	data := rec.Body.Bytes()
+	err = protocol.DecodeJSON(data, &response)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(response.BlockTxids))
+	require.Equal(t, stx.ID().String(), response.BlockTxids[0])
 }
 
 func TestGetBlockHash(t *testing.T) {
