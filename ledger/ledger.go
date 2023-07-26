@@ -289,12 +289,12 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(hotPrefix string, coldPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
+func openLedgerDB(hotDbPrefix string, coldDbPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
 	// TODO: Can we remove this?
 	if !dbMem {
-		commonDBFilename := hotPrefix + ".sqlite"
+		commonDBFilename := hotDbPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
 		if !os.IsNotExist(err) {
 			// before launch, we used to have both blocks and tracker
@@ -316,8 +316,8 @@ func openLedgerDB(hotPrefix string, coldPrefix string, dbMem bool, cfg config.Lo
 		case "sqlite":
 			fallthrough
 		default:
-			// before using dbPathPrefix, check if there is a hot data dir or a tracker db path defined in cfg
-			file := hotPrefix + ".tracker.sqlite"
+			// before using hotDbPrefix, check if there is a tracker db path defined in cfg
+			file := hotDbPrefix + ".tracker.sqlite"
 			if cfg.TrackerDbFilePath != "" {
 				fmt.Println("AXELAXEL: path - using trackerdb cfg value")
 				file = cfg.TrackerDbFilePath
@@ -331,8 +331,8 @@ func openLedgerDB(hotPrefix string, coldPrefix string, dbMem bool, cfg config.Lo
 
 	go func() {
 		var lerr error
-		// before using dbPathPrefix, check if there is a hot data dir or a tracker db path defined in cfg
-		blockDBFilename := coldPrefix + ".block.sqlite"
+		// before using coldDbPrefix, check if there is a block db path defined in cfg
+		blockDBFilename := coldDbPrefix + ".block.sqlite"
 		if cfg.TrackerDbFilePath != "" {
 			fmt.Println("AXELAXEL: path - using blockdb cfg value")
 			blockDBFilename = cfg.BlockDbFilePath
