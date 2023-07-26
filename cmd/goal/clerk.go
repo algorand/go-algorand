@@ -74,7 +74,7 @@ var (
 	simulateAllowMoreOpcodeBudget bool
 	simulateExtraOpcodeBudget     uint64
 
-	simulateAllTraceOptions    bool
+	simulateFullTrace          bool
 	simulateEnableRequestTrace bool
 	simulateStackChange        bool
 	simulateScratchChange      bool
@@ -167,7 +167,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
 
-	simulateCmd.Flags().BoolVar(&simulateAllTraceOptions, "all-trace-options", false, "Enable all options for simulation execution trace")
+	simulateCmd.Flags().BoolVar(&simulateFullTrace, "full-trace", false, "Enable all options for simulation execution trace")
 	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
 	simulateCmd.Flags().BoolVar(&simulateStackChange, "stack", false, "Report stack change during simulation time")
 	simulateCmd.Flags().BoolVar(&simulateScratchChange, "scratch", false, "Report scratch change during simulation time")
@@ -1373,7 +1373,7 @@ func decodeTxnsFromFile(file string) []transactions.SignedTxn {
 
 func traceCmdOptionToSimulateTraceConfigModel() simulation.ExecTraceConfig {
 	var traceConfig simulation.ExecTraceConfig
-	if simulateAllTraceOptions {
+	if simulateFullTrace {
 		traceConfig = simulation.ExecTraceConfig{
 			Enable:  true,
 			Stack:   true,
