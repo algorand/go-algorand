@@ -52,7 +52,7 @@ func TestLoadMissingConfig(t *testing.T) {
 	a := require.New(t)
 
 	templateDir, err := filepath.Abs("../test/testdata/nettemplates")
-	a.Error(err)
+	a.NoError(err)
 	template, err := loadTemplate(filepath.Join(templateDir, "<invalidname>.json"))
 	a.Error(err)
 	a.Equal(template.Genesis.NetworkName, "")

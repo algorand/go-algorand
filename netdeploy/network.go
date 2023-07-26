@@ -341,7 +341,7 @@ func (n Network) GetPeerAddresses(binDir string) []string {
 }
 
 func (n Network) startNodes(binDir string, relayNameToAddress map[string]string, redirectOutput bool) error {
-	allRelaysAddresses := strings.Join(maps.Keys(relayNameToAddress), ";")
+	allRelaysAddresses := strings.Join(maps.Values(relayNameToAddress), ";")
 
 	nodeConfigToEntry := make(map[string]remote.NodeConfigGoal, len(n.cfg.Template.Nodes))
 	for _, n := range n.cfg.Template.Nodes {
