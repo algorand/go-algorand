@@ -82,7 +82,25 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	lib.GenesisJSONText = genesisText
 
 	liveLog := filepath.Join(s.RootPath, "node.log")
+	// if the hotDataDir is explicitly set, use it for logging
+	if cfg.HotDataDir != "" {
+		liveLog = filepath.Join(cfg.HotDataDir, "node.log")
+	}
+	// if the LogFilePath is explicitly set, use it
+	if cfg.LogFilePath != "" {
+		liveLog = cfg.LogFilePath
+	}
+
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
+	// if the coldDataDir is explicitly set, use it for archive
+	if cfg.ColdDataDir != "" {
+		archive = filepath.Join(cfg.HotDataDir, cfg.LogArchiveName)
+	}
+	// if the LogArchiveDir is explicitly set, use it
+	if cfg.LogArchiveDir != "" {
+		archive = filepath.Join(cfg.LogArchiveDir, cfg.LogArchiveName)
+	}
+
 	var maxLogAge time.Duration
 	var err error
 	if cfg.LogArchiveMaxAge != "" {

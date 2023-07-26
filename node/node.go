@@ -193,22 +193,30 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
 
+	// determine genesis directories for hot/cold datadirs if provided
+	// and their ledger prefixes
 	// by default, hot and cold genesis directories are based in the supplied rootDir
 	rootGenesisDir := filepath.Join(rootDir, node.genesisID)
 	hotGenesisDir := filepath.Join(rootDir, node.genesisID)
-	hotPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
 	coldGenesisDir := filepath.Join(rootDir, node.genesisID)
-	coldPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
+	hotLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
+	coldLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
 
 	// if hot/cold data directories are configured, load them
 	if cfg.HotDataDir != "" {
 		hotGenesisDir = filepath.Join(cfg.HotDataDir, node.genesisID)
-		hotPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
+		hotLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
 	}
 	if cfg.ColdDataDir != "" {
 		coldGenesisDir = filepath.Join(cfg.ColdDataDir, node.genesisID)
-		coldPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
+		coldLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
 	}
+
+	log.Warnln("AXELAXEL: path - rootDir: ", rootDir)
+	log.Warnln("AXELAXEL: path - hotGenesisDir: ", hotGenesisDir)
+	log.Warnln("AXELAXEL: path - coldGenesisDir: ", coldGenesisDir)
+	log.Warnln("AXELAXEL: path - hotPrefix: ", hotLedgerPrefix)
+	log.Warnln("AXELAXEL: path - coldPrefix: ", coldLedgerPrefix)
 
 	// create initial genesis dir(s), if it doesn't exist
 	for _, dir := range []string{hotGenesisDir, coldGenesisDir} {
@@ -228,9 +236,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, hotPrefix, coldPrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, hotLedgerPrefix, coldLedgerPrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
-		log.Errorf("Cannot initialize ledger (hot: %s, cold: %s ): %v", hotPrefix, coldPrefix, err)
+		log.Errorf("Cannot initialize ledger (hot: %s, cold: %s ): %v", hotLedgerPrefix, coldLedgerPrefix, err)
 		return nil, err
 	}
 
@@ -261,7 +269,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
+	// crash data is stored in the cold data directory unless otherwise specified
 	crashPathname := filepath.Join(coldGenesisDir, config.CrashFilename)
+	if cfg.CrashFilePath != "" {
+		crashPathname = cfg.CrashFilePath
+	}
 	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
 	if err != nil {
 		log.Errorf("Cannot load crash data: %v", err)
@@ -276,6 +288,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	} else {
 		agreementClock = timers.MakeMonotonicClock(time.Now())
 	}
+
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
 		Accessor:       crashAccess,
@@ -332,7 +345,12 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
-	node.stateProofWorker = stateproof.NewWorker(hotGenesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	// stateproof worker should use hot genesis dir by default, but can be overridden by config
+	stateproofWorkerDir := hotGenesisDir
+	if cfg.StateproofDir != "" {
+		stateproofWorkerDir = cfg.StateproofDir
+	}
+	node.stateProofWorker = stateproof.NewWorker(stateproofWorkerDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }

@@ -98,8 +98,8 @@ type Ledger struct {
 
 	cfg config.Local
 
-	hotPrefix  string
-	coldPrefix string
+	hotPrefix    string
+	coldDbPrefix string
 
 	tracer logic.EvalTracer
 }
@@ -134,7 +134,7 @@ func OpenLedger(
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
 		hotPrefix:                      hotPrefix,
-		coldPrefix:                     coldPrefix,
+		coldDbPrefix:                   coldPrefix,
 		tracer:                         tracer,
 	}
 
@@ -224,7 +224,14 @@ func (l *Ledger) reloadLedger() error {
 
 	l.accts.initialize(l.cfg)
 	l.acctsOnline.initialize(l.cfg)
-	l.catchpoint.initialize(l.cfg, l.coldPrefix)
+
+	// catchpoint tracker's directory defaults to the coldPrefix
+	// but can be direclty set
+	catchpointDir := l.coldDbPrefix
+	if l.cfg.CatchpointDir != "" {
+		catchpointDir = l.cfg.CatchpointDir
+	}
+	l.catchpoint.initialize(l.cfg, catchpointDir)
 
 	err = l.trackers.initialize(l, trackers, l.cfg)
 	if err != nil {
@@ -285,6 +292,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 func openLedgerDB(hotPrefix string, coldPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
+	// TODO: Can we remove this?
 	if !dbMem {
 		commonDBFilename := hotPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
@@ -310,9 +318,11 @@ func openLedgerDB(hotPrefix string, coldPrefix string, dbMem bool, cfg config.Lo
 		default:
 			// before using dbPathPrefix, check if there is a hot data dir or a tracker db path defined in cfg
 			file := hotPrefix + ".tracker.sqlite"
-			if cfg.TrackerDbPath != "" {
-				file = cfg.TrackerDbPath
+			if cfg.TrackerDbFilePath != "" {
+				fmt.Println("AXELAXEL: path - using trackerdb cfg value")
+				file = cfg.TrackerDbFilePath
 			}
+			log.Warnln("AXELAXEL: path - trackerFile: ", file)
 			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
 		}
 
@@ -323,9 +333,11 @@ func openLedgerDB(hotPrefix string, coldPrefix string, dbMem bool, cfg config.Lo
 		var lerr error
 		// before using dbPathPrefix, check if there is a hot data dir or a tracker db path defined in cfg
 		blockDBFilename := coldPrefix + ".block.sqlite"
-		if cfg.TrackerDbPath != "" {
-			blockDBFilename = cfg.BlockDbPath
+		if cfg.TrackerDbFilePath != "" {
+			fmt.Println("AXELAXEL: path - using blockdb cfg value")
+			blockDBFilename = cfg.BlockDbFilePath
 		}
+		log.Warnln("AXELAXEL: path - blockFile: ", blockDBFilename)
 		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
 		if lerr != nil {
 			outErr <- lerr

@@ -80,12 +80,28 @@ type Local struct {
 
 	// Data directories
 	// HotDataDir is an alternative to DataDir for storing data that is frequently accessed
+	// if not set, resources which use HotDataDir should default to DataDir
 	HotDataDir string `version[0]:""`
 	// ColdDataDir is an alternative to DataDir for storing data that is infrequently accessed
-	ColdDataDir   string `version[0]:""`
-	TrackerDbPath string `version[0]:""`
-	BlockDbPath   string `version[0]:""`
+	// if not set, resources which use ColdDataDir should default to DataDir
+	ColdDataDir string `version[0]:""`
+	// TrackingDbFilePath is the path to the db file (sqlite) or directory (kv stores) used by the trackerdb
+	// by default, this is ledger.tracker.sqlite in your Genesis Directory
+	TrackerDbFilePath string `version[0]:""`
+	// BlockDbFilePath is the path to the db file (sqlite) or directory (kv stores) used by the blockdb
+	// by default, this is ledger.block.sqlite in your Genesis Directory
+	BlockDbFilePath string `version[0]:""`
+	// BlockDbFilePath is the path to the directory used by the catchpoint tracker
+	// by default, this is catchpoint/ in your Genesis Directory
 	CatchpointDir string `version[0]:""`
+	// LogFilePath is the path to the log file used by the node
+	// by default, this is node.log in your data directory
+	LogFilePath string `version[0]:""`
+	// LogArchiveDir is the path to the directory used for log archiving
+	// by default, this is your data directory, and the log archive file name is set by LogArchiveName
+	LogArchiveDir string `version[0]:""`
+	StateproofDir string `version[0]:""`
+	CrashFilePath string `version[0]:""`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.

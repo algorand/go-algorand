@@ -90,7 +90,7 @@ func catchpointStage1Decoder(r io.Reader) (io.ReadCloser, error) {
 }
 
 type catchpointTracker struct {
-	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directory for the catchup files to be generated
+	// dbDirectory is the parent directory for the catchup files to be generated
 	dbDirectory string
 
 	// catchpointInterval is the configured interval at which the catchpointTracker would generate catchpoint labels and catchpoint files.
