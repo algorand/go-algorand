@@ -651,7 +651,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
-// GetBlockTxids gets all TxIDs in a block for the given round.
+// GetBlockTxids gets all top level TxIDs in a block for the given round.
 // (GET /v2/blocks/{round}/txids)
 func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()

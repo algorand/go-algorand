@@ -356,7 +356,7 @@
             "schema": {
               "properties": {
                 "blockTxids": {
-                  "description": "Block txids.",
+                  "description": "Block transaction Ids.",
                   "items": {
                     "type": "string"
                   },
@@ -370,7 +370,7 @@
             }
           }
         },
-        "description": "Txids in a block."
+        "description": "Top level transaction Ids in a block."
       },
       "BoxResponse": {
         "content": {
@@ -3844,7 +3844,7 @@
         "operationId": "GetBlockTxids",
         "parameters": [
           {
-            "description": "The round from which to fetch block hash information.",
+            "description": "The round from which to fetch block transaction Ids.",
             "in": "path",
             "name": "round",
             "required": true,
@@ -3861,7 +3861,7 @@
                 "schema": {
                   "properties": {
                     "blockTxids": {
-                      "description": "Block txids.",
+                      "description": "Block transaction Ids.",
                       "items": {
                         "type": "string"
                       },
@@ -3875,7 +3875,7 @@
                 }
               }
             },
-            "description": "Txids in a block."
+            "description": "Top level transaction Ids in a block."
           },
           "400": {
             "content": {
@@ -3905,7 +3905,7 @@
                 }
               }
             },
-            "description": "None existing block "
+            "description": "Non existing block "
           },
           "500": {
             "content": {
@@ -3922,7 +3922,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Get the txids for the block on the given round.",
+        "summary": "Get the top level transaction Ids for the block on the given round.",
         "tags": [
           "public",
           "nonparticipating"

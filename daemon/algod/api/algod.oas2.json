@@ -590,13 +590,13 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get the txids for the block on the given round.",
+        "summary": "Get the top level transaction Ids for the block on the given round.",
         "operationId": "GetBlockTxids",
         "parameters": [
           {
             "minimum": 0,
             "type": "integer",
-            "description": "The round from which to fetch block hash information.",
+            "description": "The round from which to fetch block transaction Ids.",
             "name": "round",
             "in": "path",
             "required": true
@@ -619,7 +619,7 @@
             }
           },
           "404": {
-            "description": "None existing block ",
+            "description": "Non existing block ",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -4349,7 +4349,7 @@
       }
     },
     "BlockTxidsResponse": {
-      "description": "Txids in a block.",
+      "description": "Top level transaction Ids in a block.",
       "schema": {
         "type": "object",
         "required": [
@@ -4357,7 +4357,7 @@
         ],
         "properties": {
           "blockTxids": {
-            "description": "Block txids.",
+            "description": "Block transaction Ids.",
             "type": "array",
             "items": {
               "type": "string"
