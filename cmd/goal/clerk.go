@@ -73,9 +73,11 @@ var (
 	simulateAllowMoreLogging      bool
 	simulateAllowMoreOpcodeBudget bool
 	simulateExtraOpcodeBudget     uint64
-	simulateEnableRequestTrace    bool
-	simulateStackChange           bool
-	simulateScratchChange         bool
+
+	simulateAllTraceOptions    bool
+	simulateEnableRequestTrace bool
+	simulateStackChange        bool
+	simulateScratchChange      bool
 )
 
 func init() {
@@ -164,6 +166,8 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
+
+	simulateCmd.Flags().BoolVar(&simulateAllTraceOptions, "all-trace-options", false, "Enable all options for simulation execution trace")
 	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
 	simulateCmd.Flags().BoolVar(&simulateStackChange, "stack", false, "Report stack change during simulation time")
 	simulateCmd.Flags().BoolVar(&simulateScratchChange, "scratch", false, "Report scratch change during simulation time")
@@ -1368,9 +1372,17 @@ func decodeTxnsFromFile(file string) []transactions.SignedTxn {
 }
 
 func traceCmdOptionToSimulateTraceConfigModel() simulation.ExecTraceConfig {
-	return simulation.ExecTraceConfig{
-		Enable:  simulateEnableRequestTrace,
-		Stack:   simulateStackChange,
-		Scratch: simulateScratchChange,
+	var traceConfig simulation.ExecTraceConfig
+	if simulateAllTraceOptions {
+		traceConfig = simulation.ExecTraceConfig{
+			Enable:  true,
+			Stack:   true,
+			Scratch: true,
+		}
 	}
+	traceConfig.Enable = traceConfig.Enable || simulateEnableRequestTrace
+	traceConfig.Stack = traceConfig.Stack || simulateStackChange
+	traceConfig.Scratch = traceConfig.Scratch || simulateScratchChange
+
+	return traceConfig
 }
