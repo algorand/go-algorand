@@ -10,7 +10,12 @@
             },
             {
                 "Name": "SmallWallet",
-                "Stake": 15,
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "NonPartWallet",
+                "Stake": 5,
                 "Online": true
             }
         ]
@@ -42,6 +47,9 @@
         },
         {
             "Name": "NonPartNode",
+            "Wallets": [{
+                "Name": "NonPartWallet"
+            }],
             "PeerList": "Relay1"
         }
     ]
