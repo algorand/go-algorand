@@ -98,7 +98,7 @@ type Ledger struct {
 
 	cfg config.Local
 
-	hotPrefix    string
+	hotDbPrefix  string
 	coldDbPrefix string
 
 	tracer logic.EvalTracer
@@ -133,7 +133,7 @@ func OpenLedger(
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
-		hotPrefix:                      hotPrefix,
+		hotDbPrefix:                    hotPrefix,
 		coldDbPrefix:                   coldPrefix,
 		tracer:                         tracer,
 	}
