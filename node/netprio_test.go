@@ -19,6 +19,7 @@ package node
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -30,6 +31,15 @@ func TestBase64AllocboundSize(t *testing.T) {
 	t.Parallel()
 
 	node := AlgorandFullNode{}
-	require.Len(t, node.NewPrioChallenge(), netPrioChallengeSizeBase64Encoded)
+	nonce := node.NewPrioChallenge()
+	require.Len(t, nonce, netPrioChallengeSizeBase64Encoded)
+
+	npr := netPrioResponse{Nonce: nonce}
+	e := protocol.Encode(&npr)
+
+	npr2 := netPrioResponse{}
+	err := protocol.Decode(e, &npr2)
+	require.NoError(t, err)
+	require.Equal(t, nonce, npr2.Nonce)
 
 }
