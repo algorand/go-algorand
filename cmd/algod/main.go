@@ -116,21 +116,9 @@ func run() int {
 	}
 
 	genesisPath := *genesisFile
-	if genesisPath == "" {
-		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
-	}
-
-	// Load genesis
-	genesisText, err := os.ReadFile(genesisPath)
+	genesis, genesisText, err := loadGenesis(dataDir, genesisPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisPath, err)
-		return 1
-	}
-
-	var genesis bookkeeping.Genesis
-	err = protocol.DecodeJSON(genesisText, &genesis)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse genesis file %s: %v\n", genesisPath, err)
+		fmt.Fprintf(os.Stderr, "Error loading genesis file (%s): %v", genesisPath, err)
 		return 1
 	}
 
