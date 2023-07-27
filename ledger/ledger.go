@@ -226,7 +226,7 @@ func (l *Ledger) reloadLedger() error {
 	l.acctsOnline.initialize(l.cfg)
 
 	// catchpoint tracker's directory defaults to the coldPrefix
-	// but can be direclty set
+	// but can be directly set
 	catchpointDir := l.coldDbPrefix
 	if l.cfg.CatchpointDir != "" {
 		catchpointDir = l.cfg.CatchpointDir
