@@ -685,7 +685,7 @@ func ensureAbsDir(path string, make bool) (string, error) {
 	return pathAbs, nil
 }
 
-// For user specified paths, ensure they are absolute, and create directories if they don't exist
+// EnsureProvidedPaths will ensure that all user provided paths in the config are absolute, and will create them if they are a directory
 func (cfg *Local) EnsureProvidedPaths() error {
 	if cfg.HotDataDir != "" {
 		abs, err := ensureAbsDir(cfg.HotDataDir, true)

@@ -18,8 +18,6 @@ package node
 
 import (
 	"context"
-	"fmt"
-	"io/ioutil"
 	"path/filepath"
 	"testing"
 
@@ -255,7 +253,6 @@ func TestConfiguredDataDirs_Follower(t *testing.T) {
 	require.DirExists(t, filepath.Join(testDirCold, genesis.ID()))
 
 	// confirm the blockdb is in the genesis dir of cold data dir
-	fmt.Println(ioutil.ReadDir(filepath.Join(testDirCold, genesis.ID())))
 	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "ledger.block.sqlite"))
 
 }
