@@ -119,7 +119,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	// if ColdDataDir is set, prepare coldGenesisDir and coldLedgerPrefix
 	if cfg.ColdDataDir != "" {
 		coldGenesisDir = filepath.Join(cfg.ColdDataDir, node.genesisID)
-		coldLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
+		coldLedgerPrefix = filepath.Join(coldGenesisDir, config.LedgerFilenamePrefix)
 	}
 
 	// create initial genesis dir(s), if it doesn't exist

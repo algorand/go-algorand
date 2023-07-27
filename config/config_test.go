@@ -654,3 +654,60 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 		})
 	}
 }
+
+// Tests that EnsureAbsDir resolves a path to an absolute path, and creates the directory if requested
+func TestEnsureAbsDir(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectroy := t.TempDir()
+
+	t1 := filepath.Join(testDirectroy, "test1")
+	// confirm that EnsureAbsDir does not make the directory if supplied false
+	t1Abs, err := ensureAbsDir(t1, false)
+	require.NoError(t, err)
+	_, err = os.Stat(t1Abs)
+	require.Error(t, err)
+
+	// confirm that EnsureAbsDir creates the directory if supplied true
+	t1AbsAgain, err := ensureAbsDir(t1, true)
+	require.Equal(t, t1Abs, t1AbsAgain)
+	require.NoError(t, err)
+	t1stat, err := os.Stat(t1Abs)
+	require.NoError(t, err)
+	require.True(t, t1stat.IsDir())
+
+	// confirm that relative paths become absolute
+	t2 := filepath.Join(testDirectroy, "test2", "..")
+	t2Abs, err := ensureAbsDir(t2, true)
+	require.NoError(t, err)
+	require.Equal(t, testDirectroy, t2Abs)
+}
+
+// TestEnsureProvidedPaths confirms that paths provided in the config are resolved to absolute paths and are created if relevant
+func TestEnsureProvidedPaths(t *testing.T) {
+	cfg := GetDefaultLocal()
+
+	testDirectroy := t.TempDir()
+
+	// insert some "Bad" path elements to see them removed when converted to absolute
+	cfg.TrackerDbFilePath = filepath.Join(testDirectroy, "BAD/../custom_tracker.sqlite")
+	cfg.BlockDbFilePath = filepath.Join(testDirectroy, "/BAD/BAD/../../custom_block.sqlite")
+	cfg.LogFilePath = filepath.Join(testDirectroy, "/BAD/BAD/BAD/../../../custom_log.log")
+	cfg.CrashFilePath = filepath.Join(testDirectroy, "custom_crash.sqlite")
+
+	cfg.StateproofDir = filepath.Join(testDirectroy, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
+	cfg.LogArchiveDir = filepath.Join(testDirectroy, "custom_log_archive")
+	cfg.CatchpointDir = filepath.Join(testDirectroy, "custom_catchpoint")
+
+	err := cfg.EnsureProvidedPaths()
+	require.NoError(t, err)
+
+	require.Equal(t, filepath.Join(testDirectroy, "custom_tracker.sqlite"), cfg.TrackerDbFilePath)
+	require.Equal(t, filepath.Join(testDirectroy, "custom_block.sqlite"), cfg.BlockDbFilePath)
+	require.Equal(t, filepath.Join(testDirectroy, "custom_log.log"), cfg.LogFilePath)
+	require.Equal(t, filepath.Join(testDirectroy, "custom_crash.sqlite"), cfg.CrashFilePath)
+
+	require.DirExists(t, filepath.Join(testDirectroy, "custom_stateproof"))
+	require.DirExists(t, filepath.Join(testDirectroy, "custom_log_archive"))
+	require.DirExists(t, filepath.Join(testDirectroy, "custom_catchpoint"))
+}
