@@ -64,7 +64,7 @@ func (w *stateproofWriter) DeleteOldSPContexts(ctx context.Context, earliestLast
 	// DELETE FROM stateproofverification
 	// WHERE lastattestedround < ?
 
-	start, end := stateproofRangePrefix(earliestLastAttestedRound)
+	start, end := stateproofRoundRangePrefix(earliestLastAttestedRound)
 	return w.kvw.DeleteRange(start[:], end[:])
 }
 

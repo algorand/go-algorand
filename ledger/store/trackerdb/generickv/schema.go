@@ -48,7 +48,7 @@ const (
 	// this is the true separator used in the keys
 	separator = '-'
 	// this is used as a value greather than the `separator` to get all the keys with a given prefix
-	endRangeSeparattor = '.'
+	endRangeSeparator = '.'
 )
 
 // return the big-endian binary encoding of a uint64
@@ -81,6 +81,7 @@ func extractResourceAidx(key []byte) basics.CreatableIndex {
 	return basics.CreatableIndex(aidx64)
 }
 
+// TODO: [Review] discuss if we want/need to have the address as part of the key
 func resourceKey(address basics.Address, aidx basics.CreatableIndex) [44]byte {
 	var key [prefixLength + separatorLength + addressLength + separatorLength + 8]byte
 
@@ -105,7 +106,7 @@ func resourceAddrOnlyRangePrefix(address basics.Address) ([36]byte, [36]byte) {
 	low[prefixLength+separatorLength+addressLength] = separator
 	// high
 	copy(high[:], low[:])
-	high[prefixLength+separatorLength+addressLength] = endRangeSeparattor
+	high[prefixLength+separatorLength+addressLength] = endRangeSeparator
 
 	return low, high
 }
@@ -176,10 +177,22 @@ func onlineAccountLatestRangePrefix(address basics.Address, round basics.Round) 
 	return low, high
 }
 
-func onlineAccountRangePrefix(address basics.Address) ([36]byte, [36]byte) {
+func onlineAccountAddressRangePrefix(address basics.Address) ([36]byte, [36]byte) {
 	low := onlineAccountOnlyPartialKey(address)
 	high := onlineAccountOnlyPartialKey(address)
-	high[prefixLength+separatorLength+addressLength] = endRangeSeparattor
+	high[prefixLength+separatorLength+addressLength] = endRangeSeparator
+
+	return low, high
+}
+
+func onlineAccountFullRangePrefix() ([3]byte, [3]byte) {
+	var low, high [prefixLength + separatorLength]byte
+
+	copy(low[0:], kvPrefixOnlineAccount)
+	low[prefixLength] = separator
+
+	copy(high[0:], kvPrefixOnlineAccount)
+	high[prefixLength] = endRangeSeparator
 
 	return low, high
 }
@@ -285,13 +298,25 @@ func txTailKey(rnd basics.Round) [11]byte {
 	return key
 }
 
-func txTailRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
+func txTailRoundRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
 	var low [prefixLength + separatorLength]byte
 
 	copy(low[0:], kvTxTail)
 	low[prefixLength] = separator
 
 	high := txTailKey(rnd)
+
+	return low, high
+}
+
+func txTailFullRangePrefix() ([3]byte, [3]byte) {
+	var low, high [prefixLength + separatorLength]byte
+
+	copy(low[0:], kvTxTail)
+	low[prefixLength] = separator
+
+	copy(high[0:], kvTxTail)
+	high[prefixLength] = endRangeSeparator
 
 	return low, high
 }
@@ -314,13 +339,25 @@ func onlineAccountRoundParamsKey(rnd basics.Round) [11]byte {
 	return key
 }
 
-func onlineAccountRoundParamsRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
+func onlineAccountRoundParamsRoundRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
 	var low [prefixLength + separatorLength]byte
 
 	copy(low[0:], kvOnlineAccountRoundParams)
 	low[prefixLength] = separator
 
 	high := onlineAccountRoundParamsKey(rnd)
+
+	return low, high
+}
+
+func onlineAccountRoundParamsFullRangePrefix() ([3]byte, [3]byte) {
+	var low, high [prefixLength + separatorLength]byte
+
+	copy(low[0:], kvOnlineAccountRoundParams)
+	low[prefixLength] = separator
+
+	copy(high[0:], kvOnlineAccountRoundParams)
+	high[prefixLength] = endRangeSeparator
 
 	return low, high
 }
@@ -337,13 +374,25 @@ func stateproofKey(rnd basics.Round) [11]byte {
 	return key
 }
 
-func stateproofRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
+func stateproofRoundRangePrefix(rnd basics.Round) ([3]byte, [11]byte) {
 	var low [prefixLength + separatorLength]byte
 
 	copy(low[0:], kvPrefixStateproof)
 	low[prefixLength] = separator
 
 	high := stateproofKey(rnd)
+
+	return low, high
+}
+
+func stateproofFullRangePrefix() ([3]byte, [3]byte) {
+	var low, high [prefixLength + separatorLength]byte
+
+	copy(low[0:], kvPrefixStateproof)
+	low[prefixLength] = separator
+
+	copy(high[0:], kvPrefixStateproof)
+	high[prefixLength] = endRangeSeparator
 
 	return low, high
 }

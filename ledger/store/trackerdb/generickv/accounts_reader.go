@@ -17,7 +17,6 @@
 package generickv
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 

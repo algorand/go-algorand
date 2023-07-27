@@ -68,9 +68,8 @@ func (r *stateproofReader) GetAllSPContexts(ctx context.Context) ([]ledgercore.S
 	// FROM stateProofVerification
 	// ORDER BY lastattestedround
 
-	low := []byte(kvPrefixStateproof + "-")
-	high := []byte(kvPrefixStateproof + ".")
-	iter := r.kvr.NewIter(low, high, false)
+	low, high := stateproofFullRangePrefix()
+	iter := r.kvr.NewIter(low[:], high[:], false)
 	defer iter.Close()
 
 	results := make([]ledgercore.StateProofVerificationContext, 0)

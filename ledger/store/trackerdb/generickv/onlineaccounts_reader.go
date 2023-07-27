@@ -17,8 +17,6 @@
 package generickv
 
 import (
-	"encoding/binary"
-
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -50,20 +48,15 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 	defer iter.Close()
 
 	var value []byte
-	var updRound uint64
 
 	if iter.Next() {
-		// schema: <prefix>-<addr>-<rnd>
 		key := iter.Key()
 
-		// extract updround, its the last section after the "-"
-		rndOffset := len(kvPrefixOnlineAccount) + 1 + 32 + 1
-		updRound = binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
-		if err != nil {
-			return
-		}
+		// extract round
+		updRound := extractOnlineAccountRound(key)
+
 		data.Addr = addr
-		data.UpdRound = basics.Round(updRound)
+		data.UpdRound = updRound
 
 		// get value for current item in the iterator
 		value, err = iter.Value()
@@ -90,12 +83,11 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 }
 
 func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trackerdb.PersistedOnlineAccountData, rnd basics.Round, err error) {
-	low, high := onlineAccountRangePrefix(addr)
+	low, high := onlineAccountAddressRangePrefix(addr)
 	iter := r.kvr.NewIter(low[:], high[:], false)
 	defer iter.Close()
 
 	var value []byte
-	var updround uint64
 
 	// read the current db round
 	rnd, err = r.AccountsRound()
@@ -106,16 +98,13 @@ func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trac
 	for iter.Next() {
 		pitem := trackerdb.PersistedOnlineAccountData{}
 
-		// schema: <prefix>-<addr>-<rnd>
 		key := iter.Key()
-		// extract updround, its the last section after the "-"
-		rndOffset := len(kvPrefixOnlineAccount) + 1 + 32 + 1
-		updround = binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
-		if err != nil {
-			return
-		}
+
+		// extract round
+		updRound := extractOnlineAccountRound(key)
+
 		pitem.Addr = addr
-		pitem.UpdRound = basics.Round(updround)
+		pitem.UpdRound = updRound
 		// Note: for compatibility with the SQL impl, this is not included on each item
 		// pitem.Round = rnd
 
@@ -147,7 +136,8 @@ func (r *accountsReader) LookupOnlineRoundParams(rnd basics.Round) (onlineRoundP
 	// FROM onlineroundparamstail
 	// WHERE rnd=?
 
-	value, closer, err := r.kvr.Get(onlineAccountRoundParamsKey(rnd))
+	key := onlineAccountRoundParamsKey(rnd)
+	value, closer, err := r.kvr.Get(key[:])
 	if err != nil {
 		return
 	}

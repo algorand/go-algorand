@@ -116,7 +116,7 @@ func (r *accountsReader) TotalKVs(ctx context.Context) (total uint64, err error)
 
 // TODO: this replicates some functionality from LookupOnlineHistory, implemented for onlineAccountsReader
 func (r *accountsReader) LookupOnlineAccountDataByAddress(addr basics.Address) (ref trackerdb.OnlineAccountRef, data []byte, err error) {
-	low, high := onlineAccountRangePrefix(addr)
+	low, high := onlineAccountAddressRangePrefix(addr)
 	iter := r.kvr.NewIter(low[:], high[:], true)
 	defer iter.Close()
 
@@ -232,9 +232,8 @@ func (r *accountsReader) AccountsOnlineRoundParams() (onlineRoundParamsData []le
 	//
 	// SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd ASC
 
-	start := []byte(kvOnlineAccountRoundParams + "-")
-	end := []byte(kvOnlineAccountRoundParams + ".")
-	iter := r.kvr.NewIter(start, end, false)
+	start, end := onlineAccountRoundParamsFullRangePrefix()
+	iter := r.kvr.NewIter(start[:], end[:], false)
 	defer iter.Close()
 
 	var value []byte
@@ -285,9 +284,8 @@ func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pers
 		return nil, err
 	}
 
-	low := []byte(kvPrefixOnlineAccount + "-")
-	high := []byte(kvPrefixOnlineAccount + ".")
-	iter := r.kvr.NewIter(low, high, false)
+	low, high := onlineAccountFullRangePrefix()
+	iter := r.kvr.NewIter(low[:], high[:], false)
 	defer iter.Close()
 
 	result := make([]trackerdb.PersistedOnlineAccountData, 0, maxAccounts)
@@ -418,9 +416,8 @@ func (r *accountsReader) LoadTxTail(ctx context.Context, dbRound basics.Round) (
 	//
 	// "SELECT rnd, data FROM txtail ORDER BY rnd DESC"
 
-	start := []byte(kvTxTail + "-")
-	end := []byte(kvTxTail + ".")
-	iter := r.kvr.NewIter(start, end, true)
+	start, end := txTailFullRangePrefix()
+	iter := r.kvr.NewIter(start[:], end[:], true)
 	defer iter.Close()
 
 	var value []byte
