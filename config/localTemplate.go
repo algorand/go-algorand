@@ -670,32 +670,85 @@ func (cfg Local) IsGossipServer() bool {
 	return cfg.NetAddress != ""
 }
 
-func ensureAbsDir(path string) (string, error) {
+// ensureAbsDir will convert a path to absolute, and if make is set, will attempt to make a directory there
+func ensureAbsDir(path string, make bool) (string, error) {
 	pathAbs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
 	}
-	err = os.MkdirAll(pathAbs, 0700)
-	if err != nil && !os.IsExist(err) {
-		return "", err
+	if make {
+		err = os.MkdirAll(pathAbs, 0700)
+		if err != nil && !os.IsExist(err) {
+			return "", err
+		}
 	}
 	return pathAbs, nil
 }
 
+// For user specified paths, ensure they are absolute, and create directories if they don't exist
 func (cfg *Local) EnsureProvidedPaths() error {
 	if cfg.HotDataDir != "" {
-		hotDataDirAbs, err := ensureAbsDir(cfg.HotDataDir)
+		abs, err := ensureAbsDir(cfg.HotDataDir, true)
 		if err != nil {
 			return err
 		}
-		cfg.HotDataDir = hotDataDirAbs
+		cfg.HotDataDir = abs
 	}
 	if cfg.ColdDataDir != "" {
-		coldDataDirAbs, err := ensureAbsDir(cfg.ColdDataDir)
+		abs, err := ensureAbsDir(cfg.ColdDataDir, true)
 		if err != nil {
 			return err
 		}
-		cfg.ColdDataDir = coldDataDirAbs
+		cfg.ColdDataDir = abs
+	}
+	if cfg.TrackerDbFilePath != "" {
+		abs, err := ensureAbsDir(cfg.TrackerDbFilePath, false)
+		if err != nil {
+			return err
+		}
+		cfg.TrackerDbFilePath = abs
+	}
+	if cfg.BlockDbFilePath != "" {
+		abs, err := ensureAbsDir(cfg.BlockDbFilePath, false)
+		if err != nil {
+			return err
+		}
+		cfg.BlockDbFilePath = abs
+	}
+	if cfg.CatchpointDir != "" {
+		abs, err := ensureAbsDir(cfg.CatchpointDir, true)
+		if err != nil {
+			return err
+		}
+		cfg.CatchpointDir = abs
+	}
+	if cfg.LogFilePath != "" {
+		abs, err := ensureAbsDir(cfg.LogFilePath, false)
+		if err != nil {
+			return err
+		}
+		cfg.LogFilePath = abs
+	}
+	if cfg.LogArchiveDir != "" {
+		abs, err := ensureAbsDir(cfg.LogArchiveDir, true)
+		if err != nil {
+			return err
+		}
+		cfg.LogArchiveDir = abs
+	}
+	if cfg.StateproofDir != "" {
+		abs, err := ensureAbsDir(cfg.StateproofDir, true)
+		if err != nil {
+			return err
+		}
+		cfg.StateproofDir = abs
+	}
+	if cfg.CrashFilePath != "" {
+		abs, err := ensureAbsDir(cfg.CrashFilePath, false)
+		if err != nil {
+			return err
+		}
+		cfg.CrashFilePath = abs
 	}
 	return nil
 }
