@@ -212,12 +212,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		coldLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
 	}
 
-	log.Warnln("AXELAXEL: path - rootDir: ", rootDir)
-	log.Warnln("AXELAXEL: path - hotGenesisDir: ", hotGenesisDir)
-	log.Warnln("AXELAXEL: path - coldGenesisDir: ", coldGenesisDir)
-	log.Warnln("AXELAXEL: path - hotPrefix: ", hotLedgerPrefix)
-	log.Warnln("AXELAXEL: path - coldPrefix: ", coldLedgerPrefix)
-
 	// create initial genesis dir(s), if it doesn't exist
 	for _, dir := range []string{hotGenesisDir, coldGenesisDir} {
 		err = os.Mkdir(dir, 0700)
