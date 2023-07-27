@@ -173,6 +173,8 @@ func onlineAccountKey(address basics.Address, round basics.Round) [44]byte {
 func onlineAccountLatestRangePrefix(address basics.Address, round basics.Round) ([36]byte, [44]byte) {
 	low := onlineAccountOnlyPartialKey(address)
 	high := onlineAccountKey(address, round)
+	// inc the last byte to make it inclusive
+	high[len(high)-1]++
 
 	return low, high
 }
@@ -249,7 +251,7 @@ func onlineAccountBalanceForRoundRangePrefix(round basics.Round) ([3]byte, [12]b
 	copy(high[0:], kvPrefixOnlineAccountBalance)
 	high[prefixLength] = separator
 	copy(high[prefixLength+separatorLength:], round8[:])
-	high[prefixLength+separatorLength+8] = separator
+	high[prefixLength+separatorLength+8] = endRangeSeparator
 
 	return low, high
 }
