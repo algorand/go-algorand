@@ -377,7 +377,7 @@ func (r *accountsReader) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd
 		if _, ok := data[addr]; ok {
 			continue
 		}
-		// when the a ccount is expired we do not add it to the data
+		// when the account is expired we do not add it to the data
 		// but we might have an older version that is not expired show up
 		// this would be wrong, so we skip those accounts if the latest version is expired
 		if _, ok := expired[addr]; ok {
