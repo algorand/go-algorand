@@ -81,6 +81,11 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	lib.GenesisJSONText = genesisText
 
+	err := cfg.EnsureProvidedPaths()
+	if err != nil {
+		return fmt.Errorf("error ensuring configuration provided paths: %v", err)
+	}
+
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	// if the hotDataDir is explicitly set, use it for logging
 	if cfg.HotDataDir != "" {
@@ -102,7 +107,6 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	}
 
 	var maxLogAge time.Duration
-	var err error
 	if cfg.LogArchiveMaxAge != "" {
 		maxLogAge, err = time.ParseDuration(cfg.LogArchiveMaxAge)
 		if err != nil {

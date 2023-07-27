@@ -670,6 +670,36 @@ func (cfg Local) IsGossipServer() bool {
 	return cfg.NetAddress != ""
 }
 
+func ensureAbsDir(path string) (string, error) {
+	pathAbs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	err = os.MkdirAll(pathAbs, 0700)
+	if err != nil && !os.IsExist(err) {
+		return "", err
+	}
+	return pathAbs, nil
+}
+
+func (cfg *Local) EnsureProvidedPaths() error {
+	if cfg.HotDataDir != "" {
+		hotDataDirAbs, err := ensureAbsDir(cfg.HotDataDir)
+		if err != nil {
+			return err
+		}
+		cfg.HotDataDir = hotDataDirAbs
+	}
+	if cfg.ColdDataDir != "" {
+		coldDataDirAbs, err := ensureAbsDir(cfg.ColdDataDir)
+		if err != nil {
+			return err
+		}
+		cfg.ColdDataDir = coldDataDirAbs
+	}
+	return nil
+}
+
 // AdjustConnectionLimits updates RestConnectionsSoftLimit, RestConnectionsHardLimit, IncomingConnectionsLimit
 // if requiredFDs greater than maxFDs
 func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {

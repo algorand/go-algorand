@@ -193,28 +193,29 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
 
-	// determine genesis directories for hot/cold datadirs if provided
-	// and their ledger prefixes
-	// by default, hot and cold genesis directories are based in the supplied rootDir
+	// Set defaults for dataDirs.
+	// Hot and Cold entries are defaulted to the root directory version.
+	// They will be loaded and validated if set in the config, below
 	rootGenesisDir := filepath.Join(rootDir, node.genesisID)
 	hotGenesisDir := filepath.Join(rootDir, node.genesisID)
 	coldGenesisDir := filepath.Join(rootDir, node.genesisID)
 	hotLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
 	coldLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
 
-	// if hot/cold data directories are configured, load them
+	// if HotDataDir is set, prepare hotGenesisDir and hotLedgerPrefix
 	if cfg.HotDataDir != "" {
 		hotGenesisDir = filepath.Join(cfg.HotDataDir, node.genesisID)
 		hotLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
 	}
+	// if ColdDataDir is set, prepare coldGenesisDir and coldLedgerPrefix
 	if cfg.ColdDataDir != "" {
 		coldGenesisDir = filepath.Join(cfg.ColdDataDir, node.genesisID)
 		coldLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
 	}
 
 	// create initial genesis dir(s), if it doesn't exist
-	for _, dir := range []string{hotGenesisDir, coldGenesisDir} {
-		err = os.Mkdir(dir, 0700)
+	for _, dir := range []string{rootGenesisDir, hotGenesisDir, coldGenesisDir} {
+		err = os.MkdirAll(dir, 0700)
 		if err != nil && !os.IsExist(err) {
 			log.Errorf("Unable to create genesis directory: %v", err)
 			return nil, err
