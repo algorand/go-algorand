@@ -102,16 +102,35 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	p2pNode.DeregisterMessageInterest(protocol.VoteBundleTag)
 	node.net = p2pNode
 
-	// load stored data
-	genesisDir := filepath.Join(rootDir, genesis.ID())
-	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
+	// Set defaults for dataDirs.
+	// Hot and Cold entries are defaulted to the root directory version.
+	// They will be loaded and validated if set in the config, below
+	rootGenesisDir := filepath.Join(rootDir, node.genesisID)
+	hotGenesisDir := filepath.Join(rootDir, node.genesisID)
+	coldGenesisDir := filepath.Join(rootDir, node.genesisID)
+	hotLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
+	coldLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
 
-	// create initial ledger, if it doesn't exist
-	err = os.Mkdir(genesisDir, 0700)
-	if err != nil && !os.IsExist(err) {
-		log.Errorf("Unable to create genesis directory: %v", err)
-		return nil, err
+	// if HotDataDir is set, prepare hotGenesisDir and hotLedgerPrefix
+	if cfg.HotDataDir != "" {
+		hotGenesisDir = filepath.Join(cfg.HotDataDir, node.genesisID)
+		hotLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
 	}
+	// if ColdDataDir is set, prepare coldGenesisDir and coldLedgerPrefix
+	if cfg.ColdDataDir != "" {
+		coldGenesisDir = filepath.Join(cfg.ColdDataDir, node.genesisID)
+		coldLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
+	}
+
+	// create initial genesis dir(s), if it doesn't exist
+	for _, dir := range []string{rootGenesisDir, hotGenesisDir, coldGenesisDir} {
+		err = os.MkdirAll(dir, 0700)
+		if err != nil && !os.IsExist(err) {
+			log.Errorf("Unable to create genesis directory: %v", err)
+			return nil, err
+		}
+	}
+
 	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
@@ -120,9 +139,9 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, hotLedgerPrefix, coldLedgerPrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
-		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
+		log.Errorf("Cannot initialize ledger (hot: %s, cold: %s): %v", hotLedgerPrefix, coldLedgerPrefix, err)
 		return nil, err
 	}
 
