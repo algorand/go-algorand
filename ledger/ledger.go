@@ -331,7 +331,7 @@ func openLedgerDB(hotDbPrefix string, coldDbPrefix string, dbMem bool, cfg confi
 		var lerr error
 		// before using coldDbPrefix, check if there is a block db path defined in cfg
 		blockDBFilename := coldDbPrefix + ".block.sqlite"
-		if cfg.TrackerDbFilePath != "" {
+		if cfg.BlockDbFilePath != "" {
 			blockDBFilename = cfg.BlockDbFilePath
 		}
 		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
