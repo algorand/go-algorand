@@ -77,6 +77,17 @@ func (r *accountsReader) LookupAccountAddressFromAddressID(ctx context.Context, 
 }
 
 func (r *accountsReader) LookupAccountRowID(addr basics.Address) (ref trackerdb.AccountRef, err error) {
+	// TODO: [Review] technically we could just return the address here
+	// 			return accountRef{addr}, nil
+	// the problem is that this would have a different behaviour than the SQL which hits the db
+	// thus potentially returning notfound
+	key := accountKey(addr)
+	_, closer, err := r.kvr.Get(key[:])
+	if err != nil {
+		return
+	}
+	defer closer.Close()
+
 	return accountRef{addr}, nil
 }
 
