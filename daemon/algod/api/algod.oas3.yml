@@ -1205,7 +1205,8 @@
           },
           "app": {
             "description": "Application ID of the local state application.",
-            "type": "integer"
+            "type": "integer",
+            "x-algorand-format": "uint64"
           }
         },
         "required": [
@@ -1347,7 +1348,8 @@
           },
           "asset": {
             "description": "Asset ID of the holding.",
-            "type": "integer"
+            "type": "integer",
+            "x-algorand-format": "uint64"
           }
         },
         "required": [
@@ -2283,14 +2285,16 @@
           "apps": {
             "description": "The unnamed applications that were referenced. The order of this array is arbitrary.",
             "items": {
-              "type": "integer"
+              "type": "integer",
+              "x-algorand-format": "uint64"
             },
             "type": "array"
           },
           "assets": {
             "description": "The unnamed assets that were referenced. The order of this array is arbitrary.",
             "items": {
-              "type": "integer"
+              "type": "integer",
+              "x-algorand-format": "uint64"
             },
             "type": "array"
           },
