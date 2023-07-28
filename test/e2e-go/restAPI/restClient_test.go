@@ -1236,8 +1236,10 @@ end:
     int 1
 `
 	ops, err := logic.AssembleString(prog)
+	a.NoError(err)
 	approval := ops.Program
 	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
 	clearState := ops.Program
 
 	gl := basics.StateSchema{}
@@ -3214,8 +3216,6 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 
 	testClient := localFixture.LibGoalClient
 
-	proto := config.Consensus[protocol.ConsensusFuture]
-
 	_, err := testClient.WaitForRound(1)
 	a.NoError(err)
 
@@ -3349,7 +3349,7 @@ assert
 
 // Box access
 byte "A"
-int 64
+int 1025
 box_create
 assert
 
@@ -3422,17 +3422,12 @@ int 1
 
 	expectedUnnamedGroupResources := model.SimulationUnnamedGroupResources{
 		Resources: model.SimulationUnnamedResourceAssignment{
-			MaxTotalRefs: uint64(proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences),
 			Accounts:     &[]string{otherAddress},
-			MaxAccounts:  uint64(proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps)),
 			Assets:       &[]uint64{assetID},
-			MaxAssets:    uint64(proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets),
 			Apps:         &[]uint64{uint64(otherAppID)},
-			MaxApps:      uint64(proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps),
 			Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
-			MaxBoxes:     uint64(proto.MaxTxGroupSize * proto.MaxAppBoxReferences),
+			EmptyBoxRefs: toPtr[uint64](1),
 		},
-		MaxCrossProductRefs: uint64(proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences * (proto.MaxAppTotalTxnReferences + 2)),
 		AssetHoldings: &[]model.AssetHoldingReference{
 			{Account: otherAddress, Asset: assetID},
 		},

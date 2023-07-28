@@ -815,9 +815,6 @@ type SimulationUnnamedGroupResources struct {
 	// AssetHoldings The unnamed asset holdings that were referenced. The order of this array is arbitrary.
 	AssetHoldings *[]AssetHoldingReference `json:"asset-holdings,omitempty"`
 
-	// MaxCrossProductRefs The maximum allowed number of asset holding and app local references.
-	MaxCrossProductRefs uint64 `json:"max-cross-product-refs"`
-
 	// Resources The set of unnamed resources that were accessed during a simulation call.
 	Resources SimulationUnnamedResourceAssignment `json:"resources"`
 }
@@ -838,21 +835,6 @@ type SimulationUnnamedResourceAssignment struct {
 
 	// EmptyBoxRefs The number of unnamed box references used to increase the IO budget.
 	EmptyBoxRefs *uint64 `json:"empty-box-refs,omitempty"`
-
-	// MaxAccounts The maximum allowed number of unnamed account references.
-	MaxAccounts uint64 `json:"max-accounts"`
-
-	// MaxApps The maximum allowed number of unnamed app references.
-	MaxApps uint64 `json:"max-apps"`
-
-	// MaxAssets The maximum allowed number of unnamed asset references.
-	MaxAssets uint64 `json:"max-assets"`
-
-	// MaxBoxes The maximum allowed number of unnamed boxes references.
-	MaxBoxes uint64 `json:"max-boxes"`
-
-	// MaxTotalRefs The maximum allowed number of all unnamed references.
-	MaxTotalRefs uint64 `json:"max-total-refs"`
 }
 
 // StateDelta Application state delta.

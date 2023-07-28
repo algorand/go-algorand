@@ -467,13 +467,6 @@ func convertUnnamedResourceAssignment(assignment *simulation.ResourceAssignment)
 		return nil
 	}
 	return &model.SimulationUnnamedResourceAssignment{
-		MaxTotalRefs: uint64(assignment.MaxTotalRefs),
-		MaxAccounts:  uint64(assignment.MaxAccounts),
-		MaxAssets:    uint64(assignment.MaxAssets),
-		MaxApps:      uint64(assignment.MaxApps),
-		MaxBoxes:     uint64(assignment.MaxBoxes),
-		EmptyBoxRefs: omitEmpty(uint64(assignment.NumEmptyBoxRefs)),
-
 		Accounts: sliceOrNil(stringSlice(maps.Keys(assignment.Accounts))),
 		Assets:   sliceOrNil(uint64Slice(maps.Keys(assignment.Assets))),
 		Apps:     sliceOrNil(uint64Slice(maps.Keys(assignment.Apps))),
@@ -483,6 +476,7 @@ func convertUnnamedResourceAssignment(assignment *simulation.ResourceAssignment)
 				Name: []byte(box.Name),
 			}
 		})),
+		EmptyBoxRefs: omitEmpty(uint64(assignment.NumEmptyBoxRefs)),
 	}
 }
 
@@ -491,9 +485,7 @@ func convertUnnamedGroupResources(resources *simulation.GroupResourceAssignment)
 		return nil
 	}
 	return &model.SimulationUnnamedGroupResources{
-		Resources:           *convertUnnamedResourceAssignment(&resources.Resources),
-		MaxCrossProductRefs: uint64(resources.MaxCrossProductReferences),
-
+		Resources: *convertUnnamedResourceAssignment(&resources.Resources),
 		AssetHoldings: sliceOrNil(convertSlice(maps.Keys(resources.AssetHoldings), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
 			return model.AssetHoldingReference{
 				Account: holding.Address.String(),

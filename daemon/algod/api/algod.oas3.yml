@@ -2260,16 +2260,11 @@
             },
             "type": "array"
           },
-          "max-cross-product-refs": {
-            "description": "The maximum allowed number of asset holding and app local references.",
-            "type": "integer"
-          },
           "resources": {
             "$ref": "#/components/schemas/SimulationUnnamedResourceAssignment"
           }
         },
         "required": [
-          "max-cross-product-refs",
           "resources"
         ],
         "type": "object"
@@ -2309,35 +2304,8 @@
           "empty-box-refs": {
             "description": "The number of unnamed box references used to increase the IO budget.",
             "type": "integer"
-          },
-          "max-accounts": {
-            "description": "The maximum allowed number of unnamed account references.",
-            "type": "integer"
-          },
-          "max-apps": {
-            "description": "The maximum allowed number of unnamed app references.",
-            "type": "integer"
-          },
-          "max-assets": {
-            "description": "The maximum allowed number of unnamed asset references.",
-            "type": "integer"
-          },
-          "max-boxes": {
-            "description": "The maximum allowed number of unnamed boxes references.",
-            "type": "integer"
-          },
-          "max-total-refs": {
-            "description": "The maximum allowed number of all unnamed references.",
-            "type": "integer"
           }
         },
-        "required": [
-          "max-accounts",
-          "max-apps",
-          "max-assets",
-          "max-boxes",
-          "max-total-refs"
-        ],
         "type": "object"
       },
       "StateDelta": {

@@ -4048,16 +4048,11 @@
       "description": "If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and could benefit from group resource sharing. In other words, there are no restrictions on where these resources must be placed in the transaction group. Also see property 'unnamed-resources-accessed' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing; in contrast, these resources must be placed local to that transaction.",
       "type": "object",
       "required": [
-        "resources",
-        "max-cross-product-refs"
+        "resources"
       ],
       "properties": {
         "resources": {
           "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
-        },
-        "max-cross-product-refs": {
-          "description": "The maximum allowed number of asset holding and app local references.",
-          "type": "integer"
         },
         "asset-holdings": {
           "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
@@ -4078,18 +4073,8 @@
     "SimulationUnnamedResourceAssignment": {
       "description": "The set of unnamed resources that were accessed during a simulation call.",
       "type": "object",
-      "required": [
-        "max-total-refs",
-        "max-accounts",
-        "max-assets",
-        "max-apps",
-        "max-boxes"
-      ],
+      "required": [],
       "properties": {
-        "max-total-refs": {
-          "description": "The maximum allowed number of all unnamed references.",
-          "type": "integer"
-        },
         "accounts": {
           "description": "The unnamed accounts that were referenced. The order of this array is arbitrary.",
           "type": "array",
@@ -4098,10 +4083,6 @@
             "x-algorand-format": "Address"
           }
         },
-        "max-accounts": {
-          "description": "The maximum allowed number of unnamed account references.",
-          "type": "integer"
-        },
         "assets": {
           "description": "The unnamed assets that were referenced. The order of this array is arbitrary.",
           "type": "array",
@@ -4109,20 +4090,12 @@
             "type": "integer"
           }
         },
-        "max-assets": {
-          "description": "The maximum allowed number of unnamed asset references.",
-          "type": "integer"
-        },
         "apps": {
           "description": "The unnamed applications that were referenced. The order of this array is arbitrary.",
           "type": "array",
           "items": {
             "type": "integer"
           }
-        },
-        "max-apps": {
-          "description": "The maximum allowed number of unnamed app references.",
-          "type": "integer"
         },
         "boxes": {
           "description": "The unnamed boxes that were referenced. The order of this array is arbitrary.",
@@ -4133,10 +4106,6 @@
         },
         "empty-box-refs": {
           "description": "The number of unnamed box references used to increase the IO budget.",
-          "type": "integer"
-        },
-        "max-boxes": {
-          "description": "The maximum allowed number of unnamed boxes references.",
           "type": "integer"
         }
       }
