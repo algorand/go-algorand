@@ -202,7 +202,7 @@ func (ct *catchpointTracker) GetLastCatchpointLabel() string {
 }
 
 func (ct *catchpointTracker) getSPVerificationData() (encodedData []byte, spVerificationHash crypto.Digest, err error) {
-	err = ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+	err = ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 		rawData, dbErr := tx.MakeSpVerificationCtxReader().GetAllSPContexts(ctx)
 		if dbErr != nil {
 			return dbErr
@@ -1147,17 +1147,17 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		chunkExecutionDuration = shortChunkExecutionDuration
 	}
 
-	var catchpointWriter *catchpointWriter
+	var catchpointWriter *catchpointFileWriter
 
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = ct.dbs.TransactionContext(ctx, func(dbCtx context.Context, tx trackerdb.TransactionScope) (err error) {
-		catchpointWriter, err = makeCatchpointWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
+	err = ct.dbs.SnapshotContext(ctx, func(dbCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return
 		}
 
-		err = catchpointWriter.WriteStateProofVerificationContext(encodedSPData)
+		err = catchpointWriter.FileWriteSPVerificationContext(encodedSPData)
 		if err != nil {
 			return
 		}
@@ -1165,7 +1165,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(dbCtx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
-			more, err = catchpointWriter.WriteStep(stepCtx)
+			more, err = catchpointWriter.FileWriteStep(stepCtx)
 			// accumulate the actual time we've spent writing in this step.
 			catchpointGenerationStats.CPUTime += uint64(time.Since(writeStepStartTime).Nanoseconds())
 			stepCancelFunction()
@@ -1341,7 +1341,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	ledgerGetcatchpointCount.Inc(nil)
 	// TODO: we need to generalize this, check @cce PoC PR, he has something
 	//       somewhat broken for some KVs..
-	err := ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
 		cr, err := tx.MakeCatchpointReader()
 		if err != nil {
 			return err

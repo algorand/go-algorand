@@ -46,13 +46,13 @@ const (
 	SPContextPerCatchpointFile = 70000
 )
 
-// catchpointWriter is the struct managing the persistence of accounts data into the catchpoint file.
-// it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
+// catchpointFileWriter is the struct managing the persistence of accounts data into the catchpoint file.
+// it's designed to work in a step fashion : a caller will call the FileWriteStep method in a loop until
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throttling the CPU utilization in between the calls.
-type catchpointWriter struct {
+type catchpointFileWriter struct {
 	ctx                  context.Context
-	tx                   trackerdb.TransactionScope
+	tx                   trackerdb.SnapshotScope
 	filePath             string
 	totalAccounts        uint64
 	totalKVs             uint64
@@ -106,7 +106,7 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
-func makeCatchpointWriter(ctx context.Context, filePath string, tx trackerdb.TransactionScope, maxResourcesPerChunk int) (*catchpointWriter, error) {
+func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int) (*catchpointFileWriter, error) {
 	aw, err := tx.MakeAccountsReader()
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx trackerdb.Tra
 	}
 	tar := tar.NewWriter(compressor)
 
-	res := &catchpointWriter{
+	res := &catchpointFileWriter{
 		ctx:                  ctx,
 		tx:                   tx,
 		filePath:             filePath,
@@ -151,7 +151,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx trackerdb.Tra
 	return res, nil
 }
 
-func (cw *catchpointWriter) Abort() error {
+func (cw *catchpointFileWriter) Abort() error {
 	cw.accountsIterator.Close()
 	cw.tar.Close()
 	cw.compressor.Close()
@@ -159,7 +159,7 @@ func (cw *catchpointWriter) Abort() error {
 	return os.Remove(cw.filePath)
 }
 
-func (cw *catchpointWriter) WriteStateProofVerificationContext(encodedData []byte) error {
+func (cw *catchpointFileWriter) FileWriteSPVerificationContext(encodedData []byte) error {
 	err := cw.tar.WriteHeader(&tar.Header{
 		Name: catchpointSPVerificationFileName,
 		Mode: 0600,
@@ -182,16 +182,16 @@ func (cw *catchpointWriter) WriteStateProofVerificationContext(encodedData []byt
 	return nil
 }
 
-// WriteStep works for a short period of time (determined by stepCtx) to get
+// FileWriteStep works for a short period of time (determined by stepCtx) to get
 // some more data (accounts/resources/kvpairs) by using readDatabaseStep, and
 // write that data to the open tar file in cw.tar.  The writing is done in
 // asyncWriter, so that it can proceed concurrently with reading the data from
 // the db. asyncWriter only runs long enough to process the data read during a
-// single call to WriteStep, and WriteStep ensures that asyncWriter has finished
+// single call to FileWriteStep, and FileWriteStep ensures that asyncWriter has finished
 // writing by waiting for it in a defer block, collecting any errors that may
-// have occurred during writing.  Therefore, WriteStep looks like a simple
+// have occurred during writing.  Therefore, FileWriteStep looks like a simple
 // synchronous function to its callers.
-func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err error) {
+func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more bool, err error) {
 	// have we timed-out / canceled by that point ?
 	if more, err = hasContextDeadlineExceeded(stepCtx); more || err != nil {
 		return
@@ -206,15 +206,14 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		// writerResponse is drained, ensuring any problems from asyncWriter are
 		// noted (and that the writing is done).
 		close(writerRequest)
-	drain:
+
+		// drain the writerResponse queue
 		for {
-			select {
-			case writerError, open := <-writerResponse:
-				if open {
-					err = writerError
-				} else {
-					break drain
-				}
+			writerError, open := <-writerResponse
+			if open {
+				err = writerError
+			} else {
+				break
 			}
 		}
 		if !more {
@@ -228,7 +227,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 			}
 			cw.writtenBytes = fileInfo.Size()
 
-			// These don't HAVE to be closed, since the "owning" tx will be cmmmitted/rolledback
+			// These don't HAVE to be closed, since the "owning" tx will be committed/rolledback
 			cw.accountsIterator.Close()
 			if cw.kvRows != nil {
 				cw.kvRows.Close()
@@ -276,7 +275,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 	}
 }
 
-func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, response chan error, chunkNum uint64) {
+func (cw *catchpointFileWriter) asyncWriter(chunks chan catchpointFileChunkV6, response chan error, chunkNum uint64) {
 	defer close(response)
 	for chk := range chunks {
 		chunkNum++
@@ -308,7 +307,7 @@ func (cw *catchpointWriter) asyncWriter(chunks chan catchpointFileChunkV6, respo
 // all of the account chunks first, and then the kv chunks. Even if the accounts
 // are evenly divisible by BalancesPerCatchpointFileChunk, it must not return an
 // empty chunk between accounts and kvs.
-func (cw *catchpointWriter) readDatabaseStep(ctx context.Context) error {
+func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 	if !cw.accountsDone {
 		balances, numAccounts, err := cw.accountsIterator.Next(ctx, BalancesPerCatchpointFileChunk, cw.maxResourcesPerChunk)
 		if err != nil {

@@ -15,7 +15,7 @@ fi
 POSTGRES_CONTAINER=generator-test-container
 POSTGRES_PORT=15432
 POSTGRES_DATABASE=generator_db
-SCENARIO=${2:-"$(dirname $0)/test_config.yml"}
+SCENARIO=${2:-"$(dirname $0)/../test_scenario.yml"}
 echo "Using scenario config file: $SCENARIO"
 
 function start_postgres() {
@@ -51,10 +51,10 @@ echo "Starting postgres container."
 start_postgres
 echo "Starting test runner"
 $(dirname "$0")/block-generator runner \
-	--conduit-binary "$CONDUIT_BINARY" \
-	--report-directory $OUTPUT \
-	--test-duration 30s \
-	--conduit-log-level trace \
-	--postgres-connection-string "host=localhost user=algorand password=algorand dbname=generator_db port=15432 sslmode=disable" \
-	--scenario ${SCENARIO} \
+  --conduit-binary "$CONDUIT_BINARY" \
+  --report-directory $OUTPUT \
+  --test-duration 30s \
+  --conduit-log-level trace \
+  --postgres-connection-string "host=localhost user=algorand password=algorand dbname=generator_db port=15432 sslmode=disable" \
+  --scenario ${SCENARIO} \
   --reset-db

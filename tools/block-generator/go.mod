@@ -34,7 +34,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.3.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/miekg/dns v1.1.55 // indirect
