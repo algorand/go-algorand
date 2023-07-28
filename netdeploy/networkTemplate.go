@@ -235,9 +235,13 @@ func (t NetworkTemplate) Validate() error {
 	}
 
 	// Follow nodes cannot be relays
+	// Relays cannot have peer list
 	for _, cfg := range t.Nodes {
 		if cfg.IsRelay && isEnableFollowMode(cfg.ConfigJSONOverride) {
 			return fmt.Errorf("invalid template: follower nodes may not be relays")
+		}
+		if cfg.IsRelay && len(cfg.PeerList) > 0 {
+			return fmt.Errorf("invalid template: relays may not have a peer list")
 		}
 	}
 
