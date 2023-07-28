@@ -288,8 +288,9 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 	if round == cachedRound {
 		// one round behind, so write the cached block (if non-empty)
-		// Verbose logging
-		//fmt.Printf("Received round request %d, but nextRound=%d. Not finishing round.\n", round, nextRound)
+		if g.verbose {
+			fmt.Printf("Received round request %d, but nextRound=%d. Not finishing round.\n", round, nextRound)
+		}
 		if len(g.latestBlockMsgp) != 0 {
 			// write the msgpack bytes for a block
 			_, err := output.Write(g.latestBlockMsgp)
@@ -305,10 +306,9 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-	//Verbose logging.
-	//if g.round == 0 {
-	//	fmt.Printf("starting txnCounter: %d\n", g.txnCounter)
-	//}
+	if g.verbose && g.round == 0 {
+		fmt.Printf("starting txnCounter: %d\n", g.txnCounter)
+	}
 	minTxnsForBlock := g.minTxnsForBlock(g.round)
 
 	var cert rpcs.EncodedBlockCert
