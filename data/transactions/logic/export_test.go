@@ -58,11 +58,13 @@ var TestProg = testProg
 var WithPanicOpcode = withPanicOpcode
 
 // TryApps exports "testApps" while accepting a simple uint64. Annoying, we
-// can't export this as "TestApps" because it looks like a Test function with
-// the wrong signature.
+// can't export call this "TestApps" because it looks like a Test function with
+// the wrong signature. But we can get that effect with the alias below.
 func TryApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, ver uint64, ledger *Ledger, expected ...expect) *EvalParams {
 	return testApps(t, programs, txgroup, protoVer(ver), ledger, expected...)
 }
+
+var TestApps = TryApps
 
 const CreatedResourcesVersion = createdResourcesVersion
 const AssemblerNoVersion = assemblerNoVersion
