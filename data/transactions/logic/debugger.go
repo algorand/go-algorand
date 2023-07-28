@@ -285,13 +285,13 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 		ds.Error = evalError.Error()
 	}
 
-	stack := make([]basics.TealValue, len(cx.stack))
-	for i, sv := range cx.stack {
+	stack := make([]basics.TealValue, len(cx.Stack))
+	for i, sv := range cx.Stack {
 		stack[i] = sv.toEncodedTealValue()
 	}
 
-	scratch := make([]basics.TealValue, len(cx.scratch))
-	for i, sv := range cx.scratch {
+	scratch := make([]basics.TealValue, len(cx.Scratch))
+	for i, sv := range cx.Scratch {
 		scratch[i] = sv.toEncodedTealValue()
 	}
 

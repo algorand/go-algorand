@@ -82,7 +82,7 @@ def parse_args():
     parser.add_argument("--conduit-binary", help="Path to conduit binary")
     parser.add_argument(
         "--scenario",
-        default=(default := CWD / "test_config.yml"),
+        default=(default := CWD.parents[1] / "test_scenario.yml"),
         help=f"Scenario configuration file ({default=!s})",
     )
     parser.add_argument(

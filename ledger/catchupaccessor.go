@@ -67,6 +67,9 @@ type CatchpointCatchupAccessor interface {
 	// GetCatchupBlockRound returns the latest block round matching the current catchpoint
 	GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error)
 
+	// GetVerifyData returns the balances hash, spver hash and totals used by VerifyCatchpoint
+	GetVerifyData(ctx context.Context) (balancesHash crypto.Digest, spverHash crypto.Digest, totals ledgercore.AccountTotals, err error)
+
 	// VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
 	VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error)
 
@@ -754,7 +757,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		defer wg.Done()
 		defer close(writerQueue)
 
-		dbErr := dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
+		// Note: this needs to be accessed on a snapshot to guarantee a concurrent read-only access to the sqlite db
+		dbErr := dbs.Snapshot(func(transactionCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
 			it := tx.MakeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize)
 			var hashes [][]byte
 			for {
@@ -926,34 +930,9 @@ func (c *catchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context
 	return basics.Round(iRound), nil
 }
 
-// VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
-func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
-	var balancesHash crypto.Digest
+func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (balancesHash crypto.Digest, spverHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
 	var rawStateProofVerificationContext []ledgercore.StateProofVerificationContext
-	var blockRound basics.Round
-	var totals ledgercore.AccountTotals
-	var catchpointLabel string
-	var version uint64
 
-	catchpointLabel, err = c.catchpointStore.ReadCatchpointStateString(ctx, trackerdb.CatchpointStateCatchupLabel)
-	if err != nil {
-		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupLabel, err)
-	}
-
-	version, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve catchpoint version: %v", err)
-	}
-
-	var iRound uint64
-	iRound, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBlockRound)
-	if err != nil {
-		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupBlockRound, err)
-	}
-	blockRound = basics.Round(iRound)
-
-	start := time.Now()
-	ledgerVerifycatchpointCount.Inc(nil)
 	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
@@ -988,6 +967,42 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 
 		return
 	})
+	if err != nil {
+		return crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, err
+	}
+
+	wrappedContext := catchpointStateProofVerificationContext{Data: rawStateProofVerificationContext}
+	spverHash = crypto.HashObj(wrappedContext)
+
+	return balancesHash, spverHash, totals, err
+}
+
+// VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
+func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
+	var blockRound basics.Round
+	var catchpointLabel string
+	var version uint64
+
+	catchpointLabel, err = c.catchpointStore.ReadCatchpointStateString(ctx, trackerdb.CatchpointStateCatchupLabel)
+	if err != nil {
+		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupLabel, err)
+	}
+
+	version, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
+	if err != nil {
+		return fmt.Errorf("unable to retrieve catchpoint version: %v", err)
+	}
+
+	var iRound uint64
+	iRound, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBlockRound)
+	if err != nil {
+		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", trackerdb.CatchpointStateCatchupBlockRound, err)
+	}
+	blockRound = basics.Round(iRound)
+
+	start := time.Now()
+	ledgerVerifycatchpointCount.Inc(nil)
+	balancesHash, spVerificationHash, totals, err := c.GetVerifyData(ctx)
 	ledgerVerifycatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
@@ -995,9 +1010,6 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	if blockRound != blk.Round() {
 		return fmt.Errorf("block round in block header doesn't match block round in catchpoint:  %d != %d", blockRound, blk.Round())
 	}
-
-	wrappedContext := catchpointStateProofVerificationContext{Data: rawStateProofVerificationContext}
-	spVerificationHash := crypto.HashObj(wrappedContext)
 
 	var catchpointLabelMaker ledgercore.CatchpointLabelMaker
 	blockDigest := blk.Digest()

@@ -5,14 +5,14 @@
 version: 2.1
 
 orbs:
-  win: circleci/windows@2.3.0
+  win: circleci/windows@5.0.0
   go: circleci/go@1.7.3
-  slack: circleci/slack@4.10.1
+  slack: circleci/slack@4.12.5
 
 parameters:
   ubuntu_image:
     type: string
-    default: "ubuntu-2004:202104-01"
+    default: "ubuntu-2004:2023.04.2"
   build_dir:
     type: string
     default: "/opt/cibuild"
@@ -47,19 +47,20 @@ executors:
     resource_class: arm.large
   mac_amd64_medium:
     macos:
-      xcode: 13.2.1
-    resource_class: medium
+      xcode: 14.2.0
+    resource_class: macos.x86.medium.gen2
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_amd64_large:
     macos:
-      xcode: 13.2.1
-    resource_class: large
+      xcode: 14.2.0
+    # Since they removed the large class for amd64, we will use medium here too.
+    resource_class: macos.x86.medium.gen2
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_arm64: &executor-mac-arm64
     machine: true
-    resource_class: algorand/macstadium-m1-macos11
+    resource_class: algorand/macstadium-m1
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   # these are required b/c jobs explicitly assign sizes to the executors

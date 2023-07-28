@@ -163,10 +163,10 @@ func (sm StateSchema) MinBalance(proto *config.ConsensusParams) (res MicroAlgos)
 type TealType uint64
 
 const (
-	// TealBytesType represents the type of a byte slice in a TEAL program
+	// TealBytesType represents the type of byte slice in a TEAL program
 	TealBytesType TealType = 1
 
-	// TealUintType represents the type of a uint in a TEAL program
+	// TealUintType represents the type of uint in a TEAL program
 	TealUintType TealType = 2
 )
 

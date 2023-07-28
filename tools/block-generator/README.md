@@ -2,6 +2,27 @@
 
 This tool is used for testing Conduit import performance. It does this by generating synthetic blocks which are sent by mocking the Algod REST API endpoints that Conduit uses.
 
+## Benchmark Scenarios
+
+Several scenarios were designed to mimic different block traffic patterns. Scenarios can be used to test the same traffic across multiple versions of software. Each benchmark is run twice. Once with blocks containing 25000 transactions, and once with blocks containing 50000 transactions.
+
+### Organic Traffic
+
+Simulate the current mainnet traffic pattern. Approximately:
+* 15% payment transactions
+* 10% application transactions
+* 75% asset transactions
+
+With current tooling, the app transactions use boxes much more frequently than current mainnet traffic.
+
+### Payment Test (best case TPS)
+
+Blocks are entirely made up of payments. Most payments are transfers between existing accounts.
+
+### Stress Test (worst case TPS)
+
+Blocks are heavily weighted towards creating applications and boxes. This means a lot of data is being written which should translate to lower TPS.
+
 ## Scenario Configuration
 
 Block generator uses a YAML config file to describe the composition of each randomly generated block. There are three levels of configuration:
@@ -84,7 +105,7 @@ Flags:
   -h, --help            help for daemon
   -p, --port uint       Port to start the server at. (default 4010)
 ```
-  
+
 ### runner
 
 The runner mode is well suited for running the same set of tests consistently across many scenarios and for different releases. The runner mode automates this process by starting the **daemon** with many different configurations, managing a postgres database, and running a separate Conduit process configured to use them.
@@ -149,7 +170,7 @@ Flags:
   -v, --verbose                             If set the runner will print debugging information from the generator and ledger.
  ```
 
-## Example Run using Conduit and Postgres in **bash** via `run_runner.sh`
+## Example Run using Conduit and Postgres
 
 A typical **runner** scenario involves:
 
@@ -158,30 +179,30 @@ A typical **runner** scenario involves:
 * a datastore -such as a postgres database- to collect `conduit`'s output
 * a `conduit` config file to define its import/export behavior
 
-`run_runner.sh` makes the following choices for the previous bullet points:
-
-* it can accept any scenario as its second argument, but defaults to [test_config.yml](./test_config.yml) when this isn't provided (this is a scenario with a lifetime of ~30 seconds)
-* knows how to import through a mock Algod running on port 11112 (which is the port the runner avails)
-* sets up a dockerized postgres database to receive conduit's output
-* configures `conduit` for these specs using [this config template](./runner/template/conduit.yml.tmpl)
+The `block-generator runner` subcommand has a number of options to configure behavion.
 
 ### Sample Run
 
 First you'll need to get a `conduit` binary. For example you can follow the [developer portal's instructions](https://developer.algorand.org/docs/get-details/conduit/GettingStarted/#installation) or run `go build .` inside of the directory `cmd/conduit` after downloading the `conduit` repo.
 
-Assume you've navigated to the `tools/block-generator` directory of
-the `go-algorand` repo, and:
+Run `make install` from the `go-algorand` root, this should add `block-generator` to your path.
 
-* saved the conduit binary to `tools/block-generator/conduit`
-* created a block generator scenario config at `tools/block-generator/scenario.yml`
+Start a postgres container using `scripts/run_postgres.sh`. This starts a container on port 15432 a database named generator_db and a user with credentials algorand/algorand.
 
-Then you can execute the following command to run the scenario:
+Now run `block-generator runner` to run the test:
 
 ```sh
-./run_runner.sh ./conduit scenario.yml 
+block-generator runner \
+  --conduit-binary "$CONDUIT_BINARY" \
+  --report-directory reports \
+  --test-duration 30s \
+  --conduit-log-level trace \
+  --postgres-connection-string "host=localhost user=algorand password=algorand dbname=generator_db port=15432 sslmode=disable" \
+  --scenario generator/test_scenario.yml \
+  --reset-db
 ```
 
 ### Scenario Report
 
-If all goes well, the run will generate a directory `../../tmp/OUTPUT_RUN_RUNNER_TEST`
-and in that directory you can see the statistics of the run in `scenario.report`.
+If all goes well, the run will generate a directory named reports.
+In that directory you can see the statistics of the run in the file ending with `.report`.

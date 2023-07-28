@@ -1,6 +1,6 @@
 ARG ARCH="amd64"
 
-FROM ${ARCH}/ubuntu:18.04
+FROM ${ARCH}/ubuntu:20.04
 ARG GOLANG_VERSION
 ARG ARCH="amd64"
 RUN apt-get update && apt-get install curl python python3.7 python3-pip build-essential apt-transport-https ca-certificates software-properties-common -y && \

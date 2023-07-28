@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -265,6 +266,60 @@ func TestPayTxn(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestIllFormedStackRequest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	futureAppID := basics.AppIndex(1001)
+
+	createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: 0,
+		ApprovalProgram: `#pragma version 6
+txn ApplicationID
+bz create
+byte "app call"
+log
+b end
+create:
+byte "app creation"
+log
+end:
+int 1`,
+		ClearStateProgram: `#pragma version 6
+int 0`,
+	})
+	callTxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: futureAppID,
+	})
+
+	txntest.Group(&createTxn, &callTxn)
+
+	signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+	signedCallTxn := callTxn.Txn().Sign(sender.Sk)
+
+	simRequest := simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{
+			{signedCreateTxn, signedCallTxn},
+		},
+		TraceConfig: simulation.ExecTraceConfig{
+			Enable: false,
+			Stack:  true,
+		},
+	}
+
+	_, err := simulation.MakeSimulator(env.Ledger, true).Simulate(simRequest)
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+	require.ErrorContains(t, err, "basic trace must be enabled when enabling stack tracing")
 }
 
 func TestWrongAuthorizerTxn(t *testing.T) {
@@ -2027,7 +2082,59 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 	})
 }
 
-func TestLogicSigPCExposure(t *testing.T) {
+func goValuesToTealValues(goValues ...interface{}) []basics.TealValue {
+	if len(goValues) == 0 {
+		return nil
+	}
+
+	boolToUint64 := func(b bool) uint64 {
+		if b {
+			return 1
+		}
+		return 0
+	}
+
+	modelValues := make([]basics.TealValue, len(goValues))
+	for i, goValue := range goValues {
+		switch convertedValue := goValue.(type) {
+		case []byte:
+			modelValues[i] = basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: string(convertedValue),
+			}
+		case string:
+			modelValues[i] = basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: string(convertedValue),
+			}
+		case bool:
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: boolToUint64(convertedValue),
+			}
+		case int:
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: uint64(convertedValue),
+			}
+		case basics.AppIndex:
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: uint64(convertedValue),
+			}
+		case uint64:
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: convertedValue,
+			}
+		default:
+			panic("unexpected type inferred from interface{}")
+		}
+	}
+	return modelValues
+}
+
+func TestLogicSigPCandStackExposure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2061,6 +2168,8 @@ byte "hello"; log; int 1`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
+		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
+
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -2068,6 +2177,7 @@ byte "hello"; log; int 1`,
 				},
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
+					Stack:  true,
 				},
 			},
 			developerAPI: true,
@@ -2076,6 +2186,7 @@ byte "hello"; log; int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
+					Stack:  true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2094,19 +2205,53 @@ byte "hello"; log; int 1`,
 								LogicSigBudgetConsumed: 266,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
-										{PC: 8},
-										{PC: 9},
+										{
+											PC:         1,
+											StackAdded: goValuesToTealValues("hello"),
+										},
+										{
+											PC:            8,
+											StackPopCount: 1,
+										},
+										{
+											PC:         9,
+											StackAdded: goValuesToTealValues(1),
+										},
 									},
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
-										{PC: 5},
-										{PC: 6},
-										{PC: 7},
-										{PC: 8},
-										{PC: 9},
-										{PC: 10},
-										{PC: 11},
+										{
+											PC: 1,
+										},
+										{
+											PC:         5,
+											StackAdded: goValuesToTealValues("a"),
+										},
+										{
+											PC:            6,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
+										},
+										{
+											PC:            7,
+											StackPopCount: 1,
+										},
+										{
+											PC:         8,
+											StackAdded: goValuesToTealValues("a"),
+										},
+										{
+											PC:            9,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
+										},
+										{
+											PC:            10,
+											StackPopCount: 1,
+										},
+										{
+											PC:         11,
+											StackAdded: goValuesToTealValues(1),
+										},
 									},
 								},
 							},
@@ -2120,13 +2265,13 @@ byte "hello"; log; int 1`,
 	})
 }
 
-func TestFailingLogicSig(t *testing.T) {
+func TestFailingLogicSigPCandStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	op, err := logic.AssembleString(`#pragma version 8
 ` + strings.Repeat(`byte "a"; keccak256; pop
-`, 2) + `int 0`)
+`, 2) + `int 0; int 1; -`)
 	require.NoError(t, err)
 	program := logic.Program(op.Program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
@@ -2154,6 +2299,8 @@ byte "hello"; log; int 1`,
 		signedAppCallTxn := appCallTxn.SignedTxn()
 		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
 
+		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
+
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -2161,6 +2308,7 @@ byte "hello"; log; int 1`,
 				},
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
+					Stack:  true,
 				},
 			},
 			developerAPI:  true,
@@ -2170,6 +2318,7 @@ byte "hello"; log; int 1`,
 				LastRound: env.TxnInfo.LatestRound(),
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
+					Stack:  true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2180,17 +2329,50 @@ byte "hello"; log; int 1`,
 								Txn: transactions.SignedTxnWithAD{
 									ApplyData: transactions.ApplyData{},
 								},
-								LogicSigBudgetConsumed: 266,
+								LogicSigBudgetConsumed: 268,
 								Trace: &simulation.TransactionTrace{
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
-										{PC: 1},
-										{PC: 5},
-										{PC: 6},
-										{PC: 7},
-										{PC: 8},
-										{PC: 9},
-										{PC: 10},
-										{PC: 11},
+										{
+											PC: 1,
+										},
+										{
+											PC:         5,
+											StackAdded: goValuesToTealValues("a"),
+										},
+										{
+											PC:            6,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
+										},
+										{
+											PC:            7,
+											StackPopCount: 1,
+										},
+										{
+											PC:         8,
+											StackAdded: goValuesToTealValues("a"),
+										},
+										{
+											PC:            9,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
+										},
+										{
+											PC:            10,
+											StackPopCount: 1,
+										},
+										{
+											PC:         11,
+											StackAdded: goValuesToTealValues(0),
+										},
+										{
+											PC:         13,
+											StackAdded: goValuesToTealValues(1),
+										},
+										{
+											PC:            15,
+											StackPopCount: 2,
+										},
 									},
 								},
 							},
@@ -2290,6 +2472,391 @@ byte "hello"; log; int 0`,
 						},
 						AppBudgetAdded:    700,
 						AppBudgetConsumed: 3,
+					},
+				},
+			},
+		}
+	})
+}
+
+const FrameBuryDigProgram = `#pragma version 8
+txn ApplicationID      // on creation, always approve
+bz end
+
+txn NumAppArgs
+int 1
+==
+assert
+
+txn ApplicationArgs 0
+btoi
+callsub subroutine_manipulating_stack
+itob
+log
+b end
+
+subroutine_manipulating_stack:
+  proto 1 1
+  int 0                                   // [0]
+  dup                                     // [0, 0]
+  dupn 4                                  // [0, 0, 0, 0, 0, 0]
+  frame_dig -1                            // [0, 0, 0, 0, 0, 0, arg_0]
+  frame_bury 0                            // [arg_0, 0, 0, 0, 0, 0]
+  dig 5                                   // [arg_0, 0, 0, 0, 0, 0, arg_0]
+  cover 5                                 // [arg_0, arg_0, 0, 0, 0, 0, 0]
+  frame_dig 0                             // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0]
+  frame_dig 1                             // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0, arg_0]
+  +                                       // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0 * 2]
+  bury 7                                  // [arg_0 * 2, arg_0, 0, 0, 0, 0, 0]
+  popn 5                                  // [arg_0 * 2, arg_0]
+  uncover 1                               // [arg_0, arg_0 * 2]
+  swap                                    // [arg_0 * 2, arg_0]
+  +                                       // [arg_0 * 3]
+  pushbytess "1!" "5!"                    // [arg_0 * 3, "1!", "5!"]
+  pushints 0 2 1 1 5 18446744073709551615 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5, 18446744073709551615]
+  store 1                                 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5]
+  load 1                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5, 18446744073709551615]
+  stores                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1]
+  load 1                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 18446744073709551615]
+  store 1                                 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1]
+  retsub
+
+end:
+  int 1
+  return
+`
+
+func TestFrameBuryDigStackTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		applicationArg := 10
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   0,
+			ApprovalProgram: FrameBuryDigProgram,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+		payment := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance,
+		})
+		callTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{{byte(applicationArg)}},
+		})
+		txntest.Group(&createTxn, &payment, &callTxn)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedPay := payment.Txn().Sign(sender.Sk)
+		signedAppCall := callTxn.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedPay, signedAppCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 5,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC:         4,
+											StackAdded: goValuesToTealValues(0),
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC:         90,
+											StackAdded: goValuesToTealValues(1),
+										},
+										{
+											PC:            91,
+											StackAdded:    goValuesToTealValues(1),
+											StackPopCount: 1,
+										},
+									},
+								},
+							},
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											Logs: []string{
+												string(uint64ToBytes(uint64(applicationArg * 3))),
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 39,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC:         4,
+											StackAdded: goValuesToTealValues(futureAppID),
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC:         9,
+											StackAdded: goValuesToTealValues(1),
+										},
+										{
+											PC:         11,
+											StackAdded: goValuesToTealValues(1),
+										},
+										{
+											PC:            12,
+											StackAdded:    goValuesToTealValues(1),
+											StackPopCount: 2,
+										},
+										{
+											PC:            13,
+											StackPopCount: 1,
+										},
+										{
+											PC:         14,
+											StackAdded: goValuesToTealValues([]byte{byte(applicationArg)}),
+										},
+										{
+											PC:            17,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 1,
+										},
+										// call sub
+										{
+											PC: 18,
+										},
+										// proto
+										{
+											PC: 26,
+										},
+										{
+											PC:         29,
+											StackAdded: goValuesToTealValues(0),
+										},
+										// dup
+										{
+											PC:            31,
+											StackAdded:    goValuesToTealValues(0, 0),
+											StackPopCount: 1,
+										},
+										// dupn 4
+										{
+											PC:            32,
+											StackAdded:    goValuesToTealValues(0, 0, 0, 0, 0),
+											StackPopCount: 1,
+										},
+										// frame_dig -1
+										{
+											PC:            34,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
+										},
+										// frame_bury 0
+										{
+											PC:            36,
+											StackAdded:    goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
+											StackPopCount: 7,
+										},
+										// dig 5
+										{
+											PC:            38,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
+										},
+										// cover 5
+										{
+											PC:            40,
+											StackAdded:    goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
+											StackPopCount: 6,
+										},
+										// frame_dig 0
+										{
+											PC:            42,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
+										},
+										// frame_dig 1
+										{
+											PC:            44,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
+										},
+										// +
+										{
+											PC:            46,
+											StackAdded:    goValuesToTealValues(applicationArg * 2),
+											StackPopCount: 2,
+										},
+										// bury 7
+										{
+											PC:            47,
+											StackAdded:    goValuesToTealValues(applicationArg*2, applicationArg, 0, 0, 0, 0, 0),
+											StackPopCount: 8,
+										},
+										// popn 5
+										{
+											PC:            49,
+											StackPopCount: 5,
+										},
+										// uncover 1
+										{
+											PC:            51,
+											StackPopCount: 2,
+											StackAdded:    goValuesToTealValues(applicationArg, applicationArg*2),
+										},
+										// swap
+										{
+											PC:            53,
+											StackAdded:    goValuesToTealValues(applicationArg*2, applicationArg),
+											StackPopCount: 2,
+										},
+										// +
+										{
+											PC:            54,
+											StackAdded:    goValuesToTealValues(applicationArg * 3),
+											StackPopCount: 2,
+										},
+										// pushbytess "1!" "5!"
+										{
+											PC:         55,
+											StackAdded: goValuesToTealValues("1!", "5!"),
+										},
+										// pushints 0 2 1 1 5 18446744073709551615
+										{
+											PC:         63,
+											StackAdded: goValuesToTealValues(0, 2, 1, 1, 5, uint64(math.MaxUint64)),
+										},
+										// store 1
+										{
+											PC:            80,
+											StackPopCount: 1,
+											ScratchSlotChanges: []simulation.ScratchChange{
+												{
+													Slot:     1,
+													NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+												},
+											},
+										},
+										// load 1
+										{
+											PC:         82,
+											StackAdded: goValuesToTealValues(uint64(math.MaxUint64)),
+										},
+										// stores
+										{
+											PC:            84,
+											StackPopCount: 2,
+											ScratchSlotChanges: []simulation.ScratchChange{
+												{
+													Slot:     5,
+													NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+												},
+											},
+										},
+										// load 1
+										{
+											PC:         85,
+											StackAdded: goValuesToTealValues(uint64(math.MaxUint64)),
+										},
+										// store 1
+										{
+											PC:            87,
+											StackPopCount: 1,
+											ScratchSlotChanges: []simulation.ScratchChange{
+												{
+													Slot:     1,
+													NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+												},
+											},
+										},
+										// retsub
+										{
+											PC:            89,
+											StackAdded:    goValuesToTealValues(applicationArg * 3),
+											StackPopCount: 8,
+										},
+										// itob
+										{
+											PC:            21,
+											StackAdded:    goValuesToTealValues(uint64ToBytes(uint64(applicationArg) * 3)),
+											StackPopCount: 1,
+										},
+										// log
+										{
+											PC:            22,
+											StackPopCount: 1,
+										},
+										// b end
+										{
+											PC: 23,
+										},
+										// int 1
+										{
+											PC:         90,
+											StackAdded: goValuesToTealValues(1),
+										},
+										// return
+										{
+											PC:            91,
+											StackAdded:    goValuesToTealValues(1),
+											StackPopCount: 1,
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 44,
 					},
 				},
 			},
