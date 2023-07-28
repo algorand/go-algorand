@@ -1932,18 +1932,17 @@ func TestTxn(t *testing.T) {
 				// And the early tests use "arg" a lot - not allowed in stateful. So remove those tests.
 				lastArg := strings.Index(source, "arg 10\n==\n&&")
 				require.NotEqual(t, -1, lastArg)
+				source = source[lastArg+12:]
 
-				if v >= appsEnabledVersion {
-					aep.TxnGroup[2].EvalDelta.Logs = []string{"x", "prefilled"}
-					appSafe := "int 1" + strings.Replace(source[lastArg+12:], `txn Sender
+				aep.TxnGroup[2].EvalDelta.Logs = []string{"x", "prefilled"} // allows gtxn 2 NumLogs
+				appSafe := "int 1" + strings.Replace(source, `txn Sender
 int 0
 args
 ==
 assert`, "", 1)
 
-					ops := testProg(t, appSafe, v)
-					testAppFull(t, ops.Program, 3, basics.AppIndex(888), aep)
-				}
+				ops := testProg(t, appSafe, v)
+				testAppFull(t, ops.Program, 3, basics.AppIndex(888), aep)
 			}
 		})
 	}
