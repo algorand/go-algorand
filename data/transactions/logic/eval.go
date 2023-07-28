@@ -443,14 +443,6 @@ func (ep *EvalParams) computeAvailability() *resources {
 	return available
 }
 
-func (cx *EvalContext) minAvmVersionCheck() error {
-	if cx.version < cx.EvalParams.minAvmVersion {
-		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d",
-			cx.minAvmVersion, cx.version)
-	}
-	return nil
-}
-
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
 // to required minfee.  It can make assumptions about overflow because the group
 // is known OK according to txnGroupBatchPrep. (The group is "WellFormed")
@@ -1117,20 +1109,15 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		}
 	}()
 
-	// Avoid returning for any reason until after cx.debugState is setup. That
-	// require cx to be minimally setup, too.
-
-	version, vlen, verr := versionCheck(program, cx.Proto)
-	// defer verr check until after cx and debugState is setup
-
-	cx.version = version
-	cx.pc = vlen
 	// 16 is chosen to avoid growth for small programs, and so that repeated
 	// doublings lead to a number just a bit above 1000, the max stack height.
 	cx.Stack = make([]stackValue, 0, 16)
-	cx.program = program
 	cx.txn.EvalDelta.GlobalDelta = basics.StateDelta{}
 	cx.txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
+
+	// We get the error here, but defer reporting so that the Tracer can be
+	// called with an basically initialized cx.
+	verr := cx.begin(program)
 
 	if cx.Tracer != nil {
 		cx.Tracer.BeforeProgram(cx)
@@ -1162,10 +1149,6 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	}
 	if verr != nil {
 		return false, verr
-	}
-
-	if err = cx.minAvmVersionCheck(); err != nil {
-		return false, err
 	}
 
 	for (err == nil) && (cx.pc < len(cx.program)) {
@@ -1234,21 +1217,13 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 		return errLogicSigNotSupported
 	}
 
-	version, pc, err := versionCheck(program, params.Proto)
-	if err != nil {
-		return err
-	}
-
 	var cx EvalContext
-	cx.version = version
-	cx.pc = pc
 	cx.EvalParams = params
 	cx.runMode = mode
-	cx.program = program
 	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
 	cx.instructionStarts = make([]bool, len(program)+1)
 
-	if err := cx.minAvmVersionCheck(); err != nil {
+	if err := cx.begin(program); err != nil {
 		return err
 	}
 
@@ -1261,7 +1236,7 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 			return fmt.Errorf("pc=%3d %w", cx.pc, err)
 		}
 		staticCost += stepCost
-		if version < backBranchEnabledVersion && staticCost > maxCost {
+		if cx.version < backBranchEnabledVersion && staticCost > maxCost {
 			return fmt.Errorf("pc=%3d static cost budget of %d exceeded", cx.pc, maxCost)
 		}
 		if cx.pc <= prevpc {
@@ -1275,19 +1250,31 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	return nil
 }
 
-func versionCheck(program []byte, proto *config.ConsensusParams) (version uint64, vlen int, err error) {
-	version, vlen, err = transactions.ProgramVersion(program)
+func (cx *EvalContext) begin(program []byte) error {
+	cx.program = program
+
+	version, vlen, err := transactions.ProgramVersion(program)
 	if err != nil {
-		return 0, 0, err
+		return err
 	}
 	if version > LogicVersion {
-		return 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, LogicVersion)
+		return fmt.Errorf("program version %d greater than max supported version %d", version, LogicVersion)
 	}
-	if version > proto.LogicSigVersion {
-		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, proto.LogicSigVersion)
+	if version > cx.Proto.LogicSigVersion {
+		return fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.Proto.LogicSigVersion)
+	}
+	if err != nil {
+		return err
 	}
 
-	return version, vlen, nil
+	cx.version = version
+	cx.pc = vlen
+
+	if cx.version < cx.EvalParams.minAvmVersion {
+		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d",
+			cx.minAvmVersion, cx.version)
+	}
+	return nil
 }
 
 func opCompat(expected, got avmType) bool {
