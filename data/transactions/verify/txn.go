@@ -130,27 +130,6 @@ func (e *TxGroupError) Unwrap() error {
 	return e.err
 }
 
-// verifyCount gives the number of signature verifications
-func verifyCount(txn *transactions.SignedTxn) int {
-	if !txn.Sig.Blank() {
-		return 1
-	}
-	if !txn.Msig.Blank() {
-		return txn.Msig.Signatures()
-	}
-	if !txn.Lsig.Blank() {
-		if !txn.Lsig.Sig.Blank() {
-			return 1
-		}
-		if !txn.Lsig.Msig.Blank() {
-			return txn.Lsig.Msig.Signatures()
-		}
-		return 0
-	}
-	return 0
-	// stateproof txns have no sigs at all
-}
-
 // PrepareGroupContext prepares a GroupCtx for a given transaction group.
 func PrepareGroupContext(group []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, ledger logic.LedgerForSignature, evalTracer logic.EvalTracer) (*GroupContext, error) {
 	if len(group) == 0 {

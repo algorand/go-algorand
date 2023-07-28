@@ -59,7 +59,7 @@ assert not err, err
 tx = goal.pay(escrow, escrow, amt=0, note=b'146', send=False)
 stx = goal.sign_with_program(tx, code, [(146).to_bytes(8, "big")])
 txinfo, err = goal.send(stx)
-assert err, txinfo
+assert "dynamic cost budget exceeded, executing keccak256" in str(err)
 
 # Now, try pooling across multiple logicsigs 39988/137 = 291.xxx
 tx0 = goal.pay(escrow, escrow, amt=0, note=b'200', send=False)
@@ -81,7 +81,7 @@ tx1 = goal.pay(escrow, escrow, amt=0, note=b'92', send=False)
 stx0 = goal.sign_with_program(tx0, code, [(200).to_bytes(8, "big")])
 stx1 = goal.sign_with_program(tx1, code, [(92).to_bytes(8, "big")])
 txinfo, err = goal.send_group([stx0, stx1])
-assert err, txinfo
+assert "dynamic cost budget exceeded, executing keccak256" in str(err)
 
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")
