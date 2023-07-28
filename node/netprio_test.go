@@ -17,6 +17,7 @@
 package node
 
 import (
+	"encoding/base64"
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -30,6 +31,7 @@ func TestBase64AllocboundSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	require.Equal(t, netPrioChallengeSizeBase64Encoded, base64.StdEncoding.EncodedLen(netPrioChallengeSize))
 	node := AlgorandFullNode{}
 	nonce := node.NewPrioChallenge()
 	require.Len(t, nonce, netPrioChallengeSizeBase64Encoded)
