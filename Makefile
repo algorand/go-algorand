@@ -49,23 +49,15 @@ export CPATH=/opt/homebrew/include
 export LIBRARY_PATH=/opt/homebrew/lib
 endif
 endif
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
-ifeq ($(ARCH), amd64)
 # the following predicate is abit misleading; it tests if we're not in centos.
 ifeq (,$(wildcard /etc/centos-release))
 EXTLDFLAGS  += -static
 endif
 GOTAGSLIST  += osusergo netgo static_build
 GOBUILDMODE := -buildmode pie
-endif
-ifeq ($(ARCH), arm)
-ifneq ("$(wildcard /etc/alpine-release)","")
-EXTLDFLAGS  += -static
-GOTAGSLIST  += osusergo netgo static_build
-GOBUILDMODE := -buildmode pie
-endif
-endif
 endif
 
 ifneq (, $(findstring MINGW,$(UNAME)))
@@ -99,7 +91,7 @@ ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd d
 
 GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types
 
-MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
+MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/store/trackerdb/generickv ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
 
 default: build
 
