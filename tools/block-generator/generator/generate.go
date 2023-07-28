@@ -288,7 +288,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 	if round == cachedRound {
 		// one round behind, so write the cached block (if non-empty)
-		fmt.Printf("Received round request %d, but nextRound=%d. Not finishing round.\n", round, nextRound)
+		// Verbose logging
+		//fmt.Printf("Received round request %d, but nextRound=%d. Not finishing round.\n", round, nextRound)
 		if len(g.latestBlockMsgp) != 0 {
 			// write the msgpack bytes for a block
 			_, err := output.Write(g.latestBlockMsgp)
@@ -304,9 +305,10 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-	if g.round == 0 {
-		fmt.Printf("starting txnCounter: %d\n", g.txnCounter)
-	}
+	//Verbose logging.
+	//if g.round == 0 {
+	//	fmt.Printf("starting txnCounter: %d\n", g.txnCounter)
+	//}
 	minTxnsForBlock := g.minTxnsForBlock(g.round)
 
 	var cert rpcs.EncodedBlockCert
@@ -335,8 +337,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		if err != nil {
 			return fmt.Errorf("failed to evaluate block: %w", err)
 		}
-		if ledgerTxnCount != g.txnCounter + intra {
-			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter + intra)
+		if ledgerTxnCount != g.txnCounter+intra {
+			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter+intra)
 		}
 
 		err = g.ledger.AddValidatedBlock(*vBlock, cert.Certificate)
