@@ -54,12 +54,13 @@ type Args struct {
 	RunDuration              time.Duration
 	RunnerVerbose            bool
 	ConduitLogLevel          string
-	ReportDirectory          string
+	BaseReportDirectory      string
 	ResetReportDir           bool
 	RunValidation            bool
 	KeepDataDir              bool
 	GenesisFile              string
 	ResetDB                  bool
+	Times                    uint64
 }
 
 type config struct {
@@ -74,43 +75,54 @@ type config struct {
 // The test will run against the generator configuration file specified by 'args.Path'.
 // If 'args.Path' is a directory it should contain generator configuration files, a test will run using each file.
 func Run(args Args) error {
-	if _, err := os.Stat(args.ReportDirectory); !os.IsNotExist(err) {
-		if args.ResetReportDir {
-			fmt.Printf("Resetting existing report directory '%s'\n", args.ReportDirectory)
-			if err := os.RemoveAll(args.ReportDirectory); err != nil {
-				return fmt.Errorf("failed to reset report directory: %w", err)
-			}
-		} else {
-			return fmt.Errorf("report directory '%s' already exists", args.ReportDirectory)
-		}
-	}
-	err := os.Mkdir(args.ReportDirectory, os.ModeDir|os.ModePerm)
-	if err != nil {
-		return err
-	}
-
 	defer fmt.Println("Done running tests!")
-	return filepath.Walk(args.Path, func(path string, info os.FileInfo, err error) error {
+	for i := uint64(0); i < args.Times; i++ {
+		reportDirectory := args.BaseReportDirectory
+		if args.Times != 1 {
+			fmt.Println("* Starting test", i+1, "of", args.Times, "times")
+			reportDirectory = fmt.Sprintf("%s_%d", args.BaseReportDirectory, i+1)
+		}
+		if _, err := os.Stat(reportDirectory); !os.IsNotExist(err) {
+			if args.ResetReportDir {
+				fmt.Printf("Resetting existing report directory '%s'\n", reportDirectory)
+				if err := os.RemoveAll(reportDirectory); err != nil {
+					return fmt.Errorf("failed to reset report directory: %w", err)
+				}
+			} else {
+				return fmt.Errorf("report directory '%s' already exists", reportDirectory)
+			}
+		}
+		err := os.Mkdir(reportDirectory, os.ModeDir|os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("run.go Run(): failed to walk path: %w", err)
+			return err
 		}
-		// Ignore the directory
-		if info.IsDir() {
-			return nil
+
+		err = filepath.Walk(args.Path, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return fmt.Errorf("run.go Run(): failed to walk path: %w", err)
+			}
+			// Ignore the directory
+			if info.IsDir() {
+				return nil
+			}
+			runnerArgs := args
+			runnerArgs.Path = path
+			fmt.Printf("Running test for configuration '%s'\n", path)
+			return runnerArgs.run(reportDirectory)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to walk path: %w", err)
 		}
-		runnerArgs := args
-		runnerArgs.Path = path
-		fmt.Printf("Running test for configuration '%s'\n", path)
-		return runnerArgs.run()
-	})
+	}
+	return nil
 }
 
-func (r *Args) run() error {
+func (r *Args) run(reportDirectory string) error {
 	baseName := filepath.Base(r.Path)
 	baseNameNoExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
-	reportfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
-	logfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.conduit-log", baseNameNoExt))
-	dataDir := path.Join(r.ReportDirectory, fmt.Sprintf("%s_data", baseNameNoExt))
+	reportfile := path.Join(reportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
+	logfile := path.Join(reportDirectory, fmt.Sprintf("%s.conduit-log", baseNameNoExt))
+	dataDir := path.Join(reportDirectory, fmt.Sprintf("%s_data", baseNameNoExt))
 	// create the data directory.
 	if err := os.Mkdir(dataDir, os.ModeDir|os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
@@ -452,6 +464,7 @@ func startGenerator(configFile string, dbround uint64, genesisFile string, verbo
 
 // startConduit starts the conduit binary.
 func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
+	fmt.Printf("Conduit starting with data directory: %s", dataDir)
 	cmd := exec.Command(
 		conduitBinary,
 		"-r", strconv.FormatUint(round, 10),
@@ -470,13 +483,13 @@ func startConduit(dataDir string, conduitBinary string, round uint64) (func() er
 
 	return func() error {
 		if err := cmd.Process.Signal(os.Interrupt); err != nil {
-			fmt.Printf("failed to kill conduit process: %s\n", err)
+			fmt.Printf("failed to interrupt conduit process: %s\n", err)
 			if err := cmd.Process.Kill(); err != nil {
 				return fmt.Errorf("failed to kill conduit process: %w", err)
 			}
 		}
 		if err := cmd.Wait(); err != nil {
-			fmt.Printf("exiting block generator runner: %s\n", err)
+			fmt.Printf("Conduit exiting: %s\n", err)
 		}
 		return nil
 	}, nil
