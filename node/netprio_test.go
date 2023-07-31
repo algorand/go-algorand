@@ -14,30 +14,34 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package logic_test
+package node
 
 import (
+	"encoding/base64"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkCheckSignature(b *testing.B) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	txns := txntest.CreateTinyManTxGroup(b, true)
-	ops, err := logic.AssembleString(txntest.TmLsig)
-	require.NoError(b, err)
-	stxns := []transactions.SignedTxn{{Txn: txns[3].Txn(), Lsig: transactions.LogicSig{Logic: ops.Program}}}
-	ep := logic.NewSigEvalParams(stxns, &proto, &logic.NoHeaderLedger{})
-	b.ResetTimer()
+// TestBase64AllocboundSize tests that the base64 encoded size of the Nonce is the same as the allocbound
+// used on the Nonce field in the struct for netprio response messages.
+func TestBase64AllocboundSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	for i := 0; i < b.N; i++ {
-		err = logic.CheckSignature(0, ep)
-		require.NoError(b, err)
-	}
+	require.Equal(t, netPrioChallengeSizeBase64Encoded, base64.StdEncoding.EncodedLen(netPrioChallengeSize))
+	node := AlgorandFullNode{}
+	nonce := node.NewPrioChallenge()
+	require.Len(t, nonce, netPrioChallengeSizeBase64Encoded)
+
+	npr := netPrioResponse{Nonce: nonce}
+	e := protocol.Encode(&npr)
+
+	npr2 := netPrioResponse{}
+	err := protocol.Decode(e, &npr2)
+	require.NoError(t, err)
+	require.Equal(t, nonce, npr2.Nonce)
+
 }

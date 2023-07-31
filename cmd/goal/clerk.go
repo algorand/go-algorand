@@ -453,7 +453,7 @@ var sendCmd = &cobra.Command{
 					CurrentProtocol: proto,
 				},
 			}
-			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil)
+			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil, nil)
 			if err == nil {
 				err = verify.LogicSigSanityCheck(0, groupCtx)
 			}
@@ -854,7 +854,7 @@ var signCmd = &cobra.Command{
 			}
 			var groupCtx *verify.GroupContext
 			if lsig.Logic != nil {
-				groupCtx, err = verify.PrepareGroupContext(txnGroup, &contextHdr, nil)
+				groupCtx, err = verify.PrepareGroupContext(txnGroup, &contextHdr, nil, nil)
 				if err != nil {
 					// this error has to be unsupported protocol
 					reportErrorf("%s: %v", txFilename, err)
@@ -1126,7 +1126,6 @@ var dryrunCmd = &cobra.Command{
 	Long:  "Test a TEAL program offline under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
 		stxns := decodeTxnsFromFile(txFilename)
-		txgroup := transactions.WrapSignedTxnsWithAD(stxns)
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
 			// Write dryrun data to file
@@ -1147,15 +1146,14 @@ var dryrunCmd = &cobra.Command{
 		if timeStamp <= 0 {
 			timeStamp = time.Now().Unix()
 		}
-		for i, txn := range txgroup {
+		for i, txn := range stxns {
 			if txn.Lsig.Blank() {
 				continue
 			}
 			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
-			ep := logic.NewEvalParams(txgroup, &params, nil)
-			ep.SigLedger = logic.NoHeaderLedger{}
+			ep := logic.NewSigEvalParams(stxns, &params, logic.NoHeaderLedger{})
 			err := logic.CheckSignature(i, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)

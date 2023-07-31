@@ -41,7 +41,6 @@ func TestGlobalFieldsVersions(t *testing.T) {
 	}
 	require.Greater(t, len(fields), 1)
 
-	ledger := NewLedger(nil)
 	for _, field := range fields {
 		text := fmt.Sprintf("global %s", field.field.String())
 		// check assembler fails if version before introduction
@@ -54,22 +53,16 @@ func TestGlobalFieldsVersions(t *testing.T) {
 		ops := testProg(t, text, AssemblerMaxVersion)
 
 		// check on a version before the field version
-		preLogicVersion := field.version - 1
-		proto := makeTestProtoV(preLogicVersion)
-		if preLogicVersion < appsEnabledVersion {
-			require.False(t, proto.Application)
-		}
-		ep := defaultEvalParams()
-		ep.Proto = proto
-		ep.Ledger = ledger
+		preVersion := field.version - 1
+		ep := defaultSigParamsWithVersion(preVersion)
 
-		// check failure with version check
-		_, err := EvalApp(ops.Program, 0, 888, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "greater than protocol supported version")
+		// check failure from whole program version check
+		testLogicBytes(t, ops.Program, ep,
+			"greater than protocol supported version",
+			"greater than protocol supported version")
 
 		// check opcodes failures
-		ops.Program[0] = byte(preLogicVersion) // set version
+		ops.Program[0] = byte(preVersion) // set version
 		testLogicBytes(t, ops.Program, ep, "invalid global field")
 
 		// check opcodes failures on 0 version
@@ -101,7 +94,6 @@ func TestTxnFieldVersions(t *testing.T) {
 	}
 	txnaVersion := uint64(appsEnabledVersion)
 
-	ledger := NewLedger(nil)
 	txn := makeSampleTxn()
 	// We'll reject too early if we have a nonzero RekeyTo, because that
 	// field must be zero for every txn in the group if this is an old
@@ -132,25 +124,18 @@ func TestTxnFieldVersions(t *testing.T) {
 
 			ops := testProg(t, text, AssemblerMaxVersion)
 
-			preLogicVersion := fs.version - 1
-			proto := makeTestProtoV(preLogicVersion)
-			if preLogicVersion < appsEnabledVersion {
-				require.False(t, proto.Application)
-			}
-			ep := defaultEvalParams()
-			ep.Proto = proto
-			ep.Ledger = ledger
-			ep.TxnGroup = transactions.WrapSignedTxnsWithAD(txgroup)
+			preVersion := fs.version - 1
+			ep := defaultSigParamsWithVersion(preVersion, txgroup...)
 
 			// check failure with version check
 			testLogicBytes(t, ops.Program, ep,
 				"greater than protocol supported version", "greater than protocol supported version")
 
 			// check opcodes failures
-			ops.Program[0] = byte(preLogicVersion) // set version
+			ops.Program[0] = byte(preVersion) // set version
 			checkErr := ""
 			evalErr := "invalid txn field"
-			if txnaMode && preLogicVersion < txnaVersion {
+			if txnaMode && preVersion < txnaVersion {
 				checkErr = "illegal opcode"
 				evalErr = "illegal opcode"
 			}

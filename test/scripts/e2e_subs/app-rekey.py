@@ -78,4 +78,5 @@ txinfo, err = goal.pay(flo, joe, amt=1)
 assert not err, err
 assert goal.balance(joe) == joeb+7, goal.balance(joe)
 
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

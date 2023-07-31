@@ -363,6 +363,7 @@ func init() {
 }
 
 func checkLogicSigPass(t *testing.T, response *model.DryrunResponse) {
+	t.Helper()
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
