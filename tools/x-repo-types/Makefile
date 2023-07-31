@@ -39,6 +39,13 @@ goal-v-sdk-stateproof:
 		--y-package "github.com/algorand/go-algorand-sdk/v2/types" \
 		--y-type "StateProof"
 
+goal-v-sdk-consensus:
+	x-repo-types --x-package "github.com/algorand/go-algorand/config" \
+		--x-type "ConsensusParams" \
+		--y-branch "develop" \
+		--y-package "github.com/algorand/go-algorand-sdk/v2/protocol/config" \
+		--y-type "ConsensusParams"
+
 # go-algorand vs go-stateproof-verification:
 
 goal-v-spv: goal-v-spv-stateproof
