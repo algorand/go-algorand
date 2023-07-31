@@ -21,9 +21,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	log "github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
-	"github.com/algorand/go-algorand/tools/network"
 )
 
 var (
@@ -54,7 +52,7 @@ var dnsaddrTreeCmd = &cobra.Command{
 	Short: "Recursively resolves and lists the dnsaddr entries of the given domain",
 	Long:  "Recursively resolves and lists the dnsaddr entries of the given domain",
 	Run: func(cmd *cobra.Command, args []string) {
-		controller := dnsaddr.NewMultiaddrDNSResolveController(network.NewResolveController(secure, "", log.Base()))
+		controller := dnsaddr.NewMultiaddrDNSResolveController(secure, "")
 		addrs, err := dnsaddr.MultiaddrsFromResolver(dnsaddrDomain, controller)
 		if err != nil {
 			fmt.Printf("%s\n", err.Error())

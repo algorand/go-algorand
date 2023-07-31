@@ -21,24 +21,25 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	log "github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/tools/network"
 )
 
 func TestDnsAddrResolveController(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	controller := network.NewResolveController(true, "127.0.0.1", log.Base())
-	dnsaddrCont := NewMultiaddrDNSResolveController(controller)
+	dnsaddrCont := NewMultiaddrDNSResolveController(true, "127.0.0.1")
 
 	// Assert that the dnsaddr resolver cycles through the dns resolvers properly
-	assert.Equal(t, controller.SystemDnsaddrResolver(), dnsaddrCont.Resolver())
-	assert.Equal(t, controller.FallbackDnsaddrResolver(), dnsaddrCont.NextResolver())
-	assert.Equal(t, controller.DefaultDnsaddrResolver(), dnsaddrCont.NextResolver())
+	assert.Equal(t, dnsaddrCont.controller.SystemDnsaddrResolver(), dnsaddrCont.Resolver())
+	assert.Equal(t, dnsaddrCont.controller.FallbackDnsaddrResolver(), dnsaddrCont.NextResolver())
+	assert.Equal(t, dnsaddrCont.controller.DefaultDnsaddrResolver(), dnsaddrCont.NextResolver())
 	// It should return nil once all the resolvers have been tried
 	assert.Nil(t, dnsaddrCont.NextResolver())
 	assert.Nil(t, dnsaddrCont.NextResolver())
+
+	// It should not include fallback if none was specified
+	dnsaddrCont = NewMultiaddrDNSResolveController(true, "")
+	assert.Equal(t, 2, len(dnsaddrCont.nextResolvers))
 
 }

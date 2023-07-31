@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	log "github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/tools/network"
 )
@@ -61,8 +60,7 @@ func TestMultiaddrsFromResolver(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	controller := network.NewResolveController(false, "", log.Base())
-	dnsaddrCont := NewMultiaddrDNSResolveController(controller)
+	dnsaddrCont := NewMultiaddrDNSResolveController(false, "")
 
 	// Fail on bad dnsaddr domain
 	maddrs, err := MultiaddrsFromResolver("/bogus/foobar", dnsaddrCont)

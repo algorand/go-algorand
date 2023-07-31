@@ -19,6 +19,7 @@ package dnsaddr
 import (
 	madns "github.com/multiformats/go-multiaddr-dns"
 
+	log "github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/network"
 )
 
@@ -30,10 +31,15 @@ type MultiaddrDNSResolveController struct {
 }
 
 // NewMultiaddrDNSResolveController constructs a MultiaddrDNSResolveController
-func NewMultiaddrDNSResolveController(controller network.ResolveController) *MultiaddrDNSResolveController {
+func NewMultiaddrDNSResolveController(secure bool, fallbackDNSResolverAddress string) *MultiaddrDNSResolveController {
+	controller := network.NewResolveController(secure, fallbackDNSResolverAddress, log.Base())
+	nextResolvers := []func() *madns.Resolver{controller.SystemDnsaddrResolver}
+	if fallbackDNSResolverAddress != "" {
+		nextResolvers = append(nextResolvers, controller.FallbackDnsaddrResolver)
+	}
 	return &MultiaddrDNSResolveController{
 		resolver:      nil,
-		nextResolvers: []func() *madns.Resolver{controller.SystemDnsaddrResolver, controller.FallbackDnsaddrResolver, controller.DefaultDnsaddrResolver},
+		nextResolvers: append(nextResolvers, controller.DefaultDnsaddrResolver),
 		controller:    controller,
 	}
 }
