@@ -1,6 +1,5 @@
 all: clean goal-v-sdk goal-v-spv
 
-
 clean:
 	rm x-repo-types
 
