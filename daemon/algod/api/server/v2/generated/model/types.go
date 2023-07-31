@@ -956,7 +956,7 @@ type BlockResponse struct {
 
 // BlockTxidsResponse defines model for BlockTxidsResponse.
 type BlockTxidsResponse struct {
-	// BlockTxids Block transaction Ids.
+	// BlockTxids Block transaction IDs.
 	BlockTxids []string `json:"blockTxids"`
 }
 
