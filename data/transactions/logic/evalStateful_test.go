@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -50,18 +51,12 @@ func makeSampleEnv() (*EvalParams, *transactions.Transaction, *Ledger) {
 }
 
 func makeSampleEnvWithVersion(version uint64) (*EvalParams, *transactions.Transaction, *Ledger) {
-	// We'd usually like an app in the group, so that the ep created is
-	// "complete".  But to keep as many old tests working as possible, if
-	// version < appsEnabledVersion, don't put an appl txn in it.
+	if version < appsEnabledVersion {
+		panic("makeSampleEnv is for apps, but you've asked for a version before apps work")
+	}
 	firstTxn := makeSampleTxn()
-	if version >= appsEnabledVersion {
-		firstTxn.Txn.Type = protocol.ApplicationCallTx
-	}
-	// avoid putting in a RekeyTo field if version < rekeyingEnabledVersion
-	if version < rekeyingEnabledVersion {
-		firstTxn.Txn.RekeyTo = basics.Address{}
-	}
-	ep := defaultEvalParamsWithVersion(version, makeSampleTxnGroup(firstTxn)...)
+	firstTxn.Txn.Type = protocol.ApplicationCallTx
+	ep := defaultAppParamsWithVersion(version, makeSampleTxnGroup(firstTxn)...)
 	ledger := NewLedger(nil)
 	ep.SigLedger = ledger
 	ep.Ledger = ledger
@@ -265,8 +260,8 @@ log
 				tx.SelectionPK[:],
 				tx.Note,
 			}
-			ep.TxnGroup[0].Txn.ApplicationID = 100
-			ep.TxnGroup[0].Txn.ForeignAssets = []basics.AssetIndex{500} // needed since v4
+			tx.ApplicationID = 100
+			tx.ForeignAssets = []basics.AssetIndex{500} // needed since v4
 			params := basics.AssetParams{
 				Total:         1000,
 				Decimals:      2,
@@ -287,7 +282,9 @@ log
 			ledger.NewAsset(tx.Sender, 5, params)
 
 			if mode == ModeSig {
+				ep.runMode = ModeSig
 				testLogic(t, test, AssemblerMaxVersion, ep)
+				ep.runMode = ModeApp
 			} else {
 				testApp(t, test, ep)
 			}
@@ -296,8 +293,8 @@ log
 
 	// check err opcode work in both modes
 	source := "err"
-	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(), "err opcode executed")
-	testApp(t, source, defaultEvalParams(), "err opcode executed")
+	testLogic(t, source, AssemblerMaxVersion, nil, "err opcode executed")
+	testApp(t, source, nil, "err opcode executed")
 
 	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
 	disallowedV4 := []string{
@@ -310,7 +307,7 @@ log
 	}
 	for _, source := range disallowedV4 {
 		ops := testProg(t, source, 4)
-		testAppBytes(t, ops.Program, defaultEvalParams(),
+		testAppBytes(t, ops.Program, nil,
 			"not allowed in current mode", "not allowed in current mode")
 	}
 
@@ -324,7 +321,7 @@ log
 	}
 	for _, source := range disallowed {
 		ops := testProg(t, source, AssemblerMaxVersion)
-		testAppBytes(t, ops.Program, defaultEvalParams(),
+		testAppBytes(t, ops.Program, nil,
 			"not allowed in current mode", "not allowed in current mode")
 	}
 
@@ -363,7 +360,7 @@ log
 			if v < introduced {
 				continue
 			}
-			testLogic(t, source, v, defaultEvalParamsWithVersion(v),
+			testLogic(t, source, v, defaultSigParamsWithVersion(v),
 				"not allowed in current mode", "not allowed in current mode")
 		}
 	}
@@ -372,6 +369,26 @@ log
 	require.Equal(t, RunMode(2), ModeApp)
 	require.True(t, modeAny == ModeSig|ModeApp)
 	require.True(t, modeAny.Any())
+}
+
+func TestApplicationsDisallowOldTeal(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const source = "int 1"
+
+	txn := makeSampleTxn()
+	txn.Txn.Type = protocol.ApplicationCallTx
+	txn.Txn.RekeyTo = basics.Address{}
+	ep := defaultAppParams(txn)
+
+	for v := uint64(0); v < appsEnabledVersion; v++ {
+		ops := testProg(t, source, v)
+		e := fmt.Sprintf("program version must be >= %d", appsEnabledVersion)
+		testAppBytes(t, ops.Program, ep, e, e)
+	}
+
+	testApp(t, source, ep)
 }
 
 func TestBalance(t *testing.T) {
@@ -403,13 +420,14 @@ func TestBalance(t *testing.T) {
 	})
 }
 
-func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, version uint64, ledger *Ledger,
+func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, ledger *Ledger,
 	expected ...expect) *EvalParams {
 	t.Helper()
+	proto := makeTestProto(opt)
 	codes := make([][]byte, len(programs))
 	for i, program := range programs {
 		if program != "" {
-			codes[i] = testProg(t, program, version).Program
+			codes[i] = testProg(t, program, proto.LogicSigVersion).Program
 		}
 	}
 	if txgroup == nil {
@@ -421,7 +439,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			txgroup = append(txgroup, sample)
 		}
 	}
-	ep := NewEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), proto, &transactions.SpecialAddresses{})
 	if ledger == nil {
 		ledger = NewLedger(nil)
 	}
@@ -461,13 +479,20 @@ func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...
 
 func testApp(t *testing.T, program string, ep *EvalParams, problems ...string) transactions.EvalDelta {
 	t.Helper()
+	if ep == nil {
+		ep = defaultAppParamsWithVersion(LogicVersion)
+	}
 	ops := testProg(t, program, ep.Proto.LogicSigVersion)
 	return testAppBytes(t, ops.Program, ep, problems...)
 }
 
 func testAppBytes(t *testing.T, program []byte, ep *EvalParams, problems ...string) transactions.EvalDelta {
 	t.Helper()
-	ep.reset()
+	if ep == nil {
+		ep = defaultAppParamsWithVersion(LogicVersion)
+	} else {
+		ep.reset()
+	}
 	aid := ep.TxnGroup[0].Txn.ApplicationID
 	if aid == 0 {
 		aid = basics.AppIndex(888)
@@ -496,15 +521,13 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 		require.Fail(t, "Misused testApp: %d problems", len(problems))
 	}
 
-	sb := &strings.Builder{}
-	ep.Trace = sb
+	ep.Trace = &strings.Builder{}
 
 	err := CheckContract(program, ep)
 	if checkProblem == "" {
-		require.NoError(t, err, sb.String())
+		require.NoError(t, err, "Error in CheckContract %v", ep.Trace)
 	} else {
-		require.Error(t, err, "Check\n%s\nExpected: %v", sb, checkProblem)
-		require.Contains(t, err.Error(), checkProblem, sb.String())
+		require.ErrorContains(t, err, checkProblem, "Wrong error in CheckContract %v", ep.Trace)
 	}
 
 	// We continue on to check Eval() of things that failed Check() because it's
@@ -519,18 +542,17 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 	pass, err := EvalApp(program, gi, aid, ep)
 	delta := ep.TxnGroup[gi].EvalDelta
 	if evalProblem == "" {
-		require.NoError(t, err, "Eval%s\nExpected: PASS", sb)
-		require.True(t, pass, "Eval%s\nExpected: PASS", sb)
+		require.NoError(t, err, "Eval\n%sExpected: PASS", ep.Trace)
+		require.True(t, pass, "Eval\n%sExpected: PASS", ep.Trace)
 		return delta
 	}
 
 	// There is an evalProblem to check. REJECT is special and only means that
 	// the app didn't accept.  Maybe it's an error, maybe it's just !pass.
 	if evalProblem == "REJECT" {
-		require.True(t, err != nil || !pass, "Eval%s\nExpected: REJECT", sb)
+		require.True(t, err != nil || !pass, "Eval%s\nExpected: REJECT", ep.Trace)
 	} else {
-		require.Error(t, err, "Eval\n%s\nExpected: %v", sb, evalProblem)
-		require.Contains(t, err.Error(), evalProblem)
+		require.ErrorContains(t, err, evalProblem, "Wrong error in EvalContract %v", ep.Trace)
 	}
 	return delta
 }
@@ -1022,9 +1044,9 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 	}
 
 	txn := makeSampleAppl(888)
-	pre := defaultEvalParamsWithVersion(directRefEnabledVersion-1, txn)
+	pre := defaultAppParamsWithVersion(directRefEnabledVersion-1, txn)
 	require.GreaterOrEqual(t, version, uint64(directRefEnabledVersion))
-	now := defaultEvalParamsWithVersion(version, txn)
+	now := defaultAppParamsWithVersion(version, txn)
 	ledger := NewLedger(
 		map[basics.Address]uint64{
 			txn.Txn.Sender: 1,
@@ -1529,7 +1551,7 @@ intc_1
 			var txn transactions.SignedTxn
 			txn.Txn.Type = protocol.ApplicationCallTx
 			txn.Txn.ApplicationID = 100
-			ep := defaultEvalParams(txn)
+			ep := defaultAppParams(txn)
 			err := CheckContract(ops.Program, ep)
 			require.NoError(t, err)
 
@@ -2565,8 +2587,8 @@ func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates t
 		txnFieldSpecs[Amount] = origSpec
 	}()
 
-	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(), "Amount expected field type is []byte but got uint64")
-	testApp(t, source, defaultEvalParams(), "Amount expected field type is []byte but got uint64")
+	testLogic(t, source, AssemblerMaxVersion, nil, "Amount expected field type is []byte but got uint64")
+	testApp(t, source, nil, "Amount expected field type is []byte but got uint64")
 
 	source = `global MinTxnFee`
 
@@ -2578,8 +2600,8 @@ func TestEnumFieldErrors(t *testing.T) { // nolint:paralleltest // manipulates t
 		globalFieldSpecs[MinTxnFee] = origMinTxnFs
 	}()
 
-	testLogic(t, source, AssemblerMaxVersion, defaultEvalParams(), "MinTxnFee expected field type is []byte but got uint64")
-	testApp(t, source, defaultEvalParams(), "MinTxnFee expected field type is []byte but got uint64")
+	testLogic(t, source, AssemblerMaxVersion, nil, "MinTxnFee expected field type is []byte but got uint64")
+	testApp(t, source, nil, "MinTxnFee expected field type is []byte but got uint64")
 
 	ep, tx, ledger := makeSampleEnv()
 	ledger.NewAccount(tx.Sender, 1)
@@ -2799,26 +2821,27 @@ func TestReturnTypes(t *testing.T) {
 				sb.WriteString(cmd + "\n")
 				ops := testProg(t, sb.String(), AssemblerMaxVersion)
 
-				ep, tx, ledger := makeSampleEnv()
-
-				tx.Type = protocol.ApplicationCallTx
-				tx.ApplicationID = 300
-				tx.ForeignApps = []basics.AppIndex{tx.ApplicationID}
-				tx.ForeignAssets = []basics.AssetIndex{400}
-				tx.Boxes = []transactions.BoxRef{{
-					Name: []byte("3456"),
-				}}
-				ep.TxnGroup[0].Lsig.Args = [][]byte{
+				tx0 := makeSampleTxn()
+				tx0.Txn.Type = protocol.ApplicationCallTx
+				tx0.Txn.ApplicationID = 300
+				tx0.Txn.ForeignApps = []basics.AppIndex{300}
+				tx0.Txn.ForeignAssets = []basics.AssetIndex{400}
+				tx0.Txn.Boxes = []transactions.BoxRef{{Name: []byte("3456")}}
+				tx0.Lsig.Args = [][]byte{
 					[]byte("aoeu"),
 					[]byte("aoeu"),
 					[]byte("aoeu2"),
 					[]byte("aoeu3"),
 				}
+				tx0.Lsig.Logic = ops.Program
 				// We are going to run with GroupIndex=1, so make tx1 interesting too (so
-				// txn can look at things)
-				ep.TxnGroup[1] = ep.TxnGroup[0]
+				// `txn` opcode can look at things)
+				tx1 := tx0
 
-				ep.pastScratch[0] = &scratchSpace{} // for gload
+				sep, aep := defaultEvalParams(tx0, tx1)
+				ledger := aep.Ledger.(*Ledger)
+
+				tx := tx0.Txn
 				ledger.NewAccount(tx.Sender, 1)
 				params := basics.AssetParams{
 					Total:         1000,
@@ -2842,39 +2865,34 @@ func TestReturnTypes(t *testing.T) {
 				ledger.NewLocal(tx.Receiver, 300, string(key), algoValue)
 				ledger.NewAccount(appAddr(300), 1000000)
 
-				ep.reset()                          // for Trace and budget isolation
-				ep.pastScratch[0] = &scratchSpace{} // for gload
 				// these allows the box_* opcodes that to work
 				ledger.CreateBox(300, "3456", 10)
-				ep.ioBudget = 50
 
-				cx := EvalContext{
-					EvalParams: ep,
-					runMode:    m,
-					groupIndex: 1,
-					txn:        &ep.TxnGroup[1],
-					appID:      300,
+				// We are running gi=1, but we never ran gi=0.  Set things up as
+				// if we did, so they can be accessed with gtxn, gload, gaid
+				aep.pastScratch[0] = &scratchSpace{}
+				aep.TxnGroup[0].ConfigAsset = 100
+
+				var cx *EvalContext
+				if m == ModeApp {
+					_, cx, err = EvalContract(ops.Program, 1, 300, aep)
+				} else {
+					_, cx, err = EvalSignatureFull(1, sep)
 				}
-
-				// These set conditions for some ops that examine the group.
-				// This convinces them all to work.  Revisit.
-				cx.TxnGroup[0].ConfigAsset = 100
-
-				// These little programs need not pass. Since the returned stack
-				// is checked for typing, we can't get hung up on whether it is
-				// exactly one positive int. But if it fails for any *other*
-				// reason, we're not doing a good test.
-				_, err = eval(ops.Program, &cx)
+				// These little programs need not pass. We are just trying to
+				// examine cx.Stack for proper types/size after executing the
+				// opcode. But if it fails for any *other* reason, we're not
+				// doing a good test.
 				if err != nil {
 					// Allow the kinds of errors we expect, but fail for stuff
 					// that indicates the opcode itself failed.
 					reason := err.Error()
-					if reason != "stack finished with bytes not int" &&
-						!strings.HasPrefix(reason, "stack len is") {
-						require.NoError(t, err, "%s: %s\n%s", name, err, ep.Trace)
+					if !strings.Contains(reason, "stack finished with bytes not int") &&
+						!strings.Contains(reason, "stack len is") {
+						require.NoError(t, err, "%s: %s\n%s", name, err, cx.Trace)
 					}
 				}
-				require.Len(t, cx.Stack, len(spec.Return.Types), "%s", ep.Trace)
+				require.Len(t, cx.Stack, len(spec.Return.Types), "%s", cx.Trace)
 				for i := 0; i < len(spec.Return.Types); i++ {
 					stackType := cx.Stack[i].stackType()
 					retType := spec.Return.Types[i]
@@ -2901,17 +2919,146 @@ func TestTxnEffects(t *testing.T) {
 	testApp(t, "byte 0x32; log; gtxn 0 LastLog; byte 0x32; ==", ep, "txn effects can only be read from past txns")
 
 	// Look at the logs of tx 0
-	testApps(t, []string{"", "byte 0x32; log; gtxn 0 LastLog; byte 0x; =="}, nil, AssemblerMaxVersion, nil)
-	testApps(t, []string{"byte 0x33; log; int 1", "gtxn 0 LastLog; byte 0x33; =="}, nil, AssemblerMaxVersion, nil)
-	testApps(t, []string{"byte 0x33; dup; log; log; int 1", "gtxn 0 NumLogs; int 2; =="}, nil, AssemblerMaxVersion, nil)
-	testApps(t, []string{"byte 0x37; log; int 1", "gtxn 0 Logs 0; byte 0x37; =="}, nil, AssemblerMaxVersion, nil)
-	testApps(t, []string{"byte 0x37; log; int 1", "int 0; gtxnas 0 Logs; byte 0x37; =="}, nil, AssemblerMaxVersion, nil)
+	testApps(t, []string{"", "byte 0x32; log; gtxn 0 LastLog; byte 0x; =="}, nil, nil, nil)
+	testApps(t, []string{"byte 0x33; log; int 1", "gtxn 0 LastLog; byte 0x33; =="}, nil, nil, nil)
+	testApps(t, []string{"byte 0x33; dup; log; log; int 1", "gtxn 0 NumLogs; int 2; =="}, nil, nil, nil)
+	testApps(t, []string{"byte 0x37; log; int 1", "gtxn 0 Logs 0; byte 0x37; =="}, nil, nil, nil)
+	testApps(t, []string{"byte 0x37; log; int 1", "int 0; gtxnas 0 Logs; byte 0x37; =="}, nil, nil, nil)
 
 	// Look past the logs of tx 0
-	testApps(t, []string{"byte 0x37; log; int 1", "gtxna 0 Logs 1; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
+	testApps(t, []string{"byte 0x37; log; int 1", "gtxna 0 Logs 1; byte 0x37; =="}, nil, nil, nil,
 		exp(1, "invalid Logs index 1"))
-	testApps(t, []string{"byte 0x37; log; int 1", "int 6; gtxnas 0 Logs; byte 0x37; =="}, nil, AssemblerMaxVersion, nil,
+	testApps(t, []string{"byte 0x37; log; int 1", "int 6; gtxnas 0 Logs; byte 0x37; =="}, nil, nil, nil,
 		exp(1, "invalid Logs index 6"))
+}
+func TestLog(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	var txn transactions.SignedTxn
+	txn.Txn.Type = protocol.ApplicationCallTx
+	ledger := NewLedger(nil)
+	ledger.NewApp(txn.Txn.Receiver, 0, basics.AppParams{})
+	ep := defaultAppParams(txn)
+	testCases := []struct {
+		source string
+		loglen int
+	}{
+		{
+			source: `byte  "a logging message"; log; int 1`,
+			loglen: 1,
+		},
+		{
+			source: `byte  "a logging message"; log; byte  "a logging message"; log; int 1`,
+			loglen: 2,
+		},
+		{
+			source: fmt.Sprintf(`%s int 1`, strings.Repeat(`byte "a logging message"; log; `, maxLogCalls)),
+			loglen: maxLogCalls,
+		},
+		{
+			source: `int 1; loop: byte "a logging message"; log; int 1; +; dup; int 30; <=; bnz loop;`,
+			loglen: 30,
+		},
+		{
+			source: fmt.Sprintf(`byte "%s"; log; int 1`, strings.Repeat("a", maxLogSize)),
+			loglen: 1,
+		},
+	}
+
+	//track expected number of logs in cx.EvalDelta.Logs
+	for i, s := range testCases {
+		delta := testApp(t, s.source, ep)
+		require.Len(t, delta.Logs, s.loglen)
+		if i == len(testCases)-1 {
+			require.Equal(t, strings.Repeat("a", maxLogSize), delta.Logs[0])
+		} else {
+			for _, l := range delta.Logs {
+				require.Equal(t, "a logging message", l)
+			}
+		}
+	}
+
+	msg := strings.Repeat("a", 400)
+	failCases := []struct {
+		source      string
+		errContains string
+		// For cases where assembly errors, we manually put in the bytes
+		assembledBytes []byte
+	}{
+		{
+			source:      fmt.Sprintf(`byte  "%s"; log; int 1`, strings.Repeat("a", maxLogSize+1)),
+			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
+		},
+		{
+			source:      fmt.Sprintf(`byte  "%s"; log; byte  "%s"; log; byte  "%s"; log; int 1`, msg, msg, msg),
+			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
+		},
+		{
+			source:      fmt.Sprintf(`%s; int 1`, strings.Repeat(`byte "a"; log; `, maxLogCalls+1)),
+			errContains: "too many log calls",
+		},
+		{
+			source:      `int 1; loop: byte "a"; log; int 1; +; dup; int 35; <; bnz loop;`,
+			errContains: "too many log calls",
+		},
+		{
+			source:      fmt.Sprintf(`int 1; loop: byte "%s"; log; int 1; +; dup; int 6; <; bnz loop;`, strings.Repeat(`a`, 400)),
+			errContains: fmt.Sprintf(">  %d bytes limit", maxLogSize),
+		},
+		{
+			source:         `load 0; log`,
+			errContains:    "log arg 0 wanted []byte but got uint64",
+			assembledBytes: []byte{byte(ep.Proto.LogicSigVersion), 0x34, 0x00, 0xb0},
+		},
+	}
+
+	for _, c := range failCases {
+		if c.assembledBytes == nil {
+			testApp(t, c.source, ep, c.errContains)
+		} else {
+			testAppBytes(t, c.assembledBytes, ep, c.errContains)
+		}
+	}
+}
+
+func TestGaid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	check0 := testProg(t, "gaid 0; int 100; ==", 4)
+	appTxn := makeSampleTxn()
+	appTxn.Txn.Type = protocol.ApplicationCallTx
+	targetTxn := makeSampleTxn()
+	targetTxn.Txn.Type = protocol.AssetConfigTx
+	ep := defaultAppParams(targetTxn, appTxn, makeSampleTxn())
+
+	// should fail when no creatable was created
+	_, err := EvalApp(check0.Program, 1, 888, ep)
+	require.ErrorContains(t, err, "did not create anything")
+
+	ep.TxnGroup[0].ApplyData.ConfigAsset = 100
+	pass, err := EvalApp(check0.Program, 1, 888, ep)
+	if !pass || err != nil {
+		t.Log(ep.Trace.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// should fail when accessing future transaction in group
+	check2 := testProg(t, "gaid 2; int 0; >", 4)
+	_, err = EvalApp(check2.Program, 1, 888, ep)
+	require.ErrorContains(t, err, "gaid can't get creatable ID of txn ahead of the current one")
+
+	// should fail when accessing self
+	_, err = EvalApp(check0.Program, 0, 888, ep)
+	require.ErrorContains(t, err, "gaid is only for accessing creatable IDs of previous txns")
+
+	// should fail on non-creatable
+	ep.TxnGroup[0].Txn.Type = protocol.PaymentTx
+	_, err = EvalApp(check0.Program, 1, 888, ep)
+	require.ErrorContains(t, err, "can't use gaid on txn that is not an app call nor an asset config txn")
+	ep.TxnGroup[0].Txn.Type = protocol.AssetConfigTx
 }
 
 func TestRound(t *testing.T) {
@@ -2966,6 +3113,7 @@ func TestBlockSeed(t *testing.T) {
 
 	// `block` should also work in LogicSigs, to drive home the point, blot out
 	// the normal Ledger
+	ep.runMode = ModeSig
 	ep.Ledger = nil
 	testLogic(t, "int 0xfffffff0; block BlkTimestamp", randomnessVersion, ep)
 }
@@ -3010,11 +3158,11 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	ledger := NewLedger(nil)
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
-	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, LogicVersion, ledger,
+	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, nil, ledger,
 		exp(0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"))
 
 	// Simulate test with 3 grouped txn
-	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, LogicVersion, ledger)
+	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, nil, ledger)
 }
 
 func appAddr(id int) basics.Address {
@@ -3042,20 +3190,30 @@ func TestAppInfo(t *testing.T) {
 	testApp(t, source, ep)
 }
 
-func TestBudget(t *testing.T) {
+func TestAppBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	source := `
+	source := func(budget int) string {
+		return fmt.Sprintf(`
 global OpcodeBudget
-int 699
+int %d
 ==
 assert
 global OpcodeBudget
-int 695
+int %d
 ==
-`
-	testApp(t, source, defaultEvalParams())
+`, budget-1, budget-5)
+	}
+	testApp(t, source(700), nil)
+
+	// with pooling a two app call starts with 1400
+	testApps(t, []string{source(1400), source(1393)}, nil, nil, nil)
+
+	// without, they get base 700
+	testApps(t, []string{source(700), source(700)}, nil,
+		func(p *config.ConsensusParams) { p.EnableAppCostPooling = false }, nil)
+
 }
 
 func TestSelfMutateV8(t *testing.T) {

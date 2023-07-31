@@ -399,7 +399,8 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
 	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
 	specials := transactions.SpecialAddresses{}
-	ep := logic.NewEvalParams(txgroup, &proto, &specials)
+	ep := logic.NewAppEvalParams(txgroup, &proto, &specials)
+	sep := logic.NewSigEvalParams(dr.Txns, &proto, &dl)
 
 	origEnableAppCostPooling := proto.EnableAppCostPooling
 	// Enable EnableAppCostPooling so that dryrun
@@ -421,11 +422,10 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 	response.Txns = make([]model.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		var result model.DryrunTxnResult
-		if len(stxn.Lsig.Logic) > 0 {
+		if !stxn.Lsig.Blank() {
 			var debug dryrunDebugReceiver
-			ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
-			ep.SigLedger = &dl
-			pass, err := logic.EvalSignature(ti, ep)
+			sep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
+			pass, err := logic.EvalSignature(ti, sep)
 			var messages []string
 			result.Disassembly = debug.lines          // Keep backwards compat
 			result.LogicSigDisassembly = &debug.lines // Also add to Lsig specific
