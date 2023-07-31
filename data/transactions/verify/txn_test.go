@@ -62,7 +62,7 @@ var spec = transactions.SpecialAddresses{
 func verifyTxn(gi int, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if err := txnBatchPrep(gi, groupCtx, batchVerifier, nil); err != nil {
+	if err := txnBatchPrep(gi, groupCtx, batchVerifier); err != nil {
 		return err
 	}
 	return batchVerifier.Verify()
@@ -208,7 +208,7 @@ func TestSignedPayment(t *testing.T) {
 	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0, 0)
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
-	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil)
+	groupCtx, err := PrepareGroupContext(stxns, blockHeader, nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
 	require.NoError(t, verifyTxn(0, groupCtx), "generateTestObjects generated a bad signedtxn")
@@ -230,7 +230,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
 	for _, txn := range signed {
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
 		require.NoError(t, err)
 		if verifyTxn(0, groupCtx) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
@@ -250,7 +250,7 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0, 0)
 
 	for _, txn := range signed {
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil)
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{txn}, blockHeader, nil, nil)
 		require.NoError(t, err)
 		if verifyTxn(0, groupCtx) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
@@ -292,7 +292,7 @@ func TestTxnValidationStateProof(t *testing.T) {
 		},
 	}
 
-	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, blockHeader, nil)
+	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, blockHeader, nil, nil)
 	require.NoError(t, err)
 
 	err = verifyTxn(0, groupCtx)
@@ -352,7 +352,7 @@ func TestDecodeNil(t *testing.T) {
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
 		// This used to panic when run on a zero value of SignedTxn.
-		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{st}, blockHeader, nil)
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{st}, blockHeader, nil, nil)
 		require.NoError(t, err)
 		verifyTxn(0, groupCtx)
 	}
@@ -1069,7 +1069,7 @@ func BenchmarkTxn(b *testing.B) {
 
 	b.ResetTimer()
 	for _, txnGroup := range txnGroups {
-		groupCtx, err := PrepareGroupContext(txnGroup, &blk.BlockHeader, nil)
+		groupCtx, err := PrepareGroupContext(txnGroup, &blk.BlockHeader, nil, nil)
 		require.NoError(b, err)
 		for i := range txnGroup {
 			err := verifyTxn(i, groupCtx)

@@ -237,13 +237,13 @@ type evaluation struct {
 	states       AppState
 }
 
-func (e *evaluation) eval(gi int, ep *logic.EvalParams) (pass bool, err error) {
+func (e *evaluation) eval(gi int, sep *logic.EvalParams, aep *logic.EvalParams) (pass bool, err error) {
 	if e.mode == modeStateful {
-		pass, _, err = e.ba.StatefulEval(gi, ep, e.aidx, e.program)
+		pass, _, err = e.ba.StatefulEval(gi, aep, e.aidx, e.program)
 		return
 	}
-	ep.TxnGroup[gi].Lsig.Logic = e.program
-	return logic.EvalSignature(gi, ep)
+	sep.TxnGroup[gi].Lsig.Logic = e.program
+	return logic.EvalSignature(gi, sep)
 }
 
 // LocalRunner runs local eval
@@ -531,23 +531,17 @@ func (r *LocalRunner) RunAll() error {
 		return fmt.Errorf("no program to debug")
 	}
 
-	configureDebugger := func(ep *logic.EvalParams) {
-		// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
-		// r.debugger = nil
-		// ep.Debugger = r.debugger
-		// if ep.Debugger != nil // FALSE
-		if r.debugger != nil {
-			ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(r.debugger)
-		}
-	}
-
 	txngroup := transactions.WrapSignedTxnsWithAD(r.txnGroup)
 	failed := 0
 	start := time.Now()
 
-	ep := logic.NewEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
-	ep.SigLedger = logic.NoHeaderLedger{}
-	configureDebugger(ep)
+	sep := logic.NewSigEvalParams(r.txnGroup, &r.proto, &logic.NoHeaderLedger{})
+	aep := logic.NewAppEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
+	if r.debugger != nil {
+		t := logic.MakeEvalTracerDebuggerAdaptor(r.debugger)
+		sep.Tracer = t
+		aep.Tracer = t
+	}
 
 	var last error
 	for i := range r.runs {
@@ -556,7 +550,7 @@ func (r *LocalRunner) RunAll() error {
 			r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
 		}
 
-		run.result.pass, run.result.err = run.eval(int(run.groupIndex), ep)
+		run.result.pass, run.result.err = run.eval(int(run.groupIndex), sep, aep)
 		if run.result.err != nil {
 			failed++
 			last = run.result.err

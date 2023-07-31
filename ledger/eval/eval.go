@@ -958,7 +958,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	cow := eval.state.child(len(txgroup))
 	defer cow.recycle()
 
-	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials)
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
