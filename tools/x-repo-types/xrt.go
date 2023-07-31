@@ -231,6 +231,10 @@ func restoreFile(src, dst string) error {
 func goGet(repo string) error {
 	fmt.Println("Downloading repo:", repo)
 	cmd := exec.Command("go", "get", repo)
+
+	env := os.Environ()
+	cmd.Env = append(env, "GOPROXY=direct")
+
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
