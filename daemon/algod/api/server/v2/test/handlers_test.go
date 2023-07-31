@@ -345,9 +345,14 @@ func TestGetBlockTxids(t *testing.T) {
 	handler, c, rec, stx, releasefunc := addBlockHelper(t)
 	defer releasefunc()
 
+	var response model.BlockTxidsResponse
 	err := handler.GetBlockTxids(c, 0)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
+	data := rec.Body.Bytes()
+	err = protocol.DecodeJSON(data, &response)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(response.BlockTxids))
 
 	c, rec = newReq(t)
 	err = handler.GetBlockTxids(c, 2)
@@ -357,9 +362,8 @@ func TestGetBlockTxids(t *testing.T) {
 	c, rec = newReq(t)
 	err = handler.GetBlockTxids(c, 1)
 	require.NoError(t, err)
-
-	var response model.BlockTxidsResponse
-	data := rec.Body.Bytes()
+	require.Equal(t, 200, rec.Code)
+	data = rec.Body.Bytes()
 	err = protocol.DecodeJSON(data, &response)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(response.BlockTxids))

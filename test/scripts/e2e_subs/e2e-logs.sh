@@ -19,7 +19,7 @@ function app_txid {
 
 function commit_round {
     # Get the round that the app transaction was confirmed
-    grep -o -E 'committed in round [0-9]+' | rev | cut -d ' ' -f 1 | rev
+    grep -o -E 'committed in round [0-9]+' | cut -d ' ' -f 4
 }
 
 set -e
