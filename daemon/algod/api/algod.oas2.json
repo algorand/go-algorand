@@ -3821,7 +3821,7 @@
           "type": "integer"
         },
         "unnamed-resources-accessed": {
-          "$ref": "#/definitions/SimulationUnnamedGroupResources"
+          "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
         }
       }
     },
@@ -3847,7 +3847,7 @@
           "$ref": "#/definitions/SimulationTransactionExecTrace"
         },
         "unnamed-resources-accessed": {
-          "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
+          "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
         }
       }
     },
@@ -4046,36 +4046,9 @@
         }
       }
     },
-    "SimulationUnnamedGroupResources": {
-      "description": "If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and could benefit from group resource sharing. In other words, there are no restrictions on where these resources must be placed in the transaction group. Also see property 'unnamed-resources-accessed' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing; in contrast, these resources must be placed local to that transaction.",
+    "SimulateUnnamedResourcesAccessed": {
+      "description": "If unnamed resource access is allowed, this is a set of unnamed resources that were accessed. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult).",
       "type": "object",
-      "required": [
-        "resources"
-      ],
-      "properties": {
-        "resources": {
-          "$ref": "#/definitions/SimulationUnnamedResourceAssignment"
-        },
-        "asset-holdings": {
-          "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/AssetHoldingReference"
-          }
-        },
-        "app-locals": {
-          "description": "The unnamed app local states that were referenced. The order of this array is arbitrary.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ApplicationLocalReference"
-          }
-        }
-      }
-    },
-    "SimulationUnnamedResourceAssignment": {
-      "description": "The set of unnamed resources that were accessed during a simulation call.",
-      "type": "object",
-      "required": [],
       "properties": {
         "accounts": {
           "description": "The unnamed accounts that were referenced. The order of this array is arbitrary.",
@@ -4108,9 +4081,23 @@
             "$ref": "#/definitions/BoxReference"
           }
         },
-        "empty-box-refs": {
-          "description": "The number of unnamed box references used to increase the IO budget.",
+        "extra-box-refs": {
+          "description": "The number of extra box references used to increase the IO budget. This is in addition to the references defined in the input transaction group and any referenced to unnamed boxes.",
           "type": "integer"
+        },
+        "asset-holdings": {
+          "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AssetHoldingReference"
+          }
+        },
+        "app-locals": {
+          "description": "The unnamed app local states that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationLocalReference"
+          }
         }
       }
     }

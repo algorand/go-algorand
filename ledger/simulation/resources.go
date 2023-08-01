@@ -27,9 +27,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// ResourceAssignment calculates the additional resources that a transaction or group could use, and
+// ResourceTracker calculates the additional resources that a transaction or group could use, and
 // it tracks any referenced unnamed resources that fit within those limits.
-type ResourceAssignment struct {
+type ResourceTracker struct {
 	Accounts    map[basics.Address]struct{}
 	MaxAccounts int
 
@@ -47,13 +47,17 @@ type ResourceAssignment struct {
 	maxWriteBudget  uint64
 
 	MaxTotalRefs int
+
+	AssetHoldings             map[ledgercore.AccountAsset]struct{}
+	AppLocals                 map[ledgercore.AccountApp]struct{}
+	MaxCrossProductReferences int
 }
 
-func makeTxnResourceAssignment(txn *transactions.Transaction, proto *config.ConsensusParams) ResourceAssignment {
+func makeTxnResourceTracker(txn *transactions.Transaction, proto *config.ConsensusParams) ResourceTracker {
 	if txn.Type != protocol.ApplicationCallTx {
-		return ResourceAssignment{}
+		return ResourceTracker{}
 	}
-	return ResourceAssignment{
+	return ResourceTracker{
 		// Use MaxAppTxnAccounts + MaxAppTxnForeignApps for the account limit because app references
 		// also make their accounts available, and since we can't know if an unknown account is an
 		// app account, we assume it is.
@@ -65,9 +69,23 @@ func makeTxnResourceAssignment(txn *transactions.Transaction, proto *config.Cons
 	}
 }
 
-func makeGlobalResourceAssignment(perTxnResources []ResourceAssignment, proto *config.ConsensusParams) ResourceAssignment {
+func makeGlobalResourceTracker(perTxnResources []ResourceTracker, nonAppCalls int, proto *config.ConsensusParams) ResourceTracker {
+	// Calculate the maximum number of cross-product resources that can be accessed by one app call
+	// under normal circumstances. This is calculated using the case of an app call with a full set
+	// of foreign apps. Including the app being called, there are (MaxAppTxnForeignApps + 1) apps,
+	// crossed with (MaxAppTxnForeignAssets + 2) accounts (the called app's account, the sender's
+	// account, and the foreign app accounts). We then subtract out the app local of sender's
+	// account and the called app, and each app local of an app and its own account, or
+	// (MaxAppTxnForeignApps + 2) references. So we end up with:
+	//
+	// (MaxAppTxnForeignApps + 1) * (MaxAppTxnForeignApps + 2) - (MaxAppTxnForeignApps + 2)
+	// <=> MaxAppTxnForeignApps^2 + 3*MaxAppTxnForeignApps + 2 - MaxAppTxnForeignApps - 2
+	// <=> MaxAppTxnForeignApps^2 + 2*MaxAppTxnForeignApps
+	// <=> MaxAppTxnForeignApps * (MaxAppTxnForeignApps + 2)
+	maxCrossProductsPerAppCall := proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2)
 	unusedTxns := proto.MaxTxGroupSize - len(perTxnResources)
-	globalResources := ResourceAssignment{
+	globalResources := ResourceTracker{
+		MaxCrossProductReferences: maxCrossProductsPerAppCall * (proto.MaxTxGroupSize - nonAppCalls),
 		// If there are fewer than MaxTxGroupSize transactions, then we can make more resources
 		// available as if the remaining transactions were empty app calls.
 		MaxAccounts:  unusedTxns * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
@@ -86,16 +104,16 @@ func makeGlobalResourceAssignment(perTxnResources []ResourceAssignment, proto *c
 	return globalResources
 }
 
-func (a *ResourceAssignment) removePrivateFields() {
+func (a *ResourceTracker) removePrivateFields() {
 	a.maxWriteBudget = 0
 }
 
-// HasResources returns true if the assignment has any resources.
-func (a *ResourceAssignment) HasResources() bool {
-	return len(a.Accounts) != 0 || len(a.Assets) != 0 || len(a.Apps) != 0 || len(a.Boxes) != 0
+// HasResources returns true if the tracker has any resources.
+func (a *ResourceTracker) HasResources() bool {
+	return len(a.Accounts) != 0 || len(a.Assets) != 0 || len(a.Apps) != 0 || len(a.Boxes) != 0 || len(a.AssetHoldings) != 0 || len(a.AppLocals) != 0
 }
 
-func (a *ResourceAssignment) hasAccount(addr basics.Address, ep *logic.EvalParams, programVersion uint64) bool {
+func (a *ResourceTracker) hasAccount(addr basics.Address, ep *logic.EvalParams, programVersion uint64) bool {
 	// nil map lookup is ok
 	_, ok := a.Accounts[addr]
 	if ok {
@@ -111,7 +129,7 @@ func (a *ResourceAssignment) hasAccount(addr basics.Address, ep *logic.EvalParam
 	return false
 }
 
-func (a *ResourceAssignment) addAccount(addr basics.Address) bool {
+func (a *ResourceTracker) addAccount(addr basics.Address) bool {
 	if len(a.Accounts) >= a.MaxAccounts || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
 		return false
 	}
@@ -122,7 +140,7 @@ func (a *ResourceAssignment) addAccount(addr basics.Address) bool {
 	return true
 }
 
-func (a *ResourceAssignment) removeAccountSlot() bool {
+func (a *ResourceTracker) removeAccountSlot() bool {
 	if len(a.Accounts) >= a.MaxAccounts || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
 		return false
 	}
@@ -131,13 +149,13 @@ func (a *ResourceAssignment) removeAccountSlot() bool {
 	return true
 }
 
-func (a *ResourceAssignment) hasAsset(aid basics.AssetIndex) bool {
+func (a *ResourceTracker) hasAsset(aid basics.AssetIndex) bool {
 	// nil map lookup is ok
 	_, ok := a.Assets[aid]
 	return ok
 }
 
-func (a *ResourceAssignment) addAsset(aid basics.AssetIndex) bool {
+func (a *ResourceTracker) addAsset(aid basics.AssetIndex) bool {
 	if len(a.Assets) >= a.MaxAssets || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
 		return false
 	}
@@ -148,7 +166,7 @@ func (a *ResourceAssignment) addAsset(aid basics.AssetIndex) bool {
 	return true
 }
 
-func (a *ResourceAssignment) removeAssetSlot() bool {
+func (a *ResourceTracker) removeAssetSlot() bool {
 	if len(a.Assets) >= a.MaxAssets || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
 		return false
 	}
@@ -157,13 +175,13 @@ func (a *ResourceAssignment) removeAssetSlot() bool {
 	return true
 }
 
-func (a *ResourceAssignment) hasApp(aid basics.AppIndex) bool {
+func (a *ResourceTracker) hasApp(aid basics.AppIndex) bool {
 	// nil map lookup is ok
 	_, ok := a.Apps[aid]
 	return ok
 }
 
-func (a *ResourceAssignment) addApp(aid basics.AppIndex, ep *logic.EvalParams, programVersion uint64) bool {
+func (a *ResourceTracker) addApp(aid basics.AppIndex, ep *logic.EvalParams, programVersion uint64) bool {
 	if len(a.Apps) >= a.MaxApps {
 		return false
 	}
@@ -191,7 +209,7 @@ func (a *ResourceAssignment) addApp(aid basics.AppIndex, ep *logic.EvalParams, p
 	return true
 }
 
-func (a *ResourceAssignment) removeAppSlot() bool {
+func (a *ResourceTracker) removeAppSlot() bool {
 	if len(a.Apps) >= a.MaxApps || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
 		return false
 	}
@@ -203,13 +221,13 @@ func (a *ResourceAssignment) removeAppSlot() bool {
 	return true
 }
 
-func (a *ResourceAssignment) hasBox(app basics.AppIndex, name string) bool {
+func (a *ResourceTracker) hasBox(app basics.AppIndex, name string) bool {
 	// nil map lookup is ok
 	_, ok := a.Boxes[logic.BoxRef{App: app, Name: name}]
 	return ok
 }
 
-func (a *ResourceAssignment) addBox(app basics.AppIndex, name string, readSize, additionalReadBudget, bytesPerBoxRef uint64) bool {
+func (a *ResourceTracker) addBox(app basics.AppIndex, name string, readSize, additionalReadBudget, bytesPerBoxRef uint64) bool {
 	usedReadBudget := basics.AddSaturate(a.usedBoxReadBudget(), readSize)
 	// Adding bytesPerBoxRef to account for the new IO budget from adding an additional box ref
 	readBudget := additionalReadBudget + a.boxIOBudget(bytesPerBoxRef) + bytesPerBoxRef
@@ -240,7 +258,7 @@ func (a *ResourceAssignment) addBox(app basics.AppIndex, name string, readSize, 
 	return true
 }
 
-func (a *ResourceAssignment) addEmptyBoxRefsForWriteBudget(usedWriteBudget, additionalWriteBudget, bytesPerBoxRef uint64) bool {
+func (a *ResourceTracker) addEmptyBoxRefsForWriteBudget(usedWriteBudget, additionalWriteBudget, bytesPerBoxRef uint64) bool {
 	writeBudget := additionalWriteBudget + a.boxIOBudget(bytesPerBoxRef)
 	if usedWriteBudget > writeBudget {
 		// Need to allocate more empty box refs
@@ -257,11 +275,11 @@ func (a *ResourceAssignment) addEmptyBoxRefsForWriteBudget(usedWriteBudget, addi
 	return true
 }
 
-func (a *ResourceAssignment) boxIOBudget(bytesPerBoxRef uint64) uint64 {
+func (a *ResourceTracker) boxIOBudget(bytesPerBoxRef uint64) uint64 {
 	return uint64(len(a.Boxes)+a.NumEmptyBoxRefs) * bytesPerBoxRef
 }
 
-func (a *ResourceAssignment) usedBoxReadBudget() uint64 {
+func (a *ResourceTracker) usedBoxReadBudget() uint64 {
 	var budget uint64
 	for _, readSize := range a.Boxes {
 		budget += readSize
@@ -269,7 +287,7 @@ func (a *ResourceAssignment) usedBoxReadBudget() uint64 {
 	return budget
 }
 
-func (a *ResourceAssignment) maxPossibleUnnamedBoxes() int {
+func (a *ResourceTracker) maxPossibleUnnamedBoxes() int {
 	numBoxes := a.MaxTotalRefs - len(a.Accounts) - len(a.Assets) - len(a.Apps)
 	if a.MaxBoxes < numBoxes {
 		numBoxes = a.MaxBoxes
@@ -277,204 +295,13 @@ func (a *ResourceAssignment) maxPossibleUnnamedBoxes() int {
 	return numBoxes
 }
 
-// GroupResourceAssignment calculates the additional resources that a transaction group could use,
-// and it tracks any referenced unnamed resources that fit within those limits.
-type GroupResourceAssignment struct {
-	// Resources specifies global resources for the entire group.
-	Resources ResourceAssignment
-
-	AssetHoldings             map[ledgercore.AccountAsset]struct{}
-	AppLocals                 map[ledgercore.AccountApp]struct{}
-	MaxCrossProductReferences int
-
-	// localTxnResources specifies local resources for each transaction in the group. This will only
-	// be populated if a top-level transaction executes AVM programs prior to v9 (when resource
-	// sharing was added).
-	localTxnResources []ResourceAssignment
-
-	startingBoxes int
-}
-
-func makeGroupResourceAssignment(txns []transactions.SignedTxnWithAD, proto *config.ConsensusParams) GroupResourceAssignment {
-	var startingBoxes int
-	var nonAppCalls int
-	localTxnResources := make([]ResourceAssignment, len(txns))
-	for i := range txns {
-		localTxnResources[i] = makeTxnResourceAssignment(&txns[i].Txn, proto)
-		startingBoxes += len(txns[i].Txn.Boxes)
-		if txns[i].Txn.Type != protocol.ApplicationCallTx {
-			nonAppCalls++
-		}
-	}
-	// Calculate the maximum number of cross-product resources that can be accessed by one app call
-	// under normal circumstances. This is calculated using the case of an app call with a full set
-	// of foreign apps. Including the app being called, there are (MaxAppTxnForeignApps + 1) apps,
-	// crossed with (MaxAppTxnForeignAssets + 2) accounts (the called app's account, the sender's
-	// account, and the foreign app accounts). We then subtract out the app local of sender's
-	// account and the called app, and each app local of an app and its own account, or
-	// (MaxAppTxnForeignApps + 2) references. So we end up with:
-	//
-	// (MaxAppTxnForeignApps + 1) * (MaxAppTxnForeignApps + 2) - (MaxAppTxnForeignApps + 2)
-	// <=> MaxAppTxnForeignApps^2 + 3*MaxAppTxnForeignApps + 2 - MaxAppTxnForeignApps - 2
-	// <=> MaxAppTxnForeignApps^2 + 2*MaxAppTxnForeignApps
-	// <=> MaxAppTxnForeignApps * (MaxAppTxnForeignApps + 2)
-	maxCrossProductsPerAppCall := proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2)
-	return GroupResourceAssignment{
-		Resources:                 makeGlobalResourceAssignment(localTxnResources, proto),
-		MaxCrossProductReferences: maxCrossProductsPerAppCall * (proto.MaxTxGroupSize - nonAppCalls),
-		localTxnResources:         localTxnResources,
-		startingBoxes:             startingBoxes,
-	}
-}
-
-func (a *GroupResourceAssignment) removePrivateFields() {
-	a.startingBoxes = 0
-	a.Resources.removePrivateFields()
-	for i := range a.localTxnResources {
-		a.localTxnResources[i].removePrivateFields()
-	}
-	a.localTxnResources = nil
-}
-
-func (a *GroupResourceAssignment) hasAccount(addr basics.Address, ep *logic.EvalParams, programVersion uint64, globalSharing bool, txnIndex int) bool {
-	if globalSharing {
-		for i := range a.localTxnResources {
-			if a.localTxnResources[i].hasAccount(addr, ep, programVersion) {
-				return true
-			}
-		}
-		return a.Resources.hasAccount(addr, ep, programVersion)
-	}
-	return a.localTxnResources[txnIndex].hasAccount(addr, ep, programVersion)
-}
-
-func (a *GroupResourceAssignment) addAccount(addr basics.Address, globalSharing bool, txnIndex int) bool {
-	if globalSharing {
-		return a.Resources.addAccount(addr)
-	}
-	if !a.localTxnResources[txnIndex].addAccount(addr) {
-		return false
-	}
-	if a.Resources.hasAccount(addr, nil, 0) {
-		// It's redundant to list a resources in both the global and local assignment, so remove it
-		// from global. The below call to a.Resources.removeAccountSlot() will revert the changes to
-		// a.Resources.MaxAccounts and a.Resources.MaxTotalRefs.
-		delete(a.Resources.Accounts, addr)
-		a.Resources.MaxAccounts++
-		a.Resources.MaxTotalRefs++
-	}
-	// This ensures that the global assignment reduces in size if a resource is assigned locally.
-	if a.Resources.removeAccountSlot() {
-		return true
-	}
-	// Undo the local assignment if global is full.
-	delete(a.localTxnResources[txnIndex].Accounts, addr)
-	return false
-}
-
-func (a *GroupResourceAssignment) hasAsset(aid basics.AssetIndex, globalSharing bool, txnIndex int) bool {
-	if globalSharing {
-		for i := range a.localTxnResources {
-			if a.localTxnResources[i].hasAsset(aid) {
-				return true
-			}
-		}
-		return a.Resources.hasAsset(aid)
-	}
-	return a.localTxnResources[txnIndex].hasAsset(aid)
-}
-
-func (a *GroupResourceAssignment) addAsset(aid basics.AssetIndex, globalSharing bool, txnIndex int) bool {
-	if globalSharing {
-		return a.Resources.addAsset(aid)
-	}
-	if !a.localTxnResources[txnIndex].addAsset(aid) {
-		return false
-	}
-	if a.Resources.hasAsset(aid) {
-		// It's redundant to list a resources in both the global and local assignment, so remove it
-		// from global. The below call to a.Resources.removeAssetSlot() will revert the changes to
-		// a.Resources.MaxAssets and a.Resources.MaxTotalRefs.
-		delete(a.Resources.Assets, aid)
-		a.Resources.MaxAssets++
-		a.Resources.MaxTotalRefs++
-	}
-	// This ensures that the global assignment reduces in size if a resource is assigned locally.
-	if a.Resources.removeAssetSlot() {
-		return true
-	}
-	// Undo the local assignment if global is full.
-	delete(a.localTxnResources[txnIndex].Assets, aid)
-	return false
-}
-
-func (a *GroupResourceAssignment) hasApp(aid basics.AppIndex, globalSharing bool, txnIndex int) bool {
-	if globalSharing {
-		for i := range a.localTxnResources {
-			if a.localTxnResources[i].hasApp(aid) {
-				return true
-			}
-		}
-		return a.Resources.hasApp(aid)
-	}
-	return a.localTxnResources[txnIndex].hasApp(aid)
-}
-
-func (a *GroupResourceAssignment) addApp(aid basics.AppIndex, ep *logic.EvalParams, programVersion uint64, globalSharing bool, txnIndex int) bool {
-	if globalSharing {
-		return a.Resources.addApp(aid, ep, programVersion)
-	}
-	if !a.localTxnResources[txnIndex].addApp(aid, ep, programVersion) {
-		return false
-	}
-	if a.Resources.hasApp(aid) {
-		// It's redundant to list a resources in both the global and local assignment, so remove it
-		// from global. The below call to a.Resources.removeAppSlot() will revert the changes to
-		// a.Resources.MaxApps and a.Resources.MaxTotalRefs.
-		delete(a.Resources.Apps, aid)
-		a.Resources.MaxApps++
-		a.Resources.MaxTotalRefs++
-	}
-	// This ensures that the global assignment reduces in size if a resource is assigned locally.
-	if a.Resources.removeAppSlot() {
-		return true
-	}
-	// Undo the local assignment if global is full.
-	delete(a.localTxnResources[txnIndex].Apps, aid)
-	return false
-}
-
-func (a *GroupResourceAssignment) hasBox(app basics.AppIndex, name string) bool {
-	// All boxes are global, never consult localTxnResources
-	return a.Resources.hasBox(app, name)
-}
-
-func (a *GroupResourceAssignment) addBox(app basics.AppIndex, name string, readSize, additionalReadBudget, bytesPerBoxRef uint64) bool {
-	// All boxes are global, never consult localTxnResources
-	return a.Resources.addBox(app, name, readSize, additionalReadBudget, bytesPerBoxRef)
-}
-
-func (a *GroupResourceAssignment) reconcileBoxWriteBudget(used uint64, bytesPerBoxRef uint64) error {
-	if !a.Resources.addEmptyBoxRefsForWriteBudget(used, uint64(a.startingBoxes)*bytesPerBoxRef, bytesPerBoxRef) {
-		return fmt.Errorf("cannot add extra box refs to satisfy write budget of %d bytes", used)
-	}
-	return nil
-}
-
-func (a *GroupResourceAssignment) maxPossibleBoxIOBudget(bytesPerBoxRef uint64) uint64 {
-	return basics.MulSaturate(
-		uint64(a.startingBoxes+a.Resources.maxPossibleUnnamedBoxes()),
-		bytesPerBoxRef,
-	)
-}
-
-func (a *GroupResourceAssignment) hasHolding(addr basics.Address, aid basics.AssetIndex) bool {
+func (a *ResourceTracker) hasHolding(addr basics.Address, aid basics.AssetIndex) bool {
 	// nil map lookup is ok
 	_, ok := a.AssetHoldings[ledgercore.AccountAsset{Address: addr, Asset: aid}]
 	return ok
 }
 
-func (a *GroupResourceAssignment) addHolding(addr basics.Address, aid basics.AssetIndex) bool {
+func (a *ResourceTracker) addHolding(addr basics.Address, aid basics.AssetIndex) bool {
 	if len(a.AssetHoldings)+len(a.AppLocals) >= a.MaxCrossProductReferences {
 		return false
 	}
@@ -485,7 +312,7 @@ func (a *GroupResourceAssignment) addHolding(addr basics.Address, aid basics.Ass
 	return true
 }
 
-func (a *GroupResourceAssignment) hasLocal(addr basics.Address, aid basics.AppIndex, ep *logic.EvalParams) bool {
+func (a *ResourceTracker) hasLocal(addr basics.Address, aid basics.AppIndex, ep *logic.EvalParams) bool {
 	if ep.GetApplicationAddress(aid) == addr {
 		// The app local of an app and its own account is always available, so don't bother recording it.
 		return true
@@ -495,7 +322,7 @@ func (a *GroupResourceAssignment) hasLocal(addr basics.Address, aid basics.AppIn
 	return ok
 }
 
-func (a *GroupResourceAssignment) addLocal(addr basics.Address, aid basics.AppIndex) bool {
+func (a *ResourceTracker) addLocal(addr basics.Address, aid basics.AppIndex) bool {
 	if len(a.AssetHoldings)+len(a.AppLocals) >= a.MaxCrossProductReferences {
 		return false
 	}
@@ -506,8 +333,192 @@ func (a *GroupResourceAssignment) addLocal(addr basics.Address, aid basics.AppIn
 	return true
 }
 
+// groupResourceTracker calculates the additional resources that a transaction group could use,
+// and it tracks any referenced unnamed resources that fit within those limits.
+type groupResourceTracker struct {
+	// globalResources specifies global resources for the entire group.
+	globalResources ResourceTracker
+
+	// localTxnResources specifies local resources for each transaction in the group. This will only
+	// be populated if a top-level transaction executes AVM programs prior to v9 (when resource
+	// sharing was added).
+	localTxnResources []ResourceTracker
+
+	startingBoxes int
+}
+
+func makeGroupResourceTracker(txns []transactions.SignedTxnWithAD, proto *config.ConsensusParams) groupResourceTracker {
+	var startingBoxes int
+	var nonAppCalls int
+	localTxnResources := make([]ResourceTracker, len(txns))
+	for i := range txns {
+		localTxnResources[i] = makeTxnResourceTracker(&txns[i].Txn, proto)
+		startingBoxes += len(txns[i].Txn.Boxes)
+		if txns[i].Txn.Type != protocol.ApplicationCallTx {
+			nonAppCalls++
+		}
+	}
+	return groupResourceTracker{
+		globalResources:   makeGlobalResourceTracker(localTxnResources, nonAppCalls, proto),
+		localTxnResources: localTxnResources,
+		startingBoxes:     startingBoxes,
+	}
+}
+
+func (a *groupResourceTracker) hasAccount(addr basics.Address, ep *logic.EvalParams, programVersion uint64, globalSharing bool, gi int) bool {
+	if globalSharing {
+		for i := range a.localTxnResources {
+			if a.localTxnResources[i].hasAccount(addr, ep, programVersion) {
+				return true
+			}
+		}
+		return a.globalResources.hasAccount(addr, ep, programVersion)
+	}
+	return a.localTxnResources[gi].hasAccount(addr, ep, programVersion)
+}
+
+func (a *groupResourceTracker) addAccount(addr basics.Address, globalSharing bool, gi int) bool {
+	if globalSharing {
+		return a.globalResources.addAccount(addr)
+	}
+	if !a.localTxnResources[gi].addAccount(addr) {
+		return false
+	}
+	if a.globalResources.hasAccount(addr, nil, 0) {
+		// It's redundant to list a resources in both the global and local tracker, so remove it
+		// from global. The below call to a.globalResources.removeAccountSlot() will revert the
+		// changes to a.globalResources.MaxAccounts and a.globalResources.MaxTotalRefs.
+		delete(a.globalResources.Accounts, addr)
+		a.globalResources.MaxAccounts++
+		a.globalResources.MaxTotalRefs++
+	}
+	// This ensures that the global tracker reduces in size if a resource is assigned locally.
+	if a.globalResources.removeAccountSlot() {
+		return true
+	}
+	// Undo the local assignment if global is full.
+	delete(a.localTxnResources[gi].Accounts, addr)
+	return false
+}
+
+func (a *groupResourceTracker) hasAsset(aid basics.AssetIndex, globalSharing bool, gi int) bool {
+	if globalSharing {
+		for i := range a.localTxnResources {
+			if a.localTxnResources[i].hasAsset(aid) {
+				return true
+			}
+		}
+		return a.globalResources.hasAsset(aid)
+	}
+	return a.localTxnResources[gi].hasAsset(aid)
+}
+
+func (a *groupResourceTracker) addAsset(aid basics.AssetIndex, globalSharing bool, gi int) bool {
+	if globalSharing {
+		return a.globalResources.addAsset(aid)
+	}
+	if !a.localTxnResources[gi].addAsset(aid) {
+		return false
+	}
+	if a.globalResources.hasAsset(aid) {
+		// It's redundant to list a resources in both the global and local tracker, so remove it
+		// from global. The below call to a.globalResources.removeAssetSlot() will revert the
+		// changes to a.globalResources.MaxAssets and a.globalResources.MaxTotalRefs.
+		delete(a.globalResources.Assets, aid)
+		a.globalResources.MaxAssets++
+		a.globalResources.MaxTotalRefs++
+	}
+	// This ensures that the global tracker reduces in size if a resource is assigned locally.
+	if a.globalResources.removeAssetSlot() {
+		return true
+	}
+	// Undo the local assignment if global is full.
+	delete(a.localTxnResources[gi].Assets, aid)
+	return false
+}
+
+func (a *groupResourceTracker) hasApp(aid basics.AppIndex, globalSharing bool, gi int) bool {
+	if globalSharing {
+		for i := range a.localTxnResources {
+			if a.localTxnResources[i].hasApp(aid) {
+				return true
+			}
+		}
+		return a.globalResources.hasApp(aid)
+	}
+	return a.localTxnResources[gi].hasApp(aid)
+}
+
+func (a *groupResourceTracker) addApp(aid basics.AppIndex, ep *logic.EvalParams, programVersion uint64, globalSharing bool, gi int) bool {
+	if globalSharing {
+		return a.globalResources.addApp(aid, ep, programVersion)
+	}
+	if !a.localTxnResources[gi].addApp(aid, ep, programVersion) {
+		return false
+	}
+	if a.globalResources.hasApp(aid) {
+		// It's redundant to list a resources in both the global and local tracker, so remove it
+		// from global. The below call to a.globalResources.removeAppSlot() will revert the changes
+		// to a.globalResources.MaxApps and a.globalResources.MaxTotalRefs.
+		delete(a.globalResources.Apps, aid)
+		a.globalResources.MaxApps++
+		a.globalResources.MaxTotalRefs++
+	}
+	// This ensures that the global tracker reduces in size if a resource is assigned locally.
+	if a.globalResources.removeAppSlot() {
+		return true
+	}
+	// Undo the local assignment if global is full.
+	delete(a.localTxnResources[gi].Apps, aid)
+	return false
+}
+
+func (a *groupResourceTracker) hasBox(app basics.AppIndex, name string) bool {
+	// All boxes are global, never consult localTxnResources
+	return a.globalResources.hasBox(app, name)
+}
+
+func (a *groupResourceTracker) addBox(app basics.AppIndex, name string, readSize, additionalReadBudget, bytesPerBoxRef uint64) bool {
+	// All boxes are global, never consult localTxnResources
+	return a.globalResources.addBox(app, name, readSize, additionalReadBudget, bytesPerBoxRef)
+}
+
+func (a *groupResourceTracker) reconcileBoxWriteBudget(used uint64, bytesPerBoxRef uint64) error {
+	if !a.globalResources.addEmptyBoxRefsForWriteBudget(used, uint64(a.startingBoxes)*bytesPerBoxRef, bytesPerBoxRef) {
+		return fmt.Errorf("cannot add extra box refs to satisfy write budget of %d bytes", used)
+	}
+	return nil
+}
+
+func (a *groupResourceTracker) maxPossibleBoxIOBudget(bytesPerBoxRef uint64) uint64 {
+	return basics.MulSaturate(
+		uint64(a.startingBoxes+a.globalResources.maxPossibleUnnamedBoxes()),
+		bytesPerBoxRef,
+	)
+}
+
+func (a *groupResourceTracker) hasHolding(addr basics.Address, aid basics.AssetIndex) bool {
+	// All cross-products are global, never consult localTxnResources
+	return a.globalResources.hasHolding(addr, aid)
+}
+
+func (a *groupResourceTracker) addHolding(addr basics.Address, aid basics.AssetIndex) bool {
+	// All cross-products are global, never consult localTxnResources
+	return a.globalResources.addHolding(addr, aid)
+}
+
+func (a *groupResourceTracker) hasLocal(addr basics.Address, aid basics.AppIndex, ep *logic.EvalParams) bool {
+	// All cross-products are global, never consult localTxnResources
+	return a.globalResources.hasLocal(addr, aid, ep)
+}
+
+func (a *groupResourceTracker) addLocal(addr basics.Address, aid basics.AppIndex) bool {
+	// All cross-products are global, never consult localTxnResources
+	return a.globalResources.addLocal(addr, aid)
+}
+
 type resourcePolicy struct {
-	assignment                  GroupResourceAssignment
+	tracker                     groupResourceTracker
 	ep                          *logic.EvalParams
 	initialBoxSurplusReadBudget *uint64
 
@@ -518,55 +529,55 @@ type resourcePolicy struct {
 
 func newResourcePolicy(ep *logic.EvalParams, groupResult *TxnGroupResult) *resourcePolicy {
 	policy := resourcePolicy{
-		assignment: makeGroupResourceAssignment(ep.TxnGroup, ep.Proto),
-		ep:         ep,
+		tracker: makeGroupResourceTracker(ep.TxnGroup, ep.Proto),
+		ep:      ep,
 	}
-	groupResult.UnnamedResourcesAccessed = &policy.assignment
+	groupResult.UnnamedResourcesAccessed = &policy.tracker.globalResources
 	for i := range groupResult.Txns {
-		groupResult.Txns[i].UnnamedResourcesAccessed = &policy.assignment.localTxnResources[i]
+		groupResult.Txns[i].UnnamedResourcesAccessed = &policy.tracker.localTxnResources[i]
 	}
 	return &policy
 }
 
 func (p *resourcePolicy) AvailableAccount(addr basics.Address) bool {
-	if p.assignment.hasAccount(addr, p.ep, p.programVersion, p.globalSharing, p.txnRootIndex) {
+	if p.tracker.hasAccount(addr, p.ep, p.programVersion, p.globalSharing, p.txnRootIndex) {
 		return true
 	}
-	return p.assignment.addAccount(addr, p.globalSharing, p.txnRootIndex)
+	return p.tracker.addAccount(addr, p.globalSharing, p.txnRootIndex)
 }
 
 func (p *resourcePolicy) AvailableAsset(aid basics.AssetIndex) bool {
-	if p.assignment.hasAsset(aid, p.globalSharing, p.txnRootIndex) {
+	if p.tracker.hasAsset(aid, p.globalSharing, p.txnRootIndex) {
 		return true
 	}
-	return p.assignment.addAsset(aid, p.globalSharing, p.txnRootIndex)
+	return p.tracker.addAsset(aid, p.globalSharing, p.txnRootIndex)
 }
 
 func (p *resourcePolicy) AvailableApp(aid basics.AppIndex) bool {
-	if p.assignment.hasApp(aid, p.globalSharing, p.txnRootIndex) {
+	if p.tracker.hasApp(aid, p.globalSharing, p.txnRootIndex) {
 		return true
 	}
-	return p.assignment.addApp(aid, p.ep, p.programVersion, p.globalSharing, p.txnRootIndex)
+	return p.tracker.addApp(aid, p.ep, p.programVersion, p.globalSharing, p.txnRootIndex)
 }
 
 func (p *resourcePolicy) AllowsHolding(addr basics.Address, aid basics.AssetIndex) bool {
 	// holdings are only checked if globalSharing is true
-	if p.assignment.hasHolding(addr, aid) {
+	if p.tracker.hasHolding(addr, aid) {
 		return true
 	}
-	return p.assignment.addHolding(addr, aid)
+	return p.tracker.addHolding(addr, aid)
 }
 
 func (p *resourcePolicy) AllowsLocal(addr basics.Address, aid basics.AppIndex) bool {
 	// locals are only checked if globalSharing is true
-	if p.assignment.hasLocal(addr, aid, p.ep) {
+	if p.tracker.hasLocal(addr, aid, p.ep) {
 		return true
 	}
-	return p.assignment.addLocal(addr, aid)
+	return p.tracker.addLocal(addr, aid)
 }
 
 func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operation logic.BoxOperation, createSize uint64) bool {
-	if p.assignment.hasBox(app, name) {
+	if p.tracker.hasBox(app, name) {
 		// We actually never expect this to happen, since the EvalContext remembers each box in
 		// order to track their dirty bytes, and it won't invoke this method if it's already seen
 		// the box.
@@ -580,5 +591,5 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operatio
 	if ok {
 		readSize = uint64(len(box))
 	}
-	return p.assignment.addBox(app, name, readSize, *p.initialBoxSurplusReadBudget, p.ep.Proto.BytesPerBoxReference)
+	return p.tracker.addBox(app, name, readSize, *p.initialBoxSurplusReadBudget, p.ep.Proto.BytesPerBoxReference)
 }

@@ -3651,21 +3651,19 @@ func TestUnnamedResources(t *testing.T) {
 				env.OptIntoApp(otherAppUser, otherAppID)
 
 				proto := env.TxnInfo.CurrentProtocolParams()
-				expectedUnnamedResourceGroupAssignment := simulation.GroupResourceAssignment{
-					Resources: simulation.ResourceAssignment{
-						MaxAccounts:  proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
-						MaxAssets:    proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
-						MaxApps:      proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
-						MaxBoxes:     proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
-						MaxTotalRefs: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
-					},
+				expectedUnnamedResourceGroupAssignment := &simulation.ResourceTracker{
+					MaxAccounts:               proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
+					MaxAssets:                 proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
+					MaxApps:                   proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
+					MaxBoxes:                  proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
+					MaxTotalRefs:              proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
 					MaxCrossProductReferences: proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 				}
-				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment
-				var expectedResources *simulation.ResourceAssignment
+				var expectedUnnamedResourceTxnAssignment *simulation.ResourceTracker
+				var expectedResources *simulation.ResourceTracker
 				if v < 9 {
 					// no shared resources
-					expectedUnnamedResourceTxnAssignment = &simulation.ResourceAssignment{
+					expectedUnnamedResourceTxnAssignment = &simulation.ResourceTracker{
 						MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
 						MaxAssets:    proto.MaxAppTxnForeignAssets,
 						MaxApps:      proto.MaxAppTxnForeignApps,
@@ -3675,7 +3673,7 @@ func TestUnnamedResources(t *testing.T) {
 					expectedResources = expectedUnnamedResourceTxnAssignment
 				} else {
 					// shared resources
-					expectedResources = &expectedUnnamedResourceGroupAssignment.Resources
+					expectedResources = expectedUnnamedResourceGroupAssignment
 				}
 
 				var innerCount int
@@ -3756,7 +3754,7 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 8 { // boxes introduced
 					program += `byte "A"; int 64; box_create; assert;`
 					program += `byte "B"; box_len; !; assert; !; assert;`
-					expectedUnnamedResourceGroupAssignment.Resources.Boxes = map[logic.BoxRef]uint64{
+					expectedUnnamedResourceGroupAssignment.Boxes = map[logic.BoxRef]uint64{
 						{App: 0, Name: "A"}: 0,
 						{App: 0, Name: "B"}: 0,
 					}
@@ -3797,17 +3795,17 @@ func TestUnnamedResources(t *testing.T) {
 					expectedUnnamedResourceGroupAssignment.AppLocals[local] = struct{}{}
 				}
 				var boxesToFix []logic.BoxRef
-				for box := range expectedUnnamedResourceGroupAssignment.Resources.Boxes {
+				for box := range expectedUnnamedResourceGroupAssignment.Boxes {
 					if box.App == 0 {
 						// replace with app ID
 						boxesToFix = append(boxesToFix, box)
 					}
 				}
 				for _, box := range boxesToFix {
-					value := expectedUnnamedResourceGroupAssignment.Resources.Boxes[box]
-					delete(expectedUnnamedResourceGroupAssignment.Resources.Boxes, box)
+					value := expectedUnnamedResourceGroupAssignment.Boxes[box]
+					delete(expectedUnnamedResourceGroupAssignment.Boxes, box)
 					box.App = testAppID
-					expectedUnnamedResourceGroupAssignment.Resources.Boxes[box] = value
+					expectedUnnamedResourceGroupAssignment.Boxes[box] = value
 				}
 
 				txn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -3822,10 +3820,18 @@ func TestUnnamedResources(t *testing.T) {
 					localAssets := len(expectedUnnamedResourceTxnAssignment.Assets)
 					localApps := len(expectedUnnamedResourceTxnAssignment.Apps)
 					// Skip boxes, they are global only
-					expectedUnnamedResourceGroupAssignment.Resources.MaxAccounts -= localAccounts + localApps
-					expectedUnnamedResourceGroupAssignment.Resources.MaxAssets -= localAssets
-					expectedUnnamedResourceGroupAssignment.Resources.MaxApps -= localApps
-					expectedUnnamedResourceGroupAssignment.Resources.MaxTotalRefs -= localAccounts + localAssets + localApps
+					expectedUnnamedResourceGroupAssignment.MaxAccounts -= localAccounts + localApps
+					expectedUnnamedResourceGroupAssignment.MaxAssets -= localAssets
+					expectedUnnamedResourceGroupAssignment.MaxApps -= localApps
+					expectedUnnamedResourceGroupAssignment.MaxTotalRefs -= localAccounts + localAssets + localApps
+
+					if !expectedUnnamedResourceTxnAssignment.HasResources() {
+						expectedUnnamedResourceTxnAssignment = nil
+					}
+				}
+
+				if !expectedUnnamedResourceGroupAssignment.HasResources() {
+					expectedUnnamedResourceGroupAssignment = nil
 				}
 
 				return simulationTestCase{
@@ -3853,7 +3859,7 @@ func TestUnnamedResources(t *testing.T) {
 								},
 								AppBudgetAdded:           700 + 700*uint64(innerCount),
 								AppBudgetConsumed:        ignoreAppBudgetConsumed,
-								UnnamedResourcesAccessed: &expectedUnnamedResourceGroupAssignment,
+								UnnamedResourcesAccessed: expectedUnnamedResourceGroupAssignment,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -3918,17 +3924,15 @@ int 1
 				stxn := txn.Txn().Sign(sender.Sk)
 
 				proto := env.TxnInfo.CurrentProtocolParams()
-				expectedUnnamedResourceAssignment := simulation.GroupResourceAssignment{
-					Resources: simulation.ResourceAssignment{
-						MaxAccounts:  proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
-						MaxAssets:    proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
-						MaxApps:      proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
-						MaxBoxes:     proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
-						MaxTotalRefs: proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
-					},
+				expectedUnnamedResourceAssignment := &simulation.ResourceTracker{
+					MaxAccounts:               proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
+					MaxAssets:                 proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
+					MaxApps:                   proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
+					MaxBoxes:                  proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
+					MaxTotalRefs:              proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
 					MaxCrossProductReferences: proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 				}
-				var expectedUnnamedResourceTxnAssignment *simulation.ResourceAssignment
+				var expectedUnnamedResourceTxnAssignment *simulation.ResourceTracker
 
 				var expectedEvalDelta transactions.EvalDelta
 				var expectedError string
@@ -3946,7 +3950,7 @@ int 1
 							},
 						},
 					}
-					expectedUnnamedResourceAssignment.Resources.Accounts = map[basics.Address]struct{}{
+					expectedUnnamedResourceAssignment.Accounts = map[basics.Address]struct{}{
 						testAppUser: {},
 					}
 					expectedUnnamedResourceAssignment.AppLocals = map[ledgercore.AccountApp]struct{}{
@@ -3955,7 +3959,7 @@ int 1
 				} else {
 					expectedError = fmt.Sprintf("logic eval error: invalid Account reference for mutation %s", testAppUser)
 					expectedFailedAt = simulation.TxnPath{0}
-					expectedUnnamedResourceTxnAssignment = &simulation.ResourceAssignment{
+					expectedUnnamedResourceTxnAssignment = &simulation.ResourceTracker{
 						MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
 						MaxAssets:    proto.MaxAppTxnForeignAssets,
 						MaxApps:      proto.MaxAppTxnForeignApps,
@@ -3965,8 +3969,16 @@ int 1
 							testAppUser: {},
 						},
 					}
-					expectedUnnamedResourceAssignment.Resources.MaxAccounts--
-					expectedUnnamedResourceAssignment.Resources.MaxTotalRefs--
+					expectedUnnamedResourceAssignment.MaxAccounts--
+					expectedUnnamedResourceAssignment.MaxTotalRefs--
+				}
+
+				if expectedUnnamedResourceTxnAssignment != nil && !expectedUnnamedResourceTxnAssignment.HasResources() {
+					expectedUnnamedResourceTxnAssignment = nil
+				}
+
+				if !expectedUnnamedResourceAssignment.HasResources() {
+					expectedUnnamedResourceAssignment = nil
 				}
 
 				return simulationTestCase{
@@ -3994,7 +4006,7 @@ int 1
 								FailedAt:                 expectedFailedAt,
 								AppBudgetAdded:           700,
 								AppBudgetConsumed:        ignoreAppBudgetConsumed,
-								UnnamedResourcesAccessed: &expectedUnnamedResourceAssignment,
+								UnnamedResourcesAccessed: expectedUnnamedResourceAssignment,
 							},
 						},
 						EvalOverrides: simulation.ResultEvalOverrides{
@@ -4116,23 +4128,21 @@ int 1
 				appCallStxn := appCallTxn.Txn().Sign(sender.Sk)
 
 				proto := env.TxnInfo.CurrentProtocolParams()
-				expectedUnnamedResourceAssignment := simulation.GroupResourceAssignment{
-					Resources: simulation.ResourceAssignment{
-						MaxAccounts:  (proto.MaxTxGroupSize - 1) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
-						MaxAssets:    (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignAssets,
-						MaxApps:      (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignApps,
-						MaxBoxes:     (proto.MaxTxGroupSize - 1) * proto.MaxAppBoxReferences,
-						MaxTotalRefs: (proto.MaxTxGroupSize - 1) * proto.MaxAppTotalTxnReferences,
+				expectedUnnamedResourceAssignment := simulation.ResourceTracker{
+					MaxAccounts:  (proto.MaxTxGroupSize - 1) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
+					MaxAssets:    (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignAssets,
+					MaxApps:      (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignApps,
+					MaxBoxes:     (proto.MaxTxGroupSize - 1) * proto.MaxAppBoxReferences,
+					MaxTotalRefs: (proto.MaxTxGroupSize - 1) * proto.MaxAppTotalTxnReferences,
 
-						Accounts: map[basics.Address]struct{}{
-							otherAccount: {},
-						},
-						Assets: map[basics.AssetIndex]struct{}{
-							otherAssetID: {},
-						},
-						Apps: map[basics.AppIndex]struct{}{
-							otherAppID: {},
-						},
+					Accounts: map[basics.Address]struct{}{
+						otherAccount: {},
+					},
+					Assets: map[basics.AssetIndex]struct{}{
+						otherAssetID: {},
+					},
+					Apps: map[basics.AppIndex]struct{}{
+						otherAppID: {},
 					},
 					MaxCrossProductReferences: (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 					// These should remain nil, since cross-product references for newly created
@@ -4324,6 +4334,23 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 	}
 
 	proto := env.TxnInfo.CurrentProtocolParams()
+	expectedUnnamedResources := &simulation.ResourceTracker{
+		MaxAccounts:  len(boxOps) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
+		MaxAssets:    len(boxOps)*proto.MaxAppTxnForeignAssets - otherAssets,
+		MaxApps:      len(boxOps) * proto.MaxAppTxnForeignApps,
+		MaxBoxes:     len(boxOps) * proto.MaxAppBoxReferences,
+		MaxTotalRefs: len(boxOps)*proto.MaxAppTotalTxnReferences - otherAssets,
+
+		Boxes:           expected.Boxes,
+		NumEmptyBoxRefs: expected.NumEmptyBoxRefs,
+
+		MaxCrossProductReferences: len(boxOps) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
+	}
+
+	if !expectedUnnamedResources.HasResources() {
+		expectedUnnamedResources = nil
+	}
+
 	testCase := simulationTestCase{
 		input: simulation.Request{
 			TxnGroups:             [][]transactions.SignedTxn{stxns},
@@ -4335,23 +4362,11 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 			LastRound: env.TxnInfo.LatestRound(),
 			TxnGroups: []simulation.TxnGroupResult{
 				{
-					Txns:              expectedTxnResults,
-					AppBudgetAdded:    uint64(700 * len(boxOps)),
-					AppBudgetConsumed: ignoreAppBudgetConsumed,
-					UnnamedResourcesAccessed: &simulation.GroupResourceAssignment{
-						Resources: simulation.ResourceAssignment{
-							MaxAccounts:  len(boxOps) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
-							MaxAssets:    len(boxOps)*proto.MaxAppTxnForeignAssets - otherAssets,
-							MaxApps:      len(boxOps) * proto.MaxAppTxnForeignApps,
-							MaxBoxes:     len(boxOps) * proto.MaxAppBoxReferences,
-							MaxTotalRefs: len(boxOps)*proto.MaxAppTotalTxnReferences - otherAssets,
-
-							Boxes:           expected.Boxes,
-							NumEmptyBoxRefs: expected.NumEmptyBoxRefs,
-						},
-						MaxCrossProductReferences: len(boxOps) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
-					},
-					FailedAt: failedAt,
+					Txns:                     expectedTxnResults,
+					AppBudgetAdded:           uint64(700 * len(boxOps)),
+					AppBudgetConsumed:        ignoreAppBudgetConsumed,
+					UnnamedResourcesAccessed: expectedUnnamedResources,
+					FailedAt:                 failedAt,
 				},
 			},
 			EvalOverrides: simulation.ResultEvalOverrides{
@@ -5159,16 +5174,15 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 
 	proto := env.TxnInfo.CurrentProtocolParams()
 
-	expectedGroupResources := simulation.GroupResourceAssignment{
-		Resources: simulation.ResourceAssignment{
-			MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
-			MaxAssets:    proto.MaxAppTxnForeignAssets,
-			MaxApps:      proto.MaxAppTxnForeignApps,
-			MaxBoxes:     proto.MaxAppBoxReferences,
-			MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+	expectedGroupResources := &simulation.ResourceTracker{
+		MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
+		MaxAssets:    proto.MaxAppTxnForeignAssets,
+		MaxApps:      proto.MaxAppTxnForeignApps,
+		MaxBoxes:     proto.MaxAppBoxReferences,
+		MaxTotalRefs: proto.MaxAppTotalTxnReferences,
 
-			Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), uint64(0)),
-		},
+		Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), uint64(0)),
+
 		MaxCrossProductReferences: proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 	}
 	expectedAccounts := mapWithKeys(resources.accounts(), struct{}{})
@@ -5191,7 +5205,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 	}
 	if appVersion < 9 {
 		// No shared resources
-		localResources := simulation.ResourceAssignment{
+		localResources := simulation.ResourceTracker{
 			MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
 			MaxAssets:    proto.MaxAppTxnForeignAssets,
 			MaxApps:      proto.MaxAppTxnForeignApps,
@@ -5202,20 +5216,24 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			Assets:   expectedAssets,
 			Apps:     expectedApps,
 		}
-		expectedGroupResources.Resources.MaxAccounts -= len(localResources.Accounts) + len(localResources.Apps)
-		expectedGroupResources.Resources.MaxAssets -= len(localResources.Assets)
-		expectedGroupResources.Resources.MaxApps -= len(localResources.Apps)
-		expectedGroupResources.Resources.MaxTotalRefs -= len(localResources.Accounts) + len(localResources.Assets) + len(localResources.Apps)
+		expectedGroupResources.MaxAccounts -= len(localResources.Accounts) + len(localResources.Apps)
+		expectedGroupResources.MaxAssets -= len(localResources.Assets)
+		expectedGroupResources.MaxApps -= len(localResources.Apps)
+		expectedGroupResources.MaxTotalRefs -= len(localResources.Accounts) + len(localResources.Assets) + len(localResources.Apps)
 		if localResources.HasResources() {
 			expectedTxnResults[0].UnnamedResourcesAccessed = &localResources
 		}
 	} else {
 		// Shared resources
-		expectedGroupResources.Resources.Accounts = expectedAccounts
-		expectedGroupResources.Resources.Assets = expectedAssets
-		expectedGroupResources.Resources.Apps = expectedApps
+		expectedGroupResources.Accounts = expectedAccounts
+		expectedGroupResources.Assets = expectedAssets
+		expectedGroupResources.Apps = expectedApps
 		expectedGroupResources.AssetHoldings = mapWithKeys(resources.assetHoldings(), struct{}{})
 		expectedGroupResources.AppLocals = mapWithKeys(resources.appLocals(), struct{}{})
+	}
+
+	if !expectedGroupResources.HasResources() {
+		expectedGroupResources = nil
 	}
 
 	testCase := simulationTestCase{
@@ -5233,7 +5251,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 					Txns:                     expectedTxnResults,
 					AppBudgetAdded:           uint64(700) + extraBudget,
 					AppBudgetConsumed:        ignoreAppBudgetConsumed,
-					UnnamedResourcesAccessed: &expectedGroupResources,
+					UnnamedResourcesAccessed: expectedGroupResources,
 					FailedAt:                 failedAt,
 				},
 			},

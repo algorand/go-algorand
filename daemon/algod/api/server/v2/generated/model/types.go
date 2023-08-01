@@ -734,8 +734,8 @@ type SimulateTransactionGroupResult struct {
 	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulateTransactionResult `json:"txn-results"`
 
-	// UnnamedResourcesAccessed If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and could benefit from group resource sharing. In other words, there are no restrictions on where these resources must be placed in the transaction group. Also see property 'unnamed-resources-accessed' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing; in contrast, these resources must be placed local to that transaction.
-	UnnamedResourcesAccessed *SimulationUnnamedGroupResources `json:"unnamed-resources-accessed,omitempty"`
+	// UnnamedResourcesAccessed If unnamed resource access is allowed, this is a set of unnamed resources that were accessed. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult).
+	UnnamedResourcesAccessed *SimulateUnnamedResourcesAccessed `json:"unnamed-resources-accessed,omitempty"`
 }
 
 // SimulateTransactionResult Simulation result for an individual transaction
@@ -752,8 +752,32 @@ type SimulateTransactionResult struct {
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`
 
-	// UnnamedResourcesAccessed The set of unnamed resources that were accessed during a simulation call.
-	UnnamedResourcesAccessed *SimulationUnnamedResourceAssignment `json:"unnamed-resources-accessed,omitempty"`
+	// UnnamedResourcesAccessed If unnamed resource access is allowed, this is a set of unnamed resources that were accessed. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult).
+	UnnamedResourcesAccessed *SimulateUnnamedResourcesAccessed `json:"unnamed-resources-accessed,omitempty"`
+}
+
+// SimulateUnnamedResourcesAccessed If unnamed resource access is allowed, this is a set of unnamed resources that were accessed. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult).
+type SimulateUnnamedResourcesAccessed struct {
+	// Accounts The unnamed accounts that were referenced. The order of this array is arbitrary.
+	Accounts *[]string `json:"accounts,omitempty"`
+
+	// AppLocals The unnamed app local states that were referenced. The order of this array is arbitrary.
+	AppLocals *[]ApplicationLocalReference `json:"app-locals,omitempty"`
+
+	// Apps The unnamed applications that were referenced. The order of this array is arbitrary.
+	Apps *[]uint64 `json:"apps,omitempty"`
+
+	// AssetHoldings The unnamed asset holdings that were referenced. The order of this array is arbitrary.
+	AssetHoldings *[]AssetHoldingReference `json:"asset-holdings,omitempty"`
+
+	// Assets The unnamed assets that were referenced. The order of this array is arbitrary.
+	Assets *[]uint64 `json:"assets,omitempty"`
+
+	// Boxes The unnamed boxes that were referenced. The order of this array is arbitrary.
+	Boxes *[]BoxReference `json:"boxes,omitempty"`
+
+	// ExtraBoxRefs The number of extra box references used to increase the IO budget. This is in addition to the references defined in the input transaction group and any referenced to unnamed boxes.
+	ExtraBoxRefs *uint64 `json:"extra-box-refs,omitempty"`
 }
 
 // SimulationEvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
@@ -805,36 +829,6 @@ type SimulationTransactionExecTrace struct {
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
-}
-
-// SimulationUnnamedGroupResources If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and could benefit from group resource sharing. In other words, there are no restrictions on where these resources must be placed in the transaction group. Also see property 'unnamed-resources-accessed' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing; in contrast, these resources must be placed local to that transaction.
-type SimulationUnnamedGroupResources struct {
-	// AppLocals The unnamed app local states that were referenced. The order of this array is arbitrary.
-	AppLocals *[]ApplicationLocalReference `json:"app-locals,omitempty"`
-
-	// AssetHoldings The unnamed asset holdings that were referenced. The order of this array is arbitrary.
-	AssetHoldings *[]AssetHoldingReference `json:"asset-holdings,omitempty"`
-
-	// Resources The set of unnamed resources that were accessed during a simulation call.
-	Resources SimulationUnnamedResourceAssignment `json:"resources"`
-}
-
-// SimulationUnnamedResourceAssignment The set of unnamed resources that were accessed during a simulation call.
-type SimulationUnnamedResourceAssignment struct {
-	// Accounts The unnamed accounts that were referenced. The order of this array is arbitrary.
-	Accounts *[]string `json:"accounts,omitempty"`
-
-	// Apps The unnamed applications that were referenced. The order of this array is arbitrary.
-	Apps *[]uint64 `json:"apps,omitempty"`
-
-	// Assets The unnamed assets that were referenced. The order of this array is arbitrary.
-	Assets *[]uint64 `json:"assets,omitempty"`
-
-	// Boxes The unnamed boxes that were referenced. The order of this array is arbitrary.
-	Boxes *[]BoxReference `json:"boxes,omitempty"`
-
-	// EmptyBoxRefs The number of unnamed box references used to increase the IO budget.
-	EmptyBoxRefs *uint64 `json:"empty-box-refs,omitempty"`
 }
 
 // StateDelta Application state delta.

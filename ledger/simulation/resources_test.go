@@ -35,16 +35,16 @@ func TestAppAccounts(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusFuture]
 	txns := make([]transactions.SignedTxnWithAD, 1)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
-	ep := logic.NewEvalParams(txns, &proto, nil)
+	ep := logic.NewAppEvalParams(txns, &proto, nil)
 
 	appID := basics.AppIndex(12345)
 	appAccount := appID.Address()
 
 	for _, globalSharing := range []bool{false, true} {
-		groupAssignment := makeGroupResourceAssignment(txns, &proto)
-		var resources *ResourceAssignment
+		groupAssignment := makeGroupResourceTracker(txns, &proto)
+		var resources *ResourceTracker
 		if globalSharing {
-			resources = &groupAssignment.Resources
+			resources = &groupAssignment.globalResources
 		} else {
 			resources = &groupAssignment.localTxnResources[0]
 		}
@@ -88,7 +88,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 	txns[1].Txn.Type = protocol.ApplicationCallTx
 	txns[2].Txn.Type = protocol.ApplicationCallTx
-	ep := logic.NewEvalParams(txns, &proto, nil)
+	ep := logic.NewAppEvalParams(txns, &proto, nil)
 
 	// For this test, we assume only the txn at index 1 supports group sharing.
 
@@ -96,9 +96,9 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		account1 := basics.Address{1, 1, 1}
 		account2 := basics.Address{2, 2, 2}
 
-		groupAssignment := makeGroupResourceAssignment(txns, &proto)
+		groupAssignment := makeGroupResourceTracker(txns, &proto)
 
-		require.Empty(t, groupAssignment.Resources.Accounts)
+		require.Empty(t, groupAssignment.globalResources.Accounts)
 		require.Empty(t, groupAssignment.localTxnResources[0].Accounts)
 		require.Empty(t, groupAssignment.localTxnResources[1].Accounts)
 		require.Empty(t, groupAssignment.localTxnResources[2].Accounts)
@@ -106,7 +106,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		require.True(t, groupAssignment.addAccount(account1, false, 0))
 
 		// account1 should be present in txn 0's local assignment
-		require.Empty(t, groupAssignment.Resources.Accounts)
+		require.Empty(t, groupAssignment.globalResources.Accounts)
 		require.Equal(t, map[basics.Address]struct{}{
 			account1: {},
 		}, groupAssignment.localTxnResources[0].Accounts)
@@ -121,7 +121,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		// account2 should be present in the global assignment
 		require.Equal(t, map[basics.Address]struct{}{
 			account2: {},
-		}, groupAssignment.Resources.Accounts)
+		}, groupAssignment.globalResources.Accounts)
 		require.Equal(t, map[basics.Address]struct{}{
 			account1: {},
 		}, groupAssignment.localTxnResources[0].Accounts)
@@ -137,7 +137,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		// account1 should be present in txn 2's local assignment
 		require.Equal(t, map[basics.Address]struct{}{
 			account2: {},
-		}, groupAssignment.Resources.Accounts)
+		}, groupAssignment.globalResources.Accounts)
 		require.Equal(t, map[basics.Address]struct{}{
 			account1: {},
 		}, groupAssignment.localTxnResources[0].Accounts)
@@ -149,7 +149,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		require.True(t, groupAssignment.addAccount(account2, false, 2))
 
 		// account2 gets moved from the global assignment to the local assignment of txn 2
-		require.Empty(t, groupAssignment.Resources.Accounts)
+		require.Empty(t, groupAssignment.globalResources.Accounts)
 		require.Equal(t, map[basics.Address]struct{}{
 			account1: {},
 		}, groupAssignment.localTxnResources[0].Accounts)
@@ -164,9 +164,9 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		asset1 := basics.AssetIndex(100)
 		asset2 := basics.AssetIndex(200)
 
-		groupAssignment := makeGroupResourceAssignment(txns, &proto)
+		groupAssignment := makeGroupResourceTracker(txns, &proto)
 
-		require.Empty(t, groupAssignment.Resources.Assets)
+		require.Empty(t, groupAssignment.globalResources.Assets)
 		require.Empty(t, groupAssignment.localTxnResources[0].Assets)
 		require.Empty(t, groupAssignment.localTxnResources[1].Assets)
 		require.Empty(t, groupAssignment.localTxnResources[2].Assets)
@@ -174,7 +174,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		require.True(t, groupAssignment.addAsset(asset1, false, 0))
 
 		// asset1 should be present in txn 0's local assignment
-		require.Empty(t, groupAssignment.Resources.Assets)
+		require.Empty(t, groupAssignment.globalResources.Assets)
 		require.Equal(t, map[basics.AssetIndex]struct{}{
 			asset1: {},
 		}, groupAssignment.localTxnResources[0].Assets)
@@ -189,7 +189,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		// asset2 should be present in the global assignment
 		require.Equal(t, map[basics.AssetIndex]struct{}{
 			asset2: {},
-		}, groupAssignment.Resources.Assets)
+		}, groupAssignment.globalResources.Assets)
 		require.Equal(t, map[basics.AssetIndex]struct{}{
 			asset1: {},
 		}, groupAssignment.localTxnResources[0].Assets)
@@ -205,7 +205,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		// asset1 should be present in txn 2's local assignment
 		require.Equal(t, map[basics.AssetIndex]struct{}{
 			asset2: {},
-		}, groupAssignment.Resources.Assets)
+		}, groupAssignment.globalResources.Assets)
 		require.Equal(t, map[basics.AssetIndex]struct{}{
 			asset1: {},
 		}, groupAssignment.localTxnResources[0].Assets)
@@ -217,7 +217,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		require.True(t, groupAssignment.addAsset(asset2, false, 2))
 
 		// asset2 gets moved from the global assignment to the local assignment of txn 2
-		require.Empty(t, groupAssignment.Resources.Assets)
+		require.Empty(t, groupAssignment.globalResources.Assets)
 		require.Equal(t, map[basics.AssetIndex]struct{}{
 			asset1: {},
 		}, groupAssignment.localTxnResources[0].Assets)
@@ -232,9 +232,9 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		app1 := basics.AppIndex(100)
 		app2 := basics.AppIndex(200)
 
-		groupAssignment := makeGroupResourceAssignment(txns, &proto)
+		groupAssignment := makeGroupResourceTracker(txns, &proto)
 
-		require.Empty(t, groupAssignment.Resources.Apps)
+		require.Empty(t, groupAssignment.globalResources.Apps)
 		require.Empty(t, groupAssignment.localTxnResources[0].Apps)
 		require.Empty(t, groupAssignment.localTxnResources[1].Apps)
 		require.Empty(t, groupAssignment.localTxnResources[2].Apps)
@@ -242,7 +242,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		require.True(t, groupAssignment.addApp(app1, ep, 7, false, 0))
 
 		// app1 should be present in txn 0's local assignment
-		require.Empty(t, groupAssignment.Resources.Apps)
+		require.Empty(t, groupAssignment.globalResources.Apps)
 		require.Equal(t, map[basics.AppIndex]struct{}{
 			app1: {},
 		}, groupAssignment.localTxnResources[0].Apps)
@@ -257,7 +257,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		// app2 should be present in the global assignment
 		require.Equal(t, map[basics.AppIndex]struct{}{
 			app2: {},
-		}, groupAssignment.Resources.Apps)
+		}, groupAssignment.globalResources.Apps)
 		require.Equal(t, map[basics.AppIndex]struct{}{
 			app1: {},
 		}, groupAssignment.localTxnResources[0].Apps)
@@ -273,7 +273,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		// app1 should be present in txn 2's local assignment
 		require.Equal(t, map[basics.AppIndex]struct{}{
 			app2: {},
-		}, groupAssignment.Resources.Apps)
+		}, groupAssignment.globalResources.Apps)
 		require.Equal(t, map[basics.AppIndex]struct{}{
 			app1: {},
 		}, groupAssignment.localTxnResources[0].Apps)
@@ -285,7 +285,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		require.True(t, groupAssignment.addApp(app2, ep, 7, false, 2))
 
 		// app2 gets moved from the global assignment to the local assignment of txn 2
-		require.Empty(t, groupAssignment.Resources.Apps)
+		require.Empty(t, groupAssignment.globalResources.Apps)
 		require.Equal(t, map[basics.AppIndex]struct{}{
 			app1: {},
 		}, groupAssignment.localTxnResources[0].Apps)

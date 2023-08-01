@@ -458,34 +458,25 @@ func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResul
 		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
 		TransactionTrace:         convertTxnTrace(txnResult.Trace),
-		UnnamedResourcesAccessed: convertUnnamedResourceAssignment(txnResult.UnnamedResourcesAccessed),
+		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
 	}
 }
 
-func convertUnnamedResourceAssignment(assignment *simulation.ResourceAssignment) *model.SimulationUnnamedResourceAssignment {
-	if assignment == nil {
+func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *model.SimulateUnnamedResourcesAccessed {
+	if resources == nil {
 		return nil
 	}
-	return &model.SimulationUnnamedResourceAssignment{
-		Accounts: sliceOrNil(stringSlice(maps.Keys(assignment.Accounts))),
-		Assets:   sliceOrNil(uint64Slice(maps.Keys(assignment.Assets))),
-		Apps:     sliceOrNil(uint64Slice(maps.Keys(assignment.Apps))),
-		Boxes: sliceOrNil(convertSlice(maps.Keys(assignment.Boxes), func(box logic.BoxRef) model.BoxReference {
+	return &model.SimulateUnnamedResourcesAccessed{
+		Accounts: sliceOrNil(stringSlice(maps.Keys(resources.Accounts))),
+		Assets:   sliceOrNil(uint64Slice(maps.Keys(resources.Assets))),
+		Apps:     sliceOrNil(uint64Slice(maps.Keys(resources.Apps))),
+		Boxes: sliceOrNil(convertSlice(maps.Keys(resources.Boxes), func(box logic.BoxRef) model.BoxReference {
 			return model.BoxReference{
 				App:  uint64(box.App),
 				Name: []byte(box.Name),
 			}
 		})),
-		EmptyBoxRefs: omitEmpty(uint64(assignment.NumEmptyBoxRefs)),
-	}
-}
-
-func convertUnnamedGroupResources(resources *simulation.GroupResourceAssignment) *model.SimulationUnnamedGroupResources {
-	if resources == nil {
-		return nil
-	}
-	return &model.SimulationUnnamedGroupResources{
-		Resources: *convertUnnamedResourceAssignment(&resources.Resources),
+		ExtraBoxRefs: omitEmpty(uint64(resources.NumEmptyBoxRefs)),
 		AssetHoldings: sliceOrNil(convertSlice(maps.Keys(resources.AssetHoldings), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
 			return model.AssetHoldingReference{
 				Account: holding.Address.String(),
@@ -512,7 +503,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 		FailureMessage:           omitEmpty(txnGroupResult.FailureMessage),
 		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
 		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
-		UnnamedResourcesAccessed: convertUnnamedGroupResources(txnGroupResult.UnnamedResourcesAccessed),
+		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {

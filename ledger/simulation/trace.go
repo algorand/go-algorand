@@ -43,7 +43,7 @@ type TxnResult struct {
 	//  * The transaction accessed unnamed resources.
 	//
 	// In that case, it will be populated with the unnamed resources accessed by this transaction.
-	UnnamedResourcesAccessed *ResourceAssignment
+	UnnamedResourcesAccessed *ResourceTracker
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group
@@ -66,7 +66,7 @@ type TxnGroupResult struct {
 	// Any unnamed resources accessed from transactions which cannot benefit from shared resources
 	// will be placed in the corresponding `UnnamedResourcesAccessed` field in the appropriate
 	// TxnResult struct.
-	UnnamedResourcesAccessed *GroupResourceAssignment
+	UnnamedResourcesAccessed *ResourceTracker
 }
 
 func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {

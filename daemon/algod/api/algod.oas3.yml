@@ -2113,7 +2113,7 @@
             "type": "array"
           },
           "unnamed-resources-accessed": {
-            "$ref": "#/components/schemas/SimulationUnnamedGroupResources"
+            "$ref": "#/components/schemas/SimulateUnnamedResourcesAccessed"
           }
         },
         "required": [
@@ -2139,12 +2139,67 @@
             "$ref": "#/components/schemas/PendingTransactionResponse"
           },
           "unnamed-resources-accessed": {
-            "$ref": "#/components/schemas/SimulationUnnamedResourceAssignment"
+            "$ref": "#/components/schemas/SimulateUnnamedResourcesAccessed"
           }
         },
         "required": [
           "txn-result"
         ],
+        "type": "object"
+      },
+      "SimulateUnnamedResourcesAccessed": {
+        "description": "If unnamed resource access is allowed, this is a set of unnamed resources that were accessed. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult).",
+        "properties": {
+          "accounts": {
+            "description": "The unnamed accounts that were referenced. The order of this array is arbitrary.",
+            "items": {
+              "type": "string",
+              "x-algorand-format": "Address"
+            },
+            "type": "array"
+          },
+          "app-locals": {
+            "description": "The unnamed app local states that were referenced. The order of this array is arbitrary.",
+            "items": {
+              "$ref": "#/components/schemas/ApplicationLocalReference"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "description": "The unnamed applications that were referenced. The order of this array is arbitrary.",
+            "items": {
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "type": "array"
+          },
+          "asset-holdings": {
+            "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
+            "items": {
+              "$ref": "#/components/schemas/AssetHoldingReference"
+            },
+            "type": "array"
+          },
+          "assets": {
+            "description": "The unnamed assets that were referenced. The order of this array is arbitrary.",
+            "items": {
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "type": "array"
+          },
+          "boxes": {
+            "description": "The unnamed boxes that were referenced. The order of this array is arbitrary.",
+            "items": {
+              "$ref": "#/components/schemas/BoxReference"
+            },
+            "type": "array"
+          },
+          "extra-box-refs": {
+            "description": "The number of extra box references used to increase the IO budget. This is in addition to the references defined in the input transaction group and any referenced to unnamed boxes.",
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "SimulationEvalOverrides": {
@@ -2241,73 +2296,6 @@
               "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
             },
             "type": "array"
-          }
-        },
-        "type": "object"
-      },
-      "SimulationUnnamedGroupResources": {
-        "description": "If unnamed resource access is allowed, this is the subset of unnamed resources that were accessed by this group and could benefit from group resource sharing. In other words, there are no restrictions on where these resources must be placed in the transaction group. Also see property 'unnamed-resources-accessed' in SimulateTransactionResult to see unnamed resources accessed by each transaction which cannot benefit from group sharing; in contrast, these resources must be placed local to that transaction.",
-        "properties": {
-          "app-locals": {
-            "description": "The unnamed app local states that were referenced. The order of this array is arbitrary.",
-            "items": {
-              "$ref": "#/components/schemas/ApplicationLocalReference"
-            },
-            "type": "array"
-          },
-          "asset-holdings": {
-            "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
-            "items": {
-              "$ref": "#/components/schemas/AssetHoldingReference"
-            },
-            "type": "array"
-          },
-          "resources": {
-            "$ref": "#/components/schemas/SimulationUnnamedResourceAssignment"
-          }
-        },
-        "required": [
-          "resources"
-        ],
-        "type": "object"
-      },
-      "SimulationUnnamedResourceAssignment": {
-        "description": "The set of unnamed resources that were accessed during a simulation call.",
-        "properties": {
-          "accounts": {
-            "description": "The unnamed accounts that were referenced. The order of this array is arbitrary.",
-            "items": {
-              "type": "string",
-              "x-algorand-format": "Address"
-            },
-            "type": "array"
-          },
-          "apps": {
-            "description": "The unnamed applications that were referenced. The order of this array is arbitrary.",
-            "items": {
-              "type": "integer",
-              "x-algorand-format": "uint64"
-            },
-            "type": "array"
-          },
-          "assets": {
-            "description": "The unnamed assets that were referenced. The order of this array is arbitrary.",
-            "items": {
-              "type": "integer",
-              "x-algorand-format": "uint64"
-            },
-            "type": "array"
-          },
-          "boxes": {
-            "description": "The unnamed boxes that were referenced. The order of this array is arbitrary.",
-            "items": {
-              "$ref": "#/components/schemas/BoxReference"
-            },
-            "type": "array"
-          },
-          "empty-box-refs": {
-            "description": "The number of unnamed box references used to increase the IO budget.",
-            "type": "integer"
           }
         },
         "type": "object"

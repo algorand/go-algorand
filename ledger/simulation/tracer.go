@@ -381,14 +381,14 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	if cx.RunMode() == logic.ModeApp {
 		tracer.handleError(evalError)
 		if evalError == nil && tracer.unnamedResourcePolicy != nil {
-			if err := tracer.unnamedResourcePolicy.assignment.reconcileBoxWriteBudget(cx.BoxDirtyBytes(), cx.Proto.BytesPerBoxReference); err != nil {
+			if err := tracer.unnamedResourcePolicy.tracker.reconcileBoxWriteBudget(cx.BoxDirtyBytes(), cx.Proto.BytesPerBoxReference); err != nil {
 				// This should never happen, since we limit the IO budget to tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget
 				// (as shown below), so we should never have to reconcile an unachievable budget.
 				panic(err.Error())
 			}
 
 			// Update box budget. It will decrease if an additional non-box resource has been accessed.
-			cx.SetIOBudget(tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
 		}
 	}
 }
@@ -422,7 +422,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 			s := cx.SurplusReadBudget
 			tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
 		}
-		cx.SetIOBudget(tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+		cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
 	}
 }
 

@@ -247,8 +247,12 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	if simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed != nil {
 		// Remove private fields for easier test comparison
 		simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed.removePrivateFields()
+		if !simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed.HasResources() {
+			simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed = nil
+		}
 		for i := range simulatorTracer.result.TxnGroups[0].Txns {
 			txnResult := &simulatorTracer.result.TxnGroups[0].Txns[i]
+			txnResult.UnnamedResourcesAccessed.removePrivateFields()
 			if !txnResult.UnnamedResourcesAccessed.HasResources() {
 				// Clean up any unused local resource assignments
 				txnResult.UnnamedResourcesAccessed = nil
