@@ -380,14 +380,15 @@ func TestConsensusVersion(t *testing.T) {
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
 		l.WaitForCommit(rnd)
 	}
-	// ensure that all the first 5 has the expected version.
+	// ensure that all the first flushOffset have the expected version.
 	for rnd := basics.Round(consensusParams.MaxTxnLife); rnd < basics.Round(consensusParams.MaxTxnLife+flushOffset); rnd++ {
 		ver, err := l.ConsensusVersion(rnd)
 		require.NoError(t, err)
 		require.Equal(t, previousProtocol, ver)
 	}
 	// the next UpgradeVoteRounds can also be known to have the previous version.
-	for rnd := basics.Round(consensusParams.MaxTxnLife + 5); rnd < basics.Round(consensusParams.MaxTxnLife+flushOffset+consensusParams.UpgradeVoteRounds); rnd++ {
+	for rnd := basics.Round(consensusParams.MaxTxnLife + flushOffset); rnd < basics.Round(consensusParams.MaxTxnLife+
+		flushOffset+consensusParams.UpgradeVoteRounds); rnd++ {
 		ver, err := l.ConsensusVersion(rnd)
 		require.NoError(t, err)
 		require.Equal(t, previousProtocol, ver)
