@@ -391,11 +391,6 @@ func defaultDebugExplain(argCount, retCount int) debugStackExplain {
 	}
 }
 
-// NextStackChange is a helper function that queries EvalContext for the coming stack change of the current PC.
-func (cx *EvalContext) NextStackChange() (deletions, additions int) {
-	return (opsByOpcode[cx.version][cx.program[cx.pc]].Explain)(cx)
-}
-
 func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
 	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
 	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
@@ -890,7 +885,7 @@ func init() {
 	}
 	// Start from v2 and higher,
 	// copy lower version opcodes and overwrite matching version
-	for v := uint64(2); v <= evalMaxVersion; v++ {
+	for v := uint64(2); v <= LogicVersion; v++ {
 		// Copy opcodes from lower version
 		OpsByName[v] = maps.Clone(OpsByName[v-1])
 		for op, oi := range opsByOpcode[v-1] {

@@ -13,8 +13,7 @@ RUN apk update && \
     apk add automake && \
     apk add fmt && \
     apk add build-base && \
-    apk add musl-dev && \
-    apk add sqlite
+    apk add musl-dev
 
 RUN apk add dpkg && \
     wget http://deb.debian.org/debian/pool/main/s/shellcheck/shellcheck_0.5.0-3_armhf.deb && \

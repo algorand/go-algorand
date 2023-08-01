@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -34,9 +35,11 @@ func TestSaveNetworkCfg(t *testing.T) {
 	a := require.New(t)
 
 	cfg := NetworkCfg{
-		Name:         "testName",
-		RelayDirs:    []string{"testPND"},
-		TemplateFile: "testTemplate",
+		Name:      "testName",
+		RelayDirs: []string{"testPND"},
+		Template: NetworkTemplate{
+			Genesis: gen.DefaultGenesis,
+		},
 	}
 
 	tmpFolder := t.TempDir()
@@ -44,6 +47,7 @@ func TestSaveNetworkCfg(t *testing.T) {
 	err := saveNetworkCfg(cfg, cfgFile)
 	a.Nil(err)
 	cfg1, err := loadNetworkCfg(cfgFile)
+	a.NoError(err)
 	a.Equal(cfg, cfg1)
 }
 
@@ -63,9 +67,11 @@ func TestSaveConsensus(t *testing.T) {
 
 	net := Network{
 		cfg: NetworkCfg{
-			Name:         "testName",
-			RelayDirs:    []string{relayDir},
-			TemplateFile: "testTemplate",
+			Name:      "testName",
+			RelayDirs: []string{relayDir},
+			Template: NetworkTemplate{
+				Genesis: gen.DefaultGenesis,
+			},
 		},
 		nodeDirs: map[string]string{
 			"node1": nodeDir,

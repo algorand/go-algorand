@@ -79,15 +79,13 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade pkg-config
     install_or_upgrade libtool
     install_or_upgrade shellcheck
-    if [ "${CIRCLECI}" != "true" ]; then
-        install_or_upgrade jq
-        install_or_upgrade autoconf
-        install_or_upgrade automake
-        install_or_upgrade python3
-        install_or_upgrade lnav
-        install_or_upgrade diffutils
-        lnav -i "$SCRIPTPATH/algorand_node_log.json"
-    fi
+    install_or_upgrade jq
+    install_or_upgrade autoconf
+    install_or_upgrade automake
+    install_or_upgrade python3
+    install_or_upgrade lnav
+    install_or_upgrade diffutils
+    lnav -i "$SCRIPTPATH/algorand_node_log.json"
 elif [ "${OS}" = "windows" ]; then
     if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-jq unzip procps; then
         echo "Error installing pacman dependencies"
