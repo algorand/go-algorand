@@ -6014,6 +6014,8 @@ int 1
 }
 
 func TestNoHeaderLedger(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	nhl := NoHeaderLedger{}
 	_, err := nhl.BlockHdr(1)
 	require.Error(t, err)

@@ -2713,6 +2713,8 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 }
 
 func TestAccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	aul := &accountUpdatesLedgerEvaluator{
 		prevHeader: bookkeeping.BlockHeader{},
 		tail:       &txTail{},
