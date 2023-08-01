@@ -17,7 +17,6 @@
 package logic
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -89,7 +88,7 @@ func opEcScalarMul(cx *EvalContext) error {
 	prev := last - 1
 	aBytes := cx.Stack[prev].Bytes
 	kBytes := cx.Stack[last].Bytes
-	if len(kBytes) > 32 {
+	if len(kBytes) > scalarSize {
 		return fmt.Errorf("ec_scalar_mul scalar len is %d, exceeds 32", len(kBytes))
 	}
 	k := new(big.Int).SetBytes(kBytes)
@@ -117,11 +116,6 @@ func opEcScalarMul(cx *EvalContext) error {
 // Input: Two byte slices, top is concatenated uncompressed bytes for k g2 points, and second to top is same for g1
 // Output: Single uint at top representing bool for whether pairing of inputs was identity
 func opEcPairingCheck(cx *EvalContext) error {
-	/*
-	   Q: Should pairing fail is the supplied points are not canonical?
-	   Q: Should pairing fail if there are no inputs?
-	*/
-
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
 	if !ok { // no version check yet, both appeared at once
@@ -156,7 +150,7 @@ func opEcPairingCheck(cx *EvalContext) error {
 }
 
 // Input: Top of stack is slice of k scalars, second to top is slice of k group points as uncompressed bytes
-// Output: Single byte slice that contains uncompressed bytes for point equivalent to p_1^e_1 * p_2^e_2 * ... * p_k^e_k, where p_i is i'th point from input and e_i is i'th scalar
+// Output: Single byte slice that contains uncompressed bytes for point equivalent to p_1*e_1 + p_2*e_2 + ... + p_k*e_k, where p_i is i'th point from input and e_i is i'th scalar
 func opEcMultiExp(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
@@ -301,7 +295,7 @@ func bytesToBLS12381G1s(b []byte, checkSubgroup bool) ([]bls12381.G1Affine, erro
 		return nil, fmt.Errorf("bad length %d. Expected %d multiple", len(b), bls12381g1Size)
 	}
 	if len(b) == 0 {
-		return nil, errors.New("empty input")
+		return nil, errEmptyInput
 	}
 	points := make([]bls12381.G1Affine, len(b)/bls12381g1Size)
 	for i := range points {
@@ -350,7 +344,7 @@ func bytesToBLS12381G2s(b []byte, checkSubgroup bool) ([]bls12381.G2Affine, erro
 		return nil, fmt.Errorf("bad length %d. Expected %d multiple", len(b), bls12381g2Size)
 	}
 	if len(b) == 0 {
-		return nil, errors.New("empty input")
+		return nil, errEmptyInput
 	}
 	points := make([]bls12381.G2Affine, len(b)/bls12381g2Size)
 	for i := range points {
@@ -560,7 +554,7 @@ func bytesToBN254G1s(b []byte, checkSubgroup bool) ([]bn254.G1Affine, error) {
 		return nil, fmt.Errorf("bad length %d. Expected %d multiple", len(b), bn254g1Size)
 	}
 	if len(b) == 0 {
-		return nil, errors.New("empty input")
+		return nil, errEmptyInput
 	}
 	points := make([]bn254.G1Affine, len(b)/bn254g1Size)
 	for i := range points {
