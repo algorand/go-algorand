@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -236,8 +237,13 @@ func (a *ResourceTracker) addBox(app basics.AppIndex, name string, readSize, add
 	if usedReadBudget > readBudget {
 		// We need to allocate more empty box refs to increase the read budget
 		neededBudget := usedReadBudget - readBudget
-		// Adding (bytesPerBoxRef - 1) to round up
-		emptyRefs = int((neededBudget + bytesPerBoxRef - 1) / bytesPerBoxRef)
+		emptyRefsU64 := basics.DivCeil(neededBudget, bytesPerBoxRef)
+		if emptyRefsU64 > math.MaxInt {
+			// This should never happen, but if we overflow an int with the number of extra pages
+			// needed, we can't support this request.
+			return false
+		}
+		emptyRefs = int(emptyRefsU64)
 	} else if a.NumEmptyBoxRefs != 0 {
 		surplusBudget := readBudget - usedReadBudget
 		if surplusBudget >= bytesPerBoxRef && readBudget-bytesPerBoxRef >= a.maxWriteBudget {
@@ -247,7 +253,7 @@ func (a *ResourceTracker) addBox(app basics.AppIndex, name string, readSize, add
 		}
 	}
 
-	if len(a.Boxes)+a.NumEmptyBoxRefs+emptyRefs >= a.MaxBoxes || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs+emptyRefs >= a.MaxTotalRefs {
+	if emptyRefs >= a.MaxBoxes-len(a.Boxes)-a.NumEmptyBoxRefs || emptyRefs >= a.MaxTotalRefs-len(a.Accounts)-len(a.Assets)-len(a.Apps)-len(a.Boxes)-a.NumEmptyBoxRefs {
 		return false
 	}
 	if a.Boxes == nil {
@@ -263,8 +269,14 @@ func (a *ResourceTracker) addEmptyBoxRefsForWriteBudget(usedWriteBudget, additio
 	if usedWriteBudget > writeBudget {
 		// Need to allocate more empty box refs
 		overspend := usedWriteBudget - writeBudget
-		extraRefs := int((overspend + bytesPerBoxRef - 1) / bytesPerBoxRef) // adding (bytesPerBoxRef - 1) to round up
-		if len(a.Boxes)+a.NumEmptyBoxRefs+extraRefs > a.MaxBoxes || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs+extraRefs > a.MaxTotalRefs {
+		extraRefsU64 := basics.DivCeil(overspend, bytesPerBoxRef)
+		if extraRefsU64 > math.MaxInt {
+			// This should never happen, but if we overflow an int with the number of extra pages
+			// needed, we can't support this request.
+			return false
+		}
+		extraRefs := int(extraRefsU64)
+		if extraRefs > a.MaxBoxes-len(a.Boxes)-a.NumEmptyBoxRefs || extraRefs > a.MaxTotalRefs-len(a.Accounts)-len(a.Assets)-len(a.Apps)-len(a.Boxes)-a.NumEmptyBoxRefs {
 			return false
 		}
 		a.NumEmptyBoxRefs += extraRefs

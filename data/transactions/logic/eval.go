@@ -3105,9 +3105,9 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case ClearStateProgram:
 		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
 	case NumApprovalProgramPages:
-		sv.Uint = uint64(divCeil(len(txn.ApprovalProgram), maxStringSize))
+		sv.Uint = uint64(basics.DivCeil(len(txn.ApprovalProgram), maxStringSize))
 	case ApprovalProgramPages:
-		pageCount := divCeil(len(txn.ApprovalProgram), maxStringSize)
+		pageCount := basics.DivCeil(len(txn.ApprovalProgram), maxStringSize)
 		if arrayFieldIdx >= uint64(pageCount) {
 			return sv, fmt.Errorf("invalid ApprovalProgramPages index %d", arrayFieldIdx)
 		}
@@ -3118,9 +3118,9 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		}
 		sv.Bytes = txn.ApprovalProgram[first:last]
 	case NumClearStateProgramPages:
-		sv.Uint = uint64(divCeil(len(txn.ClearStateProgram), maxStringSize))
+		sv.Uint = uint64(basics.DivCeil(len(txn.ClearStateProgram), maxStringSize))
 	case ClearStateProgramPages:
-		pageCount := divCeil(len(txn.ClearStateProgram), maxStringSize)
+		pageCount := basics.DivCeil(len(txn.ClearStateProgram), maxStringSize)
 		if arrayFieldIdx >= uint64(pageCount) {
 			return sv, fmt.Errorf("invalid ClearStateProgramPages index %d", arrayFieldIdx)
 		}

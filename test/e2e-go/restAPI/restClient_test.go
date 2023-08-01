@@ -3420,14 +3420,12 @@ int 1
 	})
 	a.NoError(err)
 
-	expectedUnnamedGroupResources := model.SimulationUnnamedGroupResources{
-		Resources: model.SimulationUnnamedResourceAssignment{
-			Accounts:     &[]string{otherAddress},
-			Assets:       &[]uint64{assetID},
-			Apps:         &[]uint64{uint64(otherAppID)},
-			Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
-			EmptyBoxRefs: toPtr[uint64](1),
-		},
+	expectedUnnamedGroupResources := model.SimulateUnnamedResourcesAccessed{
+		Accounts:     &[]string{otherAddress},
+		Assets:       &[]uint64{assetID},
+		Apps:         &[]uint64{uint64(otherAppID)},
+		Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
+		ExtraBoxRefs: toPtr[uint64](1),
 		AssetHoldings: &[]model.AssetHoldingReference{
 			{Account: otherAddress, Asset: assetID},
 		},
