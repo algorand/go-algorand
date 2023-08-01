@@ -5,12 +5,12 @@ go 1.20
 require (
 	github.com/DataDog/zstd v1.5.2
 	github.com/algorand/avm-abi v0.2.0
-	github.com/algorand/falcon v0.0.0-20220727072124-02a2a64c4414
-	github.com/algorand/go-codec/codec v1.1.9
+	github.com/algorand/falcon v0.1.0
+	github.com/algorand/go-codec/codec v1.1.10
 	github.com/algorand/go-deadlock v0.2.2
 	github.com/algorand/go-sumhash v0.1.0
 	github.com/algorand/graphtrace v0.1.0
-	github.com/algorand/msgp v1.1.53
+	github.com/algorand/msgp v1.1.55
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0
 	github.com/algorand/sortition v1.0.0
 	github.com/algorand/websocket v1.4.6
@@ -18,7 +18,7 @@ require (
 	github.com/consensys/gnark-crypto v0.8.0
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c
 	github.com/dchest/siphash v1.2.1
-	github.com/fatih/color v1.7.0
+	github.com/fatih/color v1.13.0
 	github.com/getkin/kin-openapi v0.107.0
 	github.com/gofrs/flock v0.7.0
 	github.com/golang/snappy v0.0.4
