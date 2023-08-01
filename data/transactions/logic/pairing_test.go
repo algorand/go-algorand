@@ -31,6 +31,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	bn254fp "github.com/consensys/gnark-crypto/ecc/bn254/fp"
 	bn254fr "github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	"github.com/stretchr/testify/require"
 )
 
 const pairingNonsense = `
@@ -232,6 +233,130 @@ func TestEcMultiExp(t *testing.T) {
 			testAccepts(t, pt+"dup; concat;  int 32; bzero; int 1; itob; b|; dup; concat;"+multiexp+
 				pt+"byte 0x02;"+mul+"==", pairingVersion)
 		})
+	}
+}
+
+func requireBlsG1Eq(t *testing.T, g1points []bls12381.G1Affine, kbytes []byte) {
+	b1, err := bls12381G1MultiExpSmall(g1points, kbytes)
+	require.NoError(t, err)
+	b2, err := bls12381G1MultiExpLarge(g1points, kbytes)
+	require.NoError(t, err)
+	require.Equal(t, b1, b2)
+}
+
+func TestBlsG1LargeSmallEquivalent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	zero := [32]byte{}
+	for i := 1; i < 10; i++ {
+		g1points := make([]bls12381.G1Affine, i)
+		for j := 0; j < i; j++ {
+			g1points[j] = bls12381RandomG1()
+		}
+		kbytes := make([]byte, i*scalarSize)
+		rand.Read(kbytes)
+		requireBlsG1Eq(t, g1points, kbytes)
+		g1points[0] = bls12381.G1Affine{} // Infinity at 0
+		requireBlsG1Eq(t, g1points, kbytes)
+		g1points[0] = bls12381RandomG1()    // change back to random
+		g1points[i-1] = bls12381.G1Affine{} // Infinity at end
+		requireBlsG1Eq(t, g1points, kbytes)
+		copy(kbytes, zero[:]) // zero scalar
+		requireBlsG1Eq(t, g1points, kbytes)
+	}
+}
+
+func requireBlsG2Eq(t *testing.T, g2points []bls12381.G2Affine, kbytes []byte) {
+	b1, err := bls12381G2MultiExpSmall(g2points, kbytes)
+	require.NoError(t, err)
+	b2, err := bls12381G2MultiExpLarge(g2points, kbytes)
+	require.NoError(t, err)
+	require.Equal(t, b1, b2)
+}
+
+func TestBlsG2LargeSmallEquivalent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	zero := [32]byte{}
+	for i := 1; i < 10; i++ {
+		g2points := make([]bls12381.G2Affine, i)
+		for j := 0; j < i; j++ {
+			g2points[j] = bls12381RandomG2()
+		}
+		kbytes := make([]byte, i*scalarSize)
+		rand.Read(kbytes)
+		requireBlsG2Eq(t, g2points, kbytes)
+		g2points[0] = bls12381.G2Affine{} // Infinity at 0
+		requireBlsG2Eq(t, g2points, kbytes)
+		g2points[0] = bls12381RandomG2()    // change back to random
+		g2points[i-1] = bls12381.G2Affine{} // Infinity at end
+		requireBlsG2Eq(t, g2points, kbytes)
+		copy(kbytes, zero[:]) // zero scalar
+		requireBlsG2Eq(t, g2points, kbytes)
+	}
+}
+
+func requireBnG1Eq(t *testing.T, g1points []bn254.G1Affine, kbytes []byte) {
+	b1, err := bn254G1MultiExpSmall(g1points, kbytes)
+	require.NoError(t, err)
+	b2, err := bn254G1MultiExpLarge(g1points, kbytes)
+	require.NoError(t, err)
+	require.Equal(t, b1, b2)
+}
+
+func TestBnG1LargeSmallEquivalent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	zero := [32]byte{}
+	for i := 1; i < 10; i++ {
+		g1points := make([]bn254.G1Affine, i)
+		for j := 0; j < i; j++ {
+			g1points[j] = bn254RandomG1()
+		}
+		kbytes := make([]byte, i*scalarSize)
+		rand.Read(kbytes)
+		requireBnG1Eq(t, g1points, kbytes)
+		g1points[0] = bn254.G1Affine{} // Infinity at 0
+		requireBnG1Eq(t, g1points, kbytes)
+		g1points[0] = bn254RandomG1()    // change back to random
+		g1points[i-1] = bn254.G1Affine{} // Infinity at end
+		requireBnG1Eq(t, g1points, kbytes)
+		copy(kbytes, zero[:]) // zero scalar
+		requireBnG1Eq(t, g1points, kbytes)
+	}
+}
+
+func requireBnG2Eq(t *testing.T, g2points []bn254.G2Affine, kbytes []byte) {
+	b1, err := bn254G2MultiExpSmall(g2points, kbytes)
+	require.NoError(t, err)
+	b2, err := bn254G2MultiExpLarge(g2points, kbytes)
+	require.NoError(t, err)
+	require.Equal(t, b1, b2)
+}
+
+func TestBnG2LargeSmallEquivalent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	zero := [32]byte{}
+	for i := 1; i < 10; i++ {
+		g2points := make([]bn254.G2Affine, i)
+		for j := 0; j < i; j++ {
+			g2points[j] = bn254RandomG2()
+		}
+		kbytes := make([]byte, i*scalarSize)
+		rand.Read(kbytes)
+		requireBnG2Eq(t, g2points, kbytes)
+		g2points[0] = bn254.G2Affine{} // Infinity at 0
+		requireBnG2Eq(t, g2points, kbytes)
+		g2points[0] = bn254RandomG2()    // change back to random
+		g2points[i-1] = bn254.G2Affine{} // Infinity at end
+		requireBnG2Eq(t, g2points, kbytes)
+		copy(kbytes, zero[:]) // zero scalar
+		requireBnG2Eq(t, g2points, kbytes)
 	}
 }
 
@@ -449,6 +574,77 @@ func BenchmarkBn254(b *testing.B) {
 		benchmarkOperation(b, "", fp2bytes+"ec_map_to BN254g2; pop", "int 1")
 	})
 
+}
+
+func BenchmarkFindMultiExpCutoff(b *testing.B) {
+	for i := 1; i < 10; i++ {
+		kbytes := make([]byte, i*scalarSize)
+		rand.Read(kbytes)
+		{
+			g1points := make([]bls12381.G1Affine, i)
+			for j := 0; j < i; j++ {
+				g1points[j] = bls12381RandomG1()
+			}
+			b.Run(fmt.Sprintf("bls g1 small %02d", i), func(b *testing.B) {
+				for r := 0; r < b.N; r++ {
+					bls12381G1MultiExpSmall(g1points, kbytes)
+				}
+			})
+			b.Run(fmt.Sprintf("bls g1 large %02d", i), func(b *testing.B) {
+				for r := 0; r < b.N; r++ {
+					bls12381G1MultiExpLarge(g1points, kbytes)
+				}
+			})
+
+			g2points := make([]bls12381.G2Affine, i)
+			for j := 0; j < i; j++ {
+				g2points[j] = bls12381RandomG2()
+			}
+			b.Run(fmt.Sprintf("bls g2 small %02d", i), func(b *testing.B) {
+				for r := 0; r < b.N; r++ {
+					bls12381G2MultiExpSmall(g2points, kbytes)
+				}
+			})
+			b.Run(fmt.Sprintf("bls g2 large %02d", i), func(b *testing.B) {
+				for r := 0; r < b.N; r++ {
+					bls12381G2MultiExpLarge(g2points, kbytes)
+				}
+			})
+		}
+
+		{
+			g1points := make([]bn254.G1Affine, i)
+			for j := 0; j < i; j++ {
+				g1points[j] = bn254RandomG1()
+			}
+			b.Run(fmt.Sprintf("bn g1 small %02d", i), func(b *testing.B) {
+				for r := 0; r < b.N; r++ {
+					bn254G1MultiExpSmall(g1points, kbytes)
+				}
+			})
+			b.Run(fmt.Sprintf("bn g1 large %02d", i), func(b *testing.B) {
+				for r := 0; r < b.N; r++ {
+					bn254G1MultiExpLarge(g1points, kbytes)
+				}
+			})
+
+			g2points := make([]bn254.G2Affine, i)
+			for j := 0; j < i; j++ {
+				g2points[j] = bn254RandomG2()
+			}
+			b.Run(fmt.Sprintf("bn g2 small %02d", i), func(b *testing.B) {
+				for r := 0; r < b.N; r++ {
+					bn254G2MultiExpSmall(g2points, kbytes)
+				}
+			})
+			b.Run(fmt.Sprintf("bn g2 large %02d", i), func(b *testing.B) {
+				for r := 0; r < b.N; r++ {
+					bn254G2MultiExpLarge(g2points, kbytes)
+				}
+			})
+		}
+
+	}
 }
 
 func bn254RandomG1() bn254.G1Affine {

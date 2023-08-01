@@ -437,42 +437,100 @@ func bls12381PairingCheck(g1Bytes, g2Bytes []byte) (bool, error) {
 
 var eccMontgomery = ecc.MultiExpConfig{ScalarsMont: true}
 
-func bls12381G1MultiExp(g1Bytes, scalarBytes []byte) ([]byte, error) {
-	g1Points, err := bytesToBLS12381G1s(g1Bytes, false)
+const bls12381G1MultiExpThreshold = 2 // determined by BenchmarkFindMultiExpCutoff
+
+func bls12381G1MultiExp(pointBytes, scalarBytes []byte) ([]byte, error) {
+	points, err := bytesToBLS12381G1s(pointBytes, false)
 	if err != nil {
 		return nil, err
 	}
-	if len(scalarBytes) != scalarSize*len(g1Points) {
-		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(g1Points))
+	if len(scalarBytes) != scalarSize*len(points) {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(points))
 	}
-	scalars := make([]bls12381fr.Element, len(g1Points))
+	if len(points) <= bls12381G1MultiExpThreshold {
+		return bls12381G1MultiExpSmall(points, scalarBytes)
+	}
+	return bls12381G1MultiExpLarge(points, scalarBytes)
+}
+
+func bls12381G1MultiExpLarge(points []bls12381.G1Affine, scalarBytes []byte) ([]byte, error) {
+	scalars := make([]bls12381fr.Element, len(points))
 	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, err := new(bls12381.G1Affine).MultiExp(g1Points, scalars, eccMontgomery)
+	res, err := new(bls12381.G1Affine).MultiExp(points, scalars, eccMontgomery)
 	if err != nil {
 		return nil, err
 	}
 	return bls12381G1ToBytes(res), nil
 }
 
-func bls12381G2MultiExp(g2Bytes, scalarBytes []byte) ([]byte, error) {
-	g2Points, err := bytesToBLS12381G2s(g2Bytes, false)
+func bls12381G1MultiExpSmall(points []bls12381.G1Affine, scalarBytes []byte) ([]byte, error) {
+	// There must be at least one point. Start with it, rather than the identity.
+	k := new(big.Int).SetBytes(scalarBytes[:scalarSize])
+	var sum bls12381.G1Jac
+	sum.ScalarMultiplicationAffine(&points[0], k)
+	for i := range points {
+		if i == 0 {
+			continue
+		}
+		k.SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
+		var prod bls12381.G1Jac
+		prod.ScalarMultiplicationAffine(&points[i], k)
+		sum.AddAssign(&prod)
+	}
+	var res bls12381.G1Affine
+	res.FromJacobian(&sum)
+	return bls12381G1ToBytes(&res), nil
+}
+
+const bls12381G2MultiExpThreshold = 2 // determined by BenchmarkFindMultiExpCutoff
+
+func bls12381G2MultiExp(pointBytes, scalarBytes []byte) ([]byte, error) {
+	points, err := bytesToBLS12381G2s(pointBytes, false)
 	if err != nil {
 		return nil, err
 	}
-	if len(scalarBytes) != scalarSize*len(g2Points) {
-		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(g2Points))
+	if len(scalarBytes) != scalarSize*len(points) {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(points))
 	}
-	scalars := make([]bls12381fr.Element, len(g2Points))
+	if len(points) <= bls12381G2MultiExpThreshold {
+		return bls12381G2MultiExpSmall(points, scalarBytes)
+	}
+	return bls12381G2MultiExpLarge(points, scalarBytes)
+}
+
+func bls12381G2MultiExpLarge(points []bls12381.G2Affine, scalarBytes []byte) ([]byte, error) {
+	scalars := make([]bls12381fr.Element, len(points))
 	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, err := new(bls12381.G2Affine).MultiExp(g2Points, scalars, eccMontgomery)
+	res, err := new(bls12381.G2Affine).MultiExp(points, scalars, eccMontgomery)
 	if err != nil {
 		return nil, err
 	}
 	return bls12381G2ToBytes(res), nil
+}
+
+func bls12381G2MultiExpSmall(points []bls12381.G2Affine, scalarBytes []byte) ([]byte, error) {
+	// There must be at least one point. Start with it, rather than the identity.
+	k := new(big.Int).SetBytes(scalarBytes[:scalarSize])
+	var sum bls12381.G2Jac
+	sum.FromAffine(&points[0])
+	sum.ScalarMultiplication(&sum, k)
+	for i := range points {
+		if i == 0 {
+			continue
+		}
+		k.SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
+		var prod bls12381.G2Jac
+		prod.FromAffine(&points[i])
+		prod.ScalarMultiplication(&prod, k)
+		sum.AddAssign(&prod)
+	}
+	var res bls12381.G2Affine
+	res.FromJacobian(&sum)
+	return bls12381G2ToBytes(&res), nil
 }
 
 func bls12381MapToG1(fpBytes []byte) ([]byte, error) {
@@ -694,42 +752,100 @@ func bn254PairingCheck(g1Bytes, g2Bytes []byte) (bool, error) {
 	return ok, nil
 }
 
-func bn254G1MultiExp(g1Bytes, scalarBytes []byte) ([]byte, error) {
-	g1Points, err := bytesToBN254G1s(g1Bytes, false)
+const bn254G1MultiExpThreshold = 2 // determined by BenchmarkFindMultiExpCutoff
+
+func bn254G1MultiExp(pointBytes, scalarBytes []byte) ([]byte, error) {
+	points, err := bytesToBN254G1s(pointBytes, false)
 	if err != nil {
 		return nil, err
 	}
-	if len(scalarBytes) != scalarSize*len(g1Points) {
-		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(g1Points))
+	if len(scalarBytes) != scalarSize*len(points) {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(points))
 	}
-	scalars := make([]bn254fr.Element, len(g1Points))
+	if len(points) <= bn254G1MultiExpThreshold {
+		return bn254G1MultiExpSmall(points, scalarBytes)
+	}
+	return bn254G1MultiExpLarge(points, scalarBytes)
+}
+
+func bn254G1MultiExpLarge(points []bn254.G1Affine, scalarBytes []byte) ([]byte, error) {
+	scalars := make([]bn254fr.Element, len(points))
 	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, err := new(bn254.G1Affine).MultiExp(g1Points, scalars, eccMontgomery)
+	res, err := new(bn254.G1Affine).MultiExp(points, scalars, eccMontgomery)
 	if err != nil {
 		return nil, err
 	}
 	return bn254G1ToBytes(res), nil
 }
 
-func bn254G2MultiExp(g2Bytes, scalarBytes []byte) ([]byte, error) {
-	g2Points, err := bytesToBN254G2s(g2Bytes, false)
+func bn254G1MultiExpSmall(points []bn254.G1Affine, scalarBytes []byte) ([]byte, error) {
+	// There must be at least one point. Start with it, rather than the identity.
+	k := new(big.Int).SetBytes(scalarBytes[:scalarSize])
+	var sum bn254.G1Jac
+	sum.ScalarMultiplicationAffine(&points[0], k)
+	for i := range points {
+		if i == 0 {
+			continue
+		}
+		k.SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
+		var prod bn254.G1Jac
+		prod.ScalarMultiplicationAffine(&points[i], k)
+		sum.AddAssign(&prod)
+	}
+	var res bn254.G1Affine
+	res.FromJacobian(&sum)
+	return bn254G1ToBytes(&res), nil
+}
+
+const bn254G2MultiExpThreshold = 2 // determined by BenchmarkFindMultiExpCutoff
+
+func bn254G2MultiExp(pointBytes, scalarBytes []byte) ([]byte, error) {
+	points, err := bytesToBN254G2s(pointBytes, false)
 	if err != nil {
 		return nil, err
 	}
-	if len(scalarBytes) != scalarSize*len(g2Points) {
-		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(g2Points))
+	if len(scalarBytes) != scalarSize*len(points) {
+		return nil, fmt.Errorf("bad scalars length %d. Expected %d", len(scalarBytes), scalarSize*len(points))
 	}
-	scalars := make([]bn254fr.Element, len(g2Points))
+	if len(points) <= bn254G2MultiExpThreshold {
+		return bn254G2MultiExpSmall(points, scalarBytes)
+	}
+	return bn254G2MultiExpLarge(points, scalarBytes)
+}
+
+func bn254G2MultiExpLarge(points []bn254.G2Affine, scalarBytes []byte) ([]byte, error) {
+	scalars := make([]bn254fr.Element, len(points))
 	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, err := new(bn254.G2Affine).MultiExp(g2Points, scalars, eccMontgomery)
+	res, err := new(bn254.G2Affine).MultiExp(points, scalars, eccMontgomery)
 	if err != nil {
 		return nil, err
 	}
 	return bn254G2ToBytes(res), nil
+}
+
+func bn254G2MultiExpSmall(points []bn254.G2Affine, scalarBytes []byte) ([]byte, error) {
+	// There must be at least one point. Start with it, rather than the identity.
+	k := new(big.Int).SetBytes(scalarBytes[:scalarSize])
+	var sum bn254.G2Jac
+	sum.FromAffine(&points[0])
+	sum.ScalarMultiplication(&sum, k)
+	for i := range points {
+		if i == 0 {
+			continue
+		}
+		k.SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
+		var prod bn254.G2Jac
+		prod.FromAffine(&points[i])
+		prod.ScalarMultiplication(&prod, k)
+		sum.AddAssign(&prod)
+	}
+	var res bn254.G2Affine
+	res.FromJacobian(&sum)
+	return bn254G2ToBytes(&res), nil
 }
 
 func bn254MapToG1(fpBytes []byte) ([]byte, error) {
