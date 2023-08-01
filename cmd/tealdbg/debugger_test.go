@@ -103,17 +103,13 @@ func TestDebuggerSimple(t *testing.T) {
 	da := makeTestDbgAdapter(t)
 	debugger.AddAdapter(da)
 
-	ep := logic.NewEvalParams(make([]transactions.SignedTxnWithAD, 1), &proto, nil)
-	ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(debugger)
-	ep.SigLedger = logic.NoHeaderLedger{}
-
-	source := `int 0
-int 1
-+
-`
-	ops, err := logic.AssembleStringWithVersion(source, 1)
+	ops, err := logic.AssembleStringWithVersion("int 0; int 1; +", 1)
 	require.NoError(t, err)
-	ep.TxnGroup[0].Lsig.Logic = ops.Program
+	txn := transactions.SignedTxn{}
+	txn.Lsig.Logic = ops.Program
+
+	ep := logic.NewSigEvalParams([]transactions.SignedTxn{txn}, &proto, logic.NoHeaderLedger{})
+	ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(debugger)
 
 	_, err = logic.EvalSignature(0, ep)
 	require.NoError(t, err)
