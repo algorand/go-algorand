@@ -4265,8 +4265,8 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
 
 		// Generate fresh set of addresses with a duplicate from original batch if warranted,
-		// assert phonebook reflects fresh list / prior peers other than selected duplicate
-		// are not present
+		// assert phonebook reflects fresh list / prior peers without duplicates
+		// will be present since `updatePhonebookAddresses` calls ExtendPeerList
 		var priorRelayDomains = relayDomains
 
 		// Dont overlap with archive nodes previously specified, duplicates between them not stored in phonebook as of this writing
@@ -4282,7 +4282,8 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		netA.updatePhonebookAddresses(relayDomains, nil)
 
 		// Check that entries are in fact in phonebook less any duplicates
-		dedupedRelayDomains = removeDuplicateStr(relayDomains, false)
+		// Since we extend, new entries are added instead of replacing existing entries
+		dedupedRelayDomains = removeDuplicateStr(append(relayDomains, priorRelayDomains...), false)
 
 		relayPeers = netA.GetPeers(PeersPhonebookRelays)
 		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
