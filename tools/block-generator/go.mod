@@ -64,6 +64,6 @@ require (
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/tools v0.11.0 // indirect
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009 // indirect
-	rsc.io/tmplfunc v0.0.3 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
+	rsc.io/tmplfunc v0.0.3 // indirect
 )
