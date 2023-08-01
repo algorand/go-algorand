@@ -3049,7 +3049,6 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 
 	// get lib goal client
 	testClient := fixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
-
 	_, err = testClient.WaitForRound(1)
 	a.NoError(err)
 
@@ -3201,4 +3200,24 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 		},
 	}
 	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
+}
+
+func TestDisabledAPIConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "DisableAPIAuth.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	statusResponse, err := testClient.Status()
+	a.NoError(err)
+	a.NotEmpty(statusResponse)
+	statusResponse2, err := testClient.Status()
+	a.NoError(err)
+	a.NotEmpty(statusResponse2)
+	a.True(statusResponse2.LastRound >= statusResponse.LastRound)
 }
