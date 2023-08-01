@@ -6012,3 +6012,10 @@ pop
 int 1
 `, 8)
 }
+
+func TestNoHeaderLedger(t *testing.T) {
+	nhl := NoHeaderLedger{}
+	_, err := nhl.BlockHdr(1)
+	require.Error(t, err)
+	require.Equal(t, err, fmt.Errorf("no block header access"))
+}
