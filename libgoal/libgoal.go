@@ -533,7 +533,12 @@ func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxn
 		// For example, a node just added block 100 and immediately sending a new transaction.
 		// The other side is lagging behind by 100ms and its LastRound is 99 so its transaction pools accepts txns for rounds 100+.
 		// This means the node client have to set FirstValid to 100 or below.
-		firstValid = lastRound
+		if lastRound > 0 {
+			firstValid = lastRound
+		} else {
+			// there is no practical sense to set FirstValid to 0, so we set it to 1
+			firstValid = 1
+		}
 	}
 
 	if validRounds != 0 {
