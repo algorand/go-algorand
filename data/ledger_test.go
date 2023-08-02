@@ -369,7 +369,7 @@ func TestConsensusVersion(t *testing.T) {
 	flushOffset := uint64(129) // pendingDeltasFlushThreshold = 128 will flush every 128 rounds (RewardsPool acct)
 	// txTailRetainSize = MaxTxnLife + DeeperBlockHeaderHistory = 1000 + 1
 
-	// add 5 blocks.
+	// add some blocks.
 	for rnd := basics.Round(1); rnd < basics.Round(consensusParams.MaxTxnLife+flushOffset); rnd++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.Seed[0] = byte(uint64(rnd))

@@ -208,7 +208,11 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	tail.Hdr = blk.BlockHeader
 
 	for txid, txnInc := range delta.Txids {
-		t.putLV(txnInc.LastValid, txid)
+		if _, ok := t.lastValid[txnInc.LastValid]; !ok {
+			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]struct{})
+		}
+		t.lastValid[txnInc.LastValid][txid] = struct{}{}
+
 		tail.TxnIDs[txnInc.Intra] = txid
 		tail.LastValid[txnInc.Intra] = txnInc.LastValid
 		if blk.Payset[txnInc.Intra].Txn.Lease != [32]byte{} {
