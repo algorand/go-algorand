@@ -78,8 +78,8 @@ func TestRateLimiting(t *testing.T) {
 	if defaultConfig.ConnectionsRateLimitingCount == 0 || defaultConfig.ConnectionsRateLimitingWindowSeconds == 0 {
 		t.Skip()
 	}
-	log := logging.TestingLog(t)
-	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
+	log := logging.Base()
+	log.SetLevel(logging.Error)
 	testConfig := defaultConfig
 	// This test is conducted locally, so we want to treat all hosts the same for counting incoming requests.
 	testConfig.DisableLocalhostConnectionRateLimit = false
