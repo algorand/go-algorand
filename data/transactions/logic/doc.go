@@ -427,29 +427,6 @@ type VerCost struct {
 	Cost string
 }
 
-// OpAllCosts returns an array of the cost of an op by version.  Each entry
-// indicates the cost over a range of versions, so if the cost has remained
-// constant, there is only one result, otherwise each entry shows the cost for a
-// consecutive range of versions, inclusive.
-func OpAllCosts(opName string) []VerCost {
-	var costs []VerCost
-	for v := 1; v <= LogicVersion; v++ {
-		spec, ok := OpsByName[v][opName]
-		if !ok {
-			continue
-		}
-		argLen := len(spec.Arg.Types)
-		cost := spec.OpDetails.docCost(argLen)
-		if costs == nil || cost != costs[len(costs)-1].Cost {
-			costs = append(costs, VerCost{v, v, cost})
-		} else {
-			costs[len(costs)-1].To = v
-		}
-	}
-
-	return costs
-}
-
 // TypeNameDescriptions contains extra description about a low level
 // protocol transaction Type string, and provide a friendlier type
 // constant name in assembler.

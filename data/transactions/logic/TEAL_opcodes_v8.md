@@ -14,27 +14,21 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Bytecode: 0x01
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA256 hash of value A, yields [32]byte
-- **Cost**:
-    - 7 (v1)
-    - 35 (since v2)
+- **Cost**: 35
 
 ## keccak256
 
 - Bytecode: 0x02
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - Keccak256 hash of value A, yields [32]byte
-- **Cost**:
-    - 26 (v1)
-    - 130 (since v2)
+- **Cost**: 130
 
 ## sha512_256
 
 - Bytecode: 0x03
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA512_256 hash of value A, yields [32]byte
-- **Cost**:
-    - 9 (v1)
-    - 45 (since v2)
+- **Cost**: 45
 
 ## ed25519verify
 
@@ -51,7 +45,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Bytecode: 0x05 {uint8}
 - Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**:  Secp256k1=1700 Secp256r1=2500
+- **Cost**: Secp256k1=1700 Secp256r1=2500
 - Availability: v5
 
 ### ECDSA
@@ -72,7 +66,7 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 - Bytecode: 0x06 {uint8}
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
 - decompress pubkey A into components X, Y
-- **Cost**:  Secp256k1=650 Secp256r1=2400
+- **Cost**: Secp256k1=650 Secp256r1=2400
 - Availability: v5
 
 The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.
