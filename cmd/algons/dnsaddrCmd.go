@@ -78,7 +78,6 @@ var dnsaddrTreeCmd = &cobra.Command{
 		}
 	},
 }
-
 var dnsaddrTreeDeleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Recursively resolves and deletes the dnsaddr entries of the given domain",
@@ -97,8 +96,8 @@ var dnsaddrTreeDeleteCmd = &cobra.Command{
 		}
 		cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 		var recordsToDelete []cloudflare.DNSRecordResponseEntry
-		err = dnsaddr.Iterate(addr, controller, func(dnsaddr multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error {
-			domain, _ := dnsaddr.ValueForProtocol(multiaddr.P_DNSADDR)
+		err = dnsaddr.Iterate(addr, controller, func(entryFrom multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error {
+			domain, _ := entryFrom.ValueForProtocol(multiaddr.P_DNSADDR)
 			name := fmt.Sprintf("_dnsaddr.%s", domain)
 			fmt.Printf("listing records for %s\n", name)
 			records, err := cloudflareDNS.ListDNSRecord(context.Background(), "TXT", name, "", "", "", "")

@@ -76,7 +76,8 @@ type txTail struct {
 	// lowestBlockHeaderRound is the lowest round in blockHeaderData, used as a starting point for old entries removal
 	lowestBlockHeaderRound basics.Round
 
-	// tailMu is the synchronization mutex for accessing roundTailHashes, roundTailSerializedDeltas and blockHeaderData.
+	// tailMu is the synchronization mutex for accessing internal data including
+	// lastValid, recent, lowWaterMark, roundTailHashes, roundTailSerializedDeltas and blockHeaderData.
 	tailMu deadlock.RWMutex
 
 	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
@@ -90,6 +91,9 @@ type txTail struct {
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	t.log = l.trackerLog()
 
 	var roundData []*trackerdb.TxTailRound
@@ -191,6 +195,9 @@ func (t *txTail) close() {
 func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	if _, has := t.recent[rnd]; has {
 		// Repeat, ignore
 		return
@@ -202,7 +209,11 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	tail.Hdr = blk.BlockHeader
 
 	for txid, txnInc := range delta.Txids {
-		t.putLV(txnInc.LastValid, txid)
+		if _, ok := t.lastValid[txnInc.LastValid]; !ok {
+			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]struct{})
+		}
+		t.lastValid[txnInc.LastValid][txid] = struct{}{}
+
 		tail.TxnIDs[txnInc.Intra] = txid
 		tail.LastValid[txnInc.Intra] = txnInc.LastValid
 		if blk.Payset[txnInc.Intra].Txn.Lease != [32]byte{} {
@@ -215,8 +226,6 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	}
 	encodedTail, tailHash := tail.Encode()
 
-	t.tailMu.Lock()
-	defer t.tailMu.Unlock()
 	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
@@ -229,6 +238,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	proto := t.recent[rnd].proto
 	maxlife := basics.Round(proto.MaxTxnLife)
 
@@ -333,6 +345,12 @@ func (t errTxTailMissingRound) Error() string {
 // checkDup test to see if the given transaction id/lease already exists. It returns nil if neither exists, or
 // TransactionInLedgerError / LeaseInLedgerError respectively.
 func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	// txTail does not use l.trackerMu, instead uses t.tailMu to make it thread-safe
+	// t.tailMu is sufficient because the state of txTail does not depend on any outside data field
+
+	t.tailMu.RLock()
+	defer t.tailMu.RUnlock()
+
 	if lastValid < t.lowWaterMark {
 		return &errTxTailMissingRound{round: lastValid}
 	}
@@ -359,13 +377,6 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 	return nil
 }
 
-func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
-	if _, ok := t.lastValid[lastValid]; !ok {
-		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
-	}
-	t.lastValid[lastValid][id] = struct{}{}
-}
-
 func (t *txTail) recentTailHash(offset uint64, retainSize uint64) (crypto.Digest, error) {
 	// prepare a buffer to hash.
 	buffer := make([]byte, (retainSize)*crypto.DigestSize)
@@ -387,8 +398,5 @@ func (t *txTail) blockHeader(rnd basics.Round) (bookkeeping.BlockHeader, bool) {
 	t.tailMu.RLock()
 	defer t.tailMu.RUnlock()
 	hdr, ok := t.blockHeaderData[rnd]
-	if !ok {
-		t.log.Warnf("txtail failed to fetch blockHeader from rnd: %d", rnd)
-	}
 	return hdr, ok
 }

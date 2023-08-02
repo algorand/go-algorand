@@ -69,7 +69,7 @@ func MultiaddrsFromResolver(domain string, controller *MultiaddrDNSResolveContro
 		return nil, fmt.Errorf("unable to construct multiaddr for %s : %v", domain, err)
 	}
 	var resolved []multiaddr.Multiaddr
-	err = Iterate(dnsaddr, controller, func(dnsaddr multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error {
+	err = Iterate(dnsaddr, controller, func(_ multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error {
 		for _, maddr := range entries {
 			if !isDnsaddr(maddr) {
 				resolved = append(resolved, maddr)

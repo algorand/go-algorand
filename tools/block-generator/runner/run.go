@@ -35,13 +35,17 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/block-generator/generator"
 	"github.com/algorand/go-algorand/tools/block-generator/util"
-	"github.com/algorand/go-deadlock"
 )
 
 //go:embed template/conduit.yml.tmpl
 var conduitConfigTmpl string
+
+const pad = "  "
 
 // Args are all the things needed to run a performance test.
 type Args struct {
@@ -107,7 +111,9 @@ func Run(args Args) error {
 			}
 			runnerArgs := args
 			runnerArgs.Path = path
-			fmt.Printf("Running test for configuration '%s'\n", path)
+			fmt.Println("----------------------------------------")
+			fmt.Printf("%sRunning test for configuration: %s\n", pad, info.Name())
+			fmt.Println("----------------------------------------")
 			return runnerArgs.run(reportDirectory)
 		})
 		if err != nil {
@@ -121,7 +127,8 @@ func (r *Args) run(reportDirectory string) error {
 	baseName := filepath.Base(r.Path)
 	baseNameNoExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
 	reportfile := path.Join(reportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
-	logfile := path.Join(reportDirectory, fmt.Sprintf("%s.conduit-log", baseNameNoExt))
+	conduitlogfile := path.Join(reportDirectory, fmt.Sprintf("%s.conduit-log", baseNameNoExt))
+	ledgerlogfile := path.Join(reportDirectory, fmt.Sprintf("%s.ledger-log", baseNameNoExt))
 	dataDir := path.Join(reportDirectory, fmt.Sprintf("%s_data", baseNameNoExt))
 	// create the data directory.
 	if err := os.Mkdir(dataDir, os.ModeDir|os.ModePerm); err != nil {
@@ -155,35 +162,38 @@ func (r *Args) run(reportDirectory string) error {
 		} else if err != nil {
 			return fmt.Errorf("getNextRound err: %w", err)
 		}
+		fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
 	}
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
-	generatorShutdownFunc, _ := startGenerator(r.Path, nextRound, r.GenesisFile, r.RunnerVerbose, algodNet, blockMiddleware)
+	generatorShutdownFunc, _ := startGenerator(ledgerlogfile, r.Path, nextRound, r.GenesisFile, r.RunnerVerbose, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
+		fmt.Printf("%sShutting down generator...\n", pad)
 		if err := generatorShutdownFunc(); err != nil {
 			fmt.Printf("failed to shutdown generator: %s\n", err)
 		}
 	}()
-	// get conduit config template
+
+	// create conduit config from template
 	t, err := template.New("conduit").Parse(conduitConfigTmpl)
 	if err != nil {
 		return fmt.Errorf("unable to parse conduit config template: %w", err)
 	}
-
 	// create config file in the right data directory
 	f, err := os.Create(path.Join(dataDir, "conduit.yml"))
 	if err != nil {
 		return fmt.Errorf("problem creating conduit.yml: %w", err)
 	}
 	defer f.Close()
-
-	conduitConfig := config{r.ConduitLogLevel, logfile,
-		fmt.Sprintf(":%d", r.MetricsPort),
-		algodNet, r.PostgresConnectionString,
+	conduitConfig := config{
+		LogLevel:                 r.ConduitLogLevel,
+		LogFile:                  conduitlogfile,
+		MetricsPort:              fmt.Sprintf(":%d", r.MetricsPort),
+		AlgodNet:                 algodNet,
+		PostgresConnectionString: r.PostgresConnectionString,
 	}
-
 	err = t.Execute(f, conduitConfig)
 	if err != nil {
 		return fmt.Errorf("problem executing template file: %w", err)
@@ -196,6 +206,7 @@ func (r *Args) run(reportDirectory string) error {
 	}
 	defer func() {
 		// Shutdown conduit
+		fmt.Printf("%sShutting down Conduit...\n", pad)
 		if sdErr := conduitShutdownFunc(); sdErr != nil {
 			fmt.Printf("failed to shutdown Conduit: %s\n", sdErr)
 		}
@@ -225,6 +236,7 @@ func (r *Args) run(reportDirectory string) error {
 	if err = r.runTest(report, metricsNet, algodNet); err != nil {
 		return err
 	}
+	fmt.Printf("%sTest completed successfully\n", pad)
 
 	return nil
 }
@@ -362,15 +374,19 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 
 	// Run for r.RunDuration
 	start := time.Now()
+	fmt.Printf("%sduration starting now: %s\n", pad, start)
 	count := 1
 	for time.Since(start) < r.RunDuration {
 		time.Sleep(r.RunDuration / 10)
+		fmt.Printf("%scollecting metrics (%d)\n", pad, count)
 
 		if err := collector.Collect(AllMetricNames...); err != nil {
 			return fmt.Errorf("problem collecting metrics (%d / %s): %w", count, time.Since(start), err)
 		}
 		count++
 	}
+
+	fmt.Printf("%scollecting final metrics\n", pad)
 	if err := collector.Collect(AllMetricNames...); err != nil {
 		return fmt.Errorf("problem collecting final metrics (%d / %s): %w", count, time.Since(start), err)
 	}
@@ -438,14 +454,20 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 }
 
 // startGenerator starts the generator server.
-func startGenerator(configFile string, dbround uint64, genesisFile string, verbose bool, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFile string, verbose bool, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+	f, err := os.OpenFile(ledgerLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	util.MaybeFail(err, "unable to open ledger log file '%s'", ledgerLogFile)
+	log := logging.NewLogger()
+	log.SetLevel(logging.Warn)
+	log.SetOutput(f)
+
 	// Start generator.
-	server, generator := generator.MakeServerWithMiddleware(dbround, genesisFile, configFile, verbose, addr, blockMiddleware)
+	server, generator := generator.MakeServerWithMiddleware(log, dbround, genesisFile, configFile, verbose, addr, blockMiddleware)
 
 	// Start the server
 	go func() {
 		// always returns error. ErrServerClosed on graceful close
-		fmt.Printf("generator serving on %s\n", server.Addr)
+		fmt.Printf("%sgenerator serving on %s\n", pad, server.Addr)
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			util.MaybeFail(err, "ListenAndServe() failure to start with config file '%s'", configFile)
 		}
@@ -464,7 +486,7 @@ func startGenerator(configFile string, dbround uint64, genesisFile string, verbo
 
 // startConduit starts the conduit binary.
 func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
-	fmt.Printf("Conduit starting with data directory: %s", dataDir)
+	fmt.Printf("%sConduit starting with data directory: %s\n", pad, dataDir)
 	cmd := exec.Command(
 		conduitBinary,
 		"-r", strconv.FormatUint(round, 10),
@@ -472,9 +494,8 @@ func startConduit(dataDir string, conduitBinary string, round uint64) (func() er
 	)
 
 	var stdout bytes.Buffer
-	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stderr = os.Stderr // pass errors to Stderr
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failure calling Start(): %w", err)
@@ -489,7 +510,7 @@ func startConduit(dataDir string, conduitBinary string, round uint64) (func() er
 			}
 		}
 		if err := cmd.Wait(); err != nil {
-			fmt.Printf("Conduit exiting: %s\n", err)
+			fmt.Printf("%sConduit exiting: %s\n", pad, err)
 		}
 		return nil
 	}, nil
