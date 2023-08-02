@@ -168,7 +168,7 @@ func (r *Args) run(reportDirectory string) error {
 	generatorShutdownFunc, _ := startGenerator(ledgerlogfile, r.Path, nextRound, r.GenesisFile, r.RunnerVerbose, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
-		fmt.Println("Shutting down generator...")
+		fmt.Printf("%sShutting down generator...\n", pad)
 		if err := generatorShutdownFunc(); err != nil {
 			fmt.Printf("failed to shutdown generator: %s\n", err)
 		}
