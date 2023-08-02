@@ -111,7 +111,9 @@ func Run(args Args) error {
 			}
 			runnerArgs := args
 			runnerArgs.Path = path
-			fmt.Printf("%sRunning test for configuration '%s'\n", pad, path)
+			fmt.Println("----------------------------------------")
+			fmt.Printf("%sRunning test for configuration: %s\n", pad, info.Name())
+			fmt.Println("----------------------------------------")
 			return runnerArgs.run(reportDirectory)
 		})
 		if err != nil {
