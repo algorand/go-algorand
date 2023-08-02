@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"sort"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -65,6 +66,8 @@ type player struct {
 	// Pending holds the player's proposalTable, which stores proposals that
 	// must be verified after some vote has been verified.
 	Pending proposalTable
+
+	payloadArrivals []time.Duration
 }
 
 func (p *player) T() stateMachineTag {
@@ -273,6 +276,45 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 		}}
 }
 
+func (p *player) handleWinningPayloadArrival(payload proposal) {
+	// ignoring validatedAt
+	p.payloadArrivals = append(p.payloadArrivals, payload.receivedAt)
+}
+
+// calculateFilterTimeout chooses the appropriate filter timeout for a new round.
+func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVersion) time.Duration {
+	proto := config.Consensus[ver]
+
+	if !proto.DynamicFilterTimeout || period != 0 {
+		return FilterTimeout(period, ver)
+	}
+
+	var dynamicDelay time.Duration
+	if proto.AgreementPipelineDelay <= 0 {
+		dynamicDelay = 0
+	} else if proto.AgreementPipelineDelay > len(p.payloadArrivals) {
+		dynamicDelay = FilterTimeout(0, ver)
+	} else {
+		sortedArrivals := make([]time.Duration, len(p.payloadArrivals))
+		copy(sortedArrivals[:], p.payloadArrivals[:])
+		sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
+		dynamicDelay = sortedArrivals[proto.AgreementPipelineDelay-1]
+	}
+
+	// Make sure the dynamic delay is not too small; we want to
+	// evenly space out the pipelined rounds across FilterTimeout,
+	// which is the fastest we could agree on blocks anyway (not
+	// including the soft vote / cert vote times).
+	if proto.AgreementPipelineDepth > 0 {
+		evenSpacing := FilterTimeout(0, ver) / time.Duration(proto.AgreementPipelineDepth)
+		if dynamicDelay < evenSpacing {
+			dynamicDelay = evenSpacing
+		}
+	}
+
+	return dynamicDelay
+}
+
 func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action {
 	r.t.timeR().RecThreshold(e)
 
@@ -288,6 +330,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
+			p.handleWinningPayloadArrival(res.Payload)
 			as := p.enterRound(r, e, p.Round+1)
 			return append(actions, as...)
 		}
@@ -607,6 +650,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
+				p.handleWinningPayloadArrival(e.Input.Proposal)
 				as := p.enterRound(r, delegatedE, cert.Round+1)
 				return append(actions, as...)
 			}
