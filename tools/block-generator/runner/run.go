@@ -35,9 +35,11 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/block-generator/generator"
 	"github.com/algorand/go-algorand/tools/block-generator/util"
-	"github.com/algorand/go-deadlock"
 )
 
 //go:embed template/conduit.yml.tmpl
@@ -109,7 +111,9 @@ func Run(args Args) error {
 			}
 			runnerArgs := args
 			runnerArgs.Path = path
-			fmt.Printf("%sRunning test for configuration '%s'\n", pad, path)
+			fmt.Println("----------------------------------------")
+			fmt.Printf("%sRunning test for configuration: %s\n", pad, info.Name())
+			fmt.Println("----------------------------------------")
 			return runnerArgs.run(reportDirectory)
 		})
 		if err != nil {
@@ -123,7 +127,8 @@ func (r *Args) run(reportDirectory string) error {
 	baseName := filepath.Base(r.Path)
 	baseNameNoExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
 	reportfile := path.Join(reportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
-	logfile := path.Join(reportDirectory, fmt.Sprintf("%s.conduit-log", baseNameNoExt))
+	conduitlogfile := path.Join(reportDirectory, fmt.Sprintf("%s.conduit-log", baseNameNoExt))
+	ledgerlogfile := path.Join(reportDirectory, fmt.Sprintf("%s.ledger-log", baseNameNoExt))
 	dataDir := path.Join(reportDirectory, fmt.Sprintf("%s_data", baseNameNoExt))
 	// create the data directory.
 	if err := os.Mkdir(dataDir, os.ModeDir|os.ModePerm); err != nil {
@@ -162,10 +167,10 @@ func (r *Args) run(reportDirectory string) error {
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
-	generatorShutdownFunc, _ := startGenerator(r.Path, nextRound, r.GenesisFile, r.RunnerVerbose, algodNet, blockMiddleware)
+	generatorShutdownFunc, _ := startGenerator(ledgerlogfile, r.Path, nextRound, r.GenesisFile, r.RunnerVerbose, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
-		fmt.Println("Shutting down generator...")
+		fmt.Printf("%sShutting down generator...\n", pad)
 		if err := generatorShutdownFunc(); err != nil {
 			fmt.Printf("failed to shutdown generator: %s\n", err)
 		}
@@ -184,7 +189,7 @@ func (r *Args) run(reportDirectory string) error {
 	defer f.Close()
 	conduitConfig := config{
 		LogLevel:                 r.ConduitLogLevel,
-		LogFile:                  logfile,
+		LogFile:                  conduitlogfile,
 		MetricsPort:              fmt.Sprintf(":%d", r.MetricsPort),
 		AlgodNet:                 algodNet,
 		PostgresConnectionString: r.PostgresConnectionString,
@@ -449,9 +454,15 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 }
 
 // startGenerator starts the generator server.
-func startGenerator(configFile string, dbround uint64, genesisFile string, verbose bool, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFile string, verbose bool, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+	f, err := os.OpenFile(ledgerLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	util.MaybeFail(err, "unable to open ledger log file '%s'", ledgerLogFile)
+	log := logging.NewLogger()
+	log.SetLevel(logging.Warn)
+	log.SetOutput(f)
+
 	// Start generator.
-	server, generator := generator.MakeServerWithMiddleware(dbround, genesisFile, configFile, verbose, addr, blockMiddleware)
+	server, generator := generator.MakeServerWithMiddleware(log, dbround, genesisFile, configFile, verbose, addr, blockMiddleware)
 
 	// Start the server
 	go func() {
