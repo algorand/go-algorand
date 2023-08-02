@@ -255,17 +255,17 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 	return nil
 }
 
-func opsToMarkdown(out io.Writer, version uint64) (err error) {
+func opsToMarkdown(out io.Writer, version uint64) error {
 	out.Write([]byte("# Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n"))
 	opSpecs := logic.OpcodesByVersion(version)
 	written := make(map[string]bool)
 	for i := range opSpecs {
-		err = opToMarkdown(out, &opSpecs[i], written, version)
+		err := opToMarkdown(out, &opSpecs[i], written, version)
 		if err != nil {
-			return
+			return err
 		}
 	}
-	return
+	return nil
 }
 
 // OpRecord is a consolidated record of things about an Op
@@ -448,10 +448,7 @@ func main() {
 		fname = strings.ReplaceAll(fname, " ", "_")
 		fout := create(fname)
 		opGroupMarkdownTable(names, fout, docVersion)
-		if err := fout.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to close '%s': %v\n", fname, err)
-			os.Exit(1)
-		}
+		fout.Close()
 		for _, opname := range names {
 			opGroups[opname] = append(opGroups[opname], grp)
 		}
@@ -470,17 +467,11 @@ func main() {
 
 	constants := create("named_integer_constants.md")
 	integerConstantsTableMarkdown(constants)
-	if err := constants.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to close 'named_integer_constants.md': %v\n", err)
-		os.Exit(1)
-	}
+	constants.Close()
 
 	namedStackTypes := create("named_stack_types.md")
 	namedStackTypesMarkdown(namedStackTypes, named)
-	if err := namedStackTypes.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to close 'named_stack_types.md': %v\n", err)
-		os.Exit(1)
-	}
+	namedStackTypes.Close()
 
 	written := make(map[string]bool)
 	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
@@ -489,10 +480,7 @@ func main() {
 			if imm.Group != nil && !written[imm.Group.Name] {
 				out := create(strings.ToLower(imm.Group.Name) + "_fields.md")
 				fieldGroupMarkdown(out, imm.Group, docVersion)
-				if err := out.Close(); err != nil {
-					fmt.Fprintf(os.Stderr, "Unable to close '%s': %v\n", out.Name(), err)
-					os.Exit(1)
-				}
+				out.Close()
 				written[imm.Group.Name] = true
 			}
 		}
@@ -505,10 +493,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error encoding teal.tmLanguage.json: % v\n", err)
 		os.Exit(1)
 	}
-	if err := tealtm.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to close 'teal.tmLanguage.json': %v\n", err)
-		os.Exit(1)
-	}
+	tealtm.Close()
 
 	for v := uint64(1); v <= docVersion; v++ {
 		langspecjs := create(fmt.Sprintf("langspec_v%d.json", v))
@@ -518,16 +503,13 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error encoding langspec JSON for version %d: %v\n", v, err)
 			os.Exit(1)
 		}
-		if err := langspecjs.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to close 'langspec_v%d.json': %v\n", v, err)
-			os.Exit(1)
-		}
+		langspecjs.Close()
 
 		opcodesMd := create(fmt.Sprintf("TEAL_opcodes_v%d.md", v))
-		opsToMarkdown(opcodesMd, v)
-		if err := opcodesMd.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to close 'TEAL_opcodes_v%d.md': %v\n", v, err)
+		if err := opsToMarkdown(opcodesMd, v); err != nil {
+			fmt.Fprintf(os.Stderr, "error creating markdown for version %d: %v\n", v, err)
 			os.Exit(1)
 		}
+		opcodesMd.Close()
 	}
 }
