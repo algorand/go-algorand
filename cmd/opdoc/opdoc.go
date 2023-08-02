@@ -448,7 +448,10 @@ func main() {
 		fname = strings.ReplaceAll(fname, " ", "_")
 		fout := create(fname)
 		opGroupMarkdownTable(names, fout, docVersion)
-		fout.Close()
+		if err := fout.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to close '%s': %v\n", fname, err)
+			os.Exit(1)
+		}
 		for _, opname := range names {
 			opGroups[opname] = append(opGroups[opname], grp)
 		}
@@ -467,11 +470,17 @@ func main() {
 
 	constants := create("named_integer_constants.md")
 	integerConstantsTableMarkdown(constants)
-	constants.Close()
+	if err := constants.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to close 'named_integer_constants.md': %v\n", err)
+		os.Exit(1)
+	}
 
 	namedStackTypes := create("named_stack_types.md")
 	namedStackTypesMarkdown(namedStackTypes, named)
-	namedStackTypes.Close()
+	if err := namedStackTypes.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to close 'named_stack_types.md': %v\n", err)
+		os.Exit(1)
+	}
 
 	written := make(map[string]bool)
 	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
@@ -480,7 +489,10 @@ func main() {
 			if imm.Group != nil && !written[imm.Group.Name] {
 				out := create(strings.ToLower(imm.Group.Name) + "_fields.md")
 				fieldGroupMarkdown(out, imm.Group, docVersion)
-				out.Close()
+				if err := out.Close(); err != nil {
+					fmt.Fprintf(os.Stderr, "Unable to close '%s': %v\n", out.Name(), err)
+					os.Exit(1)
+				}
 				written[imm.Group.Name] = true
 			}
 		}
@@ -489,26 +501,33 @@ func main() {
 	tealtm := create("teal.tmLanguage.json")
 	enc := json.NewEncoder(tealtm)
 	enc.SetIndent("", "  ")
-	err := enc.Encode(buildSyntaxHighlight(docVersion))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error encoding teal.tmLanguage.json: %s", err.Error())
+	if err := enc.Encode(buildSyntaxHighlight(docVersion)); err != nil {
+		fmt.Fprintf(os.Stderr, "error encoding teal.tmLanguage.json: % v\n", err)
 		os.Exit(1)
 	}
-	tealtm.Close()
+	if err := tealtm.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to close 'teal.tmLanguage.json': %v\n", err)
+		os.Exit(1)
+	}
 
 	for v := uint64(1); v <= docVersion; v++ {
 		langspecjs := create(fmt.Sprintf("langspec_v%d.json", v))
 		enc := json.NewEncoder(langspecjs)
 		enc.SetIndent("", "  ")
-		err := enc.Encode(buildLanguageSpec(opGroups, named, v))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error encoding langspec JSON for version %d: %s", v, err.Error())
+		if err := enc.Encode(buildLanguageSpec(opGroups, named, v)); err != nil {
+			fmt.Fprintf(os.Stderr, "error encoding langspec JSON for version %d: %v\n", v, err)
 			os.Exit(1)
 		}
-		langspecjs.Close()
+		if err := langspecjs.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to close 'langspec_v%d.json': %v\n", v, err)
+			os.Exit(1)
+		}
 
 		opcodesMd := create(fmt.Sprintf("TEAL_opcodes_v%d.md", v))
 		opsToMarkdown(opcodesMd, v)
-		opcodesMd.Close()
+		if err := opcodesMd.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to close 'TEAL_opcodes_v%d.md': %v\n", v, err)
+			os.Exit(1)
+		}
 	}
 }
