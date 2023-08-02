@@ -376,15 +376,6 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 	return nil
 }
 
-func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
-	// lock should be held by the caller
-	// do not lock here
-	if _, ok := t.lastValid[lastValid]; !ok {
-		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
-	}
-	t.lastValid[lastValid][id] = struct{}{}
-}
-
 func (t *txTail) recentTailHash(offset uint64, retainSize uint64) (crypto.Digest, error) {
 	// prepare a buffer to hash.
 	buffer := make([]byte, (retainSize)*crypto.DigestSize)
