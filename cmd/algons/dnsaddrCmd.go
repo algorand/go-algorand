@@ -100,8 +100,8 @@ var dnsaddrTreeDeleteCmd = &cobra.Command{
 			domain, _ := entryFrom.ValueForProtocol(multiaddr.P_DNSADDR)
 			name := fmt.Sprintf("_dnsaddr.%s", domain)
 			fmt.Printf("listing records for %s\n", name)
-			records, err := cloudflareDNS.ListDNSRecord(context.Background(), "TXT", name, "", "", "", "")
-			if err != nil {
+			records, err0 := cloudflareDNS.ListDNSRecord(context.Background(), "TXT", name, "", "", "", "")
+			if err0 != nil {
 				fmt.Printf("erroring listing dns records for %s %s\n", domain, err)
 				return err
 			}

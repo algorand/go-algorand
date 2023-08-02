@@ -29,6 +29,7 @@ func isDnsaddr(maddr multiaddr.Multiaddr) bool {
 	return first.Protocol().Code == multiaddr.P_DNSADDR
 }
 
+// Iterate runs through the resolvable dnsaddrs in the tree using the resolveController and invokes f for each dnsaddr node lookup
 func Iterate(initial multiaddr.Multiaddr, controller *MultiaddrDNSResolveController, f func(dnsaddr multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error) error {
 	resolver := controller.Resolver()
 	if resolver == nil {

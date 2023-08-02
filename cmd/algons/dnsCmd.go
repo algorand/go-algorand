@@ -431,7 +431,7 @@ func checkedDelete(toDelete []cloudflare.DNSRecordResponseEntry, cloudflareDNS *
 			fmt.Fprintf(os.Stdout, "Deleting %s\n", entry.Name)
 			err := cloudflareDNS.DeleteDNSRecord(context.Background(), entry.ID)
 			if err != nil {
-				return fmt.Errorf(" !! error deleting %s: %v\n", entry.Name, err)
+				return fmt.Errorf(" !! error deleting %s: %v", entry.Name, err)
 			}
 		}
 	}
