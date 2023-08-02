@@ -18,6 +18,7 @@ package stateproof
 
 import (
 	"context"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
