@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	txn "github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -42,6 +43,7 @@ type Generator interface {
 
 type generator struct {
 	verbose bool
+	log     logging.Logger
 
 	config GenerationConfig
 
@@ -52,7 +54,7 @@ type generator struct {
 	numAccounts uint64
 
 	// Block stuff
-	round uint64
+	round         uint64
 	txnCounter    uint64
 	prevBlockHash string
 	timestamp     int64

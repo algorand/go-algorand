@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/rpcs"
 )
 
@@ -40,7 +39,7 @@ import (
 func (g *generator) setBlockHeader(cert *rpcs.EncodedBlockCert) {
 	cert.Block.BlockHeader = bookkeeping.BlockHeader{
 		Round:          basics.Round(g.round),
-		TxnCounter: 	g.txnCounter,
+		TxnCounter:     g.txnCounter,
 		Branch:         bookkeeping.BlockHash{},
 		Seed:           committee.Seed{},
 		TxnCommitments: bookkeeping.TxnCommitments{NativeSha512_256Commitment: crypto.Digest{}},
@@ -63,10 +62,9 @@ func (g *generator) setBlockHeader(cert *rpcs.EncodedBlockCert) {
 	}
 }
 
-
 // ---- ledger simulation and introspection ----
 
-// initializeLedger creates a new ledger 
+// initializeLedger creates a new ledger
 func (g *generator) initializeLedger() {
 	genBal := convertToGenesisBalances(g.balances)
 	// add rewards pool with min balance
@@ -85,7 +83,7 @@ func (g *generator) initializeLedger() {
 	} else {
 		prefix = g.genesisID
 	}
-	l, err := ledger.OpenLedger(logging.Base(), prefix, true, ledgercore.InitState{
+	l, err := ledger.OpenLedger(g.log, prefix, true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    bal.Balances,
 		GenesisHash: g.genesisHash,
