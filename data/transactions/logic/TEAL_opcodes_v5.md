@@ -7,7 +7,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 
 - Bytecode: 0x00
 - Stack: ... &rarr; _exits_
-- Fail immediately. This shouldn't be here.
+- Fail immediately.
 
 ## sha256
 
