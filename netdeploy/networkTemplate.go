@@ -141,9 +141,9 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 				return
 			}
 
-			stdout, stderr, err := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
-			if err != nil {
-				return nil, nil, fmt.Errorf("goal account importrootkey failed: %w\nstdout: %s\nstderr: %s", err, stdout, stderr)
+			stdout, stderr, execErr := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
+			if execErr != nil {
+				return nil, nil, fmt.Errorf("goal account importrootkey failed: %w\nstdout: %s\nstderr: %s", execErr, stdout, stderr)
 			}
 		}
 
@@ -235,9 +235,13 @@ func (t NetworkTemplate) Validate() error {
 	}
 
 	// Follow nodes cannot be relays
+	// Relays cannot have peer list
 	for _, cfg := range t.Nodes {
 		if cfg.IsRelay && isEnableFollowMode(cfg.ConfigJSONOverride) {
 			return fmt.Errorf("invalid template: follower nodes may not be relays")
+		}
+		if cfg.IsRelay && len(cfg.PeerList) > 0 {
+			return fmt.Errorf("invalid template: relays may not have a peer list")
 		}
 	}
 

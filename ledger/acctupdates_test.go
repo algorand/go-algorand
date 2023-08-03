@@ -21,8 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/eval"
-	"github.com/algorand/go-deadlock"
 	"os"
 	"runtime"
 	"strings"
@@ -37,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
@@ -45,13 +44,14 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-deadlock"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
 
 type mockLedgerForTracker struct {
-	dbs              trackerdb.TrackerStore
+	dbs              trackerdb.Store
 	blocks           []blockEntry
 	deltas           []ledgercore.StateDelta
 	log              logging.Logger
@@ -65,6 +65,20 @@ type mockLedgerForTracker struct {
 
 	// trackerRegistry manages persistence into DB so we have to have it here even for a single tracker test
 	trackers trackerRegistry
+}
+
+// onlineTotals returns the online totals of all accounts at the end of round rnd.
+// used in tests only
+func (au *accountUpdates) onlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+
+	totals := au.roundTotals[offset]
+	return totals.Online.Money, nil
 }
 
 func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]ledgercore.AccountData, rewardLevel uint64) (totals ledgercore.AccountTotals) {
@@ -96,8 +110,7 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 }
 
 func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
-	dbs, fileName := sqlitedriver.DbOpenTrackerTest(t, inMemory)
-	dbs.SetLogger(l)
+	dbs, fileName := sqlitedriver.OpenForTesting(t, inMemory)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
 	deltas := make([]ledgercore.StateDelta, initialBlocksCount)
@@ -168,7 +181,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	dbs.Rdb.SetLogger(dblogger)
 	dbs.Wdb.SetLogger(dblogger)
 
-	newLedgerTracker.dbs = sqlitedriver.CreateTrackerSQLStore(dbs)
+	newLedgerTracker.dbs = sqlitedriver.MakeStore(dbs)
 	return newLedgerTracker
 }
 
@@ -190,20 +203,24 @@ func (ml *mockLedgerForTracker) Latest() basics.Round {
 	return basics.Round(len(ml.blocks)) - 1
 }
 
-func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta ledgercore.StateDelta) error {
+func (ml *mockLedgerForTracker) addBlock(be blockEntry, delta ledgercore.StateDelta) {
+	ml.addToBlockQueue(be, delta)
+	ml.trackers.newBlock(be.block, delta)
+}
+
+func (ml *mockLedgerForTracker) addToBlockQueue(be blockEntry, delta ledgercore.StateDelta) {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 
 	ml.blocks = append(ml.blocks, be)
 	ml.deltas = append(ml.deltas, delta)
-	return nil
 }
 
 func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eval.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	ml.mu.RLock()
 	defer ml.mu.RUnlock()
 
-	// support returning the deltas if the client explicitly provided them by calling addMockBlock, otherwise,
+	// support returning the deltas if the client explicitly provided them by calling addToBlockQueue, otherwise,
 	// just return an empty state delta ( since the client clearly didn't care about these )
 	if len(ml.deltas) > int(blk.Round()) {
 		return ml.deltas[uint64(blk.Round())], nil
@@ -235,7 +252,7 @@ func (ml *mockLedgerForTracker) BlockHdr(rnd basics.Round) (bookkeeping.BlockHea
 	return ml.blocks[int(rnd)].block.BlockHeader, nil
 }
 
-func (ml *mockLedgerForTracker) trackerDB() trackerdb.TrackerStore {
+func (ml *mockLedgerForTracker) trackerDB() trackerdb.Store {
 	return ml.dbs
 }
 
@@ -279,13 +296,13 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
-	err = au.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+	err = au.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 		var err0 error
-		arw, err := tx.MakeAccountsReaderWriter()
+		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
-		bals, err0 = arw.Testing().AccountsAllTest()
+		bals, err0 = ar.Testing().AccountsAllTest()
 		return err0
 	})
 	if err != nil {
@@ -321,7 +338,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, latestRnd, latest)
 
 	// the log has "onlineAccounts failed to fetch online totals for rnd" warning that is expected
-	_, err := ao.onlineTotals(latest + 1)
+	_, err := ao.onlineCirculation(latest+1, latest+1+basics.Round(ao.maxBalLookback()))
 	require.Error(t, err)
 
 	var validThrough basics.Round
@@ -330,7 +347,8 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
-		_, err := ao.onlineTotals(base - basics.Round(ao.maxBalLookback()))
+		rnd := base - basics.Round(ao.maxBalLookback())
+		_, err := ao.onlineCirculation(rnd, base)
 		require.Error(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
@@ -393,7 +411,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			bll := accts[rnd]
 			require.Equal(t, all, bll)
 
-			totals, err := ao.onlineTotals(rnd)
+			totals, err := ao.onlineCirculation(rnd, rnd+basics.Round(ao.maxBalLookback()))
 			require.NoError(t, err)
 			require.Equal(t, totals.Raw, totalOnline)
 
@@ -564,7 +582,7 @@ func testAcctUpdates(t *testing.T, conf config.Local) {
 				delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 
 				delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-				ml.trackers.newBlock(blk, delta)
+				ml.addBlock(blockEntry{block: blk}, delta)
 				accts = append(accts, newAccts)
 				rewardsLevels = append(rewardsLevels, rewardLevel)
 
@@ -684,7 +702,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -871,7 +889,7 @@ func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 			for addr, ad := range updates {
 				delta.Accts.Upsert(addr, ad)
 			}
-			ml.trackers.newBlock(blk, delta)
+			ml.addBlock(blockEntry{block: blk}, delta)
 			ml.trackers.committedUpTo(i)
 		}
 		lastRound := i - 1
@@ -893,185 +911,6 @@ func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 	t.Run("InMemoryDB", testFunction)
 	inMemory = false
 	t.Run("DiskDB", testFunction)
-}
-
-// listAndCompareComb lists the assets/applications and then compares against the expected
-// It repeats with different combinations of the limit parameters
-func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
-
-	// test configuration parameters
-
-	// pick the second largest index for the app and asset
-	// This is to make sure exactly one element is left out
-	// as a result of max index
-	maxAss1 := basics.CreatableIndex(0)
-	maxAss2 := basics.CreatableIndex(0)
-	maxApp1 := basics.CreatableIndex(0)
-	maxApp2 := basics.CreatableIndex(0)
-	for a, b := range expected {
-		// A moving window of the last two largest indexes: [maxAss1, maxAss2]
-		if b.Ctype == basics.AssetCreatable {
-			if maxAss2 < a {
-				maxAss1 = maxAss2
-				maxAss2 = a
-			} else if maxAss1 < a {
-				maxAss1 = a
-			}
-		}
-		if b.Ctype == basics.AppCreatable {
-			if maxApp2 < a {
-				maxApp1 = maxApp2
-				maxApp2 = a
-			} else if maxApp1 < a {
-				maxApp1 = a
-			}
-		}
-	}
-
-	// No limits. max asset index, max app index and max results have no effect
-	// This is to make sure the deleted elements do not show up
-	maxAssetIdx := basics.AssetIndex(maxAss2)
-	maxAppIdx := basics.AppIndex(maxApp2)
-	maxResults := uint64(len(expected))
-	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
-
-	// Limit with max asset index and max app index (max results has no effect)
-	maxAssetIdx = basics.AssetIndex(maxAss1)
-	maxAppIdx = basics.AppIndex(maxApp1)
-	maxResults = uint64(len(expected))
-	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
-
-	// Limit with max results
-	maxResults = 1
-	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
-}
-
-// listAndCompareComb lists the assets/applications and then compares against the expected
-// It uses the provided limit parameters
-func listAndCompare(t *testing.T,
-	maxAssetIdx basics.AssetIndex,
-	maxAppIdx basics.AppIndex,
-	maxResults uint64,
-	au *accountUpdates,
-	expected map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
-
-	// get the results with the given parameters
-	assetRes, err := au.ListAssets(maxAssetIdx, maxResults)
-	require.NoError(t, err)
-	appRes, err := au.ListApplications(maxAppIdx, maxResults)
-	require.NoError(t, err)
-
-	// count the expected number of results
-	expectedAssetCount := uint64(0)
-	expectedAppCount := uint64(0)
-	for a, b := range expected {
-		if b.Created {
-			if b.Ctype == basics.AssetCreatable &&
-				a <= basics.CreatableIndex(maxAssetIdx) &&
-				expectedAssetCount < maxResults {
-				expectedAssetCount++
-			}
-			if b.Ctype == basics.AppCreatable &&
-				a <= basics.CreatableIndex(maxAppIdx) &&
-				expectedAppCount < maxResults {
-				expectedAppCount++
-			}
-		}
-	}
-
-	// check the total counts are as expected
-	require.Equal(t, int(expectedAssetCount), len(assetRes))
-	require.Equal(t, int(expectedAppCount), len(appRes))
-
-	// verify the results are correct
-	for _, respCrtor := range assetRes {
-		crtor := expected[respCrtor.Index]
-		require.NotNil(t, crtor)
-		require.Equal(t, basics.AssetCreatable, crtor.Ctype)
-		require.Equal(t, true, crtor.Created)
-
-		require.Equal(t, basics.AssetCreatable, respCrtor.Type)
-		require.Equal(t, crtor.Creator, respCrtor.Creator)
-	}
-	for _, respCrtor := range appRes {
-		crtor := expected[respCrtor.Index]
-		require.NotNil(t, crtor)
-		require.Equal(t, basics.AppCreatable, crtor.Ctype)
-		require.Equal(t, true, crtor.Created)
-
-		require.Equal(t, basics.AppCreatable, respCrtor.Type)
-		require.Equal(t, crtor.Creator, respCrtor.Creator)
-	}
-}
-
-// TestListCreatables tests ListAssets and ListApplications
-// It tests with all elements in cache, all synced to database, and combination of both
-// It also tests the max results, max app index and max asset index
-func TestListCreatables(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// test configuration parameters
-	numElementsPerSegement := 25
-
-	// set up the database
-	dbs, _ := sqlitedriver.DbOpenTrackerTest(t, true)
-	dblogger := logging.TestingLog(t)
-	dbs.SetLogger(dblogger)
-	defer dbs.Close()
-
-	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		proto := config.Consensus[protocol.ConsensusCurrentVersion]
-
-		accts := make(map[basics.Address]basics.AccountData)
-		_ = tx.Testing().AccountsInitTest(t, accts, protocol.ConsensusCurrentVersion)
-		require.NoError(t, err)
-
-		au := &accountUpdates{}
-		au.accountsq, err = tx.Testing().MakeAccountsOptimizedReader()
-		require.NoError(t, err)
-
-		// ******* All results are obtained from the cache. Empty database *******
-		// ******* No deletes                                              *******
-		// get random data. Initial batch, no deletes
-		ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
-		expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-		ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
-		// set the cache
-		au.creatables = ctbsWithDeletes
-		listAndCompareComb(t, au, expectedDbImage)
-
-		// ******* All results are obtained from the database. Empty cache *******
-		// ******* No deletes	                                           *******
-		// sync with the database
-		var updates compactAccountDeltas
-		var resUpdates compactResourcesDeltas
-		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, ctbsWithDeletes, proto, basics.Round(1))
-		require.NoError(t, err)
-		// nothing left in cache
-		au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-		listAndCompareComb(t, au, expectedDbImage)
-
-		// ******* Results are obtained from the database and from the cache *******
-		// ******* No deletes in the database.                               *******
-		// ******* Data in the database deleted in the cache                 *******
-		au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
-		listAndCompareComb(t, au, expectedDbImage)
-
-		// ******* Results are obtained from the database and from the cache *******
-		// ******* Deletes are in the database and in the cache              *******
-		// sync with the database. This has deletes synced to the database.
-		_, _, _, err = accountsNewRound(tx, updates, resUpdates, nil, au.creatables, proto, basics.Round(1))
-		require.NoError(t, err)
-		// get new creatables in the cache. There will be deleted in the cache from the previous batch.
-		au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
-			expectedDbImage, numElementsPerSegement)
-		listAndCompareComb(t, au, expectedDbImage)
-
-		return
-	})
-	require.NoError(t, err)
 }
 
 func TestBoxNamesByAppIDs(t *testing.T) {
@@ -1752,8 +1591,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		ml.trackers.committedUpTo(basics.Round(i))
 		ml.trackers.waitAccountsWriting()
 		accts = append(accts, newAccts)
@@ -1842,8 +1680,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1880,8 +1717,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1949,8 +1785,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1986,8 +1821,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -2024,8 +1858,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		delta := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, updates.Len(), 0)
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.addMockBlock(blockEntry{block: blk}, delta)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -2154,7 +1987,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = newTotals
 
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 
 		// commit changes synchroniously
 		_, maxLookback := au.committedUpTo(i)
@@ -2177,7 +2010,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 				err := au.prepareCommit(dcc)
 				require.NoError(t, err)
 				err = ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-					arw, err := tx.MakeAccountsReaderWriter()
+					aw, err := tx.MakeAccountsWriter()
 					if err != nil {
 						return err
 					}
@@ -2186,7 +2019,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 					if err != nil {
 						return err
 					}
-					err = arw.UpdateAccountsRound(newBase)
+					err = aw.UpdateAccountsRound(newBase)
 					return err
 				})
 				require.NoError(t, err)
@@ -2337,7 +2170,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 		delta.Accts.MergeAccounts(updates)
 		delta.Creatables = creatablesFromUpdates(base, updates, knownCreatables)
 		delta.Totals = accumulateTotals(t, testProtocolVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
-		ml.trackers.newBlock(blk, delta)
+		ml.addBlock(blockEntry{block: blk}, delta)
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
@@ -2464,7 +2297,7 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			err := au.prepareCommit(dcc)
 			require.NoError(t, err)
 			err = ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-				arw, err := tx.MakeAccountsReaderWriter()
+				aw, err := tx.MakeAccountsWriter()
 				if err != nil {
 					return err
 				}
@@ -2473,7 +2306,7 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 				if err != nil {
 					return err
 				}
-				err = arw.UpdateAccountsRound(newBase)
+				err = aw.UpdateAccountsRound(newBase)
 				return err
 			})
 			require.NoError(t, err)
@@ -2877,4 +2710,17 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	require.Contains(t, data.Assets, aidx1)
 	require.Contains(t, data.Assets, aidx3)
 	require.NotContains(t, data.Assets, aidx2)
+}
+
+func TestAccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	aul := &accountUpdatesLedgerEvaluator{
+		prevHeader: bookkeeping.BlockHeader{},
+		tail:       &txTail{},
+	}
+	hdr, err := aul.BlockHdr(99)
+	require.Error(t, err)
+	require.Equal(t, ledgercore.ErrNoEntry{}, err)
+	require.Equal(t, bookkeeping.BlockHeader{}, hdr)
 }

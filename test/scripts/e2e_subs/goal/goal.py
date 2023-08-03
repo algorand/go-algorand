@@ -144,10 +144,10 @@ class Goal:
             self.open_wallet(self.wallet_name)
             return self.kmd.sign_transaction(self.handle, "", tx)
 
-    def sign_with_program(self, tx, program, delegator=None):
+    def sign_with_program(self, tx, program, args=None, delegator=None):
         if delegator:
             raise Exception("haven't implemented delgated logicsig yet")
-        return txn.LogicSigTransaction(tx, txn.LogicSig(program))
+        return txn.LogicSigTransaction(tx, txn.LogicSig(program, args))
 
     def send(self, tx, confirm=True):
         try:

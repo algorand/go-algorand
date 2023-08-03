@@ -34,7 +34,7 @@ func TestAddingToCache(t *testing.T) {
 	impl := icache.(*verifiedTransactionCache)
 	_, signedTxn, secrets, addrs := generateTestObjects(10, 5, 0, 50)
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
-	groupCtx, err := PrepareGroupContext(txnGroups[0], blockHeader, nil)
+	groupCtx, err := PrepareGroupContext(txnGroups[0], blockHeader, nil, nil)
 	require.NoError(t, err)
 	impl.Add(txnGroups[0], groupCtx)
 	// make it was added.
@@ -55,7 +55,7 @@ func TestBucketCycling(t *testing.T) {
 	_, signedTxn, _, _ := generateTestObjects(entriesPerBucket*bucketCount*2, bucketCount, 0, 0)
 
 	require.Equal(t, entriesPerBucket*bucketCount*2, len(signedTxn))
-	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{signedTxn[0]}, blockHeader, nil)
+	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{signedTxn[0]}, blockHeader, nil, nil)
 	require.NoError(t, err)
 
 	// fill up the cache with entries.
@@ -92,7 +92,7 @@ func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 		if i%2 == 0 {
 			expectedUnverifiedGroups = append(expectedUnverifiedGroups, txnGroups[i])
 		} else {
-			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil)
+			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
 			impl.Add(txnGroups[i], groupCtx)
 		}
 	}
@@ -116,7 +116,7 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 		if i%2 == 1 {
 			queryTxnGroups = append(queryTxnGroups, txnGroups[i])
 		} else {
-			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil)
+			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
 			impl.Add(txnGroups[i], groupCtx)
 		}
 	}
@@ -145,7 +145,7 @@ func TestUpdatePinned(t *testing.T) {
 
 	// insert some entries.
 	for i := 0; i < len(txnGroups); i++ {
-		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil)
+		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
 		impl.Add(txnGroups[i], groupCtx)
 	}
 
@@ -174,7 +174,7 @@ func TestPinningTransactions(t *testing.T) {
 
 	// insert half of the entries.
 	for i := 0; i < len(txnGroups)/2; i++ {
-		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil)
+		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
 		impl.Add(txnGroups[i], groupCtx)
 	}
 

@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"strings"
@@ -256,26 +257,28 @@ bad: err
 			dl.fullBlock(&txntest.Txn{Type: "pay", Sender: addrs[2], Receiver: addrs[2]})
 		}
 
-		checker := basics.AppIndex(11)
-		gold := basics.AssetIndex(13)
 		create := txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          addrs[0],
 			ApprovalProgram: source,
 		}
 
-		dl.fullBlock(&create) // create the app
+		vb := dl.fullBlock(&create) // create the app
+		checker := basics.AppIndex(vb.Block().TxnCounter)
+		gold := basics.AssetIndex(checker + 2) // doesn't exist yet
+		goldBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(goldBytes, uint64(gold))
 
 		check := txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          addrs[0],
 			ApplicationID:   checker,
-			ApplicationArgs: [][]byte{{byte(gold)}, {0}, {0}}, // exist=0 value=0
+			ApplicationArgs: [][]byte{goldBytes, {0}, {0}}, // exist=0 value=0
 		}
 
 		dl.fullBlock(&check)
-
-		dl.fullBlock(&makegold)
+		vb = dl.fullBlock(&makegold) // Works, despite asset not existing
+		require.EqualValues(t, gold, vb.Block().TxnCounter)
 
 		// confirm hardcoded "gold" is correct
 		b, ok := holding(t, dl.generator, addrs[0], gold)
@@ -284,23 +287,23 @@ bad: err
 
 		// The asset exists now. asset_holding_get gives 1,10 for the creator
 		// (who is auto-opted in)
-		check.ApplicationArgs = [][]byte{{byte(gold)}, {1}, {10}} // exist=1 value=10
+		check.ApplicationArgs = [][]byte{goldBytes, {1}, {10}} // exist=1 value=10
 		dl.fullBlock(&check)
 
 		// but still gives 0,0 for un opted-in addrs[1], because it means
 		// "exists" in the given account, i.e. opted in
 		check.Sender = addrs[1]
-		check.ApplicationArgs = [][]byte{{byte(gold)}, {0}, {0}}
+		check.ApplicationArgs = [][]byte{goldBytes, {0}, {0}}
 		dl.fullBlock(&check)
 
 		// opt-in addr[1]
 		dl.fullBlock(&txntest.Txn{Type: "axfer", XferAsset: gold, Sender: addrs[1], AssetReceiver: addrs[1]})
-		check.ApplicationArgs = [][]byte{{byte(gold)}, {1}, {0}}
+		check.ApplicationArgs = [][]byte{goldBytes, {1}, {0}}
 		dl.fullBlock(&check)
 
 		// non-existent account, with existing asset, cleanly reports exists=0, value=0
 		check.Accounts = []basics.Address{{0x01, 0x02}}
-		check.ApplicationArgs = [][]byte{{byte(gold)}, {0}, {0}}
+		check.ApplicationArgs = [][]byte{goldBytes, {0}, {0}}
 		dl.fullBlock(&check)
 	})
 }
@@ -348,32 +351,34 @@ main:
 bad: err
 `
 
-		// Advance the ledger so that there's ambiguity of app index or foreign array index
+		// Advance the ledger so that there's no ambiguity of app ID or foreign array slot
 		for i := 0; i < 10; i++ {
 			dl.fullBlock(&txntest.Txn{Type: "pay", Sender: addrs[2], Receiver: addrs[2]})
 		}
 
-		checker := basics.AppIndex(11) // the app that checks state
-		state := basics.AppIndex(12)   // the app with state
 		create := txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          addrs[0],
 			ApprovalProgram: source,
 		}
 
-		dl.fullBlock(&create) // create the checker app
-
+		vb := dl.fullBlock(&create) // create the checker app
+		// Since we are testing back to v24, we can't get appID from EvalDelta
+		checker := basics.AppIndex(vb.Block().TxnCounter)
+		state := checker + 1 // doesn't exist yet
+		stateBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(stateBytes, uint64(state))
 		check := txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          addrs[0],
 			ApplicationID:   checker,
-			ApplicationArgs: [][]byte{{byte(state)}, {0}, {0}}, // exist=0 value=0
+			ApplicationArgs: [][]byte{stateBytes, {0}, {0}}, // exist=0 value=0
 		}
 
-		// unlike assets, you can't even as `app_local_get_ex` for address that
-		// have not been opted in.  For local state, the existence bit is only
-		// used to distinguish "key existence". The local state bundle MUST
-		// exist of program fails.
+		// unlike assets, you can't even do `app_local_get_ex` for an address
+		// that has not been opted into the app.  For local state, the existence
+		// bit is only used to distinguish "key existence". The local state
+		// bundle MUST exist or the program fails.
 		dl.txn(&check, "cannot fetch key")
 
 		// so we make the app and try again
@@ -388,7 +393,7 @@ bad: err
 
 		// opt-in addr[0]
 		dl.fullBlock(&txntest.Txn{Type: "appl", ApplicationID: state, Sender: addrs[0], OnCompletion: transactions.OptInOC})
-		check.ApplicationArgs = [][]byte{{byte(state)}, {0}, {0}}
+		check.ApplicationArgs = [][]byte{stateBytes, {0}, {0}}
 		dl.fullBlock(&check)
 	})
 }
@@ -594,7 +599,7 @@ func TestMinBalanceChanges(t *testing.T) {
 		},
 	}
 
-	const expectedID basics.AssetIndex = 1
+	const expectedID basics.AssetIndex = 1001
 	optInTxn := txntest.Txn{
 		Type:          "axfer",
 		Sender:        addrs[5],
@@ -661,7 +666,7 @@ func TestAppInsMinBalance(t *testing.T) {
 	l := newSimpleLedgerWithConsensusVersion(t, genBalances, protocol.ConsensusV30, cfg)
 	defer l.Close()
 
-	const appid basics.AppIndex = 1
+	const appID basics.AppIndex = 1
 
 	maxAppsOptedIn := config.Consensus[protocol.ConsensusV30].MaxAppsOptedIn
 	require.Greater(t, maxAppsOptedIn, 0)
@@ -695,7 +700,7 @@ func TestAppInsMinBalance(t *testing.T) {
 		optInTxn := txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        addrs[9],
-			ApplicationID: appid + basics.AppIndex(i),
+			ApplicationID: appID + basics.AppIndex(i),
 			OnCompletion:  transactions.OptInOC,
 		}
 		txnsOptIn = append(txnsOptIn, &optInTxn)

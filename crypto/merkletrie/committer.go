@@ -16,6 +16,8 @@
 
 package merkletrie
 
+import "golang.org/x/exp/slices"
+
 // Committer is the interface supporting serializing tries into persistent storage.
 type Committer interface {
 	StorePage(page uint64, content []byte) error
@@ -40,9 +42,7 @@ func (mc *InMemoryCommitter) StorePage(page uint64, content []byte) error {
 	if content == nil {
 		delete(mc.memStore, page)
 	} else {
-		storedContent := make([]byte, len(content))
-		copy(storedContent, content)
-		mc.memStore[page] = storedContent
+		mc.memStore[page] = slices.Clone(content)
 	}
 	return nil
 }

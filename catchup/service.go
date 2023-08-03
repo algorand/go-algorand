@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -125,7 +126,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
 	s.blockValidationPool = blockValidationPool
-	s.syncNow = make(chan struct{})
+	s.syncNow = make(chan struct{}, 1)
 
 	return s
 }
@@ -157,6 +158,16 @@ func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
 	return
 }
 
+// triggerSync attempts to wake up the sync loop.
+func (s *Service) triggerSync() {
+	// Prevents deadlock if periodic sync isn't running
+	// when catchup is setting the sync round.
+	select {
+	case s.syncNow <- struct{}{}:
+	default:
+	}
+}
+
 // SetDisableSyncRound attempts to set the first round we _do_not_ want to fetch from the network
 // Blocks from disableSyncRound or any round after disableSyncRound will not be fetched while this is set
 func (s *Service) SetDisableSyncRound(rnd uint64) error {
@@ -164,18 +175,14 @@ func (s *Service) SetDisableSyncRound(rnd uint64) error {
 		return ErrSyncRoundInvalid
 	}
 	atomic.StoreUint64(&s.disableSyncRound, rnd)
-	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
-		s.syncNow <- struct{}{}
-	}
+	s.triggerSync()
 	return nil
 }
 
 // UnsetDisableSyncRound removes any previously set disabled sync round
 func (s *Service) UnsetDisableSyncRound() {
 	atomic.StoreUint64(&s.disableSyncRound, 0)
-	if syncing, initial := s.IsSynchronizing(); !syncing && !initial {
-		s.syncNow <- struct{}{}
-	}
+	s.triggerSync()
 }
 
 // GetDisableSyncRound returns the disabled sync round
@@ -738,17 +745,19 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		if cert.Round == fetchedCert.Round &&
 			cert.Proposal.BlockDigest != fetchedCert.Proposal.BlockDigest &&
 			fetchedCert.Authenticate(*block, s.ledger, verifier) == nil {
-			s := "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
-			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "fetchRound called with a cert authenticating block with hash %v.\n"
-			s += "We fetched a valid cert authenticating a different block, %v. This indicates a fork.\n\n"
-			s += "Cert from our agreement service:\n%#v\n\n"
-			s += "Cert from the fetcher:\n%#v\n\n"
-			s += "Block from the fetcher:\n%#v\n\n"
-			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
-			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+			var builder strings.Builder
+			builder.WriteString("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+			builder.WriteString("!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n")
+			builder.WriteString("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+			builder.WriteString("fetchRound called with a cert authenticating block with hash %v.\n")
+			builder.WriteString("We fetched a valid cert authenticating a different block, %v. This indicates a fork.\n\n")
+			builder.WriteString("Cert from our agreement service:\n%#v\n\n")
+			builder.WriteString("Cert from the fetcher:\n%#v\n\n")
+			builder.WriteString("Block from the fetcher:\n%#v\n\n")
+			builder.WriteString("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+			builder.WriteString("!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n")
+			builder.WriteString("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+			s := builder.String()
 			s = fmt.Sprintf(s, cert.Proposal.BlockDigest, fetchedCert.Proposal.BlockDigest, cert, fetchedCert, block)
 			fmt.Println(s)
 			logging.Base().Error(s)
@@ -810,13 +819,49 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 			if cfg.NetAddress != "" { // Relay node
 				peerClasses = []peerClass{
 					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivers},
+					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
+					{initialRank: peerRankInitialFifthPriority, peerClass: network.PeersConnectedIn},
+				}
+			} else {
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
+				}
+			}
+		} else {
+			if cfg.NetAddress != "" { // Relay node
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivalNodes},
+					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
+					{initialRank: peerRankInitialFifthPriority, peerClass: network.PeersPhonebookArchivers},
+				}
+			} else {
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
+					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookArchivers},
+				}
+			}
+		}
+	} else {
+		if pipelineFetch {
+			if cfg.NetAddress != "" { // Relay node
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
 					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn},
 				}
 			} else {
 				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedOut},
 					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
 				}
@@ -826,42 +871,14 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				peerClasses = []peerClass{
 					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
 					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
+					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivalNodes},
+					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
+				}
+			} else {
+				peerClasses = []peerClass{
+					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
+					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
 					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookArchivers},
-				}
-			} else {
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivers},
-				}
-			}
-		}
-	} else {
-		if pipelineFetch {
-			if cfg.NetAddress != "" { // Relay node
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedIn},
-				}
-			} else {
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-				}
-			}
-		} else {
-			if cfg.NetAddress != "" { // Relay node
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-				}
-			} else {
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 				}
 			}
 		}

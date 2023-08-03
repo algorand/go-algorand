@@ -81,6 +81,8 @@ var (
 	LedgerRewardClaimsTotal = MetricName{Name: "algod_ledger_reward_claims_total", Description: "Total number of reward claims written to the ledger"}
 	// LedgerRound Last round written to ledger
 	LedgerRound = MetricName{Name: "algod_ledger_round", Description: "Last round written to ledger"}
+	// LedgerDBRound Last round written to ledger
+	LedgerDBRound = MetricName{Name: "algod_ledger_dbround", Description: "Last round written to the ledger DB"}
 
 	// AgreementMessagesHandled "Number of agreement messages handled"
 	AgreementMessagesHandled = MetricName{Name: "algod_agreement_handled", Description: "Number of agreement messages handled"}
@@ -130,4 +132,9 @@ var (
 	TransactionGroupTxSyncRemember = MetricName{Name: "algod_transaction_group_txsync_remember", Description: "Number of transaction groups remembered via txsync"}
 	// TransactionGroupTxSyncAlreadyCommitted "Number of duplicate or error transaction groups received via txsync"
 	TransactionGroupTxSyncAlreadyCommitted = MetricName{Name: "algod_transaction_group_txsync_err_or_committed", Description: "Number of duplicate or error transaction groups received via txsync"}
+
+	// BroadcastSignedTxGroupSucceeded "Number of successful broadcasts of local signed transaction groups"
+	BroadcastSignedTxGroupSucceeded = MetricName{Name: "algod_broadcast_txgroup_succeeded", Description: "Number of successful broadcasts of local signed transaction groups"}
+	// BroadcastSignedTxGroupFailed "Number of failed broadcasts of local signed transaction groups"
+	BroadcastSignedTxGroupFailed = MetricName{Name: "algod_broadcast_txgroup_failed", Description: "Number of failed broadcasts of local signed transaction groups"}
 )

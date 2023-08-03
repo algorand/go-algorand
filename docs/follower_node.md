@@ -25,6 +25,7 @@ Follower mode was initially created to be a data source for [Conduit](https://gi
 Behavior is controlled with the `config.json` file:
 
 | property | description |
+| -------- | ----------- |
 | EnableFollowMode | When set to `true` the node starts as a network follower. |
 | MaxAcctLookback | The number of additional `Ledger State Delta` objects available. The default can be used, increasing to 64 or higher could help performance. |
 | CatchupParallelBlocks | The number of blocks that are fetched concurrently. The default can be used, increasing to 64 or higher could help performance. |

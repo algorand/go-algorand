@@ -1111,7 +1111,7 @@
           "public",
           "nonparticipating"
         ],
-        "description": "Waits for a block to appear after round {round} and returns the node's status at the time.",
+        "description": "Waits for a block to appear after round {round} and returns the node's status at the time. There is a 1 minute timeout, when reached the current status is returned regardless of whether or not it is the round after the given round.",
         "produces": [
           "application/json"
         ],
@@ -1132,10 +1132,11 @@
         ],
         "responses": {
           "200": {
+            "description": "The round after the given round, or the current round if a timeout occurs.",
             "$ref": "#/responses/NodeStatusResponse"
           },
           "400": {
-            "description": "Bad Request -- number must be non-negative integer ",
+            "description": "Bad Request -- number must be non-negative integer",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1469,8 +1470,7 @@
         "description": "Get ledger deltas for a round.",
         "tags": [
             "public",
-            "data",
-            "experimental"
+            "nonparticipating"
         ],
         "produces": [
           "application/json",
@@ -1524,6 +1524,144 @@
           },
           "503": {
             "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/deltas/{round}/txn/group": {
+      "get": {
+        "description": "Get ledger deltas for transaction groups in a given round.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get LedgerStateDelta objects for all transaction groups in a given round",
+        "operationId": "GetTransactionGroupLedgerStateDeltasForRound",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionGroupLedgerStateDeltasForRoundResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find deltas for round",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/deltas/txn/group/{id}": {
+      "get": {
+        "description": "Get a ledger delta for a given transaction group.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a LedgerStateDelta object for a given transaction group",
+        "operationId": "GetLedgerStateDeltaForTransactionGroup",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]+",
+            "type": "string",
+            "description": "A transaction ID, or transaction group ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/LedgerStateDeltaForTransactionGroupResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find a delta for transaction ID or group ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -2276,6 +2414,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "408": {
+            "description": "Request Timeout",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {
@@ -2519,6 +2663,25 @@
       "description": "Ledger StateDelta object",
       "type": "object",
       "x-algorand-format": "StateDelta"
+    },
+    "LedgerStateDeltaForTransactionGroup": {
+      "description": "Contains a ledger delta for a single transaction group",
+      "type": "object",
+      "required": [
+        "Delta",
+        "Ids"
+      ],
+      "properties": {
+        "Delta": {
+          "$ref": "#/definitions/LedgerStateDelta"
+        },
+        "Ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "Account": {
       "description": "Account information at a given round.\n\nDefinition:\ndata/basics/userBalance.go : AccountData\n",
@@ -2946,6 +3109,29 @@
         }
       }
     },
+    "AvmValue": {
+      "description": "Represents an AVM value.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint64**",
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "bytes value.",
+          "type": "string",
+          "format": "byte"
+        },
+        "uint": {
+          "description": "uint value.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
     "StateDelta": {
       "description": "Application state delta.",
       "type": "array",
@@ -3293,6 +3479,13 @@
         "allow-more-logging": {
           "description": "Lifts limits on log opcode usage during simulation.",
           "type": "boolean"
+        },
+        "extra-opcode-budget": {
+          "description": "Applies extra opcode budget during simulation for each transaction group.",
+          "type": "integer"
+        },
+        "exec-trace-config": {
+          "$ref": "#/definitions/SimulateTraceConfig"
         }
       }
     },
@@ -3312,6 +3505,24 @@
             "format": "json",
             "x-algorand-format": "SignedTransaction"
           }
+        }
+      }
+    },
+    "SimulateTraceConfig": {
+      "description": "An object that configures simulation execution trace.",
+      "type": "object",
+      "properties": {
+        "enable": {
+          "description": "A boolean option for opting in execution trace features simulation endpoint.",
+          "type": "boolean"
+        },
+        "stack-change": {
+          "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
+          "type": "boolean"
+        },
+        "scratch-change": {
+          "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
+          "type": "boolean"
         }
       }
     },
@@ -3566,6 +3777,9 @@
         "logic-sig-budget-consumed": {
           "description": "Budget used during execution of a logic sig transaction.",
           "type": "integer"
+        },
+        "exec-trace": {
+          "$ref": "#/definitions/SimulationTransactionExecTrace"
         }
       }
     },
@@ -3659,13 +3873,104 @@
         },
         "max-log-calls": {
           "description": "The maximum log calls one can make during simulation",
-          "type": "integer",
-          "x-algorand-format": "uint64"
+          "type": "integer"
         },
         "max-log-size": {
           "description": "The maximum byte number to log during simulation",
-          "type": "integer",
-          "x-algorand-format": "uint64"
+          "type": "integer"
+        },
+        "extra-opcode-budget": {
+          "description": "The extra opcode budget added to each transaction group during simulation",
+          "type": "integer"
+        }
+      }
+    },
+    "ScratchChange": {
+      "description": "A write operation into a scratch slot.",
+      "type": "object",
+      "required": [
+        "slot",
+        "new-value"
+      ],
+      "properties": {
+        "slot": {
+          "description": "The scratch slot written.",
+          "type": "integer"
+        },
+        "new-value": {
+          "$ref": "#/definitions/AvmValue"
+        }
+      }
+    },
+    "SimulationOpcodeTraceUnit": {
+      "description": "The set of trace information and effect from evaluating a single opcode.",
+      "type": "object",
+      "required": [
+        "pc"
+      ],
+      "properties": {
+        "pc": {
+          "description": "The program counter of the current opcode being evaluated.",
+          "type": "integer"
+        },
+        "scratch-changes": {
+          "description": "The writes into scratch slots.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ScratchChange"
+          }
+        },
+        "spawned-inners": {
+          "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "stack-pop-count": {
+          "description": "The number of deleted stack values by this opcode.",
+          "type": "integer"
+        },
+        "stack-additions": {
+          "description": "The values added by this opcode to the stack.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AvmValue"
+          }
+        }
+      }
+    },
+    "SimulationTransactionExecTrace": {
+      "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
+      "type": "object",
+      "properties": {
+        "approval-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in an approval program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "clear-state-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a clear state program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "logic-sig-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a logic sig.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "inner-trace": {
+          "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationTransactionExecTrace"
+          }
         }
       }
     }
@@ -3868,6 +4173,29 @@
           "round": {
             "description": "The minimum sync round for the ledger.",
             "type": "integer"
+          }
+        }
+      }
+    },
+    "LedgerStateDeltaForTransactionGroupResponse": {
+      "description": "Response containing a ledger state delta for a single transaction group.",
+      "schema": {
+        "$ref": "#/definitions/LedgerStateDelta"
+      }
+    },
+    "TransactionGroupLedgerStateDeltasForRoundResponse": {
+      "description": "Response containing all ledger state deltas for transaction groups, with their associated Ids, in a single round.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "Deltas"
+        ],
+        "properties": {
+          "Deltas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/LedgerStateDeltaForTransactionGroup"
+            }
           }
         }
       }
@@ -4274,6 +4602,9 @@
           },
           "eval-overrides": {
             "$ref": "#/definitions/SimulationEvalOverrides"
+          },
+          "exec-trace-config": {
+            "$ref": "#/definitions/SimulateTraceConfig"
           }
         }
       }

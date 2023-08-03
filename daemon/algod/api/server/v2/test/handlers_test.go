@@ -24,11 +24,17 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/daemon/algod/api/server"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"golang.org/x/exp/slices"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -66,16 +72,19 @@ import (
 const stateProofInterval = uint64(256)
 
 func setupMockNodeForMethodGet(t *testing.T, status node.StatusReport, devmode bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
+	return setupMockNodeForMethodGetWithShutdown(t, status, devmode, make(chan struct{}))
+}
+
+func setupMockNodeForMethodGetWithShutdown(t *testing.T, status node.StatusReport, devmode bool, shutdown chan struct{}) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, devmode)
-	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
+		Shutdown: shutdown,
 	}
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -579,9 +588,73 @@ func TestGetStatusAfterBlock(t *testing.T) {
 	defer releasefunc()
 	err := handler.WaitForBlock(c, 0)
 	require.NoError(t, err)
-	// Expect 400 - the test ledger will always cause "errRequestedRoundInUnsupportedRound",
-	// as it has not participated in agreement to build blockheaders
+
 	require.Equal(t, 400, rec.Code)
+	msg, err := io.ReadAll(rec.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(msg), "requested round would reach only after the protocol upgrade which isn't supported")
+}
+
+func TestGetStatusAfterBlockShutdown(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	catchup := cannedStatusReportGolden
+	catchup.StoppedAtUnsupportedRound = false
+	shutdownChan := make(chan struct{})
+	handler, c, rec, _, _, releasefunc := setupMockNodeForMethodGetWithShutdown(t, catchup, false, shutdownChan)
+	defer releasefunc()
+
+	close(shutdownChan)
+	err := handler.WaitForBlock(c, 0)
+	require.NoError(t, err)
+
+	require.Equal(t, 500, rec.Code)
+	msg, err := io.ReadAll(rec.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(msg), "operation aborted as server is shutting down")
+}
+
+func TestGetStatusAfterBlockDuringCatchup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	catchup := cannedStatusReportGolden
+	catchup.StoppedAtUnsupportedRound = false
+	catchup.Catchpoint = "catchpoint"
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, catchup)
+	defer releasefunc()
+
+	err := handler.WaitForBlock(c, 0)
+	require.NoError(t, err)
+
+	require.Equal(t, 503, rec.Code)
+	msg, err := io.ReadAll(rec.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(msg), "operation not available during catchup")
+}
+
+func TestGetStatusAfterBlockTimeout(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	supported := cannedStatusReportGolden
+	supported.StoppedAtUnsupportedRound = false
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, supported)
+	defer releasefunc()
+
+	before := v2.WaitForBlockTimeout
+	defer func() { v2.WaitForBlockTimeout = before }()
+	v2.WaitForBlockTimeout = 1 * time.Millisecond
+	err := handler.WaitForBlock(c, 1000)
+	require.NoError(t, err)
+
+	require.Equal(t, 200, rec.Code)
+	dec := json.NewDecoder(rec.Body)
+	var resp model.NodeStatusResponse
+	err = dec.Decode(&resp)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), resp.LastRound)
 }
 
 func TestGetTransactionParams(t *testing.T) {
@@ -934,7 +1007,7 @@ func TestSimulateTransaction(t *testing.T) {
 	for name, scenarioFn := range scenarios {
 		t.Run(name, func(t *testing.T) { //nolint:paralleltest // Uses shared testing env
 			sender := roots[0]
-			futureAppID := basics.AppIndex(2)
+			futureAppID := basics.AppIndex(1002)
 
 			payTxn := txnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -1025,8 +1098,7 @@ int 1`,
 
 					var expectedFailedAt *[]uint64
 					if len(scenario.FailedAt) != 0 {
-						clone := make([]uint64, len(scenario.FailedAt))
-						copy(clone, scenario.FailedAt)
+						clone := slices.Clone(scenario.FailedAt)
 						clone[0]++
 						expectedFailedAt = &clone
 					}
@@ -1222,10 +1294,6 @@ func TestStartCatchup(t *testing.T) {
 
 	badCatchPoint := "bad catchpoint"
 	startCatchupTest(t, badCatchPoint, nil, 400)
-
-	// Test that a catchup fails w/ 400 when the catchpoint round is > syncRound (while syncRound is set)
-	syncRoundError := node.MakeCatchpointSyncRoundFailure(goodCatchPoint, 1)
-	startCatchupTest(t, goodCatchPoint, syncRoundError, 400)
 }
 
 func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
@@ -1518,7 +1586,7 @@ func TestTealDryrun(t *testing.T) {
 	gdr.ProtocolVersion = ""
 
 	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
-	require.Equal(t, string(protocol.ConsensusCurrentVersion), ddr.ProtocolVersion)
+	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
 	gdr.ProtocolVersion = string(protocol.ConsensusFuture)
 	ddr = tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
 	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
@@ -2069,4 +2137,169 @@ func TestTimestampOffsetInDevMode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
 	require.Equal(t, "{\"message\":\"failed to set timestamp offset on the node: block timestamp offset cannot be larger than max int64 value\"}\n", rec.Body.String())
+}
+
+func TestDeltasForTxnGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	blk1 := bookkeeping.BlockHeader{Round: 1}
+	blk2 := bookkeeping.BlockHeader{Round: 2}
+	delta1 := ledgercore.StateDelta{Hdr: &blk1}
+	delta2 := ledgercore.StateDelta{Hdr: &blk2, KvMods: map[string]ledgercore.KvValueDelta{"bx1": {Data: []byte("foobar")}}}
+	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+	groupID1, err := crypto.DigestFromString(crypto.Hash([]byte("hello")).String())
+	require.NoError(t, err)
+	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{
+		Type:   protocol.AssetTransferTx,
+		Header: transactions.Header{Group: groupID1}},
+	}}
+
+	tracer := eval.MakeTxnGroupDeltaTracer(2)
+	handlers := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: tracer,
+			},
+		},
+		Log: logging.Base(),
+	}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	// Add blocks to tracer
+	tracer.BeforeBlock(&blk1)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn1}}, &delta1, nil)
+	tracer.BeforeBlock(&blk2)
+	tracer.AfterTxnGroup(&logic.EvalParams{TxnGroup: []transactions.SignedTxnWithAD{txn2}}, &delta2, nil)
+
+	// Test /v2/deltas/{round}/txn/group
+	jsonFormatForRound := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(1),
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+
+	var roundResponse model.TransactionGroupLedgerStateDeltasForRoundResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &roundResponse)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(roundResponse.Deltas))
+	require.Equal(t, []string{txn1.ID().String()}, roundResponse.Deltas[0].Ids)
+	hdr, ok := roundResponse.Deltas[0].Delta["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta1.Hdr.Round, basics.Round(hdr["rnd"].(float64)))
+
+	// Test invalid round parameter
+	c, rec = newReq(t)
+	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		uint64(4),
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	// Test /v2/deltas/txn/group/{id}
+	jsonFormatForTxn := model.GetLedgerStateDeltaForTransactionGroupParamsFormatJson
+	c, rec = newReq(t)
+	// Use TxID
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		txn2.Txn.ID().String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	var groupResponse model.LedgerStateDeltaForTransactionGroupResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	groupHdr, ok := groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Use Group ID
+	c, rec = newReq(t)
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	err = json.Unmarshal(rec.Body.Bytes(), &groupResponse)
+	require.NoError(t, err)
+	require.NotNil(t, groupResponse["KvMods"])
+	groupHdr, ok = groupResponse["Hdr"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, delta2.Hdr.Round, basics.Round(groupHdr["rnd"].(float64)))
+
+	// Test invalid ID
+	c, rec = newReq(t)
+	badID := crypto.Hash([]byte("invalidID")).String()
+	err = handlers.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		badID,
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	// Test nil Tracer
+	nilTracerHandler := v2.Handlers{
+		Node: &mockNode{
+			ledger: &mockLedger{
+				tracer: nil,
+			},
+		},
+		Log: logging.Base(),
+	}
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetLedgerStateDeltaForTransactionGroup(
+		c,
+		groupID1.String(),
+		model.GetLedgerStateDeltaForTransactionGroupParams{Format: &jsonFormatForTxn},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 501, rec.Code)
+
+	c, rec = newReq(t)
+	err = nilTracerHandler.GetTransactionGroupLedgerStateDeltasForRound(
+		c,
+		0,
+		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
+	)
+	require.NoError(t, err)
+	require.Equal(t, 501, rec.Code)
+}
+
+func TestRouterRequestBody(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	mockLedger, _, _, _, _ := testingenv(t, 1, 1, true)
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	dummyShutdownChan := make(chan struct{})
+	l, err := net.Listen("tcp", ":0") // create listener so requests are buffered
+	e := server.NewRouter(logging.TestingLog(t), mockNode, dummyShutdownChan, "", "", l, 1000)
+	go e.Start(":0")
+	defer e.Close()
+
+	// Admin API call greater than max body bytes should succeed
+	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
+	stringReader := strings.NewReader(strings.Repeat("a", 50_000_000))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("https://%s/v2/participation", e.Listener.Addr().String()), stringReader)
+	assert.NoError(t, err)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Public API call greater than max body bytes fails
+	assert.Equal(t, "10MB", server.MaxRequestBodyBytes)
+	stringReader = strings.NewReader(strings.Repeat("a", 50_000_000))
+	req, err = http.NewRequest(http.MethodPost, fmt.Sprintf("https://%s/v2/transactions", e.Listener.Addr().String()), stringReader)
+	assert.NoError(t, err)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
 }

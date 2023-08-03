@@ -6,7 +6,21 @@ General purpose algod container image.
 
 ## Image Configuration
 
-There are a number of special files and environment variables used to control how a container is started.
+Algorand maintains a Docker image with recent snapshot builds from our `master` branch on DockerHub to support users who prefer to run containerized processes. There are a couple of different images avaliable for running the latest stable or development versions of Algod.
+
+- `algorand/algod:latest` is the latest stable release version of Algod (default)
+- `algorand/algod:stable` is the latest stable version of Algod
+- `algorand/algod:{version}-stable` is the stable version of Algod at a specific version number
+- `algorand/algod:beta` is the version of Algod being considered for the next stable release
+- `algorand/algod:nightly` is the latest development version of Algod
+
+Algorand also publishes experimental versions of Algod.
+
+- `algorand/algod:{LONGSHA}` is a version containing a specific commit to `master`
+- `algorand/algod:master` is the version running on our `master` branch
+- `algorand/algod:feature-{branch}` is the latest version of Algod on any of the go-algorand feature branches
+
+Furthermore, There are a number of special files and environment variables used to control how a container is started. See below for more detail.
 
 ### Default Configuration
 
@@ -22,17 +36,19 @@ The following environment variables can be supplied. Except when noted, it is po
 
 | Variable | Description |
 | -------- | ----------- |
-| NETWORK        | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
-| PROFILE        | If set, initializes the config.json file according to the given profile. |
-| DEV_MODE       | If set to 1 on a private network, enable dev mode. Only used during data directory initialization.                                                  |
-| START_KMD      | When set to 1, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION.                                                            |
-| FAST_CATCHUP   | If set to 1 on a public network, attempt to start fast-catchup during initial config.                                                               |
-| TOKEN          | If set, overrides the REST API token.                                                                                                               |
-| ADMIN_TOKEN    | If set, overrides the REST API admin token.                                                                                                         |
-| KMD_TOKEN      | If set along with `START_KMD`, override the KMD REST API token.                                                                                     |
-| TELEMETRY_NAME | If set on a public network, telemetry is reported with this name.                                                                                   |
-| NUM_ROUNDS     | If set on a private network, override default of 30000 participation keys.                                                                          |
-| PEER_ADDRESS   | If set, override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)                                              |
+| NETWORK         | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
+| PROFILE         | If set, initializes the config.json file according to the given profile. |
+| DEV_MODE        | If set to 1 on a private network, enable dev mode. Only used during data directory initialization.                                                  |
+| START_KMD       | When set to 1, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION.                                                            |
+| FAST_CATCHUP    | If set to 1 on a public network, attempt to start fast-catchup during initial config.                                                               |
+| TOKEN           | If set, overrides the REST API token.                                                                                                               |
+| ADMIN_TOKEN     | If set, overrides the REST API admin token.                                                                                                         |
+| KMD_TOKEN       | If set along with `START_KMD`, override the KMD REST API token.                                                                                     |
+| TELEMETRY_NAME  | If set on a public network, telemetry is reported with this name.                                                                                   |
+| NUM_ROUNDS      | If set on a private network, override default of 30000 participation keys.                                                                          |
+| GENESIS_ADDRESS | If set, use this API address to initialize the genesis file. |
+| PEER_ADDRESS    | If set, override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)                                              |
+| GOSSIP_PORT     | If set, configure the node to listen for external connections on this address. For example "4161" |
 
 ### Special Files
 
@@ -44,7 +60,7 @@ Configuration can be modified by specifying certain files. These can be changed 
 | /etc/algorand/algod.token | Override default randomized REST API token. |
 | /etc/algorand/algod.admin.token | Override default randomized REST API admin token. |
 | /etc/algorand/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
- | /etc/algorand/template.json | Override default private network topology. One of the nodes in the template must be named "data".| 
+ | /etc/algorand/template.json | Override default private network topology. One of the nodes in the template must be named "data".|
 
 ## Example Configuration
 

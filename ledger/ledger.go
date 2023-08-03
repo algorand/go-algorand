@@ -51,7 +51,7 @@ type Ledger struct {
 	// Database connections to the DBs storing blocks and tracker state.
 	// We use potentially different databases to avoid SQLite contention
 	// during catchup.
-	trackerDBs trackerdb.TrackerStore
+	trackerDBs trackerdb.Store
 	blockDBs   db.Pair
 
 	// blockQ is the buffer of added blocks that will be flushed to
@@ -90,8 +90,6 @@ type Ledger struct {
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
-
-	headerCache blockHeaderCache
 
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
@@ -136,22 +134,17 @@ func OpenLedger(
 		tracer:                         tracer,
 	}
 
-	l.headerCache.initialize()
-
 	defer func() {
 		if err != nil {
 			l.Close()
 		}
 	}()
 
-	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem, cfg, log)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
 	}
-	l.trackerDBs.SetLogger(log)
-	l.blockDBs.Rdb.SetLogger(log)
-	l.blockDBs.Wdb.SetLogger(log)
 
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
 
@@ -284,12 +277,9 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs trackerdb.TrackerStore, blockDBs db.Pair, err error) {
+func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
-	var trackerDBFilename string
-	var blockDBFilename string
-
 	if !dbMem {
 		commonDBFilename := dbPathPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
@@ -302,20 +292,32 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs trackerdb.Tracker
 		}
 	}
 
-	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-	blockDBFilename = dbPathPrefix + ".block.sqlite"
-
 	outErr := make(chan error, 2)
 	go func() {
 		var lerr error
-		trackerDBs, lerr = sqlitedriver.OpenTrackerSQLStore(trackerDBFilename, dbMem)
+		switch cfg.StorageEngine {
+		case "sqlite":
+			fallthrough
+		// anything else will initialize a sqlite engine.
+		default:
+			file := dbPathPrefix + ".tracker.sqlite"
+			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
+		}
+
 		outErr <- lerr
 	}()
 
 	go func() {
 		var lerr error
+		blockDBFilename := dbPathPrefix + ".block.sqlite"
 		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
-		outErr <- lerr
+		if lerr != nil {
+			outErr <- lerr
+			return
+		}
+		blockDBs.Rdb.SetLogger(log)
+		blockDBs.Wdb.SetLogger(log)
+		outErr <- nil
 	}()
 
 	err = <-outErr
@@ -474,6 +476,11 @@ func (l *Ledger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta,
 	return l.accts.lookupStateDelta(rnd)
 }
 
+// GetTracer returns the logic.EvalTracer attached to the ledger--can be nil.
+func (l *Ledger) GetTracer() logic.EvalTracer {
+	return l.tracer
+}
+
 // VotersForStateProof returns the top online accounts at round rnd.
 // The result might be nil, even with err=nil, if there are no voters
 // for that round because state proofs were not enabled.
@@ -489,24 +496,6 @@ func (l *Ledger) GetStateProofVerificationContext(stateProofLastAttestedRound ba
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.spVerification.LookupVerificationContext(stateProofLastAttestedRound)
-}
-
-// ListAssets takes a maximum asset index and maximum result length, and
-// returns up to that many CreatableLocators from the database where app idx is
-// less than or equal to the maximum.
-func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.ListAssets(maxAssetIdx, maxResults)
-}
-
-// ListApplications takes a maximum app index and maximum result length, and
-// returns up to that many CreatableLocators from the database where app idx is
-// less than or equal to the maximum.
-func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.ListApplications(maxAppIdx, maxResults)
 }
 
 // LookupLatest uses the accounts tracker to return the account state (including
@@ -625,17 +614,16 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 	return l.accts.LatestTotals()
 }
 
-// OnlineTotals returns the online totals of all accounts at the end of round rnd.
-func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+// OnlineCirculation returns the online totals of all accounts at the end of round rnd.
+// It implements agreement's calls for Circulation(rnd)
+func (l *Ledger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.onlineTotals(rnd)
+	return l.acctsOnline.onlineCirculation(rnd, voteRnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.
 func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
@@ -660,16 +648,22 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 
 // BlockHdr returns the BlockHeader of the block for round rnd.
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	blk, exists := l.headerCache.get(rnd)
-	if exists {
-		return
-	}
 
-	blk, err = l.blockQ.getBlockHdr(rnd)
-	if err == nil {
-		l.headerCache.put(blk)
+	// Expected availability range in txTail.blockHeader is [Latest - MaxTxnLife, Latest]
+	// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+	// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
+	// and currently set to 1.
+	// Explanation:
+	// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
+	// and because a txn is alive when the current round <= txn.LastValid
+	// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
+	// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
+	// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
+	hdr, ok := l.txTail.blockHeader(rnd)
+	if !ok {
+		hdr, err = l.blockQ.getBlockHdr(rnd)
 	}
-	return
+	return hdr, err
 }
 
 // EncodedBlockCert returns the encoded block and the corresponding encoded certificate of the block for round rnd.
@@ -718,7 +712,6 @@ func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.
 	if err != nil {
 		return err
 	}
-	l.headerCache.put(blk.BlockHeader)
 	l.trackers.newBlock(blk, vb.Delta())
 	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil
@@ -761,27 +754,6 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
 }
 
-// BlockHdrCached returns the block header if available.
-// Expected availability range is [Latest - MaxTxnLife, Latest]
-// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
-// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
-// and currently set to 1.
-// Explanation:
-// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
-// and because a txn is alive when the current round <= txn.LastValid
-// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
-// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
-// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
-func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	hdr, ok := l.txTail.blockHeader(rnd)
-	if !ok {
-		err = fmt.Errorf("no cached header data for round %d", rnd)
-	}
-	return hdr, err
-}
-
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
 func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {
 	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)
@@ -799,7 +771,7 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 }
 
 // ledgerForTracker methods
-func (l *Ledger) trackerDB() trackerdb.TrackerStore {
+func (l *Ledger) trackerDB() trackerdb.Store {
 	return l.trackerDBs
 }
 
@@ -826,7 +798,7 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eva
 func (l *Ledger) IsWritingCatchpointDataFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.catchpoint.IsWritingCatchpointDataFile()
+	return l.catchpoint.isWritingCatchpointDataFile()
 }
 
 // VerifiedTransactionCache returns the verify.VerifiedTransactionCache
@@ -842,15 +814,19 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 // If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
 // be used instead.
 // The tracer argument is a logic.EvalTracer which will be attached to the evaluator and have its hooked invoked during
-// the eval process for each block. A nil tracer will skip tracer invocation entirely.
+// the eval process for each block. A nil tracer will default to the tracer attached to the ledger.
 func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
+	tracerForEval := tracer
+	if tracerForEval == nil {
+		tracerForEval = l.tracer
+	}
 	return eval.StartEvaluator(l, hdr,
 		eval.EvaluatorOptions{
 			PaysetHint:          paysetHint,
 			Generate:            true,
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
-			Tracer:              tracer,
+			Tracer:              tracerForEval,
 		})
 }
 

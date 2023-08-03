@@ -18,6 +18,7 @@ package trackerdb
 
 import (
 	"context"
+	"errors"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -25,6 +26,9 @@ import (
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
+
+// ErrNotFound is returned when a record is not found.
+var ErrNotFound = errors.New("trackerdb: not found")
 
 // AccountRef is an opaque ref to an account in the db.
 type AccountRef interface {
@@ -82,8 +86,6 @@ type AccountsWriterExt interface {
 // AccountsReader is the "optimized" read interface for:
 // - accounts, resources, app kvs, creatables
 type AccountsReader interface {
-	ListCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error)
-
 	LookupAccount(addr basics.Address) (data PersistedAccountData, err error)
 
 	LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error)
@@ -103,7 +105,6 @@ type AccountsReaderExt interface {
 	AccountsTotals(ctx context.Context, catchpointStaging bool) (totals ledgercore.AccountTotals, err error)
 	AccountsHashRound(ctx context.Context) (hashrnd basics.Round, err error)
 	LookupAccountAddressFromAddressID(ctx context.Context, ref AccountRef) (address basics.Address, err error)
-	LookupAccountDataByAddress(basics.Address) (ref AccountRef, data []byte, err error)
 	LookupAccountRowID(basics.Address) (ref AccountRef, err error)
 	LookupResourceDataByAddrID(accountRef AccountRef, aidx basics.CreatableIndex) (data []byte, err error)
 	TotalResources(ctx context.Context) (total uint64, err error)
@@ -113,10 +114,12 @@ type AccountsReaderExt interface {
 	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
 	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
+	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
-	Testing() TestAccountsReaderExt
+	// testing
+	Testing() AccountsReaderTestExt
 }
 
 // AccountsReaderWriter is AccountsReader+AccountsWriter
@@ -139,7 +142,7 @@ type OnlineAccountsWriter interface {
 // - online accounts
 type OnlineAccountsReader interface {
 	LookupOnline(addr basics.Address, rnd basics.Round) (data PersistedOnlineAccountData, err error)
-	LookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error)
+	LookupOnlineRoundParams(rnd basics.Round) (onlineRoundParamsData ledgercore.OnlineRoundParamsData, err error)
 	LookupOnlineHistory(addr basics.Address) (result []PersistedOnlineAccountData, rnd basics.Round, err error)
 
 	Close()

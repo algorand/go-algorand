@@ -9,7 +9,9 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -21,6 +23,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//   |-----> BlockMaxSize()
 //
 // BlockHash
 //     |-----> (*) MarshalMsg
@@ -37,6 +40,7 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> BlockHeaderMaxSize()
 //
 // Genesis
 //    |-----> (*) MarshalMsg
@@ -45,6 +49,16 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> GenesisMaxSize()
+//
+// GenesisAccountData
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> GenesisAccountDataMaxSize()
 //
 // GenesisAllocation
 //         |-----> (*) MarshalMsg
@@ -53,6 +67,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> GenesisAllocationMaxSize()
 //
 // LightBlockHeader
 //         |-----> (*) MarshalMsg
@@ -61,6 +76,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> LightBlockHeaderMaxSize()
 //
 // ParticipationUpdates
 //           |-----> (*) MarshalMsg
@@ -69,6 +85,7 @@ import (
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> ParticipationUpdatesMaxSize()
 //
 // RewardsState
 //       |-----> (*) MarshalMsg
@@ -77,6 +94,7 @@ import (
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> RewardsStateMaxSize()
 //
 // StateProofTrackingData
 //            |-----> (*) MarshalMsg
@@ -85,6 +103,7 @@ import (
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> StateProofTrackingDataMaxSize()
 //
 // TxnCommitments
 //        |-----> (*) MarshalMsg
@@ -93,6 +112,7 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> TxnCommitmentsMaxSize()
 //
 // UpgradeVote
 //      |-----> (*) MarshalMsg
@@ -101,6 +121,10 @@ import (
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> UpgradeVoteMaxSize()
+//
+// crypto.Digest
+//       |-----> crypto.DigestMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -440,6 +464,16 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
+			var zb0006 int
+			zb0006, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0006 > config.MaxGenesisIDLen {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(config.MaxGenesisIDLen))
+				return
+			}
 			(*z).BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
@@ -576,27 +610,27 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			var zb0006 int
-			var zb0007 bool
-			zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0007 int
+			var zb0008 bool
+			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
-			if zb0006 > protocol.NumStateProofTypes {
-				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumStateProofTypes))
+			if zb0007 > protocol.NumStateProofTypes {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(protocol.NumStateProofTypes))
 				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
-			if zb0007 {
+			if zb0008 {
 				(*z).BlockHeader.StateProofTracking = nil
 			} else if (*z).BlockHeader.StateProofTracking == nil {
-				(*z).BlockHeader.StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0006)
+				(*z).BlockHeader.StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0007)
 			}
-			for zb0006 > 0 {
+			for zb0007 > 0 {
 				var zb0001 protocol.StateProofType
 				var zb0002 StateProofTrackingData
-				zb0006--
+				zb0007--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
@@ -612,24 +646,24 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			var zb0008 int
-			var zb0009 bool
-			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0009 int
+			var zb0010 bool
+			zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0008 > config.MaxProposedExpiredOnlineAccounts {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxProposedExpiredOnlineAccounts))
+			if zb0009 > config.MaxProposedExpiredOnlineAccounts {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxProposedExpiredOnlineAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0009 {
+			if zb0010 {
 				(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = nil
-			} else if (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) >= zb0008 {
-				(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = ((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts)[:zb0008]
+			} else if (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) >= zb0009 {
+				(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = ((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts)[:zb0009]
 			} else {
-				(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0008)
+				(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0009)
 			}
 			for zb0003 := range (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
 				bts, err = (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsg(bts)
@@ -707,6 +741,16 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "gen":
+				var zb0011 int
+				zb0011, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0011 > config.MaxGenesisIDLen {
+					err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxGenesisIDLen))
+					return
+				}
 				(*z).BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "GenesisID")
@@ -809,27 +853,27 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "spt":
-				var zb0010 int
-				var zb0011 bool
-				zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0012 int
+				var zb0013 bool
+				zb0012, zb0013, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
-				if zb0010 > protocol.NumStateProofTypes {
-					err = msgp.ErrOverflow(uint64(zb0010), uint64(protocol.NumStateProofTypes))
+				if zb0012 > protocol.NumStateProofTypes {
+					err = msgp.ErrOverflow(uint64(zb0012), uint64(protocol.NumStateProofTypes))
 					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
-				if zb0011 {
+				if zb0013 {
 					(*z).BlockHeader.StateProofTracking = nil
 				} else if (*z).BlockHeader.StateProofTracking == nil {
-					(*z).BlockHeader.StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0010)
+					(*z).BlockHeader.StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0012)
 				}
-				for zb0010 > 0 {
+				for zb0012 > 0 {
 					var zb0001 protocol.StateProofType
 					var zb0002 StateProofTrackingData
-					zb0010--
+					zb0012--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "StateProofTracking")
@@ -843,24 +887,24 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).BlockHeader.StateProofTracking[zb0001] = zb0002
 				}
 			case "partupdrmv":
-				var zb0012 int
-				var zb0013 bool
-				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0014 int
+				var zb0015 bool
+				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0012 > config.MaxProposedExpiredOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxProposedExpiredOnlineAccounts))
+				if zb0014 > config.MaxProposedExpiredOnlineAccounts {
+					err = msgp.ErrOverflow(uint64(zb0014), uint64(config.MaxProposedExpiredOnlineAccounts))
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0013 {
+				if zb0015 {
 					(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = nil
-				} else if (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) >= zb0012 {
-					(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = ((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts)[:zb0012]
+				} else if (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) >= zb0014 {
+					(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = ((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts)[:zb0014]
 				} else {
-					(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0012)
+					(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0014)
 				}
 				for zb0003 := range (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
 					bts, err = (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsg(bts)
@@ -916,6 +960,23 @@ func (z *Block) MsgIsZero() bool {
 	return ((*z).BlockHeader.Round.MsgIsZero()) && ((*z).BlockHeader.Branch.MsgIsZero()) && ((*z).BlockHeader.Seed.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).BlockHeader.TimeStamp == 0) && ((*z).BlockHeader.GenesisID == "") && ((*z).BlockHeader.GenesisHash.MsgIsZero()) && ((*z).BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).BlockHeader.RewardsState.RewardsRate == 0) && ((*z).BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolApprovals == 0) && ((*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).BlockHeader.TxnCounter == 0) && (len((*z).BlockHeader.StateProofTracking) == 0) && (len((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && ((*z).Payset.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func BlockMaxSize() (s int) {
+	s = 3 + 4 + basics.RoundMaxSize() + 5 + BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.BlockHeader.StateProofTracking
+	s += protocol.NumStateProofTypes * (protocol.StateProofTypeMaxSize())
+	// Adding size of map values for z.BlockHeader.StateProofTracking
+	s += protocol.NumStateProofTypes * (StateProofTrackingDataMaxSize())
+	s += 11
+	// Calculating size of slice: z.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
+	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
+	s += 5
+	// Using maxtotalbytes for: z.Payset
+	s += config.MaxTxnBytesPerBlock
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *BlockHash) MarshalMsg(b []byte) []byte {
 	return ((*(crypto.Digest))(z)).MarshalMsg(b)
@@ -942,6 +1003,11 @@ func (z *BlockHash) Msgsize() int {
 // MsgIsZero returns whether this is a zero value
 func (z *BlockHash) MsgIsZero() bool {
 	return ((*(crypto.Digest))(z)).MsgIsZero()
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func BlockHashMaxSize() int {
+	return crypto.DigestMaxSize()
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1272,6 +1338,16 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
+			var zb0006 int
+			zb0006, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0006 > config.MaxGenesisIDLen {
+				err = msgp.ErrOverflow(uint64(zb0006), uint64(config.MaxGenesisIDLen))
+				return
+			}
 			(*z).GenesisID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
@@ -1408,27 +1484,27 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			var zb0006 int
-			var zb0007 bool
-			zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0007 int
+			var zb0008 bool
+			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
-			if zb0006 > protocol.NumStateProofTypes {
-				err = msgp.ErrOverflow(uint64(zb0006), uint64(protocol.NumStateProofTypes))
+			if zb0007 > protocol.NumStateProofTypes {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(protocol.NumStateProofTypes))
 				err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 				return
 			}
-			if zb0007 {
+			if zb0008 {
 				(*z).StateProofTracking = nil
 			} else if (*z).StateProofTracking == nil {
-				(*z).StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0006)
+				(*z).StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0007)
 			}
-			for zb0006 > 0 {
+			for zb0007 > 0 {
 				var zb0001 protocol.StateProofType
 				var zb0002 StateProofTrackingData
-				zb0006--
+				zb0007--
 				bts, err = zb0001.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
@@ -1444,24 +1520,24 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			var zb0008 int
-			var zb0009 bool
-			zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0009 int
+			var zb0010 bool
+			zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0008 > config.MaxProposedExpiredOnlineAccounts {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxProposedExpiredOnlineAccounts))
+			if zb0009 > config.MaxProposedExpiredOnlineAccounts {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxProposedExpiredOnlineAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0009 {
+			if zb0010 {
 				(*z).ParticipationUpdates.ExpiredParticipationAccounts = nil
-			} else if (*z).ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).ParticipationUpdates.ExpiredParticipationAccounts) >= zb0008 {
-				(*z).ParticipationUpdates.ExpiredParticipationAccounts = ((*z).ParticipationUpdates.ExpiredParticipationAccounts)[:zb0008]
+			} else if (*z).ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).ParticipationUpdates.ExpiredParticipationAccounts) >= zb0009 {
+				(*z).ParticipationUpdates.ExpiredParticipationAccounts = ((*z).ParticipationUpdates.ExpiredParticipationAccounts)[:zb0009]
 			} else {
-				(*z).ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0008)
+				(*z).ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0009)
 			}
 			for zb0003 := range (*z).ParticipationUpdates.ExpiredParticipationAccounts {
 				bts, err = (*z).ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsg(bts)
@@ -1531,6 +1607,16 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "gen":
+				var zb0011 int
+				zb0011, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0011 > config.MaxGenesisIDLen {
+					err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxGenesisIDLen))
+					return
+				}
 				(*z).GenesisID, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "GenesisID")
@@ -1633,27 +1719,27 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "spt":
-				var zb0010 int
-				var zb0011 bool
-				zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0012 int
+				var zb0013 bool
+				zb0012, zb0013, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
-				if zb0010 > protocol.NumStateProofTypes {
-					err = msgp.ErrOverflow(uint64(zb0010), uint64(protocol.NumStateProofTypes))
+				if zb0012 > protocol.NumStateProofTypes {
+					err = msgp.ErrOverflow(uint64(zb0012), uint64(protocol.NumStateProofTypes))
 					err = msgp.WrapError(err, "StateProofTracking")
 					return
 				}
-				if zb0011 {
+				if zb0013 {
 					(*z).StateProofTracking = nil
 				} else if (*z).StateProofTracking == nil {
-					(*z).StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0010)
+					(*z).StateProofTracking = make(map[protocol.StateProofType]StateProofTrackingData, zb0012)
 				}
-				for zb0010 > 0 {
+				for zb0012 > 0 {
 					var zb0001 protocol.StateProofType
 					var zb0002 StateProofTrackingData
-					zb0010--
+					zb0012--
 					bts, err = zb0001.UnmarshalMsg(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "StateProofTracking")
@@ -1667,24 +1753,24 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).StateProofTracking[zb0001] = zb0002
 				}
 			case "partupdrmv":
-				var zb0012 int
-				var zb0013 bool
-				zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0014 int
+				var zb0015 bool
+				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0012 > config.MaxProposedExpiredOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxProposedExpiredOnlineAccounts))
+				if zb0014 > config.MaxProposedExpiredOnlineAccounts {
+					err = msgp.ErrOverflow(uint64(zb0014), uint64(config.MaxProposedExpiredOnlineAccounts))
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0013 {
+				if zb0015 {
 					(*z).ParticipationUpdates.ExpiredParticipationAccounts = nil
-				} else if (*z).ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).ParticipationUpdates.ExpiredParticipationAccounts) >= zb0012 {
-					(*z).ParticipationUpdates.ExpiredParticipationAccounts = ((*z).ParticipationUpdates.ExpiredParticipationAccounts)[:zb0012]
+				} else if (*z).ParticipationUpdates.ExpiredParticipationAccounts != nil && cap((*z).ParticipationUpdates.ExpiredParticipationAccounts) >= zb0014 {
+					(*z).ParticipationUpdates.ExpiredParticipationAccounts = ((*z).ParticipationUpdates.ExpiredParticipationAccounts)[:zb0014]
 				} else {
-					(*z).ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0012)
+					(*z).ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0014)
 				}
 				for zb0003 := range (*z).ParticipationUpdates.ExpiredParticipationAccounts {
 					bts, err = (*z).ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsg(bts)
@@ -1731,6 +1817,20 @@ func (z *BlockHeader) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *BlockHeader) MsgIsZero() bool {
 	return ((*z).Round.MsgIsZero()) && ((*z).Branch.MsgIsZero()) && ((*z).Seed.MsgIsZero()) && ((*z).TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).TimeStamp == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).RewardsState.FeeSink.MsgIsZero()) && ((*z).RewardsState.RewardsPool.MsgIsZero()) && ((*z).RewardsState.RewardsLevel == 0) && ((*z).RewardsState.RewardsRate == 0) && ((*z).RewardsState.RewardsResidue == 0) && ((*z).RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocolApprovals == 0) && ((*z).UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).UpgradeVote.UpgradeApprove == false) && ((*z).TxnCounter == 0) && (len((*z).StateProofTracking) == 0) && (len((*z).ParticipationUpdates.ExpiredParticipationAccounts) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func BlockHeaderMaxSize() (s int) {
+	s = 3 + 4 + basics.RoundMaxSize() + 5 + BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.StateProofTracking
+	s += protocol.NumStateProofTypes * (protocol.StateProofTypeMaxSize())
+	// Adding size of map values for z.StateProofTracking
+	s += protocol.NumStateProofTypes * (StateProofTrackingDataMaxSize())
+	s += 11
+	// Calculating size of slice: z.ParticipationUpdates.ExpiredParticipationAccounts
+	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2076,6 +2176,296 @@ func (z *Genesis) MsgIsZero() bool {
 	return ((*z).SchemaID == "") && ((*z).Network.MsgIsZero()) && ((*z).Proto.MsgIsZero()) && (len((*z).Allocation) == 0) && ((*z).RewardsPool == "") && ((*z).FeeSink == "") && ((*z).Timestamp == 0) && ((*z).Comment == "") && ((*z).DevMode == false)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func GenesisMaxSize() (s int) {
+	s = 1 + 3
+	panic("Unable to determine max size: String type z.SchemaID is unbounded")
+	s += 8 + protocol.NetworkIDMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 6
+	// Calculating size of slice: z.Allocation
+	s += msgp.ArrayHeaderSize + ((MaxInitialGenesisAllocationSize) * (GenesisAllocationMaxSize()))
+	s += 4
+	panic("Unable to determine max size: String type z.RewardsPool is unbounded")
+	s += 5
+	panic("Unable to determine max size: String type z.FeeSink is unbounded")
+	s += 10 + msgp.Int64Size + 8
+	panic("Unable to determine max size: String type z.Comment is unbounded")
+	s += 8 + msgp.BoolSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *GenesisAccountData) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(8)
+	var zb0001Mask uint16 /* 9 bits */
+	if (*z).MicroAlgos.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Status.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).SelectionID.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).StateProofID.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if (*z).VoteID.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if (*z).VoteFirstValid.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	if (*z).VoteKeyDilution == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x80
+	}
+	if (*z).VoteLastValid.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x100
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "algo"
+			o = append(o, 0xa4, 0x61, 0x6c, 0x67, 0x6f)
+			o = (*z).MicroAlgos.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "onl"
+			o = append(o, 0xa3, 0x6f, 0x6e, 0x6c)
+			o = (*z).Status.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "sel"
+			o = append(o, 0xa3, 0x73, 0x65, 0x6c)
+			o = (*z).SelectionID.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "stprf"
+			o = append(o, 0xa5, 0x73, 0x74, 0x70, 0x72, 0x66)
+			o = (*z).StateProofID.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "vote"
+			o = append(o, 0xa4, 0x76, 0x6f, 0x74, 0x65)
+			o = (*z).VoteID.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "voteFst"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x46, 0x73, 0x74)
+			o = (*z).VoteFirstValid.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not empty
+			// string "voteKD"
+			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x4b, 0x44)
+			o = msgp.AppendUint64(o, (*z).VoteKeyDilution)
+		}
+		if (zb0001Mask & 0x100) == 0 { // if not empty
+			// string "voteLst"
+			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x4c, 0x73, 0x74)
+			o = (*z).VoteLastValid.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *GenesisAccountData) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*GenesisAccountData)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Status.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Status")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).MicroAlgos.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "MicroAlgos")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).VoteID.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteID")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).StateProofID.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "StateProofID")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).SelectionID.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SelectionID")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).VoteFirstValid.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteFirstValid")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).VoteLastValid.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteLastValid")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteKeyDilution")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = GenesisAccountData{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "onl":
+				bts, err = (*z).Status.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Status")
+					return
+				}
+			case "algo":
+				bts, err = (*z).MicroAlgos.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "MicroAlgos")
+					return
+				}
+			case "vote":
+				bts, err = (*z).VoteID.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VoteID")
+					return
+				}
+			case "stprf":
+				bts, err = (*z).StateProofID.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "StateProofID")
+					return
+				}
+			case "sel":
+				bts, err = (*z).SelectionID.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "SelectionID")
+					return
+				}
+			case "voteFst":
+				bts, err = (*z).VoteFirstValid.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VoteFirstValid")
+					return
+				}
+			case "voteLst":
+				bts, err = (*z).VoteLastValid.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VoteLastValid")
+					return
+				}
+			case "voteKD":
+				(*z).VoteKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "VoteKeyDilution")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *GenesisAccountData) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*GenesisAccountData)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *GenesisAccountData) Msgsize() (s int) {
+	s = 1 + 4 + (*z).Status.Msgsize() + 5 + (*z).MicroAlgos.Msgsize() + 5 + (*z).VoteID.Msgsize() + 6 + (*z).StateProofID.Msgsize() + 4 + (*z).SelectionID.Msgsize() + 8 + (*z).VoteFirstValid.Msgsize() + 8 + (*z).VoteLastValid.Msgsize() + 7 + msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *GenesisAccountData) MsgIsZero() bool {
+	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).StateProofID.MsgIsZero()) && ((*z).SelectionID.MsgIsZero()) && ((*z).VoteFirstValid.MsgIsZero()) && ((*z).VoteLastValid.MsgIsZero()) && ((*z).VoteKeyDilution == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func GenesisAccountDataMaxSize() (s int) {
+	s = 1 + 4 + basics.StatusMaxSize() + 5 + basics.MicroAlgosMaxSize() + 5 + crypto.OneTimeSignatureVerifierMaxSize() + 6 + merklesignature.CommitmentMaxSize() + 4 + crypto.VRFVerifierMaxSize() + 8 + basics.RoundMaxSize() + 8 + basics.RoundMaxSize() + 7 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *GenesisAllocation) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2202,6 +2592,16 @@ func (z *GenesisAllocation) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *GenesisAllocation) MsgIsZero() bool {
 	return ((*z).Address == "") && ((*z).Comment == "") && ((*z).State.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func GenesisAllocationMaxSize() (s int) {
+	s = 1 + 5
+	panic("Unable to determine max size: String type z.Address is unbounded")
+	s += 8
+	panic("Unable to determine max size: String type z.Comment is unbounded")
+	s += 6 + GenesisAccountDataMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2379,6 +2779,12 @@ func (z *LightBlockHeader) MsgIsZero() bool {
 	return ((*z).Seed.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).GenesisHash.MsgIsZero()) && ((*z).Sha256TxnCommitment.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func LightBlockHeaderMaxSize() (s int) {
+	s = 1 + 2 + committee.SeedMaxSize() + 2 + basics.RoundMaxSize() + 3 + crypto.DigestMaxSize() + 3 + crypto.GenericDigestMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *ParticipationUpdates) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2535,6 +2941,14 @@ func (z *ParticipationUpdates) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *ParticipationUpdates) MsgIsZero() bool {
 	return (len((*z).ExpiredParticipationAccounts) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func ParticipationUpdatesMaxSize() (s int) {
+	s = 1 + 11
+	// Calculating size of slice: z.ExpiredParticipationAccounts
+	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2758,6 +3172,12 @@ func (z *RewardsState) MsgIsZero() bool {
 	return ((*z).FeeSink.MsgIsZero()) && ((*z).RewardsPool.MsgIsZero()) && ((*z).RewardsLevel == 0) && ((*z).RewardsRate == 0) && ((*z).RewardsResidue == 0) && ((*z).RewardsRecalculationRound.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func RewardsStateMaxSize() (s int) {
+	s = 1 + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *StateProofTrackingData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2910,6 +3330,12 @@ func (z *StateProofTrackingData) MsgIsZero() bool {
 	return ((*z).StateProofVotersCommitment.MsgIsZero()) && ((*z).StateProofOnlineTotalWeight.MsgIsZero()) && ((*z).StateProofNextRound.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func StateProofTrackingDataMaxSize() (s int) {
+	s = 1 + 2 + crypto.GenericDigestMaxSize() + 2 + basics.MicroAlgosMaxSize() + 2 + basics.RoundMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *TxnCommitments) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -3037,6 +3463,12 @@ func (z *TxnCommitments) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *TxnCommitments) MsgIsZero() bool {
 	return ((*z).NativeSha512_256Commitment.MsgIsZero()) && ((*z).Sha256Commitment.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func TxnCommitmentsMaxSize() (s int) {
+	s = 1 + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3189,4 +3621,10 @@ func (z *UpgradeVote) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *UpgradeVote) MsgIsZero() bool {
 	return ((*z).UpgradePropose.MsgIsZero()) && ((*z).UpgradeDelay.MsgIsZero()) && ((*z).UpgradeApprove == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func UpgradeVoteMaxSize() (s int) {
+	s = 1 + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize
+	return
 }

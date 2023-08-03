@@ -59,7 +59,7 @@ ${gcmd} app delete --app-id $APPID --app-arg "str:hello" --from $ACCOUNT
 
 # Check should fail since we can't find program to execute
 RES=$(${gcmd} app call --app-id $APPID --app-arg "str:check" --app-arg "str:bar" --from $ACCOUNT 2>&1 || true)
-EXPERROR='only clearing out is supported'
+EXPERROR='only ClearState is supported'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL app call should fail if app has been deleted %Y%m%d_%H%M%S'
     false

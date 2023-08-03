@@ -40,7 +40,6 @@ import (
 // LedgerForCowBase represents subset of Ledger functionality needed for cow business
 type LedgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -157,10 +156,10 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, sta
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
-	creatable := creatable{cindex: cidx, ctype: ctype}
+	c := creatable{cindex: cidx, ctype: ctype}
 
-	if foundAddress, ok := x.creators[creatable]; ok {
-		return foundAddress.address, foundAddress.exists, nil
+	if fa, ok := x.creators[c]; ok {
+		return fa.address, fa.exists, nil
 	}
 
 	address, exists, err := x.l.GetCreatorForRound(x.rnd, cidx, ctype)
@@ -169,7 +168,7 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 			"roundCowBase.getCreator() cidx: %d ctype: %v err: %w", cidx, ctype, err)
 	}
 
-	x.creators[creatable] = foundAddress{address: address, exists: exists}
+	x.creators[c] = foundAddress{address: address, exists: exists}
 	return address, exists, nil
 }
 
@@ -340,10 +339,6 @@ func (x *roundCowBase) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 
 func (x *roundCowBase) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	return x.l.GetStateProofVerificationContext(stateProofLastAttestedRound)
-}
-
-func (x *roundCowBase) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
-	return x.l.BlockHdrCached(r)
 }
 
 func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
@@ -734,9 +729,9 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, evalOpts.PaysetHint)
 
 	if evalOpts.Validate {
-		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
-		if err != nil {
-			return nil, err
+		preCheckErr := eval.block.BlockHeader.PreCheck(eval.prevHeader)
+		if preCheckErr != nil {
+			return nil, preCheckErr
 		}
 
 		// Check that the rewards rate, level and residue match expected values
@@ -958,7 +953,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	cow := eval.state.child(len(txgroup))
 	defer cow.recycle()
 
-	evalParams := logic.NewEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials)
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
@@ -1097,16 +1092,16 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 
 		// Transaction already in the ledger?
-		err := cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+		err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
 
 		// Does the address that authorized the transaction actually match whatever address the sender has rekeyed to?
 		// i.e., the sig/lsig/msig was checked against the txn.Authorizer() address, but does this match the sender's balrecord.AuthAddr?
-		acctdata, err := cow.lookup(txn.Txn.Sender)
-		if err != nil {
-			return err
+		acctdata, lookupErr := cow.lookup(txn.Txn.Sender)
+		if lookupErr != nil {
+			return lookupErr
 		}
 		correctAuthorizer := acctdata.AuthAddr
 		if (correctAuthorizer == basics.Address{}) {
@@ -1300,9 +1295,9 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 	if eval.validate {
 		// check commitments
-		txnRoot, err := eval.block.PaysetCommit()
-		if err != nil {
-			return err
+		txnRoot, err2 := eval.block.PaysetCommit()
+		if err2 != nil {
+			return err2
 		}
 		if txnRoot != eval.block.TxnCommitments {
 			return fmt.Errorf("txn root wrong: %v != %v", txnRoot, eval.block.TxnCommitments)
@@ -1316,15 +1311,37 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 
-		expectedVoters, expectedVotersWeight, err := eval.stateProofVotersAndTotal()
-		if err != nil {
-			return err
+		expectedVoters, expectedVotersWeight, err2 := eval.stateProofVotersAndTotal()
+		if err2 != nil {
+			return err2
 		}
 		if !eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
 			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, expectedVoters)
 		}
-		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
-			return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
+		if eval.proto.ExcludeExpiredCirculation {
+			if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
+				return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
+			}
+		} else {
+			if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
+				actualVotersWeight := eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
+				var highWeight, lowWeight basics.MicroAlgos
+				if expectedVotersWeight.LessThan(actualVotersWeight) {
+					highWeight = actualVotersWeight
+					lowWeight = expectedVotersWeight
+				} else {
+					highWeight = expectedVotersWeight
+					lowWeight = actualVotersWeight
+				}
+				const stakeDiffusionFactor = 5
+				allowedDelta, overflowed := basics.Muldiv(expectedVotersWeight.Raw, stakeDiffusionFactor, 100)
+				if overflowed {
+					return fmt.Errorf("StateProofOnlineTotalWeight overflow: %v != %v", actualVotersWeight, expectedVotersWeight)
+				}
+				if (highWeight.Raw - lowWeight.Raw) > allowedDelta {
+					return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v greater than %d", actualVotersWeight, expectedVotersWeight, allowedDelta)
+				}
+			}
 		}
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.GetStateProofNextRound() {
 			return fmt.Errorf("StateProofNextRound wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound, eval.state.GetStateProofNextRound())
@@ -1678,10 +1695,10 @@ transactionGroupLoop:
 			}
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
-		case err, open := <-txvalidator.done:
+		case doneErr, open := <-txvalidator.done:
 			// if we're not validating, then `txvalidator.done` would be nil, in which case this case statement would never be executed.
-			if open && err != nil {
-				return ledgercore.StateDelta{}, err
+			if open && doneErr != nil {
+				return ledgercore.StateDelta{}, doneErr
 			}
 		}
 	}

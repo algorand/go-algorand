@@ -23,6 +23,7 @@ type NodeConfig struct {
 	NetAddress         string `json:",omitempty"`
 	APIEndpoint        string `json:",omitempty"`
 	APIToken           string `json:",omitempty"`
+	AdminAPIToken      string `json:",omitempty"`
 	EnableTelemetry    bool   // Needs to also be configured host-wide (assign logging host name)
 	TelemetryURI       string `json:",omitempty"` // Needs to be HostConfig
 	EnableMetrics      bool   // Needs to also be configured host-wide (register DNS entry)
@@ -58,4 +59,5 @@ type NodeConfigGoal struct {
 	Wallets            []NodeWalletData
 	DeadlockDetection  int    `json:"-"`
 	ConfigJSONOverride string `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
+	PeerList           string `json:",omitempty"` // Semicolon separated list of peers to connect to. Only applicable for non-relays
 }

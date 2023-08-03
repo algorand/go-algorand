@@ -40,7 +40,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
-	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -103,7 +102,7 @@ type mockNode struct {
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
-	panic("implement me")
+	return account.ParticipationID{}, nil
 }
 
 func (m *mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
@@ -168,7 +167,7 @@ func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) erro
 }
 
 func (m *mockNode) Simulate(request simulation.Request) (simulation.Result, error) {
-	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger))
+	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger), m.config.EnableDeveloperAPI)
 	return simulator.Simulate(request)
 }
 
@@ -221,10 +220,6 @@ func (m *mockNode) Uint64() uint64 {
 	return 1
 }
 
-func (m *mockNode) Indexer() (*indexer.Indexer, error) {
-	return nil, fmt.Errorf("indexer not implemented")
-}
-
 func (m *mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (node.TxnWithStatus, error) {
 	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
 }
@@ -266,7 +261,7 @@ var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
 var genesisID = "testingid"
 var retOneProgram = []byte{2, 0x20, 1, 1, 0x22}
 
-var proto = config.Consensus[protocol.ConsensusCurrentVersion]
+var proto = config.Consensus[protocol.ConsensusFuture]
 
 func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
 	minMoneyAtStart := 100000  // min money start
@@ -313,7 +308,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 		}
 		accessors = append(accessors, access)
 
-		part, err := account.FillDBWithParticipationKeys(access, root.Address(), 0, lastValid, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		part, err := account.FillDBWithParticipationKeys(access, root.Address(), 0, lastValid, proto.DefaultKeyDilution)
 		if err != nil {
 			panic(err)
 		}
@@ -351,7 +346,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, cfg)
+	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusFuture, bootstrap, genesisID, genesisHash, nil, cfg)
 	if err != nil {
 		panic(err)
 	}

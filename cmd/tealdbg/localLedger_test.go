@@ -83,7 +83,7 @@ int 2
 	a.NoError(err)
 
 	assetIdx := basics.AssetIndex(50)
-	appIdx := basics.AppIndex(100)
+	appIdx := basics.AppIndex(1001)
 	br := makeSampleBalanceRecord(addr, assetIdx, appIdx)
 	balances := map[basics.Address]basics.AccountData{
 		addr: br.AccountData,
@@ -112,7 +112,7 @@ int 2
 	a.NoError(err)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	ep := logic.NewEvalParams([]transactions.SignedTxnWithAD{{SignedTxn: txn}}, &proto, &transactions.SpecialAddresses{})
+	ep := logic.NewAppEvalParams([]transactions.SignedTxnWithAD{{SignedTxn: txn}}, &proto, &transactions.SpecialAddresses{})
 	pass, delta, err := ba.StatefulEval(0, ep, appIdx, program)
 	a.NoError(err)
 	a.True(pass)

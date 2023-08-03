@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -207,10 +208,7 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 	l.certs = make(map[basics.Round]Certificate)
 	l.nextRound = 1
 
-	l.state = make(map[basics.Address]basics.AccountData)
-	for k, v := range state {
-		l.state[k] = v
-	}
+	l.state = maps.Clone(state)
 
 	l.notifications = make(map[basics.Round]signal)
 
@@ -226,10 +224,7 @@ func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountD
 	l.certs = make(map[basics.Round]Certificate)
 	l.nextRound = 1
 
-	l.state = make(map[basics.Address]basics.AccountData)
-	for k, v := range state {
-		l.state[k] = v
-	}
+	l.state = maps.Clone(state)
 
 	l.notifications = make(map[basics.Round]signal)
 
@@ -245,10 +240,7 @@ func makeTestLedgerMaxBlocks(state map[basics.Address]basics.AccountData, maxNum
 
 	l.maxNumBlocks = maxNumBlocks
 
-	l.state = make(map[basics.Address]basics.AccountData)
-	for k, v := range state {
-		l.state[k] = v
-	}
+	l.state = maps.Clone(state)
 
 	l.notifications = make(map[basics.Round]signal)
 
@@ -335,7 +327,7 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 	return l.state[a].OnlineAccountData(), nil
 }
 
-func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

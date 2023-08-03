@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/maps"
 )
 
 //   ___________________
@@ -56,7 +57,6 @@ type roundCowParent interface {
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	GetStateProofNextRound() basics.Round
 	BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
-	blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	// note: getStorageLimits is redundant with the other methods
 	// and is provided to optimize state schema lookups
@@ -249,10 +249,6 @@ func (cb *roundCowState) GetStateProofVerificationContext(stateProofLastAttested
 	return cb.lookupParent.GetStateProofVerificationContext(stateProofLastAttestedRound)
 }
 
-func (cb *roundCowState) blockHdrCached(r basics.Round) (bookkeeping.BlockHeader, error) {
-	return cb.lookupParent.blockHdrCached(r)
-}
-
 func (cb *roundCowState) incTxnCount() {
 	cb.txnCount++
 }
@@ -336,13 +332,9 @@ func (cb *roundCowState) reset() {
 	cb.proto = config.ConsensusParams{}
 	cb.mods.Reset()
 	cb.txnCount = 0
-	for addr := range cb.sdeltas {
-		delete(cb.sdeltas, addr)
-	}
+	maps.Clear(cb.sdeltas)
 	cb.compatibilityMode = false
-	for addr := range cb.compatibilityGetKeyCache {
-		delete(cb.compatibilityGetKeyCache, addr)
-	}
+	maps.Clear(cb.compatibilityGetKeyCache)
 	cb.prevTotals = ledgercore.AccountTotals{}
 }
 

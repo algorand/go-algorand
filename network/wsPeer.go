@@ -41,7 +41,8 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-const maxMessageLength = 6 * 1024 * 1024 // Currently the biggest message is VB vote bundles. TODO: per message type size limit?
+// MaxMessageLength is the maximum length of a message that can be sent or received, exported to be used in the node.TestMaxSizesCorrect test
+const MaxMessageLength = 6 * 1024 * 1024 // Currently the biggest message is VB vote bundles.
 const averageMessageLength = 2 * 1024    // Most of the messages are smaller than this size, which makes it into a good base allocation.
 
 // This parameter controls how many messages from a single peer can be
@@ -51,9 +52,6 @@ const averageMessageLength = 2 * 1024    // Most of the messages are smaller tha
 const msgsInReadBufferPerPeer = 10
 
 var tagStringList []string
-
-// allowCustomTags is set by tests to allow non-protocol-defined message tags. It is false in non-test code.
-var allowCustomTags bool
 
 func init() {
 	tagStringList = make([]string, len(protocol.TagList))
@@ -168,6 +166,7 @@ const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 const disconnectStaleWrite disconnectReason = "DisconnectStaleWrite"
 const disconnectDuplicateConnection disconnectReason = "DuplicateConnection"
 const disconnectBadIdentityData disconnectReason = "BadIdentityData"
+const disconnectUnexpectedTopicResp disconnectReason = "UnexpectedTopicResp"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -176,6 +175,9 @@ type Response struct {
 
 type sendMessages struct {
 	msgs []sendMessage
+
+	// onRelease function is called when the message is released either by being sent or discarded.
+	onRelease func()
 }
 
 type wsPeer struct {
@@ -184,6 +186,10 @@ type wsPeer struct {
 	// error.
 	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
 	lastPacketTime int64
+
+	// outstandingTopicRequests is an atomic counter for the number of outstanding block requests we've made out to this peer
+	// if a peer sends more blocks than we've requested, we'll disconnect from it.
+	outstandingTopicRequests int64
 
 	// intermittentOutgoingMessageEnqueueTime contains the UnixNano of the message's enqueue time that is currently being written to the
 	// peer, or zero if no message is being written.
@@ -309,7 +315,7 @@ type UnicastPeer interface {
 	// Version returns the matching version from network.SupportedProtocolVersions
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
-	Respond(ctx context.Context, reqMsg IncomingMessage, topics Topics) (e error)
+	Respond(ctx context.Context, reqMsg IncomingMessage, outMsg OutgoingMessage) (e error)
 }
 
 // TCPInfoUnicastPeer exposes information about the underlying connection if available on the platform
@@ -385,7 +391,7 @@ func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
 }
 
 // Respond sends the response of a request message
-func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseTopics Topics) (e error) {
+func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, outMsg OutgoingMessage) (e error) {
 
 	// Get the hash/key of the request message
 	requestHash := hashTopics(reqMsg.Data)
@@ -393,7 +399,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	// Add the request hash
 	requestHashData := make([]byte, binary.MaxVarintLen64)
 	binary.PutUvarint(requestHashData, requestHash)
-	responseTopics = append(responseTopics, Topic{key: requestHashKey, data: requestHashData})
+	responseTopics := append(outMsg.Topics, Topic{key: requestHashKey, data: requestHashData})
 
 	// Serialize the topics
 	serializedMsg := responseTopics.MarshallTopics()
@@ -408,11 +414,17 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, responseT
 	}
 
 	select {
-	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
+	case wp.sendBufferBulk <- sendMessages{msgs: msg, onRelease: outMsg.OnRelease}:
 	case <-wp.closing:
+		if outMsg.OnRelease != nil {
+			outMsg.OnRelease()
+		}
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
 	case <-ctx.Done():
+		if outMsg.OnRelease != nil {
+			outMsg.OnRelease()
+		}
 		return ctx.Err()
 	}
 	return nil
@@ -472,8 +484,8 @@ func (wp *wsPeer) readLoop() {
 	defer func() {
 		wp.readLoopCleanup(cleanupCloseError)
 	}()
-	wp.conn.SetReadLimit(maxMessageLength)
-	slurper := MakeLimitedReaderSlurper(averageMessageLength, maxMessageLength)
+	wp.conn.SetReadLimit(MaxMessageLength)
+	slurper := MakeLimitedReaderSlurper(averageMessageLength, MaxMessageLength)
 	dataConverter := makeWsPeerMsgDataConverter(wp)
 
 	for {
@@ -505,7 +517,31 @@ func (wp *wsPeer) readLoop() {
 			return
 		}
 		msg.Tag = Tag(string(tag[:]))
-		slurper.Reset()
+
+		// Skip the message if it's a response to a request we didn't make or has timed out
+		if msg.Tag == protocol.TopicMsgRespTag && wp.lenResponseChannels() == 0 {
+			atomic.AddInt64(&wp.outstandingTopicRequests, -1)
+
+			// This peers has sent us more responses than we have requested.  This is a protocol violation and we should disconnect.
+			if atomic.LoadInt64(&wp.outstandingTopicRequests) < 0 {
+				wp.net.log.Errorf("wsPeer readloop: peer %s sent TS response without a request", wp.conn.RemoteAddr().String())
+				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "unrequestedTS"})
+				cleanupCloseError = disconnectUnexpectedTopicResp
+				return
+			}
+			var n int64
+			// Peer sent us a response to a request we made but we've already timed out -- discard
+			n, err = io.Copy(io.Discard, reader)
+			if err != nil {
+				wp.net.log.Infof("wsPeer readloop: could not discard timed-out TS message from %s : %s", wp.conn.RemoteAddr().String(), err)
+				wp.reportReadErr(err)
+				return
+			}
+			wp.net.log.Warnf("wsPeer readLoop: received a TS response for a stale request from %s. %d bytes discarded", wp.conn.RemoteAddr().String(), n)
+			continue
+		}
+
+		slurper.Reset(uint64(msg.Tag.MaxMessageSize()))
 		err = slurper.Read(reader)
 		if err != nil {
 			wp.reportReadErr(err)
@@ -538,11 +574,16 @@ func (wp *wsPeer) readLoop() {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
 			atomic.AddUint64(&wp.miMessageCount, 1)
-			if wp.handleMessageOfInterest(msg) {
+			if close, reason := wp.handleMessageOfInterest(msg); close {
+				cleanupCloseError = reason
+				if reason == disconnectBadData {
+					networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "protocol"})
+				}
 				return
 			}
 			continue
 		case protocol.TopicMsgRespTag: // Handle Topic message
+			atomic.AddInt64(&wp.outstandingTopicRequests, -1)
 			topics, err := UnmarshallTopics(msg.Data)
 			if err != nil {
 				wp.net.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddr().String(), err)
@@ -583,9 +624,8 @@ func (wp *wsPeer) readLoop() {
 		default: // unrecognized tag
 			unknownProtocolTagMessagesTotal.Inc(nil)
 			atomic.AddUint64(&wp.unkMessageCount, 1)
-			if !allowCustomTags {
-				continue // drop message, skip adding it to queue
-			}
+			continue // drop message, skip adding it to queue
+			// TODO: should disconnect here?
 		}
 		if len(msg.Data) > 0 && wp.incomingMsgFilter != nil && dedupSafeTag(msg.Tag) {
 			if wp.incomingMsgFilter.CheckIncomingMessage(msg.Tag, msg.Data, true, true) {
@@ -616,13 +656,14 @@ func (wp *wsPeer) readLoop() {
 	}
 }
 
-func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
-	shutdown = false
+func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (close bool, reason disconnectReason) {
+	close = false
+	reason = disconnectReasonNone
 	// decode the message, and ensure it's a valid message.
 	msgTagsMap, err := unmarshallMessageOfInterest(msg.Data)
 	if err != nil {
 		wp.net.log.Warnf("wsPeer handleMessageOfInterest: could not unmarshall message from: %s %v", wp.conn.RemoteAddr().String(), err)
-		return
+		return true, disconnectBadData
 	}
 	msgs := make([]sendMessage, 1, 1)
 	msgs[0] = sendMessage{
@@ -641,7 +682,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 		return
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
-		shutdown = true
+		return true, disconnectReasonNone
 	default:
 	}
 
@@ -650,7 +691,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 	case wp.sendBufferBulk <- sm:
 	case <-wp.closing:
 		wp.net.log.Debugf("peer closing %s", wp.conn.RemoteAddr().String())
-		shutdown = true
+		return true, disconnectReasonNone
 	}
 	return
 }
@@ -683,6 +724,9 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 }
 
 func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
+	if msgs.onRelease != nil {
+		defer msgs.onRelease()
+	}
 	for _, msg := range msgs.msgs {
 		select {
 		case <-msg.ctx.Done():
@@ -700,8 +744,8 @@ func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
 }
 
 func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
-	if len(msg.data) > maxMessageLength {
-		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
+	if len(msg.data) > MaxMessageLength {
+		wp.net.log.Errorf("trying to send a message longer than we would receive: %d > %d tag=%s", len(msg.data), MaxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
 		return disconnectReasonNone
 	}
@@ -832,7 +876,8 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 	return false
 }
 
-const pingLength = 8
+// PingLength is the fixed length of ping message, exported to be used in the node.TestMaxSizesCorrect test
+const PingLength = 8
 const maxPingWait = 60 * time.Second
 
 // sendPing sends a ping block to the peer.
@@ -846,7 +891,7 @@ func (wp *wsPeer) sendPing() bool {
 	}
 
 	tagBytes := []byte(protocol.PingTag)
-	mbytes := make([]byte, len(tagBytes)+pingLength)
+	mbytes := make([]byte, len(tagBytes)+PingLength)
 	copy(mbytes, tagBytes)
 	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
@@ -890,6 +935,21 @@ func (wp *wsPeer) Close(deadline time.Time) {
 			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
 		}
 	}
+
+	// We need to loop through all of the messages with callbacks still in the send queue and call them
+	// to ensure that state of counters such as wsBlockBytesUsed is correct.
+L:
+	for {
+		select {
+		case msgs := <-wp.sendBufferBulk:
+			if msgs.onRelease != nil {
+				msgs.onRelease()
+			}
+		default:
+			break L
+		}
+
+	}
 	// now call all registered closers
 	for _, f := range wp.closers {
 		f()
@@ -923,12 +983,20 @@ func (wp *wsPeer) getRequestNonce() []byte {
 	return buf
 }
 
+// MakeNonceTopic returns a topic with the nonce as the data
+// exported for testing purposes
+func MakeNonceTopic(nonce uint64) Topic {
+	buf := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(buf, nonce)
+	return Topic{key: "nonce", data: buf}
+}
+
 // Request submits the request to the server, waits for a response
 func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error) {
 
-	// Add nonce as a topic
-	nonce := wp.getRequestNonce()
-	topics = append(topics, Topic{key: "nonce", data: nonce})
+	// Add nonce, stored on the wsPeer as the topic
+	nonceTopic := MakeNonceTopic(atomic.AddUint64(&wp.requestNonce, 1))
+	topics = append(topics, nonceTopic)
 
 	// serialize the topics
 	serializedMsg := topics.MarshallTopics()
@@ -949,6 +1017,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 		ctx:          context.Background()}
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
+		atomic.AddInt64(&wp.outstandingTopicRequests, 1)
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddr().String())
 		return
@@ -974,6 +1043,12 @@ func (wp *wsPeer) makeResponseChannel(key uint64) (responseChannel chan *Respons
 	defer wp.responseChannelsMutex.Unlock()
 	wp.responseChannels[key] = newChan
 	return newChan
+}
+
+func (wp *wsPeer) lenResponseChannels() int {
+	wp.responseChannelsMutex.Lock()
+	defer wp.responseChannelsMutex.Unlock()
+	return len(wp.responseChannels)
 }
 
 // getAndRemoveResponseChannel returns the channel and deletes the channel from the map

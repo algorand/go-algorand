@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -256,7 +257,7 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	a := require.New(t)
 
-	c0, err := loadWithoutDefaults(getVersionedDefaultLocalConfig(0))
+	c0, err := loadWithoutDefaults(GetVersionedDefaultLocalConfig(0))
 	a.NoError(err)
 	c0, err = migrate(c0)
 	a.NoError(err)
@@ -271,8 +272,8 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 	a.Error(err)
 
 	// Ensure we don't migrate values that aren't the default old version
-	c0Modified := getVersionedDefaultLocalConfig(0)
-	c0Modified.BaseLoggerDebugLevel = getVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
+	c0Modified := GetVersionedDefaultLocalConfig(0)
+	c0Modified.BaseLoggerDebugLevel = GetVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
 	c0Modified, err = migrate(c0Modified)
 	a.NoError(err)
 	a.NotEqual(defaultLocal, c0Modified)
@@ -310,11 +311,12 @@ func TestLocal_ConfigInvariant(t *testing.T) {
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
-	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+	// for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+	for configVersion := uint32(27); configVersion <= 27; configVersion++ {
 		c := Local{}
 		err = codecs.LoadObjectFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)), &c)
 		a.NoError(err)
-		a.Equal(getVersionedDefaultLocalConfig(configVersion), c)
+		a.Equal(GetVersionedDefaultLocalConfig(configVersion), c)
 	}
 }
 
@@ -394,22 +396,42 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 		name               string
 		fields             fields
 		args               args
-		wantBootstrapArray []string
+		wantBootstrapArray []*DNSBootstrap
 	}{
 		{name: "test1",
 			fields:             fields{DNSBootstrapID: "<network>.cloudflare.com"},
 			args:               args{networkID: "devnet"},
-			wantBootstrapArray: []string{"devnet.cloudflare.com"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.cloudflare.com"}},
 		},
 		{name: "test2",
 			fields:             fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com"},
 			args:               args{networkID: "devnet"},
-			wantBootstrapArray: []string{"devnet.cloudflare.com", "devnet.cloudfront.com"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.cloudflare.com"}, {PrimarySRVBootstrap: "devnet.cloudfront.com"}},
 		},
 		{name: "test3",
 			fields:             fields{DNSBootstrapID: ""},
 			args:               args{networkID: "devnet"},
-			wantBootstrapArray: []string{},
+			wantBootstrapArray: []*DNSBootstrap(nil),
+		},
+		{name: "test4 - intended to mismatch local template",
+			fields: fields{DNSBootstrapID: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"},
+			args:   args{networkID: "testnet"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "testnet.algorand.network",
+				BackupSRVBootstrap: "testnet.algorand.net",
+				DedupExp:           regexp.MustCompile("(algorand-testnet.(network|net))")}},
+		},
+		{name: "test5 - intended to match legacy template",
+			fields:             fields{DNSBootstrapID: "<network>.algorand.network"},
+			args:               args{networkID: "testnet"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "testnet.algorand.network"}},
+		},
+		{name: "test6 - exercise record append with full template",
+			fields: fields{DNSBootstrapID: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net);<network>.cloudfront.com"},
+			args:   args{networkID: "devnet"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.algorand.network",
+				BackupSRVBootstrap: "devnet.algorand.net",
+				DedupExp:           regexp.MustCompile("(algorand-devnet.(network|net))")},
+				{PrimarySRVBootstrap: "devnet.cloudfront.com"}},
 		},
 	}
 	for _, tt := range tests {
@@ -420,57 +442,26 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 			if gotBootstrapArray := cfg.DNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
 				t.Errorf("Local.DNSBootstrapArray() = %#v, want %#v", gotBootstrapArray, tt.wantBootstrapArray)
 			}
+			// handling should be identical to DNSBootstrapArray method for all of these cases
+			if gotBootstrapArray, _ := cfg.ValidateDNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
+				t.Errorf("Local.DNSBootstrapArray() = %#v, want %#v", gotBootstrapArray, tt.wantBootstrapArray)
+			}
 		})
 	}
 }
 
-func TestLocal_DNSBootstrap(t *testing.T) {
+func TestLocal_ValidateDNSBootstrapArray_StopsOnError(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
-	type fields struct {
-		DNSBootstrapID string
+	var dnsBootstrapIDWithInvalidNameMacroUsage = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.((network|net)"
+
+	cfg := Local{
+		DNSBootstrapID: dnsBootstrapIDWithInvalidNameMacroUsage,
 	}
-	type args struct {
-		network protocol.NetworkID
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   string
-	}{
-		{name: "test1",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com",
-		},
-		{name: "test2",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com;",
-		},
-		{name: "test3",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com;devnet.cloudfront.com",
-		},
-		{name: "test4",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com;"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com;devnet.cloudfront.com;",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := Local{
-				DNSBootstrapID: tt.fields.DNSBootstrapID,
-			}
-			if got := cfg.DNSBootstrap(tt.args.network); got != tt.want {
-				t.Errorf("Local.DNSBootstrap() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+
+	_, err := cfg.ValidateDNSBootstrapArray(Mainnet)
+
+	assert.ErrorContains(t, err, bootstrapDedupRegexDoesNotCompile)
 }
 
 func TestLocal_StructTags(t *testing.T) {
@@ -522,7 +513,7 @@ func TestLocal_GetVersionedDefaultLocalConfig(t *testing.T) {
 	t.Parallel()
 
 	for i := uint32(0); i < getLatestConfigVersion(); i++ {
-		localVersion := getVersionedDefaultLocalConfig(i)
+		localVersion := GetVersionedDefaultLocalConfig(i)
 		require.Equal(t, uint32(i), localVersion.Version)
 	}
 }

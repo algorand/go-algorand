@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/ledger/eval"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -31,6 +30,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -696,8 +697,7 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	appIdx = 2 // the second successful txn
 
 	badTx = correctAppCreate
-	program := make([]byte, len(approvalProgram))
-	copy(program, approvalProgram)
+	program := slices.Clone(approvalProgram)
 	program[0] = '\x01'
 	badTx.ApprovalProgram = program
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
@@ -1385,46 +1385,6 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 	}
 }
 
-func TestLedgerBlockHdrCaching(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState := getInitState()
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
-	a.NoError(err)
-	defer l.Close()
-
-	blk := genesisInitState.Block
-
-	for i := 0; i < 1024; i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		err := l.AddBlock(blk, agreement.Certificate{})
-		a.NoError(err)
-
-		hdr, err := l.BlockHdr(blk.BlockHeader.Round)
-		a.NoError(err)
-		a.Equal(blk.BlockHeader, hdr)
-	}
-
-	rnd := basics.Round(128)
-	hdr, err := l.BlockHdr(rnd) // should update LRU cache but not latestBlockHeaderCache
-	a.NoError(err)
-	a.Equal(rnd, hdr.Round)
-
-	_, exists := l.headerCache.lruCache.Get(rnd)
-	a.True(exists)
-
-	_, exists = l.headerCache.latestHeaderCache.get(rnd)
-	a.False(exists)
-}
-
 func BenchmarkLedgerBlockHdrCaching(b *testing.B) {
 	benchLedgerCache(b, 1024-256+1)
 }
@@ -1490,17 +1450,18 @@ func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.In
 	l.trackers.lastFlushTime = time.Time{}
 	l.trackers.mu.Unlock()
 
-	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
-
-	const timeout = 2 * time.Second
+	const timeout = 3 * time.Second
 	started := time.Now()
 
 	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
 	// we might beat scheduleCommit's addition to accountsWriting, making our wait on it continue immediately.
-	// The solution is to wait for the advancement of l.trackers.dbRound, which is a side effect of postCommit's success.
+	// The solution is to continue to add blocks and  wait for the advancement of l.trackers.dbRound,
+	// which is a side effect of postCommit's success.
 	for currentDbRound == initialDbRound {
 		time.Sleep(50 * time.Microsecond)
 		require.True(t, time.Since(started) < timeout)
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
+		l.WaitForCommit(l.Latest())
 		l.trackers.mu.RLock()
 		currentDbRound = l.trackers.dbRound
 		l.trackers.mu.RUnlock()
@@ -1622,71 +1583,6 @@ func generateCreatables(numElementsPerSegement int) (
 	return
 }
 
-// TestListAssetsAndApplications tests the ledger.ListAssets and ledger.ListApplications
-// interfaces. The detailed test on the correctness of these functions is given in:
-// TestListCreatables (acctupdates_test.go)
-func TestListAssetsAndApplications(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	numElementsPerSegement := 10 // This is multiplied by 10. see randomCreatables
-
-	//initLedger
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
-	const inMem = true
-	log := logging.TestingLog(t)
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
-	require.NoError(t, err, "could not open ledger")
-	defer ledger.Close()
-
-	// ******* All results are obtained from the cache. Empty database *******
-	// ******* No deletes                                              *******
-	// get random data. Initial batch, no deletes
-	randomCtbs, maxAsset, maxApp, err := generateCreatables(numElementsPerSegement)
-	require.NoError(t, err)
-
-	// set the cache
-	ledger.accts.creatables = randomCtbs
-
-	// Test ListAssets
-	// Check the number of results limit
-	results, err := ledger.ListAssets(basics.AssetIndex(maxAsset), 2)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(results))
-	// Check the max asset id limit
-	results, err = ledger.ListAssets(basics.AssetIndex(maxAsset), 100)
-	require.NoError(t, err)
-	assetCount := 0
-	for id, ctb := range randomCtbs {
-		if ctb.Ctype == basics.AssetCreatable &&
-			ctb.Created &&
-			id <= maxAsset {
-			assetCount++
-		}
-	}
-	require.Equal(t, assetCount, len(results))
-
-	// Test ListApplications
-	// Check the number of results limit
-	ledger.accts.creatables = randomCtbs
-	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 2)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(results))
-	// Check the max application id limit
-	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
-	require.NoError(t, err)
-	appCount := 0
-	for id, ctb := range randomCtbs {
-		if ctb.Ctype == basics.AppCreatable &&
-			ctb.Created &&
-			id <= maxApp {
-			appCount++
-		}
-	}
-	require.Equal(t, appCount, len(results))
-}
-
 // TestLedgerVerifiesOldStateProofs test that if stateproof chain is delayed for X intervals (pass StateProofMaxRecoveryIntervals),
 // The ledger will still be able to verify the state proof - i.e the ledger has the necessary data to verify it.
 func TestLedgerVerifiesOldStateProofs(t *testing.T) {
@@ -1761,6 +1657,11 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	}
 
 	triggerTrackerFlush(t, l, genesisInitState)
+	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
+	l.WaitForCommit(l.Latest())
+	// At this point the block queue go-routine will start removing block . However, it might not complete the task
+	// for that reason, we wait for the next block to be committed.
+	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	l.WaitForCommit(l.Latest())
 
 	// we make sure that the voters header does not exist and that the voters tracker
@@ -2199,10 +2100,11 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	l.cfg = cfg
 	l.reloadLedger()
 
-	_, err = l.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
+	rnd := basics.Round(proto.MaxBalLookback - shorterLookback)
+	_, err = l.OnlineCirculation(rnd, rnd+basics.Round(proto.MaxBalLookback))
 	require.Error(t, err)
 	for i := basics.Round(proto.MaxBalLookback - shorterLookback + 1); i <= l.Latest(); i++ {
-		online, err := l.OnlineTotals(i)
+		online, err := l.OnlineCirculation(i, i+basics.Round(proto.MaxBalLookback))
 		require.NoError(t, err)
 		require.Equal(t, onlineTotals[i], online)
 	}
@@ -2270,7 +2172,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 
 	// reset tables and re-init again, similary to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
-	err = l.trackerDBs.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
+	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		arw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
@@ -2289,7 +2191,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			DbPathPrefix:      l.catchpoint.dbDirectory,
 			BlockDb:           l.blockDBs,
 		}
-		_, err0 = tx.Testing().RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		_, err0 = tx.RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
 		if err0 != nil {
 			return err0
 		}
@@ -2432,7 +2334,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = proto.MaxBalLookback
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
-	trackerDB, blockDB, err := openLedgerDB(dbName, inMem)
+	trackerDB, blockDB, err := openLedgerDB(dbName, inMem, cfg, log)
 	require.NoError(t, err)
 	defer func() {
 		trackerDB.Close()
@@ -2440,10 +2342,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	}()
 	// create tables so online accounts can still be written
 	err = trackerDB.Batch(func(ctx context.Context, tx trackerdb.BatchScope) error {
-		if err := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
-			return err
-		}
-		return nil
+		return tx.Testing().AccountsUpdateSchemaTest(ctx)
 	})
 	require.NoError(t, err)
 
@@ -2625,10 +2524,11 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		l2.Close()
 	}()
 
-	_, err = l2.OnlineTotals(basics.Round(proto.MaxBalLookback - shorterLookback))
+	rnd := basics.Round(proto.MaxBalLookback - shorterLookback)
+	_, err = l2.OnlineCirculation(rnd, rnd+basics.Round(proto.MaxBalLookback))
 	require.Error(t, err)
 	for i := l2.Latest() - basics.Round(proto.MaxBalLookback-1); i <= l2.Latest(); i++ {
-		online, err := l2.OnlineTotals(i)
+		online, err := l2.OnlineCirculation(i, i+basics.Round(proto.MaxBalLookback))
 		require.NoError(t, err)
 		require.Equal(t, onlineTotals[i], online)
 	}
@@ -2689,7 +2589,7 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 
 	latest := l.Latest()
 	for i := latest - basics.Round(proto.MaxTxnLife); i <= latest; i++ {
-		blk, err := l.BlockHdrCached(i)
+		blk, err := l.BlockHdr(i)
 		require.NoError(t, err)
 		require.Equal(t, blk.Round, i)
 	}
@@ -2703,13 +2603,13 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	start := dbRound - basics.Round(proto.MaxTxnLife)
 	end := latest - basics.Round(proto.MaxTxnLife)
 	for i := start; i < end; i++ {
-		blk, err := l.BlockHdrCached(i)
+		blk, err := l.BlockHdr(i)
 		require.NoError(t, err)
 		require.Equal(t, blk.Round, i)
 	}
 
-	_, err = l.BlockHdrCached(start - 1)
-	require.Error(t, err)
+	_, ok := l.txTail.blockHeader(start - 1)
+	require.False(t, ok)
 }
 
 // TestLedgerKeyregFlip generates keyreg transactions for flipping genesis accounts state.
@@ -2866,7 +2766,7 @@ func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState := getInitState()
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 
@@ -2876,24 +2776,15 @@ func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	blk := genesisInitState.Block
-	var sp bookkeeping.StateProofTrackingData
-	sp.StateProofNextRound = basics.Round(proto.StateProofInterval * 2)
-	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
-		protocol.StateProofBasic: sp,
-	}
-
 	// we add blocks to the ledger to test reload from disk. we would like the history of the acctonline to extend.
 	// but we don't want to go behind  stateproof recovery interval
 	for i := uint64(0); i < (proto.StateProofInterval*(proto.StateProofMaxRecoveryIntervals-2) - proto.StateProofVotersLookback); i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
 	// at this point the database should contain the voter for round 256 but the voters for round 512 should be in deltas
-	l.WaitForCommit(blk.BlockHeader.Round)
+	l.WaitForCommit(l.Latest())
+	triggerTrackerFlush(t, l, genesisInitState)
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 
 	// ensuring no tree was evicted.
@@ -3013,7 +2904,9 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 	}
 
 	// the voters tracker should contain all the voters for each stateproof round. nothing should be removed
-	l.WaitForCommit(blk.BlockHeader.Round)
+	l.WaitForCommit(l.Latest())
+	triggerDeleteVoters(t, l, genesisInitState)
+
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 	beforeRemoveVotersLen := len(vtSnapshot)
 	err = l.reloadLedger()
@@ -3028,7 +2921,7 @@ func testVotersReloadFromDiskPassRecoveryPeriod(t *testing.T, cfg config.Local) 
 
 	triggerDeleteVoters(t, l, genesisInitState)
 
-	// round 512 should now be forgotten.
+	// round 256 (240+16) should now be forgotten.
 	_, found = l.acctsOnline.voters.votersForRoundCache[basics.Round(proto.StateProofInterval-proto.StateProofVotersLookback)]
 	require.False(t, found)
 
@@ -3083,40 +2976,12 @@ func TestVotersCallbackPersistsAfterLedgerReload(t *testing.T) {
 	require.Equal(t, listenerBeforeReload, listenerAfterReload)
 }
 
-type errorCommitListener struct{}
-
-func (l *errorCommitListener) OnPrepareVoterCommit(oldBase basics.Round, newBase basics.Round, _ ledgercore.LedgerForSPBuilder) {
-}
-
-func TestLedgerContinuesOnVotersCallbackFailure(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
-	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.MaxAcctLookback = 0
-	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
-	require.NoError(t, err)
-	defer l.Close()
-
-	commitListener := errorCommitListener{}
-	l.RegisterVotersCommitListener(&commitListener)
-
-	previousCachedDbRound := l.trackers.dbRound
-	triggerTrackerFlush(t, l, genesisInitState)
-	require.Equal(t, previousCachedDbRound+1, l.trackers.dbRound)
-}
-
 func TestLedgerSPVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState := getInitState()
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -3134,37 +2999,24 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	lastStateProofContextConfirmedRound := firstStateProofContextConfirmedRound + proto.StateProofInterval*(numOfStateProofs-1)
 	lastStateProofContextTargetRound := lastStateProofContextConfirmedRound + proto.StateProofInterval
 
-	blk := genesisInitState.Block
-	var sp bookkeeping.StateProofTrackingData
-	sp.StateProofNextRound = basics.Round(firstStateProofContextTargetRound)
-	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
-		protocol.StateProofBasic: sp,
-	}
-
 	for i := uint64(0); i < firstStateProofContextConfirmedRound-1; i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		1, proto.StateProofInterval, false, any)
 
-	blk.BlockHeader.Round++
-	blk.BlockHeader.TimeStamp += 10
-	err = l.AddBlock(blk, agreement.Certificate{})
-	require.NoError(t, err)
+	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		1, proto.StateProofInterval, true, trackerMemory)
 
 	for i := firstStateProofContextConfirmedRound; i < lastStateProofContextConfirmedRound; i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
+
+	l.WaitForCommit(l.Latest())
+	triggerTrackerFlush(t, l, genesisInitState)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
@@ -3172,18 +3024,18 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(lastStateProofContextTargetRound),
 		1, proto.StateProofInterval, true, trackerMemory)
 
-	l.WaitForCommit(blk.BlockHeader.Round)
+	l.WaitForCommit(l.Latest())
+	triggerTrackerFlush(t, l, genesisInitState)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs, proto.StateProofInterval, true, any)
 
+	blk := makeNewEmptyBlock(t, l, t.Name(), genesisInitState.Accounts)
 	var stateProofReceived bookkeeping.StateProofTrackingData
 	stateProofReceived.StateProofNextRound = basics.Round(firstStateProofContextTargetRound + proto.StateProofInterval)
 	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
 		protocol.StateProofBasic: stateProofReceived,
 	}
-	blk.BlockHeader.Round++
-	blk.BlockHeader.TimeStamp += 10
 
 	// This implementation is an easy way to feed the delta, which the state proof verification tracker relies on,
 	// to the ledger.
@@ -3195,13 +3047,11 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := uint64(0); i < proto.MaxBalLookback; i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
 	l.WaitForCommit(blk.BlockHeader.Round)
+	triggerTrackerFlush(t, l, genesisInitState)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		1, proto.StateProofInterval, false, any)
@@ -3214,7 +3064,7 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState := getInitState()
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -3232,21 +3082,23 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 	lastStateProofContextConfirmedRound := firstStateProofContextConfirmedRound + proto.StateProofInterval*(numOfStateProofs-1)
 	lastStateProofContextTargetRound := lastStateProofContextConfirmedRound + proto.StateProofInterval
 
-	blk := genesisInitState.Block
-	var sp bookkeeping.StateProofTrackingData
-	sp.StateProofNextRound = basics.Round(firstStateProofContextTargetRound)
-	blk.BlockHeader.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
-		protocol.StateProofBasic: sp,
-	}
-
 	for i := uint64(0); i < lastStateProofContextConfirmedRound; i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 10
-		err = l.AddBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
+		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
-	l.WaitForCommit(blk.BlockHeader.Round)
+	// trigger trackers flush
+	// first ensure the block is committed into blockdb
+	l.WaitForCommit(l.Latest())
+	// wait for any pending tracker flushes
+	l.trackers.waitAccountsWriting()
+	// force flush as needed
+	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
+		l.trackers.mu.Lock()
+		l.trackers.lastFlushTime = time.Time{}
+		l.trackers.mu.Unlock()
+		l.notifyCommit(l.Latest())
+		l.trackers.waitAccountsWriting()
+	}
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
@@ -3265,7 +3117,6 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 func feedBlocksUntilRound(t *testing.T, l *Ledger, prevBlk bookkeeping.Block, targetRound basics.Round) bookkeeping.Block {
 	for prevBlk.Round() < targetRound {
 		prevBlk.BlockHeader.Round++
-		prevBlk.BlockHeader.TimeStamp += 10
 		err := l.AddBlock(prevBlk, agreement.Certificate{})
 		require.NoError(t, err)
 	}
@@ -3304,6 +3155,7 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	// Feeding blocks until we can know for sure we have at least one catchpoint written.
 	blk = feedBlocksUntilRound(t, l, blk, basics.Round(cfg.CatchpointInterval*2))
 	l.WaitForCommit(basics.Round(cfg.CatchpointInterval * 2))
+	triggerTrackerFlush(t, l, genesisInitState)
 
 	numTrackedDataFirstCatchpoint := (cfg.CatchpointInterval - proto.MaxBalLookback) / proto.StateProofInterval
 
@@ -3377,7 +3229,18 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	// To be deleted, but not yet deleted (waiting for commit)
 	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, any)
 
+	// first ensure the block is committed into blockdb
 	l.WaitForCommit(l.Latest())
+	// wait for any pending tracker flushes
+	l.trackers.waitAccountsWriting()
+	// force flush as needed
+	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
+		l.trackers.mu.Lock()
+		l.trackers.lastFlushTime = time.Time{}
+		l.trackers.mu.Unlock()
+		l.notifyCommit(spblk.BlockHeader.Round)
+		l.trackers.waitAccountsWriting()
+	}
 
 	err = l.reloadLedger()
 	a.NoError(err)

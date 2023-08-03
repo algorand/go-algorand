@@ -16,6 +16,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
+//   |-----> LayerMaxSize()
 //
 // Proof
 //   |-----> (*) MarshalMsg
@@ -24,6 +25,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//   |-----> ProofMaxSize()
 //
 // SingleLeafProof
 //        |-----> (*) MarshalMsg
@@ -40,6 +42,7 @@ import (
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//   |-----> TreeMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -113,6 +116,13 @@ func (z Layer) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z Layer) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func LayerMaxSize() (s int) {
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree) * (crypto.GenericDigestMaxSize()))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -318,6 +328,15 @@ func (z *Proof) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Proof) MsgIsZero() bool {
 	return (len((*z).Path) == 0) && ((*z).HashFactory.MsgIsZero()) && ((*z).TreeDepth == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func ProofMaxSize() (s int) {
+	s = 1 + 4
+	// Calculating size of slice: z.Path
+	s += msgp.ArrayHeaderSize + ((MaxNumLeavesOnEncodedTree / 2) * (crypto.GenericDigestMaxSize()))
+	s += 4 + crypto.HashFactoryMaxSize() + 3 + msgp.Uint8Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -803,4 +822,13 @@ func (z *Tree) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Tree) MsgIsZero() bool {
 	return (len((*z).Levels) == 0) && ((*z).NumOfElements == 0) && ((*z).Hash.MsgIsZero()) && ((*z).IsVectorCommitment == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func TreeMaxSize() (s int) {
+	s = 1 + 5
+	// Calculating size of slice: z.Levels
+	s += msgp.ArrayHeaderSize + ((MaxEncodedTreeDepth + 1) * (MaxNumLeavesOnEncodedTree * (crypto.GenericDigestMaxSize())))
+	s += 3 + msgp.Uint64Size + 4 + crypto.HashFactoryMaxSize() + 3 + msgp.BoolSize
+	return
 }

@@ -40,6 +40,17 @@ has fewer than two elements, the operation fails. Some operations, like
 `frame_dig` and `proto` could fail because of an attempt to access
 above the current stack.
 
+## Stack Types
+
+While every element of the stack is restricted to the types `uint64` and `bytes`, 
+the values of these types may be known to be bounded.  The more common bounded types are 
+named to provide more semantic information in the documentation. They're also used during
+assembly time to do type checking and to provide more informative error messages.
+
+
+@@ named_stack_types.md @@
+
+
 ## Scratch Space
 
 In addition to the stack there are 256 positions of scratch
@@ -114,13 +125,17 @@ of a contract account.
 
 The bytecode plus the length of all Args must add up to no more than
 1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an
-associated cost and the program cost must total no more than 20,000
-(consensus parameter LogicSigMaxCost). Most opcodes have a cost of 1,
-but a few slow cryptographic operations have a much higher cost. Prior
-to v4, the program's cost was estimated as the static sum of all the
-opcode costs in the program (whether they were actually executed or
-not). Beginning with v4, the program's cost is tracked dynamically,
-while being evaluated. If the program exceeds its budget, it fails.
+associated cost, usually 1, but a few slow operations have higher
+costs. Prior to v4, the program's cost was estimated as the static sum
+of all the opcode costs in the program (whether they were actually
+executed or not). Beginning with v4, the program's cost is tracked
+dynamically, while being evaluated. If the program exceeds its budget,
+it fails.
+
+The total program cost of all Smart Signatures in a group must not
+exceed 20,000 (consensus parameter LogicSigMaxCost) times the number
+of transactions in the group.
+
 
 ## Execution Environment for Smart Contracts (Applications)
 
@@ -236,6 +251,18 @@ _available_.
    ForeignApplications array, with the usual convention that 0
    indicates the application ID of the app called by that
    transaction. No box is ever _available_ to a ClearStateProgram.
+
+Regardless of _availability_, any attempt to access an Asset or
+Application with an ID less than 256 from within a Contract will fail
+immediately. This avoids any ambiguity in opcodes that interpret their
+integer arguments as resource IDs _or_ indexes into the
+`txn.ForeignAssets` or `txn.ForeignApplications` arrays.
+
+It is recommended that contract authors avoid supplying array indexes
+to these opcodes, and always use explicit resource IDs. By using
+explicit IDs, contracts will better take advantage of group resource
+sharing.  The array indexing interpretation may be deprecated in a
+future version.
 
 ## Constants
 

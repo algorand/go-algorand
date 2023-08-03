@@ -20,6 +20,9 @@ package protocol
 // e.g., the agreement service can register to handle agreements with the Agreement tag.
 type Tag string
 
+// TagLength specifies the length of protocol tags.
+const TagLength = 2
+
 // Tags, in lexicographic sort order of tag values to avoid duplicates.
 // These tags must not contain a comma character because lists of tags
 // are encoded using a comma separator (see network/msgOfInterest.go).
@@ -43,6 +46,90 @@ const (
 	VoteBundleTag Tag = "VB"
 )
 
+// The following constants are overestimates in some cases but are reasonable upper bounds
+// for the purposes of limiting the number of bytes read from the network.
+// The calculations to obtain them are defined in node/TestMaxSizesCorrect()
+
+// AgreementVoteTagMaxSize is the maximum size of an AgreementVoteTag message
+const AgreementVoteTagMaxSize = 1228
+
+// MsgOfInterestTagMaxSize is the maximum size of a MsgOfInterestTag message
+const MsgOfInterestTagMaxSize = 45
+
+// MsgDigestSkipTagMaxSize is the maximum size of a MsgDigestSkipTag message
+const MsgDigestSkipTagMaxSize = 69
+
+// NetPrioResponseTagMaxSize is the maximum size of a NetPrioResponseTag message
+const NetPrioResponseTagMaxSize = 850
+
+// NetIDVerificationTagMaxSize is the maximum size of a NetIDVerificationTag message
+const NetIDVerificationTagMaxSize = 215
+
+// PingTagMaxSize is the maximum size of a PingTag message
+const PingTagMaxSize = 8
+
+// PingReplyTagMaxSize is the maximum size of a PingReplyTag message
+const PingReplyTagMaxSize = 8
+
+// ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
+// This value is dominated by the MaxTxnBytesPerBlock
+const ProposalPayloadTagMaxSize = 5247980
+
+// StateProofSigTagMaxSize is the maximum size of a StateProofSigTag message
+const StateProofSigTagMaxSize = 6378
+
+// TopicMsgRespTagMaxSize is the maximum size of a TopicMsgRespTag message
+// This is a response to a topic message request (either UE or MI) and the largest possible
+// response is the largest possible block.
+// Matches  current network.MaxMessageLength
+const TopicMsgRespTagMaxSize = 6 * 1024 * 1024
+
+// TxnTagMaxSize is the maximum size of a TxnTag message. This is equal to SignedTxnMaxSize()
+// which is size of just a single message containing maximum Stateproof. Since Stateproof
+// transactions can't be batched we don't need to multiply by MaxTxnBatchSize.
+const TxnTagMaxSize = 4620031
+
+// UniEnsBlockReqTagMaxSize is the maximum size of a UniEnsBlockReqTag message
+const UniEnsBlockReqTagMaxSize = 67
+
+// VoteBundleTagMaxSize is the maximum size of a VoteBundleTag message
+// Matches current network.MaxMessageLength
+const VoteBundleTagMaxSize = 6 * 1024 * 1024
+
+// MaxMessageSize returns the maximum size of a message for a given tag
+func (tag Tag) MaxMessageSize() uint64 {
+	switch tag {
+	case AgreementVoteTag:
+		return AgreementVoteTagMaxSize
+	case MsgOfInterestTag:
+		return MsgOfInterestTagMaxSize
+	case MsgDigestSkipTag:
+		return MsgDigestSkipTagMaxSize
+	case NetPrioResponseTag:
+		return NetPrioResponseTagMaxSize
+	case NetIDVerificationTag:
+		return NetIDVerificationTagMaxSize
+	case PingTag:
+		return PingTagMaxSize
+	case PingReplyTag:
+		return PingReplyTagMaxSize
+	case ProposalPayloadTag:
+		return ProposalPayloadTagMaxSize
+	case StateProofSigTag:
+		return StateProofSigTagMaxSize
+	case TopicMsgRespTag:
+		return TopicMsgRespTagMaxSize
+	case TxnTag:
+		return TxnTagMaxSize
+	case UniEnsBlockReqTag:
+		return UniEnsBlockReqTagMaxSize
+	case VoteBundleTag:
+		return VoteBundleTagMaxSize
+	default:
+		return 0 // Unknown tag
+	}
+}
+
 // TagList is a list of all currently used protocol tags.
 var TagList = []Tag{
 	AgreementVoteTag,
@@ -58,4 +145,14 @@ var TagList = []Tag{
 	TxnTag,
 	UniEnsBlockReqTag,
 	VoteBundleTag,
+}
+
+// TagMap is a map of all currently used protocol tags.
+var TagMap map[Tag]struct{}
+
+func init() {
+	TagMap = make(map[Tag]struct{})
+	for _, tag := range TagList {
+		TagMap[tag] = struct{}{}
+	}
 }

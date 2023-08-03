@@ -4,6 +4,9 @@ package rpcs
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
 // The following msgp objects are implemented in this file:
@@ -14,6 +17,7 @@ import (
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> EncodedBlockCertMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -125,4 +129,10 @@ func (z *EncodedBlockCert) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *EncodedBlockCert) MsgIsZero() bool {
 	return ((*z).Block.MsgIsZero()) && ((*z).Certificate.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func EncodedBlockCertMaxSize() (s int) {
+	s = 1 + 6 + bookkeeping.BlockMaxSize() + 5 + agreement.CertificateMaxSize()
+	return
 }
