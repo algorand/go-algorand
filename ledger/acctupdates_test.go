@@ -662,7 +662,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	conf := config.GetDefaultLocal()
 	maxAcctLookback := conf.MaxAcctLookback
 	au, _ := newAcctUpdates(b, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
@@ -796,7 +796,7 @@ func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 		}
 
 		au, _ := newAcctUpdates(t, ml, cfg)
-		// au and ao are closed via ml.Close() -> ml.trackers.close()
+		// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 		// cover 10 genesis blocks
 		rewardLevel := uint64(0)
@@ -927,7 +927,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, protocol.ConsensusCurrentVersion, protoParams, knownCreatables}
@@ -1048,7 +1048,7 @@ func TestKVCache(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 	opts := auNewBlockOpts{ledgercore.AccountDeltas{}, protocol.ConsensusCurrentVersion, protoParams, knownCreatables}
@@ -1222,7 +1222,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	au, _ := newAcctUpdates(b, ml, cfg)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
@@ -1611,7 +1611,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 
 	conf = config.GetDefaultLocal()
 	au, _ = newAcctUpdates(t, ml2, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	// make sure the deltas array end up containing only the most recent 320 rounds.
 	require.Equal(t, int(conf.MaxAcctLookback), len(au.deltas))
@@ -1639,7 +1639,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
@@ -1744,7 +1744,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
@@ -1879,7 +1879,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	var addr1 basics.Address
 	var addr2 basics.Address
@@ -2086,7 +2086,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 	for addr, acct := range accts {
 		acctData, validThrough, withoutRewards, err := au.lookupLatest(addr)
 		require.NoError(t, err)
@@ -2364,7 +2364,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	var addr1 basics.Address
 	for addr := range accts[0] {
@@ -2493,7 +2493,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	var addr1 basics.Address
 	for addr := range accts[0] {
@@ -2573,7 +2573,7 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, _ := newAcctUpdates(t, ml, conf)
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
