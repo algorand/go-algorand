@@ -52,6 +52,9 @@ func makeVoteTesting(addr basics.Address, vrfSecs *crypto.VRFSecrets, otSecs cry
 			err = fmt.Errorf("Test Signature verification failed")
 		}
 	}
+	if err != nil {
+		return vote{}, err
+	}
 	cred, err := authenticateCred(&uv.Cred, round, ledger, &m)
 	v := vote{R: uv.R, Cred: *cred, Sig: uv.Sig}
 	return v, err
