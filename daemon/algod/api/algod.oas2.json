@@ -1111,7 +1111,7 @@
           "public",
           "nonparticipating"
         ],
-        "description": "Waits for a block to appear after round {round} and returns the node's status at the time.",
+        "description": "Waits for a block to appear after round {round} and returns the node's status at the time. There is a 1 minute timeout, when reached the current status is returned regardless of whether or not it is the round after the given round.",
         "produces": [
           "application/json"
         ],
@@ -1132,10 +1132,11 @@
         ],
         "responses": {
           "200": {
+            "description": "The round after the given round, or the current round if a timeout occurs.",
             "$ref": "#/responses/NodeStatusResponse"
           },
           "400": {
-            "description": "Bad Request -- number must be non-negative integer ",
+            "description": "Bad Request -- number must be non-negative integer",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }

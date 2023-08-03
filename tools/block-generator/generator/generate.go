@@ -27,15 +27,15 @@ import (
 	"time"
 
 	cconfig "github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/rpcs"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	txn "github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 // ---- templates ----
@@ -55,14 +55,19 @@ var clearSwap string
 // ---- constructors ----
 
 // MakeGenerator initializes the Generator object.
-func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig, verbose bool) (Generator, error) {
+func MakeGenerator(log logging.Logger, dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig, verbose bool) (Generator, error) {
 	if err := config.validateWithDefaults(false); err != nil {
 		return nil, fmt.Errorf("invalid generator configuration: %w", err)
+	}
+
+	if log == nil {
+		log = logging.Base()
 	}
 
 	var proto protocol.ConsensusVersion = "future"
 	gen := &generator{
 		verbose:                   verbose,
+		log:                       log,
 		config:                    config,
 		protocol:                  proto,
 		params:                    cconfig.Consensus[proto],
