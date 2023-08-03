@@ -4048,7 +4048,7 @@
       }
     },
     "SimulateUnnamedResourcesAccessed": {
-      "description": "If unnamed resource access is allowed, these are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult). In order to make this group valid for actual submission, resources that can benefit from group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.",
+      "description": "These are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, the unnamed resources it contains may or may not qualify for group resource sharing. If this is a field in SimulateTransactionGroupResult, the resources do qualify, but if this is a field in SimulateTransactionResult, they do not qualify. In order to make this group valid for actual submission, resources that qualify for group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.",
       "type": "object",
       "properties": {
         "accounts": {
