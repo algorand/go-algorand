@@ -82,7 +82,7 @@ func uint64Slice[T ~uint64](s []T) []uint64 {
 	return convertSlice(s, func(t T) uint64 { return uint64(t) })
 }
 
-func stringSlice[T interface{ String() string }](s []T) []string {
+func stringSlice[T fmt.Stringer](s []T) []string {
 	return convertSlice(s, func(t T) string { return t.String() })
 }
 

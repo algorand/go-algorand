@@ -457,7 +457,7 @@ type BoxDescriptor struct {
 
 // BoxReference References a box of an application.
 type BoxReference struct {
-	// App App ID which this box belongs to
+	// App Application ID which this box belongs to
 	App uint64 `json:"app"`
 
 	// Name Base64 encoded box name
@@ -734,7 +734,7 @@ type SimulateTransactionGroupResult struct {
 	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulateTransactionResult `json:"txn-results"`
 
-	// UnnamedResourcesAccessed If unnamed resource access is allowed, this is a set of unnamed resources that were accessed. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult).
+	// UnnamedResourcesAccessed If unnamed resource access is allowed, these are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult). In order to make this group valid for actual submission, resources that can benefit from group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.
 	UnnamedResourcesAccessed *SimulateUnnamedResourcesAccessed `json:"unnamed-resources-accessed,omitempty"`
 }
 
@@ -752,16 +752,16 @@ type SimulateTransactionResult struct {
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`
 
-	// UnnamedResourcesAccessed If unnamed resource access is allowed, this is a set of unnamed resources that were accessed. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult).
+	// UnnamedResourcesAccessed If unnamed resource access is allowed, these are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult). In order to make this group valid for actual submission, resources that can benefit from group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.
 	UnnamedResourcesAccessed *SimulateUnnamedResourcesAccessed `json:"unnamed-resources-accessed,omitempty"`
 }
 
-// SimulateUnnamedResourcesAccessed If unnamed resource access is allowed, this is a set of unnamed resources that were accessed. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult).
+// SimulateUnnamedResourcesAccessed If unnamed resource access is allowed, these are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult). In order to make this group valid for actual submission, resources that can benefit from group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.
 type SimulateUnnamedResourcesAccessed struct {
 	// Accounts The unnamed accounts that were referenced. The order of this array is arbitrary.
 	Accounts *[]string `json:"accounts,omitempty"`
 
-	// AppLocals The unnamed app local states that were referenced. The order of this array is arbitrary.
+	// AppLocals The unnamed application local states that were referenced. The order of this array is arbitrary.
 	AppLocals *[]ApplicationLocalReference `json:"app-locals,omitempty"`
 
 	// Apps The unnamed applications that were referenced. The order of this array is arbitrary.

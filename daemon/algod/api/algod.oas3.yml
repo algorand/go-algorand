@@ -1510,7 +1510,7 @@
         "description": "References a box of an application.",
         "properties": {
           "app": {
-            "description": "App ID which this box belongs to",
+            "description": "Application ID which this box belongs to",
             "type": "integer"
           },
           "name": {
@@ -2148,7 +2148,7 @@
         "type": "object"
       },
       "SimulateUnnamedResourcesAccessed": {
-        "description": "If unnamed resource access is allowed, this is a set of unnamed resources that were accessed. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult).",
+        "description": "If unnamed resource access is allowed, these are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, it either contains the unnamed resources that were accessed by this group and could benefit from group resource sharing (if this is a field in SimulateTransactionGroupResult), or the unnamed resources that were accessed by each transaction which cannot benefit from group sharing (if this is a field in SimulateTransactionResult). In order to make this group valid for actual submission, resources that can benefit from group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.",
         "properties": {
           "accounts": {
             "description": "The unnamed accounts that were referenced. The order of this array is arbitrary.",
@@ -2159,7 +2159,7 @@
             "type": "array"
           },
           "app-locals": {
-            "description": "The unnamed app local states that were referenced. The order of this array is arbitrary.",
+            "description": "The unnamed application local states that were referenced. The order of this array is arbitrary.",
             "items": {
               "$ref": "#/components/schemas/ApplicationLocalReference"
             },
