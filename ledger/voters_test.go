@@ -176,8 +176,8 @@ func TestLimitVoterTracker(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	// To cause all blocks to be committed, for easier processing by the voters tracker.
 	conf.MaxAcctLookback = 0
+	_, ao := newAcctUpdates(t, ml, conf)
 	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
-	// au and ao are closed via ml.Close() -> ml.trackers.close()
 
 	i := uint64(1)
 
