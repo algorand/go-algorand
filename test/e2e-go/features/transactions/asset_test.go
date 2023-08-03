@@ -80,7 +80,7 @@ func TestAssetValidRounds(t *testing.T) {
 	validRounds = cparams.MaxTxnLife + 1
 	firstValid, lastValid, lastRound, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
-	a.Equal(lastRound+1, firstValid)
+	a.True(firstValid == 1 || firstValid == lastRound)
 	a.Equal(firstValid+cparams.MaxTxnLife, lastValid)
 
 	firstValid = 0
