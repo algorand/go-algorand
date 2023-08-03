@@ -17,24 +17,19 @@
 package network
 
 import (
+	"fmt"
 	"sync/atomic"
-
-	"github.com/algorand/go-algorand/logging"
 )
 
 // Multiplexer is a message handler that sorts incoming messages by Tag and passes
 // them along to the relevant message handler for that type of message.
 type Multiplexer struct {
 	msgHandlers atomic.Value // stores map[Tag]MessageHandler, an immutable map.
-
-	log logging.Logger
 }
 
 // MakeMultiplexer creates an empty Multiplexer
-func MakeMultiplexer(log logging.Logger) *Multiplexer {
-	m := &Multiplexer{
-		log: log,
-	}
+func MakeMultiplexer() *Multiplexer {
+	m := &Multiplexer{}
 	m.ClearHandlers([]Tag{}) // allocate the map
 	return m
 }
@@ -78,7 +73,7 @@ func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
 	}
 	for _, v := range dispatch {
 		if _, has := mp[v.Tag]; has {
-			m.log.Panicf("Already registered a handler for tag %v", v.Tag)
+			panic(fmt.Sprintf("Already registered a handler for tag %v", v.Tag))
 		}
 		mp[v.Tag] = v.MessageHandler
 	}
