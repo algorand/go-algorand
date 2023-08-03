@@ -506,7 +506,7 @@ type networkPeerManager interface {
 	// used by msgBroadcaster
 	peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32)
 	checkSlowWritingPeers()
-	getPeersChangeCounter() *int32
+	getPeersChangeCounter() int32
 
 	// used by msgHandler
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
@@ -938,7 +938,7 @@ func (wn *WebsocketNetwork) Start() {
 		go wn.handler.messageHandlerThread(&wn.wg, wn.peersConnectivityCheckTicker.C, wn)
 	}
 	wn.wg.Add(1)
-	go wn.broadcaster.broadcastThread(wn.wg.Done, wn)
+	go wn.broadcaster.broadcastThread(&wn.wg, wn)
 	if wn.prioScheme != nil {
 		wn.wg.Add(1)
 		go wn.prioWeightRefresh()
@@ -1312,7 +1312,7 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 	}
 }
 
-func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivityCheckCh <-chan time.Time, pm networkPeerManager) {
+func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivityCheckCh <-chan time.Time, net networkPeerManager) {
 	defer wg.Done()
 
 	for {
@@ -1329,7 +1329,7 @@ func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivity
 				}
 			}
 			if wn.config.EnableOutgoingNetworkMessageFiltering && len(msg.Data) >= messageFilterSize {
-				wn.sendFilterMessage(msg, pm)
+				wn.sendFilterMessage(msg, net)
 			}
 			//wn.log.Debugf("msg handling %#v [%d]byte", msg.Tag, len(msg.Data))
 			start := time.Now()
@@ -1348,9 +1348,9 @@ func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivity
 				if outmsg.reason != disconnectReasonNone {
 					reason = outmsg.reason
 				}
-				go pm.disconnectThread(msg.Sender, reason)
+				go net.disconnectThread(msg.Sender, reason)
 			case Broadcast:
-				err := pm.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
+				err := net.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
 				if err != nil && err != errBcastQFull {
 					wn.log.Warnf("WebsocketNetwork.messageHandlerThread: WebsocketNetwork.Broadcast returned unexpected error %v", err)
 				}
@@ -1363,7 +1363,7 @@ func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivity
 			}
 		case <-peersConnectivityCheckCh:
 			// go over the peers and ensure we have some type of communication going on.
-			pm.checkPeersConnectivity()
+			net.checkPeersConnectivity()
 		}
 	}
 }
@@ -1403,29 +1403,25 @@ func (wn *WebsocketNetwork) checkSlowWritingPeers() {
 	}
 }
 
-func (wn *WebsocketNetwork) getPeersChangeCounter() *int32 {
-	return &wn.peersChangeCounter
-}
-
-func (wn *msgHandler) sendFilterMessage(msg IncomingMessage, pm networkPeerManager) {
+func (wn *msgHandler) sendFilterMessage(msg IncomingMessage, net networkPeerManager) {
 	digest := generateMessageDigest(msg.Tag, msg.Data)
 	//wn.log.Debugf("send filter %s(%d) %v", msg.Tag, len(msg.Data), digest)
-	err := pm.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, msg.Sender)
+	err := net.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, msg.Sender)
 	if err != nil && err != errBcastQFull {
 		wn.log.Warnf("WebsocketNetwork.sendFilterMessage: WebsocketNetwork.Broadcast returned unexpected error %v", err)
 	}
 }
 
-func (wn *msgBroadcaster) broadcastThread(wgDone func(), pm networkPeerManager) {
-	defer wgDone()
+func (wn *msgBroadcaster) broadcastThread(wg *sync.WaitGroup, net networkPeerManager) {
+	defer wg.Done()
 
 	slowWritingPeerCheckTicker := time.NewTicker(wn.slowWritingPeerMonitorInterval)
 	defer slowWritingPeerCheckTicker.Stop()
-	peers, lastPeersChangeCounter := pm.peerSnapshot([]*wsPeer{})
+	peers, lastPeersChangeCounter := net.peerSnapshot([]*wsPeer{})
 	// updatePeers update the peers list if their peer change counter has changed.
 	updatePeers := func() {
-		if curPeersChangeCounter := atomic.LoadInt32(pm.getPeersChangeCounter()); curPeersChangeCounter != lastPeersChangeCounter {
-			peers, lastPeersChangeCounter = pm.peerSnapshot(peers)
+		if curPeersChangeCounter := net.getPeersChangeCounter(); curPeersChangeCounter != lastPeersChangeCounter {
+			peers, lastPeersChangeCounter = net.peerSnapshot(peers)
 		}
 	}
 
@@ -1516,7 +1512,7 @@ func (wn *msgBroadcaster) broadcastThread(wgDone func(), pm networkPeerManager) 
 			}
 			wn.innerBroadcast(request, true, peers)
 		case <-slowWritingPeerCheckTicker.C:
-			pm.checkSlowWritingPeers()
+			net.checkSlowWritingPeers()
 			continue
 		case request := <-wn.broadcastQueueBulk:
 			// check if peers need to be updated, since we've been waiting a while.
@@ -1551,8 +1547,11 @@ func (wn *WebsocketNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 		dest = make([]*wsPeer, len(wn.peers))
 	}
 	copy(dest, wn.peers)
-	peerChangeCounter := atomic.LoadInt32(&wn.peersChangeCounter)
-	return dest, peerChangeCounter
+	return dest, wn.getPeersChangeCounter()
+}
+
+func (wn *WebsocketNetwork) getPeersChangeCounter() int32 {
+	return atomic.LoadInt32(&wn.peersChangeCounter)
 }
 
 // preparePeerData prepares batches of data for sending.

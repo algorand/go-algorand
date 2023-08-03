@@ -325,7 +325,7 @@ func (i identityVerificationMessageSigned) Verify(key crypto.PublicKey) bool {
 // sender's claimed identity and the challenge that was assigned to it. If the identity is available,
 // the peer is loaded into the identity tracker. Otherwise, we ask the network to disconnect the peer.
 func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
-	wsNet, ok := message.Net.(*WebsocketNetwork)
+	wn, ok := message.Net.(*WebsocketNetwork)
 	if !ok {
 		// this is only a feature for the wsNetwork
 		return OutgoingMessage{}
@@ -356,9 +356,9 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	}
 	atomic.StoreUint32(&peer.identityVerified, 1)
 	// if the identity could not be claimed by this peer, it means the identity is in use
-	wsNet.peersLock.Lock()
-	ok = wsNet.identityTracker.setIdentity(peer)
-	wsNet.peersLock.Unlock()
+	wn.peersLock.Lock()
+	ok = wn.identityTracker.setIdentity(peer)
+	wn.peersLock.Unlock()
 	if !ok {
 		networkPeerIdentityDisconnect.Inc(nil)
 		peer.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity already in use, disconnecting")
