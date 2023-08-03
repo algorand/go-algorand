@@ -273,9 +273,20 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 		}}
 }
 
-func (p *player) handleWinningPayloadArrival(payload proposal) {
+func (p *player) handleWinningPayloadArrival(payload proposal, ver protocol.ConsensusVersion) {
 	// ignoring validatedAt
 	p.payloadArrivals = append(p.payloadArrivals, payload.receivedAt)
+	p.resizePayloadArrivals(ver)
+}
+
+func (p *player) resizePayloadArrivals(ver protocol.ConsensusVersion) {
+	proto := config.Consensus[ver]
+	if len(p.payloadArrivals) > proto.AgreementPipelineDelayHistory {
+		p.payloadArrivals = p.payloadArrivals[len(p.payloadArrivals)-proto.AgreementPipelineDelayHistory:]
+	}
+	for len(p.payloadArrivals) < proto.AgreementPipelineDelayHistory {
+		p.payloadArrivals = append([]time.Duration{FilterTimeout(0, ver)}, p.payloadArrivals...)
+	}
 }
 
 // calculateFilterTimeout chooses the appropriate filter timeout for a new round.
@@ -327,7 +338,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			p.handleWinningPayloadArrival(res.Payload)
+			p.handleWinningPayloadArrival(res.Payload, e.Proto)
 			as := p.enterRound(r, e, p.Round+1)
 			return append(actions, as...)
 		}
@@ -651,7 +662,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				p.handleWinningPayloadArrival(e.Input.Proposal)
+				p.handleWinningPayloadArrival(e.Input.Proposal, e.Proto.Version)
 				as := p.enterRound(r, delegatedE, cert.Round+1)
 				return append(actions, as...)
 			}
