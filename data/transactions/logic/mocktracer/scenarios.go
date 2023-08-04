@@ -341,7 +341,7 @@ type TestScenarioGenerator func(info TestScenarioInfo) TestScenario
 // scenarios are all app calls which invoke inner transactions under various failure conditions.
 // The scenarios follow this format:
 //
-//   1. An app call transaction that spawns inners. They are:
+//  1. An app call transaction that spawns inners. They are:
 //     a. A basic app call transaction
 //     b. A payment transaction [grouped with c]
 //     c. A payment transaction [grouped with b]

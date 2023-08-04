@@ -49,23 +49,15 @@ export CPATH=/opt/homebrew/include
 export LIBRARY_PATH=/opt/homebrew/lib
 endif
 endif
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
-ifeq ($(ARCH), amd64)
 # the following predicate is abit misleading; it tests if we're not in centos.
 ifeq (,$(wildcard /etc/centos-release))
 EXTLDFLAGS  += -static
 endif
 GOTAGSLIST  += osusergo netgo static_build
 GOBUILDMODE := -buildmode pie
-endif
-ifeq ($(ARCH), arm)
-ifneq ("$(wildcard /etc/alpine-release)","")
-EXTLDFLAGS  += -static
-GOTAGSLIST  += osusergo netgo static_build
-GOBUILDMODE := -buildmode pie
-endif
-endif
 endif
 
 ifneq (, $(findstring MINGW,$(UNAME)))
@@ -76,6 +68,11 @@ endif
 ifeq ($(SHORT_PART_PERIOD), 1)
 export SHORT_PART_PERIOD_FLAG := -s
 endif
+
+# Disable go experiments during build as of go 1.20.5 due to
+# https://github.com/golang/go/issues/60825
+# Likely fix: https://go-review.googlesource.com/c/go/+/503937/6/src/runtime/race_arm64.s
+export GOEXPERIMENT=none
 
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
@@ -91,6 +88,8 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
+
+GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types
 
 MSGP_GENERATE	:= ./protocol ./protocol/test ./crypto ./crypto/merklearray ./crypto/merklesignature ./crypto/stateproof ./data/basics ./data/transactions ./data/stateproofmsg ./data/committee ./data/bookkeeping ./data/hashable ./agreement ./rpcs ./network ./node ./ledger ./ledger/ledgercore ./ledger/store/trackerdb ./ledger/encoded ./stateproof ./data/account ./daemon/algod/api/spec/v2
 
@@ -115,7 +114,12 @@ check_go_version:
 	fi
 
 tidy: check_go_version
+	@echo "Tidying go-algorand"
 	go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)
+	@for dir in $(GOMOD_DIRS); do \
+		echo "Tidying $$dir" && \
+		(cd $$dir && go mod tidy -compat=$(GOLANG_VERSION_SUPPORT)); \
+	done
 
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
@@ -151,7 +155,7 @@ ALWAYS:
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
 crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
-	cp -R crypto/libsodium-fork crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
+	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
 		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
 		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" && \

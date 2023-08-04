@@ -25,7 +25,7 @@ sudo apt-get upgrade -y
 # `apt-get` fails randomly when downloading package, this is a hack that "works" reasonably well.
 sudo apt-get update
 
-sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
+sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
 
 #umask 0077
@@ -106,7 +106,7 @@ fi
 sudo usermod -a -G docker ubuntu
 sg docker "docker pull centos:7"
 sg docker "docker pull quay.io/centos/centos:stream8"
-sg docker "docker pull ubuntu:18.04"
+sg docker "docker pull ubuntu:22.04"
 
 cat << EOF >> "${HOME}/.bashrc"
 export EDITOR=vi

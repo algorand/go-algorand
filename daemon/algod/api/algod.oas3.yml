@@ -790,6 +790,9 @@
                 "eval-overrides": {
                   "$ref": "#/components/schemas/SimulationEvalOverrides"
                 },
+                "exec-trace-config": {
+                  "$ref": "#/components/schemas/SimulateTraceConfig"
+                },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                   "type": "integer"
@@ -1397,6 +1400,30 @@
         ],
         "type": "object"
       },
+      "AvmValue": {
+        "description": "Represents an AVM value.",
+        "properties": {
+          "bytes": {
+            "description": "bytes value.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "type": {
+            "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint64**",
+            "type": "integer"
+          },
+          "uint": {
+            "description": "uint value.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
       "Box": {
         "description": "Box name and its content.",
         "properties": {
@@ -1907,6 +1934,23 @@
         ],
         "type": "object"
       },
+      "ScratchChange": {
+        "description": "A write operation into a scratch slot.",
+        "properties": {
+          "new-value": {
+            "$ref": "#/components/schemas/AvmValue"
+          },
+          "slot": {
+            "description": "The scratch slot written.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "new-value",
+          "slot"
+        ],
+        "type": "object"
+      },
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
@@ -1917,6 +1961,9 @@
           "allow-more-logging": {
             "description": "Lifts limits on log opcode usage during simulation.",
             "type": "boolean"
+          },
+          "exec-trace-config": {
+            "$ref": "#/components/schemas/SimulateTraceConfig"
           },
           "extra-opcode-budget": {
             "description": "Applies extra opcode budget during simulation for each transaction group.",
@@ -1952,6 +1999,24 @@
         "required": [
           "txns"
         ],
+        "type": "object"
+      },
+      "SimulateTraceConfig": {
+        "description": "An object that configures simulation execution trace.",
+        "properties": {
+          "enable": {
+            "description": "A boolean option for opting in execution trace features simulation endpoint.",
+            "type": "boolean"
+          },
+          "scratch-change": {
+            "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
+            "type": "boolean"
+          },
+          "stack-change": {
+            "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "SimulateTransactionGroupResult": {
@@ -1996,6 +2061,9 @@
             "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
             "type": "integer"
           },
+          "exec-trace": {
+            "$ref": "#/components/schemas/SimulationTransactionExecTrace"
+          },
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
@@ -2027,6 +2095,78 @@
           "max-log-size": {
             "description": "The maximum byte number to log during simulation",
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SimulationOpcodeTraceUnit": {
+        "description": "The set of trace information and effect from evaluating a single opcode.",
+        "properties": {
+          "pc": {
+            "description": "The program counter of the current opcode being evaluated.",
+            "type": "integer"
+          },
+          "scratch-changes": {
+            "description": "The writes into scratch slots.",
+            "items": {
+              "$ref": "#/components/schemas/ScratchChange"
+            },
+            "type": "array"
+          },
+          "spawned-inners": {
+            "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "stack-additions": {
+            "description": "The values added by this opcode to the stack.",
+            "items": {
+              "$ref": "#/components/schemas/AvmValue"
+            },
+            "type": "array"
+          },
+          "stack-pop-count": {
+            "description": "The number of deleted stack values by this opcode.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pc"
+        ],
+        "type": "object"
+      },
+      "SimulationTransactionExecTrace": {
+        "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
+        "properties": {
+          "approval-program-trace": {
+            "description": "Program trace that contains a trace of opcode effects in an approval program.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          },
+          "clear-state-program-trace": {
+            "description": "Program trace that contains a trace of opcode effects in a clear state program.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
+          },
+          "inner-trace": {
+            "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationTransactionExecTrace"
+            },
+            "type": "array"
+          },
+          "logic-sig-trace": {
+            "description": "Program trace that contains a trace of opcode effects in a logic sig.",
+            "items": {
+              "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -3833,6 +3973,16 @@
               }
             },
             "description": "Invalid API Token"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Timeout"
           },
           "500": {
             "content": {
@@ -6289,6 +6439,9 @@
                     "eval-overrides": {
                       "$ref": "#/components/schemas/SimulationEvalOverrides"
                     },
+                    "exec-trace-config": {
+                      "$ref": "#/components/schemas/SimulateTraceConfig"
+                    },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
@@ -6318,6 +6471,9 @@
                   "properties": {
                     "eval-overrides": {
                       "$ref": "#/components/schemas/SimulationEvalOverrides"
+                    },
+                    "exec-trace-config": {
+                      "$ref": "#/components/schemas/SimulateTraceConfig"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",

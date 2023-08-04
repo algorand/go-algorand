@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -29,12 +30,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
-
 	"github.com/algorand/go-algorand/ledger/simulation"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,6 +48,7 @@ func uint64ToBytes(num uint64) []byte {
 
 type simulationTestCase struct {
 	input         simulation.Request
+	developerAPI  bool
 	expected      simulation.Result
 	expectedError string
 }
@@ -122,11 +124,10 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 	t.Helper()
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
 
 	testcase := f(env)
 
-	actual, err := s.Simulate(testcase.input)
+	actual, err := simulation.MakeSimulator(env.Ledger, testcase.developerAPI).Simulate(testcase.input)
 	require.NoError(t, err)
 
 	validateSimulationResult(t, actual)
@@ -267,6 +268,60 @@ func TestPayTxn(t *testing.T) {
 	})
 }
 
+func TestIllFormedStackRequest(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	futureAppID := basics.AppIndex(1001)
+
+	createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: 0,
+		ApprovalProgram: `#pragma version 6
+txn ApplicationID
+bz create
+byte "app call"
+log
+b end
+create:
+byte "app creation"
+log
+end:
+int 1`,
+		ClearStateProgram: `#pragma version 6
+int 0`,
+	})
+	callTxn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: futureAppID,
+	})
+
+	txntest.Group(&createTxn, &callTxn)
+
+	signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+	signedCallTxn := callTxn.Txn().Sign(sender.Sk)
+
+	simRequest := simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{
+			{signedCreateTxn, signedCallTxn},
+		},
+		TraceConfig: simulation.ExecTraceConfig{
+			Enable: false,
+			Stack:  true,
+		},
+	}
+
+	_, err := simulation.MakeSimulator(env.Ledger, true).Simulate(simRequest)
+	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+	require.ErrorContains(t, err, "basic trace must be enabled when enabling stack tracing")
+}
+
 func TestWrongAuthorizerTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -369,7 +424,7 @@ func TestStateProofTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, false)
 
 	txgroup := []transactions.SignedTxn{
 		env.TxnInfo.NewTxn(txntest.Txn{
@@ -388,7 +443,7 @@ func TestSimpleGroupTxn(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, false)
 	sender1 := env.Accounts[0]
 	sender1Balance := env.Accounts[0].AcctData.MicroAlgos
 	sender2 := env.Accounts[1]
@@ -917,6 +972,106 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 	})
 }
 
+func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Transaction group has a cost of 4 + 1404
+	expensiveAppSource := `#pragma version 6
+	txn ApplicationID      // [appId]
+	bz end                 // []
+` + strings.Repeat(`int 1; pop;`, 700) + `end:
+	int 1`
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+		// App create with cost 4
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   expensiveAppSource,
+			ClearStateProgram: "#pragma version 6\nint 1",
+		})
+		// Expensive 700 repetition of int 1 and pop total cost 1404
+		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &expensiveTxn)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
+		extraOpcodeBudget := uint64(100)
+
+		commonLeadingSteps := []simulation.OpcodeTraceUnit{
+			{PC: 1}, {PC: 4}, {PC: 6},
+		}
+
+		// Get the first trace
+		firstTrace := make([]simulation.OpcodeTraceUnit, len(commonLeadingSteps))
+		copy(firstTrace, commonLeadingSteps[:])
+		firstTrace = append(firstTrace, simulation.OpcodeTraceUnit{PC: 1409})
+
+		// Get the second trace
+		secondTrace := make([]simulation.OpcodeTraceUnit, len(commonLeadingSteps))
+		copy(secondTrace, commonLeadingSteps[:])
+		for i := 9; i <= 1409; i++ {
+			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: uint64(i)})
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedExpensiveTxn},
+				},
+				ExtraOpcodeBudget: extraOpcodeBudget,
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: firstTrace,
+								},
+							},
+							{
+								AppBudgetConsumed: 1404,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: secondTrace,
+								},
+							},
+						},
+						AppBudgetAdded:    1500,
+						AppBudgetConsumed: 1408,
+					},
+				},
+				EvalOverrides: simulation.ResultEvalOverrides{ExtraOpcodeBudget: extraOpcodeBudget},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+		}
+	})
+}
+
 func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1004,7 +1159,7 @@ func TestAppCallWithExtraBudgetExceedsInternalLimit(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, false)
 
 	sender := env.Accounts[0]
 
@@ -1212,7 +1367,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, false)
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -1397,7 +1552,6 @@ int 1`
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
-		receiver := env.Accounts[1]
 
 		futureAppID := basics.AppIndex(1001)
 
@@ -1413,7 +1567,6 @@ int 1`
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
 			ApplicationID:   futureAppID,
-			Accounts:        []basics.Address{receiver.Addr},
 			ApplicationArgs: [][]byte{[]byte("first-arg")},
 		})
 
@@ -1471,6 +1624,1242 @@ int 1`
 				},
 			},
 			expectedError: "logic eval error: program logs too large. 66150 bytes >  65536 bytes limit.",
+		}
+	})
+}
+
+// The program is originated from pyteal source for c2c test over betanet:
+// https://github.com/ahangsu/c2c-testscript/blob/master/c2c_test/max_depth/app.py
+//
+// To fully test the PC exposure, we added opt-in and clear-state calls,
+// between funding and calling with on-complete deletion.
+// The modified version here: https://gist.github.com/ahangsu/7839f558dd36ad7117c0a12fb1dcc63a
+const maxDepthTealApproval = `#pragma version 8
+txn ApplicationID
+int 0
+==
+bnz main_l6
+txn OnCompletion
+int OptIn
+==
+bnz main_l6
+txn NumAppArgs
+int 1
+==
+bnz main_l3
+err
+main_l3:
+global CurrentApplicationID
+app_params_get AppApprovalProgram
+store 1
+store 0
+global CurrentApplicationID
+app_params_get AppClearStateProgram
+store 3
+store 2
+global CurrentApplicationAddress
+acct_params_get AcctBalance
+store 5
+store 4
+load 1
+assert
+load 3
+assert
+load 5
+assert
+int 2
+txna ApplicationArgs 0
+btoi
+exp
+itob
+log
+txna ApplicationArgs 0
+btoi
+int 0
+>
+bnz main_l5
+main_l4:
+int 1
+return
+main_l5:
+itxn_begin
+  int appl
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 0
+  itxn_field ApprovalProgram
+  load 2
+  itxn_field ClearStateProgram
+itxn_submit
+itxn_begin
+  int pay
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 4
+  int 100000
+  -
+  itxn_field Amount
+  byte "appID"
+  gitxn 0 CreatedApplicationID
+  itob
+  concat
+  sha512_256
+  itxn_field Receiver
+itxn_next
+  int appl
+  itxn_field TypeEnum
+  itxn CreatedApplicationID
+  itxn_field ApplicationID
+  int 0
+  itxn_field Fee
+  int OptIn
+  itxn_field OnCompletion
+itxn_next
+  int appl
+  itxn_field TypeEnum
+  itxn CreatedApplicationID
+  itxn_field ApplicationID
+  int 0
+  itxn_field Fee
+  int ClearState
+  itxn_field OnCompletion
+itxn_next
+  int appl
+  itxn_field TypeEnum
+  txna ApplicationArgs 0
+  btoi
+  int 1
+  -
+  itob
+  itxn_field ApplicationArgs
+  itxn CreatedApplicationID
+  itxn_field ApplicationID
+  int 0
+  itxn_field Fee
+  int DeleteApplication
+  itxn_field OnCompletion
+itxn_submit
+b main_l4
+main_l6:
+int 1
+return`
+
+func TestMaxDepthAppWithPCTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			ApprovalProgram:   maxDepthTealApproval,
+			ClearStateProgram: "#pragma version 8\nint 1",
+		})
+
+		MaxDepth := 2
+		MinBalance := env.TxnInfo.CurrentProtocolParams().MinBalance
+		MinFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
+
+		paymentTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   MinBalance * uint64(MaxDepth+1),
+		})
+
+		callsMaxDepth := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{{byte(MaxDepth)}},
+			Fee:             MinFee * uint64(MaxDepth*5+2),
+		})
+
+		txntest.Group(&createTxn, &paymentTxn, &callsMaxDepth)
+
+		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
+		signedPaymentTxn := paymentTxn.Txn().Sign(sender.Sk)
+		signedCallsMaxDepth := callsMaxDepth.Txn().Sign(sender.Sk)
+
+		creationOpcodeTrace := []simulation.OpcodeTraceUnit{
+			{PC: 1},
+			{PC: 6},
+			{PC: 8},
+			{PC: 9},
+			{PC: 10},
+			{PC: 185},
+			{PC: 186},
+		}
+
+		clearStateOpcodeTrace := []simulation.OpcodeTraceUnit{{PC: 1}}
+
+		recursiveLongOpcodeTrace := []simulation.OpcodeTraceUnit{
+			{PC: 1},
+			{PC: 6},
+			{PC: 8},
+			{PC: 9},
+			{PC: 10},
+			{PC: 13},
+			{PC: 15},
+			{PC: 16},
+			{PC: 17},
+			{PC: 20},
+			{PC: 22},
+			{PC: 23},
+			{PC: 24},
+			{PC: 28},
+			{PC: 30},
+			{PC: 32},
+			{PC: 34},
+			{PC: 36},
+			{PC: 38},
+			{PC: 40},
+			{PC: 42},
+			{PC: 44},
+			{PC: 46},
+			{PC: 48},
+			{PC: 50},
+			{PC: 52},
+			{PC: 54},
+			{PC: 55},
+			{PC: 57},
+			{PC: 58},
+			{PC: 60},
+			{PC: 61},
+			{PC: 63},
+			{PC: 66},
+			{PC: 67},
+			{PC: 68},
+			{PC: 69},
+			{PC: 70},
+			{PC: 73},
+			{PC: 74},
+			{PC: 75},
+			{PC: 76},
+			{PC: 81},
+			{PC: 82},
+			{PC: 83},
+			{PC: 85},
+			{PC: 86},
+			{PC: 88},
+			{PC: 90},
+			{PC: 92},
+			{PC: 94},
+			{PC: 96, SpawnedInners: []int{0}},
+			{PC: 97},
+			{PC: 98},
+			{PC: 99},
+			{PC: 101},
+			{PC: 102},
+			{PC: 104},
+			{PC: 106},
+			{PC: 110},
+			{PC: 111},
+			{PC: 113},
+			{PC: 120},
+			{PC: 123},
+			{PC: 124},
+			{PC: 125},
+			{PC: 126},
+			{PC: 128},
+			{PC: 129},
+			{PC: 130},
+			{PC: 132},
+			{PC: 134},
+			{PC: 136},
+			{PC: 137},
+			{PC: 139},
+			{PC: 140},
+			{PC: 142},
+			{PC: 143},
+			{PC: 144},
+			{PC: 146},
+			{PC: 148},
+			{PC: 150},
+			{PC: 151},
+			{PC: 153},
+			{PC: 155},
+			{PC: 157},
+			{PC: 158},
+			{PC: 159},
+			{PC: 161},
+			{PC: 164},
+			{PC: 165},
+			{PC: 166},
+			{PC: 167},
+			{PC: 168},
+			{PC: 170},
+			{PC: 172},
+			{PC: 174},
+			{PC: 175},
+			{PC: 177},
+			{PC: 179},
+			{PC: 181, SpawnedInners: []int{1, 2, 3, 4}},
+			{PC: 182},
+			{PC: 79},
+			{PC: 80},
+		}
+
+		optInTrace := []simulation.OpcodeTraceUnit{
+			{PC: 1},
+			{PC: 6},
+			{PC: 8},
+			{PC: 9},
+			{PC: 10},
+			{PC: 13},
+			{PC: 15},
+			{PC: 16},
+			{PC: 17},
+			{PC: 185},
+			{PC: 186},
+		}
+
+		finalDepthTrace := []simulation.OpcodeTraceUnit{
+			{PC: 1},
+			{PC: 6},
+			{PC: 8},
+			{PC: 9},
+			{PC: 10},
+			{PC: 13},
+			{PC: 15},
+			{PC: 16},
+			{PC: 17},
+			{PC: 20},
+			{PC: 22},
+			{PC: 23},
+			{PC: 24},
+			{PC: 28},
+			{PC: 30},
+			{PC: 32},
+			{PC: 34},
+			{PC: 36},
+			{PC: 38},
+			{PC: 40},
+			{PC: 42},
+			{PC: 44},
+			{PC: 46},
+			{PC: 48},
+			{PC: 50},
+			{PC: 52},
+			{PC: 54},
+			{PC: 55},
+			{PC: 57},
+			{PC: 58},
+			{PC: 60},
+			{PC: 61},
+			{PC: 63},
+			{PC: 66},
+			{PC: 67},
+			{PC: 68},
+			{PC: 69},
+			{PC: 70},
+			{PC: 73},
+			{PC: 74},
+			{PC: 75},
+			{PC: 76},
+			{PC: 79},
+			{PC: 80},
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreateTxn, signedPaymentTxn, signedCallsMaxDepth},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{ApplicationID: futureAppID},
+								},
+								AppBudgetConsumed: 7,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: creationOpcodeTrace,
+								},
+							},
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: 0,
+										EvalDelta: transactions.EvalDelta{
+											Logs: []string{string(uint64ToBytes(1 << MaxDepth))},
+											InnerTxns: []transactions.SignedTxnWithAD{
+												{
+													ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 3},
+												},
+												{},
+												{},
+												{},
+												{
+													ApplyData: transactions.ApplyData{
+														EvalDelta: transactions.EvalDelta{
+															Logs: []string{string(uint64ToBytes(1 << (MaxDepth - 1)))},
+															InnerTxns: []transactions.SignedTxnWithAD{
+																{
+																	ApplyData: transactions.ApplyData{ApplicationID: futureAppID + 8},
+																},
+																{},
+																{},
+																{},
+																{
+																	ApplyData: transactions.ApplyData{
+																		EvalDelta: transactions.EvalDelta{
+																			Logs: []string{string(uint64ToBytes(1 << (MaxDepth - 2)))},
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 378,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: recursiveLongOpcodeTrace,
+									InnerTraces: []simulation.TransactionTrace{
+										{
+											ApprovalProgramTrace: creationOpcodeTrace,
+										},
+										{},
+										{
+											ApprovalProgramTrace: optInTrace,
+										},
+										{
+											ClearStateProgramTrace: clearStateOpcodeTrace,
+										},
+										{
+											ApprovalProgramTrace: recursiveLongOpcodeTrace,
+											InnerTraces: []simulation.TransactionTrace{
+												{
+													ApprovalProgramTrace: creationOpcodeTrace,
+												},
+												{},
+												{
+													ApprovalProgramTrace: optInTrace,
+												},
+												{
+													ClearStateProgramTrace: clearStateOpcodeTrace,
+												},
+												{
+													ApprovalProgramTrace: finalDepthTrace,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    4200,
+						AppBudgetConsumed: 385,
+					},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+		}
+	})
+}
+
+func goValuesToTealValues(goValues ...interface{}) []basics.TealValue {
+	if len(goValues) == 0 {
+		return nil
+	}
+
+	boolToUint64 := func(b bool) uint64 {
+		if b {
+			return 1
+		}
+		return 0
+	}
+
+	modelValues := make([]basics.TealValue, len(goValues))
+	for i, goValue := range goValues {
+		switch convertedValue := goValue.(type) {
+		case []byte:
+			modelValues[i] = basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: string(convertedValue),
+			}
+		case string:
+			modelValues[i] = basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: string(convertedValue),
+			}
+		case bool:
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: boolToUint64(convertedValue),
+			}
+		case int:
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: uint64(convertedValue),
+			}
+		case basics.AppIndex:
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: uint64(convertedValue),
+			}
+		case uint64:
+			modelValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: convertedValue,
+			}
+		default:
+			panic("unexpected type inferred from interface{}")
+		}
+	}
+	return modelValues
+}
+
+func TestLogicSigPCandStackExposure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 8
+` + strings.Repeat(`byte "a"; keccak256; pop
+`, 2) + `int 1`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
+byte "hello"; log; int 1`,
+			ClearStateProgram: "#pragma version 8\n int 1",
+		})
+
+		txntest.Group(&payTxn, &appCallTxn)
+
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+
+		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedPayTxn, signedAppCallTxn},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					Stack:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					Stack:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: 1002,
+										EvalDelta:     transactions.EvalDelta{Logs: []string{"hello"}},
+									},
+								},
+								AppBudgetConsumed:      3,
+								LogicSigBudgetConsumed: 266,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC:         1,
+											StackAdded: goValuesToTealValues("hello"),
+										},
+										{
+											PC:            8,
+											StackPopCount: 1,
+										},
+										{
+											PC:         9,
+											StackAdded: goValuesToTealValues(1),
+										},
+									},
+									LogicSigTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC:         5,
+											StackAdded: goValuesToTealValues("a"),
+										},
+										{
+											PC:            6,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
+										},
+										{
+											PC:            7,
+											StackPopCount: 1,
+										},
+										{
+											PC:         8,
+											StackAdded: goValuesToTealValues("a"),
+										},
+										{
+											PC:            9,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
+										},
+										{
+											PC:            10,
+											StackPopCount: 1,
+										},
+										{
+											PC:         11,
+											StackAdded: goValuesToTealValues(1),
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    700,
+						AppBudgetConsumed: 3,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestFailingLogicSigPCandStack(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 8
+` + strings.Repeat(`byte "a"; keccak256; pop
+`, 2) + `int 0; int 1; -`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
+byte "hello"; log; int 1`,
+			ClearStateProgram: "#pragma version 8\n int 1",
+		})
+
+		txntest.Group(&payTxn, &appCallTxn)
+
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+
+		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedPayTxn, signedAppCallTxn},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					Stack:  true,
+				},
+			},
+			developerAPI:  true,
+			expectedError: "rejected by logic",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					Stack:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{1},
+						Txns: []simulation.TxnResult{
+							{},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{},
+								},
+								LogicSigBudgetConsumed: 268,
+								Trace: &simulation.TransactionTrace{
+									LogicSigTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC:         5,
+											StackAdded: goValuesToTealValues("a"),
+										},
+										{
+											PC:            6,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
+										},
+										{
+											PC:            7,
+											StackPopCount: 1,
+										},
+										{
+											PC:         8,
+											StackAdded: goValuesToTealValues("a"),
+										},
+										{
+											PC:            9,
+											StackAdded:    goValuesToTealValues(keccakBytes),
+											StackPopCount: 1,
+										},
+										{
+											PC:            10,
+											StackPopCount: 1,
+										},
+										{
+											PC:         11,
+											StackAdded: goValuesToTealValues(0),
+										},
+										{
+											PC:         13,
+											StackAdded: goValuesToTealValues(1),
+										},
+										{
+											PC:            15,
+											StackPopCount: 2,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestFailingApp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	op, err := logic.AssembleString(`#pragma version 8
+` + strings.Repeat(`byte "a"; keccak256; pop
+`, 2) + `int 1`)
+	require.NoError(t, err)
+	program := logic.Program(op.Program)
+	lsigAddr := basics.Address(crypto.HashObj(&program))
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		payTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: lsigAddr,
+			Amount:   1_000_000,
+		})
+		appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:   protocol.ApplicationCallTx,
+			Sender: lsigAddr,
+			ApprovalProgram: `#pragma version 8
+byte "hello"; log; int 0`,
+			ClearStateProgram: "#pragma version 8\n int 1",
+		})
+
+		txntest.Group(&payTxn, &appCallTxn)
+
+		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
+		signedAppCallTxn := appCallTxn.SignedTxn()
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedPayTxn, signedAppCallTxn},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+			},
+			developerAPI:  true,
+			expectedError: "rejected by ApprovalProgram",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{1},
+						Txns: []simulation.TxnResult{
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: 1002,
+										EvalDelta:     transactions.EvalDelta{Logs: []string{"hello"}},
+									},
+								},
+								AppBudgetConsumed:      3,
+								LogicSigBudgetConsumed: 266,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 8},
+										{PC: 9},
+									},
+									LogicSigTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 5},
+										{PC: 6},
+										{PC: 7},
+										{PC: 8},
+										{PC: 9},
+										{PC: 10},
+										{PC: 11},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    700,
+						AppBudgetConsumed: 3,
+					},
+				},
+			},
+		}
+	})
+}
+
+const FrameBuryDigProgram = `#pragma version 8
+txn ApplicationID      // on creation, always approve
+bz end
+
+txn NumAppArgs
+int 1
+==
+assert
+
+txn ApplicationArgs 0
+btoi
+callsub subroutine_manipulating_stack
+itob
+log
+b end
+
+subroutine_manipulating_stack:
+  proto 1 1
+  int 0                                   // [0]
+  dup                                     // [0, 0]
+  dupn 4                                  // [0, 0, 0, 0, 0, 0]
+  frame_dig -1                            // [0, 0, 0, 0, 0, 0, arg_0]
+  frame_bury 0                            // [arg_0, 0, 0, 0, 0, 0]
+  dig 5                                   // [arg_0, 0, 0, 0, 0, 0, arg_0]
+  cover 5                                 // [arg_0, arg_0, 0, 0, 0, 0, 0]
+  frame_dig 0                             // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0]
+  frame_dig 1                             // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0, arg_0]
+  +                                       // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0 * 2]
+  bury 7                                  // [arg_0 * 2, arg_0, 0, 0, 0, 0, 0]
+  popn 5                                  // [arg_0 * 2, arg_0]
+  uncover 1                               // [arg_0, arg_0 * 2]
+  swap                                    // [arg_0 * 2, arg_0]
+  +                                       // [arg_0 * 3]
+  pushbytess "1!" "5!"                    // [arg_0 * 3, "1!", "5!"]
+  pushints 0 2 1 1 5 18446744073709551615 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5, 18446744073709551615]
+  store 1                                 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5]
+  load 1                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5, 18446744073709551615]
+  stores                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1]
+  load 1                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 18446744073709551615]
+  store 1                                 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1]
+  retsub
+
+end:
+  int 1
+  return
+`
+
+func TestFrameBuryDigStackTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		applicationArg := 10
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   0,
+			ApprovalProgram: FrameBuryDigProgram,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+		payment := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance,
+		})
+		callTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{{byte(applicationArg)}},
+		})
+		txntest.Group(&createTxn, &payment, &callTxn)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedPay := payment.Txn().Sign(sender.Sk)
+		signedAppCall := callTxn.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedPay, signedAppCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 5,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC:         4,
+											StackAdded: goValuesToTealValues(0),
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC:         90,
+											StackAdded: goValuesToTealValues(1),
+										},
+										{
+											PC:            91,
+											StackAdded:    goValuesToTealValues(1),
+											StackPopCount: 1,
+										},
+									},
+								},
+							},
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											Logs: []string{
+												string(uint64ToBytes(uint64(applicationArg * 3))),
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 39,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC:         4,
+											StackAdded: goValuesToTealValues(futureAppID),
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC:         9,
+											StackAdded: goValuesToTealValues(1),
+										},
+										{
+											PC:         11,
+											StackAdded: goValuesToTealValues(1),
+										},
+										{
+											PC:            12,
+											StackAdded:    goValuesToTealValues(1),
+											StackPopCount: 2,
+										},
+										{
+											PC:            13,
+											StackPopCount: 1,
+										},
+										{
+											PC:         14,
+											StackAdded: goValuesToTealValues([]byte{byte(applicationArg)}),
+										},
+										{
+											PC:            17,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 1,
+										},
+										// call sub
+										{
+											PC: 18,
+										},
+										// proto
+										{
+											PC: 26,
+										},
+										{
+											PC:         29,
+											StackAdded: goValuesToTealValues(0),
+										},
+										// dup
+										{
+											PC:            31,
+											StackAdded:    goValuesToTealValues(0, 0),
+											StackPopCount: 1,
+										},
+										// dupn 4
+										{
+											PC:            32,
+											StackAdded:    goValuesToTealValues(0, 0, 0, 0, 0),
+											StackPopCount: 1,
+										},
+										// frame_dig -1
+										{
+											PC:            34,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
+										},
+										// frame_bury 0
+										{
+											PC:            36,
+											StackAdded:    goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
+											StackPopCount: 7,
+										},
+										// dig 5
+										{
+											PC:            38,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
+										},
+										// cover 5
+										{
+											PC:            40,
+											StackAdded:    goValuesToTealValues(applicationArg, 0, 0, 0, 0, 0),
+											StackPopCount: 6,
+										},
+										// frame_dig 0
+										{
+											PC:            42,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
+										},
+										// frame_dig 1
+										{
+											PC:            44,
+											StackAdded:    goValuesToTealValues(applicationArg),
+											StackPopCount: 0,
+										},
+										// +
+										{
+											PC:            46,
+											StackAdded:    goValuesToTealValues(applicationArg * 2),
+											StackPopCount: 2,
+										},
+										// bury 7
+										{
+											PC:            47,
+											StackAdded:    goValuesToTealValues(applicationArg*2, applicationArg, 0, 0, 0, 0, 0),
+											StackPopCount: 8,
+										},
+										// popn 5
+										{
+											PC:            49,
+											StackPopCount: 5,
+										},
+										// uncover 1
+										{
+											PC:            51,
+											StackPopCount: 2,
+											StackAdded:    goValuesToTealValues(applicationArg, applicationArg*2),
+										},
+										// swap
+										{
+											PC:            53,
+											StackAdded:    goValuesToTealValues(applicationArg*2, applicationArg),
+											StackPopCount: 2,
+										},
+										// +
+										{
+											PC:            54,
+											StackAdded:    goValuesToTealValues(applicationArg * 3),
+											StackPopCount: 2,
+										},
+										// pushbytess "1!" "5!"
+										{
+											PC:         55,
+											StackAdded: goValuesToTealValues("1!", "5!"),
+										},
+										// pushints 0 2 1 1 5 18446744073709551615
+										{
+											PC:         63,
+											StackAdded: goValuesToTealValues(0, 2, 1, 1, 5, uint64(math.MaxUint64)),
+										},
+										// store 1
+										{
+											PC:            80,
+											StackPopCount: 1,
+											ScratchSlotChanges: []simulation.ScratchChange{
+												{
+													Slot:     1,
+													NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+												},
+											},
+										},
+										// load 1
+										{
+											PC:         82,
+											StackAdded: goValuesToTealValues(uint64(math.MaxUint64)),
+										},
+										// stores
+										{
+											PC:            84,
+											StackPopCount: 2,
+											ScratchSlotChanges: []simulation.ScratchChange{
+												{
+													Slot:     5,
+													NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+												},
+											},
+										},
+										// load 1
+										{
+											PC:         85,
+											StackAdded: goValuesToTealValues(uint64(math.MaxUint64)),
+										},
+										// store 1
+										{
+											PC:            87,
+											StackPopCount: 1,
+											ScratchSlotChanges: []simulation.ScratchChange{
+												{
+													Slot:     1,
+													NewValue: goValuesToTealValues(uint64(math.MaxUint64))[0],
+												},
+											},
+										},
+										// retsub
+										{
+											PC:            89,
+											StackAdded:    goValuesToTealValues(applicationArg * 3),
+											StackPopCount: 8,
+										},
+										// itob
+										{
+											PC:            21,
+											StackAdded:    goValuesToTealValues(uint64ToBytes(uint64(applicationArg) * 3)),
+											StackPopCount: 1,
+										},
+										// log
+										{
+											PC:            22,
+											StackPopCount: 1,
+										},
+										// b end
+										{
+											PC: 23,
+										},
+										// int 1
+										{
+											PC:         90,
+											StackAdded: goValuesToTealValues(1),
+										},
+										// return
+										{
+											PC:            91,
+											StackAdded:    goValuesToTealValues(1),
+											StackPopCount: 1,
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 44,
+					},
+				},
+			},
 		}
 	})
 }
@@ -1634,7 +3023,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 	defer env.Close()
-	s := simulation.MakeSimulator(env.Ledger)
+	s := simulation.MakeSimulator(env.Ledger, false)
 	sender := env.Accounts[0]
 
 	stxn := env.TxnInfo.NewTxn(txntest.Txn{

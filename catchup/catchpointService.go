@@ -156,11 +156,19 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 }
 
 // Start starts the catchpoint catchup service ( continue in the process )
-func (cs *CatchpointCatchupService) Start(ctx context.Context) {
+func (cs *CatchpointCatchupService) Start(ctx context.Context) error {
+	// Only check catchpoint ledger validity if we're starting new
+	if cs.stage == ledger.CatchpointCatchupStateInactive {
+		err := cs.checkLedgerDownload()
+		if err != nil {
+			return fmt.Errorf("aborting catchup Start(): %s", err)
+		}
+	}
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(ctx)
 	cs.abortCtx, cs.abortCtxFunc = context.WithCancel(context.Background())
 	cs.running.Add(1)
 	go cs.run()
+	return nil
 }
 
 // Abort aborts the catchpoint catchup process
@@ -802,4 +810,27 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
 			})
 	}
+}
+
+// checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
+// before actually starting the catchup process.
+// The error returned is either from an unsuccessful request or a successful request that did not return a 200.
+func (cs *CatchpointCatchupService) checkLedgerDownload() error {
+	round, _, err := ledgercore.ParseCatchpointLabel(cs.stats.CatchpointLabel)
+	if err != nil {
+		return fmt.Errorf("failed to parse catchpoint label : %v", err)
+	}
+	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
+	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
+	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
+		psp, peerError := peerSelector.getNextPeer()
+		if peerError != nil {
+			return err
+		}
+		err = ledgerFetcher.headLedger(context.Background(), psp.Peer, round)
+		if err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("checkLedgerDownload(): catchpoint '%s' unavailable from peers: %s", cs.stats.CatchpointLabel, err)
 }

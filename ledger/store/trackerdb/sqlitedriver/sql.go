@@ -30,7 +30,6 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt     *sql.Stmt
 	lookupAccountStmt      *sql.Stmt
 	lookupResourcesStmt    *sql.Stmt
 	lookupAllResourcesStmt *sql.Stmt
@@ -53,7 +52,7 @@ type accountsSQLWriter struct {
 }
 
 type onlineAccountsSQLWriter struct {
-	insertStmt, updateStmt *sql.Stmt
+	insertStmt *sql.Stmt
 }
 
 type sqlRowRef struct {
@@ -69,11 +68,6 @@ func (ref sqlRowRef) CreatableRefMarker()     {}
 func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
-
-	qs.listCreatablesStmt, err = q.Prepare("SELECT acctrounds.rnd, assetcreators.asset, assetcreators.creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
-	if err != nil {
-		return nil, err
-	}
 
 	qs.lookupAccountStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, accountbase.data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
 	if err != nil {
@@ -131,16 +125,11 @@ func OnlineAccountsInitDbQueries(r db.Queryable) (*onlineAccountsDbQueries, erro
 }
 
 // MakeOnlineAccountsSQLWriter constructs an OnlineAccountsWriter backed by sql queries.
-func MakeOnlineAccountsSQLWriter(tx *sql.Tx, hasAccounts bool) (w *onlineAccountsSQLWriter, err error) {
+func MakeOnlineAccountsSQLWriter(e db.Executable, hasAccounts bool) (w *onlineAccountsSQLWriter, err error) {
 	w = new(onlineAccountsSQLWriter)
 
 	if hasAccounts {
-		w.insertStmt, err = tx.Prepare("INSERT INTO onlineaccounts (address, normalizedonlinebalance, data, updround, votelastvalid) VALUES (?, ?, ?, ?, ?)")
-		if err != nil {
-			return
-		}
-
-		w.updateStmt, err = tx.Prepare("UPDATE onlineaccounts SET normalizedonlinebalance = ?, data = ?, updround = ?, votelastvalid =? WHERE rowid = ?")
+		w.insertStmt, err = e.Prepare("INSERT INTO onlineaccounts (address, normalizedonlinebalance, data, updround, votelastvalid) VALUES (?, ?, ?, ?, ?)")
 		if err != nil {
 			return
 		}
@@ -150,99 +139,66 @@ func MakeOnlineAccountsSQLWriter(tx *sql.Tx, hasAccounts bool) (w *onlineAccount
 }
 
 // MakeAccountsSQLWriter constructs an AccountsWriter backed by sql queries.
-func MakeAccountsSQLWriter(tx *sql.Tx, hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (w *accountsSQLWriter, err error) {
+func MakeAccountsSQLWriter(e db.Executable, hasAccounts, hasResources, hasKvPairs, hasCreatables bool) (w *accountsSQLWriter, err error) {
 	w = new(accountsSQLWriter)
 
 	if hasAccounts {
-		w.deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
+		w.deleteByRowIDStmt, err = e.Prepare("DELETE FROM accountbase WHERE rowid=?")
 		if err != nil {
 			return
 		}
 
-		w.insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+		w.insertStmt, err = e.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
 		if err != nil {
 			return
 		}
 
-		w.updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
+		w.updateStmt, err = e.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
 		if err != nil {
 			return
 		}
 	}
 
 	if hasResources {
-		w.deleteResourceStmt, err = tx.Prepare("DELETE FROM resources WHERE addrid = ? AND aidx = ?")
+		w.deleteResourceStmt, err = e.Prepare("DELETE FROM resources WHERE addrid = ? AND aidx = ?")
 		if err != nil {
 			return
 		}
 
-		w.insertResourceStmt, err = tx.Prepare("INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
+		w.insertResourceStmt, err = e.Prepare("INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
 		if err != nil {
 			return
 		}
 
-		w.updateResourceStmt, err = tx.Prepare("UPDATE resources SET data = ? WHERE addrid = ? AND aidx = ?")
+		w.updateResourceStmt, err = e.Prepare("UPDATE resources SET data = ? WHERE addrid = ? AND aidx = ?")
 		if err != nil {
 			return
 		}
 	}
 
 	if hasKvPairs {
-		w.upsertKvPairStmt, err = tx.Prepare("INSERT INTO kvstore (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+		w.upsertKvPairStmt, err = e.Prepare("INSERT INTO kvstore (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
 		if err != nil {
 			return
 		}
 
-		w.deleteKvPairStmt, err = tx.Prepare("DELETE FROM kvstore WHERE key=?")
+		w.deleteKvPairStmt, err = e.Prepare("DELETE FROM kvstore WHERE key=?")
 		if err != nil {
 			return
 		}
 	}
 
 	if hasCreatables {
-		w.insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
+		w.insertCreatableIdxStmt, err = e.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
 		if err != nil {
 			return
 		}
 
-		w.deleteCreatableIdxStmt, err = tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
+		w.deleteCreatableIdxStmt, err = e.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
 		if err != nil {
 			return
 		}
 	}
-	return
-}
-
-// ListCreatables returns an array of CreatableLocator which have CreatableIndex smaller or equal to maxIdx and are of the provided CreatableType.
-func (qs *accountsDbQueries) ListCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
-	err = db.Retry(func() error {
-		// Query for assets in range
-		rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-
-		// For each row, copy into a new CreatableLocator and append to results
-		var buf []byte
-		var cl basics.CreatableLocator
-		var creatableIndex sql.NullInt64
-		for rows.Next() {
-			err = rows.Scan(&dbRound, &creatableIndex, &buf)
-			if err != nil {
-				return err
-			}
-			if !creatableIndex.Valid {
-				// we received an entry without any index. This would happen only on the first entry when there are no creatables of the requested type.
-				break
-			}
-			cl.Index = basics.CreatableIndex(creatableIndex.Int64)
-			copy(cl.Creator[:], buf)
-			cl.Type = ctype
-			results = append(results, cl)
-		}
-		return nil
-	})
 	return
 }
 
@@ -476,6 +432,9 @@ func (qs *accountsDbQueries) LookupAccount(addr basics.Address) (data trackerdb.
 				data.Ref = sqlRowRef{rowid.Int64}
 				err = protocol.Decode(buf, &data.AccountData)
 				return err
+			} else if len(buf) == 0 && rowid.Valid {
+				// we are sure empty valid accounts do not exist in the database.
+				return fmt.Errorf("account %v exists but has no data in the database", addr)
 			}
 			// we don't have that account, just return the database round.
 			return nil
@@ -522,13 +481,15 @@ func (qs *onlineAccountsDbQueries) LookupOnline(addr basics.Address, rnd basics.
 	return
 }
 
-func (qs *onlineAccountsDbQueries) LookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
+func (qs *onlineAccountsDbQueries) LookupOnlineRoundParams(round basics.Round) (ledgercore.OnlineRoundParamsData, error) {
 	data := ledgercore.OnlineRoundParamsData{}
 	err := db.Retry(func() error {
 		row := qs.lookupOnlineTotalsStmt.QueryRow(round)
 		var buf []byte
 		err := row.Scan(&buf)
-		if err != nil {
+		if err == sql.ErrNoRows {
+			return trackerdb.ErrNotFound
+		} else if err != nil {
 			return err
 		}
 		err = protocol.Decode(buf, &data)
@@ -537,7 +498,10 @@ func (qs *onlineAccountsDbQueries) LookupOnlineTotalsHistory(round basics.Round)
 		}
 		return nil
 	})
-	return basics.MicroAlgos{Raw: data.OnlineSupply}, err
+	if err != nil {
+		return ledgercore.OnlineRoundParamsData{}, err
+	}
+	return data, nil
 }
 
 func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (result []trackerdb.PersistedOnlineAccountData, rnd basics.Round, err error) {
@@ -552,7 +516,7 @@ func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 			var buf []byte
 			data := trackerdb.PersistedOnlineAccountData{}
 			var rowid int64
-			err := rows.Scan(&rowid, &data.UpdRound, &rnd, &buf)
+			err = rows.Scan(&rowid, &data.UpdRound, &rnd, &buf)
 			if err != nil {
 				return err
 			}
@@ -564,14 +528,13 @@ func (qs *onlineAccountsDbQueries) LookupOnlineHistory(addr basics.Address) (res
 			data.Addr = addr
 			result = append(result, data)
 		}
-		return err
+		return nil
 	})
 	return
 }
 
 func (qs *accountsDbQueries) Close() {
 	preparedQueries := []**sql.Stmt{
-		&qs.listCreatablesStmt,
 		&qs.lookupAccountStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,

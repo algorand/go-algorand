@@ -36,17 +36,19 @@ The following environment variables can be supplied. Except when noted, it is po
 
 | Variable | Description |
 | -------- | ----------- |
-| NETWORK        | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
-| PROFILE        | If set, initializes the config.json file according to the given profile. |
-| DEV_MODE       | If set to 1 on a private network, enable dev mode. Only used during data directory initialization.                                                  |
-| START_KMD      | When set to 1, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION.                                                            |
-| FAST_CATCHUP   | If set to 1 on a public network, attempt to start fast-catchup during initial config.                                                               |
-| TOKEN          | If set, overrides the REST API token.                                                                                                               |
-| ADMIN_TOKEN    | If set, overrides the REST API admin token.                                                                                                         |
-| KMD_TOKEN      | If set along with `START_KMD`, override the KMD REST API token.                                                                                     |
-| TELEMETRY_NAME | If set on a public network, telemetry is reported with this name.                                                                                   |
-| NUM_ROUNDS     | If set on a private network, override default of 30000 participation keys.                                                                          |
-| PEER_ADDRESS   | If set, override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)                                              |
+| NETWORK         | Leave blank for a private network, otherwise specify one of mainnet, betanet, testnet, or devnet. Only used during a data directory initialization. |
+| PROFILE         | If set, initializes the config.json file according to the given profile. |
+| DEV_MODE        | If set to 1 on a private network, enable dev mode. Only used during data directory initialization.                                                  |
+| START_KMD       | When set to 1, start kmd service with no timeout. THIS SHOULD NOT BE USED IN PRODUCTION.                                                            |
+| FAST_CATCHUP    | If set to 1 on a public network, attempt to start fast-catchup during initial config.                                                               |
+| TOKEN           | If set, overrides the REST API token.                                                                                                               |
+| ADMIN_TOKEN     | If set, overrides the REST API admin token.                                                                                                         |
+| KMD_TOKEN       | If set along with `START_KMD`, override the KMD REST API token.                                                                                     |
+| TELEMETRY_NAME  | If set on a public network, telemetry is reported with this name.                                                                                   |
+| NUM_ROUNDS      | If set on a private network, override default of 30000 participation keys.                                                                          |
+| GENESIS_ADDRESS | If set, use this API address to initialize the genesis file. |
+| PEER_ADDRESS    | If set, override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)                                              |
+| GOSSIP_PORT     | If set, configure the node to listen for external connections on this address. For example "4161" |
 
 ### Special Files
 
@@ -58,7 +60,7 @@ Configuration can be modified by specifying certain files. These can be changed 
 | /etc/algorand/algod.token | Override default randomized REST API token. |
 | /etc/algorand/algod.admin.token | Override default randomized REST API admin token. |
 | /etc/algorand/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
- | /etc/algorand/template.json | Override default private network topology. One of the nodes in the template must be named "data".| 
+ | /etc/algorand/template.json | Override default private network topology. One of the nodes in the template must be named "data".|
 
 ## Example Configuration
 

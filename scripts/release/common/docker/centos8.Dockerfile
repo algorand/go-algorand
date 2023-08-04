@@ -2,7 +2,7 @@ FROM quay.io/centos/centos:stream8
 
 WORKDIR /root
 RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
-    dnf install -y autoconf awscli curl git gnupg2 nfs-utils python36 sqlite boost-devel expect jq libtool gcc-c++ libstdc++-devel rpmdevtools createrepo rpm-sign bzip2 which && \
+    dnf install -y autoconf awscli curl git gnupg2 nfs-utils python36 expect jq libtool gcc-c++ libstdc++-devel rpmdevtools createrepo rpm-sign bzip2 which && \
     dnf -y --enablerepo=powertools install libstdc++-static
 
 RUN echo "${BOLD}Downloading and installing binaries...${RESET}" && \

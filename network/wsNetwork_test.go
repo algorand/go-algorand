@@ -30,6 +30,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -37,6 +38,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/internal/rapidgen"
+	"pgregory.net/rapid"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,11 +61,6 @@ import (
 const sendBufferLength = 1000
 
 const genesisID = "go-test-network-genesis"
-
-func init() {
-	// this allows test code to use out-of-protocol message tags and have them go through
-	allowCustomTags = true
-}
 
 func TestMain(m *testing.M) {
 	logging.Base().SetLevel(logging.Debug)
@@ -126,7 +125,7 @@ func init() {
 
 func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...testWebsocketOption) *WebsocketNetwork {
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Level(conf.BaseLoggerDebugLevel))
+	log.SetLevel(logging.Warn)
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    conf,
@@ -299,10 +298,16 @@ func netStop(t testing.TB, wn *WebsocketNetwork, name string) {
 }
 
 func setupWebsocketNetworkAB(t *testing.T, countTarget int) (*WebsocketNetwork, *WebsocketNetwork, *messageCounterHandler, func()) {
+	return setupWebsocketNetworkABwithLogger(t, countTarget, nil)
+}
+func setupWebsocketNetworkABwithLogger(t *testing.T, countTarget int, log logging.Logger) (*WebsocketNetwork, *WebsocketNetwork, *messageCounterHandler, func()) {
 	success := false
 
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
+	if log != nil {
+		netA.log = log
+	}
 	netA.Start()
 	defer func() {
 		if !success {
@@ -310,6 +315,9 @@ func setupWebsocketNetworkAB(t *testing.T, countTarget int) (*WebsocketNetwork, 
 		}
 	}()
 	netB := makeTestWebsocketNode(t)
+	if log != nil {
+		netB.log = log
+	}
 	netB.config.GossipFanout = 1
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
@@ -355,38 +363,55 @@ func TestWebsocketNetworkBasic(t *testing.T) {
 	}
 }
 
-// Set up two nodes, test that B drops invalid tags when A ends them.
-func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest // changes global variable allowCustomTags
-	partitiontest.PartitionTest(t)
-	// disallow custom tags for this test
-	allowCustomTags = false
-	defaultSendMessageTags["XX"] = true
-	defer func() {
-		allowCustomTags = true
-		delete(defaultSendMessageTags, "XX")
-	}()
+type mutexBuilder struct {
+	logOutput strings.Builder
+	mu        deadlock.Mutex
+}
 
-	netA, netB, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
+func (lw *mutexBuilder) Write(p []byte) (n int, err error) {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+	return lw.logOutput.Write(p)
+}
+func (lw *mutexBuilder) String() string {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+	return lw.logOutput.String()
+}
+
+// Set up two nodes, test that the connection between A and B is not established.
+func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest // changes global variable defaultSendMessageTags
+	partitiontest.PartitionTest(t)
+	defaultSendMessageTagsOriginal := defaultSendMessageTags
+	defaultSendMessageTags = map[protocol.Tag]bool{"XX": true, "MI": true}
+	defer func() {
+		defaultSendMessageTags = defaultSendMessageTagsOriginal
+	}()
+	var logOutput mutexBuilder
+	log := logging.TestingLog(t)
+	log.SetOutput(&logOutput)
+	log.SetLevel(logging.Level(logging.Debug))
+	netA, netB, counter, closeFunc := setupWebsocketNetworkABwithLogger(t, 0, log)
+
 	defer closeFunc()
-	counterDone := counter.done
-	// register a handler that should never get called, because the message will
-	// be dropped before it gets to the handlers if allowCustomTags = false
+	// register a handler that should never get called, because the message will never be delivered
 	netB.RegisterHandlers([]TaggedMessageHandler{
 		{Tag: "XX", MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
 			require.Fail(t, "MessageHandler for out-of-protocol tag should not be called")
 			return OutgoingMessage{}
 		})}})
-	// send 2 valid and 2 invalid tags
-	netA.Broadcast(context.Background(), "TX", []byte("foo"), false, nil)
+	// send a message with an invalid tag which is in defaultSendMessageTags.
+	// it should not go through because the defaultSendMessageTags should not be accepted
+	// and the connection should be dropped dropped
 	netA.Broadcast(context.Background(), "XX", []byte("foo"), false, nil)
-	netA.Broadcast(context.Background(), "TX", []byte("bar"), false, nil)
-	netA.Broadcast(context.Background(), "XX", []byte("bar"), false, nil)
-
-	select {
-	case <-counterDone:
-	case <-time.After(2 * time.Second):
-		t.Errorf("timeout, count=%d, wanted 2", counter.count)
+	for p := 0; p < 100; p++ {
+		if strings.Contains(logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from") {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
+	require.Contains(t, logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from")
+	require.Equal(t, 0, counter.count)
 }
 
 // Set up two nodes, send proposal
@@ -581,7 +606,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	msgs[50].ctx = ctx
 
 	for _, peer := range peers {
-		peer.sendBufferHighPrio <- sendMessages{msgs}
+		peer.sendBufferHighPrio <- sendMessages{msgs: msgs}
 	}
 
 	select {
@@ -1033,8 +1058,16 @@ func TestDupFilter(t *testing.T) {
 	netC.Start()
 	defer netC.Stop()
 
-	msg := make([]byte, messageFilterSize+1)
-	rand.Read(msg)
+	makeMsg := func(n int) []byte {
+		// We cannot harcode the msgSize to messageFilterSize + 1 because max allowed AV message is smaller  than that.
+		// We also cannot use maxSize for PP since it's a compressible tag but trying to compress random data will expand it.
+		if messageFilterSize+1 < n {
+			n = messageFilterSize + 1
+		}
+		msg := make([]byte, n)
+		rand.Read(msg)
+		return msg
+	}
 
 	readyTimeout := time.NewTimer(2 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
@@ -1050,9 +1083,10 @@ func TestDupFilter(t *testing.T) {
 	// Maybe we should just .Set(0) those counters and use them in this test?
 
 	// This exercise inbound dup detection.
-	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
-	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
-	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
+	avMsg := makeMsg(int(protocol.AgreementVoteTag.MaxMessageSize()))
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, avMsg, true, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, avMsg, true, nil)
+	netA.Broadcast(context.Background(), protocol.AgreementVoteTag, avMsg, true, nil)
 	t.Log("A dup send done")
 
 	select {
@@ -1065,15 +1099,16 @@ func TestDupFilter(t *testing.T) {
 	counter.lock.Unlock()
 
 	// new message
-	rand.Read(msg)
+	debugTag2Msg := makeMsg(int(debugTag2.MaxMessageSize()))
+	t.Logf("debugTag2Msg len %d", len(debugTag2Msg))
 	t.Log("A send, C non-dup-send")
-	netA.Broadcast(context.Background(), debugTag2, msg, true, nil)
+	netA.Broadcast(context.Background(), debugTag2, debugTag2Msg, true, nil)
 	// B should broadcast its non-desire to receive the message again
 	time.Sleep(500 * time.Millisecond)
 
 	// C should now not send these
-	netC.Broadcast(context.Background(), debugTag2, msg, true, nil)
-	netC.Broadcast(context.Background(), debugTag2, msg, true, nil)
+	netC.Broadcast(context.Background(), debugTag2, debugTag2Msg, true, nil)
+	netC.Broadcast(context.Background(), debugTag2, debugTag2Msg, true, nil)
 
 	select {
 	case <-counter2.done:
@@ -1133,6 +1168,16 @@ func TestGetPeers(t *testing.T) {
 	expectAddrs := []string{addrA, "a", "b", "c"}
 	sort.Strings(expectAddrs)
 	assert.Equal(t, expectAddrs, peerAddrs)
+
+	// For now, PeersPhonebookArchivalNodes and PeersPhonebookRelays will return the same set of nodes
+	bPeers2 := netB.GetPeers(PeersPhonebookArchivalNodes)
+	peerAddrs2 := make([]string, len(bPeers2))
+	for pi2, peer2 := range bPeers2 {
+		peerAddrs2[pi2] = peer2.(HTTPPeer).GetAddress()
+	}
+	sort.Strings(peerAddrs2)
+	assert.Equal(t, expectAddrs, peerAddrs2)
+
 }
 
 // confirms that if the config PublicAddress is set to "testing",
@@ -2756,15 +2801,6 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 	assert.Equal(t, 5, int(sum[0]))
 }
 
-var (
-	ft1 = protocol.Tag("F1")
-	ft2 = protocol.Tag("F2")
-	ft3 = protocol.Tag("F3")
-	ft4 = protocol.Tag("F4")
-
-	testTags = []protocol.Tag{ft1, ft2, ft3, ft4}
-)
-
 func waitPeerInternalChanQuiet(t *testing.T, netA *WebsocketNetwork) {
 	// okay, but now we need to wait for asynchronous thread within netA to _apply_ the MOI to its peer for netB...
 	timeout := time.Now().Add(100 * time.Millisecond)
@@ -2803,7 +2839,14 @@ func waitForMOIRefreshQuiet(netB *WebsocketNetwork) {
 // Set up two nodes, have one of them request a certain message tag mask, and verify the other follow that.
 func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	var (
+		ft1 = protocol.Tag("AV")
+		ft2 = protocol.Tag("pj")
+		ft3 = protocol.Tag("NI")
+		ft4 = protocol.Tag("TX")
 
+		testTags = []protocol.Tag{ft1, ft2, ft3, ft4}
+	)
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.config.EnablePingHandler = false
@@ -2817,6 +2860,12 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	require.True(t, postListen)
 	t.Log(addrA)
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+
+	// have netB asking netA to send it ft2, deregister ping handler to make sure that we aren't exceeding the maximum MOI messagesize
+	// Max MOI size is calculated by encoding all of the valid tags, since we are using a custom tag here we must deregister one in the default set.
+	netB.DeregisterMessageInterest(protocol.PingTag)
+	netB.RegisterMessageInterest(ft2)
+
 	netB.Start()
 	defer netStop(t, netB, "B")
 
@@ -2868,6 +2917,10 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
 	netB.RegisterMessageInterest(ft2)
+	netB.DeregisterMessageInterest(ft1)
+	netB.DeregisterMessageInterest(ft3)
+	netB.DeregisterMessageInterest(ft4)
+
 	// send another message which we can track, so that we'll know that the first message was delivered.
 	netB.Broadcast(context.Background(), protocol.VoteBundleTag, []byte{0, 1, 2, 3, 4}, true, nil)
 	messageFilterArriveWg.Wait()
@@ -3141,11 +3194,11 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 
 	netB.OnNetworkAdvance()
 	waitForMOIRefreshQuiet(netB)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		if atomic.LoadUint32(&netB.wantTXGossip) == uint32(wantTXGossipNo) {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	require.Equal(t, uint32(wantTXGossipNo), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
@@ -3246,11 +3299,11 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 
 	netB.OnNetworkAdvance()
 	waitForMOIRefreshQuiet(netB)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		if atomic.LoadUint32(&netB.wantTXGossip) == uint32(wantTXGossipYes) {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	require.Equal(t, uint32(wantTXGossipYes), atomic.LoadUint32(&netB.wantTXGossip))
 	// send another message which we can track, so that we'll know that the first message was delivered.
@@ -3864,8 +3917,7 @@ func TestMaxHeaderSize(t *testing.T) {
 	netA.wsMaxHeaderBytes = wsMaxHeaderBytes
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
-	time.Sleep(250 * time.Millisecond)
-	assert.Equal(t, 1, len(netA.peers))
+	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 
 	netA.removePeer(netA.peers[0], disconnectReasonNone)
 	assert.Zero(t, len(netA.peers))
@@ -3887,8 +3939,7 @@ func TestMaxHeaderSize(t *testing.T) {
 	netA.wsMaxHeaderBytes = 0
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipB)
-	time.Sleep(250 * time.Millisecond)
-	assert.Equal(t, 1, len(netA.peers))
+	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 }
 
 func TestTryConnectEarlyWrite(t *testing.T) {
@@ -3944,4 +3995,602 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 	assert.Len(t, netA.peers, 1)
 	fmt.Printf("MI Message Count: %v\n", netA.peers[0].miMessageCount)
 	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount)
+}
+
+// Test functionality that allows a node to discard a block response that it did not request or that arrived too late.
+// Both cases are tested here by having A send unexpected, late responses to nodes B and C respectively.
+func TestDiscardUnrequestedBlockResponse(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netA"})
+	netA.config.GossipFanout = 1
+
+	netB := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netB"})
+	netB.config.GossipFanout = 1
+
+	netC := makeTestWebsocketNode(t, testWebsocketLogNameOption{"netC"})
+	netC.config.GossipFanout = 1
+
+	netA.Start()
+	defer netA.Stop()
+	netB.Start()
+	defer netB.Stop()
+
+	addrB, ok := netB.Address()
+	require.True(t, ok)
+	gossipB, err := netB.addrToGossipAddr(addrB)
+	require.NoError(t, err)
+
+	netA.wg.Add(1)
+	netA.tryConnect(addrB, gossipB)
+	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
+
+	// send an unrequested block response
+	msg := make([]sendMessage, 1, 1)
+	msg[0] = sendMessage{
+		data:         append([]byte(protocol.TopicMsgRespTag), []byte("foo")...),
+		enqueued:     time.Now(),
+		peerEnqueued: time.Now(),
+		ctx:          context.Background(),
+	}
+	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
+	require.Eventually(t,
+		func() bool {
+			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) == 1
+		},
+		1*time.Second,
+		50*time.Millisecond,
+	)
+
+	// Stop and confirm that we hit the case of disconnecting a peer for sending an unrequested block response
+	require.Zero(t, netB.NumPeers())
+
+	netC.Start()
+	defer netC.Stop()
+
+	addrC, ok := netC.Address()
+	require.True(t, ok)
+	gossipC, err := netC.addrToGossipAddr(addrC)
+	require.NoError(t, err)
+
+	netA.wg.Add(1)
+	netA.tryConnect(addrC, gossipC)
+	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	topics := Topics{
+		MakeTopic("requestDataType",
+			[]byte("a")),
+		MakeTopic(
+			"blockData",
+			[]byte("b")),
+	}
+	// Send a request for a block and cancel it after the handler has been registered
+	go func() {
+		netC.peers[0].Request(ctx, protocol.UniEnsBlockReqTag, topics)
+	}()
+	require.Eventually(
+		t,
+		func() bool {
+			netC.peersLock.RLock()
+			defer netC.peersLock.RUnlock()
+			require.NotEmpty(t, netC.peers)
+			return netC.peers[0].lenResponseChannels() > 0
+		},
+		1*time.Second,
+		50*time.Millisecond,
+	)
+	cancel()
+
+	// confirm that the request was cancelled but that we have registered that we have sent a request
+	require.Eventually(
+		t,
+		func() bool { return netC.peers[0].lenResponseChannels() == 0 },
+		500*time.Millisecond,
+		20*time.Millisecond,
+	)
+	require.Equal(t, atomic.LoadInt64(&netC.peers[0].outstandingTopicRequests), int64(1))
+
+	// Create a buffer to monitor log output from netC
+	logBuffer := bytes.NewBuffer(nil)
+	netC.log.SetOutput(logBuffer)
+
+	// send a late TS response from A -> C
+	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
+	require.Eventually(
+		t,
+		func() bool { return atomic.LoadInt64(&netC.peers[0].outstandingTopicRequests) == int64(0) },
+		500*time.Millisecond,
+		20*time.Millisecond,
+	)
+
+	// Stop and confirm that we hit the case of disconnecting a peer for sending a stale block response
+	netC.Stop()
+	lg := logBuffer.String()
+	require.Contains(t, lg, "wsPeer readLoop: received a TS response for a stale request ")
+}
+
+func customNetworkIDGen(networkID protocol.NetworkID) *rapid.Generator[protocol.NetworkID] {
+	return rapid.Custom(func(t *rapid.T) protocol.NetworkID {
+		// Unused/satisfying rapid requirement
+		rapid.String().Draw(t, "networkIDGen")
+		return networkID
+	})
+}
+
+// The hardcoded network IDs just make testing this function more difficult with no confidence gain (the custom logic
+// is already exercised well in the dnsbootstrap parsing tests).
+func nonHardcodedNetworkIDGen() *rapid.Generator[protocol.NetworkID] {
+	return rapid.OneOf(customNetworkIDGen(config.Testnet), customNetworkIDGen(config.Mainnet),
+		customNetworkIDGen(config.Devtestnet))
+}
+
+/*
+Basic exercise of the refreshRelayArchivePhonebookAddresses function, uses base / expected cases, relying  on neighboring
+unit tests to cover the merge and phonebook update logic.
+*/
+func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+	var refreshRelayDNSBootstrapID = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		refreshTestConf := defaultConfig
+		refreshTestConf.DNSBootstrapID = refreshRelayDNSBootstrapID
+		netA = makeTestWebsocketNodeWithConfig(t, refreshTestConf)
+		netA.NetworkID = nonHardcodedNetworkIDGen().Draw(t1, "network")
+
+		primarySRVBootstrap := strings.Replace("<network>.algorand.network", "<network>", string(netA.NetworkID), -1)
+		backupSRVBootstrap := strings.Replace("<network>.algorand.net", "<network>", string(netA.NetworkID), -1)
+		var primaryRelayResolvedRecords []string
+		var secondaryRelayResolvedRecords []string
+		var primaryArchiveResolvedRecords []string
+		var secondaryArchiveResolvedRecords []string
+
+		for _, record := range []string{"r1.algorand-<network>.network",
+			"r2.algorand-<network>.network", "r3.algorand-<network>.network"} {
+			var recordSub = strings.Replace(record, "<network>", string(netA.NetworkID), -1)
+			primaryRelayResolvedRecords = append(primaryRelayResolvedRecords, recordSub)
+			secondaryRelayResolvedRecords = append(secondaryRelayResolvedRecords, strings.Replace(recordSub, "network", "net", -1))
+		}
+
+		for _, record := range []string{"r1archive.algorand-<network>.network",
+			"r2archive.algorand-<network>.network", "r3archive.algorand-<network>.network"} {
+			var recordSub = strings.Replace(record, "<network>", string(netA.NetworkID), -1)
+			primaryArchiveResolvedRecords = append(primaryArchiveResolvedRecords, recordSub)
+			secondaryArchiveResolvedRecords = append(secondaryArchiveResolvedRecords, strings.Replace(recordSub, "network", "net", -1))
+		}
+
+		// Mock the SRV record lookup
+		netA.resolveSRVRecords = func(service string, protocol string, name string, fallbackDNSResolverAddress string,
+			secure bool) (addrs []string, err error) {
+			if service == "algobootstrap" && protocol == "tcp" && name == primarySRVBootstrap {
+				return primaryRelayResolvedRecords, nil
+			} else if service == "algobootstrap" && protocol == "tcp" && name == backupSRVBootstrap {
+				return secondaryRelayResolvedRecords, nil
+			}
+
+			if service == "archive" && protocol == "tcp" && name == primarySRVBootstrap {
+				return primaryArchiveResolvedRecords, nil
+			} else if service == "archive" && protocol == "tcp" && name == backupSRVBootstrap {
+				return secondaryArchiveResolvedRecords, nil
+			}
+
+			return
+		}
+
+		relayPeers := netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, 0, len(relayPeers))
+
+		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, 0, len(archivePeers))
+
+		netA.refreshRelayArchivePhonebookAddresses()
+
+		relayPeers = netA.GetPeers(PeersPhonebookRelays)
+
+		assert.Equal(t, 3, len(relayPeers))
+		relayAddrs := make([]string, 0, len(relayPeers))
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, primaryRelayResolvedRecords, relayAddrs)
+
+		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+
+		// For the time being, we do not dedup resolved archive nodes
+		assert.Equal(t, 6, len(archivePeers))
+
+		archiveAddrs := make([]string, 0, len(archivePeers))
+		for _, peer := range archivePeers {
+			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, append(primaryArchiveResolvedRecords, secondaryArchiveResolvedRecords...), archiveAddrs)
+
+	})
+}
+
+/*
+Exercises the updatePhonebookAddresses function, notably with different variations of valid relay and
+archival addresses.
+*/
+func TestUpdatePhonebookAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+		relayPeers := netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, 0, len(relayPeers))
+
+		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, 0, len(archivePeers))
+
+		domainGen := rapidgen.Domain()
+
+		// Generate between 0 and N examples - if no dups, should end up in phonebook
+		relayDomainsGen := rapid.SliceOfN(domainGen, 0, 200)
+
+		relayDomains := relayDomainsGen.Draw(t1, "relayDomains")
+
+		// Dont overlap with relays, duplicates between them not stored in phonebook as of this writing
+		archiveDomainsGen := rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", relayDomains), 0, 200)
+		archiveDomains := archiveDomainsGen.Draw(t1, "archiveDomains")
+		netA.updatePhonebookAddresses(relayDomains, archiveDomains)
+
+		// Check that entries are in fact in phonebook less any duplicates
+		dedupedRelayDomains := removeDuplicateStr(relayDomains, false)
+		dedupedArchiveDomains := removeDuplicateStr(archiveDomains, false)
+
+		relayPeers = netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
+
+		relayAddrs := make([]string, 0, len(relayPeers))
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
+
+		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
+
+		archiveAddrs := make([]string, 0, len(archivePeers))
+		for _, peer := range archivePeers {
+			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
+
+		// Generate fresh set of addresses with a duplicate from original batch if warranted,
+		// assert phonebook reflects fresh list / prior peers other than selected duplicate
+		// are not present
+		var priorRelayDomains = relayDomains
+
+		// Dont overlap with archive nodes previously specified, duplicates between them not stored in phonebook as of this writing
+		relayDomainsGen = rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", archiveDomains), 0, 200)
+		relayDomains = relayDomainsGen.Draw(t1, "relayDomains")
+
+		// Randomly select a prior relay domain
+		if len(priorRelayDomains) > 0 {
+			priorIdx := rapid.IntRange(0, len(priorRelayDomains)-1).Draw(t1, "")
+			relayDomains = append(relayDomains, priorRelayDomains[priorIdx])
+		}
+
+		netA.updatePhonebookAddresses(relayDomains, nil)
+
+		// Check that entries are in fact in phonebook less any duplicates
+		dedupedRelayDomains = removeDuplicateStr(relayDomains, false)
+
+		relayPeers = netA.GetPeers(PeersPhonebookRelays)
+		assert.Equal(t, len(dedupedRelayDomains), len(relayPeers))
+
+		relayAddrs = nil
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
+
+		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
+
+		archiveAddrs = nil
+		for _, peer := range archivePeers {
+			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
+	})
+}
+
+func removeDuplicateStr(strSlice []string, lowerCase bool) []string {
+	allKeys := make(map[string]bool)
+	var dedupStrSlice = make([]string, 0)
+	for _, item := range strSlice {
+		if lowerCase {
+			item = strings.ToLower(item)
+		}
+		if _, exists := allKeys[item]; !exists {
+			allKeys[item] = true
+			dedupStrSlice = append(dedupStrSlice, item)
+		}
+	}
+	return dedupStrSlice
+}
+
+func replaceAllIn(strSlice []string, strToReplace string, newStr string) []string {
+	var subbedStrSlice = make([]string, 0)
+	for _, item := range strSlice {
+		item = strings.ReplaceAll(item, strToReplace, newStr)
+		subbedStrSlice = append(subbedStrSlice, item)
+	}
+
+	return subbedStrSlice
+}
+
+func supportedNetworkGen() *rapid.Generator[string] {
+	return rapid.OneOf(rapid.StringMatching(string(config.Testnet)), rapid.StringMatching(string(config.Mainnet)),
+		rapid.StringMatching(string(config.Devnet)), rapid.StringMatching(string(config.Betanet)),
+		rapid.StringMatching(string(config.Alphanet)), rapid.StringMatching(string(config.Devtestnet)))
+}
+
+func TestMergePrimarySecondaryRelayAddressListsMinOverlap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+
+		network := supportedNetworkGen().Draw(t1, "network")
+		dedupExp := regexp.MustCompile(strings.Replace(
+			`(algorand-<network>.(network|net))`, "<network>", network, -1))
+		domainPortGen := rapidgen.DomainWithPort()
+
+		// Generate between 0 and N examples - if no dups, should end up in phonebook
+		domainsGen := rapid.SliceOfN(domainPortGen, 0, 200)
+
+		primaryRelayAddresses := domainsGen.Draw(t1, "primaryRelayAddresses")
+		secondaryRelayAddresses := domainsGen.Draw(t1, "secondaryRelayAddresses")
+
+		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
+
+		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, secondaryRelayAddresses...), true)
+
+		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
+	})
+}
+
+type MergeTestDNSInputs struct {
+	dedupExpStr string
+
+	primaryDomainSuffix string
+
+	secondaryDomainSuffix string
+}
+
+func mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen() *rapid.Generator[*MergeTestDNSInputs] {
+
+	algorand0Base := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
+		//unused/satisfying rapid expectation
+		rapid.String().Draw(t, "algorand0Base")
+		// <network>.algorand.network?backup=<network>.algorand0.network&
+		//		dedup=<name>.(algorand-<network>|n-<network>.algorand0).network
+		return &MergeTestDNSInputs{
+			dedupExpStr:           "((algorand-<network>|n-<network>.algorand0).network)",
+			primaryDomainSuffix:   "algorand-<network>.network",
+			secondaryDomainSuffix: "n-<network>.algorand0.network",
+		}
+	})
+
+	algorand0Inverse := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
+		//unused/satisfying rapid expectation
+		rapid.String().Draw(t, "algorand0Inverse")
+		// <network>.algorand0.network?backup=<network>.algorand.network&
+		//		dedup=<name>.(algorand-<network>|n-<network>.algorand0).network
+		return &MergeTestDNSInputs{
+			dedupExpStr:           "((algorand-<network>|n-<network>.algorand0).network)",
+			primaryDomainSuffix:   "n-<network>.algorand0.network",
+			secondaryDomainSuffix: "algorand-<network>.network",
+		}
+	})
+
+	algorandNetBase := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
+		//unused/satisfying rapid expectation
+		rapid.String().Draw(t, "algorandNetBase")
+		//<network>.algorand.network?backup=<network>.algorand.net
+		//			dedup=<name>.algorand-<network>.(network|net)
+		return &MergeTestDNSInputs{
+			dedupExpStr:           "(algorand-<network>.(network|net))",
+			primaryDomainSuffix:   "algorand-<network>.network",
+			secondaryDomainSuffix: "algorand-<network>.net",
+		}
+	})
+
+	algorandNetInverse := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
+		//unused/satisfying rapid expectation
+		rapid.String().Draw(t, "algorandNetInverse")
+		//<network>.algorand.net?backup=<network>.algorand.network" +
+		//			"&dedup=<name>.algorand-<network>.(network|net)
+		return &MergeTestDNSInputs{
+			dedupExpStr:           "(algorand-<network>.(network|net))",
+			primaryDomainSuffix:   "algorand-<network>.net",
+			secondaryDomainSuffix: "algorand-<network>.network",
+		}
+	})
+
+	return rapid.OneOf(algorand0Base, algorand0Inverse, algorandNetBase, algorandNetInverse)
+}
+
+func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+
+		network := supportedNetworkGen().Draw(t1, "network")
+		mergeTestInputs := mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen().Draw(t1, "mergeTestInputs")
+
+		dedupExp := regexp.MustCompile(strings.Replace(
+			mergeTestInputs.dedupExpStr, "<network>", network, -1))
+		primaryDomainSuffix := strings.Replace(
+			mergeTestInputs.primaryDomainSuffix, "<network>", network, -1)
+
+		// Generate hosts for a primary network domain
+		primaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(primaryDomainSuffix, nil)
+		primaryDomainsGen := rapid.SliceOfN(primaryNetworkDomainGen, 0, 200)
+
+		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses")
+
+		secondaryDomainSuffix := strings.Replace(
+			mergeTestInputs.secondaryDomainSuffix, "<network>", network, -1)
+		// Generate these addresses from primary ones, find/replace domain suffix appropriately
+		secondaryRelayAddresses := replaceAllIn(primaryRelayAddresses, primaryDomainSuffix, secondaryDomainSuffix)
+		// Add some generated addresses to secondary list - to simplify verification further down
+		// (substituting suffixes, etc), we dont want the generated addresses to duplicate any of
+		// the replaced secondary ones
+		secondaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(secondaryDomainSuffix, secondaryRelayAddresses)
+		secondaryDomainsGen := rapid.SliceOfN(secondaryNetworkDomainGen, 0, 200)
+		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses")
+		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
+
+		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
+
+		// We expect the primary addresses to take precedence over a "matching" secondary address, randomly generated
+		// secondary addresses should be present in the merged slice
+		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, generatedSecondaryRelayAddresses...), true)
+
+		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
+	})
+}
+
+// Case where a "backup" network is specified, but no dedup expression is provided. Technically possible,
+// but there is little benefit vs specifying them as separate `;` separated addresses in DNSBootrstrapID.
+func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	var netA *WebsocketNetwork
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		netA = makeTestWebsocketNode(t)
+
+		network := supportedNetworkGen().Draw(t1, "network")
+		primaryDomainSuffix := strings.Replace(
+			`n-<network>.algorand0.network`, "<network>", network, -1)
+
+		// Generate hosts for a primary network domain
+		primaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(primaryDomainSuffix, nil)
+		primaryDomainsGen := rapid.SliceOfN(primaryNetworkDomainGen, 0, 200)
+
+		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses")
+
+		secondaryDomainSuffix := strings.Replace(
+			`algorand-<network>.network`, "<network>", network, -1)
+		// Generate these addresses from primary ones, find/replace domain suffix appropriately
+		secondaryRelayAddresses := replaceAllIn(primaryRelayAddresses, primaryDomainSuffix, secondaryDomainSuffix)
+		// Add some generated addresses to secondary list - to simplify verification further down
+		// (substituting suffixes, etc), we don't want the generated addresses to duplicate any of
+		// the replaced secondary ones
+		secondaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(secondaryDomainSuffix, secondaryRelayAddresses)
+		secondaryDomainsGen := rapid.SliceOfN(secondaryNetworkDomainGen, 0, 200)
+		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses")
+		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
+
+		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+			primaryRelayAddresses, secondaryRelayAddresses, nil)
+
+		// We expect non deduplication, so all addresses _should_ be present (note that no lower casing happens either)
+		expectedRelayAddresses := append(primaryRelayAddresses, secondaryRelayAddresses...)
+
+		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
+	})
+}
+
+// TestSendMessageCallbacks tests that the SendMessage callbacks are called correctly. These are currently used for
+// decrementing the number of bytes considered currently in flight for blockservice memcaps.
+func TestSendMessageCallbacks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	netA, netB, _, closeFunc := setupWebsocketNetworkAB(t, 2)
+	defer closeFunc()
+
+	var counter uint64
+	require.NotZero(t, netA.NumPeers())
+
+	// peerB is netA's representation of netB and vice versa
+	peerB := netA.peers[0]
+	peerA := netB.peers[0]
+
+	// Need to create a channel so that TS messages sent by netA don't get filtered out in the readLoop
+	peerA.makeResponseChannel(1)
+
+	// The for loop simulates netA receiving 100 UE block requests from netB
+	// and goes through the actual response code path to generate and send TS responses to netB
+	for i := 0; i < 100; i++ {
+		randInt := crypto.RandUint64()%(128) + 1
+		atomic.AddUint64(&counter, randInt)
+		topic := MakeTopic("val", []byte("blah"))
+		callback := func() {
+			atomic.AddUint64(&counter, ^uint64(randInt-1))
+		}
+		msg := IncomingMessage{Sender: peerB, Tag: protocol.UniEnsBlockReqTag}
+		peerB.Respond(context.Background(), msg, OutgoingMessage{OnRelease: callback, Topics: Topics{topic}})
+	}
+	// Confirm that netB's representation netA peerB has received some requests and decremented the counter
+	// of outstanding TS requests below 0. This will be true because we never made any UE block requests, we only
+	// simulated them by manually creating a IncomingMessage with the UE tag in the loop above
+	require.Eventually(t,
+		func() bool { return atomic.LoadInt64(&peerA.outstandingTopicRequests) < 0 },
+		500*time.Millisecond,
+		25*time.Millisecond,
+	)
+
+	// confirm that the test counter decrements down to zero correctly through callbacks
+	require.Eventually(t,
+		func() bool { return atomic.LoadUint64(&counter) == uint64(0) },
+		500*time.Millisecond,
+		25*time.Millisecond,
+	)
+}
+
+func TestSendMessageCallbackDrain(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	node := makeTestWebsocketNode(t)
+	destPeer := wsPeer{
+		closing:            make(chan struct{}),
+		sendBufferHighPrio: make(chan sendMessages, sendBufferLength),
+		sendBufferBulk:     make(chan sendMessages, sendBufferLength),
+		conn:               &nopConnSingleton,
+	}
+	node.addPeer(&destPeer)
+	node.Start()
+	defer node.Stop()
+
+	var target, counter uint64
+	// send messages to the peer that won't read them so they will sit in the sendQueue
+	for i := 0; i < 10; i++ {
+		randInt := crypto.RandUint64()%(128) + 1
+		target += randInt
+		topic := MakeTopic("val", []byte("blah"))
+		callback := func() {
+			counter += randInt
+		}
+		msg := IncomingMessage{Sender: node.peers[0], Tag: protocol.UniEnsBlockReqTag}
+		destPeer.Respond(context.Background(), msg, OutgoingMessage{OnRelease: callback, Topics: Topics{topic}})
+	}
+	require.Len(t, destPeer.sendBufferBulk, 10)
+	require.Zero(t, counter)
+	require.Positive(t, target)
+	// close the peer to trigger draining of the queue callbacks
+	destPeer.Close(time.Now().Add(time.Second))
+
+	require.Eventually(t,
+		func() bool { return target == counter },
+		2*time.Second,
+		50*time.Millisecond,
+	)
 }

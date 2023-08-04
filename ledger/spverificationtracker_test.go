@@ -424,7 +424,7 @@ func TestStateProofVerificationTracker_LookupVerificationContext(t *testing.T) {
 
 	_, err := spt.LookupVerificationContext(basics.Round(0))
 	a.ErrorIs(err, errSPVerificationContextNotFound)
-	a.ErrorContains(err, "no rows")
+	a.ErrorContains(err, "not found")
 
 	finalLastAttestedRound := basics.Round(defaultStateProofInterval + contextToAdd*defaultStateProofInterval)
 	_, err = spt.LookupVerificationContext(finalLastAttestedRound + basics.Round(defaultStateProofInterval))

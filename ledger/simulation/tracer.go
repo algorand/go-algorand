@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // cursorEvalTracer is responsible for maintaining a TxnPath that points to the currently executing
@@ -82,11 +83,31 @@ type evalTracer struct {
 
 	result   *Result
 	failedAt TxnPath
+
+	// execTraceStack keeps track of the call stack:
+	// from top level transaction to the current inner txn that contains latest TransactionTrace.
+	// NOTE: execTraceStack is used only for PC/Stack/Storage exposure.
+	execTraceStack []*TransactionTrace
+
+	// addCount and popCount keep track of the latest opcode change explanation from opcode.
+	addCount int
+	popCount int
+
+	// stackHeightAfterDeletion is calculated by stack height before opcode - stack element deletion number.
+	// NOTE: both stackChangeExplanation and stackHeightAfterDeletion are used only for Stack exposure.
+	stackHeightAfterDeletion int
+
+	// scratchSlots are the scratch slots changed on current opcode (currently either `store` or `stores`).
+	// NOTE: this field scratchSlots is used only for scratch change exposure.
+	scratchSlots []uint64
 }
 
-func makeEvalTracer(lastRound basics.Round, request Request) *evalTracer {
-	result := makeSimulationResult(lastRound, request)
-	return &evalTracer{result: &result}
+func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
+	result, err := makeSimulationResult(lastRound, request, developerAPI)
+	if err != nil {
+		return nil, err
+	}
+	return &evalTracer{result: &result}, nil
 }
 
 func (tracer *evalTracer) handleError(evalError error) {
@@ -163,9 +184,63 @@ func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
 	applyDataOfCurrentTxn.EvalDelta = evalDelta
 }
 
+func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
+	if tracer.result.ReturnTrace() {
+		var txnTraceStackElem *TransactionTrace
+
+		// Where should the current transaction trace attach to:
+		// - if it is a top level transaction, then attach to TxnResult level
+		// - if it is an inner transaction, then refer to the stack for latest exec trace,
+		//   and attach to inner array
+		if len(tracer.execTraceStack) == 0 {
+			// to adapt to logic sig trace here, we separate into 2 cases:
+			// - if we already executed `Before/After-Program`,
+			//   then there should be a trace containing logic sig.
+			//   We should add the transaction type to the pre-existing execution trace.
+			// - otherwise, we take the simplest trace with transaction type.
+			if tracer.result.TxnGroups[0].Txns[groupIndex].Trace == nil {
+				tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &TransactionTrace{}
+			}
+			txnTraceStackElem = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+		} else {
+			// we are reaching inner txns, so we don't have to be concerned about logic sig trace here
+			lastExecTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+			lastExecTrace.InnerTraces = append(lastExecTrace.InnerTraces, TransactionTrace{})
+			txnTraceStackElem = &lastExecTrace.InnerTraces[len(lastExecTrace.InnerTraces)-1]
+
+			innerIndex := len(lastExecTrace.InnerTraces) - 1
+			parentOpIndex := len(*lastExecTrace.programTraceRef) - 1
+
+			parentOp := &(*lastExecTrace.programTraceRef)[parentOpIndex]
+			parentOp.SpawnedInners = append(parentOp.SpawnedInners, innerIndex)
+		}
+
+		currentTxn := ep.TxnGroup[groupIndex]
+		if currentTxn.Txn.Type == protocol.ApplicationCallTx {
+			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
+			case transactions.ClearStateOC:
+				txnTraceStackElem.programTraceRef = &txnTraceStackElem.ClearStateProgramTrace
+			default:
+				txnTraceStackElem.programTraceRef = &txnTraceStackElem.ApprovalProgramTrace
+			}
+		}
+
+		// In both case, we need to add to transaction trace to the stack
+		tracer.execTraceStack = append(tracer.execTraceStack, txnTraceStackElem)
+	}
+	tracer.cursorEvalTracer.BeforeTxn(ep, groupIndex)
+}
+
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
 	tracer.saveApplyData(ad)
+	// if the current transaction + simulation condition would lead to exec trace making
+	// we should clean them up from tracer.execTraceStack.
+	if tracer.result.ReturnTrace() {
+		lastOne := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+		lastOne.programTraceRef = nil
+		tracer.execTraceStack = tracer.execTraceStack[:len(tracer.execTraceStack)-1]
+	}
 	tracer.cursorEvalTracer.AfterTxn(ep, groupIndex, ad, evalError)
 }
 
@@ -178,21 +253,120 @@ func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDT
 	applyDataOfCurrentTxn.EvalDelta.InnerTxns = inners
 }
 
+func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTraceUnit {
+	return OpcodeTraceUnit{PC: uint64(cx.PC())}
+}
+
+func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
+	tracer.popCount, tracer.addCount = cx.GetOpSpec().Explain(cx)
+	o.StackPopCount = uint64(tracer.popCount)
+
+	stackHeight := len(cx.Stack)
+	tracer.stackHeightAfterDeletion = stackHeight - int(o.StackPopCount)
+}
+
 func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
-	if cx.RunMode() != logic.ModeApp {
-		// do nothing for LogicSig ops
-		return
+	groupIndex := cx.GroupIndex()
+
+	if cx.RunMode() == logic.ModeApp {
+		// Remember app EvalDelta before executing the opcode. We do this
+		// because if this opcode fails, the block evaluator resets the EvalDelta.
+		var appIDToSave basics.AppIndex
+		if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
+			// App creation
+			appIDToSave = cx.AppID()
+		}
+		tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
 	}
-	groupIndex := tracer.relativeGroupIndex()
-	var appIDToSave basics.AppIndex
-	if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
-		// app creation
-		appIDToSave = cx.AppID()
+
+	if tracer.result.ReturnTrace() {
+		var txnTrace *TransactionTrace
+		if cx.RunMode() == logic.ModeSig {
+			txnTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+		} else {
+			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
+		}
+		*txnTrace.programTraceRef = append(*txnTrace.programTraceRef, tracer.makeOpcodeTraceUnit(cx))
+
+		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
+		if tracer.result.ReturnStackChange() {
+			latestOpcodeTraceUnit.computeStackValueDeletions(cx, tracer)
+		}
+		if tracer.result.ReturnScratchChange() {
+			tracer.recordChangedScratchSlots(cx)
+		}
 	}
-	tracer.saveEvalDelta(cx.TxnGroup[groupIndex].EvalDelta, appIDToSave)
+}
+
+func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *evalTracer) {
+	for i := tracer.stackHeightAfterDeletion; i < len(cx.Stack); i++ {
+		tealValue := cx.Stack[i].ToTealValue()
+		o.StackAdded = append(o.StackAdded, basics.TealValue{
+			Type:  tealValue.Type,
+			Uint:  tealValue.Uint,
+			Bytes: tealValue.Bytes,
+		})
+	}
+}
+
+func (tracer *evalTracer) recordChangedScratchSlots(cx *logic.EvalContext) {
+	currentOpcodeName := cx.GetOpSpec().Name
+	last := len(cx.Stack) - 1
+	tracer.scratchSlots = nil
+
+	switch currentOpcodeName {
+	case "store":
+		slot := uint64(cx.GetProgram()[cx.PC()+1])
+		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+	case "stores":
+		prev := last - 1
+		slot := cx.Stack[prev].Uint
+
+		// If something goes wrong for `stores`, we don't have to error here
+		// for in runtime already has evalError
+		if slot >= uint64(len(cx.Scratch)) {
+			return
+		}
+		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+	}
+}
+
+func (tracer *evalTracer) recordUpdatedScratchVars(cx *logic.EvalContext) []ScratchChange {
+	if len(tracer.scratchSlots) == 0 {
+		return nil
+	}
+	changes := make([]ScratchChange, len(tracer.scratchSlots))
+	for i, slot := range tracer.scratchSlots {
+		changes[i] = ScratchChange{
+			Slot:     slot,
+			NewValue: cx.Scratch[slot].ToTealValue(),
+		}
+	}
+	return changes
 }
 
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
+	groupIndex := cx.GroupIndex()
+
+	// NOTE: only when we have no evalError on current opcode,
+	// we can proceed for recording stack chaange
+	if evalError == nil && tracer.result.ReturnTrace() {
+		var txnTrace *TransactionTrace
+		if cx.RunMode() == logic.ModeSig {
+			txnTrace = tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+		} else {
+			txnTrace = tracer.execTraceStack[len(tracer.execTraceStack)-1]
+		}
+
+		latestOpcodeTraceUnit := &(*txnTrace.programTraceRef)[len(*txnTrace.programTraceRef)-1]
+		if tracer.result.ReturnStackChange() {
+			latestOpcodeTraceUnit.appendAddedStackValue(cx, tracer)
+		}
+		if tracer.result.ReturnScratchChange() {
+			latestOpcodeTraceUnit.ScratchSlotChanges = tracer.recordUpdatedScratchVars(cx)
+		}
+	}
+
 	if cx.RunMode() != logic.ModeApp {
 		// do nothing for LogicSig ops
 		return
@@ -200,10 +374,29 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	tracer.handleError(evalError)
 }
 
+func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
+	groupIndex := cx.GroupIndex()
+
+	// Before Program, activated for logic sig, happens before txn group execution
+	// we should create trace object for this txn result
+	if cx.RunMode() != logic.ModeApp {
+		if tracer.result.ReturnTrace() {
+			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &TransactionTrace{}
+			traceRef := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
+			traceRef.programTraceRef = &traceRef.LogicSigTrace
+		}
+	}
+}
+
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
+	groupIndex := cx.GroupIndex()
+
 	if cx.RunMode() != logic.ModeApp {
 		// Report cost for LogicSig program and exit
-		tracer.result.TxnGroups[0].Txns[cx.GroupIndex()].LogicSigBudgetConsumed = uint64(cx.Cost())
+		tracer.result.TxnGroups[0].Txns[groupIndex].LogicSigBudgetConsumed = uint64(cx.Cost())
+		if tracer.result.ReturnTrace() {
+			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.programTraceRef = nil
+		}
 		return
 	}
 

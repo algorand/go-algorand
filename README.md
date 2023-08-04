@@ -22,7 +22,7 @@ the [official Go documentation website](https://golang.org/doc/).
 
 ### Linux / OSX
 
-We currently strive to support Debian-based distributions with Ubuntu 18.04
+We currently strive to support Debian-based distributions with Ubuntu 20.04
 being our official release target.
 Building on Arch Linux works as well.
 Our core engineering team uses Linux and OSX, so both environments are well

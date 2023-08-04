@@ -73,6 +73,9 @@ var (
 	simulateAllowMoreLogging      bool
 	simulateAllowMoreOpcodeBudget bool
 	simulateExtraOpcodeBudget     uint64
+	simulateEnableRequestTrace    bool
+	simulateStackChange           bool
+	simulateScratchChange         bool
 )
 
 func init() {
@@ -96,7 +99,7 @@ func init() {
 	sendCmd.Flags().Uint64VarP(&amount, "amount", "a", 0, "The amount to be transferred (required), in microAlgos")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
 	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
-	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
+	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source file to use as account logic")
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	sendCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
@@ -116,7 +119,7 @@ func init() {
 	signCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "Partially-signed transaction file to add signature to")
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
 	signCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
-	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to use as account logic")
+	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source file to use as account logic")
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
 	signCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "Consensus protocol version id string")
@@ -161,6 +164,9 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
 	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
+	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
+	simulateCmd.Flags().BoolVar(&simulateStackChange, "stack", false, "Report stack change during simulation time")
+	simulateCmd.Flags().BoolVar(&simulateScratchChange, "scratch", false, "Report scratch change during simulation time")
 }
 
 var clerkCmd = &cobra.Command{
@@ -443,10 +449,10 @@ var sendCmd = &cobra.Command{
 			}
 			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil)
 			if err == nil {
-				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
+				err = verify.LogicSigSanityCheck(0, groupCtx)
 			}
 			if err != nil {
-				reportErrorf("%s: txn[0] error %s", outFilename, err)
+				reportErrorf("%s: txn error %s", outFilename, err)
 			}
 			stx = uncheckedTxn
 		} else if program != nil {
@@ -628,7 +634,7 @@ var rawsendCmd = &cobra.Command{
 				}
 
 				if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
-					reportInfof(infoTxCommitted, txidStr, txn.ConfirmedRound)
+					reportInfof(infoTxCommitted, txidStr, *txn.ConfirmedRound)
 					break
 				}
 
@@ -848,17 +854,17 @@ var signCmd = &cobra.Command{
 					reportErrorf("%s: %v", txFilename, err)
 				}
 			}
-			for i, txn := range txnGroup {
+			for i := range txnGroup {
 				var signedTxn transactions.SignedTxn
 				if lsig.Logic != nil {
-					err = verify.LogicSigSanityCheck(&txn, i, groupCtx)
+					err = verify.LogicSigSanityCheck(i, groupCtx)
 					if err != nil {
 						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
 					}
-					signedTxn = txn
+					signedTxn = txnGroup[i]
 				} else {
 					// sign the usual way
-					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txn.Txn)
+					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txnGroup[i].Txn)
 					if err != nil {
 						reportErrorf(errorSigningTX, err)
 					}
@@ -1276,6 +1282,7 @@ var simulateCmd = &cobra.Command{
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
 				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1299,6 +1306,7 @@ var simulateCmd = &cobra.Command{
 				AllowEmptySignatures: simulateAllowEmptySignatures,
 				AllowMoreLogging:     simulateAllowMoreLogging,
 				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
+				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
@@ -1357,4 +1365,12 @@ func decodeTxnsFromFile(file string) []transactions.SignedTxn {
 		txgroup = append(txgroup, txn)
 	}
 	return txgroup
+}
+
+func traceCmdOptionToSimulateTraceConfigModel() simulation.ExecTraceConfig {
+	return simulation.ExecTraceConfig{
+		Enable:  simulateEnableRequestTrace,
+		Stack:   simulateStackChange,
+		Scratch: simulateScratchChange,
+	}
 }

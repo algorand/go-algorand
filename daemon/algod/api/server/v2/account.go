@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	"golang.org/x/exp/slices"
 )
 
 // AssetHolding converts between basics.AssetHolding and model.AssetHolding
@@ -132,9 +133,9 @@ func AccountDataToAccount(
 		AppsLocalState:              &appsLocalState,
 		TotalAppsOptedIn:            uint64(len(appsLocalState)),
 		AppsTotalSchema:             &totalAppSchema,
-		AppsTotalExtraPages:         numOrNil(totalExtraPages),
-		TotalBoxes:                  numOrNil(record.TotalBoxes),
-		TotalBoxBytes:               numOrNil(record.TotalBoxBytes),
+		AppsTotalExtraPages:         omitEmpty(totalExtraPages),
+		TotalBoxes:                  omitEmpty(record.TotalBoxes),
+		TotalBoxBytes:               omitEmpty(record.TotalBoxBytes),
 		MinBalance:                  minBalance.Raw,
 	}, nil
 }
@@ -429,7 +430,7 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
 			ClearStateProgram: appParams.ClearStateProgram,
-			ExtraProgramPages: numOrNil(extraProgramPages),
+			ExtraProgramPages: omitEmpty(extraProgramPages),
 			GlobalState:       globalState,
 			LocalStateSchema: &model.ApplicationStateSchema{
 				NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
@@ -465,11 +466,11 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 		Total:         params.Total,
 		Decimals:      uint64(params.Decimals),
 		DefaultFrozen: &frozen,
-		Name:          strOrNil(printableUTF8OrEmpty(params.AssetName)),
+		Name:          omitEmpty(printableUTF8OrEmpty(params.AssetName)),
 		NameB64:       byteOrNil([]byte(params.AssetName)),
-		UnitName:      strOrNil(printableUTF8OrEmpty(params.UnitName)),
+		UnitName:      omitEmpty(printableUTF8OrEmpty(params.UnitName)),
 		UnitNameB64:   byteOrNil([]byte(params.UnitName)),
-		Url:           strOrNil(printableUTF8OrEmpty(params.URL)),
+		Url:           omitEmpty(printableUTF8OrEmpty(params.URL)),
 		UrlB64:        byteOrNil([]byte(params.URL)),
 		Clawback:      addrOrNil(params.Clawback),
 		Freeze:        addrOrNil(params.Freeze),
@@ -477,8 +478,7 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 		Reserve:       addrOrNil(params.Reserve),
 	}
 	if params.MetadataHash != ([32]byte{}) {
-		metadataHash := make([]byte, len(params.MetadataHash))
-		copy(metadataHash, params.MetadataHash[:])
+		metadataHash := slices.Clone(params.MetadataHash[:])
 		assetParams.MetadataHash = &metadataHash
 	}
 

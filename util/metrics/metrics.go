@@ -81,6 +81,8 @@ var (
 	LedgerRewardClaimsTotal = MetricName{Name: "algod_ledger_reward_claims_total", Description: "Total number of reward claims written to the ledger"}
 	// LedgerRound Last round written to ledger
 	LedgerRound = MetricName{Name: "algod_ledger_round", Description: "Last round written to ledger"}
+	// LedgerDBRound Last round written to ledger
+	LedgerDBRound = MetricName{Name: "algod_ledger_dbround", Description: "Last round written to the ledger DB"}
 
 	// AgreementMessagesHandled "Number of agreement messages handled"
 	AgreementMessagesHandled = MetricName{Name: "algod_agreement_handled", Description: "Number of agreement messages handled"}

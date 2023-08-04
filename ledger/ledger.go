@@ -51,7 +51,7 @@ type Ledger struct {
 	// Database connections to the DBs storing blocks and tracker state.
 	// We use potentially different databases to avoid SQLite contention
 	// during catchup.
-	trackerDBs trackerdb.TrackerStore
+	trackerDBs trackerdb.Store
 	blockDBs   db.Pair
 
 	// blockQ is the buffer of added blocks that will be flushed to
@@ -144,14 +144,11 @@ func OpenLedger(
 		}
 	}()
 
-	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem, cfg, log)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
 	}
-	l.trackerDBs.SetLogger(log)
-	l.blockDBs.Rdb.SetLogger(log)
-	l.blockDBs.Wdb.SetLogger(log)
 
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
 
@@ -284,12 +281,9 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs trackerdb.TrackerStore, blockDBs db.Pair, err error) {
+func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
-	var trackerDBFilename string
-	var blockDBFilename string
-
 	if !dbMem {
 		commonDBFilename := dbPathPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
@@ -302,20 +296,32 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs trackerdb.Tracker
 		}
 	}
 
-	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-	blockDBFilename = dbPathPrefix + ".block.sqlite"
-
 	outErr := make(chan error, 2)
 	go func() {
 		var lerr error
-		trackerDBs, lerr = sqlitedriver.OpenTrackerSQLStore(trackerDBFilename, dbMem)
+		switch cfg.StorageEngine {
+		case "sqlite":
+			fallthrough
+		// anything else will initialize a sqlite engine.
+		default:
+			file := dbPathPrefix + ".tracker.sqlite"
+			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
+		}
+
 		outErr <- lerr
 	}()
 
 	go func() {
 		var lerr error
+		blockDBFilename := dbPathPrefix + ".block.sqlite"
 		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
-		outErr <- lerr
+		if lerr != nil {
+			outErr <- lerr
+			return
+		}
+		blockDBs.Rdb.SetLogger(log)
+		blockDBs.Wdb.SetLogger(log)
+		outErr <- nil
 	}()
 
 	err = <-outErr
@@ -494,24 +500,6 @@ func (l *Ledger) GetStateProofVerificationContext(stateProofLastAttestedRound ba
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.spVerification.LookupVerificationContext(stateProofLastAttestedRound)
-}
-
-// ListAssets takes a maximum asset index and maximum result length, and
-// returns up to that many CreatableLocators from the database where app idx is
-// less than or equal to the maximum.
-func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.ListAssets(maxAssetIdx, maxResults)
-}
-
-// ListApplications takes a maximum app index and maximum result length, and
-// returns up to that many CreatableLocators from the database where app idx is
-// less than or equal to the maximum.
-func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.ListApplications(maxAppIdx, maxResults)
 }
 
 // LookupLatest uses the accounts tracker to return the account state (including
@@ -805,7 +793,7 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 }
 
 // ledgerForTracker methods
-func (l *Ledger) trackerDB() trackerdb.TrackerStore {
+func (l *Ledger) trackerDB() trackerdb.Store {
 	return l.trackerDBs
 }
 
@@ -848,15 +836,19 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 // If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
 // be used instead.
 // The tracer argument is a logic.EvalTracer which will be attached to the evaluator and have its hooked invoked during
-// the eval process for each block. A nil tracer will skip tracer invocation entirely.
+// the eval process for each block. A nil tracer will default to the tracer attached to the ledger.
 func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
+	tracerForEval := tracer
+	if tracerForEval == nil {
+		tracerForEval = l.tracer
+	}
 	return eval.StartEvaluator(l, hdr,
 		eval.EvaluatorOptions{
 			PaysetHint:          paysetHint,
 			Generate:            true,
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
-			Tracer:              tracer,
+			Tracer:              tracerForEval,
 		})
 }
 

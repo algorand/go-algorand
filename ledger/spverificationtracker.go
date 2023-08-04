@@ -134,7 +134,7 @@ func (spt *spVerificationTracker) commitRound(ctx context.Context, tx trackerdb.
 	}
 
 	if dcc.spVerification.lastDeleteIndex >= 0 {
-		err = tx.MakeSpVerificationCtxReaderWriter().DeleteOldSPContexts(ctx, dcc.spVerification.earliestLastAttestedRound)
+		err = tx.MakeSpVerificationCtxWriter().DeleteOldSPContexts(ctx, dcc.spVerification.earliestLastAttestedRound)
 	}
 
 	return err
@@ -146,7 +146,7 @@ func commitSPContexts(ctx context.Context, tx trackerdb.TransactionScope, commit
 		ptrToCtxs[i] = &commitData[i].verificationContext
 	}
 
-	return tx.MakeSpVerificationCtxReaderWriter().StoreSPContexts(ctx, ptrToCtxs)
+	return tx.MakeSpVerificationCtxWriter().StoreSPContexts(ctx, ptrToCtxs)
 }
 
 func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCommitContext) {
@@ -226,8 +226,8 @@ func (spt *spVerificationTracker) lookupContextInTrackedMemory(stateProofLastAtt
 		}
 	}
 
-	return &ledgercore.StateProofVerificationContext{}, fmt.Errorf("%w for round %d: memory lookup failed",
-		errSPVerificationContextNotFound, stateProofLastAttestedRound)
+	return &ledgercore.StateProofVerificationContext{}, fmt.Errorf("%w for round %d: memory lookup failed (pending len %d)",
+		errSPVerificationContextNotFound, stateProofLastAttestedRound, len(spt.pendingCommitContexts))
 }
 
 func (spt *spVerificationTracker) lookupContextInDB(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {

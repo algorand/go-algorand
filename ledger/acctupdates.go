@@ -151,7 +151,7 @@ type modifiedKvValue struct {
 
 type accountUpdates struct {
 	// Connection to the database.
-	dbs trackerdb.TrackerStore
+	dbs trackerdb.Store
 
 	// Optimized reader for fast accounts DB lookups.
 	accountsq trackerdb.AccountsReader
@@ -586,100 +586,6 @@ func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Add
 	return
 }
 
-// ListAssets lists the assets by their asset index, limiting to the first maxResults
-func (au *accountUpdates) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
-	return au.listCreatables(basics.CreatableIndex(maxAssetIdx), maxResults, basics.AssetCreatable)
-}
-
-// ListApplications lists the application by their app index, limiting to the first maxResults
-func (au *accountUpdates) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
-	return au.listCreatables(basics.CreatableIndex(maxAppIdx), maxResults, basics.AppCreatable)
-}
-
-// listCreatables lists the application/asset by their app/asset index, limiting to the first maxResults
-func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) ([]basics.CreatableLocator, error) {
-	au.accountsMu.RLock()
-	for {
-		currentDbRound := au.cachedDBRound
-		currentDeltaLen := len(au.deltas)
-		// Sort indices for creatables that have been created/deleted. If this
-		// turns out to be too inefficient, we could keep around a heap of
-		// created/deleted asset indices in memory.
-		keys := make([]basics.CreatableIndex, 0, len(au.creatables))
-		for cidx, delta := range au.creatables {
-			if delta.Ctype != ctype {
-				continue
-			}
-			if cidx <= maxCreatableIdx {
-				keys = append(keys, cidx)
-			}
-		}
-		sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
-
-		// Check for creatables that haven't been synced to disk yet.
-		unsyncedCreatables := make([]basics.CreatableLocator, 0, len(keys))
-		deletedCreatables := make(map[basics.CreatableIndex]bool, len(keys))
-		for _, cidx := range keys {
-			delta := au.creatables[cidx]
-			if delta.Created {
-				// Created but only exists in memory
-				unsyncedCreatables = append(unsyncedCreatables, basics.CreatableLocator{
-					Type:    delta.Ctype,
-					Index:   cidx,
-					Creator: delta.Creator,
-				})
-			} else {
-				// Mark deleted creatables for exclusion from the results set
-				deletedCreatables[cidx] = true
-			}
-		}
-
-		au.accountsMu.RUnlock()
-
-		// Check in-memory created creatables, which will always be newer than anything
-		// in the database
-		if uint64(len(unsyncedCreatables)) >= maxResults {
-			return unsyncedCreatables[:maxResults], nil
-		}
-		res := unsyncedCreatables
-
-		// Fetch up to maxResults - len(res) + len(deletedCreatables) from the database,
-		// so we have enough extras in case creatables were deleted
-		numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedCreatables))
-		dbResults, dbRound, err := au.accountsq.ListCreatables(maxCreatableIdx, numToFetch, ctype)
-		if err != nil {
-			return nil, err
-		}
-
-		if dbRound == currentDbRound {
-			// Now we merge the database results with the in-memory results
-			for _, loc := range dbResults {
-				// Check if we have enough results
-				if uint64(len(res)) == maxResults {
-					return res, nil
-				}
-
-				// Creatable was deleted
-				if _, ok := deletedCreatables[loc.Index]; ok {
-					continue
-				}
-
-				// We're OK to include this result
-				res = append(res, loc)
-			}
-			return res, nil
-		}
-		if dbRound < currentDbRound {
-			au.log.Errorf("listCreatables: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-			return []basics.CreatableLocator{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
-		}
-		au.accountsMu.RLock()
-		for currentDbRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
-			au.accountsReadCond.Wait()
-		}
-	}
-}
-
 // GetCreatorForRound returns the creator for a given asset/app index at a given round
 func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	return au.getCreatorForRound(rnd, cidx, ctype, true /* take the lock */)
@@ -914,17 +820,17 @@ func (au *accountUpdates) latestTotalsImpl() (basics.Round, ledgercore.AccountTo
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
 // and preparing the accountUpdates for operation.
-func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) (err error) {
+func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) error {
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
 	au.ledger = l
 
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = au.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
-		ar, err := tx.MakeAccountsReader()
-		if err != nil {
-			return err
+	err := au.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
+		ar, err0 := tx.MakeAccountsReader()
+		if err0 != nil {
+			return err0
 		}
 
 		totals, err0 := ar.AccountsTotals(ctx, false)
@@ -938,17 +844,17 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 
 	ledgerAccountsinitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
-		return
+		return err
 	}
 
 	au.accountsq, err = au.dbs.MakeAccountsOptimizedReader()
 	if err != nil {
-		return
+		return err
 	}
 
 	hdr, err := l.BlockHdr(lastBalancesRound)
 	if err != nil {
-		return
+		return err
 	}
 
 	au.versions = []protocol.ConsensusVersion{hdr.CurrentProtocol}
@@ -968,7 +874,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		au.baseResources.init(au.log, 0, 1)
 		au.baseKVs.init(au.log, 0, 1)
 	}
-	return
+	return nil
 }
 
 // newBlockImpl is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
@@ -1171,7 +1077,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 			// use a cache of the most recent account state.
 			ad = macct.data
 			foundAccount = true
-		} else if pad, has := au.baseAccounts.read(addr); has && pad.Round == currentDbRound {
+		} else if pad, inLRU := au.baseAccounts.read(addr); inLRU && pad.Round == currentDbRound {
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(pad)
@@ -1185,8 +1091,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 
 		// check for resources modified in the past rounds, in the deltas
 		for cidx, mr := range au.resources.getForAddress(addr) {
-			if err := addResource(cidx, rnd, mr.resource); err != nil {
-				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+			if addErr := addResource(cidx, rnd, mr.resource); addErr != nil {
+				return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, addErr
 			}
 		}
 
@@ -1201,8 +1107,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				// would ensure that we promote this field.
 				au.baseResources.writePending(prd, addr)
 				if prd.AcctRef != nil {
-					if err := addResource(prd.Aidx, rnd, prd.AccountResource()); err != nil {
-						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+					if addErr := addResource(prd.Aidx, rnd, prd.AccountResource()); addErr != nil {
+						return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, addErr
 					}
 				}
 			}
@@ -1256,8 +1162,8 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 		if resourceDbRound == currentDbRound {
 			for _, pd := range persistedResources {
 				au.baseResources.writePending(pd, addr)
-				if err := addResource(pd.Aidx, currentDbRound, pd.AccountResource()); err != nil {
-					return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+				if addErr := addResource(pd.Aidx, currentDbRound, pd.AccountResource()); addErr != nil {
+					return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, addErr
 				}
 			}
 			// We've found all the resources we could find for this address.
@@ -1508,7 +1414,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 }
 
 // getCreatorForRound returns the asset/app creator for a given asset/app index at a given round
-func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (creator basics.Address, ok bool, err error) {
+func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (basics.Address, bool, error) {
 	unlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -1524,6 +1430,7 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
+		var err error
 		offset, err = au.roundOffset(rnd)
 		if err != nil {
 			return basics.Address{}, false, err
@@ -1558,6 +1465,8 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 			unlock = false
 		}
 		// Check the database
+		var ok bool
+		var creator basics.Address
 		creator, ok, dbRound, err = au.accountsq.LookupCreator(cidx, ctype)
 		if err != nil {
 			return basics.Address{}, false, err
@@ -1682,12 +1591,12 @@ func (au *accountUpdates) commitRound(ctx context.Context, tx trackerdb.Transact
 		dcc.stats.OldAccountPreloadDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.OldAccountPreloadDuration
 	}
 
-	arw, err := tx.MakeAccountsReaderWriter()
+	aw, err := tx.MakeAccountsWriter()
 	if err != nil {
 		return err
 	}
 
-	err = arw.AccountsPutTotals(dcc.roundTotals, false)
+	err = aw.AccountsPutTotals(dcc.roundTotals, false)
 	if err != nil {
 		return err
 	}

@@ -33,8 +33,15 @@ linters-settings:
     exclude-functions:
     # We do this 121 times and never check the error.
     - (*github.com/spf13/cobra.Command).MarkFlagRequired
+    - (*github.com/spf13/pflag.FlagSet).MarkDeprecated
+    - (*github.com/spf13/pflag.FlagSet).MarkShorthandDeprecated
   govet:
+    check-shadowing: true
     settings:
+      shadow:
+        # explanation of strict vs non-strict:
+        # https://github.com/golang/tools/blob/v0.7.0/go/analysis/passes/shadow/shadow.go#L104-L122
+        strict: false
       printf:
         # Comma-separated list of print function names to check (in addition to default, see `go tool vet help printf`).
         # Default: []
@@ -95,7 +102,15 @@ issues:
     # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
     - ineffective break statement. Did you mean to break out of the outer loop
     # revive: irrelevant error about naming
-    - "var-naming: don't use leading k in Go names"
+    - "^var-naming: don't use leading k in Go names"
+    # revive: ignore unused-paramter, package-comments, unexported-return, redefines-builtin-id, var-declaration, empty-block, superfluous-else
+    - "^unused-parameter: parameter"
+    - "^package-comments: should have a package comment"
+    - "^unexported-return: "
+    - "^redefines-builtin-id: redefinition of"
+    - "^var-declaration: should"
+    - "^empty-block: this block is empty, you can remove it"
+    - "^superfluous-else: if block ends with"
 
   exclude-rules:
     - path: _test\.go
@@ -110,8 +125,20 @@ issues:
         # - nilerr
         - nolintlint
         # - revive
-        - staticcheck
+        # - staticcheck
         - typecheck
+    - path: _test\.go
+      linters:
+        - staticcheck
+      text: "SA4006: this value" # of X is never used
+    - linters:
+        - staticcheck
+      text: "SA1019: rand*"
+    # allow shadowing in test code
+    - path: _test\.go
+      linters:
+        - govet
+      text: "shadows declaration at line"
     # Ignore missing parallel tests in existing packages
     - path: ^agreement.*_test\.go
       linters:

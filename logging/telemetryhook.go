@@ -274,7 +274,8 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 }
 
 // Note: This will be removed with the externalized telemetry project. Return whether or not the URI was successfully
-//       updated.
+//
+//	updated.
 func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
 	updated := false
 

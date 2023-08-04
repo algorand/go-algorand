@@ -2413,6 +2413,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "408": {
+            "description": "Request Timeout",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {
@@ -3102,6 +3108,29 @@
         }
       }
     },
+    "AvmValue": {
+      "description": "Represents an AVM value.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint64**",
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "bytes value.",
+          "type": "string",
+          "format": "byte"
+        },
+        "uint": {
+          "description": "uint value.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
     "StateDelta": {
       "description": "Application state delta.",
       "type": "array",
@@ -3453,6 +3482,9 @@
         "extra-opcode-budget": {
           "description": "Applies extra opcode budget during simulation for each transaction group.",
           "type": "integer"
+        },
+        "exec-trace-config": {
+          "$ref": "#/definitions/SimulateTraceConfig"
         }
       }
     },
@@ -3472,6 +3504,24 @@
             "format": "json",
             "x-algorand-format": "SignedTransaction"
           }
+        }
+      }
+    },
+    "SimulateTraceConfig": {
+      "description": "An object that configures simulation execution trace.",
+      "type": "object",
+      "properties": {
+        "enable": {
+          "description": "A boolean option for opting in execution trace features simulation endpoint.",
+          "type": "boolean"
+        },
+        "stack-change": {
+          "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
+          "type": "boolean"
+        },
+        "scratch-change": {
+          "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
+          "type": "boolean"
         }
       }
     },
@@ -3726,6 +3776,9 @@
         "logic-sig-budget-consumed": {
           "description": "Budget used during execution of a logic sig transaction.",
           "type": "integer"
+        },
+        "exec-trace": {
+          "$ref": "#/definitions/SimulationTransactionExecTrace"
         }
       }
     },
@@ -3828,6 +3881,95 @@
         "extra-opcode-budget": {
           "description": "The extra opcode budget added to each transaction group during simulation",
           "type": "integer"
+        }
+      }
+    },
+    "ScratchChange": {
+      "description": "A write operation into a scratch slot.",
+      "type": "object",
+      "required": [
+        "slot",
+        "new-value"
+      ],
+      "properties": {
+        "slot": {
+          "description": "The scratch slot written.",
+          "type": "integer"
+        },
+        "new-value": {
+          "$ref": "#/definitions/AvmValue"
+        }
+      }
+    },
+    "SimulationOpcodeTraceUnit": {
+      "description": "The set of trace information and effect from evaluating a single opcode.",
+      "type": "object",
+      "required": [
+        "pc"
+      ],
+      "properties": {
+        "pc": {
+          "description": "The program counter of the current opcode being evaluated.",
+          "type": "integer"
+        },
+        "scratch-changes": {
+          "description": "The writes into scratch slots.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ScratchChange"
+          }
+        },
+        "spawned-inners": {
+          "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "stack-pop-count": {
+          "description": "The number of deleted stack values by this opcode.",
+          "type": "integer"
+        },
+        "stack-additions": {
+          "description": "The values added by this opcode to the stack.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AvmValue"
+          }
+        }
+      }
+    },
+    "SimulationTransactionExecTrace": {
+      "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
+      "type": "object",
+      "properties": {
+        "approval-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in an approval program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "clear-state-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a clear state program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "logic-sig-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a logic sig.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "inner-trace": {
+          "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationTransactionExecTrace"
+          }
         }
       }
     }
@@ -4459,6 +4601,9 @@
           },
           "eval-overrides": {
             "$ref": "#/definitions/SimulationEvalOverrides"
+          },
+          "exec-trace-config": {
+            "$ref": "#/definitions/SimulateTraceConfig"
           }
         }
       }

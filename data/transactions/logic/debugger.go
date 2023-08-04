@@ -177,7 +177,7 @@ func makeDebugState(cx *EvalContext) *DebugState {
 	globals := make([]basics.TealValue, len(globalFieldSpecs))
 	for _, fs := range globalFieldSpecs {
 		// Don't try to grab app only fields when evaluating a signature
-		if (cx.runModeFlags&ModeSig) != 0 && fs.mode == ModeApp {
+		if cx.runMode == ModeSig && fs.mode == ModeApp {
 			continue
 		}
 		sv, err := cx.globalFieldToValue(fs)
@@ -188,7 +188,7 @@ func makeDebugState(cx *EvalContext) *DebugState {
 	}
 	ds.Globals = globals
 
-	if (cx.runModeFlags & ModeApp) != 0 {
+	if cx.runMode == ModeApp {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
@@ -285,13 +285,13 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 		ds.Error = evalError.Error()
 	}
 
-	stack := make([]basics.TealValue, len(cx.stack))
-	for i, sv := range cx.stack {
+	stack := make([]basics.TealValue, len(cx.Stack))
+	for i, sv := range cx.Stack {
 		stack[i] = sv.toEncodedTealValue()
 	}
 
-	scratch := make([]basics.TealValue, len(cx.scratch))
-	for i, sv := range cx.scratch {
+	scratch := make([]basics.TealValue, len(cx.Scratch))
+	for i, sv := range cx.Scratch {
 		scratch[i] = sv.toEncodedTealValue()
 	}
 
@@ -300,7 +300,7 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 	ds.OpcodeBudget = cx.remainingBudget()
 	ds.CallStack = ds.parseCallstack(cx.callstack)
 
-	if (cx.runModeFlags & ModeApp) != 0 {
+	if cx.runMode == ModeApp {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 

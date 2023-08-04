@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
@@ -74,18 +75,13 @@ func addrOrNil(addr basics.Address) *string {
 	return &ret
 }
 
-func strOrNil(str string) *string {
-	if str == "" {
+// omitEmpty defines a handy impl for all comparable types to convert from default value to nil ptr
+func omitEmpty[T comparable](val T) *T {
+	var defaultVal T
+	if val == defaultVal {
 		return nil
 	}
-	return &str
-}
-
-func numOrNil(num uint64) *uint64 {
-	if num == 0 {
-		return nil
-	}
-	return &num
+	return &val
 }
 
 func byteOrNil(data []byte) *[]byte {
@@ -93,13 +89,6 @@ func byteOrNil(data []byte) *[]byte {
 		return nil
 	}
 	return &data
-}
-
-func trueOrNil(b bool) *bool {
-	if !b {
-		return nil
-	}
-	return &b
 }
 
 func nilToZero(numPtr *uint64) uint64 {
@@ -111,13 +100,10 @@ func nilToZero(numPtr *uint64) uint64 {
 
 func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
 	// Compute transaction index in block
-	offset := -1
-	for idx, stxnib := range payset {
-		if tx.Txn.Txn.ID() == stxnib.Txn.ID() {
-			offset = idx
-			break
-		}
-	}
+	txID := tx.Txn.Txn.ID()
+	offset := slices.IndexFunc(payset, func(ad transactions.SignedTxnWithAD) bool {
+		return ad.Txn.ID() == txID
+	})
 
 	// Sanity check that txn was in fetched block
 	if offset < 0 {
@@ -268,8 +254,8 @@ func stateDeltaToStateDelta(d basics.StateDelta) *model.StateDelta {
 			Key: base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: model.EvalDelta{
 				Action: uint64(v.Action),
-				Bytes:  strOrNil(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
-				Uint:   numOrNil(v.Uint),
+				Bytes:  omitEmpty(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
+				Uint:   omitEmpty(v.Uint),
 			},
 		})
 	}
@@ -347,8 +333,8 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 
 	// Since this is an inner txn, we know these indexes will be populated. No
 	// need to search payset for IDs
-	response.AssetIndex = numOrNil(uint64(txn.ApplyData.ConfigAsset))
-	response.ApplicationIndex = numOrNil(uint64(txn.ApplyData.ApplicationID))
+	response.AssetIndex = omitEmpty(uint64(txn.ApplyData.ConfigAsset))
+	response.ApplicationIndex = omitEmpty(uint64(txn.ApplyData.ApplicationID))
 
 	withStatus := node.TxnWithStatus{
 		Txn:       txn.SignedTxn,
@@ -360,11 +346,92 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
+func convertScratchChanges(scratchChanges []simulation.ScratchChange) *[]model.ScratchChange {
+	if len(scratchChanges) == 0 {
+		return nil
+	}
+	modelSC := make([]model.ScratchChange, len(scratchChanges))
+	for i, scratchChange := range scratchChanges {
+		modelSC[i] = model.ScratchChange{
+			Slot: scratchChange.Slot,
+			NewValue: model.AvmValue{
+				Type:  uint64(scratchChange.NewValue.Type),
+				Uint:  omitEmpty(scratchChange.NewValue.Uint),
+				Bytes: byteOrNil([]byte(scratchChange.NewValue.Bytes)),
+			},
+		}
+	}
+	return &modelSC
+}
+
+func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.AvmValue {
+	if len(tvs) == 0 {
+		return nil
+	}
+	modelTvs := make([]model.AvmValue, len(tvs))
+	for i := range tvs {
+		modelTvs[i] = model.AvmValue{
+			Type:  uint64(tvs[i].Type),
+			Uint:  omitEmpty(tvs[i].Uint),
+			Bytes: byteOrNil([]byte(tvs[i].Bytes)),
+		}
+	}
+	return &modelTvs
+}
+
+func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.SimulationOpcodeTraceUnit {
+	if len(programTrace) == 0 {
+		return nil
+	}
+	modelProgramTrace := make([]model.SimulationOpcodeTraceUnit, len(programTrace))
+	for i := range programTrace {
+		var spawnedInnersPtr *[]uint64
+		if len(programTrace[i].SpawnedInners) > 0 {
+			spawnedInners := make([]uint64, len(programTrace[i].SpawnedInners))
+			for j, innerIndex := range programTrace[i].SpawnedInners {
+				spawnedInners[j] = uint64(innerIndex)
+			}
+			spawnedInnersPtr = &spawnedInners
+		}
+		modelProgramTrace[i] = model.SimulationOpcodeTraceUnit{
+			Pc:             programTrace[i].PC,
+			SpawnedInners:  spawnedInnersPtr,
+			StackAdditions: convertTealValueSliceToModel(programTrace[i].StackAdded),
+			StackPopCount:  omitEmpty(programTrace[i].StackPopCount),
+			ScratchChanges: convertScratchChanges(programTrace[i].ScratchSlotChanges),
+		}
+	}
+	return &modelProgramTrace
+}
+
+func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTransactionExecTrace {
+	if txnTrace == nil {
+		return nil
+	}
+
+	execTraceModel := model.SimulationTransactionExecTrace{
+		ApprovalProgramTrace:   convertProgramTrace(txnTrace.ApprovalProgramTrace),
+		ClearStateProgramTrace: convertProgramTrace(txnTrace.ClearStateProgramTrace),
+		LogicSigTrace:          convertProgramTrace(txnTrace.LogicSigTrace),
+	}
+
+	if len(txnTrace.InnerTraces) > 0 {
+		innerTraces := make([]model.SimulationTransactionExecTrace, len(txnTrace.InnerTraces))
+		for i := range txnTrace.InnerTraces {
+			innerTraces[i] = *convertTxnTrace(&txnTrace.InnerTraces[i])
+		}
+		execTraceModel.InnerTrace = &innerTraces
+	}
+
+	return &execTraceModel
+}
+
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
 		Txn:                    ConvertInnerTxn(&txnResult.Txn),
-		AppBudgetConsumed:      numOrNil(txnResult.AppBudgetConsumed),
-		LogicSigBudgetConsumed: numOrNil(txnResult.LogicSigBudgetConsumed),
+		AppBudgetConsumed:      omitEmpty(txnResult.AppBudgetConsumed),
+		LogicSigBudgetConsumed: omitEmpty(txnResult.LogicSigBudgetConsumed),
+		TransactionTrace:       convertTxnTrace(txnResult.Trace),
 	}
 }
 
@@ -376,14 +443,13 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 
 	encoded := PreEncodedSimulateTxnGroupResult{
 		Txns:              txnResults,
-		FailureMessage:    strOrNil(txnGroupResult.FailureMessage),
-		AppBudgetAdded:    numOrNil(txnGroupResult.AppBudgetAdded),
-		AppBudgetConsumed: numOrNil(txnGroupResult.AppBudgetConsumed),
+		FailureMessage:    omitEmpty(txnGroupResult.FailureMessage),
+		AppBudgetAdded:    omitEmpty(txnGroupResult.AppBudgetAdded),
+		AppBudgetConsumed: omitEmpty(txnGroupResult.AppBudgetConsumed),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
-		failedAt := make([]uint64, len(txnGroupResult.FailedAt))
-		copy(failedAt, txnGroupResult.FailedAt)
+		failedAt := slices.Clone[[]uint64, uint64](txnGroupResult.FailedAt)
 		encoded.FailedAt = &failedAt
 	}
 
@@ -394,18 +460,19 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
-			AllowEmptySignatures: trueOrNil(result.EvalOverrides.AllowEmptySignatures),
+			AllowEmptySignatures: omitEmpty(result.EvalOverrides.AllowEmptySignatures),
 			MaxLogSize:           result.EvalOverrides.MaxLogSize,
 			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
-			ExtraOpcodeBudget:    numOrNil(result.EvalOverrides.ExtraOpcodeBudget),
+			ExtraOpcodeBudget:    omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
 		}
 	}
 
 	encodedSimulationResult := PreEncodedSimulateResponse{
-		Version:       result.Version,
-		LastRound:     uint64(result.LastRound),
-		TxnGroups:     make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
-		EvalOverrides: evalOverrides,
+		Version:         result.Version,
+		LastRound:       uint64(result.LastRound),
+		TxnGroups:       make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		EvalOverrides:   evalOverrides,
+		ExecTraceConfig: result.TraceConfig,
 	}
 
 	for i, txnGroup := range result.TxnGroups {
@@ -425,6 +492,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowEmptySignatures: request.AllowEmptySignatures,
 		AllowMoreLogging:     request.AllowMoreLogging,
 		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
+		TraceConfig:          request.ExecTraceConfig,
 	}
 }
 

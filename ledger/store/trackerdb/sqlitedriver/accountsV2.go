@@ -56,20 +56,25 @@ func NewAccountsSQLReaderWriter(e db.Executable) *accountsV2ReaderWriter {
 	}
 }
 
+// NewAccountsSQLReader creates an SQL reader
+func NewAccountsSQLReader(q db.Queryable) *accountsV2Reader {
+	return &accountsV2Reader{q: q, preparedStatements: make(map[string]*sql.Stmt)}
+}
+
 // Testing returns this reader, exposed as an interface with test functions
-func (r *accountsV2Reader) Testing() trackerdb.TestAccountsReaderExt {
+func (r *accountsV2Reader) Testing() trackerdb.AccountsReaderTestExt {
 	return r
 }
 
-func (r *accountsV2Reader) getOrPrepare(queryString string) (stmt *sql.Stmt, err error) {
+func (r *accountsV2Reader) getOrPrepare(queryString string) (*sql.Stmt, error) {
 	// fetch statement (use the query as the key)
 	if stmt, ok := r.preparedStatements[queryString]; ok {
 		return stmt, nil
 	}
 	// we do not have it, prepare it
-	stmt, err = r.q.Prepare(queryString)
+	stmt, err := r.q.Prepare(queryString)
 	if err != nil {
-		return
+		return nil, err
 	}
 	// cache the statement
 	r.preparedStatements[queryString] = stmt
@@ -433,21 +438,6 @@ func (r *accountsV2Reader) LookupAccountAddressFromAddressID(ctx context.Context
 	return
 }
 
-func (r *accountsV2Reader) LookupAccountDataByAddress(addr basics.Address) (ref trackerdb.AccountRef, data []byte, err error) {
-	// optimize this query for repeated usage
-	selectStmt, err := r.getOrPrepare("SELECT rowid, data FROM accountbase WHERE address=?")
-	if err != nil {
-		return
-	}
-
-	var rowid int64
-	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
-	if err != nil {
-		return
-	}
-	return sqlRowRef{rowid}, data, err
-}
-
 // LookupOnlineAccountDataByAddress looks up online account data by address.
 func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address) (ref trackerdb.OnlineAccountRef, data []byte, err error) {
 	// optimize this query for repeated usage
@@ -458,7 +448,10 @@ func (r *accountsV2Reader) LookupOnlineAccountDataByAddress(addr basics.Address)
 
 	var rowid int64
 	err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &data)
-	if err != nil {
+	if err == sql.ErrNoRows {
+		err = trackerdb.ErrNotFound
+		return
+	} else if err != nil {
 		return
 	}
 	return sqlRowRef{rowid}, data, err
@@ -474,7 +467,10 @@ func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (ref trackerd
 
 	var rowid int64
 	err = addrRowidStmt.QueryRow(addr[:]).Scan(&rowid)
-	if err != nil {
+	if err == sql.ErrNoRows {
+		err = trackerdb.ErrNotFound
+		return
+	} else if err != nil {
 		return
 	}
 	return sqlRowRef{rowid}, err
@@ -483,7 +479,7 @@ func (r *accountsV2Reader) LookupAccountRowID(addr basics.Address) (ref trackerd
 // LookupResourceDataByAddrID looks up the resource data by account rowid + resource aidx.
 func (r *accountsV2Reader) LookupResourceDataByAddrID(accountRef trackerdb.AccountRef, aidx basics.CreatableIndex) (data []byte, err error) {
 	if accountRef == nil {
-		return data, sql.ErrNoRows
+		return data, trackerdb.ErrNotFound
 	}
 	addrid := accountRef.(sqlRowRef).rowid
 	// optimize this query for repeated usage
@@ -493,7 +489,10 @@ func (r *accountsV2Reader) LookupResourceDataByAddrID(accountRef trackerdb.Accou
 	}
 
 	err = selectStmt.QueryRow(addrid, aidx).Scan(&data)
-	if err != nil {
+	if err == sql.ErrNoRows {
+		err = trackerdb.ErrNotFound
+		return
+	} else if err != nil {
 		return
 	}
 	return data, err

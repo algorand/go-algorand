@@ -5,7 +5,7 @@ ARG GOLANG_VERSION
 ARG ARCH="amd64"
 RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm && \
     yum update -y && \
-    yum install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel sqlite3 boost-devel expect jq \
+    yum install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel expect jq \
     libtool gcc-c++ libstdc++-devel libstdc++-static rpmdevtools createrepo rpm-sign bzip2 which ShellCheck \
     libffi-devel openssl-devel
 WORKDIR /root
@@ -20,6 +20,7 @@ COPY . $GOPATH/src/github.com/algorand/go-algorand
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     GOPROXY=https://proxy.golang.org,https://pkg.go.dev,https://goproxy.io,direct
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
+RUN git config --global --add safe.directory '*'
 RUN make clean
 RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
     mkdir -p $GOPATH/src/github.com/algorand/go-algorand

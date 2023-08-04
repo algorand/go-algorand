@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/slices"
 )
 
 func protoFromString(protoString string) (name string, proto config.ConsensusParams, err error) {
@@ -190,8 +191,7 @@ func (a *AppState) clone() (b AppState) {
 			b.locals[addr][aid] = tkv.Clone()
 		}
 	}
-	b.logs = make([]string, len(a.logs))
-	copy(b.logs, a.logs)
+	b.logs = slices.Clone(a.logs)
 	b.innerTxns = cloneInners(a.innerTxns)
 	return
 }
@@ -298,14 +298,15 @@ func determineEvalMode(program []byte, modeIn string) (mode modeType, err error)
 // - Sources from command line file names.
 // - Programs mentioned in transaction group txnGroup.
 // - if DryrunRequest present and no sources or transaction group set in command line then:
-//   1. DryrunRequest.Sources are expanded to DryrunRequest.Apps or DryrunRequest.Txns.
-//   2. DryrunRequest.Apps are expanded into DryrunRequest.Txns.
-//   3. txnGroup is set to DryrunRequest.Txns
+//  1. DryrunRequest.Sources are expanded to DryrunRequest.Apps or DryrunRequest.Txns.
+//  2. DryrunRequest.Apps are expanded into DryrunRequest.Txns.
+//  3. txnGroup is set to DryrunRequest.Txns
+//
 // Application search by id:
-//  - Balance records from CLI or DryrunRequest.Accounts
-//  - If no balance records set in CLI then DryrunRequest.Accounts and DryrunRequest.Apps are used.
-//    In this case Accounts data is used as a base for balance records creation,
-//    and Apps supply updates to AppParams field.
+//   - Balance records from CLI or DryrunRequest.Accounts
+//   - If no balance records set in CLI then DryrunRequest.Accounts and DryrunRequest.Apps are used.
+//     In this case Accounts data is used as a base for balance records creation,
+//     and Apps supply updates to AppParams field.
 func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 	ddr, err := ddrFromParams(dp)
 	if err != nil {

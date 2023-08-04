@@ -30,13 +30,18 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
@@ -538,4 +543,55 @@ func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 			require.Equal(t, test.expectedInt, getOfflineClosedStatus(test.acctData))
 		})
 	}
+}
+
+// TestMaxSizesCorrect tests that constants defined in the protocol package are correct
+// and match the MaxSize() values of associated msgp encodable structs.
+// the test is located here since it needs to import various other packages.
+//
+// If this test fails, DO NOT JUST UPDATE THE CONSTANTS OR MODIFY THE TEST!
+// Instead you need to introduce a new version of the protocol and mechanisms
+// to ensure that nodes on different proto versions don't reject each others messages due to exceeding
+// max size network protocol version
+func TestMaxSizesCorrect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	/************************************************
+	 * ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! *
+	 *  Read the comment before touching this test!  *
+	 * ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! *
+	 *************************************************
+	 */ ////////////////////////////////////////////////
+	avSize := uint64(agreement.UnauthenticatedVoteMaxSize())
+	require.Equal(t, avSize, protocol.AgreementVoteTag.MaxMessageSize())
+	miSize := uint64(network.MessageOfInterestMaxSize())
+	require.Equal(t, miSize, protocol.MsgOfInterestTag.MaxMessageSize())
+	npSize := uint64(NetPrioResponseSignedMaxSize())
+	require.Equal(t, npSize, protocol.NetPrioResponseTag.MaxMessageSize())
+	nsSize := uint64(network.IdentityVerificationMessageSignedMaxSize())
+	require.Equal(t, nsSize, protocol.NetIDVerificationTag.MaxMessageSize())
+	piSize := uint64(network.PingLength)
+	require.Equal(t, piSize, protocol.PingTag.MaxMessageSize())
+	pjSize := uint64(network.PingLength)
+	require.Equal(t, pjSize, protocol.PingReplyTag.MaxMessageSize())
+	ppSize := uint64(agreement.TransmittedPayloadMaxSize())
+	require.Equal(t, ppSize, protocol.ProposalPayloadTag.MaxMessageSize())
+	spSize := uint64(stateproof.SigFromAddrMaxSize())
+	require.Equal(t, spSize, protocol.StateProofSigTag.MaxMessageSize())
+	txSize := uint64(transactions.SignedTxnMaxSize())
+	require.Equal(t, txSize, protocol.TxnTag.MaxMessageSize())
+	msSize := uint64(crypto.DigestMaxSize())
+	require.Equal(t, msSize, protocol.MsgDigestSkipTag.MaxMessageSize())
+
+	// UE is a handrolled message not using msgp
+	// including here for completeness ensured by protocol.TestMaxSizesTested
+	ueSize := uint64(67)
+	require.Equal(t, ueSize, protocol.UniEnsBlockReqTag.MaxMessageSize())
+
+	// VB and TS are the largest messages and are using the default network max size
+	// including here for completeness ensured by protocol.TestMaxSizesTested
+	vbSize := uint64(network.MaxMessageLength)
+	require.Equal(t, vbSize, protocol.VoteBundleTag.MaxMessageSize())
+	tsSize := uint64(network.MaxMessageLength)
+	require.Equal(t, tsSize, protocol.TopicMsgRespTag.MaxMessageSize())
 }

@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,6 +45,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -1566,6 +1568,94 @@ end:
 	assertBoxCount(numberOfBoxesRemaining)
 }
 
+func TestSimulateTxnTracerDevMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "DevModeTxnTracerNetwork.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	senderBalance, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	if senderAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	toAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
+	closeToAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
+
+	// Ensure these accounts don't exist
+	receiverBalance, err := testClient.GetBalance(toAddress)
+	a.NoError(err)
+	a.Zero(receiverBalance)
+	closeToBalance, err := testClient.GetBalance(closeToAddress)
+	a.NoError(err)
+	a.Zero(closeToBalance)
+
+	txn, err := testClient.ConstructPayment(senderAddress, toAddress, 0, senderBalance/2, nil, closeToAddress, [32]byte{}, 0, 0)
+	a.NoError(err)
+	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
+	a.NoError(err)
+
+	currentRoundBeforeSimulate, err := testClient.CurrentRound()
+	a.NoError(err)
+
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+	}
+	result, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	currentAfterAfterSimulate, err := testClient.CurrentRound()
+	a.NoError(err)
+
+	// We can assert equality here since DevMode rounds are controlled by txn sends.
+	a.Equal(result.LastRound, currentRoundBeforeSimulate)
+	a.Equal(result.LastRound, currentAfterAfterSimulate)
+
+	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
+	expectedResult := v2.PreEncodedSimulateResponse{
+		Version:   2,
+		LastRound: result.LastRound, // checked above
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn: v2.PreEncodedTxInfo{
+							Txn:           stxn,
+							ClosingAmount: &closingAmount,
+						},
+					},
+				},
+			},
+		},
+	}
+	a.Equal(expectedResult, result)
+
+	// Ensure the transaction did not actually get applied to the ledger
+	receiverBalance, err = testClient.GetBalance(toAddress)
+	a.NoError(err)
+	a.Zero(receiverBalance)
+	closeToBalance, err = testClient.GetBalance(closeToAddress)
+	a.NoError(err)
+	a.Zero(closeToBalance)
+}
+
 func TestSimulateTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1738,17 +1828,6 @@ func TestSimulateWithUnlimitedLog(t *testing.T) {
 	}
 	a.NoError(err)
 
-	toAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-	closeToAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-
-	// Ensure these accounts don't exist
-	receiverBalance, err := testClient.GetBalance(toAddress)
-	a.NoError(err)
-	a.Zero(receiverBalance)
-	closeToBalance, err := testClient.GetBalance(closeToAddress)
-	a.NoError(err)
-	a.Zero(closeToBalance)
-
 	// construct program that uses a lot of log
 	prog := `#pragma version 8
 txn NumAppArgs
@@ -1785,12 +1864,10 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
-	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 	a.Greater(uint64(createdAppID), uint64(0))
@@ -1884,17 +1961,6 @@ func TestSimulateWithExtraBudget(t *testing.T) {
 	}
 	a.NoError(err)
 
-	toAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-	closeToAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
-
-	// Ensure these accounts don't exist
-	receiverBalance, err := testClient.GetBalance(toAddress)
-	a.NoError(err)
-	a.Zero(receiverBalance)
-	closeToBalance, err := testClient.GetBalance(closeToAddress)
-	a.NoError(err)
-	a.Zero(closeToBalance)
-
 	// construct program that uses a lot of budget
 	prog := `#pragma version 8
 txn ApplicationID
@@ -1926,12 +1992,10 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
-	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 	a.Greater(uint64(createdAppID), uint64(0))
@@ -1987,4 +2051,1154 @@ int 1`
 		},
 	}
 	a.Equal(expectedResult, resp)
+}
+
+func toPtr[T any](constVar T) *T { return &constVar }
+
+func valToNil[T comparable](v *T) *T {
+	var defaultV T
+	if v == nil || *v == defaultV {
+		return nil
+	}
+	return v
+}
+
+// The program is copied from pyteal source for c2c test over betanet:
+// source: https://github.com/ahangsu/c2c-testscript/blob/master/c2c_test/max_depth/app.py
+const maxDepthTealApproval = `#pragma version 8
+txn ApplicationID
+int 0
+==
+bnz main_l6
+txn NumAppArgs
+int 1
+==
+bnz main_l3
+err
+main_l3:
+global CurrentApplicationID
+app_params_get AppApprovalProgram
+store 1
+store 0
+global CurrentApplicationID
+app_params_get AppClearStateProgram
+store 3
+store 2
+global CurrentApplicationAddress
+acct_params_get AcctBalance
+store 5
+store 4
+load 1
+assert
+load 3
+assert
+load 5
+assert
+int 2
+txna ApplicationArgs 0
+btoi
+exp
+itob
+log
+txna ApplicationArgs 0
+btoi
+int 0
+>
+bnz main_l5
+main_l4:
+int 1
+return
+main_l5:
+itxn_begin
+  int appl
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 0
+  itxn_field ApprovalProgram
+  load 2
+  itxn_field ClearStateProgram
+itxn_submit
+itxn_begin
+  int pay
+  itxn_field TypeEnum
+  int 0
+  itxn_field Fee
+  load 4
+  int 100000
+  -
+  itxn_field Amount
+  byte "appID"
+  gitxn 0 CreatedApplicationID
+  itob
+  concat
+  sha512_256
+  itxn_field Receiver
+itxn_next
+  int appl
+  itxn_field TypeEnum
+  txna ApplicationArgs 0
+  btoi
+  int 1
+  -
+  itob
+  itxn_field ApplicationArgs
+  itxn CreatedApplicationID
+  itxn_field ApplicationID
+  int 0
+  itxn_field Fee
+  int DeleteApplication
+  itxn_field OnCompletion
+itxn_submit
+b main_l4
+main_l6:
+int 1
+return`
+
+func goValuesToAvmValues(goValues ...interface{}) *[]model.AvmValue {
+	if len(goValues) == 0 {
+		return nil
+	}
+
+	boolToUint64 := func(b bool) uint64 {
+		if b {
+			return 1
+		}
+		return 0
+	}
+
+	modelValues := make([]model.AvmValue, len(goValues))
+	for i, goValue := range goValues {
+		switch converted := goValue.(type) {
+		case []byte:
+			modelValues[i] = model.AvmValue{
+				Type:  uint64(basics.TealBytesType),
+				Bytes: &converted,
+			}
+		case bool:
+			convertedUint := boolToUint64(converted)
+			modelValues[i] = model.AvmValue{
+				Type: uint64(basics.TealUintType),
+				Uint: valToNil(&convertedUint),
+			}
+		case int:
+			convertedUint := uint64(converted)
+			modelValues[i] = model.AvmValue{
+				Type: uint64(basics.TealUintType),
+				Uint: valToNil(&convertedUint),
+			}
+		case basics.AppIndex:
+			convertedUint := uint64(converted)
+			modelValues[i] = model.AvmValue{
+				Type: uint64(basics.TealUintType),
+				Uint: valToNil(&convertedUint),
+			}
+		case uint64:
+			modelValues[i] = model.AvmValue{
+				Type: uint64(basics.TealUintType),
+				Uint: valToNil(&converted),
+			}
+		default:
+			panic("unexpected type inferred from interface{}")
+		}
+	}
+	return &modelValues
+}
+
+func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
+
+	// Get primary node
+	primaryNode, err := fixture.GetNodeController("Primary")
+	a.NoError(err)
+
+	fixture.Start()
+	defer primaryNode.FullStop()
+
+	// get lib goal client
+	testClient := fixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	_, err = testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(senderAddress, "no addr with funds")
+	a.NoError(err)
+
+	ops, err := logic.AssembleString(maxDepthTealApproval)
+	a.NoError(err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	MaxDepth := 2
+	MinFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
+	MinBalance := config.Consensus[protocol.ConsensusFuture].MinBalance
+
+	// create app and get the application ID
+	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
+		transactions.NoOpOC, approval, clearState, gl,
+		lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+
+	// fund app account
+	appFundTxn, err := testClient.SendPaymentFromWallet(
+		wh, nil, senderAddress, futureAppID.Address().String(),
+		0, MinBalance*uint64(MaxDepth+1), nil, "", 0, 0,
+	)
+	a.NoError(err)
+
+	uint64ToBytes := func(v uint64) []byte {
+		b := make([]byte, 8)
+		binary.BigEndian.PutUint64(b, v)
+		return b
+	}
+
+	// construct app calls
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(futureAppID), [][]byte{uint64ToBytes(uint64(MaxDepth))}, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee*uint64(3*MaxDepth+2), appCallTxn)
+	a.NoError(err)
+
+	// Group the transactions, and start the simulation
+	gid, err := testClient.GroupID([]transactions.Transaction{appFundTxn, appCallTxn})
+	a.NoError(err)
+	appFundTxn.Group = gid
+	appCallTxn.Group = gid
+
+	appFundTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appFundTxn)
+	a.NoError(err)
+	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
+	a.NoError(err)
+
+	// The first simulation should not pass, for simulation return PC in config has not been activated
+	execTraceConfig := simulation.ExecTraceConfig{
+		Enable: true,
+		Stack:  true,
+	}
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+		},
+		ExecTraceConfig: execTraceConfig,
+	}
+
+	_, err = testClient.SimulateTransactions(simulateRequest)
+	var httpError client.HTTPError
+	a.ErrorAs(err, &httpError)
+	a.Equal(http.StatusBadRequest, httpError.StatusCode)
+	a.Contains(httpError.ErrorString, "the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace")
+
+	// update the configuration file to enable EnableDeveloperAPI
+	err = primaryNode.FullStop()
+	a.NoError(err)
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	cfg.EnableDeveloperAPI = true
+	err = cfg.SaveToDisk(primaryNode.GetDataDir())
+	require.NoError(t, err)
+	fixture.Start()
+
+	resp, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	// Check expected == actual
+	creationOpcodeTrace := []model.SimulationOpcodeTraceUnit{
+		{
+			Pc: 1,
+		},
+		// txn ApplicationID
+		{
+			Pc:             6,
+			StackAdditions: goValuesToAvmValues(0),
+		},
+		// int 0
+		{
+			Pc:             8,
+			StackAdditions: goValuesToAvmValues(0),
+		},
+		// ==
+		{
+			Pc:             9,
+			StackPopCount:  toPtr[uint64](2),
+			StackAdditions: goValuesToAvmValues(1),
+		},
+		// bnz main_l6
+		{
+			Pc:            10,
+			StackPopCount: toPtr[uint64](1),
+		},
+		// int 1
+		{
+			Pc:             149,
+			StackAdditions: goValuesToAvmValues(1),
+		},
+		// return
+		{
+			Pc:             150,
+			StackAdditions: goValuesToAvmValues(1),
+			StackPopCount:  toPtr[uint64](1),
+		},
+	}
+
+	const NumArgs = 1
+
+	recursiveLongOpcodeTrace := func(appID basics.AppIndex, layer int) *[]model.SimulationOpcodeTraceUnit {
+		return &[]model.SimulationOpcodeTraceUnit{
+			{
+				Pc: 1,
+			},
+			// txn ApplicationID
+			{
+				Pc:             6,
+				StackAdditions: goValuesToAvmValues(appID),
+			},
+			// int 0
+			{
+				Pc:             8,
+				StackAdditions: goValuesToAvmValues(0),
+			},
+			// ==
+			{
+				Pc:             9,
+				StackAdditions: goValuesToAvmValues(false),
+				StackPopCount:  toPtr[uint64](2),
+			},
+			// bnz main_l6
+			{
+				Pc:            10,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// txn NumAppArgs
+			{
+				Pc:             13,
+				StackAdditions: goValuesToAvmValues(NumArgs),
+			},
+			// int 1
+			{
+				Pc:             15,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// ==
+			{
+				Pc:             16,
+				StackPopCount:  toPtr[uint64](2),
+				StackAdditions: goValuesToAvmValues(true),
+			},
+			// bnz main_l3
+			{
+				Pc:            17,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// global CurrentApplicationID
+			{
+				Pc:             21,
+				StackAdditions: goValuesToAvmValues(appID),
+			},
+			// app_params_get AppApprovalProgram
+			{
+				Pc:             23,
+				StackAdditions: goValuesToAvmValues(approval, 1),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// store 1
+			{
+				Pc:            25,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// store 0
+			{
+				Pc:            27,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// global CurrentApplicationID
+			{
+				Pc:             29,
+				StackAdditions: goValuesToAvmValues(appID),
+			},
+			// app_params_get AppClearStateProgram
+			{
+				Pc:             31,
+				StackAdditions: goValuesToAvmValues(clearState, 1),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// store 3
+			{
+				Pc:            33,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// store 2
+			{
+				Pc:            35,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// global CurrentApplicationAddress
+			{
+				Pc:             37,
+				StackAdditions: goValuesToAvmValues(crypto.Digest(appID.Address()).ToSlice()),
+			},
+			// acct_params_get AcctBalance
+			{
+				Pc:             39,
+				StackAdditions: goValuesToAvmValues(uint64(3-layer)*MinBalance, 1),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// store 5
+			{
+				Pc:            41,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// store 4
+			{
+				Pc:            43,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// load 1
+			{
+				Pc:             45,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// assert
+			{
+				Pc:            47,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// load 3
+			{
+				Pc:             48,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// assert
+			{
+				Pc:            50,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// load 5
+			{
+				Pc:             51,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// assert
+			{
+				Pc:            53,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// int 2
+			{
+				Pc:             54,
+				StackAdditions: goValuesToAvmValues(2),
+			},
+			// txna ApplicationArgs 0
+			{
+				Pc:             56,
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
+			},
+			// btoi
+			{
+				Pc:             59,
+				StackAdditions: goValuesToAvmValues(uint64(MaxDepth - layer)),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// exp
+			{
+				Pc:             60,
+				StackAdditions: goValuesToAvmValues(1 << (MaxDepth - layer)),
+				StackPopCount:  toPtr[uint64](2),
+			},
+			// itob
+			{
+				Pc:             61,
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// log
+			{
+				Pc:            62,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// txna ApplicationArgs 0
+			{
+				Pc:             63,
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
+			},
+			// btoi
+			{
+				Pc:             66,
+				StackAdditions: goValuesToAvmValues(MaxDepth - layer),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// int 0
+			{
+				Pc:             67,
+				StackAdditions: goValuesToAvmValues(0),
+			},
+			// >
+			{
+				Pc:             68,
+				StackAdditions: goValuesToAvmValues(MaxDepth-layer > 0),
+				StackPopCount:  toPtr[uint64](2),
+			},
+			// bnz main_l5
+			{
+				Pc:            69,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// itxn_begin
+			{
+				Pc: 74,
+			},
+			// int appl
+			{
+				Pc:             75,
+				StackAdditions: goValuesToAvmValues(6),
+			},
+			// itxn_field TypeEnum
+			{
+				Pc:            76,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// int 0
+			{
+				Pc:             78,
+				StackAdditions: goValuesToAvmValues(0),
+			},
+			// itxn_field Fee
+			{
+				Pc:            79,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// load 0
+			{
+				Pc:             81,
+				StackAdditions: goValuesToAvmValues(approval),
+			},
+			// itxn_field ApprovalProgram
+			{
+				Pc:            83,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// load 2
+			{
+				Pc:             85,
+				StackAdditions: goValuesToAvmValues(clearState),
+			},
+			// itxn_field ClearStateProgram
+			{
+				Pc:            87,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// itxn_submit
+			{
+				Pc:            89,
+				SpawnedInners: &[]uint64{0},
+			},
+			// itxn_begin
+			{
+				Pc: 90,
+			},
+			// int pay
+			{
+				Pc:             91,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// itxn_field TypeEnum
+			{
+				Pc:            92,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// int 0
+			{
+				Pc:             94,
+				StackAdditions: goValuesToAvmValues(0),
+			},
+			// itxn_field Fee
+			{
+				Pc:            95,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// load 4
+			{
+				Pc:             97,
+				StackAdditions: goValuesToAvmValues(uint64(3-layer) * MinBalance),
+			},
+			// int 100000
+			{
+				Pc:             99,
+				StackAdditions: goValuesToAvmValues(MinBalance),
+			},
+			// -
+			{
+				Pc:             103,
+				StackPopCount:  toPtr[uint64](2),
+				StackAdditions: goValuesToAvmValues(uint64(2-layer) * MinBalance),
+			},
+			// itxn_field Amount
+			{
+				Pc:            104,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// byte "appID"
+			{
+				Pc:             106,
+				StackAdditions: goValuesToAvmValues([]byte("appID")),
+			},
+			// gitxn 0 CreatedApplicationID
+			{
+				Pc:             113,
+				StackAdditions: goValuesToAvmValues(appID + 3),
+			},
+			// itob
+			{
+				Pc:             116,
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(appID) + 3)),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// concat
+			{
+				Pc:             117,
+				StackAdditions: goValuesToAvmValues([]byte("appID" + string(uint64ToBytes(uint64(appID)+3)))),
+				StackPopCount:  toPtr[uint64](2),
+			},
+			// sha512_256
+			{
+				Pc:             118,
+				StackAdditions: goValuesToAvmValues(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// itxn_field Receiver
+			{
+				Pc:            119,
+				StackPopCount: toPtr[uint64](1),
+			},
+			{
+				Pc: 121,
+			},
+			// int appl
+			{
+				Pc:             122,
+				StackAdditions: goValuesToAvmValues(6),
+			},
+			// itxn_field TypeEnum
+			{
+				Pc:            123,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// txna ApplicationArgs 0
+			{
+				Pc:             125,
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
+			},
+			// btoi
+			{
+				Pc:             128,
+				StackAdditions: goValuesToAvmValues(MaxDepth - layer),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// int 1
+			{
+				Pc:             129,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// -
+			{
+				Pc:             130,
+				StackAdditions: goValuesToAvmValues(MaxDepth - layer - 1),
+				StackPopCount:  toPtr[uint64](2),
+			},
+			// itob
+			{
+				Pc:             131,
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer - 1))),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// itxn_field ApplicationArgs
+			{
+				Pc:            132,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// itxn CreatedApplicationID
+			{
+				Pc:             134,
+				StackAdditions: goValuesToAvmValues(appID + 3),
+			},
+			// itxn_field ApplicationID
+			{
+				Pc:            136,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// int 0
+			{
+				Pc:             138,
+				StackAdditions: goValuesToAvmValues(0),
+			},
+			// itxn_field Fee
+			{
+				Pc:            139,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// int DeleteApplication
+			{
+				Pc:             141,
+				StackAdditions: goValuesToAvmValues(5),
+			},
+			// itxn_field OnCompletion
+			{
+				Pc:            143,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// itxn_submit
+			{
+				Pc:            145,
+				SpawnedInners: &[]uint64{1, 2},
+			},
+			// b main_l4
+			{
+				Pc: 146,
+			},
+			// int 1
+			{
+				Pc:             72,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// return
+			{
+				Pc:             73,
+				StackAdditions: goValuesToAvmValues(1),
+				StackPopCount:  toPtr[uint64](1),
+			},
+		}
+	}
+
+	finalDepthTrace := func(appID basics.AppIndex, layer int) *[]model.SimulationOpcodeTraceUnit {
+		return &[]model.SimulationOpcodeTraceUnit{
+			{
+				Pc: 1,
+			},
+			// txn ApplicationID
+			{
+				Pc:             6,
+				StackAdditions: goValuesToAvmValues(appID),
+			},
+			// int 0
+			{
+				Pc:             8,
+				StackAdditions: goValuesToAvmValues(0),
+			},
+			// ==
+			{
+				Pc:             9,
+				StackAdditions: goValuesToAvmValues(false),
+				StackPopCount:  toPtr[uint64](2),
+			},
+			// bnz main_l6
+			{
+				Pc:            10,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// txn NumAppArgs
+			{
+				Pc:             13,
+				StackAdditions: goValuesToAvmValues(NumArgs),
+			},
+			// int 1
+			{
+				Pc:             15,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// ==
+			{
+				Pc:             16,
+				StackPopCount:  toPtr[uint64](2),
+				StackAdditions: goValuesToAvmValues(true),
+			},
+			// bnz main_l3
+			{
+				Pc:            17,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// global CurrentApplicationID
+			{
+				Pc:             21,
+				StackAdditions: goValuesToAvmValues(appID),
+			},
+			// app_params_get AppApprovalProgram
+			{
+				Pc:             23,
+				StackAdditions: goValuesToAvmValues(approval, 1),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// store 1
+			{
+				Pc:            25,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// store 0
+			{
+				Pc:            27,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// global CurrentApplicationID
+			{
+				Pc:             29,
+				StackAdditions: goValuesToAvmValues(appID),
+			},
+			// app_params_get AppClearStateProgram
+			{
+				Pc:             31,
+				StackAdditions: goValuesToAvmValues(clearState, 1),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// store 3
+			{
+				Pc:            33,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// store 2
+			{
+				Pc:            35,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// global CurrentApplicationAddress
+			{
+				Pc:             37,
+				StackAdditions: goValuesToAvmValues(crypto.Digest(appID.Address()).ToSlice()),
+			},
+			// acct_params_get AcctBalance
+			{
+				Pc:             39,
+				StackAdditions: goValuesToAvmValues(uint64(3-layer)*MinBalance, 1),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// store 5
+			{
+				Pc:            41,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// store 4
+			{
+				Pc:            43,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// load 1
+			{
+				Pc:             45,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// assert
+			{
+				Pc:            47,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// load 3
+			{
+				Pc:             48,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// assert
+			{
+				Pc:            50,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// load 5
+			{
+				Pc:             51,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// assert
+			{
+				Pc:            53,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// int 2
+			{
+				Pc:             54,
+				StackAdditions: goValuesToAvmValues(2),
+			},
+			// txna ApplicationArgs 0
+			{
+				Pc:             56,
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
+			},
+			// btoi
+			{
+				Pc:             59,
+				StackAdditions: goValuesToAvmValues(uint64(MaxDepth - layer)),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// exp
+			{
+				Pc:             60,
+				StackAdditions: goValuesToAvmValues(1 << (MaxDepth - layer)),
+				StackPopCount:  toPtr[uint64](2),
+			},
+			// itob
+			{
+				Pc:             61,
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(1 << uint64(MaxDepth-layer))),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// log
+			{
+				Pc:            62,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// txna ApplicationArgs 0
+			{
+				Pc:             63,
+				StackAdditions: goValuesToAvmValues(uint64ToBytes(uint64(MaxDepth - layer))),
+			},
+			// btoi
+			{
+				Pc:             66,
+				StackAdditions: goValuesToAvmValues(MaxDepth - layer),
+				StackPopCount:  toPtr[uint64](1),
+			},
+			// int 0
+			{
+				Pc:             67,
+				StackAdditions: goValuesToAvmValues(0),
+			},
+			// >
+			{
+				Pc:             68,
+				StackAdditions: goValuesToAvmValues(MaxDepth-layer > 0),
+				StackPopCount:  toPtr[uint64](2),
+			},
+			// bnz main_l5
+			{
+				Pc:            69,
+				StackPopCount: toPtr[uint64](1),
+			},
+			// int 1
+			{
+				Pc:             72,
+				StackAdditions: goValuesToAvmValues(1),
+			},
+			// return
+			{
+				Pc:             73,
+				StackAdditions: goValuesToAvmValues(1),
+				StackPopCount:  toPtr[uint64](1),
+			},
+		}
+	}
+
+	a.Len(resp.TxnGroups[0].Txns, 2)
+	a.Nil(resp.TxnGroups[0].FailureMessage)
+	a.Nil(resp.TxnGroups[0].FailedAt)
+
+	a.Nil(resp.TxnGroups[0].Txns[0].TransactionTrace)
+
+	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
+		ApprovalProgramTrace: recursiveLongOpcodeTrace(futureAppID, 0),
+		InnerTrace: &[]model.SimulationTransactionExecTrace{
+			{ApprovalProgramTrace: &creationOpcodeTrace},
+			{},
+			{
+				ApprovalProgramTrace: recursiveLongOpcodeTrace(futureAppID+3, 1),
+				InnerTrace: &[]model.SimulationTransactionExecTrace{
+					{ApprovalProgramTrace: &creationOpcodeTrace},
+					{},
+					{ApprovalProgramTrace: finalDepthTrace(futureAppID+6, 2)},
+				},
+			},
+		},
+	}
+	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
+
+	a.Equal(execTraceConfig, resp.ExecTraceConfig)
+}
+
+func TestSimulateScratchSlotChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
+
+	// Get primary node
+	primaryNode, err := fixture.GetNodeController("Primary")
+	a.NoError(err)
+
+	fixture.Start()
+	defer primaryNode.FullStop()
+
+	// get lib goal client
+	testClient := fixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	_, err = testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(senderAddress, "no addr with funds")
+	a.NoError(err)
+
+	ops, err := logic.AssembleString(
+		`#pragma version 8
+		 global CurrentApplicationID
+		 bz end
+		 int 1
+		 store 1
+		 load 1
+		 dup
+		 stores
+		end:
+		 int 1`)
+	a.NoError(err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	MinFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
+	MinBalance := config.Consensus[protocol.ConsensusFuture].MinBalance
+
+	// create app and get the application ID
+	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
+		transactions.NoOpOC, approval, clearState, gl,
+		lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+
+	// fund app account
+	appFundTxn, err := testClient.SendPaymentFromWallet(
+		wh, nil, senderAddress, futureAppID.Address().String(),
+		0, MinBalance, nil, "", 0, 0,
+	)
+	a.NoError(err)
+
+	// construct app calls
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(futureAppID), [][]byte{}, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallTxn)
+	a.NoError(err)
+
+	// Group the transactions
+	gid, err := testClient.GroupID([]transactions.Transaction{appFundTxn, appCallTxn})
+	a.NoError(err)
+	appFundTxn.Group = gid
+	appCallTxn.Group = gid
+
+	appFundTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appFundTxn)
+	a.NoError(err)
+	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
+	a.NoError(err)
+
+	// construct simulation request, with scratch slot change enabled
+	execTraceConfig := simulation.ExecTraceConfig{
+		Enable:  true,
+		Scratch: true,
+	}
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+		},
+		ExecTraceConfig: execTraceConfig,
+	}
+
+	// update the configuration file to enable EnableDeveloperAPI
+	err = primaryNode.FullStop()
+	a.NoError(err)
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	cfg.EnableDeveloperAPI = true
+	err = cfg.SaveToDisk(primaryNode.GetDataDir())
+	require.NoError(t, err)
+	fixture.Start()
+
+	// simulate with wrong config (not enabled trace), see expected error
+	_, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+		},
+		ExecTraceConfig: simulation.ExecTraceConfig{Scratch: true},
+	})
+	a.ErrorContains(err, "basic trace must be enabled when enabling scratch slot change tracing")
+
+	// start real simulating
+	resp, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	// check if resp match expected result
+	a.Equal(execTraceConfig, resp.ExecTraceConfig)
+	a.Len(resp.TxnGroups[0].Txns, 2)
+	a.Nil(resp.TxnGroups[0].Txns[0].TransactionTrace)
+	a.NotNil(resp.TxnGroups[0].Txns[1].TransactionTrace)
+
+	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
+		ApprovalProgramTrace: &[]model.SimulationOpcodeTraceUnit{
+			{Pc: 1},
+			{Pc: 4},
+			{Pc: 6},
+			{Pc: 9},
+			{
+				Pc: 10,
+				ScratchChanges: &[]model.ScratchChange{
+					{
+						Slot: 1,
+						NewValue: model.AvmValue{
+							Type: 2,
+							Uint: toPtr[uint64](1),
+						},
+					},
+				},
+			},
+			{Pc: 12},
+			{Pc: 14},
+			{
+				Pc: 15,
+				ScratchChanges: &[]model.ScratchChange{
+					{
+						Slot: 1,
+						NewValue: model.AvmValue{
+							Type: 2,
+							Uint: toPtr[uint64](1),
+						},
+					},
+				},
+			},
+			{Pc: 16},
+		},
+	}
+	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
 }

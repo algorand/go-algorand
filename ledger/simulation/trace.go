@@ -35,6 +35,7 @@ type TxnResult struct {
 	Txn                    transactions.SignedTxnWithAD
 	AppBudgetConsumed      uint64
 	LogicSigBudgetConsumed uint64
+	Trace                  *TransactionTrace
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group
@@ -103,6 +104,15 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 	return logicEvalConstants
 }
 
+// ExecTraceConfig gathers all execution trace related configs for simulation result
+type ExecTraceConfig struct {
+	_struct struct{} `codec:",omitempty"`
+
+	Enable  bool `codec:"enable"`
+	Stack   bool `codec:"stack-change"`
+	Scratch bool `codec:"scratch-change"`
+}
+
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
 	Version       uint64
@@ -110,13 +120,51 @@ type Result struct {
 	TxnGroups     []TxnGroupResult // this is a list so that supporting multiple in the future is not breaking
 	EvalOverrides ResultEvalOverrides
 	Block         *ledgercore.ValidatedBlock
+	TraceConfig   ExecTraceConfig
 }
 
-func makeSimulationResultWithVersion(lastRound basics.Round, request Request, version uint64) (Result, error) {
-	if version != ResultLatestVersion {
-		return Result{}, fmt.Errorf("invalid SimulationResult version: %d", version)
-	}
+// ReturnTrace reads from Result object and decides if simulation returns PC.
+// It only reads Enable for any option combination must contain Enable field, or it won't make sense.
+// The other invalid options would be eliminated in validateSimulateRequest early.
+func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 
+// ReturnStackChange reads from Result object and decides if simulation return stack changes.
+func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
+
+// ReturnScratchChange tells if the simulation runs with scratch-change enabled.
+func (r Result) ReturnScratchChange() bool { return r.TraceConfig.Scratch }
+
+// validateSimulateRequest first checks relation between request and config variables, including developerAPI:
+// if `developerAPI` provided is turned off, this method would:
+// - error on asking for exec trace
+func validateSimulateRequest(request Request, developerAPI bool) error {
+	if !developerAPI && request.TraceConfig.Enable {
+		return InvalidRequestError{
+			SimulatorError{
+				err: fmt.Errorf("the local configuration of the node has `EnableDeveloperAPI` turned off, while requesting for execution trace"),
+			},
+		}
+	}
+	if !request.TraceConfig.Enable {
+		if request.TraceConfig.Stack {
+			return InvalidRequestError{
+				SimulatorError{
+					err: fmt.Errorf("basic trace must be enabled when enabling stack tracing"),
+				},
+			}
+		}
+		if request.TraceConfig.Scratch {
+			return InvalidRequestError{
+				SimulatorError{
+					err: fmt.Errorf("basic trace must be enabled when enabling scratch slot change tracing"),
+				},
+			}
+		}
+	}
+	return nil
+}
+
+func makeSimulationResult(lastRound basics.Round, request Request, developerAPI bool) (Result, error) {
 	groups := make([]TxnGroupResult, len(request.TxnGroups))
 
 	for i, txgroup := range request.TxnGroups {
@@ -128,19 +176,60 @@ func makeSimulationResultWithVersion(lastRound basics.Round, request Request, ve
 		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
+	if err := validateSimulateRequest(request, developerAPI); err != nil {
+		return Result{}, err
+	}
+
 	return Result{
-		Version:       version,
+		Version:       ResultLatestVersion,
 		LastRound:     lastRound,
 		TxnGroups:     groups,
 		EvalOverrides: resultEvalConstants,
+		TraceConfig:   request.TraceConfig,
 	}, nil
 }
 
-func makeSimulationResult(lastRound basics.Round, request Request) Result {
-	result, err := makeSimulationResultWithVersion(lastRound, request, ResultLatestVersion)
-	if err != nil {
-		// this should never happen, since we pass in ResultLatestVersion
-		panic(err)
-	}
-	return result
+// ScratchChange represents a write operation into a scratch slot
+type ScratchChange struct {
+	// Slot stands for the scratch slot id get written to
+	Slot uint64
+
+	// NewValue is the stack value written to scratch slot
+	NewValue basics.TealValue
+}
+
+// OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
+type OpcodeTraceUnit struct {
+	// The PC of the opcode being evaluated
+	PC uint64
+
+	// SpawnedInners contains the indexes of traces for inner transactions spawned by this opcode,
+	// if any. These indexes refer to the InnerTraces array of the TransactionTrace object containing
+	// this OpcodeTraceUnit.
+	SpawnedInners []int
+
+	// what has been added to stack
+	StackAdded []basics.TealValue
+
+	// deleted element number from stack
+	StackPopCount uint64
+
+	// ScratchSlotChanges stands for write operations into scratch slots
+	ScratchSlotChanges []ScratchChange
+}
+
+// TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
+type TransactionTrace struct {
+	// ApprovalProgramTrace stands for a slice of OpcodeTraceUnit over application call on approval program
+	ApprovalProgramTrace []OpcodeTraceUnit
+	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
+	ClearStateProgramTrace []OpcodeTraceUnit
+	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
+	LogicSigTrace []OpcodeTraceUnit
+	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
+	programTraceRef *[]OpcodeTraceUnit
+	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
+	// object only contains traces for inners that are immediate children of this transaction.
+	// Grandchild traces will be present inside the TransactionTrace of their parent.
+	InnerTraces []TransactionTrace
 }

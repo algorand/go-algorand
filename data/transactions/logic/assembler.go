@@ -596,8 +596,8 @@ func asmPushInt(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sour
 
 func asmPushInts(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	ops.pending.WriteByte(spec.Opcode)
-	_, err := asmIntImmArgs(ops, args)
-	return err
+	asmIntImmArgs(ops, args)
+	return nil
 }
 
 func asmPushBytes(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
@@ -672,6 +672,9 @@ func parseBinaryArgs(args []token) ([]byte, int, error) {
 		}
 		val, err := base64.StdEncoding.DecodeString(arg[open+1 : close])
 		if err != nil {
+			if cie, ok := err.(base64.CorruptInputError); ok {
+				return nil, 0, base64.CorruptInputError(int64(cie) + int64(open) + 1)
+			}
 			return nil, 0, err
 		}
 		return val, 1, nil
@@ -727,7 +730,7 @@ func parseStringLiteral(input string) (result []byte, err error) {
 		char := input[pos]
 		if char == '\\' && !escapeSeq {
 			if hexSeq {
-				return nil, fmt.Errorf("escape seq inside hex number")
+				return nil, fmt.Errorf("escape sequence inside hex number")
 			}
 			escapeSeq = true
 			pos++
@@ -757,7 +760,7 @@ func parseStringLiteral(input string) (result []byte, err error) {
 		if hexSeq {
 			hexSeq = false
 			if pos >= len(input)-2 { // count a closing quote
-				return nil, fmt.Errorf("non-terminated hex seq")
+				return nil, fmt.Errorf("non-terminated hex sequence")
 			}
 			num, err := strconv.ParseUint(input[pos:pos+2], 16, 8)
 			if err != nil {
@@ -771,7 +774,7 @@ func parseStringLiteral(input string) (result []byte, err error) {
 		pos++
 	}
 	if escapeSeq || hexSeq {
-		return nil, fmt.Errorf("non-terminated escape seq")
+		return nil, fmt.Errorf("non-terminated escape sequence")
 	}
 
 	return
@@ -851,7 +854,7 @@ func asmMethod(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourc
 	return args[0].errorf("unable to parse method signature")
 }
 
-func asmIntImmArgs(ops *OpStream, args []token) ([]uint64, *sourceError) {
+func asmIntImmArgs(ops *OpStream, args []token) []uint64 {
 	ivals := make([]uint64, len(args))
 	var scratch [binary.MaxVarintLen64]byte
 	l := binary.PutUvarint(scratch[:], uint64(len(args)))
@@ -866,15 +869,12 @@ func asmIntImmArgs(ops *OpStream, args []token) ([]uint64, *sourceError) {
 		ivals[i] = cu
 	}
 
-	return ivals, nil
+	return ivals
 }
 
 func asmIntCBlock(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	ops.pending.WriteByte(spec.Opcode)
-	ivals, err := asmIntImmArgs(ops, args)
-	if err != nil {
-		return err
-	}
+	ivals := asmIntImmArgs(ops, args)
 	if !ops.known.deadcode {
 		// If we previously processed an `int`, we thought we could insert our
 		// own intcblock, but now we see a manual one.
@@ -895,10 +895,9 @@ func asmByteImmArgs(ops *OpStream, spec *OpSpec, args []token) ([][]byte, *sourc
 	for len(rest) > 0 {
 		val, consumed, err := parseBinaryArgs(rest)
 		if err != nil {
-			// Would be nice to keep going, as in
-			// intcblock, but parseBinaryArgs would have
-			// to return a useful consumed value even in
-			// the face of errors.  Hard.
+			// Would be nice to keep going, as in asmIntImmArgs, but
+			// parseBinaryArgs would have to return a useful consumed value even
+			// in the face of errors.  Hard.
 			return nil, rest[0].errorf("%s %w", spec.Name, err)
 		}
 		bvals = append(bvals, val)
@@ -1271,11 +1270,6 @@ func typeBury(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, erro
 	}
 
 	top := len(pgm.stack) - 1
-	typ, ok := pgm.top()
-	if !ok {
-		return nil, nil, nil // Will error because bury demands a stack arg
-	}
-
 	idx := top - n
 	if idx < 0 {
 		if pgm.bottom.AVMType == avmNone {
@@ -1286,6 +1280,7 @@ func typeBury(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, erro
 		// nothing to update.
 		return nil, nil, nil
 	}
+	typ, _ := pgm.top()
 
 	returns := make(StackTypes, n)
 	copy(returns, pgm.stack[idx:]) // Won't have room to copy the top type
@@ -1320,11 +1315,7 @@ func typeFrameBury(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes,
 		return nil, nil, nil
 	}
 
-	top := len(pgm.stack) - 1
-	typ, ok := pgm.top()
-	if !ok {
-		return nil, nil, nil // Will error because fbury demands a stack arg
-	}
+	typ, _ := pgm.top() // !ok is a degenerate case anyway
 
 	// If we have no frame pointer, we have to wipe out any belief that the
 	// stack contains anything but the supplied type.
@@ -1344,6 +1335,7 @@ func typeFrameBury(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes,
 	if idx < 0 {
 		return nil, nil, fmt.Errorf("frame_bury %d in sub with %d args", n, pgm.fp)
 	}
+	top := len(pgm.stack) - 1
 	if idx >= top {
 		return nil, nil, fmt.Errorf("frame_bury above stack")
 	}
@@ -1649,15 +1641,15 @@ func getSpec(ops *OpStream, mnemonic token, argCount int) (OpSpec, string, bool)
 	name := mnemonic.str
 	pseudoSpecs, ok := ops.versionedPseudoOps[name]
 	if ok {
-		pseudo, ok := pseudoSpecs[argCount]
-		if !ok {
+		pseudo, ok2 := pseudoSpecs[argCount]
+		if !ok2 {
 			// Could be that pseudoOp wants to handle immediates itself so check -1 key
-			pseudo, ok = pseudoSpecs[anyImmediates]
-			if !ok {
+			pseudo, ok2 = pseudoSpecs[anyImmediates]
+			if !ok2 {
 				// Number of immediates supplied did not match any of the pseudoOps of the given name, so we try to construct a mock spec that can be used to track types
 				pseudoImmediatesError(ops, mnemonic, pseudoSpecs)
-				proto, version, ok := mergeProtos(pseudoSpecs)
-				if !ok {
+				proto, version, ok3 := mergeProtos(pseudoSpecs)
+				if !ok3 {
 					return OpSpec{}, "", false
 				}
 				pseudo = OpSpec{Name: name, Proto: proto, Version: version, OpDetails: OpDetails{
@@ -1759,6 +1751,7 @@ func isFullSpec(spec OpSpec) bool {
 func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 	var args StackTypes
 	var returns StackTypes
+	var debugExplainFuncPtr debugStackExplain
 	var minVersion uint64
 	i := 0
 	for _, spec := range specs {
@@ -1784,9 +1777,16 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 				}
 			}
 		}
+		if debugExplainFuncPtr == nil {
+			debugExplainFuncPtr = spec.Explain
+		}
 		i++
 	}
-	return Proto{typedList{args, ""}, typedList{returns, ""}}, minVersion, true
+	return Proto{
+		Arg:     typedList{args, ""},
+		Return:  typedList{returns, ""},
+		Explain: debugExplainFuncPtr,
+	}, minVersion, true
 }
 
 func prepareVersionedPseudoTable(version uint64) map[string]map[int]OpSpec {
@@ -1828,18 +1828,6 @@ func (se sourceError) Unwrap() error {
 
 func errorLinef(line int, format string, a ...interface{}) *sourceError {
 	return &sourceError{line, 0, fmt.Errorf(format, a...)}
-}
-
-func typecheck(expected, got StackType) bool {
-	// Some ops push 'any' and we wait for run time to see what it is.
-	// Some of those 'any' are based on fields that we _could_ know now but haven't written a more detailed system of typecheck for (yet).
-	if expected == StackAny && got == StackNone { // Any is lenient, but stack can't be empty
-		return false
-	}
-	if (expected == StackAny) || (got == StackAny) {
-		return true
-	}
-	return expected == got
 }
 
 type token struct {
@@ -2019,15 +2007,15 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 // nextStatement breaks tokens into two slices at the first semicolon and expands macros along the way.
 func nextStatement(ops *OpStream, tokens []token) (current, rest []token) {
 	for i := 0; i < len(tokens); i++ {
-		token := tokens[i]
-		replacement, ok := ops.macros[token.str]
+		tok := tokens[i]
+		replacement, ok := ops.macros[tok.str]
 		if ok {
 			tokens = append(tokens[0:i], append(replacement[1:], tokens[i+1:]...)...)
 			// backup to handle potential re-expansion of the first token in the expansion
 			i--
 			continue
 		}
-		if token.str == ";" {
+		if tok.str == ";" {
 			return tokens[:i], tokens[i+1:]
 		}
 	}
