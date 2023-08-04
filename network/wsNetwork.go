@@ -813,14 +813,14 @@ func (wn *WebsocketNetwork) setup() {
 		broadcastQueueHighPrio: make(chan broadcastRequest, wn.outgoingMessagesBufferSize),
 		broadcastQueueBulk:     make(chan broadcastRequest, 100),
 	}
+	if wn.broadcaster.slowWritingPeerMonitorInterval == 0 {
+		wn.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
+	}
 	wn.meshUpdateRequests = make(chan meshRequest, 5)
 	wn.readyChan = make(chan struct{})
 	wn.tryConnectAddrs = make(map[string]int64)
 	wn.eventualReadyDelay = time.Minute
 	wn.prioTracker = newPrioTracker(wn)
-	if wn.broadcaster.slowWritingPeerMonitorInterval == 0 {
-		wn.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
-	}
 
 	readBufferLen := wn.config.IncomingConnectionsLimit + wn.config.GossipFanout
 	if readBufferLen < 100 {
