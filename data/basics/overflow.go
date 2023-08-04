@@ -156,7 +156,7 @@ func Muldiv(a uint64, b uint64, c uint64) (res uint64, overflow bool) {
 // DivCeil provides `math.Ceil` semantics using integer division.  The technique
 // avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
 //
-// The method does _not_ check for divide-by-zero.
+// The method assumes both numbers are positive and does _not_ check for divide-by-zero.
 func DivCeil[T constraints.Integer](numerator, denominator T) T {
 	return (numerator + denominator - 1) / denominator
 }
