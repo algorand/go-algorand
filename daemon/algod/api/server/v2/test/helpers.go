@@ -170,7 +170,7 @@ func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) erro
 	return m.err
 }
 
-func (m *mockNode) BroadcastRawSignedTxGroup(txgroup []transactions.SignedTxn) error {
+func (m *mockNode) AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
 	return m.err
 }
 

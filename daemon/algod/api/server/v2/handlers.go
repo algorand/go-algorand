@@ -105,7 +105,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	BroadcastRawSignedTxGroup(txgroup []transactions.SignedTxn) error
+	AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	Simulate(request simulation.Request) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
@@ -941,7 +941,7 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	err = v2.Node.BroadcastRawSignedTxGroup(txgroup)
+	err = v2.Node.AsyncBroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		return serviceUnavailable(ctx, err, err.Error(), v2.Log)
 	}

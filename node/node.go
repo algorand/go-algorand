@@ -485,9 +485,9 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	return node.broadcastSignedTxGroup(txgroup)
 }
 
-// BroadcastRawSignedTxGroup feeds a raw transaction group directly to the transaction pool.
+// AsyncBroadcastSignedTxGroup feeds a raw transaction group directly to the transaction pool.
 // This method is intended to be used for performance testing and debugging purposes only.
-func (node *AlgorandFullNode) BroadcastRawSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+func (node *AlgorandFullNode) AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
 	return node.txHandler.LocalTransaction(txgroup)
 }
 
