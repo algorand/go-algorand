@@ -163,7 +163,7 @@ func TestAssetValidRounds(t *testing.T) {
 	// ledger may advance between SuggestedParams and FillUnsignedTxTemplate calls
 	// expect validity sequence
 	var firstValidRange, lastValidRange []uint64
-	for i := lastRoundBefore + 1; i <= lastRoundAfter+1; i++ {
+	for i := lastRoundBefore; i <= lastRoundAfter+1; i++ {
 		firstValidRange = append(firstValidRange, i)
 		lastValidRange = append(lastValidRange, i+cparams.MaxTxnLife)
 	}
