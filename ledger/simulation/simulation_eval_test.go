@@ -1205,7 +1205,7 @@ func TestLogicSigOverBudget(t *testing.T) {
 ` + strings.Repeat(`byte "a"
 keccak256
 pop
-`, 200) + `int 1`)
+`, 310) + `int 1`)
 	require.NoError(t, err)
 	program := logic.Program(op.Program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
@@ -1261,7 +1261,7 @@ int 1`,
 									ApplyData: expectedAppCallAD,
 								},
 								AppBudgetConsumed:      0,
-								LogicSigBudgetConsumed: 19934,
+								LogicSigBudgetConsumed: 39998,
 							},
 						},
 						FailedAt:          expectedFailedAt,

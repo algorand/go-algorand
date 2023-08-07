@@ -113,10 +113,12 @@ func TestVrfVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, _, _ := makeSampleEnv()
+	ep := defaultAppParams()
 	testApp(t, notrack("int 1; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 0 wanted")
 	testApp(t, notrack("byte 0x1122; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 1 wanted")
 	testApp(t, notrack("byte 0x1122; byte 0x2233; int 3; vrf_verify VrfAlgorand"), ep, "arg 2 wanted")
+
+	ep = defaultSigParams()
 	testLogic(t, "byte 0x1122; byte 0x2233; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf proof wrong size")
 	// 80 byte proof
 	testLogic(t, "byte 0x1122; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf pubkey wrong size")
@@ -210,18 +212,18 @@ ed25519verify`, pkStr), v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn))
+			testLogicBytes(t, ops.Program, defaultSigParams(txn))
 
 			// short sig will fail
 			txn.Lsig.Args[1] = sig[1:]
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "invalid signature")
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "invalid signature")
 
 			// flip a bit and it should not pass
 			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "REJECT")
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
 		})
 	}
 }
@@ -250,18 +252,18 @@ ed25519verify_bare`, pkStr), v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn))
+			testLogicBytes(t, ops.Program, defaultSigParams(txn))
 
 			// short sig will fail
 			txn.Lsig.Args[1] = sig[1:]
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "invalid signature")
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "invalid signature")
 
 			// flip a bit and it should not pass
 			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "REJECT")
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
 		})
 	}
 }
@@ -460,7 +462,7 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, 5)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(5, txn))
+	pass, err := EvalSignature(0, defaultSigParamsWithVersion(5, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -568,7 +570,7 @@ ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, fidoVersion)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(fidoVersion, txn))
+	pass, err := EvalSignature(0, defaultSigParamsWithVersion(fidoVersion, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -707,7 +709,7 @@ ed25519verify`, pkStr), AssemblerMaxVersion)
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = programs[i]
 		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
-		ep := defaultEvalParams(txn)
+		ep := defaultSigParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(programs[i]))
@@ -792,7 +794,7 @@ func benchmarkEcdsa(b *testing.B, source string, curve EcdsaCurve) {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].msg[:], data[i].r, data[i].s, data[i].x, data[i].y, data[i].pk, {uint8(data[i].v)}}
-		ep := defaultEvalParams(txn)
+		ep := defaultSigParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))
@@ -915,7 +917,7 @@ func benchmarkBn256(b *testing.B, source string) {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].a, data[i].k, data[i].g1, data[i].g2}
-		ep := defaultEvalParams(txn)
+		ep := defaultSigParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))

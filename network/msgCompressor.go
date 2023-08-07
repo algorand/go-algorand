@@ -144,7 +144,7 @@ func (c *wsPeerMsgDataConverter) convert(tag protocol.Tag, data []byte) ([]byte,
 
 func makeWsPeerMsgDataConverter(wp *wsPeer) *wsPeerMsgDataConverter {
 	c := wsPeerMsgDataConverter{
-		log:    wp.net.log,
+		log:    wp.log,
 		origin: wp.originAddress,
 	}
 

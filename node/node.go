@@ -491,8 +491,19 @@ func (node *AlgorandFullNode) BroadcastInternalSignedTxGroup(txgroup []transacti
 	return node.broadcastSignedTxGroup(txgroup)
 }
 
+var broadcastTxSucceeded = metrics.MakeCounter(metrics.BroadcastSignedTxGroupSucceeded)
+var broadcastTxFailed = metrics.MakeCounter(metrics.BroadcastSignedTxGroupFailed)
+
 // broadcastSignedTxGroup broadcasts a transaction group that has already been signed.
 func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+	defer func() {
+		if err != nil {
+			broadcastTxFailed.Inc(nil)
+		} else {
+			broadcastTxSucceeded.Inc(nil)
+		}
+	}()
+
 	lastRound := node.ledger.Latest()
 	var b bookkeeping.BlockHeader
 	b, err = node.ledger.BlockHdr(lastRound)
