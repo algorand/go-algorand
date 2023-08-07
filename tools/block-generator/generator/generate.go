@@ -350,6 +350,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		if err != nil {
 			return fmt.Errorf("failed to add validated block: %w", err)
 		}
+		g.ledger.FlushCaches()
 
 		cert.Block.Payset = vBlock.Block().Payset
 
