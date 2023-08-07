@@ -111,9 +111,9 @@ func Run(args Args) error {
 			}
 			runnerArgs := args
 			runnerArgs.Path = path
-			fmt.Println("----------------------------------------")
+			fmt.Printf("%s----------------------------------------------------------------------\n", pad)
 			fmt.Printf("%sRunning test for configuration: %s\n", pad, info.Name())
-			fmt.Println("----------------------------------------")
+			fmt.Printf("%s----------------------------------------------------------------------\n", pad)
 			return runnerArgs.run(reportDirectory)
 		})
 		if err != nil {
@@ -151,6 +151,7 @@ func (r *Args) run(reportDirectory string) error {
 	var nextRound uint64
 	var err error
 	if r.ResetDB {
+		fmt.Printf("%sPostgreSQL resetting.\n", pad)
 		if err = util.EmptyDB(r.PostgresConnectionString); err != nil {
 			return fmt.Errorf("emptyDB err: %w", err)
 		}
@@ -174,6 +175,7 @@ func (r *Args) run(reportDirectory string) error {
 		if err := generatorShutdownFunc(); err != nil {
 			fmt.Printf("failed to shutdown generator: %s\n", err)
 		}
+		fmt.Printf("%sGenerator shutdown complete\n", pad)
 	}()
 
 	// create conduit config from template
@@ -210,6 +212,7 @@ func (r *Args) run(reportDirectory string) error {
 		if sdErr := conduitShutdownFunc(); sdErr != nil {
 			fmt.Printf("failed to shutdown Conduit: %s\n", sdErr)
 		}
+		fmt.Printf("%sConduit shutdown complete\n", pad)
 	}()
 
 	// Create the report file
@@ -487,11 +490,14 @@ func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFil
 // startConduit starts the conduit binary.
 func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
 	fmt.Printf("%sConduit starting with data directory: %s\n", pad, dataDir)
-	cmd := exec.Command(
+	ctx, cf := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(
+		ctx,
 		conduitBinary,
 		"-r", strconv.FormatUint(round, 10),
 		"-d", dataDir,
 	)
+	cmd.WaitDelay = 5 * time.Second
 
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -503,12 +509,7 @@ func startConduit(dataDir string, conduitBinary string, round uint64) (func() er
 	// conduit doesn't have health check endpoint. so, no health check for now
 
 	return func() error {
-		if err := cmd.Process.Signal(os.Interrupt); err != nil {
-			fmt.Printf("failed to interrupt conduit process: %s\n", err)
-			if err := cmd.Process.Kill(); err != nil {
-				return fmt.Errorf("failed to kill conduit process: %w", err)
-			}
-		}
+		cf()
 		if err := cmd.Wait(); err != nil {
 			fmt.Printf("%sConduit exiting: %s\n", pad, err)
 		}
