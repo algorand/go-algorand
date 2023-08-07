@@ -533,6 +533,7 @@ type Local struct {
 	// This is only used when P2PEnable is true. If the parameter is not set, it uses the default location.
 	P2PPrivateKeyLocation string `version[29]:""`
 
+	// DisableAPIAuth turns off authentication for public API endpoints.
 	DisableAPIAuth bool `version[30]:"false"`
 }
 
