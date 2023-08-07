@@ -24,7 +24,7 @@ import (
 // canonical encoding of maps in msgpack format.
 //
 //msgp:ignore SortUint64
-//msgp:sort uint64 SortUint64 Uint64Less
+//msgp:sort uint64 SortUint64
 type SortUint64 []uint64
 
 func (a SortUint64) Len() int           { return len(a) }
@@ -69,16 +69,12 @@ func AppIndexLess(a, b AppIndex) bool { return a < b }
 // canonical encoding of maps in msgpack format.
 //
 //msgp:ignore SortString
-//msgp:sort string SortString StringLess
+//msgp:sort string SortString
 type SortString []string
 
 func (a SortString) Len() int           { return len(a) }
 func (a SortString) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortString) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-
-// StringLess is necessary for msgp:sort directive
-// which used to generate UnmarshalValidateMsg generators
-func StringLess(a, b string) bool { return a < b }
 
 // SortAddress implements sorting by Address keys for
 // canonical encoding of maps in msgpack format.

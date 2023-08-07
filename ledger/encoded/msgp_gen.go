@@ -341,9 +341,11 @@ func (z *BalanceRecordV6) unmarshalMsg(bts []byte, validate bool) (o []byte, err
 					err = msgp.WrapError(err, "struct-from-array", "Resources")
 					return
 				}
-				if validate && zb0010 && Uint64Less(zb0001, zb0009) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0010 && msgp.Uint64Less(zb0001, zb0009) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0009 = zb0001
 				zb0010 = true
@@ -443,9 +445,11 @@ func (z *BalanceRecordV6) unmarshalMsg(bts []byte, validate bool) (o []byte, err
 						err = msgp.WrapError(err, "Resources")
 						return
 					}
-					if validate && zb0014 && Uint64Less(zb0001, zb0013) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0014 && msgp.Uint64Less(zb0001, zb0013) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0013 = zb0001
 					zb0014 = true

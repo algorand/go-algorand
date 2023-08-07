@@ -1457,9 +1457,11 @@ func (z *StateProof) unmarshalMsg(bts []byte, validate bool) (o []byte, err erro
 					err = msgp.WrapError(err, "struct-from-array", "Reveals")
 					return
 				}
-				if validate && zb0011 && Uint64Less(zb0001, zb0010) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0011 && msgp.Uint64Less(zb0001, zb0010) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0010 = zb0001
 				zb0011 = true
@@ -1613,9 +1615,11 @@ func (z *StateProof) unmarshalMsg(bts []byte, validate bool) (o []byte, err erro
 						err = msgp.WrapError(err, "Reveals")
 						return
 					}
-					if validate && zb0017 && Uint64Less(zb0001, zb0016) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0017 && msgp.Uint64Less(zb0001, zb0016) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0016 = zb0001
 					zb0017 = true

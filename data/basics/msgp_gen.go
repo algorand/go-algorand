@@ -686,9 +686,11 @@ func (z *AccountData) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 					err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 					return
 				}
-				if validate && zb0019 && AssetIndexLess(zb0001, zb0018) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0019 && AssetIndexLess(zb0001, zb0018) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0018 = zb0001
 				zb0019 = true
@@ -732,9 +734,11 @@ func (z *AccountData) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 					err = msgp.WrapError(err, "struct-from-array", "Assets")
 					return
 				}
-				if validate && zb0023 && AssetIndexLess(zb0003, zb0022) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0023 && AssetIndexLess(zb0003, zb0022) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0022 = zb0003
 				zb0023 = true
@@ -869,9 +873,11 @@ func (z *AccountData) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 					err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
 					return
 				}
-				if validate && zb0031 && AppIndexLess(zb0005, zb0030) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0031 && AppIndexLess(zb0005, zb0030) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0030 = zb0005
 				zb0031 = true
@@ -915,9 +921,11 @@ func (z *AccountData) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 					err = msgp.WrapError(err, "struct-from-array", "AppParams")
 					return
 				}
-				if validate && zb0035 && AppIndexLess(zb0007, zb0034) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0035 && AppIndexLess(zb0007, zb0034) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0034 = zb0007
 				zb0035 = true
@@ -1224,9 +1232,11 @@ func (z *AccountData) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 						err = msgp.WrapError(err, "AssetParams")
 						return
 					}
-					if validate && zb0046 && AssetIndexLess(zb0001, zb0045) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0046 && AssetIndexLess(zb0001, zb0045) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0045 = zb0001
 					zb0046 = true
@@ -1273,9 +1283,11 @@ func (z *AccountData) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 						err = msgp.WrapError(err, "Assets")
 						return
 					}
-					if validate && zb0050 && AssetIndexLess(zb0003, zb0049) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0050 && AssetIndexLess(zb0003, zb0049) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0049 = zb0003
 					zb0050 = true
@@ -1416,9 +1428,11 @@ func (z *AccountData) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 						err = msgp.WrapError(err, "AppLocalStates")
 						return
 					}
-					if validate && zb0058 && AppIndexLess(zb0005, zb0057) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0058 && AppIndexLess(zb0005, zb0057) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0057 = zb0005
 					zb0058 = true
@@ -1465,9 +1479,11 @@ func (z *AccountData) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 						err = msgp.WrapError(err, "AppParams")
 						return
 					}
-					if validate && zb0062 && AppIndexLess(zb0007, zb0061) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0062 && AppIndexLess(zb0007, zb0061) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0061 = zb0007
 					zb0062 = true
@@ -2016,9 +2032,11 @@ func (z *AppLocalState) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 					err = msgp.WrapError(err, "struct-from-array", "KeyValue")
 					return
 				}
-				if validate && zb0014 && StringLess(zb0001, zb0013) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0014 && msgp.StringLess(zb0001, zb0013) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0013 = zb0001
 				zb0014 = true
@@ -2182,9 +2200,11 @@ func (z *AppLocalState) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 						err = msgp.WrapError(err, "KeyValue")
 						return
 					}
-					if validate && zb0022 && StringLess(zb0001, zb0021) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0022 && msgp.StringLess(zb0001, zb0021) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0021 = zb0001
 					zb0022 = true
@@ -2470,9 +2490,11 @@ func (z *AppParams) unmarshalMsg(bts []byte, validate bool) (o []byte, err error
 					err = msgp.WrapError(err, "struct-from-array", "GlobalState")
 					return
 				}
-				if validate && zb0012 && StringLess(zb0001, zb0011) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0012 && msgp.StringLess(zb0001, zb0011) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0011 = zb0001
 				zb0012 = true
@@ -2774,9 +2796,11 @@ func (z *AppParams) unmarshalMsg(bts []byte, validate bool) (o []byte, err error
 						err = msgp.WrapError(err, "GlobalState")
 						return
 					}
-					if validate && zb0026 && StringLess(zb0001, zb0025) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0026 && msgp.StringLess(zb0001, zb0025) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0025 = zb0001
 					zb0026 = true
@@ -4193,9 +4217,11 @@ func (z *BalanceRecord) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 					err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 					return
 				}
-				if validate && zb0019 && AssetIndexLess(zb0001, zb0018) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0019 && AssetIndexLess(zb0001, zb0018) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0018 = zb0001
 				zb0019 = true
@@ -4239,9 +4265,11 @@ func (z *BalanceRecord) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 					err = msgp.WrapError(err, "struct-from-array", "Assets")
 					return
 				}
-				if validate && zb0023 && AssetIndexLess(zb0003, zb0022) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0023 && AssetIndexLess(zb0003, zb0022) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0022 = zb0003
 				zb0023 = true
@@ -4376,9 +4404,11 @@ func (z *BalanceRecord) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 					err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
 					return
 				}
-				if validate && zb0031 && AppIndexLess(zb0005, zb0030) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0031 && AppIndexLess(zb0005, zb0030) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0030 = zb0005
 				zb0031 = true
@@ -4422,9 +4452,11 @@ func (z *BalanceRecord) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 					err = msgp.WrapError(err, "struct-from-array", "AppParams")
 					return
 				}
-				if validate && zb0035 && AppIndexLess(zb0007, zb0034) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0035 && AppIndexLess(zb0007, zb0034) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0034 = zb0007
 				zb0035 = true
@@ -4742,9 +4774,11 @@ func (z *BalanceRecord) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 						err = msgp.WrapError(err, "AssetParams")
 						return
 					}
-					if validate && zb0046 && AssetIndexLess(zb0001, zb0045) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0046 && AssetIndexLess(zb0001, zb0045) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0045 = zb0001
 					zb0046 = true
@@ -4791,9 +4825,11 @@ func (z *BalanceRecord) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 						err = msgp.WrapError(err, "Assets")
 						return
 					}
-					if validate && zb0050 && AssetIndexLess(zb0003, zb0049) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0050 && AssetIndexLess(zb0003, zb0049) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0049 = zb0003
 					zb0050 = true
@@ -4934,9 +4970,11 @@ func (z *BalanceRecord) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 						err = msgp.WrapError(err, "AppLocalStates")
 						return
 					}
-					if validate && zb0058 && AppIndexLess(zb0005, zb0057) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0058 && AppIndexLess(zb0005, zb0057) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0057 = zb0005
 					zb0058 = true
@@ -4983,9 +5021,11 @@ func (z *BalanceRecord) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 						err = msgp.WrapError(err, "AppParams")
 						return
 					}
-					if validate && zb0062 && AppIndexLess(zb0007, zb0061) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0062 && AppIndexLess(zb0007, zb0061) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0061 = zb0007
 					zb0062 = true
@@ -5735,9 +5775,11 @@ func (z *StateDelta) unmarshalMsg(bts []byte, validate bool) (o []byte, err erro
 			err = msgp.WrapError(err)
 			return
 		}
-		if validate && zb0006 && StringLess(zb0001, zb0005) {
-			err = &msgp.ErrNonCanonical{}
-			return
+		if validate {
+			if zb0006 && msgp.StringLess(zb0001, zb0005) {
+				err = &msgp.ErrNonCanonical{}
+				return
+			}
 		}
 		zb0005 = zb0001
 		zb0006 = true
@@ -6607,9 +6649,11 @@ func (z *TealKeyValue) unmarshalMsg(bts []byte, validate bool) (o []byte, err er
 			err = msgp.WrapError(err)
 			return
 		}
-		if validate && zb0006 && StringLess(zb0001, zb0005) {
-			err = &msgp.ErrNonCanonical{}
-			return
+		if validate {
+			if zb0006 && msgp.StringLess(zb0001, zb0005) {
+				err = &msgp.ErrNonCanonical{}
+				return
+			}
 		}
 		zb0005 = zb0001
 		zb0006 = true

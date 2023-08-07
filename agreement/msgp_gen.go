@@ -4165,9 +4165,11 @@ func (z *periodRouter) unmarshalMsg(bts []byte, validate bool) (o []byte, err er
 					err = msgp.WrapError(err, "struct-from-array", "Children")
 					return
 				}
-				if validate && zb0010 && StepLess(zb0001, zb0009) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0010 && StepLess(zb0001, zb0009) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0009 = zb0001
 				zb0010 = true
@@ -4276,9 +4278,11 @@ func (z *periodRouter) unmarshalMsg(bts []byte, validate bool) (o []byte, err er
 						err = msgp.WrapError(err, "Children")
 						return
 					}
-					if validate && zb0014 && StepLess(zb0001, zb0013) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0014 && StepLess(zb0001, zb0013) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0013 = zb0001
 					zb0014 = true
@@ -5203,9 +5207,11 @@ func (z *proposal) unmarshalMsg(bts []byte, validate bool) (o []byte, err error)
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
-				if validate && zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0011 = zb0001
 				zb0012 = true
@@ -5603,9 +5609,11 @@ func (z *proposal) unmarshalMsg(bts []byte, validate bool) (o []byte, err error)
 						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
-					if validate && zb0020 && protocol.StateProofTypeLess(zb0001, zb0019) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0020 && protocol.StateProofTypeLess(zb0001, zb0019) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0019 = zb0001
 					zb0020 = true
@@ -6125,9 +6133,11 @@ func (z *proposalStore) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 					err = msgp.WrapError(err, "struct-from-array", "Relevant")
 					return
 				}
-				if validate && zb0012 && PeriodLess(zb0001, zb0011) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0012 && PeriodLess(zb0001, zb0011) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0011 = zb0001
 				zb0012 = true
@@ -6174,9 +6184,11 @@ func (z *proposalStore) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 					err = msgp.WrapError(err, "struct-from-array", "Assemblers")
 					return
 				}
-				if validate && zb0016 && ProposalValueLess(zb0003, zb0015) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0016 && ProposalValueLess(zb0003, zb0015) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0015 = zb0003
 				zb0016 = true
@@ -6241,9 +6253,11 @@ func (z *proposalStore) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 						err = msgp.WrapError(err, "Relevant")
 						return
 					}
-					if validate && zb0020 && PeriodLess(zb0001, zb0019) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0020 && PeriodLess(zb0001, zb0019) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0019 = zb0001
 					zb0020 = true
@@ -6296,9 +6310,11 @@ func (z *proposalStore) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 						err = msgp.WrapError(err, "Assemblers")
 						return
 					}
-					if validate && zb0024 && ProposalValueLess(zb0003, zb0023) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0024 && ProposalValueLess(zb0003, zb0023) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0023 = zb0003
 					zb0024 = true
@@ -6475,9 +6491,11 @@ func (z *proposalTable) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 					err = msgp.WrapError(err, "struct-from-array", "Pending")
 					return
 				}
-				if validate && zb0010 && Uint64Less(zb0001, zb0009) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0010 && msgp.Uint64Less(zb0001, zb0009) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0009 = zb0001
 				zb0010 = true
@@ -6561,9 +6579,11 @@ func (z *proposalTable) unmarshalMsg(bts []byte, validate bool) (o []byte, err e
 						err = msgp.WrapError(err, "Pending")
 						return
 					}
-					if validate && zb0014 && Uint64Less(zb0001, zb0013) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0014 && msgp.Uint64Less(zb0001, zb0013) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0013 = zb0001
 					zb0014 = true
@@ -6739,9 +6759,11 @@ func (z *proposalTracker) unmarshalMsg(bts []byte, validate bool) (o []byte, err
 					err = msgp.WrapError(err, "struct-from-array", "Duplicate")
 					return
 				}
-				if validate && zb0010 && basics.AddressLess(zb0001, zb0009) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0010 && basics.AddressLess(zb0001, zb0009) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0009 = zb0001
 				zb0010 = true
@@ -6822,9 +6844,11 @@ func (z *proposalTracker) unmarshalMsg(bts []byte, validate bool) (o []byte, err
 						err = msgp.WrapError(err, "Duplicate")
 						return
 					}
-					if validate && zb0014 && basics.AddressLess(zb0001, zb0013) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0014 && basics.AddressLess(zb0001, zb0013) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0013 = zb0001
 					zb0014 = true
@@ -7410,9 +7434,11 @@ func (z *proposalVoteCounter) unmarshalMsg(bts []byte, validate bool) (o []byte,
 					err = msgp.WrapError(err, "struct-from-array", "Votes")
 					return
 				}
-				if validate && zb0010 && basics.AddressLess(zb0001, zb0009) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0010 && basics.AddressLess(zb0001, zb0009) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0009 = zb0001
 				zb0010 = true
@@ -7488,9 +7514,11 @@ func (z *proposalVoteCounter) unmarshalMsg(bts []byte, validate bool) (o []byte,
 						err = msgp.WrapError(err, "Votes")
 						return
 					}
-					if validate && zb0014 && basics.AddressLess(zb0001, zb0013) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0014 && basics.AddressLess(zb0001, zb0013) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0013 = zb0001
 					zb0014 = true
@@ -8151,9 +8179,11 @@ func (z *rootRouter) unmarshalMsg(bts []byte, validate bool) (o []byte, err erro
 					err = msgp.WrapError(err, "struct-from-array", "Children")
 					return
 				}
-				if validate && zb0018 && RoundLess(zb0001, zb0017) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0018 && RoundLess(zb0001, zb0017) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0017 = zb0001
 				zb0018 = true
@@ -8341,9 +8371,11 @@ func (z *rootRouter) unmarshalMsg(bts []byte, validate bool) (o []byte, err erro
 						err = msgp.WrapError(err, "Children")
 						return
 					}
-					if validate && zb0030 && RoundLess(zb0001, zb0029) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0030 && RoundLess(zb0001, zb0029) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0029 = zb0001
 					zb0030 = true
@@ -8615,9 +8647,11 @@ func (z *roundRouter) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 					err = msgp.WrapError(err, "struct-from-array", "Children")
 					return
 				}
-				if validate && zb0014 && PeriodLess(zb0001, zb0013) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0014 && PeriodLess(zb0001, zb0013) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0013 = zb0001
 				zb0014 = true
@@ -8798,9 +8832,11 @@ func (z *roundRouter) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 						err = msgp.WrapError(err, "Children")
 						return
 					}
-					if validate && zb0022 && PeriodLess(zb0001, zb0021) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0022 && PeriodLess(zb0001, zb0021) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0021 = zb0001
 					zb0022 = true
@@ -10314,9 +10350,11 @@ func (z *transmittedPayload) unmarshalMsg(bts []byte, validate bool) (o []byte, 
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
-				if validate && zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0011 = zb0001
 				zb0012 = true
@@ -10722,9 +10760,11 @@ func (z *transmittedPayload) unmarshalMsg(bts []byte, validate bool) (o []byte, 
 						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
-					if validate && zb0020 && protocol.StateProofTypeLess(zb0001, zb0019) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0020 && protocol.StateProofTypeLess(zb0001, zb0019) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0019 = zb0001
 					zb0020 = true
@@ -12221,9 +12261,11 @@ func (z *unauthenticatedProposal) unmarshalMsg(bts []byte, validate bool) (o []b
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
-				if validate && zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0011 = zb0001
 				zb0012 = true
@@ -12621,9 +12663,11 @@ func (z *unauthenticatedProposal) unmarshalMsg(bts []byte, validate bool) (o []b
 						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
-					if validate && zb0020 && protocol.StateProofTypeLess(zb0001, zb0019) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0020 && protocol.StateProofTypeLess(zb0001, zb0019) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0019 = zb0001
 					zb0020 = true
@@ -13549,9 +13593,11 @@ func (z *voteTracker) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 					err = msgp.WrapError(err, "struct-from-array", "Voters")
 					return
 				}
-				if validate && zb0014 && basics.AddressLess(zb0001, zb0013) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0014 && basics.AddressLess(zb0001, zb0013) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0013 = zb0001
 				zb0014 = true
@@ -13590,9 +13636,11 @@ func (z *voteTracker) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 					err = msgp.WrapError(err, "struct-from-array", "Counts")
 					return
 				}
-				if validate && zb0018 && ProposalValueLess(zb0003, zb0017) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0018 && ProposalValueLess(zb0003, zb0017) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0017 = zb0003
 				zb0018 = true
@@ -13631,9 +13679,11 @@ func (z *voteTracker) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 					err = msgp.WrapError(err, "struct-from-array", "Equivocators")
 					return
 				}
-				if validate && zb0022 && basics.AddressLess(zb0005, zb0021) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0022 && basics.AddressLess(zb0005, zb0021) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0021 = zb0005
 				zb0022 = true
@@ -13706,9 +13756,11 @@ func (z *voteTracker) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 						err = msgp.WrapError(err, "Voters")
 						return
 					}
-					if validate && zb0026 && basics.AddressLess(zb0001, zb0025) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0026 && basics.AddressLess(zb0001, zb0025) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0025 = zb0001
 					zb0026 = true
@@ -13750,9 +13802,11 @@ func (z *voteTracker) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 						err = msgp.WrapError(err, "Counts")
 						return
 					}
-					if validate && zb0030 && ProposalValueLess(zb0003, zb0029) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0030 && ProposalValueLess(zb0003, zb0029) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0029 = zb0003
 					zb0030 = true
@@ -13794,9 +13848,11 @@ func (z *voteTracker) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 						err = msgp.WrapError(err, "Equivocators")
 						return
 					}
-					if validate && zb0034 && basics.AddressLess(zb0005, zb0033) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0034 && basics.AddressLess(zb0005, zb0033) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0033 = zb0005
 					zb0034 = true

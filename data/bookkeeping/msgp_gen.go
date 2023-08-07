@@ -660,9 +660,11 @@ func (z *Block) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
-				if validate && zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0011 = zb0001
 				zb0012 = true
@@ -1032,9 +1034,11 @@ func (z *Block) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
-					if validate && zb0019 && protocol.StateProofTypeLess(zb0001, zb0018) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0019 && protocol.StateProofTypeLess(zb0001, zb0018) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0018 = zb0001
 					zb0019 = true
@@ -1702,9 +1706,11 @@ func (z *BlockHeader) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
-				if validate && zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0012 && protocol.StateProofTypeLess(zb0001, zb0011) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0011 = zb0001
 				zb0012 = true
@@ -2066,9 +2072,11 @@ func (z *BlockHeader) unmarshalMsg(bts []byte, validate bool) (o []byte, err err
 						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
-					if validate && zb0019 && protocol.StateProofTypeLess(zb0001, zb0018) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0019 && protocol.StateProofTypeLess(zb0001, zb0018) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0018 = zb0001
 					zb0019 = true

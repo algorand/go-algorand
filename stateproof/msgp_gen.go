@@ -369,9 +369,11 @@ func (z *spProver) unmarshalMsg(bts []byte, validate bool) (o []byte, err error)
 					err = msgp.WrapError(err, "struct-from-array", "AddrToPos")
 					return
 				}
-				if validate && zb0010 && basics.AddressLess(zb0001, zb0009) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0010 && basics.AddressLess(zb0001, zb0009) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0009 = zb0001
 				zb0010 = true
@@ -479,9 +481,11 @@ func (z *spProver) unmarshalMsg(bts []byte, validate bool) (o []byte, err error)
 						err = msgp.WrapError(err, "AddrToPos")
 						return
 					}
-					if validate && zb0014 && basics.AddressLess(zb0001, zb0013) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0014 && basics.AddressLess(zb0001, zb0013) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0013 = zb0001
 					zb0014 = true

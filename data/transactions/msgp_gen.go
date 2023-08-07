@@ -2475,9 +2475,11 @@ func (z *EvalDelta) unmarshalMsg(bts []byte, validate bool) (o []byte, err error
 					err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 					return
 				}
-				if validate && zb0013 && Uint64Less(zb0001, zb0012) {
-					err = &msgp.ErrNonCanonical{}
-					return
+				if validate {
+					if zb0013 && msgp.Uint64Less(zb0001, zb0012) {
+						err = &msgp.ErrNonCanonical{}
+						return
+					}
 				}
 				zb0012 = zb0001
 				zb0013 = true
@@ -2645,9 +2647,11 @@ func (z *EvalDelta) unmarshalMsg(bts []byte, validate bool) (o []byte, err error
 						err = msgp.WrapError(err, "LocalDeltas")
 						return
 					}
-					if validate && zb0023 && Uint64Less(zb0001, zb0022) {
-						err = &msgp.ErrNonCanonical{}
-						return
+					if validate {
+						if zb0023 && msgp.Uint64Less(zb0001, zb0022) {
+							err = &msgp.ErrNonCanonical{}
+							return
+						}
 					}
 					zb0022 = zb0001
 					zb0023 = true
