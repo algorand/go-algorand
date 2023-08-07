@@ -146,12 +146,16 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 	opts.Experimental.ReadSamplingMultiplier = -1
 
 	// The target file size for the level.
+	// WARNING: unclear if this can be changed during the lifetime of the db
+	//          if it can be changed, it might make things slower for a time
 	opts.Levels[0].TargetFileSize = 2 * 1024 * 1024 // default: 4 MB
 
 	// configure the levels
 	for i := 0; i < len(opts.Levels); i++ {
 		l := &opts.Levels[i]
 		// BlockSize is the target uncompressed size in bytes of each table block.
+		// WARNING: unclear if this can be changed during the lifetime of the db
+		//          if it can be changed, it might make things slower for a time
 		l.BlockSize = 4 * 1024 // default: 4 KB
 
 		// IndexBlockSize is the target uncompressed size in bytes of each index
@@ -161,6 +165,8 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 		// indexes.
 		//
 		// The default value is the value of BlockSize.
+		// WARNING: unclear if this can be changed during the lifetime of the db
+		//          if it can be changed, it might make things slower for a time
 		l.IndexBlockSize = l.BlockSize
 
 		// FilterPolicy defines a filter algorithm (such as a Bloom filter) that can
@@ -170,6 +176,8 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 		// package.
 		//
 		// The default value means to use no filter.
+		// WARNING: unclear if this can be changed during the lifetime of the db
+		//          if it can be changed, it might make things slower for a time
 		l.FilterPolicy = bloom.FilterPolicy(10)
 
 		// FilterType defines whether an existing filter policy is applied at a
@@ -179,13 +187,19 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 		// memory proportional to the number of keys in an sstable to create, but
 		// avoids the index lookup when determining if a key is present. Table-level
 		// filters should be preferred except under constrained memory situations.
+		// WARNING: unclear if this can be changed during the lifetime of the db
+		//          if it can be changed, it might make things slower for a time
 		l.FilterType = pebble.TableFilter
 
 		// Compression defines the per-block compression to use.
+		// WARNING: unclear if this can be changed during the lifetime of the db
+		//          if it can be changed, it might make things slower for a time
 		l.Compression = pebble.SnappyCompression // default: SnappyCompression
 
 		if i > 0 {
 			// The target file size for the level.
+			// WARNING: unclear if this can be changed during the lifetime of the db
+			//          if it can be changed, it might make things slower for a time
 			l.TargetFileSize = opts.Levels[i-1].TargetFileSize
 		}
 	}
