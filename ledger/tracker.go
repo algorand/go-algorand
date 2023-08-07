@@ -282,6 +282,8 @@ func (dcc deferredCommitContext) newBase() basics.Round {
 var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
 
 func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 

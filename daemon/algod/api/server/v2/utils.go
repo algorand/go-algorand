@@ -346,6 +346,24 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
+func convertScratchChanges(scratchChanges []simulation.ScratchChange) *[]model.ScratchChange {
+	if len(scratchChanges) == 0 {
+		return nil
+	}
+	modelSC := make([]model.ScratchChange, len(scratchChanges))
+	for i, scratchChange := range scratchChanges {
+		modelSC[i] = model.ScratchChange{
+			Slot: scratchChange.Slot,
+			NewValue: model.AvmValue{
+				Type:  uint64(scratchChange.NewValue.Type),
+				Uint:  omitEmpty(scratchChange.NewValue.Uint),
+				Bytes: byteOrNil([]byte(scratchChange.NewValue.Bytes)),
+			},
+		}
+	}
+	return &modelSC
+}
+
 func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.AvmValue {
 	if len(tvs) == 0 {
 		return nil
@@ -380,6 +398,7 @@ func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.Sim
 			SpawnedInners:  spawnedInnersPtr,
 			StackAdditions: convertTealValueSliceToModel(programTrace[i].StackAdded),
 			StackPopCount:  omitEmpty(programTrace[i].StackPopCount),
+			ScratchChanges: convertScratchChanges(programTrace[i].ScratchSlotChanges),
 		}
 	}
 	return &modelProgramTrace

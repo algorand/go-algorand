@@ -108,8 +108,9 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 type ExecTraceConfig struct {
 	_struct struct{} `codec:",omitempty"`
 
-	Enable bool `codec:"enable"`
-	Stack  bool `codec:"stack-change"`
+	Enable  bool `codec:"enable"`
+	Stack   bool `codec:"stack-change"`
+	Scratch bool `codec:"scratch-change"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -130,6 +131,9 @@ func (r Result) ReturnTrace() bool { return r.TraceConfig.Enable }
 // ReturnStackChange reads from Result object and decides if simulation return stack changes.
 func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
 
+// ReturnScratchChange tells if the simulation runs with scratch-change enabled.
+func (r Result) ReturnScratchChange() bool { return r.TraceConfig.Scratch }
+
 // validateSimulateRequest first checks relation between request and config variables, including developerAPI:
 // if `developerAPI` provided is turned off, this method would:
 // - error on asking for exec trace
@@ -141,11 +145,20 @@ func validateSimulateRequest(request Request, developerAPI bool) error {
 			},
 		}
 	}
-	if !request.TraceConfig.Enable && request.TraceConfig.Stack {
-		return InvalidRequestError{
-			SimulatorError{
-				err: fmt.Errorf("basic trace must be enabled when enabling stack tracing"),
-			},
+	if !request.TraceConfig.Enable {
+		if request.TraceConfig.Stack {
+			return InvalidRequestError{
+				SimulatorError{
+					err: fmt.Errorf("basic trace must be enabled when enabling stack tracing"),
+				},
+			}
+		}
+		if request.TraceConfig.Scratch {
+			return InvalidRequestError{
+				SimulatorError{
+					err: fmt.Errorf("basic trace must be enabled when enabling scratch slot change tracing"),
+				},
+			}
 		}
 	}
 	return nil
@@ -176,6 +189,15 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 	}, nil
 }
 
+// ScratchChange represents a write operation into a scratch slot
+type ScratchChange struct {
+	// Slot stands for the scratch slot id get written to
+	Slot uint64
+
+	// NewValue is the stack value written to scratch slot
+	NewValue basics.TealValue
+}
+
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
@@ -191,6 +213,9 @@ type OpcodeTraceUnit struct {
 
 	// deleted element number from stack
 	StackPopCount uint64
+
+	// ScratchSlotChanges stands for write operations into scratch slots
+	ScratchSlotChanges []ScratchChange
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)

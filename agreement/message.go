@@ -28,7 +28,7 @@ type message struct {
 
 	// this field is for backwards compatibility with crash state serialized using go-codec prior to explicit unexport.
 	// should be removed after the next consensus update.
-	MessageHandle msgp.Raw
+	MessageHandle msgp.Raw `codec:"MessageHandle,omitempty"`
 	// explicitly unexport this field since we can't define serializers for interface{} type
 	// the only implementation of this is gossip.messageMetadata which doesn't have exported fields to serialize.
 	messageHandle MessageHandle

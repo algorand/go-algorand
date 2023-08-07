@@ -517,15 +517,24 @@ type Local struct {
 	// only relevant if TxIncomingFilteringFlags is non-zero
 	TxIncomingFilterMaxSize uint64 `version[28]:"500000"`
 
+	SpeculativeAsmTimeOffset   time.Duration `version[30]:"400000000"`
+	SpeculativeAssemblyDisable bool          `version[30]:"false"`
+
 	// BlockServiceMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
 	// When it exceeds this capacity, it redirects the block requests to a different node
 	BlockServiceMemCap uint64 `version[28]:"500000000"`
 
-	// SpeculativeAsmTimeOffset defines when speculative block assembly first starts, nanoseconds before consensus AgreementFilterTimeoutPeriod0 or AgreementFilterTimeout
-	// A huge value (greater than either AgreementFilterTimeout) disables this event.
-	SpeculativeAsmTimeOffset time.Duration `version[29]:"400000000"`
+	// P2PEnable turns on the peer to peer network
+	P2PEnable bool `version[29]:"false"`
 
-	SpeculativeAssemblyDisable bool `version[29]:"false"`
+	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
+	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
+	P2PPersistPeerID bool `version[29]:"true"`
+
+	// P2PPrivateKeyLocation allows the user to specify a custom path to the private key used for the node's PeerID.
+	// The private key provided must be an ed25519 private key.
+	// This is only used when P2PEnable is true. If the parameter is not set, it uses the default location.
+	P2PPrivateKeyLocation string `version[29]:""`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

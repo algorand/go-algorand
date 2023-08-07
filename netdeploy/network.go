@@ -30,8 +30,10 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/netdeploy/remote"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
+	"golang.org/x/exp/maps"
 )
 
 const configFileName = "network.json"
@@ -43,8 +45,8 @@ type NetworkCfg struct {
 	Name string `json:"Name,omitempty"`
 	// RelayDirs are directories where relays live (where we check for connection IP:Port)
 	// They are stored relative to root dir (e.g. "Primary")
-	RelayDirs    []string `json:"RelayDirs,omitempty"`
-	TemplateFile string   `json:"TemplateFile,omitempty"` // Template file used to create the network
+	RelayDirs []string        `json:"RelayDirs,omitempty"`
+	Template  NetworkTemplate `json:"Template,omitempty"` // Template file used to create the network
 }
 
 // Network represents an instance of a deployed network
@@ -108,6 +110,7 @@ func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, b
 		return n, err
 	}
 	n.gen = template.Genesis
+	n.cfg.Template = template
 
 	err = n.Save(rootDir)
 	n.SetConsensus(binDir, consensus)
@@ -278,9 +281,9 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 
 	// Start Prime Relay and get its listening address
 
-	var peerAddressListBuilder strings.Builder
 	var relayAddress string
 	var err error
+	relayNameToAddress := map[string]string{}
 	for _, relayDir := range n.cfg.RelayDirs {
 		nodeFullPath := n.getNodeFullPath(relayDir)
 		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
@@ -299,15 +302,10 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 		if err != nil {
 			return err
 		}
-
-		if peerAddressListBuilder.Len() != 0 {
-			peerAddressListBuilder.WriteString(";")
-		}
-		peerAddressListBuilder.WriteString(relayAddress)
+		relayNameToAddress[relayDir] = relayAddress
 	}
 
-	peerAddressList := peerAddressListBuilder.String()
-	err = n.startNodes(binDir, peerAddressList, redirectOutput)
+	err = n.startNodes(binDir, relayNameToAddress, redirectOutput)
 	return err
 }
 
@@ -337,21 +335,38 @@ func (n Network) GetPeerAddresses(binDir string) []string {
 		if err != nil {
 			continue
 		}
-		if strings.HasPrefix(relayAddress, "http://") {
-			relayAddress = relayAddress[7:]
-		}
-		peerAddresses = append(peerAddresses, relayAddress)
+		peerAddresses = append(peerAddresses, strings.TrimPrefix(relayAddress, "http://"))
 	}
 	return peerAddresses
 }
 
-func (n Network) startNodes(binDir, relayAddress string, redirectOutput bool) error {
-	args := nodecontrol.AlgodStartArgs{
-		PeerAddress:       relayAddress,
-		RedirectOutput:    redirectOutput,
-		ExitErrorCallback: n.nodeExitCallback,
+func (n Network) startNodes(binDir string, relayNameToAddress map[string]string, redirectOutput bool) error {
+	allRelaysAddresses := strings.Join(maps.Values(relayNameToAddress), ";")
+
+	nodeConfigToEntry := make(map[string]remote.NodeConfigGoal, len(n.cfg.Template.Nodes))
+	for _, n := range n.cfg.Template.Nodes {
+		nodeConfigToEntry[n.Name] = n
 	}
+
 	for _, nodeDir := range n.nodeDirs {
+		args := nodecontrol.AlgodStartArgs{
+			PeerAddress:       allRelaysAddresses,
+			RedirectOutput:    redirectOutput,
+			ExitErrorCallback: n.nodeExitCallback,
+		}
+		if n, ok := nodeConfigToEntry[nodeDir]; ok && len(n.PeerList) > 0 {
+			relayNames := strings.Split(n.PeerList, ";")
+			var peerAddresses []string
+			for _, relayName := range relayNames {
+				relayAddress, ok := relayNameToAddress[relayName]
+				if !ok {
+					return fmt.Errorf("relay %s is not defined in the network", relayName)
+				}
+				peerAddresses = append(peerAddresses, relayAddress)
+			}
+			args.PeerAddress = strings.Join(peerAddresses, ";")
+		}
+
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
 		_, err := nc.StartAlgod(args)
 		if err != nil {

@@ -27,7 +27,7 @@ import (
 
 func TestInitConfigFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	config, err := initializeConfigFile("../test_config.yml")
+	config, err := initializeConfigFile("test_scenario.yml")
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), config.NumGenesisAccounts)
 	require.Equal(t, float32(0.25), config.AssetCloseFraction)

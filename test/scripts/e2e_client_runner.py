@@ -446,6 +446,7 @@ def main():
     retcode = 0
     capv = args.version.capitalize()
     xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, f'test/testdata/nettemplates/TwoNodes50Each{capv}.json')], timeout=90)
+<<<<<<< HEAD
     env['ALGORAND_DATA'] = os.path.join(netdir, 'Node')
     env['ALGORAND_DATA2'] = os.path.join(netdir, 'Primary')
     cfgpath = os.path.join(netdir, 'Node', 'config.json')
@@ -457,6 +458,27 @@ def main():
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
     atexit.register(goal_network_stop, netdir, env)
 
+=======
+    nodeDataDir = os.path.join(netdir, 'Node')
+    primaryDataDir = os.path.join(netdir, 'Primary')
+
+    # Set EnableDeveloperAPI to true for both nodes
+    for dataDir in (nodeDataDir, primaryDataDir):
+        configFile = os.path.join(dataDir, 'config.json')
+        with open(configFile, 'r') as f:
+            configOptions = json.load(f)
+
+        configOptions['EnableDeveloperAPI'] = True
+
+        with open(configFile, 'w') as f:
+            json.dump(configOptions, f)
+
+    xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
+    atexit.register(goal_network_stop, netdir, env)
+
+    env['ALGORAND_DATA'] = nodeDataDir
+    env['ALGORAND_DATA2'] = primaryDataDir
+>>>>>>> master
 
     if args.unsafe_scrypt:
         create_kmd_config_with_unsafe_scrypt(env['ALGORAND_DATA'])

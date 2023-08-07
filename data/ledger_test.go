@@ -366,9 +366,11 @@ func TestConsensusVersion(t *testing.T) {
 	require.NotNil(t, &l)
 
 	blk := genesisInitState.Block
+	flushOffset := uint64(129) // pendingDeltasFlushThreshold = 128 will flush every 128 rounds (RewardsPool acct)
+	// txTailRetainSize = MaxTxnLife + DeeperBlockHeaderHistory = 1000 + 1
 
-	// add 5 blocks.
-	for rnd := basics.Round(1); rnd < basics.Round(consensusParams.MaxTxnLife+5); rnd++ {
+	// add some blocks.
+	for rnd := basics.Round(1); rnd < basics.Round(consensusParams.MaxTxnLife+flushOffset); rnd++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.Seed[0] = byte(uint64(rnd))
 		blk.BlockHeader.Seed[1] = byte(uint64(rnd) / 256)
@@ -378,31 +380,38 @@ func TestConsensusVersion(t *testing.T) {
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
 		l.WaitForCommit(rnd)
 	}
-	// ensure that all the first 5 has the expected version.
-	for rnd := basics.Round(consensusParams.MaxTxnLife); rnd < basics.Round(consensusParams.MaxTxnLife+5); rnd++ {
+	// ensure that all the first flushOffset have the expected version.
+	for rnd := basics.Round(consensusParams.MaxTxnLife); rnd < basics.Round(consensusParams.MaxTxnLife+flushOffset); rnd++ {
 		ver, err := l.ConsensusVersion(rnd)
 		require.NoError(t, err)
 		require.Equal(t, previousProtocol, ver)
 	}
 	// the next UpgradeVoteRounds can also be known to have the previous version.
-	for rnd := basics.Round(consensusParams.MaxTxnLife + 5); rnd < basics.Round(consensusParams.MaxTxnLife+5+consensusParams.UpgradeVoteRounds); rnd++ {
+	for rnd := basics.Round(consensusParams.MaxTxnLife + flushOffset); rnd < basics.Round(consensusParams.MaxTxnLife+
+		flushOffset+consensusParams.UpgradeVoteRounds); rnd++ {
 		ver, err := l.ConsensusVersion(rnd)
 		require.NoError(t, err)
 		require.Equal(t, previousProtocol, ver)
 	}
 
 	// but two rounds ahead is not known.
-	ver, err := l.ConsensusVersion(basics.Round(consensusParams.MaxTxnLife + 6 + consensusParams.UpgradeVoteRounds))
+	ver, err := l.ConsensusVersion(basics.Round(consensusParams.MaxTxnLife + flushOffset + 1 + consensusParams.UpgradeVoteRounds))
 	require.Equal(t, protocol.ConsensusVersion(""), ver)
-	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(consensusParams.MaxTxnLife + 6 + consensusParams.UpgradeVoteRounds), Latest: basics.Round(consensusParams.MaxTxnLife + 4), Committed: basics.Round(consensusParams.MaxTxnLife + 4)}, err)
+	require.Equal(t, ledgercore.ErrNoEntry{
+		Round:     basics.Round(consensusParams.MaxTxnLife + flushOffset + 1 + consensusParams.UpgradeVoteRounds),
+		Latest:    basics.Round(consensusParams.MaxTxnLife + flushOffset - 1),
+		Committed: basics.Round(consensusParams.MaxTxnLife + flushOffset - 1)}, err)
 
 	// check round #1 which was already dropped.
 	ver, err = l.ConsensusVersion(basics.Round(1))
 	require.Equal(t, protocol.ConsensusVersion(""), ver)
-	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(1), Latest: basics.Round(consensusParams.MaxTxnLife + 4), Committed: basics.Round(consensusParams.MaxTxnLife + 4)}, err)
+	require.Equal(t, ledgercore.ErrNoEntry{
+		Round:     basics.Round(1),
+		Latest:    basics.Round(consensusParams.MaxTxnLife + flushOffset - 1),
+		Committed: basics.Round(consensusParams.MaxTxnLife + flushOffset - 1)}, err)
 
 	// add another round, with upgrade
-	rnd := basics.Round(consensusParams.MaxTxnLife + 5)
+	rnd := basics.Round(consensusParams.MaxTxnLife + flushOffset)
 	blk.BlockHeader.Round++
 	blk.BlockHeader.Seed[0] = byte(uint64(rnd))
 	blk.BlockHeader.Seed[1] = byte(uint64(rnd) / 256)
