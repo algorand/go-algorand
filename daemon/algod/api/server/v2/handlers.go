@@ -626,7 +626,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	}
 
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -684,7 +684,7 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 // (GET /v2/blocks/{round}/hash)
 func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -713,7 +713,7 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 	}
 
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
