@@ -655,7 +655,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 // (GET /v2/blocks/{round}/txids)
 func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -670,7 +670,7 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 		return internalError(ctx, err, "decoding transactions", v2.Log)
 	}
 
-	txids := make([]string, 0)
+	txids := make([]string, 0, len(txns))
 	for ids := range txns {
 		txids = append(txids, txns[ids].ID().String())
 	}
