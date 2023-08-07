@@ -401,7 +401,7 @@ APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
 
 ${gcmd} app call --app-id $APPID --app-arg "int:10" --from $ACCOUNT 2>&1 -o "${TEMPDIR}/stack-and-scratch.tx"
 ${gcmd} clerk sign -i "${TEMPDIR}/stack-and-scratch.tx" -o "${TEMPDIR}/stack-and-scratch.stx"
-RES=$(${gcmd} clerk simulate --trace --stack --scratch -t "${TEMPDIR}/stack-and-scratch.stx")
+RES=$(${gcmd} clerk simulate --full-trace -t "${TEMPDIR}/stack-and-scratch.stx")
 
 if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
     date '+app-simulate-test FAIL the app call for stack and scratch trace should pass %Y%m%d_%H%M%S'

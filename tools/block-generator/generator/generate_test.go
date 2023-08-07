@@ -24,15 +24,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func makePrivateGenerator(t *testing.T, round uint64, genesis bookkeeping.Genesis) *generator {
@@ -45,7 +47,7 @@ func makePrivateGenerator(t *testing.T, round uint64, genesis bookkeeping.Genesi
 		AssetCreateFraction:          1.0,
 	}
 	cfg.validateWithDefaults(true)
-	publicGenerator, err := MakeGenerator(round, genesis, cfg, true)
+	publicGenerator, err := MakeGenerator(logging.Base(), round, genesis, cfg, true)
 	require.NoError(t, err)
 	return publicGenerator.(*generator)
 }
@@ -355,7 +357,7 @@ func TestAppBoxesOptin(t *testing.T) {
 
 	paySiblingTxn := sgnTxns[1].Txn
 	require.Equal(t, protocol.PaymentTx, paySiblingTxn.Type)
-	
+
 	g.finishRound()
 	// 2nd attempt to optin (with new sender) doesn't get replaced
 	g.startRound()
@@ -723,21 +725,21 @@ func TestCumulativeEffects(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	report := Report{
-		TxTypeID("app_boxes_optin"): 	{GenerationCount: uint64(42)},
-		TxTypeID("app_boxes_create"): 	{GenerationCount: uint64(1337)},
-		TxTypeID("pay_pay"):         	{GenerationCount: uint64(999)},
-		TxTypeID("asset_optin_total"): 	{GenerationCount: uint64(13)},
-		TxTypeID("app_boxes_call"):    	{GenerationCount: uint64(413)},
+		TxTypeID("app_boxes_optin"):   {GenerationCount: uint64(42)},
+		TxTypeID("app_boxes_create"):  {GenerationCount: uint64(1337)},
+		TxTypeID("pay_pay"):           {GenerationCount: uint64(999)},
+		TxTypeID("asset_optin_total"): {GenerationCount: uint64(13)},
+		TxTypeID("app_boxes_call"):    {GenerationCount: uint64(413)},
 	}
 
 	expectedEffectsReport := EffectsReport{
-		"app_boxes_optin": 			uint64(42),
-		"app_boxes_create": 		uint64(1337),
-		"pay_pay":         			uint64(999),
-		"asset_optin_total": 		uint64(13),
-		"app_boxes_call":    		uint64(413),
-		"effect_payment_sibling": 	uint64(42) + uint64(1337),
-		"effect_inner_tx": 			uint64(2 * 42),
+		"app_boxes_optin":        uint64(42),
+		"app_boxes_create":       uint64(1337),
+		"pay_pay":                uint64(999),
+		"asset_optin_total":      uint64(13),
+		"app_boxes_call":         uint64(413),
+		"effect_payment_sibling": uint64(42) + uint64(1337),
+		"effect_inner_tx":        uint64(2 * 42),
 	}
 
 	require.Equal(t, expectedEffectsReport, CumulativeEffects(report))
@@ -772,7 +774,7 @@ func TestCountInners(t *testing.T) {
 					InnerTxns: []transactions.SignedTxnWithAD{
 						{
 							ApplyData: transactions.ApplyData{
-									EvalDelta: transactions.EvalDelta{
+								EvalDelta: transactions.EvalDelta{
 									InnerTxns: []transactions.SignedTxnWithAD{{}, {}},
 								},
 							},
@@ -793,4 +795,3 @@ func TestCountInners(t *testing.T) {
 		})
 	}
 }
-

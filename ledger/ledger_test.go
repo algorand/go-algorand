@@ -1385,46 +1385,6 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 	}
 }
 
-func TestLedgerBlockHdrCaching(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-
-	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	genesisInitState := getInitState()
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
-	a.NoError(err)
-	defer l.Close()
-
-	blk := genesisInitState.Block
-
-	for i := 0; i < 1024; i++ {
-		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		err := l.AddBlock(blk, agreement.Certificate{})
-		a.NoError(err)
-
-		hdr, err := l.BlockHdr(blk.BlockHeader.Round)
-		a.NoError(err)
-		a.Equal(blk.BlockHeader, hdr)
-	}
-
-	rnd := basics.Round(128)
-	hdr, err := l.BlockHdr(rnd) // should update LRU cache but not latestBlockHeaderCache
-	a.NoError(err)
-	a.Equal(rnd, hdr.Round)
-
-	_, exists := l.headerCache.lruCache.Get(rnd)
-	a.True(exists)
-
-	_, exists = l.headerCache.latestHeaderCache.get(rnd)
-	a.False(exists)
-}
-
 func BenchmarkLedgerBlockHdrCaching(b *testing.B) {
 	benchLedgerCache(b, 1024-256+1)
 }
@@ -2629,7 +2589,7 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 
 	latest := l.Latest()
 	for i := latest - basics.Round(proto.MaxTxnLife); i <= latest; i++ {
-		blk, err := l.BlockHdrCached(i)
+		blk, err := l.BlockHdr(i)
 		require.NoError(t, err)
 		require.Equal(t, blk.Round, i)
 	}
@@ -2643,13 +2603,13 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 	start := dbRound - basics.Round(proto.MaxTxnLife)
 	end := latest - basics.Round(proto.MaxTxnLife)
 	for i := start; i < end; i++ {
-		blk, err := l.BlockHdrCached(i)
+		blk, err := l.BlockHdr(i)
 		require.NoError(t, err)
 		require.Equal(t, blk.Round, i)
 	}
 
-	_, err = l.BlockHdrCached(start - 1)
-	require.Error(t, err)
+	_, ok := l.txTail.blockHeader(start - 1)
+	require.False(t, ok)
 }
 
 // TestLedgerKeyregFlip generates keyreg transactions for flipping genesis accounts state.

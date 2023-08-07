@@ -112,6 +112,10 @@ type ConsensusParams struct {
 	// rather than check each individual app call is within the budget.
 	EnableAppCostPooling bool
 
+	// EnableLogicSigCostPooling specifies LogicSig budgets are pooled across a
+	// group. The total available is len(group) * LogicSigMaxCost)
+	EnableLogicSigCostPooling bool
+
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
 	//
@@ -1356,6 +1360,7 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.EnableLogicSigCostPooling = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

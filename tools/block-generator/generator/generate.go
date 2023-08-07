@@ -27,15 +27,15 @@ import (
 	"time"
 
 	cconfig "github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/rpcs"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	txn "github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 // ---- templates ----
@@ -55,14 +55,19 @@ var clearSwap string
 // ---- constructors ----
 
 // MakeGenerator initializes the Generator object.
-func MakeGenerator(dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig, verbose bool) (Generator, error) {
+func MakeGenerator(log logging.Logger, dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig, verbose bool) (Generator, error) {
 	if err := config.validateWithDefaults(false); err != nil {
 		return nil, fmt.Errorf("invalid generator configuration: %w", err)
+	}
+
+	if log == nil {
+		log = logging.Base()
 	}
 
 	var proto protocol.ConsensusVersion = "future"
 	gen := &generator{
 		verbose:                   verbose,
+		log:                       log,
 		config:                    config,
 		protocol:                  proto,
 		params:                    cconfig.Consensus[proto],
@@ -288,7 +293,9 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 	if round == cachedRound {
 		// one round behind, so write the cached block (if non-empty)
-		fmt.Printf("Received round request %d, but nextRound=%d. Not finishing round.\n", round, nextRound)
+		if g.verbose {
+			fmt.Printf("Received round request %d, but nextRound=%d. Not finishing round.\n", round, nextRound)
+		}
 		if len(g.latestBlockMsgp) != 0 {
 			// write the msgpack bytes for a block
 			_, err := output.Write(g.latestBlockMsgp)
@@ -304,7 +311,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if err != nil {
 		return err
 	}
-	if g.round == 0 {
+	if g.verbose && g.round == 0 {
 		fmt.Printf("starting txnCounter: %d\n", g.txnCounter)
 	}
 	minTxnsForBlock := g.minTxnsForBlock(g.round)
@@ -335,8 +342,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		if err != nil {
 			return fmt.Errorf("failed to evaluate block: %w", err)
 		}
-		if ledgerTxnCount != g.txnCounter + intra {
-			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter + intra)
+		if ledgerTxnCount != g.txnCounter+intra {
+			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter+intra)
 		}
 
 		err = g.ledger.AddValidatedBlock(*vBlock, cert.Certificate)

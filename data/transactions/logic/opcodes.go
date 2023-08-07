@@ -885,7 +885,7 @@ func init() {
 	}
 	// Start from v2 and higher,
 	// copy lower version opcodes and overwrite matching version
-	for v := uint64(2); v <= evalMaxVersion; v++ {
+	for v := uint64(2); v <= LogicVersion; v++ {
 		// Copy opcodes from lower version
 		OpsByName[v] = maps.Clone(OpsByName[v-1])
 		for op, oi := range opsByOpcode[v-1] {
