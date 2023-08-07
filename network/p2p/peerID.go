@@ -21,13 +21,13 @@ package p2p
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/algorand/go-algorand/util"
 	"os"
 	"path"
 
-	"github.com/libp2p/go-libp2p/core/crypto"
-
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/util"
+
+	"github.com/libp2p/go-libp2p/core/crypto"
 )
 
 // DefaultPrivKeyPath is the default path inside the node's root directory at which the private key
@@ -47,9 +47,12 @@ func GetPrivKey(cfg config.Local, dataDir string) (crypto.PrivKey, error) {
 		return loadPrivateKeyFromFile(cfg.P2PPrivateKeyLocation)
 	}
 	// if a default path key exists load it
-	defaultPrivKeyPath := path.Join(dataDir, DefaultPrivKeyPath)
-	if util.FileExists(defaultPrivKeyPath) {
-		return loadPrivateKeyFromFile(defaultPrivKeyPath)
+	var defaultPrivKeyPath string
+	if dataDir != "" {
+		defaultPrivKeyPath = path.Join(dataDir, DefaultPrivKeyPath)
+		if util.FileExists(defaultPrivKeyPath) {
+			return loadPrivateKeyFromFile(defaultPrivKeyPath)
+		}
 	}
 	// generate a new key
 	privKey, err := generatePrivKey()
@@ -57,7 +60,7 @@ func GetPrivKey(cfg config.Local, dataDir string) (crypto.PrivKey, error) {
 		return privKey, fmt.Errorf("failed to generate private key %w", err)
 	}
 	// if we want persistent PeerID, save the generated PrivKey
-	if cfg.P2PPersistPeerID {
+	if cfg.P2PPersistPeerID && defaultPrivKeyPath != "" {
 		return privKey, writePrivateKeyToFile(defaultPrivKeyPath, privKey)
 	}
 	return privKey, nil

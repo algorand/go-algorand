@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
+	"github.com/multiformats/go-multiaddr"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -212,13 +213,6 @@ type GossipNode interface {
 	// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
 	// request that was provided to the http handler ( or provide a fallback Context() to that )
 	GetHTTPRequestConnection(request *http.Request) (conn net.Conn)
-
-	// RegisterMessageInterest notifies the network library that this node
-	// wants to receive messages with the specified tag.  This will cause
-	// this node to send corresponding MsgOfInterest notifications to any
-	// newly connecting peers.  This should be called before the network
-	// is started.
-	RegisterMessageInterest(protocol.Tag)
 
 	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 	SubstituteGenesisID(rawURL string) string
@@ -2193,6 +2187,21 @@ func ParseHostOrURL(addr string) (*url.URL, error) {
 		return parsed, nil
 	}
 	return parsed, err /* return original err, not our prefix altered try */
+}
+
+// ParseHostOrURLOrMultiaddr returns an error if it could not parse the provided
+// string as a valid "host:port", full URL, or multiaddr. If no error, it returns
+// a host:port address, or a multiaddr.
+func ParseHostOrURLOrMultiaddr(addr string) (string, error) {
+	if strings.HasPrefix(addr, "/") { // multiaddr starts with '/'
+		_, err := multiaddr.NewMultiaddr(addr)
+		return addr, err
+	}
+	url, err := ParseHostOrURL(addr)
+	if err != nil {
+		return "", err
+	}
+	return url.Host, nil
 }
 
 // addrToGossipAddr parses host:port or a URL and returns the URL to the websocket interface at that address.
