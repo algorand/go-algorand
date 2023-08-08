@@ -172,6 +172,19 @@ func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, 
 	return resp.TxId, nil
 }
 
+// BroadcastTransactionAsync broadcasts a signed transaction to the network by appending it into tx handler queue.
+func (c *Client) BroadcastTransactionAsync(stx transactions.SignedTxn) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	_, err = algod.SendRawTransactionAsync(stx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // BroadcastTransactionGroup broadcasts a signed transaction group to the network using algod
 func (c *Client) BroadcastTransactionGroup(txgroup []transactions.SignedTxn) error {
 	algod, err := c.ensureAlgodClient()

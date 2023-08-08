@@ -312,9 +312,9 @@ var swaggerSpec = []string{
 	"7D73xOf27033sMV6pTLw8q6az6lg167Ppx/p32Ai2BRQihVIKmTgfqV0FaeYRn/b/3kr0+iP/XUUndrT",
 	"sZ9PP7artbYQpJeVydQN5R2OXplYkoznrn4JGpNrxdQo5gdocgOwn1w6o3yLFnSRAeOYZ1VVprEc2M61",
 	"12j9tmNHYHrpjOgLIXECNNLjLFSohwceCxpSJTPUhzvXs4PsR5VB/3rGC/ifFZTb5gZ2ME6mLf7sCDxS",
-	"Fufe112fnd4eRv74mEAvYX3icEXRO3+f3nBh7CXugvQRo/3OBnh+6jJydn5tkmD1vmBmr+DH0PU1+utp",
-	"XVku+rGrqMe+OkV1oJH3nvOfG6NdaARDkqjNX+8+2J3FuiWOWhqbzovTUwx8XSptTie3048de0/48UO9",
-	"mT5Reb2ptx9u/18AAAD//9/FM7B32gAA",
+	"Fufe112fnd4eRv74mEAvYX3icEXRO3+f3nBh7CXugvQRo/3OBnh+6jJydn5tkmD1vmBmr+DH0PU1+usp",
+	"b1N7W0/3xcGiH7tKfOyrU2IHGnnPOv+5MeiFBjIkl9o09u6D3XWsaeIoqbH3vDg9xaDYpdLmdHI7/dix",
+	"BYUfP9Qb7ZOY1xt+++H2/wUAAP//q8e4jZPaAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
