@@ -521,9 +521,7 @@ func TestDefaultResourcePaths(t *testing.T) {
 	require.NoError(t, err)
 
 	// confirm genesis dir exists in the data dir, and that resources exist in the expected locations
-	genesisDir, err := os.Stat(filepath.Join(testDirectory, genesis.ID()))
-	require.NoError(t, err)
-	require.True(t, genesisDir.IsDir())
+	require.DirExists(t, filepath.Join(testDirectory, genesis.ID()))
 
 	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "ledger.tracker.sqlite"))
 	require.NoError(t, err)

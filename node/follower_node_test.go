@@ -273,10 +273,8 @@ func TestConfiguredResourcePaths_Follower(t *testing.T) {
 	testDirCold := t.TempDir()
 
 	// add a path for each resource now
-	trackerPath := filepath.Join(testDirectory, "custom_tracker.sqlite")
-	blockPath := filepath.Join(testDirectory, "custom_block.sqlite")
-	stateproofDir := filepath.Join(testDirectory, "custom_stateproof")
-	crashPath := filepath.Join(testDirectory, "custom_crash.sqlite")
+	trackerPath := filepath.Join(testDirectory, "custom_tracker")
+	blockPath := filepath.Join(testDirectory, "custom_block")
 
 	genesis := bookkeeping.Genesis{
 		SchemaID:    "go-test-node-genesis",
@@ -293,8 +291,6 @@ func TestConfiguredResourcePaths_Follower(t *testing.T) {
 	cfg.ColdDataDir = testDirCold
 	cfg.TrackerDBDir = trackerPath
 	cfg.BlockDBDir = blockPath
-	cfg.StateproofDir = stateproofDir
-	cfg.CrashDBDir = crashPath
 	cfg.CatchpointTracking = 2
 	cfg.CatchpointInterval = 1
 
@@ -314,13 +310,14 @@ func TestConfiguredResourcePaths_Follower(t *testing.T) {
 	// confirm hot data dir exists and contains a genesis dir
 	require.DirExists(t, filepath.Join(testDirHot, genesis.ID()))
 
-	// the tracker shouldn't be in the hot data dir, but rather the custom path
+	// the tracker shouldn't be in the hot data dir, but rather the custom path's genesis dir
 	require.NoFileExists(t, filepath.Join(testDirHot, genesis.ID(), "ledger.tracker.sqlite"))
-	require.FileExists(t, trackerPath)
+	require.FileExists(t, filepath.Join(cfg.TrackerDBDir, genesis.ID(), "ledger.tracker.sqlite"))
 
 	// confirm cold data dir exists and contains a genesis dir
 	require.DirExists(t, filepath.Join(testDirCold, genesis.ID()))
-	// block db shouldn't be in the cold data dir, but rather the custom path
+
+	// block db shouldn't be in the cold data dir, but rather the custom path's genesis dir
 	require.NoFileExists(t, filepath.Join(testDirCold, genesis.ID(), "ledger.block.sqlite"))
-	require.FileExists(t, blockPath)
+	require.FileExists(t, filepath.Join(cfg.BlockDBDir, genesis.ID(), "ledger.block.sqlite"))
 }
