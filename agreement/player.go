@@ -298,9 +298,11 @@ func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVer
 
 	proto := config.Consensus[ver]
 
+	//return FilterTimeout(period, ver)
+
 	if !proto.DynamicFilterTimeout || period != 0 {
 		// Either dynamic lambda is disabled, or we're not in period 0 and
-		// therefore can't use dynamic lambda
+		// therefore, can't use dynamic lambda
 		return FilterTimeout(period, ver)
 	}
 
