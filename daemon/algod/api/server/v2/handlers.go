@@ -213,8 +213,8 @@ func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForA
 				continue
 			}
 
-			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
-				uint64(round) <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
+			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= round &&
+				round <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
 				return txn.Txn, nil
 			}
 		}
@@ -1685,8 +1685,8 @@ func (v2 *Handlers) GetStateProof(ctx echo.Context, round uint64) error {
 	response.Message.BlockHeadersCommitment = tx.Message.BlockHeadersCommitment
 	response.Message.VotersCommitment = tx.Message.VotersCommitment
 	response.Message.LnProvenWeight = tx.Message.LnProvenWeight
-	response.Message.FirstAttestedRound = tx.Message.FirstAttestedRound
-	response.Message.LastAttestedRound = tx.Message.LastAttestedRound
+	response.Message.FirstAttestedRound = uint64(tx.Message.FirstAttestedRound)
+	response.Message.LastAttestedRound = uint64(tx.Message.LastAttestedRound)
 
 	return ctx.JSON(http.StatusOK, response)
 }
@@ -1718,14 +1718,14 @@ func (v2 *Handlers) GetLightBlockHeaderProof(ctx echo.Context, round uint64) err
 
 	lastAttestedRound := stateProof.Message.LastAttestedRound
 	firstAttestedRound := stateProof.Message.FirstAttestedRound
-	stateProofInterval := lastAttestedRound - firstAttestedRound + 1
+	stateProofInterval := uint64(lastAttestedRound - firstAttestedRound + 1)
 
-	lightHeaders, err := stateproof.FetchLightHeaders(ledger, stateProofInterval, basics.Round(lastAttestedRound))
+	lightHeaders, err := stateproof.FetchLightHeaders(ledger, stateProofInterval, lastAttestedRound)
 	if err != nil {
 		return notFound(ctx, err, err.Error(), v2.Log)
 	}
 
-	blockIndex := round - firstAttestedRound
+	blockIndex := round - uint64(firstAttestedRound)
 	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(stateProofInterval, lightHeaders, blockIndex)
 	if err != nil {
 		return internalError(ctx, err, err.Error(), v2.Log)

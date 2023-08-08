@@ -59,7 +59,7 @@ func GenerateStateProofMessage(l BlockHeaderFetcher, round basics.Round) (statep
 	}
 
 	proto := config.Consensus[latestRoundHeader.CurrentProtocol]
-	votersRound := uint64(round.SubSaturate(basics.Round(proto.StateProofInterval)))
+	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
 	commitment, err := createHeaderCommitment(l, &proto, &latestRoundHeader)
 	if err != nil {
 		return stateproofmsg.Message{}, err
@@ -75,7 +75,7 @@ func GenerateStateProofMessage(l BlockHeaderFetcher, round basics.Round) (statep
 		VotersCommitment:       latestRoundHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		LnProvenWeight:         lnProvenWeight,
 		FirstAttestedRound:     votersRound + 1,
-		LastAttestedRound:      uint64(latestRoundHeader.Round),
+		LastAttestedRound:      latestRoundHeader.Round,
 	}, nil
 }
 

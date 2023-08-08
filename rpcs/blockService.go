@@ -39,10 +39,12 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -54,9 +56,15 @@ const blockResponseRetryAfter = "3"                                             
 const blockServerMaxBodyLength = 512                                               // we don't really pass meaningful content here, so 512 bytes should be a safe limit
 const blockServerCatchupRequestBufferSize = 10
 
+// StateProofResponseContentType is the HTTP Content-Type header for a raw state proof transaction
+const StateProofResponseContentType = "application/x-algorand-stateproof-v1"
+
 // BlockServiceBlockPath is the path to register BlockService as a handler for when using gorilla/mux
 // e.g. .HandleFunc(BlockServiceBlockPath, ls.ServeBlockPath)
 const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
+
+// BlockServiceStateProofPath is the path to register BlockService's ServeStateProofPath handler
+const BlockServiceStateProofPath = "/v{version:[0-9.]+}/{genesisID}/stateproof/type{type:[0-9.]+}/{round:[0-9a-z]+}"
 
 // Constant strings used as keys for topics
 const (
@@ -87,6 +95,10 @@ var httpBlockMessagesDroppedCounter = metrics.MakeCounter(
 // LedgerForBlockService describes the Ledger methods used by BlockService.
 type LedgerForBlockService interface {
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
+	BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
+	Block(rnd basics.Round) (bookkeeping.Block, error)
+	Latest() basics.Round
+	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
 }
 
 // BlockService represents the Block RPC API
@@ -108,12 +120,17 @@ type BlockService struct {
 	memoryCap               uint64
 }
 
-// EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
+// EncodedBlockCert defines how GetBlockBytes and GetBlockStateProofBytes
+// encodes a block and its certificate or light header proof.  It is
+// compatible with encoding of PreEncodedBlockCert, but currently we use
+// two different structs, because we don't store pre-msgpack'ed light
+// header proofs.
 type EncodedBlockCert struct {
-	_struct struct{} `codec:""`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Block       bookkeeping.Block     `codec:"block"`
-	Certificate agreement.Certificate `codec:"cert"`
+	Block                 bookkeeping.Block     `codec:"block,omitempty"`
+	Certificate           agreement.Certificate `codec:"cert,omitempty"`
+	LightBlockHeaderProof []byte                `codec:"proof,omitempty"`
 }
 
 // PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
@@ -159,6 +176,7 @@ type HTTPRegistrar interface {
 // RegisterHandlers registers the request handlers for BlockService's paths with the registrar.
 func (bs *BlockService) RegisterHandlers(registrar HTTPRegistrar) {
 	registrar.RegisterHTTPHandlerFunc(BlockServiceBlockPath, bs.ServeBlockPath)
+	registrar.RegisterHTTPHandlerFunc(BlockServiceStateProofPath, bs.ServeStateProofPath)
 }
 
 // Start listening to catchup requests over ws
@@ -185,8 +203,118 @@ func (bs *BlockService) Stop() {
 	bs.closeWaitGroup.Wait()
 }
 
+// ServeStateProofPath returns state proofs.
+// It expects to be invoked via:
+//
+//	/v{version}/{genesisID}/stateproof/type{type}/{round}
+func (bs *BlockService) ServeStateProofPath(response http.ResponseWriter, request *http.Request) {
+	pathVars := mux.Vars(request)
+	versionStr := pathVars["version"]
+	roundStr := pathVars["round"]
+	genesisID := pathVars["genesisID"]
+	typeStr := pathVars["type"]
+	if versionStr != "1" {
+		bs.log.Debug("http stateproof bad version", versionStr)
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if genesisID != bs.genesisID {
+		bs.log.Debugf("http stateproof bad genesisID mine=%#v theirs=%#v", bs.genesisID, genesisID)
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if typeStr != "0" { // StateProofBasic
+		bs.log.Debugf("http stateproof bad type", typeStr)
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	uround, err := strconv.ParseUint(roundStr, 36, 64)
+	if err != nil {
+		bs.log.Debug("http stateproof round parse fail", roundStr, err)
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	round := basics.Round(uround)
+
+	latestRound := bs.ledger.Latest()
+	ctx := request.Context()
+	hdr, err := bs.ledger.BlockHdr(round)
+	if err != nil {
+		bs.log.Debug("http stateproof cannot get blockhdr", round, err)
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			goto notfound
+		default:
+			response.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if config.Consensus[hdr.CurrentProtocol].StateProofInterval == 0 {
+		bs.log.Debug("http stateproof not enabled", round)
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// As an optimization to prevent expensive searches for state
+	// proofs that don't exist yet, don't bother searching if we
+	// are looking for a state proof for a round that's within
+	// StateProofInterval of latest.
+	if round + basics.Round(config.Consensus[hdr.CurrentProtocol].StateProofInterval) >= latestRound {
+		goto notfound
+	}
+
+	for i := round + 1; i <= latestRound; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		txns, err := bs.ledger.AddressTxns(transactions.StateProofSender, i)
+		if err != nil {
+			bs.log.Debug("http stateproof address txns error", err)
+			response.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		for _, txn := range txns {
+			if txn.Txn.Type != protocol.StateProofTx {
+				continue
+			}
+
+			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= round && round <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
+				encodedStateProof := protocol.Encode(&txn.Txn)
+				response.Header().Set("Content-Type", StateProofResponseContentType)
+				response.Header().Set("Content-Length", strconv.Itoa(len(encodedStateProof)))
+				response.Header().Set("Cache-Control", blockResponseHasBlockCacheControl)
+				response.WriteHeader(http.StatusOK)
+				_, err = response.Write(encodedStateProof)
+				if err != nil {
+					bs.log.Warn("http stateproof write failed ", err)
+				}
+				return
+			}
+		}
+	}
+
+notfound:
+	ok := bs.redirectRequest(response, request, bs.formatStateProofQuery(uint64(round)))
+	if !ok {
+		response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
+		response.WriteHeader(http.StatusNotFound)
+	}
+}
+
 // ServeBlockPath returns blocks
-// Either /v{version}/{genesisID}/block/{round} or ?b={round}&v={version}
+// It expects to be invoked via several possible paths:
+//
+//	/v{version}/{genesisID}/block/{round}
+//	?b={round}&v={version}
+//
+// It optionally takes a ?stateproof={n} argument, where n is the type of
+// state proof for which we should return a light block header proof.  In
+// the absence of this argument, we will return an agreement certificate.
+//
 // Uses gorilla/mux for path argument parsing.
 func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *http.Request) {
 	pathVars := mux.Vars(request)
@@ -211,15 +339,17 @@ func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *ht
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	request.Body = http.MaxBytesReader(response, request.Body, blockServerMaxBodyLength)
+	err := request.ParseForm()
+	if err != nil {
+		bs.log.Debug("http block parse form err", err)
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	if (!hasVersionStr) || (!hasRoundStr) {
 		// try query arg ?b={round}
-		request.Body = http.MaxBytesReader(response, request.Body, blockServerMaxBodyLength)
-		err := request.ParseForm()
-		if err != nil {
-			bs.log.Debug("http block parse form err", err)
-			response.WriteHeader(http.StatusBadRequest)
-			return
-		}
 		roundStrs, ok := request.Form["b"]
 		if !ok || len(roundStrs) != 1 {
 			bs.log.Debug("http block bad block id form arg")
@@ -248,12 +378,31 @@ func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *ht
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	encodedBlockCert, err := bs.rawBlockBytes(basics.Round(round))
+
+	sendStateProof := false
+	stateProof, hasStateProof := request.Form["stateproof"]
+	if hasStateProof {
+		if len(stateProof) != 1 || stateProof[0] != "0" {
+			bs.log.Debug("http block stateproof version %v unsupported", stateProof)
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		sendStateProof = true
+	}
+
+	var encodedBlock []byte
+	if sendStateProof {
+		encodedBlock, err = bs.rawBlockStateProofBytes(basics.Round(round))
+	} else {
+		encodedBlock, err = bs.rawBlockBytes(basics.Round(round))
+	}
+
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
 			// entry cound not be found.
-			ok := bs.redirectRequest(round, response, request)
+			ok := bs.redirectRequest(response, request, bs.formatBlockQuery(round, sendStateProof))
 			if !ok {
 				response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
 				response.WriteHeader(http.StatusNotFound)
@@ -261,7 +410,7 @@ func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *ht
 			return
 		case errMemoryAtCapacity:
 			// memory used by HTTP block requests is over the cap
-			ok := bs.redirectRequest(round, response, request)
+			ok := bs.redirectRequest(response, request, bs.formatBlockQuery(round, sendStateProof))
 			if !ok {
 				response.Header().Set("Retry-After", blockResponseRetryAfter)
 				response.WriteHeader(http.StatusServiceUnavailable)
@@ -278,16 +427,16 @@ func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *ht
 	}
 
 	response.Header().Set("Content-Type", BlockResponseContentType)
-	response.Header().Set("Content-Length", strconv.Itoa(len(encodedBlockCert)))
+	response.Header().Set("Content-Length", strconv.Itoa(len(encodedBlock)))
 	response.Header().Set("Cache-Control", blockResponseHasBlockCacheControl)
 	response.WriteHeader(http.StatusOK)
-	_, err = response.Write(encodedBlockCert)
+	_, err = response.Write(encodedBlock)
 	if err != nil {
 		bs.log.Warn("http block write failed ", err)
 	}
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
-	bs.memoryUsed = bs.memoryUsed - uint64(len(encodedBlockCert))
+	bs.memoryUsed = bs.memoryUsed - uint64(len(encodedBlock))
 }
 
 func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
@@ -392,7 +541,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 
 // redirectRequest redirects the request to the next round robin fallback endpoing if available, otherwise,
 // if EnableBlockServiceFallbackToArchiver is enabled, redirects to a random archiver.
-func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWriter, request *http.Request) (ok bool) {
+func (bs *BlockService) redirectRequest(response http.ResponseWriter, request *http.Request, pathsuffix string) (ok bool) {
 	peerAddress := bs.getNextCustomFallbackEndpoint()
 	if peerAddress == "" && bs.enableArchiverFallback {
 		peerAddress = bs.getRandomArchiver()
@@ -406,10 +555,23 @@ func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWrit
 		bs.log.Debugf("redirectRequest: %s", err.Error())
 		return false
 	}
-	parsedURL.Path = strings.Replace(FormatBlockQuery(round, parsedURL.Path, bs.net), "{genesisID}", bs.genesisID, 1)
+	parsedURL.Path = path.Join(parsedURL.Path, pathsuffix)
 	http.Redirect(response, request, parsedURL.String(), http.StatusTemporaryRedirect)
 	bs.log.Debugf("redirectRequest: redirected block request to %s", parsedURL.String())
 	return true
+}
+
+func (bs *BlockService) formatBlockQuery(round uint64, sendStateProof bool) string {
+	stateProofArg := ""
+	if sendStateProof {
+		stateProofArg = "?stateproof=0"
+	}
+
+	return fmt.Sprintf("/v1/%s/block/%s%s", bs.genesisID, strconv.FormatUint(uint64(round), 36), stateProofArg)
+}
+
+func (bs *BlockService) formatStateProofQuery(round uint64) string {
+	return fmt.Sprintf("/v1/%s/stateproof/type0/%s", bs.genesisID, strconv.FormatUint(uint64(round), 36))
 }
 
 // getNextCustomFallbackEndpoint returns the next custorm fallback endpoint in RR ordering
@@ -464,6 +626,29 @@ func (bs *BlockService) rawBlockBytes(round basics.Round) ([]byte, error) {
 	return data, err
 }
 
+// rawBlockStateProofBytes returns the block and light header proof for a given round, while taking the lock
+// to ensure the block service is currently active.
+func (bs *BlockService) rawBlockStateProofBytes(round basics.Round) ([]byte, error) {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	select {
+	case _, ok := <-bs.stop:
+		if !ok {
+			// service is closed.
+			return nil, errBlockServiceClosed
+		}
+	default:
+	}
+	if bs.memoryUsed > bs.memoryCap {
+		return nil, errMemoryAtCapacity{used: bs.memoryUsed, capacity: bs.memoryCap}
+	}
+	data, err := RawBlockStateProofBytes(bs.ledger, round)
+	if err == nil {
+		bs.memoryUsed = bs.memoryUsed + uint64(len(data))
+	}
+	return data, err
+}
+
 func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) (network.Topics, uint64) {
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
@@ -506,9 +691,53 @@ func RawBlockBytes(l LedgerForBlockService, round basics.Round) ([]byte, error) 
 	}), nil
 }
 
+// RawBlockStateProofBytes return the msgpack bytes for a block and light header proof
+func RawBlockStateProofBytes(l LedgerForBlockService, round basics.Round) ([]byte, error) {
+	blk, err := l.Block(round)
+	if err != nil {
+		return nil, err
+	}
+
+	stateProofInterval := basics.Round(config.Consensus[blk.CurrentProtocol].StateProofInterval)
+	if stateProofInterval == 0 {
+		return nil, fmt.Errorf("state proofs not supported in block %d", round)
+	}
+
+	lastAttestedRound := round.RoundUpToMultipleOf(stateProofInterval)
+	firstAttestedRound := lastAttestedRound - stateProofInterval + 1
+
+	latest := l.Latest()
+	if lastAttestedRound > latest {
+		return nil, fmt.Errorf("light block header proof not available for block %d yet, latest is %d", lastAttestedRound, latest)
+	}
+
+	lightHeaders, err := stateproof.FetchLightHeaders(l, uint64(stateProofInterval), lastAttestedRound)
+	if err != nil {
+		return nil, err
+	}
+
+	blockIndex := uint64(round - firstAttestedRound)
+	leafproof, err := stateproof.GenerateProofOfLightBlockHeaders(uint64(stateProofInterval), lightHeaders, blockIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	r := EncodedBlockCert{
+		Block:                 blk,
+		LightBlockHeaderProof: leafproof.GetConcatenatedProof(),
+	}
+
+	return protocol.Encode(&r), nil
+}
+
 // FormatBlockQuery formats a block request query for the given network and round number
 func FormatBlockQuery(round uint64, parsedURL string, net network.GossipNode) string {
 	return net.SubstituteGenesisID(path.Join(parsedURL, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(round), 36)))
+}
+
+// FormatStateProofQuery formats a state proof request for the given network, proof type, and round number
+func FormatStateProofQuery(round uint64, proofType protocol.StateProofType, parsedURL string, net network.GossipNode) string {
+	return net.SubstituteGenesisID(path.Join(parsedURL, "/v1/{genesisID}/stateproof/type"+strconv.FormatUint(uint64(proofType), 10)+"/"+strconv.FormatUint(uint64(round), 36)))
 }
 
 func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (fe fallbackEndpoints) {

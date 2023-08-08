@@ -20,6 +20,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -40,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -126,10 +128,18 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 		node,
 	}
 
+	spCatchupFilename := filepath.Join(node.genesisDirs.StateproofCatchupGenesisDir, config.StateProofCatchupFilename)
+	spCatchupDB, err := db.MakeAccessor(spCatchupFilename, false, false)
+	if err != nil {
+		log.Errorf("Cannot create state-proof catchup DB (%s): %v", spCatchupFilename, err)
+		return nil, err
+	}
+
 	node.ledger.RegisterBlockListeners(blockListeners)
 	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
-	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)
+	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool, &spCatchupDB)
+	node.catchupService.SetRenaissanceFromConfig(cfg)
 
 	// Initialize sync round to the latest db round + 1 so that nothing falls out of the cache on Start
 	err = node.SetSyncRound(uint64(node.Ledger().LatestTrackerCommitted() + 1))

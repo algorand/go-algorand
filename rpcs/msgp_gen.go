@@ -23,13 +23,40 @@ import (
 // MarshalMsg implements msgp.Marshaler
 func (z *EncodedBlockCert) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "block"
-	o = append(o, 0x82, 0xa5, 0x62, 0x6c, 0x6f, 0x63, 0x6b)
-	o = (*z).Block.MarshalMsg(o)
-	// string "cert"
-	o = append(o, 0xa4, 0x63, 0x65, 0x72, 0x74)
-	o = (*z).Certificate.MarshalMsg(o)
+	// omitempty: check for empty values
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).Block.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Certificate.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if len((*z).LightBlockHeaderProof) == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "block"
+			o = append(o, 0xa5, 0x62, 0x6c, 0x6f, 0x63, 0x6b)
+			o = (*z).Block.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "cert"
+			o = append(o, 0xa4, 0x63, 0x65, 0x72, 0x74)
+			o = (*z).Certificate.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "proof"
+			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x6f, 0x66)
+			o = msgp.AppendBytes(o, (*z).LightBlockHeaderProof)
+		}
+	}
 	return
 }
 
@@ -68,6 +95,14 @@ func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			(*z).LightBlockHeaderProof, bts, err = msgp.ReadBytesBytes(bts, (*z).LightBlockHeaderProof)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LightBlockHeaderProof")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -102,6 +137,12 @@ func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Certificate")
 					return
 				}
+			case "proof":
+				(*z).LightBlockHeaderProof, bts, err = msgp.ReadBytesBytes(bts, (*z).LightBlockHeaderProof)
+				if err != nil {
+					err = msgp.WrapError(err, "LightBlockHeaderProof")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -122,17 +163,18 @@ func (_ *EncodedBlockCert) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *EncodedBlockCert) Msgsize() (s int) {
-	s = 1 + 6 + (*z).Block.Msgsize() + 5 + (*z).Certificate.Msgsize()
+	s = 1 + 6 + (*z).Block.Msgsize() + 5 + (*z).Certificate.Msgsize() + 6 + msgp.BytesPrefixSize + len((*z).LightBlockHeaderProof)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *EncodedBlockCert) MsgIsZero() bool {
-	return ((*z).Block.MsgIsZero()) && ((*z).Certificate.MsgIsZero())
+	return ((*z).Block.MsgIsZero()) && ((*z).Certificate.MsgIsZero()) && (len((*z).LightBlockHeaderProof) == 0)
 }
 
 // MaxSize returns a maximum valid message size for this message type
 func EncodedBlockCertMaxSize() (s int) {
-	s = 1 + 6 + bookkeeping.BlockMaxSize() + 5 + agreement.CertificateMaxSize()
+	s = 1 + 6 + bookkeeping.BlockMaxSize() + 5 + agreement.CertificateMaxSize() + 6
+	panic("Unable to determine max size: Byteslice type z.LightBlockHeaderProof is unbounded")
 	return
 }
