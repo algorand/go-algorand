@@ -95,12 +95,12 @@ func TestMaybeIOError(t *testing.T) {
 	// This structure is how sqlite3 returns Errors
 	err := sqlite3.Error{Code: sqlite3.ErrIoErr}
 	var trackerIOErr *trackerdb.ErrIoErr
-	require.ErrorAs(t, maybeIOError(err), &trackerIOErr)
+	require.ErrorAs(t, wrapIOError(err), &trackerIOErr)
 
 	// ErrNo10 is a sqlite3 error code for ErrIoErr
 	err = sqlite3.Error{Code: sqlite3.ErrNo(10)}
-	require.ErrorAs(t, maybeIOError(err), &trackerIOErr)
+	require.ErrorAs(t, wrapIOError(err), &trackerIOErr)
 
 	err = sqlite3.Error{Code: sqlite3.ErrSchema}
-	require.False(t, errors.As(maybeIOError(err), &trackerIOErr))
+	require.False(t, errors.As(wrapIOError(err), &trackerIOErr))
 }
