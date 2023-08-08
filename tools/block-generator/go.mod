@@ -37,7 +37,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mattn/go-sqlite3 v1.10.0 // indirect
+	github.com/mattn/go-sqlite3 v1.14.16 // indirect
 	github.com/miekg/dns v1.1.55 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
