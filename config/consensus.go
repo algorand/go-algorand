@@ -520,21 +520,11 @@ type ConsensusParams struct {
 	// DynamicFilterTimeout
 	DynamicFilterTimeout bool
 
-	// AgreementPipelineDepth specifies the maximum number of pipelined
-	// rounds that the agreement protocol can run ahead with.  This is
-	// the maximum difference between the first uncommitted round and
-	// the round number that we run the agreement protocol for.
-	AgreementPipelineDepth int
+	DynamicFilterTimeoutLowerBound time.Duration
 
-	// AgreementPipelineDelayHistory specifies the number of past block arrivals
+	// DynamicFilterPayloadArriavalHistory specifies the number of past block arrivals
 	// that are measured to determine when to start pipelining the next block.
-	AgreementPipelineDelayHistory int
-
-	// AgreementPipelineDelay specifies when the agreement code should start
-	// pipelining the next block, by choosing the delay time of the
-	// AgreementPipelineDelay'th slowest block to arrive out of the last
-	// AgreementPipelineDelayHistory lowest-credential block payloads.
-	AgreementPipelineDelay int
+	DynamicFilterPayloadArriavalHistory int
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1366,6 +1356,10 @@ func initConsensusProtocols() {
 
 	v38.AgreementFilterTimeoutPeriod0 = 3000 * time.Millisecond
 
+	v38.DynamicFilterTimeout = true
+	v38.DynamicFilterPayloadArriavalHistory = 32
+	v38.DynamicFilterTimeoutLowerBound = time.Second
+
 	Consensus[protocol.ConsensusV38] = v38
 
 	// v37 can be upgraded to v38, with an update delay of 12h:
@@ -1376,6 +1370,7 @@ func initConsensusProtocols() {
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
 	vFuture := v38
+
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
