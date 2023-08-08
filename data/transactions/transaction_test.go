@@ -1397,3 +1397,27 @@ func TestStateProofTxnShouldBeZero(t *testing.T) {
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
 	require.NoError(t, err)
 }
+
+func BenchmarkUnmarshalValidateTransaction(b *testing.B) {
+	b.StopTimer()
+	const numTxns = 1000
+	// Create a random transaction
+	txns := make([][]byte, numTxns)
+	for i := 0; i < numTxns; i++ {
+		res, err := protocol.RandomizeObject(&Transaction{})
+		if err != nil {
+			b.Fatal(err)
+		}
+		txn := res.(*Transaction)
+		txns[i] = protocol.Encode(txn)
+	}
+	b.StartTimer()
+	var txn Transaction
+	for i := 0; i < b.N; i++ {
+		encodedTxn := txns[i%numTxns]
+		_, err := txn.UnmarshalMsg(encodedTxn)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
