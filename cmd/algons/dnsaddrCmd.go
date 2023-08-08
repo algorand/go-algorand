@@ -32,6 +32,7 @@ var (
 	dnsaddrDomain string
 	secure        bool
 	cmdMultiaddrs []string
+	nodeSize      int
 )
 
 func init() {
@@ -44,6 +45,7 @@ func init() {
 	dnsaddrTreeCmd.AddCommand(dnsaddrTreeCreateCmd)
 	dnsaddrTreeCreateCmd.Flags().StringArrayVarP(&cmdMultiaddrs, "multiaddrs", "m", []string{}, "multiaddrs to add")
 	dnsaddrTreeCreateCmd.Flags().StringVarP(&dnsaddrDomain, "domain", "d", "", "Top level domain")
+	dnsaddrTreeCreateCmd.Flags().IntVarP(&nodeSize, "node-size", "n", 50, "Number of multiaddrs entries per TXT record")
 	dnsaddrTreeCreateCmd.MarkFlagRequired("domain")
 	dnsaddrTreeCreateCmd.MarkFlagRequired("multiaddrs")
 
@@ -131,10 +133,9 @@ var dnsaddrTreeCreateCmd = &cobra.Command{
 			fmt.Printf("must provide multiaddrs to put in the DNS records")
 			return
 		}
-		recordsPerEntry := 4
 		// Generate the dnsaddr entries required for the full tree
 		var dnsaddrsTo []string
-		for i := 0; i < len(cmdMultiaddrs)/recordsPerEntry; i++ {
+		for i := 0; i < len(cmdMultiaddrs)/nodeSize; i++ {
 			dnsaddrsTo = append(dnsaddrsTo, fmt.Sprintf("%d%s", i, dnsaddrDomain))
 		}
 		dnsaddrsFrom := []string{fmt.Sprintf("_dnsaddr.%s", dnsaddrDomain)}
@@ -142,7 +143,7 @@ var dnsaddrTreeCreateCmd = &cobra.Command{
 			dnsaddrsFrom = append(dnsaddrsFrom, fmt.Sprintf("_dnsaddr.%s", addrTo))
 		}
 		for _, from := range dnsaddrsFrom {
-			for i := 0; i < recordsPerEntry; i++ {
+			for i := 0; i < nodeSize; i++ {
 				if len(dnsaddrsTo) > 0 {
 					newDnsaddr := fmt.Sprintf("dnsaddr=/dnsaddr/%s", dnsaddrsTo[len(dnsaddrsTo)-1])
 					fmt.Printf("writing %s => %s\n", from, newDnsaddr)
