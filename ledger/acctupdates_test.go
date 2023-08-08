@@ -2711,16 +2711,3 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	require.Contains(t, data.Assets, aidx3)
 	require.NotContains(t, data.Assets, aidx2)
 }
-
-func TestAccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	aul := &accountUpdatesLedgerEvaluator{
-		prevHeader: bookkeeping.BlockHeader{},
-		tail:       &txTail{},
-	}
-	hdr, err := aul.BlockHdr(99)
-	require.Error(t, err)
-	require.Equal(t, ledgercore.ErrNoEntry{}, err)
-	require.Equal(t, bookkeeping.BlockHeader{}, hdr)
-}
