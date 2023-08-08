@@ -285,9 +285,11 @@ func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVer
 
 	proto := config.Consensus[ver]
 
+	//return FilterTimeout(period, ver)
+
 	if !proto.DynamicFilterTimeout || period != 0 {
 		// Either dynamic lambda is disabled, or we're not in period 0 and
-		// therefore can't use dynamic lambda
+		// therefore, can't use dynamic lambda
 		return FilterTimeout(period, ver)
 	}
 
@@ -384,7 +386,13 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.Deadline = FilterTimeout(target, source.Proto)
+
+	if target != 0 {
+		// We entered a non-0 period, we should reset the filter timeout
+		// calculation mechanism.
+		p.payloadArrivals = make([]time.Duration, 0)
+	}
+	p.Deadline = p.calculateFilterTimeout(target, source.Proto)
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})

@@ -70,6 +70,7 @@ func (i *instant) TimeoutAt(d time.Duration) <-chan time.Time {
 	}
 
 	if d == agreement.FilterTimeout(0, protocol.ConsensusCurrentVersion) && !i.HasPending("pseudonode") {
+		//if d == priod0FilterTimeout && !i.HasPending("pseudonode") {
 		close(ta)
 	}
 	return ta
