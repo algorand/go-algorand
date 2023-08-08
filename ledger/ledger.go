@@ -103,6 +103,7 @@ type Ledger struct {
 	tracer logic.EvalTracer
 }
 
+// DirsAndPrefix is a struct that holds the genesis directories and the database file prefix, so ledger can construct full paths to database files
 type DirsAndPrefix struct {
 	config.ResolvedGenesisDirs
 	DBFilePrefix string // the prefix of the database files, appended to genesis directories

@@ -381,8 +381,8 @@ func main() {
 		l.Close()
 
 		fmt.Printf("Catching up from %d to %d\n", latest, *roundStart)
-		paths, err := cfg.EnsureAndResolveGenesisDirs(rootPath, genesis.ID())
-		if err != nil {
+		paths, perr := cfg.EnsureAndResolveGenesisDirs(rootPath, genesis.ID())
+		if perr != nil {
 			fmt.Fprintf(os.Stderr, "Cannot init data directory: %v", err)
 			os.Exit(1)
 		}

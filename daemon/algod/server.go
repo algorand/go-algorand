@@ -83,7 +83,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	// if the hotDataDir is explicitly set, use it for logging
-	// use cfg value directy as the resolved path includes the genesis ID
+	// use cfg value directly as the resolved path includes the genesis ID
 	if cfg.HotDataDir != "" {
 		liveLog = filepath.Join(cfg.HotDataDir, "node.log")
 	}
@@ -94,7 +94,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
 	// if the coldDataDir is explicitly set, use it for archive
-	// use cfg value directy as the resolved path includes the genesis ID
+	// use cfg value directly as the resolved path includes the genesis ID
 	if cfg.ColdDataDir != "" {
 		archive = filepath.Join(cfg.ColdDataDir, cfg.LogArchiveName)
 	}
