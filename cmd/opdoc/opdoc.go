@@ -256,7 +256,10 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 }
 
 func opsToMarkdown(out io.Writer, version uint64) error {
-	out.Write([]byte(fmt.Sprintf("# v%d Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n", version)))
+	_, err := out.Write([]byte(fmt.Sprintf("# v%d Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n", version)))
+	if err != nil {
+		return err
+	}
 	opSpecs := logic.OpcodesByVersion(version)
 	written := make(map[string]bool)
 	for i := range opSpecs {
