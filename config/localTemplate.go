@@ -88,7 +88,7 @@ type Local struct {
 	// on a fast SSD, but store the logs on a slower spinning disk.
 	// In order to allow for nodes to support multiple networks, these data directories are not used directly,
 	// but instead will hold subdirectories for each network, named by its genesis id.
-	// once these paths are resolved to genesis directories, they are passed to the node to use.
+	// once these paths are resolved to absolute paths with genesis directories, they are passed to the node to use.
 	// For simple node operation: do not specify any of these directories.
 	// For advanced node operation: specify the HotDataDir and ColdDataDir to separate drives
 	// For expert node operation: specify any of the directories to customize the node's data storage.
