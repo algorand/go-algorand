@@ -432,8 +432,13 @@ func (l *Ledger) UnregisterVotersCommitListener() {
 // written to disk.  Returns the minimum block number that must be kept
 // in the database.
 func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 	minToSave := l.trackers.committedUpTo(r)
 
 	if l.archival {
@@ -704,8 +709,13 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 // behaves like AddBlock.
 func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error {
 	// Grab the tracker lock first, to ensure newBlock() is notified before committedUpTo().
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 
 	blk := vb.Block()
 	err := l.blockQ.putBlock(blk, cert)
@@ -866,3 +876,5 @@ var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "c
 var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")
 var ledgerVerifygenhashCount = metrics.NewCounter("ledger_verifygenhash_count", "calls")
 var ledgerVerifygenhashMicros = metrics.NewCounter("ledger_verifygenhash_micros", "µs spent")
+var ledgerTrackerMuLockCount = metrics.NewCounter("ledger_lock_trackermu_count", "calls")
+var ledgerTrackerMuLockMicros = metrics.NewCounter("ledger_lock_trackermu_micros", "µs spent")

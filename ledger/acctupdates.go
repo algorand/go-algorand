@@ -327,6 +327,8 @@ func (au *accountUpdates) close() {
 
 // flushCaches flushes any pending data in caches so that it is fully available during future lookups.
 func (au *accountUpdates) flushCaches() {
+	t0 := time.Now()
+	ledgerAccountsMuLockCount.Inc(nil)
 	au.accountsMu.Lock()
 
 	au.baseAccounts.flushPendingWrites()
@@ -334,6 +336,7 @@ func (au *accountUpdates) flushCaches() {
 	au.baseKVs.flushPendingWrites()
 
 	au.accountsMu.Unlock()
+	ledgerAccountsMuLockMicros.AddMicrosecondsSince(t0, nil)
 }
 
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
@@ -675,9 +678,12 @@ func (au *accountUpdates) consecutiveVersion(offset uint64) uint64 {
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
 // which invokes the internal implementation after taking the lock.
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+	t0 := time.Now()
+	ledgerAccountsMuLockCount.Inc(nil)
 	au.accountsMu.Lock()
 	au.newBlockImpl(blk, delta)
 	au.accountsMu.Unlock()
+	ledgerAccountsMuLockMicros.AddMicrosecondsSince(t0, nil)
 	au.accountsReadCond.Broadcast()
 }
 
@@ -1629,6 +1635,8 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		dcc.stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano())
 	}
 
+	t0 := time.Now()
+	ledgerAccountsMuLockCount.Inc(nil)
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -1735,6 +1743,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	au.cachedDBRound = newBase
 
 	au.accountsMu.Unlock()
+	ledgerAccountsMuLockMicros.AddMicrosecondsSince(t0, nil)
 
 	if dcc.updateStats {
 		dcc.stats.MemoryUpdatesDuration = time.Duration(time.Now().UnixNano()) - dcc.stats.MemoryUpdatesDuration
@@ -1889,3 +1898,5 @@ var ledgerGeneratecatchpointCount = metrics.NewCounter("ledger_generatecatchpoin
 var ledgerGeneratecatchpointMicros = metrics.NewCounter("ledger_generatecatchpoint_micros", "µs spent")
 var ledgerVacuumCount = metrics.NewCounter("ledger_vacuum_count", "calls")
 var ledgerVacuumMicros = metrics.NewCounter("ledger_vacuum_micros", "µs spent")
+var ledgerAccountsMuLockCount = metrics.NewCounter("ledger_lock_accountsmu_count", "calls")
+var ledgerAccountsMuLockMicros = metrics.NewCounter("ledger_lock_accountsmu_micros", "µs spent")
