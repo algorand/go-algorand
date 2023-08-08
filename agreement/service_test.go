@@ -909,6 +909,20 @@ func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds
 	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
 }
 
+func maxFilterTimeoutPeriod0(services []*Service, version protocol.ConsensusVersion) time.Duration {
+	if len(services) == 0 {
+		return FilterTimeout(0, version)
+	}
+	maxFilter := services[0].persistStatus.calculateFilterTimeout(0, version)
+	for _, service := range services {
+		curr := service.persistStatus.calculateFilterTimeout(0, version)
+		if maxFilter < curr {
+			maxFilter = curr
+		}
+	}
+	return maxFilter
+}
+
 func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) {
 	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, traceLevel, ledgerFactory)
 	startRound := baseLedger.NextRound()
@@ -923,10 +937,10 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 
 	// run round with round-specific consensus version first (since fix in #1896)
 	version, _ := baseLedger.ConsensusVersion(ParamsRound(startRound))
-	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+	zeroes = runRound(clocks, activityMonitor, zeroes, maxFilterTimeoutPeriod0(services, version))
 	for j := 1; j < numRounds; j++ {
 		version, _ := baseLedger.ConsensusVersion(ParamsRound(baseLedger.NextRound() + basics.Round(j-1)))
-		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+		zeroes = runRound(clocks, activityMonitor, zeroes, maxFilterTimeoutPeriod0(services, version))
 	}
 
 	for i := 0; i < numNodes; i++ {
