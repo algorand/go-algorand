@@ -1,4 +1,4 @@
-# Opcodes
+# v6 Opcodes
 
 Ops have a 'cost' of 1 unless otherwise specified.
 
