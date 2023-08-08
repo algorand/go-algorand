@@ -46,14 +46,14 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: Secp256k1=1700 Secp256r1=2500
-- Availability: v5
+- Introduced In: v5
 
 ### ECDSA
 
 Curves
 
-| Index | Name | In | Notes |
-| - | ------ | - | --------- |
+| Index | Name | Introduced In | Notes |
+| - | ------ | ----------- | --------- |
 | 0 | Secp256k1 |      | secp256k1 curve, used in Bitcoin |
 | 1 | Secp256r1 | v7  | secp256r1 curve, NIST standard |
 
@@ -67,7 +67,7 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
 - decompress pubkey A into components X, Y
 - **Cost**: Secp256k1=650 Secp256r1=2400
-- Availability: v5
+- Introduced In: v5
 
 The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.
 
@@ -78,7 +78,7 @@ The 33 byte public key in a compressed form to be decompressed into X and Y (top
 - Stack: ..., A: []byte, B: uint64, C: []byte, D: []byte &rarr; ..., X: []byte, Y: []byte
 - for (data A, recovery id B, signature C, D) recover a public key
 - **Cost**: 2000
-- Availability: v5
+- Introduced In: v5
 
 S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.
 
@@ -227,7 +227,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Bytecode: 0x1e
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., X: uint64, Y: uint64
 - A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits.
-- Availability: v2
+- Introduced In: v2
 
 ## divmodw
 
@@ -235,7 +235,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Stack: ..., A: uint64, B: uint64, C: uint64, D: uint64 &rarr; ..., W: uint64, X: uint64, Y: uint64, Z: uint64
 - W,X = (A,B / C,D); Y,Z = (A,B modulo C,D)
 - **Cost**: 20
-- Availability: v4
+- Introduced In: v4
 
 The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.
 
@@ -366,8 +366,8 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))
 
-| Index | Name | Type | In | Notes |
-| - | ------ | -- | - | --------- |
+| Index | Name | Type | Introduced In | Notes |
+| - | ------ | -- | ----------- | --------- |
 | 0 | Sender | address |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
@@ -442,8 +442,8 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 
 Fields
 
-| Index | Name | Type | In | Notes |
-| - | ------ | -- | - | --------- |
+| Index | Name | Type | Introduced In | Notes |
+| - | ------ | -- | ----------- | --------- |
 | 0 | MinTxnFee | uint64 |      | microalgos |
 | 1 | MinBalance | uint64 |      | microalgos |
 | 2 | MaxTxnLife | uint64 |      | rounds |
@@ -490,14 +490,14 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Bytecode: 0x36 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates.
-- Availability: v2
+- Introduced In: v2
 
 ### txna
 
 Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))
 
-| Index | Name | Type | In | Notes |
-| - | ------ | -- | - | --------- |
+| Index | Name | Type | Introduced In | Notes |
+| - | ------ | -- | ----------- | --------- |
 | 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
 | 28 | Accounts | address | v2  | Accounts listed in the ApplicationCall transaction |
 | 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
@@ -513,7 +513,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 - Bytecode: 0x37 {uint8}, {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the current group<br />`gtxna` can be called using `gtxn` with 3 immediates.
-- Availability: v2
+- Introduced In: v2
 
 ## gtxns
 
@@ -521,7 +521,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 - Bytecode: 0x38 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of the Ath transaction in the current group
-- Availability: v3
+- Introduced In: v3
 
 for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.
 
@@ -531,7 +531,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Bytecode: 0x39 {uint8}, {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ith value of the array field F from the Ath transaction in the current group<br />`gtxnsa` can be called using `gtxns` with 2 immediates.
-- Availability: v3
+- Introduced In: v3
 
 ## gload
 
@@ -539,7 +539,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Bytecode: 0x3a {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith scratch space value of the Tth transaction in the current group
-- Availability: v4
+- Introduced In: v4
 - Mode: Application
 
 `gload` fails unless the requested transaction is an ApplicationCall and T < GroupIndex.
@@ -550,7 +550,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Bytecode: 0x3b {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ith scratch space value of the Ath transaction in the current group
-- Availability: v4
+- Introduced In: v4
 - Mode: Application
 
 `gloads` fails unless the requested transaction is an ApplicationCall and A < GroupIndex.
@@ -561,7 +561,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Bytecode: 0x3c {uint8}
 - Stack: ... &rarr; ..., uint64
 - ID of the asset or application created in the Tth transaction of the current group
-- Availability: v4
+- Introduced In: v4
 - Mode: Application
 
 `gaid` fails unless the requested transaction created an asset or application and T < GroupIndex.
@@ -571,7 +571,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Bytecode: 0x3d
 - Stack: ..., A: uint64 &rarr; ..., uint64
 - ID of the asset or application created in the Ath transaction of the current group
-- Availability: v4
+- Introduced In: v4
 - Mode: Application
 
 `gaids` fails unless the requested transaction created an asset or application and A < GroupIndex.
@@ -581,14 +581,14 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Bytecode: 0x3e
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath scratch space value.  All scratch spaces are 0 at program start.
-- Availability: v5
+- Introduced In: v5
 
 ## stores
 
 - Bytecode: 0x3f
 - Stack: ..., A: uint64, B &rarr; ...
 - store B to the Ath scratch space
-- Availability: v5
+- Introduced In: v5
 
 ## bnz
 
@@ -607,7 +607,7 @@ At v2 it became allowed to branch to the end of the program exactly after the la
 - Bytecode: 0x41 {int16 (big-endian)}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is zero
-- Availability: v2
+- Introduced In: v2
 
 See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
@@ -617,7 +617,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 - Bytecode: 0x42 {int16 (big-endian)}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET
-- Availability: v2
+- Introduced In: v2
 
 See `bnz` for details on how branches work. `b` always jumps to the offset.
 
@@ -626,14 +626,14 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x43
 - Stack: ..., A: uint64 &rarr; _exits_
 - use A as success value; end
-- Availability: v2
+- Introduced In: v2
 
 ## assert
 
 - Bytecode: 0x44
 - Stack: ..., A: uint64 &rarr; ...
 - immediately fail unless A is a non-zero number
-- Availability: v3
+- Introduced In: v3
 
 ## bury
 
@@ -641,7 +641,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x45 {uint8}
 - Stack: ..., A &rarr; ...
 - replace the Nth value from the top of the stack with A. bury 0 fails.
-- Availability: v8
+- Introduced In: v8
 
 ## popn
 
@@ -649,7 +649,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x46 {uint8}
 - Stack: ..., [N items] &rarr; ...
 - remove N values from the top of the stack
-- Availability: v8
+- Introduced In: v8
 
 ## dupn
 
@@ -657,7 +657,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x47 {uint8}
 - Stack: ..., A &rarr; ..., A, [N copies of A]
 - duplicate A, N times
-- Availability: v8
+- Introduced In: v8
 
 ## pop
 
@@ -676,7 +676,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x4a
 - Stack: ..., A, B &rarr; ..., A, B, A, B
 - duplicate A and B
-- Availability: v2
+- Introduced In: v2
 
 ## dig
 
@@ -684,21 +684,21 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x4b {uint8}
 - Stack: ..., A, [N items] &rarr; ..., A, [N items], A
 - Nth value from the top of the stack. dig 0 is equivalent to dup
-- Availability: v3
+- Introduced In: v3
 
 ## swap
 
 - Bytecode: 0x4c
 - Stack: ..., A, B &rarr; ..., B, A
 - swaps A and B on stack
-- Availability: v3
+- Introduced In: v3
 
 ## select
 
 - Bytecode: 0x4d
 - Stack: ..., A, B, C: uint64 &rarr; ..., A or B
 - selects one of two values based on top-of-stack: B if C != 0, else A
-- Availability: v3
+- Introduced In: v3
 
 ## cover
 
@@ -706,7 +706,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x4e {uint8}
 - Stack: ..., [N items], A &rarr; ..., A, [N items]
 - remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.
-- Availability: v5
+- Introduced In: v5
 
 ## uncover
 
@@ -714,14 +714,14 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x4f {uint8}
 - Stack: ..., A, [N items] &rarr; ..., [N items], A
 - remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.
-- Availability: v5
+- Introduced In: v5
 
 ## concat
 
 - Bytecode: 0x50
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - join A and B
-- Availability: v2
+- Introduced In: v2
 
 `concat` fails if the result would be greater than 4096 bytes.
 
@@ -731,21 +731,21 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x51 {uint8}, {uint8}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails
-- Availability: v2
+- Introduced In: v2
 
 ## substring3
 
 - Bytecode: 0x52
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
 - A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails
-- Availability: v2
+- Introduced In: v2
 
 ## getbit
 
 - Bytecode: 0x53
 - Stack: ..., A, B: uint64 &rarr; ..., uint64
 - Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
-- Availability: v3
+- Introduced In: v3
 
 see explanation of bit ordering in setbit
 
@@ -754,7 +754,7 @@ see explanation of bit ordering in setbit
 - Bytecode: 0x54
 - Stack: ..., A, B: uint64, C: uint64 &rarr; ..., any
 - Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
-- Availability: v3
+- Introduced In: v3
 
 When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.
 
@@ -763,14 +763,14 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Bytecode: 0x55
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails
-- Availability: v3
+- Introduced In: v3
 
 ## setbyte
 
 - Bytecode: 0x56
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
 - Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails
-- Availability: v3
+- Introduced In: v3
 
 ## extract
 
@@ -778,35 +778,35 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Bytecode: 0x57 {uint8}, {uint8}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails
-- Availability: v5
+- Introduced In: v5
 
 ## extract3
 
 - Bytecode: 0x58
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
 - A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails<br />`extract3` can be called using `extract` with no immediates.
-- Availability: v5
+- Introduced In: v5
 
 ## extract_uint16
 
 - Bytecode: 0x59
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - A uint16 formed from a range of big-endian bytes from A starting at B up to but not including B+2. If B+2 is larger than the array length, the program fails
-- Availability: v5
+- Introduced In: v5
 
 ## extract_uint32
 
 - Bytecode: 0x5a
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - A uint32 formed from a range of big-endian bytes from A starting at B up to but not including B+4. If B+4 is larger than the array length, the program fails
-- Availability: v5
+- Introduced In: v5
 
 ## extract_uint64
 
 - Bytecode: 0x5b
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails
-- Availability: v5
+- Introduced In: v5
 
 ## replace2
 
@@ -814,14 +814,14 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Bytecode: 0x5c {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)<br />`replace2` can be called using `replace` with 1 immediate.
-- Availability: v7
+- Introduced In: v7
 
 ## replace3
 
 - Bytecode: 0x5d
 - Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., []byte
 - Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />`replace3` can be called using `replace` with no immediates.
-- Availability: v7
+- Introduced In: v7
 
 ## base64_decode
 
@@ -830,7 +830,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Stack: ..., A: []byte &rarr; ..., []byte
 - decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
 - **Cost**: 1 + 1 per 16 bytes of A
-- Availability: v7
+- Introduced In: v7
 
 ### base64
 
@@ -853,7 +853,7 @@ Encodings
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
 - **Cost**: 25 + 2 per 7 bytes of A
-- Availability: v7
+- Introduced In: v7
 
 ### json_ref
 
@@ -875,7 +875,7 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 - Bytecode: 0x60
 - Stack: ..., A &rarr; ..., uint64
 - balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
@@ -885,7 +885,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address). Retu
 - Bytecode: 0x61
 - Stack: ..., A, B: uint64 &rarr; ..., bool
 - 1 if account A is opted in to application B, else 0
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.
@@ -895,7 +895,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 - Bytecode: 0x62
 - Stack: ..., A, B: []byte &rarr; ..., any
 - local state of the key B in the current application in account A
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.
@@ -905,7 +905,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 - Bytecode: 0x63
 - Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: bool
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
@@ -915,7 +915,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 - Bytecode: 0x64
 - Stack: ..., A: []byte &rarr; ..., any
 - global state of the key A in the current application
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.
@@ -925,7 +925,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 - Bytecode: 0x65
 - Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: bool
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
@@ -935,7 +935,7 @@ params: Txn.ForeignApps offset (or, since v4, an _available_ application id), st
 - Bytecode: 0x66
 - Stack: ..., A, B: []byte, C &rarr; ...
 - write C to key B in account A's local state of the current application
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.
@@ -945,7 +945,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 - Bytecode: 0x67
 - Stack: ..., A: []byte, B &rarr; ...
 - write B to key A in the global state of the current application
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 ## app_local_del
@@ -953,7 +953,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 - Bytecode: 0x68
 - Stack: ..., A, B: []byte &rarr; ...
 - delete key B from account A's local state of the current application
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.
@@ -965,7 +965,7 @@ Deleting a key which is already absent has no effect on the application local st
 - Bytecode: 0x69
 - Stack: ..., A: []byte &rarr; ...
 - delete key A from the global state of the current application
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 params: state key.
@@ -978,7 +978,7 @@ Deleting a key which is already absent has no effect on the application global s
 - Bytecode: 0x70 {uint8}
 - Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 ### asset_holding
@@ -999,15 +999,15 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 - Bytecode: 0x71 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from asset A. Y is 1 if A exists, else 0
-- Availability: v2
+- Introduced In: v2
 - Mode: Application
 
 ### asset_params
 
 Fields
 
-| Index | Name | Type | In | Notes |
-| - | ------ | -- | - | --------- |
+| Index | Name | Type | Introduced In | Notes |
+| - | ------ | -- | ----------- | --------- |
 | 0 | AssetTotal | uint64 |      | Total number of units of this asset |
 | 1 | AssetDecimals | uint64 |      | See AssetParams.Decimals |
 | 2 | AssetDefaultFrozen | bool |      | Frozen by default or not |
@@ -1030,7 +1030,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 - Bytecode: 0x72 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from app A. Y is 1 if A exists, else 0
-- Availability: v5
+- Introduced In: v5
 - Mode: Application
 
 ### app_params
@@ -1058,15 +1058,15 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 - Bytecode: 0x73 {uint8}
 - Stack: ..., A &rarr; ..., X: any, Y: bool
 - X is field F from account A. Y is 1 if A owns positive algos, else 0
-- Availability: v6
+- Introduced In: v6
 - Mode: Application
 
 ### acct_params
 
 Fields
 
-| Index | Name | Type | In | Notes |
-| - | ------ | -- | - | --------- |
+| Index | Name | Type | Introduced In | Notes |
+| - | ------ | -- | ----------- | --------- |
 | 0 | AcctBalance | uint64 |      | Account balance in microalgos |
 | 1 | AcctMinBalance | uint64 |      | Minimum required balance for account, in microalgos |
 | 2 | AcctAuthAddr | address |      | Address the account is rekeyed to. |
@@ -1086,7 +1086,7 @@ Fields
 - Bytecode: 0x78
 - Stack: ..., A &rarr; ..., uint64
 - minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.
-- Availability: v3
+- Introduced In: v3
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
@@ -1097,7 +1097,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address). Retu
 - Bytecode: 0x80 {varuint length, bytes}
 - Stack: ... &rarr; ..., []byte
 - immediate BYTES
-- Availability: v3
+- Introduced In: v3
 
 pushbytes args are not added to the bytecblock during assembly processes
 
@@ -1107,7 +1107,7 @@ pushbytes args are not added to the bytecblock during assembly processes
 - Bytecode: 0x81 {varuint}
 - Stack: ... &rarr; ..., uint64
 - immediate UINT
-- Availability: v3
+- Introduced In: v3
 
 pushint args are not added to the intcblock during assembly processes
 
@@ -1117,7 +1117,7 @@ pushint args are not added to the intcblock during assembly processes
 - Bytecode: 0x82 {varuint count, [varuint length, bytes ...]}
 - Stack: ... &rarr; ..., [N items]
 - push sequences of immediate byte arrays to stack (first byte array being deepest)
-- Availability: v8
+- Introduced In: v8
 
 pushbytess args are not added to the bytecblock during assembly processes
 
@@ -1127,7 +1127,7 @@ pushbytess args are not added to the bytecblock during assembly processes
 - Bytecode: 0x83 {varuint count, [varuint ...]}
 - Stack: ... &rarr; ..., [N items]
 - push sequence of immediate uints to stack in the order they appear (first uint being deepest)
-- Availability: v8
+- Introduced In: v8
 
 pushints args are not added to the intcblock during assembly processes
 
@@ -1137,7 +1137,7 @@ pushints args are not added to the intcblock during assembly processes
 - Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., bool
 - for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: 1900
-- Availability: v7
+- Introduced In: v7
 
 ## callsub
 
@@ -1145,7 +1145,7 @@ pushints args are not added to the intcblock during assembly processes
 - Bytecode: 0x88 {int16 (big-endian)}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET, saving the next instruction on the call stack
-- Availability: v4
+- Introduced In: v4
 
 The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.
 
@@ -1154,7 +1154,7 @@ The call stack is separate from the data stack. Only `callsub`, `retsub`, and `p
 - Bytecode: 0x89
 - Stack: ... &rarr; ...
 - pop the top instruction from the call stack and branch to it
-- Availability: v4
+- Introduced In: v4
 
 If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.
 
@@ -1164,7 +1164,7 @@ If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' a
 - Bytecode: 0x8a {uint8}, {uint8}
 - Stack: ... &rarr; ...
 - Prepare top call frame for a retsub that will assume A args and R return values.
-- Availability: v8
+- Introduced In: v8
 
 Fails unless the last instruction executed was a `callsub`.
 
@@ -1174,7 +1174,7 @@ Fails unless the last instruction executed was a `callsub`.
 - Bytecode: 0x8b {int8}
 - Stack: ... &rarr; ..., any
 - Nth (signed) value from the frame pointer.
-- Availability: v8
+- Introduced In: v8
 
 ## frame_bury
 
@@ -1182,7 +1182,7 @@ Fails unless the last instruction executed was a `callsub`.
 - Bytecode: 0x8c {int8}
 - Stack: ..., A &rarr; ...
 - replace the Nth (signed) value from the frame pointer in the stack with A
-- Availability: v8
+- Introduced In: v8
 
 ## switch
 
@@ -1190,7 +1190,7 @@ Fails unless the last instruction executed was a `callsub`.
 - Bytecode: 0x8d {varuint count, [int16 (big-endian) ...]}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
-- Availability: v8
+- Introduced In: v8
 
 ## match
 
@@ -1198,7 +1198,7 @@ Fails unless the last instruction executed was a `callsub`.
 - Bytecode: 0x8e {varuint count, [int16 (big-endian) ...]}
 - Stack: ..., [A1, A2, ..., AN], B &rarr; ...
 - given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.
-- Availability: v8
+- Introduced In: v8
 
 `match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.
 
@@ -1207,14 +1207,14 @@ Fails unless the last instruction executed was a `callsub`.
 - Bytecode: 0x90
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A times 2^B, modulo 2^64
-- Availability: v4
+- Introduced In: v4
 
 ## shr
 
 - Bytecode: 0x91
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A divided by 2^B
-- Availability: v4
+- Introduced In: v4
 
 ## sqrt
 
@@ -1222,14 +1222,14 @@ Fails unless the last instruction executed was a `callsub`.
 - Stack: ..., A: uint64 &rarr; ..., uint64
 - The largest integer I such that I^2 <= A
 - **Cost**: 4
-- Availability: v4
+- Introduced In: v4
 
 ## bitlen
 
 - Bytecode: 0x93
 - Stack: ..., A &rarr; ..., uint64
 - The highest set bit in A. If A is a byte-array, it is interpreted as a big-endian unsigned integer. bitlen of 0 is 0, bitlen of 8 is 4
-- Availability: v4
+- Introduced In: v4
 
 bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 
@@ -1238,7 +1238,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Bytecode: 0x94
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., uint64
 - A raised to the Bth power. Fail if A == B == 0 and on overflow
-- Availability: v4
+- Introduced In: v4
 
 ## expw
 
@@ -1246,7 +1246,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., X: uint64, Y: uint64
 - A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1
 - **Cost**: 10
-- Availability: v4
+- Introduced In: v4
 
 ## bsqrt
 
@@ -1254,14 +1254,14 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - Stack: ..., A: []byte &rarr; ..., []byte
 - The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers
 - **Cost**: 40
-- Availability: v6
+- Introduced In: v6
 
 ## divw
 
 - Bytecode: 0x97
 - Stack: ..., A: uint64, B: uint64, C: uint64 &rarr; ..., uint64
 - A,B / C. Fail if C == 0 or if result overflows.
-- Availability: v6
+- Introduced In: v6
 
 The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.
 
@@ -1271,7 +1271,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: []byte &rarr; ..., []byte
 - SHA3_256 hash of value A, yields [32]byte
 - **Cost**: 130
-- Availability: v7
+- Introduced In: v7
 
 ## b+
 
@@ -1279,7 +1279,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: bigint, B: bigint &rarr; ..., []byte
 - A plus B. A and B are interpreted as big-endian unsigned integers
 - **Cost**: 10
-- Availability: v4
+- Introduced In: v4
 
 ## b-
 
@@ -1287,7 +1287,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A minus B. A and B are interpreted as big-endian unsigned integers. Fail on underflow.
 - **Cost**: 10
-- Availability: v4
+- Introduced In: v4
 
 ## b/
 
@@ -1295,7 +1295,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A divided by B (truncated division). A and B are interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
-- Availability: v4
+- Introduced In: v4
 
 ## b*
 
@@ -1303,49 +1303,49 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: bigint, B: bigint &rarr; ..., []byte
 - A times B. A and B are interpreted as big-endian unsigned integers.
 - **Cost**: 20
-- Availability: v4
+- Introduced In: v4
 
 ## b<
 
 - Bytecode: 0xa4
 - Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is less than B, else 0. A and B are interpreted as big-endian unsigned integers
-- Availability: v4
+- Introduced In: v4
 
 ## b>
 
 - Bytecode: 0xa5
 - Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is greater than B, else 0. A and B are interpreted as big-endian unsigned integers
-- Availability: v4
+- Introduced In: v4
 
 ## b<=
 
 - Bytecode: 0xa6
 - Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is less than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers
-- Availability: v4
+- Introduced In: v4
 
 ## b>=
 
 - Bytecode: 0xa7
 - Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is greater than or equal to B, else 0. A and B are interpreted as big-endian unsigned integers
-- Availability: v4
+- Introduced In: v4
 
 ## b==
 
 - Bytecode: 0xa8
 - Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 1 if A is equal to B, else 0. A and B are interpreted as big-endian unsigned integers
-- Availability: v4
+- Introduced In: v4
 
 ## b!=
 
 - Bytecode: 0xa9
 - Stack: ..., A: bigint, B: bigint &rarr; ..., bool
 - 0 if A is equal to B, else 1. A and B are interpreted as big-endian unsigned integers
-- Availability: v4
+- Introduced In: v4
 
 ## b%
 
@@ -1353,7 +1353,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
-- Availability: v4
+- Introduced In: v4
 
 ## b|
 
@@ -1361,7 +1361,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A bitwise-or B. A and B are zero-left extended to the greater of their lengths
 - **Cost**: 6
-- Availability: v4
+- Introduced In: v4
 
 ## b&
 
@@ -1369,7 +1369,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A bitwise-and B. A and B are zero-left extended to the greater of their lengths
 - **Cost**: 6
-- Availability: v4
+- Introduced In: v4
 
 ## b^
 
@@ -1377,7 +1377,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - A bitwise-xor B. A and B are zero-left extended to the greater of their lengths
 - **Cost**: 6
-- Availability: v4
+- Introduced In: v4
 
 ## b~
 
@@ -1385,21 +1385,21 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A with all bits inverted
 - **Cost**: 4
-- Availability: v4
+- Introduced In: v4
 
 ## bzero
 
 - Bytecode: 0xaf
 - Stack: ..., A: uint64 &rarr; ..., []byte
 - zero filled byte-array of length A
-- Availability: v4
+- Introduced In: v4
 
 ## log
 
 - Bytecode: 0xb0
 - Stack: ..., A: []byte &rarr; ...
 - write A to log state of the current application
-- Availability: v5
+- Introduced In: v5
 - Mode: Application
 
 `log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.
@@ -1409,7 +1409,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xb1
 - Stack: ... &rarr; ...
 - begin preparation of a new inner transaction in a new transaction group
-- Availability: v5
+- Introduced In: v5
 - Mode: Application
 
 `itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.
@@ -1420,7 +1420,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xb2 {uint8}
 - Stack: ..., A &rarr; ...
 - set field F of the current inner transaction to A
-- Availability: v5
+- Introduced In: v5
 - Mode: Application
 
 `itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)
@@ -1430,7 +1430,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xb3
 - Stack: ... &rarr; ...
 - execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.
-- Availability: v5
+- Introduced In: v5
 - Mode: Application
 
 `itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.
@@ -1441,7 +1441,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xb4 {uint8}
 - Stack: ... &rarr; ..., any
 - field F of the last inner transaction
-- Availability: v5
+- Introduced In: v5
 - Mode: Application
 
 ## itxna
@@ -1450,7 +1450,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xb5 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F of the last inner transaction
-- Availability: v5
+- Introduced In: v5
 - Mode: Application
 
 ## itxn_next
@@ -1458,7 +1458,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xb6
 - Stack: ... &rarr; ...
 - begin preparation of a new inner transaction in the same transaction group
-- Availability: v6
+- Introduced In: v6
 - Mode: Application
 
 `itxn_next` initializes the transaction exactly as `itxn_begin` does
@@ -1469,7 +1469,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xb7 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the last inner group submitted
-- Availability: v6
+- Introduced In: v6
 - Mode: Application
 
 ## gitxna
@@ -1478,7 +1478,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xb8 {uint8}, {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the last inner group submitted
-- Availability: v6
+- Introduced In: v6
 - Mode: Application
 
 ## box_create
@@ -1486,7 +1486,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Bytecode: 0xb9
 - Stack: ..., A: boxName, B: uint64 &rarr; ..., bool
 - create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
-- Availability: v8
+- Introduced In: v8
 - Mode: Application
 
 Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.
@@ -1496,7 +1496,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 - Bytecode: 0xba
 - Stack: ..., A: boxName, B: uint64, C: uint64 &rarr; ..., []byte
 - read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
-- Availability: v8
+- Introduced In: v8
 - Mode: Application
 
 ## box_replace
@@ -1504,7 +1504,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 - Bytecode: 0xbb
 - Stack: ..., A: boxName, B: uint64, C: []byte &rarr; ...
 - write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
-- Availability: v8
+- Introduced In: v8
 - Mode: Application
 
 ## box_del
@@ -1512,7 +1512,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 - Bytecode: 0xbc
 - Stack: ..., A: boxName &rarr; ..., bool
 - delete box named A if it exists. Return 1 if A existed, 0 otherwise
-- Availability: v8
+- Introduced In: v8
 - Mode: Application
 
 ## box_len
@@ -1520,7 +1520,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 - Bytecode: 0xbd
 - Stack: ..., A: boxName &rarr; ..., X: uint64, Y: bool
 - X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.
-- Availability: v8
+- Introduced In: v8
 - Mode: Application
 
 ## box_get
@@ -1528,7 +1528,7 @@ Newly created boxes are filled with 0 bytes. `box_create` will fail if the refer
 - Bytecode: 0xbe
 - Stack: ..., A: boxName &rarr; ..., X: []byte, Y: bool
 - X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.
-- Availability: v8
+- Introduced In: v8
 - Mode: Application
 
 For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
@@ -1538,7 +1538,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Bytecode: 0xbf
 - Stack: ..., A: boxName, B: []byte &rarr; ...
 - replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist
-- Availability: v8
+- Introduced In: v8
 - Mode: Application
 
 For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
@@ -1549,7 +1549,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Bytecode: 0xc0 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F of the current transaction
-- Availability: v5
+- Introduced In: v5
 
 ## gtxnas
 
@@ -1557,7 +1557,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Bytecode: 0xc1 {uint8}, {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F from the Tth transaction in the current group
-- Availability: v5
+- Introduced In: v5
 
 ## gtxnsas
 
@@ -1565,14 +1565,14 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Bytecode: 0xc2 {uint8}
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., any
 - Bth value of the array field F from the Ath transaction in the current group
-- Availability: v5
+- Introduced In: v5
 
 ## args
 
 - Bytecode: 0xc3
 - Stack: ..., A: uint64 &rarr; ..., []byte
 - Ath LogicSig argument
-- Availability: v5
+- Introduced In: v5
 - Mode: Signature
 
 ## gloadss
@@ -1580,7 +1580,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Bytecode: 0xc4
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., any
 - Bth scratch space value of the Ath transaction in the current group
-- Availability: v6
+- Introduced In: v6
 - Mode: Application
 
 ## itxnas
@@ -1589,7 +1589,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Bytecode: 0xc5 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F of the last inner transaction
-- Availability: v6
+- Introduced In: v6
 - Mode: Application
 
 ## gitxnas
@@ -1598,7 +1598,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Bytecode: 0xc6 {uint8}, {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F from the Tth transaction in the last inner group submitted
-- Availability: v6
+- Introduced In: v6
 - Mode: Application
 
 ## vrf_verify
@@ -1608,7 +1608,7 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., X: []byte, Y: bool
 - Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
 - **Cost**: 5700
-- Availability: v7
+- Introduced In: v7
 
 ### vrf_verify
 
@@ -1627,7 +1627,7 @@ Standards
 - Bytecode: 0xd1 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
-- Availability: v7
+- Introduced In: v7
 
 ### block
 

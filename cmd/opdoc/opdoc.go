@@ -138,8 +138,8 @@ func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup, version uint64) 
 		widths += " -- |"
 	}
 	if showVers {
-		headers += " In |"
-		widths += " - |"
+		headers += " Introduced In |"
+		widths += " ----------- |"
 	}
 	headers += " Notes |\n"
 	widths += " --------- |\n"
@@ -234,7 +234,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 		fmt.Fprintf(out, "- **Cost**: %s\n", cost)
 	}
 	if op.Version > 1 {
-		fmt.Fprintf(out, "- Availability: v%d\n", op.Version)
+		fmt.Fprintf(out, "- Introduced In: v%d\n", op.Version)
 	}
 	if !op.Modes.Any() {
 		fmt.Fprintf(out, "- Mode: %s\n", op.Modes)
