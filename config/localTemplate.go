@@ -710,6 +710,8 @@ func ensureAbsGenesisDir(path string, genesisID string) (string, error) {
 	return genesisDir, nil
 }
 
+// ResolvedGenesisDirs is a collection of directories including Genesis ID
+// Subdirectories for execution of a node
 type ResolvedGenesisDirs struct {
 	RootGenesisDir       string
 	HotGenesisDir        string
@@ -721,6 +723,7 @@ type ResolvedGenesisDirs struct {
 	CrashGenesisDir      string
 }
 
+// String returns the Genesis Directory values as a string
 func (rgd ResolvedGenesisDirs) String() string {
 	ret := ""
 	ret += fmt.Sprintf("RootGenesisDir: %s\n", rgd.RootGenesisDir)
