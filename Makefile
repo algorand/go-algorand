@@ -212,9 +212,11 @@ build: buildsrc buildsrc-special
 # get around a bug in go build where it will fail
 # to cache binaries from time to time on empty NFS
 # dirs
-buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
-	mkdir -p "${GOCACHE}" && \
-	touch "${GOCACHE}"/file.txt && \
+${GOCACHE}/file.txt:
+	mkdir -p "${GOCACHE}"
+	touch "${GOCACHE}"/file.txt
+
+buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN ${GOCACHE}/file.txt
 	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 buildsrc-special:
