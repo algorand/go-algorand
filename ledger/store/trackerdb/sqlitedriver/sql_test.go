@@ -85,10 +85,10 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	require.Nil(t, qs.lookupAccountStmt)
 }
 
-// TestMaybeIOError ensures that SQL ErrIOErr is converted to trackerdb.ErrIoErr
+// TestWrapIOError ensures that SQL ErrIOErr is converted to trackerdb.ErrIoErr
 // github.com/mattn/go-sqlite3/blob/master/error.go
 // github.com/mattn/go-sqlite3/blob/master/sqlite3.go#L830
-func TestMaybeIOError(t *testing.T) {
+func TestWrapIOError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -103,4 +103,9 @@ func TestMaybeIOError(t *testing.T) {
 
 	err = sqlite3.Error{Code: sqlite3.ErrSchema}
 	require.False(t, errors.As(wrapIOError(err), &trackerIOErr))
+
+	// confirm that double wrapping only applies once
+	err = sqlite3.Error{Code: sqlite3.ErrIoErr}
+	require.Equal(t, wrapIOError(err), wrapIOError(wrapIOError(err)))
+
 }
