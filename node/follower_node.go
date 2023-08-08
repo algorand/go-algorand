@@ -20,7 +20,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -59,7 +58,7 @@ type AlgorandFollowerNode struct {
 	catchpointCatchupService *catchup.CatchpointCatchupService
 	blockService             *rpcs.BlockService
 
-	rootDir     string
+	genesisDirs config.ResolvedGenesisDirs
 	genesisID   string
 	genesisHash crypto.Digest
 	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
@@ -78,13 +77,13 @@ type AlgorandFollowerNode struct {
 }
 
 // MakeFollower sets up an Algorand data node
-func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFollowerNode, error) {
+func MakeFollower(log logging.Logger, genesisDirs config.ResolvedGenesisDirs, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFollowerNode, error) {
 	node := new(AlgorandFollowerNode)
-	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
+	node.genesisDirs = genesisDirs
 
 	if node.devMode {
 		log.Warn("Follower running on a devMode network. Must submit txns to a different node.")
@@ -102,33 +101,14 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	p2pNode.DeregisterMessageInterest(protocol.VoteBundleTag)
 	node.net = p2pNode
 
-	// Set defaults for dataDirs.
-	// Hot and Cold entries are defaulted to the root directory version.
-	// They will be loaded and validated if set in the config, below
-	rootGenesisDir := filepath.Join(rootDir, node.genesisID)
-	hotGenesisDir := filepath.Join(rootDir, node.genesisID)
-	coldGenesisDir := filepath.Join(rootDir, node.genesisID)
-	hotLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
-	coldLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
+	hotGenesisDir := node.genesisDirs.RootGenesisDir
+	coldGenesisDir := node.genesisDirs.RootGenesisDir
 
-	// if HotDataDir is set, prepare hotGenesisDir and hotLedgerPrefix
 	if cfg.HotDataDir != "" {
 		hotGenesisDir = filepath.Join(cfg.HotDataDir, node.genesisID)
-		hotLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
 	}
-	// if ColdDataDir is set, prepare coldGenesisDir and coldLedgerPrefix
 	if cfg.ColdDataDir != "" {
 		coldGenesisDir = filepath.Join(cfg.ColdDataDir, node.genesisID)
-		coldLedgerPrefix = filepath.Join(coldGenesisDir, config.LedgerFilenamePrefix)
-	}
-
-	// create initial genesis dir(s), if it doesn't exist
-	for _, dir := range []string{rootGenesisDir, hotGenesisDir, coldGenesisDir} {
-		err = os.MkdirAll(dir, 0700)
-		if err != nil && !os.IsExist(err) {
-			log.Errorf("Unable to create genesis directory: %v", err)
-			return nil, err
-		}
 	}
 
 	genalloc, err := genesis.Balances()
@@ -139,9 +119,20 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, hotLedgerPrefix, coldLedgerPrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	ledgerPaths := ledger.DirsAndPrefix{
+		DBFilePrefix: config.LedgerFilenamePrefix,
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			RootGenesisDir:       node.genesisDirs.RootGenesisDir,
+			HotGenesisDir:        hotGenesisDir,
+			ColdGenesisDir:       coldGenesisDir,
+			TrackerGenesisDir:    node.genesisDirs.TrackerGenesisDir,
+			BlockGenesisDir:      node.genesisDirs.BlockGenesisDir,
+			CatchpointGenesisDir: node.genesisDirs.CatchpointGenesisDir,
+		},
+	}
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
-		log.Errorf("Cannot initialize ledger (hot: %s, cold: %s): %v", hotLedgerPrefix, coldLedgerPrefix, err)
+		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
 	}
 

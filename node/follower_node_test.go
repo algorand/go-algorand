@@ -66,7 +66,9 @@ func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
 	cfg := config.GetDefaultLocal()
 	cfg.EnableFollowMode = true
 	genesis := followNodeDefaultGenesis()
-	node, err := MakeFollower(logging.Base(), t.TempDir(), cfg, []string{}, genesis)
+	root := t.TempDir()
+	paths, _ := cfg.EnsureAndResolveGenesisDirs(root, genesis.ID())
+	node, err := MakeFollower(logging.Base(), paths, cfg, []string{}, genesis)
 	require.NoError(t, err)
 	return node
 }
@@ -80,7 +82,8 @@ func remakeableFollowNode(t *testing.T, tempDir string, maxAcctLookback uint64) 
 	if tempDir == "" {
 		tempDir = t.TempDir()
 	}
-	followNode, err := MakeFollower(logging.Base(), tempDir, cfg, []string{}, genesis)
+	paths, _ := cfg.EnsureAndResolveGenesisDirs(tempDir, genesis.ID())
+	followNode, err := MakeFollower(logging.Base(), paths, cfg, []string{}, genesis)
 	require.NoError(t, err)
 	return followNode, tempDir
 }
@@ -137,7 +140,9 @@ func TestDevModeWarning(t *testing.T) {
 
 	logger, hook := test.NewNullLogger()
 	tlogger := logging.NewWrappedLogger(logger)
-	_, err := MakeFollower(tlogger, t.TempDir(), cfg, []string{}, genesis)
+	root := t.TempDir()
+	paths, _ := cfg.EnsureAndResolveGenesisDirs(root, genesis.ID())
+	_, err := MakeFollower(tlogger, paths, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	// check for the warning
@@ -175,7 +180,7 @@ func TestFastCatchupResume(t *testing.T) {
 func TestDefaultResourcePaths_Follower(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy := t.TempDir()
+	testDirectory := t.TempDir()
 
 	genesis := bookkeeping.Genesis{
 		SchemaID:    "go-test-node-genesis",
@@ -188,22 +193,23 @@ func TestDefaultResourcePaths_Follower(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 
 	// normally handled by the server
-	cfg.EnsureProvidedPaths()
+	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
+	require.NoError(t, err)
 
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFollower(log, testDirectroy, cfg, []string{}, genesis)
+	n, err := MakeFollower(log, dirs, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()
 	defer n.Stop()
 
 	// confirm genesis dir exists in the data dir, and that resources exist in the expected locations
-	require.DirExists(t, filepath.Join(testDirectroy, genesis.ID()))
+	require.DirExists(t, filepath.Join(testDirectory, genesis.ID()))
 
-	require.FileExists(t, filepath.Join(testDirectroy, genesis.ID(), "ledger.tracker.sqlite"))
-	require.FileExists(t, filepath.Join(testDirectroy, genesis.ID(), "ledger.block.sqlite"))
+	require.FileExists(t, filepath.Join(testDirectory, genesis.ID(), "ledger.tracker.sqlite"))
+	require.FileExists(t, filepath.Join(testDirectory, genesis.ID(), "ledger.block.sqlite"))
 }
 
 // TestConfiguredDataDirs tests to see that when HotDataDir and ColdDataDir are set, underlying resources are created in the correct locations
@@ -212,7 +218,7 @@ func TestDefaultResourcePaths_Follower(t *testing.T) {
 func TestConfiguredDataDirs_Follower(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy := t.TempDir()
+	testDirectory := t.TempDir()
 	testDirHot := t.TempDir()
 	testDirCold := t.TempDir()
 
@@ -232,12 +238,13 @@ func TestConfiguredDataDirs_Follower(t *testing.T) {
 	cfg.CatchpointInterval = 1
 
 	// normally handled by the server
-	cfg.EnsureProvidedPaths()
+	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
+	require.NoError(t, err)
 
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFollower(log, testDirectroy, cfg, []string{}, genesis)
+	n, err := MakeFollower(log, dirs, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()
@@ -284,20 +291,21 @@ func TestConfiguredResourcePaths_Follower(t *testing.T) {
 	// Configure everything even though a follower node will only use Tracker and Block DBs
 	cfg.HotDataDir = testDirHot
 	cfg.ColdDataDir = testDirCold
-	cfg.TrackerDbFilePath = trackerPath
-	cfg.BlockDbFilePath = blockPath
+	cfg.TrackerDBDir = trackerPath
+	cfg.BlockDBDir = blockPath
 	cfg.StateproofDir = stateproofDir
-	cfg.CrashFilePath = crashPath
+	cfg.CrashDBDir = crashPath
 	cfg.CatchpointTracking = 2
 	cfg.CatchpointInterval = 1
 
 	// normally handled by the server
-	cfg.EnsureProvidedPaths()
+	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
+	require.NoError(t, err)
 
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFollower(log, testDirectory, cfg, []string{}, genesis)
+	n, err := MakeFollower(log, dirs, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()

@@ -369,7 +369,7 @@ func main() {
 
 	log := logging.Base()
 
-	l, err := ledger.OpenLedger(log, ledgerPathnamePrefix, ledgerPathnamePrefix, false, genesisInitState, cfg)
+	l, err := ledger.OpenLedger(log, ledgerPathnamePrefix, false, genesisInitState, cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot open ledger config: %v", err)
 		os.Exit(1)
@@ -381,8 +381,12 @@ func main() {
 		l.Close()
 
 		fmt.Printf("Catching up from %d to %d\n", latest, *roundStart)
-
-		followerNode, err = node.MakeFollower(log, rootPath, cfg, []string{}, genesis)
+		paths, err := cfg.EnsureAndResolveGenesisDirs(rootPath, genesis.ID())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot init data directory: %v", err)
+			os.Exit(1)
+		}
+		followerNode, err = node.MakeFollower(log, paths, cfg, []string{}, genesis)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot init follower node: %v", err)
 			os.Exit(1)
@@ -403,7 +407,7 @@ func main() {
 		followerNode.Stop()
 
 		fmt.Printf("Caught up to %d\n", *roundStart)
-		l, err = ledger.OpenLedger(log, ledgerPathnamePrefix, ledgerPathnamePrefix, false, genesisInitState, cfg)
+		l, err = ledger.OpenLedger(log, ledgerPathnamePrefix, false, genesisInitState, cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot open ledger config: %v", err)
 			os.Exit(1)

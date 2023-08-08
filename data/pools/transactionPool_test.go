@@ -100,7 +100,7 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 	genesisInitState := ledgercore.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := ledger.OpenLedger(logging.Base(), fn, fn, inMem, genesisInitState, cfg)
+	l, err := ledger.OpenLedger(logging.Base(), fn, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	return l
 }

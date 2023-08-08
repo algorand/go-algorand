@@ -137,7 +137,7 @@ func TestArchival(t *testing.T) {
 	cfg.Archival = true
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbName, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 	wl := &wrappedLedger{
@@ -191,7 +191,7 @@ func TestArchivalRestart(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 
-	l, err := OpenLedger(logging.Base(), dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -217,7 +217,7 @@ func TestArchivalRestart(t *testing.T) {
 	require.Equal(t, basics.Round(0), earliest)
 	// close and reopen the same DB, ensure latest/earliest are not changed
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -362,7 +362,7 @@ func TestArchivalCreatables(t *testing.T) {
 	const inMem = false // use persistent storage
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -467,7 +467,7 @@ func TestArchivalCreatables(t *testing.T) {
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 
 	// check that we can fetch creator for all created assets and can't for
@@ -610,7 +610,7 @@ func TestArchivalCreatables(t *testing.T) {
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -696,7 +696,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
-	l, err := OpenLedger(log, dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -743,7 +743,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	l.Close()
 
 	cfg.Archival = true
-	l, err = OpenLedger(log, dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
+	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 

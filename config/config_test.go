@@ -655,21 +655,21 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 	}
 }
 
-// Tests that EnsureAbsDir resolves a path to an absolute path, and creates the directory if requested
+// Tests that ensureAbsGenesisDir resolves a path to an absolute path, appends the genesis directory, and creates any needed directories
 func TestEnsureAbsDir(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy := t.TempDir()
+	testDirectory := t.TempDir()
 
-	t1 := filepath.Join(testDirectroy, "test1")
+	t1 := filepath.Join(testDirectory, "test1")
 	// confirm that EnsureAbsDir does not make the directory if supplied false
-	t1Abs, err := ensureAbsDir(t1, false)
+	t1Abs, err := ensureAbsGenesisDir(t1, "myGenesisID")
 	require.NoError(t, err)
-	_, err = os.Stat(t1Abs)
-	require.Error(t, err)
+	require.DirExists(t, t1Abs)
+	require.DirExists(t, filepath.Join(t1Abs, "myGenesisID"))
 
 	// confirm that EnsureAbsDir creates the directory if supplied true
-	t1AbsAgain, err := ensureAbsDir(t1, true)
+	t1AbsAgain, err := ensureAbsGenesisDir(t1, "")
 	require.Equal(t, t1Abs, t1AbsAgain)
 	require.NoError(t, err)
 	t1stat, err := os.Stat(t1Abs)
@@ -677,37 +677,56 @@ func TestEnsureAbsDir(t *testing.T) {
 	require.True(t, t1stat.IsDir())
 
 	// confirm that relative paths become absolute
-	t2 := filepath.Join(testDirectroy, "test2", "..")
-	t2Abs, err := ensureAbsDir(t2, true)
+	t2 := filepath.Join(testDirectory, "test2", "..")
+	t2Abs, err := ensureAbsGenesisDir(t2, "")
 	require.NoError(t, err)
-	require.Equal(t, testDirectroy, t2Abs)
+	require.Equal(t, testDirectory, t2Abs)
 }
 
 // TestEnsureProvidedPaths confirms that paths provided in the config are resolved to absolute paths and are created if relevant
-func TestEnsureProvidedPaths(t *testing.T) {
+func TestEnsureAndResolveGenesisDirs(t *testing.T) {
 	cfg := GetDefaultLocal()
 
-	testDirectroy := t.TempDir()
-
+	testDirectory := t.TempDir()
 	// insert some "Bad" path elements to see them removed when converted to absolute
-	cfg.TrackerDbFilePath = filepath.Join(testDirectroy, "BAD/../custom_tracker.sqlite")
-	cfg.BlockDbFilePath = filepath.Join(testDirectroy, "/BAD/BAD/../../custom_block.sqlite")
-	cfg.LogFilePath = filepath.Join(testDirectroy, "/BAD/BAD/BAD/../../../custom_log.log")
-	cfg.CrashFilePath = filepath.Join(testDirectroy, "custom_crash.sqlite")
+	cfg.TrackerDBDir = filepath.Join(testDirectory, "BAD/../custom_tracker")
+	cfg.BlockDBDir = filepath.Join(testDirectory, "/BAD/BAD/../../custom_block")
+	cfg.CrashDBDir = filepath.Join(testDirectory, "custom_crash")
+	cfg.StateproofDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
+	cfg.CatchpointDir = filepath.Join(testDirectory, "custom_catchpoint")
 
-	cfg.StateproofDir = filepath.Join(testDirectroy, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
-	cfg.LogArchiveDir = filepath.Join(testDirectroy, "custom_log_archive")
-	cfg.CatchpointDir = filepath.Join(testDirectroy, "custom_catchpoint")
-
-	err := cfg.EnsureProvidedPaths()
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
 	require.NoError(t, err)
 
-	require.Equal(t, filepath.Join(testDirectroy, "custom_tracker.sqlite"), cfg.TrackerDbFilePath)
-	require.Equal(t, filepath.Join(testDirectroy, "custom_block.sqlite"), cfg.BlockDbFilePath)
-	require.Equal(t, filepath.Join(testDirectroy, "custom_log.log"), cfg.LogFilePath)
-	require.Equal(t, filepath.Join(testDirectroy, "custom_crash.sqlite"), cfg.CrashFilePath)
+	// confirm that the paths are absolute, and contain the genesisID
+	require.Equal(t, testDirectory+"/custom_tracker/myGenesisID", paths.TrackerGenesisDir)
+	require.DirExists(t, paths.TrackerGenesisDir)
+	require.Equal(t, testDirectory+"/custom_block/myGenesisID", paths.BlockGenesisDir)
+	require.DirExists(t, paths.BlockGenesisDir)
+	require.Equal(t, testDirectory+"/custom_crash/myGenesisID", paths.CrashGenesisDir)
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, testDirectory+"/custom_stateproof/myGenesisID", paths.StateproofGenesisDir)
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, testDirectory+"/custom_catchpoint/myGenesisID", paths.CatchpointGenesisDir)
+	require.DirExists(t, paths.CatchpointGenesisDir)
+}
 
-	require.DirExists(t, filepath.Join(testDirectroy, "custom_stateproof"))
-	require.DirExists(t, filepath.Join(testDirectroy, "custom_log_archive"))
-	require.DirExists(t, filepath.Join(testDirectroy, "custom_catchpoint"))
+// TestEnsureProvidedPathsError confirms that if a path can't be created, an error is returned
+func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
+	cfg := GetDefaultLocal()
+
+	testDirectory := t.TempDir()
+	// insert some "Bad" path elements to see them removed when converted to absolute
+	cfg.TrackerDBDir = filepath.Join(testDirectory, "BAD/../custom_tracker")
+	cfg.BlockDBDir = filepath.Join(testDirectory, "/BAD/BAD/../../custom_block")
+	cfg.CrashDBDir = filepath.Join(testDirectory, "custom_crash")
+	cfg.StateproofDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
+	cfg.CatchpointDir = filepath.Join(testDirectory, "custom_catchpoint")
+
+	require.NoError(t, os.Chmod(testDirectory, 0200))
+
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
+	require.Empty(t, paths)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "permission denied")
 }

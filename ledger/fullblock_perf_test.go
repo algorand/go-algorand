@@ -94,7 +94,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	cfg.MaxAcctLookback = uint64(b.N) // prevent committing blocks into DB since we benchmark validation
 	cfg.Archival = true
 	cfg.MaxAcctLookback = uint64(b.N) // prevent committing blocks into DB since we benchmark validation
-	l0, err := OpenLedger(logger, dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
+	l0, err := OpenLedger(logger, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// open second ledger
@@ -103,7 +103,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	cfg.MaxAcctLookback = uint64(b.N) // prevent committing blocks into DB since we benchmark validation
 	dbName = fmt.Sprintf("%s.%d.2", name, crypto.RandUint64())
 	dbPrefix = filepath.Join(dbTempDir, dbName)
-	l1, err := OpenLedger(logger, dbPrefix, dbPrefix, inMem, genesisInitState, cfg)
+	l1, err := OpenLedger(logger, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// init the first block

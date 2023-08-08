@@ -244,7 +244,7 @@ func PrepareSimulatorTest(t *testing.T) Environment {
 	cfg.Archival = true
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
-	realLedger, err := ledger.OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
+	realLedger, err := ledger.OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 
 	ledger := &data.Ledger{Ledger: realLedger}

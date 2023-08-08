@@ -685,7 +685,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 	cfg.Archival = false
 	log.SetLevel(logging.Warn)
 	dbBaseFileName := strings.Replace(b.Name(), "/", "_", -1)
-	l, err := OpenLedger(log, dbBaseFileName, dbBaseFileName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(b, err, "could not open ledger")
 	defer func() {
 		l.Close()

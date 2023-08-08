@@ -168,7 +168,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
 		cfg.Archival = true
-		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, ledgerFilenamePrefix, inMem, g.Proto, bootstrap, g.ID(), g.Hash(), nil, cfg)
+		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, g.ID(), g.Hash(), nil, cfg)
 		require.NoError(t, err)
 	}
 
@@ -179,7 +179,8 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		rootDirectory := rootDirs[i]
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
-		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, nodeNeighbors, g)
+		paths, _ := cfg.EnsureAndResolveGenesisDirs(rootDirectory, g.ID())
+		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), paths, cfg, nodeNeighbors, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
@@ -488,42 +489,14 @@ func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interfac
 	require.Contains(m.t, fmtStr, "Unable to create genesis directory")
 }
 
-// TestMismatchingGenesisDirectoryPermissions tests to see that the os.MkDir check we have in MakeFull works as expected. It tests both the return error as well as the logged error.
-func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testDirectroy := t.TempDir()
-
-	genesis := bookkeeping.Genesis{
-		SchemaID:    "go-test-node-genesis",
-		Proto:       protocol.ConsensusCurrentVersion,
-		Network:     config.Devtestnet,
-		FeeSink:     sinkAddr.String(),
-		RewardsPool: poolAddr.String(),
-	}
-
-	log := mismatchingDirectroyPermissionsLog{logging.TestingLog(t), t}
-
-	require.NoError(t, os.Chmod(testDirectroy, 0200))
-
-	node, err := MakeFull(log, testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
-
-	require.Nil(t, node)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "permission denied")
-
-	require.NoError(t, os.Chmod(testDirectroy, 1700))
-	require.NoError(t, os.RemoveAll(testDirectroy))
-}
-
 // TestDefaultResourcePaths confirms that when no extra configuration is provided, all resources are created in the dataDir
 func TestDefaultResourcePaths(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy := t.TempDir()
+	testDirectory := t.TempDir()
 
 	genesis := bookkeeping.Genesis{
-		SchemaID:    "go-test-node-genesis",
+		SchemaID:    "gen",
 		Proto:       protocol.ConsensusCurrentVersion,
 		Network:     config.Devtestnet,
 		FeeSink:     sinkAddr.String(),
@@ -532,10 +505,15 @@ func TestDefaultResourcePaths(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 
+	// normally handled by the server
+	genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
+	require.NoError(t, err)
+	//	rootGenesis := genesisDirs.RootGenesisDir
+
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFull(log, testDirectroy, cfg, []string{}, genesis)
+	n, err := MakeFull(log, genesisDirs, cfg, []string{}, genesis)
 
 	n.Start()
 	defer n.Stop()
@@ -543,19 +521,19 @@ func TestDefaultResourcePaths(t *testing.T) {
 	require.NoError(t, err)
 
 	// confirm genesis dir exists in the data dir, and that resources exist in the expected locations
-	genesisDir, err := os.Stat(filepath.Join(testDirectroy, genesis.ID()))
+	genesisDir, err := os.Stat(filepath.Join(testDirectory, genesis.ID()))
 	require.NoError(t, err)
 	require.True(t, genesisDir.IsDir())
 
-	_, err = os.Stat(filepath.Join(testDirectroy, genesis.ID(), "ledger.tracker.sqlite"))
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "ledger.tracker.sqlite"))
 	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(testDirectroy, genesis.ID(), "stateproof.sqlite"))
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "stateproof.sqlite"))
 	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(testDirectroy, genesis.ID(), "ledger.block.sqlite"))
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "ledger.block.sqlite"))
 	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(testDirectroy, genesis.ID(), "partregistry.sqlite"))
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "partregistry.sqlite"))
 	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(testDirectroy, genesis.ID(), "crash.sqlite"))
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "crash.sqlite"))
 	require.NoError(t, err)
 }
 
@@ -565,7 +543,7 @@ func TestDefaultResourcePaths(t *testing.T) {
 func TestConfiguredDataDirs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy := t.TempDir()
+	testDirectory := t.TempDir()
 	testDirHot := t.TempDir()
 	testDirCold := t.TempDir()
 
@@ -585,12 +563,13 @@ func TestConfiguredDataDirs(t *testing.T) {
 	cfg.CatchpointInterval = 1
 
 	// normally handled by the server
-	cfg.EnsureProvidedPaths()
+	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
+	require.NoError(t, err)
 
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFull(log, testDirectroy, cfg, []string{}, genesis)
+	n, err := MakeFull(log, dirs, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()
@@ -627,10 +606,10 @@ func TestConfiguredResourcePaths(t *testing.T) {
 	testDirCold := t.TempDir()
 
 	// add a path for each resource now
-	trackerPath := filepath.Join(testDirectory, "custom_tracker.sqlite")
-	blockPath := filepath.Join(testDirectory, "custom_block.sqlite")
+	trackerPath := filepath.Join(testDirectory, "custom_tracker")
+	blockPath := filepath.Join(testDirectory, "custom_block")
 	stateproofDir := filepath.Join(testDirectory, "custom_stateproof")
-	crashPath := filepath.Join(testDirectory, "custom_crash.sqlite")
+	crashPath := filepath.Join(testDirectory, "custom_crash")
 
 	genesis := bookkeeping.Genesis{
 		SchemaID:    "go-test-node-genesis",
@@ -644,20 +623,18 @@ func TestConfiguredResourcePaths(t *testing.T) {
 
 	cfg.HotDataDir = testDirHot
 	cfg.ColdDataDir = testDirCold
-	cfg.TrackerDbFilePath = trackerPath
-	cfg.BlockDbFilePath = blockPath
+	cfg.TrackerDBDir = trackerPath
+	cfg.BlockDBDir = blockPath
 	cfg.StateproofDir = stateproofDir
-	cfg.CrashFilePath = crashPath
-	cfg.CatchpointTracking = 2
-	cfg.CatchpointInterval = 1
+	cfg.CrashDBDir = crashPath
 
 	// normally handled by the server
-	cfg.EnsureProvidedPaths()
-
+	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
+	require.NoError(t, err)
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+	n, err := MakeFull(log, dirs, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()
@@ -666,23 +643,23 @@ func TestConfiguredResourcePaths(t *testing.T) {
 	// confirm hot data dir exists and contains a genesis dir
 	require.DirExists(t, filepath.Join(testDirHot, genesis.ID()))
 
-	// the tracker shouldn't be in the hot data dir, but rather the custom path
-	require.NoFileExists(t, testDirHot, genesis.ID(), "ledger.tracker.sqlite")
-	require.FileExists(t, trackerPath)
+	// the tracker shouldn't be in the hot data dir, but rather the custom path's genesis dir
+	require.NoFileExists(t, filepath.Join(testDirHot, genesis.ID(), "ledger.tracker.sqlite"))
+	require.FileExists(t, filepath.Join(cfg.TrackerDBDir, genesis.ID(), "ledger.tracker.sqlite"))
 
 	// same with stateproofs
 	require.NoFileExists(t, filepath.Join(testDirHot, genesis.ID(), "stateproof.sqlite"))
-	require.FileExists(t, filepath.Join(stateproofDir, "stateproof.sqlite"))
+	require.FileExists(t, filepath.Join(cfg.StateproofDir, genesis.ID(), "stateproof.sqlite"))
 
 	// confirm cold data dir exists and contains a genesis dir
 	require.DirExists(t, filepath.Join(testDirCold, genesis.ID()))
 
-	// block db shouldn't be in the cold data dir, but rather the custom path
+	// block db shouldn't be in the cold data dir, but rather the custom path's genesis dir
 	require.NoFileExists(t, filepath.Join(testDirCold, genesis.ID(), "ledger.block.sqlite"))
-	require.FileExists(t, blockPath)
+	require.FileExists(t, filepath.Join(cfg.BlockDBDir, genesis.ID(), "ledger.block.sqlite"))
 
 	require.NoFileExists(t, filepath.Join(testDirCold, genesis.ID(), "crash.sqlite"))
-	require.FileExists(t, crashPath)
+	require.FileExists(t, filepath.Join(cfg.CrashDBDir, genesis.ID(), "crash.sqlite"))
 }
 
 // TestOfflineOnlineClosedBitStatus a test that validates that the correct bits are being set

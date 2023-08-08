@@ -20,7 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -98,18 +98,22 @@ type Ledger struct {
 
 	cfg config.Local
 
-	hotDbPrefix  string
-	coldDbPrefix string
+	dirsAndPrefix DirsAndPrefix
 
 	tracer logic.EvalTracer
+}
+
+type DirsAndPrefix struct {
+	config.ResolvedGenesisDirs
+	DBFilePrefix string // the prefix of the database files, appended to genesis directories
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
 // based on dbPathPrefix (in-memory if dbMem is true). genesisInitState.Blocks and
 // genesisInitState.Accounts specify the initial blocks and accounts to use if the
-// database wasn't initialized before.
-func OpenLedger(
-	log logging.Logger, hotPrefix string, coldPrefix string, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
+func OpenLedger[T string | DirsAndPrefix](
+	// database wasn't initialized before.
+	log logging.Logger, dbPathPrefix T, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
 	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
@@ -120,6 +124,18 @@ func OpenLedger(
 	var tracer logic.EvalTracer
 	if cfg.EnableTxnEvalTracer {
 		tracer = eval.MakeTxnGroupDeltaTracer(cfg.MaxAcctLookback)
+	}
+
+	var dirs DirsAndPrefix
+	// if only a string path has been supplied for the ledger, use it for both hot and cold.
+	// any path prefixes are assumed to already be attached
+	if s, ok := any(dbPathPrefix).(string); ok {
+		dirs.HotGenesisDir = s
+		dirs.ColdGenesisDir = s
+	}
+	// if a DirsAndPrefix has been supplied, use it.
+	if ds, ok := any(dbPathPrefix).(DirsAndPrefix); ok {
+		dirs = ds
 	}
 
 	l := &Ledger{
@@ -133,8 +149,7 @@ func OpenLedger(
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
-		hotDbPrefix:                    hotPrefix,
-		coldDbPrefix:                   coldPrefix,
+		dirsAndPrefix:                  dirs,
 		tracer:                         tracer,
 	}
 
@@ -144,7 +159,7 @@ func OpenLedger(
 		}
 	}()
 
-	l.trackerDBs, l.blockDBs, err = openLedgerDB(hotPrefix, coldPrefix, dbMem, cfg, log)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dirs, dbMem, cfg, log)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
@@ -225,12 +240,15 @@ func (l *Ledger) reloadLedger() error {
 	l.accts.initialize(l.cfg)
 	l.acctsOnline.initialize(l.cfg)
 
-	// catchpoint tracker's directory defaults to the coldPrefix
-	// but can be directly set
-	catchpointDir := l.coldDbPrefix
-	if l.cfg.CatchpointDir != "" {
-		catchpointDir = l.cfg.CatchpointDir
+	// resolve the catchpoint tracker directory from the ResolvedGenesisDirs
+	catchpointDir := l.dirsAndPrefix.ResolvedGenesisDirs.RootGenesisDir
+	if l.dirsAndPrefix.ResolvedGenesisDirs.ColdGenesisDir != "" {
+		catchpointDir = l.dirsAndPrefix.ResolvedGenesisDirs.ColdGenesisDir
 	}
+	if l.dirsAndPrefix.ResolvedGenesisDirs.CatchpointGenesisDir != "" {
+		catchpointDir = l.dirsAndPrefix.ResolvedGenesisDirs.CatchpointGenesisDir
+	}
+
 	l.catchpoint.initialize(l.cfg, catchpointDir)
 
 	err = l.trackers.initialize(l, trackers, l.cfg)
@@ -289,23 +307,25 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(hotDbPrefix string, coldDbPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
-	// Backwards compatibility: we used to store both blocks and tracker
-	// state in a single SQLite db file.
-	// TODO: Can we remove this?
-	if !dbMem {
-		commonDBFilename := hotDbPrefix + ".sqlite"
-		_, err = os.Stat(commonDBFilename)
-		if !os.IsNotExist(err) {
-			// before launch, we used to have both blocks and tracker
-			// state in a single SQLite db file. We don't have that anymore,
-			// and we want to fail when that's the case.
-			err = fmt.Errorf("a single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
-			return
-		}
+func openLedgerDB(dbPrefixes DirsAndPrefix, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
+	outErr := make(chan error, 2)
+
+	// resolve paths to tracker and block databases
+	trackerDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.RootGenesisDir, dbPrefixes.DBFilePrefix)
+	blockDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.RootGenesisDir, dbPrefixes.DBFilePrefix)
+	if dbPrefixes.ResolvedGenesisDirs.HotGenesisDir != "" {
+		trackerDBPrefix = filepath.Join(dbPrefixes.ResolvedGenesisDirs.HotGenesisDir, dbPrefixes.DBFilePrefix)
+	}
+	if dbPrefixes.ResolvedGenesisDirs.TrackerGenesisDir != "" {
+		trackerDBPrefix = filepath.Join(dbPrefixes.ResolvedGenesisDirs.TrackerGenesisDir, dbPrefixes.DBFilePrefix)
+	}
+	if dbPrefixes.ResolvedGenesisDirs.ColdGenesisDir != "" {
+		blockDBPrefix = filepath.Join(dbPrefixes.ResolvedGenesisDirs.ColdGenesisDir, dbPrefixes.DBFilePrefix)
+	}
+	if dbPrefixes.ResolvedGenesisDirs.BlockGenesisDir != "" {
+		blockDBPrefix = filepath.Join(dbPrefixes.ResolvedGenesisDirs.BlockGenesisDir, dbPrefixes.DBFilePrefix)
 	}
 
-	outErr := make(chan error, 2)
 	go func() {
 		var lerr error
 		switch cfg.StorageEngine {
@@ -316,12 +336,7 @@ func openLedgerDB(hotDbPrefix string, coldDbPrefix string, dbMem bool, cfg confi
 		case "sqlite":
 			fallthrough
 		default:
-			// before using hotDbPrefix, check if there is a tracker db path defined in cfg
-			file := hotDbPrefix + ".tracker.sqlite"
-			if cfg.TrackerDbFilePath != "" {
-				file = cfg.TrackerDbFilePath
-			}
-			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
+			trackerDBs, lerr = sqlitedriver.Open(trackerDBPrefix+".tracker.sqlite", dbMem, log)
 		}
 
 		outErr <- lerr
@@ -329,12 +344,7 @@ func openLedgerDB(hotDbPrefix string, coldDbPrefix string, dbMem bool, cfg confi
 
 	go func() {
 		var lerr error
-		// before using coldDbPrefix, check if there is a block db path defined in cfg
-		blockDBFilename := coldDbPrefix + ".block.sqlite"
-		if cfg.BlockDbFilePath != "" {
-			blockDBFilename = cfg.BlockDbFilePath
-		}
-		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
+		blockDBs, lerr = db.OpenPair(blockDBPrefix+".block.sqlite", dbMem)
 		if lerr != nil {
 			outErr <- lerr
 			return

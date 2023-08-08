@@ -48,7 +48,7 @@ func BenchmarkManyAccounts(b *testing.B) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer l.Close()
 
@@ -101,7 +101,7 @@ func BenchmarkValidate(b *testing.B) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, dbName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer l.Close()
 

@@ -88,7 +88,7 @@ var fileCmd = &cobra.Command{
 			}},
 		}
 		cfg := config.GetDefaultLocal()
-		l, err := ledger.OpenLedger(logging.Base(), "./ledger", "./ledger", false, genesisInitState, cfg)
+		l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 		if err != nil {
 			reportErrorf("Unable to open ledger : %v", err)
 		}

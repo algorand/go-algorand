@@ -68,7 +68,7 @@ func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbName = strings.Replace(dbName, "/", "_", -1)
 	cfg.Archival = !slCfg.notArchival
-	l, err := OpenLedger(logging.Base(), dbName, dbName, !slCfg.onDisk, ledgercore.InitState{
+	l, err := OpenLedger(logging.Base(), dbName, !slCfg.onDisk, ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,

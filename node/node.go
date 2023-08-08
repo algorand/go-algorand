@@ -127,7 +127,7 @@ type AlgorandFullNode struct {
 	ledgerService            *rpcs.LedgerService
 	txPoolSyncerService      *rpcs.TxSyncer
 
-	rootDir         string
+	genesisDirs     config.ResolvedGenesisDirs
 	genesisID       string
 	genesisHash     crypto.Digest
 	devMode         bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
@@ -175,14 +175,14 @@ type TxnWithStatus struct {
 
 // MakeFull sets up an Algorand full node
 // (i.e., it returns a node that participates in consensus)
-func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
+func MakeFull(log logging.Logger, genesisDirs config.ResolvedGenesisDirs, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 	node := new(AlgorandFullNode)
-	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
 	node.config = cfg
+	node.genesisDirs = genesisDirs
 
 	// tie network, block fetcher, and agreement services together
 	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
@@ -193,35 +193,17 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
 
-	// Set defaults for dataDirs.
-	// Hot and Cold entries are defaulted to the root directory version.
-	// They will be loaded and validated if set in the config, below
-	rootGenesisDir := filepath.Join(rootDir, node.genesisID)
-	hotGenesisDir := filepath.Join(rootDir, node.genesisID)
-	coldGenesisDir := filepath.Join(rootDir, node.genesisID)
-	hotLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
-	coldLedgerPrefix := filepath.Join(rootGenesisDir, config.LedgerFilenamePrefix)
-
-	// if HotDataDir is set, prepare hotGenesisDir and hotLedgerPrefix
-	if cfg.HotDataDir != "" {
-		hotGenesisDir = filepath.Join(cfg.HotDataDir, node.genesisID)
-		hotLedgerPrefix = filepath.Join(hotGenesisDir, config.LedgerFilenamePrefix)
+	// by default, the genesis directories are all based in the root directory
+	hotGenesisDir := node.genesisDirs.RootGenesisDir
+	coldGenesisDir := node.genesisDirs.RootGenesisDir
+	// however, if the genesis directories are specified in genesisDirs, use those instead
+	if genesisDirs.HotGenesisDir != "" {
+		hotGenesisDir = node.genesisDirs.HotGenesisDir
 	}
-	// if ColdDataDir is set, prepare coldGenesisDir and coldLedgerPrefix
-	if cfg.ColdDataDir != "" {
-		coldGenesisDir = filepath.Join(cfg.ColdDataDir, node.genesisID)
-		coldLedgerPrefix = filepath.Join(coldGenesisDir, config.LedgerFilenamePrefix)
+	if genesisDirs.ColdGenesisDir != "" {
+		coldGenesisDir = node.genesisDirs.ColdGenesisDir
 	}
 
-	// create initial genesis dir(s), if it doesn't exist
-	for _, dir := range []string{rootGenesisDir, hotGenesisDir, coldGenesisDir} {
-		err = os.MkdirAll(dir, 0700)
-		if err != nil && !os.IsExist(err) {
-			log.Errorf("Unable to create genesis directory: %v", err)
-			return nil, err
-		}
-
-	}
 	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
@@ -231,9 +213,20 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, hotLedgerPrefix, coldLedgerPrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	ledgerPaths := ledger.DirsAndPrefix{
+		DBFilePrefix: config.LedgerFilenamePrefix,
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			RootGenesisDir:       node.genesisDirs.RootGenesisDir,
+			HotGenesisDir:        hotGenesisDir,
+			ColdGenesisDir:       coldGenesisDir,
+			TrackerGenesisDir:    node.genesisDirs.TrackerGenesisDir,
+			BlockGenesisDir:      node.genesisDirs.BlockGenesisDir,
+			CatchpointGenesisDir: node.genesisDirs.CatchpointGenesisDir,
+		},
+	}
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
-		log.Errorf("Cannot initialize ledger (hot: %s, cold: %s ): %v", hotLedgerPrefix, coldLedgerPrefix, err)
+		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
 	}
 
@@ -266,8 +259,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	// crash data is stored in the cold data directory unless otherwise specified
 	crashPathname := filepath.Join(coldGenesisDir, config.CrashFilename)
-	if cfg.CrashFilePath != "" {
-		crashPathname = cfg.CrashFilePath
+	if genesisDirs.CrashGenesisDir != "" {
+		crashPathname = filepath.Join(genesisDirs.CrashGenesisDir, config.CrashFilename)
 	}
 	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
 	if err != nil {
@@ -340,10 +333,10 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
-	// stateproof worker should use hot genesis dir by default, but can be overridden by config
+	// stateproof worker should use hot genesis dir by default, or uses the specified stateproof dir
 	stateproofWorkerDir := hotGenesisDir
-	if cfg.StateproofDir != "" {
-		stateproofWorkerDir = cfg.StateproofDir
+	if genesisDirs.StateproofGenesisDir != "" {
+		stateproofWorkerDir = genesisDirs.StateproofGenesisDir
 	}
 	node.stateProofWorker = stateproof.NewWorker(stateproofWorkerDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
@@ -452,7 +445,7 @@ func (node *AlgorandFullNode) Stop() {
 
 // note: unlike the other two functions, this accepts a whole filename
 func (node *AlgorandFullNode) getExistingPartHandle(filename string) (db.Accessor, error) {
-	filename = filepath.Join(node.rootDir, node.genesisID, filename)
+	filename = filepath.Join(node.genesisDirs.RootGenesisDir, filename)
 
 	_, err := os.Stat(filename)
 	if err == nil {
@@ -856,9 +849,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.Participa
 		return account.ErrParticipationIDNotFound
 	}
 
-	genID := node.GenesisID()
-
-	outDir := filepath.Join(node.rootDir, genID)
+	outDir := node.genesisDirs.RootGenesisDir
 
 	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
 	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
@@ -920,9 +911,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (strin
 
 // InstallParticipationKey Given a participation key binary stream install the participation key.
 func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
-	genID := node.GenesisID()
-
-	outDir := filepath.Join(node.rootDir, genID)
+	outDir := node.genesisDirs.RootGenesisDir
 
 	fullyQualifiedTempFile, err := createTemporaryParticipationKey(outDir, partKeyBinary)
 	// We need to make sure no tempfile is created/remains if there is an error
@@ -977,7 +966,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 
 func (node *AlgorandFullNode) loadParticipationKeys() error {
 	// Generate a list of all potential participation key files
-	genesisDir := filepath.Join(node.rootDir, node.genesisID)
+	genesisDir := node.genesisDirs.RootGenesisDir
 	files, err := os.ReadDir(genesisDir)
 	if err != nil {
 		return fmt.Errorf("AlgorandFullNode.loadPartitipationKeys: could not read directory %v: %v", genesisDir, err)

@@ -285,7 +285,7 @@ func TestTrackerDbRoundDataRace(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
 	cfg := config.GetDefaultLocal()
-	ledger, err := OpenLedger(log, t.Name(), t.Name(), inMem, genesisInitState, cfg)
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer ledger.Close()
 

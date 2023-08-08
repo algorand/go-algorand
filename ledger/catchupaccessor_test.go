@@ -88,7 +88,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 	// delete database files, in case they were left there by previous iterations of this test.
 	os.Remove(dbBaseFileName + ".block.sqlite")
 	os.Remove(dbBaseFileName + ".tracker.sqlite")
-	l, err := OpenLedger(log, dbBaseFileName, dbBaseFileName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(b, err, "could not open ledger")
 	defer func() {
 		l.Close()
@@ -189,7 +189,7 @@ func verifyStateProofVerificationCatchupAccessor(t *testing.T, targetData []ledg
 	const inMem = true
 	genesisInitState, initkeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(log, dbBaseFileName, dbBaseFileName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer func() {
 		l.Close()
@@ -234,7 +234,7 @@ func TestCatchupAccessorFoo(t *testing.T) {
 	const inMem = true
 	genesisInitState, _ /* initKeys */ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(log, dbBaseFileName, dbBaseFileName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer func() {
 		l.Close()
@@ -290,7 +290,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	const inMem = true
 	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(log, dbBaseFileName, dbBaseFileName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer func() {
 		l.Close()
@@ -408,7 +408,7 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 	const inMem = true
 	genesisInitState, _ /*initKeys*/ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(log, dbBaseFileName, dbBaseFileName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer func() {
 		l.Close()
@@ -430,7 +430,7 @@ func TestVerifyCatchpoint(t *testing.T) {
 	const inMem = true
 	genesisInitState, _ /*initKeys*/ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(log, dbBaseFileName, dbBaseFileName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer func() {
 		l.Close()
@@ -480,7 +480,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 	const inMem = true
 	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(log, dbBaseFileName, dbBaseFileName, inMem, genesisInitState, cfg)
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer func() {
 		l.Close()

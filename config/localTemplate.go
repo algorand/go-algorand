@@ -17,6 +17,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,30 +79,53 @@ type Local struct {
 	CadaverSizeTarget uint64 `version[0]:"1073741824" version[24]:"0"`
 	CadaverDirectory  string `version[27]:""`
 
-	// Data directories
-	// HotDataDir is an alternative to DataDir for storing data that is frequently accessed
-	// if not set, resources which use HotDataDir should default to DataDir
+	// Optional Data Directories
+	// data dirs are used to house data related to the operation of the node.
+	// by default, the only data directory that is required is the datadir,
+	// specified by -d or the os environment variable algorand_data.
+	// by specifying additional data directories, the node will store data in those directories,
+	// *instead* of the datadir. This is useful for example, if you want to store the ledger
+	// on a fast SSD, but store the logs on a slower spinning disk.
+	// In order to allow for nodes to support multiple networks, these data directories are not used directly,
+	// but instead will hold subdirectories for each network, named by its genesis id.
+	// once these paths are resolved to genesis directories, they are passed to the node to use.
+	// For simple node operation: do not specify any of these directories.
+	// For advanced node operation: specify the HotDataDir and ColdDataDir to separate drives
+	// For expert node operation: specify any of the directories to customize the node's data storage.
+
+	// Hot Data Directory stores data that is frequently accessed by the node. This includes:
+	// - ledger
+	// - log file
+	// if not specified, the node will use the datadir for these files.
+	// these individual resources may themselves have their own directories specified, which would override this
 	HotDataDir string `version[0]:""`
-	// ColdDataDir is an alternative to DataDir for storing data that is infrequently accessed
-	// if not set, resources which use ColdDataDir should default to DataDir
+
+	// Cold Data Directory stores data that is infrequently accessed by the node. This includes
+	// - block database
+	// - catchpoint database
+	// - stateproof database
+	// - crash database
+	// - tracker database
+	// - log archive
+	// - participation db
+	// if not specified, the node will use the datadir for these files
+	// these individual resources may themselves have their own directories specified, which would override this
 	ColdDataDir string `version[0]:""`
-	// TrackingDbFilePath is the path to the db file (sqlite) or directory (kv stores) used by the trackerdb
-	// by default, this is ledger.tracker.sqlite in your Genesis Directory
-	TrackerDbFilePath string `version[0]:""`
-	// BlockDbFilePath is the path to the db file (sqlite) or directory (kv stores) used by the blockdb
-	// by default, this is ledger.block.sqlite in your Genesis Directory
-	BlockDbFilePath string `version[0]:""`
-	// BlockDbFilePath is the path to the directory used by the catchpoint tracker
-	// by default, this is catchpoint/ in your Genesis Directory
+
+	// TrackerDbDir stores the tracker database. if not specified, the node will use the hotdatadir
+	TrackerDBDir string `version[0]:""`
+	// BlockDBDir stores the block database. if not specified, the node will use the colddatadir
+	BlockDBDir string `version[0]:""`
+	// CatchpointDir stores the catchpoint files. if not specified, the node will use the colddatadir
 	CatchpointDir string `version[0]:""`
-	// LogFilePath is the path to the log file used by the node
-	// by default, this is node.log in your data directory
-	LogFilePath string `version[0]:""`
-	// LogArchiveDir is the path to the directory used for log archiving
-	// by default, this is your data directory, and the log archive file name is set by LogArchiveName
+	// LogArchiveDir stores the log archive. if not specified, the node will use the colddatadir
 	LogArchiveDir string `version[0]:""`
+	// StateproofDir stores the stateproof database. if not specified, the node will use the colddatadir
 	StateproofDir string `version[0]:""`
-	CrashFilePath string `version[0]:""`
+	// CrashDBDir stores the crash database. if not specified, the node will use the colddatadir
+	CrashDBDir string `version[0]:""`
+	// LogDir stores the log file. if not specified, the node will use the hotdatadir + "node.log"
+	LogFilePath string `version[0]:""`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.
@@ -670,87 +694,107 @@ func (cfg Local) IsGossipServer() bool {
 	return cfg.NetAddress != ""
 }
 
-// ensureAbsDir will convert a path to absolute, and if make is set, will attempt to make a directory there
-func ensureAbsDir(path string, make bool) (string, error) {
+// ensureAbsGenesisDir will convert a path to absolute, and if make is set, will attempt to make a directory there
+func ensureAbsGenesisDir(path string, genesisID string) (string, error) {
 	pathAbs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
 	}
-	if make {
-		err = os.MkdirAll(pathAbs, 0700)
-		if err != nil && !os.IsExist(err) {
-			return "", err
-		}
+	genesisDir := filepath.Join(pathAbs, genesisID)
+	err = os.MkdirAll(genesisDir, 0700)
+	if err != nil && !os.IsExist(err) {
+		return "", err
 	}
-	return pathAbs, nil
+	return genesisDir, nil
 }
 
-// EnsureProvidedPaths will ensure that all user provided paths in the config are absolute, and will create them if they are a directory
-func (cfg *Local) EnsureProvidedPaths() error {
-	if cfg.HotDataDir != "" {
-		abs, err := ensureAbsDir(cfg.HotDataDir, true)
+type ResolvedGenesisDirs struct {
+	RootGenesisDir       string
+	HotGenesisDir        string
+	ColdGenesisDir       string
+	TrackerGenesisDir    string
+	BlockGenesisDir      string
+	CatchpointGenesisDir string
+	StateproofGenesisDir string
+	CrashGenesisDir      string
+}
+
+func (rgd ResolvedGenesisDirs) String() string {
+	ret := ""
+	ret += fmt.Sprintf("RootGenesisDir: %s\n", rgd.RootGenesisDir)
+	ret += fmt.Sprintf("HotGenesisDir: %s\n", rgd.HotGenesisDir)
+	ret += fmt.Sprintf("ColdGenesisDir: %s\n", rgd.ColdGenesisDir)
+	ret += fmt.Sprintf("TrackerGenesisDir: %s\n", rgd.TrackerGenesisDir)
+	ret += fmt.Sprintf("BlockGenesisDir: %s\n", rgd.BlockGenesisDir)
+	ret += fmt.Sprintf("CatchpointGenesisDir: %s\n", rgd.CatchpointGenesisDir)
+	ret += fmt.Sprintf("StateproofGenesisDir: %s\n", rgd.StateproofGenesisDir)
+	ret += fmt.Sprintf("CrashGenesisDir: %s\n", rgd.CrashGenesisDir)
+	return ret
+}
+
+// EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each
+// returns a ResolvedGenesisDirs struct with the resolved paths for use during runtime
+func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (ResolvedGenesisDirs, error) {
+	var root, hot, cold, tracker, block, catchpoint, stateproof, crash string
+	var err error
+	if rootDir != "" {
+		root, err = ensureAbsGenesisDir(rootDir, genesisID)
 		if err != nil {
-			return err
+			return ResolvedGenesisDirs{}, err
 		}
-		cfg.HotDataDir = abs
+	}
+	if cfg.HotDataDir != "" {
+		hot, err = ensureAbsGenesisDir(cfg.HotDataDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
 	}
 	if cfg.ColdDataDir != "" {
-		abs, err := ensureAbsDir(cfg.ColdDataDir, true)
+		cold, err = ensureAbsGenesisDir(cfg.ColdDataDir, genesisID)
 		if err != nil {
-			return err
+			return ResolvedGenesisDirs{}, err
 		}
-		cfg.ColdDataDir = abs
 	}
-	if cfg.TrackerDbFilePath != "" {
-		abs, err := ensureAbsDir(cfg.TrackerDbFilePath, false)
+	if cfg.TrackerDBDir != "" {
+		tracker, err = ensureAbsGenesisDir(cfg.TrackerDBDir, genesisID)
 		if err != nil {
-			return err
+			return ResolvedGenesisDirs{}, err
 		}
-		cfg.TrackerDbFilePath = abs
 	}
-	if cfg.BlockDbFilePath != "" {
-		abs, err := ensureAbsDir(cfg.BlockDbFilePath, false)
+	if cfg.BlockDBDir != "" {
+		block, err = ensureAbsGenesisDir(cfg.BlockDBDir, genesisID)
 		if err != nil {
-			return err
+			return ResolvedGenesisDirs{}, err
 		}
-		cfg.BlockDbFilePath = abs
 	}
 	if cfg.CatchpointDir != "" {
-		abs, err := ensureAbsDir(cfg.CatchpointDir, true)
+		catchpoint, err = ensureAbsGenesisDir(cfg.CatchpointDir, genesisID)
 		if err != nil {
-			return err
+			return ResolvedGenesisDirs{}, err
 		}
-		cfg.CatchpointDir = abs
-	}
-	if cfg.LogFilePath != "" {
-		abs, err := ensureAbsDir(cfg.LogFilePath, false)
-		if err != nil {
-			return err
-		}
-		cfg.LogFilePath = abs
-	}
-	if cfg.LogArchiveDir != "" {
-		abs, err := ensureAbsDir(cfg.LogArchiveDir, true)
-		if err != nil {
-			return err
-		}
-		cfg.LogArchiveDir = abs
 	}
 	if cfg.StateproofDir != "" {
-		abs, err := ensureAbsDir(cfg.StateproofDir, true)
+		stateproof, err = ensureAbsGenesisDir(cfg.StateproofDir, genesisID)
 		if err != nil {
-			return err
+			return ResolvedGenesisDirs{}, err
 		}
-		cfg.StateproofDir = abs
 	}
-	if cfg.CrashFilePath != "" {
-		abs, err := ensureAbsDir(cfg.CrashFilePath, false)
+	if cfg.CrashDBDir != "" {
+		crash, err = ensureAbsGenesisDir(cfg.CrashDBDir, genesisID)
 		if err != nil {
-			return err
+			return ResolvedGenesisDirs{}, err
 		}
-		cfg.CrashFilePath = abs
 	}
-	return nil
+	return ResolvedGenesisDirs{
+		RootGenesisDir:       root,
+		HotGenesisDir:        hot,
+		ColdGenesisDir:       cold,
+		TrackerGenesisDir:    tracker,
+		BlockGenesisDir:      block,
+		CatchpointGenesisDir: catchpoint,
+		StateproofGenesisDir: stateproof,
+		CrashGenesisDir:      crash,
+	}, nil
 }
 
 // AdjustConnectionLimits updates RestConnectionsSoftLimit, RestConnectionsHardLimit, IncomingConnectionsLimit

@@ -46,7 +46,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	l, err := OpenLedger(logging.TestingLog(t), t.Name(), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+	l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -405,7 +405,7 @@ func TestRekeying(t *testing.T) {
 	// Bring up a ledger
 	genesisInitState, addrs, keys := ledgertesting.Genesis(10)
 
-	l, err := OpenLedger(logging.TestingLog(t), t.Name(), t.Name(), true, genesisInitState, config.GetDefaultLocal())
+	l, err := OpenLedger(logging.TestingLog(t), t.Name(), true, genesisInitState, config.GetDefaultLocal())
 	require.NoError(t, err)
 	defer l.Close()
 

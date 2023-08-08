@@ -81,13 +81,9 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	lib.GenesisJSONText = genesisText
 
-	err := cfg.EnsureProvidedPaths()
-	if err != nil {
-		return fmt.Errorf("error ensuring configuration provided paths: %v", err)
-	}
-
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	// if the hotDataDir is explicitly set, use it for logging
+	// use cfg value directy as the resolved path includes the genesis ID
 	if cfg.HotDataDir != "" {
 		liveLog = filepath.Join(cfg.HotDataDir, "node.log")
 	}
@@ -98,12 +94,18 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
 	// if the coldDataDir is explicitly set, use it for archive
+	// use cfg value directy as the resolved path includes the genesis ID
 	if cfg.ColdDataDir != "" {
-		archive = filepath.Join(cfg.HotDataDir, cfg.LogArchiveName)
+		archive = filepath.Join(cfg.ColdDataDir, cfg.LogArchiveName)
 	}
 	// if the LogArchiveDir is explicitly set, use it
 	if cfg.LogArchiveDir != "" {
 		archive = filepath.Join(cfg.LogArchiveDir, cfg.LogArchiveName)
+	}
+
+	genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(s.RootPath, s.Genesis.ID())
+	if err != nil {
+		return fmt.Errorf("error ensuring configuration provided paths: %v", err)
 	}
 
 	var maxLogAge time.Duration
@@ -253,11 +255,11 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	var serverNode ServerNode
 	if cfg.EnableFollowMode {
 		var followerNode *node.AlgorandFollowerNode
-		followerNode, err = node.MakeFollower(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		followerNode, err = node.MakeFollower(s.log, genesisDirs, cfg, phonebookAddresses, s.Genesis)
 		serverNode = apiServer.FollowerNode{AlgorandFollowerNode: followerNode}
 	} else {
 		var fullNode *node.AlgorandFullNode
-		fullNode, err = node.MakeFull(s.log, s.RootPath, cfg, phonebookAddresses, s.Genesis)
+		fullNode, err = node.MakeFull(s.log, genesisDirs, cfg, phonebookAddresses, s.Genesis)
 		serverNode = apiServer.APINode{AlgorandFullNode: fullNode}
 	}
 	if os.IsNotExist(err) {
