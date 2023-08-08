@@ -185,7 +185,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Bytecode: 0x1e
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., X: uint64, Y: uint64
 - A plus B as a 128-bit result. X is the carry-bit, Y is the low-order 64 bits.
-- Introduced In: v2
+- Availability: v2
 
 ## intcblock
 
@@ -314,8 +314,8 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))
 
-| Index | Name | Type | Introduced In | Notes |
-| - | ------ | -- | ----------- | --------- |
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
 | 0 | Sender | address |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
@@ -380,8 +380,8 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 
 Fields
 
-| Index | Name | Type | Introduced In | Notes |
-| - | ------ | -- | ----------- | --------- |
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
 | 0 | MinTxnFee | uint64 |      | microalgos |
 | 1 | MinBalance | uint64 |      | microalgos |
 | 2 | MaxTxnLife | uint64 |      | rounds |
@@ -423,14 +423,14 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 - Bytecode: 0x36 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates.
-- Introduced In: v2
+- Availability: v2
 
 ### txna
 
 Fields (see [transaction reference](https://developer.algorand.org/docs/reference/transactions/))
 
-| Index | Name | Type | Introduced In | Notes |
-| - | ------ | -- | ----------- | --------- |
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
 | 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
 | 28 | Accounts | address | v2  | Accounts listed in the ApplicationCall transaction |
 | 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
@@ -443,7 +443,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 - Bytecode: 0x37 {uint8}, {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the current group<br />`gtxna` can be called using `gtxn` with 3 immediates.
-- Introduced In: v2
+- Availability: v2
 
 ## gtxns
 
@@ -451,7 +451,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 - Bytecode: 0x38 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of the Ath transaction in the current group
-- Introduced In: v3
+- Availability: v3
 
 for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.
 
@@ -461,7 +461,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 - Bytecode: 0x39 {uint8}, {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ith value of the array field F from the Ath transaction in the current group<br />`gtxnsa` can be called using `gtxns` with 2 immediates.
-- Introduced In: v3
+- Availability: v3
 
 ## bnz
 
@@ -480,7 +480,7 @@ At v2 it became allowed to branch to the end of the program exactly after the la
 - Bytecode: 0x41 {int16 (big-endian)}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is zero
-- Introduced In: v2
+- Availability: v2
 
 See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
@@ -490,7 +490,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 - Bytecode: 0x42 {int16 (big-endian)}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET
-- Introduced In: v2
+- Availability: v2
 
 See `bnz` for details on how branches work. `b` always jumps to the offset.
 
@@ -499,14 +499,14 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x43
 - Stack: ..., A: uint64 &rarr; _exits_
 - use A as success value; end
-- Introduced In: v2
+- Availability: v2
 
 ## assert
 
 - Bytecode: 0x44
 - Stack: ..., A: uint64 &rarr; ...
 - immediately fail unless A is a non-zero number
-- Introduced In: v3
+- Availability: v3
 
 ## pop
 
@@ -525,7 +525,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x4a
 - Stack: ..., A, B &rarr; ..., A, B, A, B
 - duplicate A and B
-- Introduced In: v2
+- Availability: v2
 
 ## dig
 
@@ -533,28 +533,28 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x4b {uint8}
 - Stack: ..., A, [N items] &rarr; ..., A, [N items], A
 - Nth value from the top of the stack. dig 0 is equivalent to dup
-- Introduced In: v3
+- Availability: v3
 
 ## swap
 
 - Bytecode: 0x4c
 - Stack: ..., A, B &rarr; ..., B, A
 - swaps A and B on stack
-- Introduced In: v3
+- Availability: v3
 
 ## select
 
 - Bytecode: 0x4d
 - Stack: ..., A, B, C: uint64 &rarr; ..., A or B
 - selects one of two values based on top-of-stack: B if C != 0, else A
-- Introduced In: v3
+- Availability: v3
 
 ## concat
 
 - Bytecode: 0x50
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - join A and B
-- Introduced In: v2
+- Availability: v2
 
 `concat` fails if the result would be greater than 4096 bytes.
 
@@ -564,21 +564,21 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Bytecode: 0x51 {uint8}, {uint8}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails
-- Introduced In: v2
+- Availability: v2
 
 ## substring3
 
 - Bytecode: 0x52
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
 - A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails
-- Introduced In: v2
+- Availability: v2
 
 ## getbit
 
 - Bytecode: 0x53
 - Stack: ..., A, B: uint64 &rarr; ..., uint64
 - Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
-- Introduced In: v3
+- Availability: v3
 
 see explanation of bit ordering in setbit
 
@@ -587,7 +587,7 @@ see explanation of bit ordering in setbit
 - Bytecode: 0x54
 - Stack: ..., A, B: uint64, C: uint64 &rarr; ..., any
 - Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails
-- Introduced In: v3
+- Availability: v3
 
 When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.
 
@@ -596,21 +596,21 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Bytecode: 0x55
 - Stack: ..., A: []byte, B: uint64 &rarr; ..., uint64
 - Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails
-- Introduced In: v3
+- Availability: v3
 
 ## setbyte
 
 - Bytecode: 0x56
 - Stack: ..., A: []byte, B: uint64, C: uint64 &rarr; ..., []byte
 - Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails
-- Introduced In: v3
+- Availability: v3
 
 ## balance
 
 - Bytecode: 0x60
 - Stack: ..., A: uint64 &rarr; ..., uint64
 - balance for account A, in microalgos. The balance is observed after the effects of previous transactions in the group, and after the fee for the current transaction is deducted. Changes caused by inner transactions are observable immediately following `itxn_submit`
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
@@ -620,7 +620,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address). Retu
 - Bytecode: 0x61
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., bool
 - 1 if account A is opted in to application B, else 0
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.
@@ -630,7 +630,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 - Bytecode: 0x62
 - Stack: ..., A: uint64, B: []byte &rarr; ..., any
 - local state of the key B in the current application in account A
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.
@@ -640,7 +640,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 - Bytecode: 0x63
 - Stack: ..., A: uint64, B: uint64, C: []byte &rarr; ..., X: any, Y: bool
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
@@ -650,7 +650,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 - Bytecode: 0x64
 - Stack: ..., A: []byte &rarr; ..., any
 - global state of the key A in the current application
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.
@@ -660,7 +660,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 - Bytecode: 0x65
 - Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: bool
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.
@@ -670,7 +670,7 @@ params: Txn.ForeignApps offset (or, since v4, an _available_ application id), st
 - Bytecode: 0x66
 - Stack: ..., A: uint64, B: []byte, C &rarr; ...
 - write C to key B in account A's local state of the current application
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.
@@ -680,7 +680,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 - Bytecode: 0x67
 - Stack: ..., A: []byte, B &rarr; ...
 - write B to key A in the global state of the current application
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 ## app_local_del
@@ -688,7 +688,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 - Bytecode: 0x68
 - Stack: ..., A: uint64, B: []byte &rarr; ...
 - delete key B from account A's local state of the current application
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.
@@ -700,7 +700,7 @@ Deleting a key which is already absent has no effect on the application local st
 - Bytecode: 0x69
 - Stack: ..., A: []byte &rarr; ...
 - delete key A from the global state of the current application
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 params: state key.
@@ -713,7 +713,7 @@ Deleting a key which is already absent has no effect on the application global s
 - Bytecode: 0x70 {uint8}
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 ### asset_holding
@@ -734,7 +734,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 - Bytecode: 0x71 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from asset A. Y is 1 if A exists, else 0
-- Introduced In: v2
+- Availability: v2
 - Mode: Application
 
 ### asset_params
@@ -763,7 +763,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 - Bytecode: 0x78
 - Stack: ..., A: uint64 &rarr; ..., uint64
 - minimum required balance for account A, in microalgos. Required balance is affected by ASA, App, and Box usage. When creating or opting into an app, the minimum balance grows before the app code runs, therefore the increase is visible there. When deleting or closing out, the minimum balance decreases after the app executes. Changes caused by inner transactions or box usage are observable immediately following the opcode effecting the change.
-- Introduced In: v3
+- Availability: v3
 - Mode: Application
 
 params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
@@ -774,7 +774,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address). Retu
 - Bytecode: 0x80 {varuint length, bytes}
 - Stack: ... &rarr; ..., []byte
 - immediate BYTES
-- Introduced In: v3
+- Availability: v3
 
 pushbytes args are not added to the bytecblock during assembly processes
 
@@ -784,6 +784,6 @@ pushbytes args are not added to the bytecblock during assembly processes
 - Bytecode: 0x81 {varuint}
 - Stack: ... &rarr; ..., uint64
 - immediate UINT
-- Introduced In: v3
+- Availability: v3
 
 pushint args are not added to the intcblock during assembly processes
