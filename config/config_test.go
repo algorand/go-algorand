@@ -662,25 +662,17 @@ func TestEnsureAbsDir(t *testing.T) {
 	testDirectory := t.TempDir()
 
 	t1 := filepath.Join(testDirectory, "test1")
-	// confirm that EnsureAbsDir does not make the directory if supplied false
 	t1Abs, err := ensureAbsGenesisDir(t1, "myGenesisID")
 	require.NoError(t, err)
 	require.DirExists(t, t1Abs)
-	require.DirExists(t, filepath.Join(t1Abs, "myGenesisID"))
-
-	// confirm that EnsureAbsDir creates the directory if supplied true
-	t1AbsAgain, err := ensureAbsGenesisDir(t1, "")
-	require.Equal(t, t1Abs, t1AbsAgain)
-	require.NoError(t, err)
-	t1stat, err := os.Stat(t1Abs)
-	require.NoError(t, err)
-	require.True(t, t1stat.IsDir())
+	require.Equal(t, testDirectory+"/test1/myGenesisID", t1Abs)
 
 	// confirm that relative paths become absolute
 	t2 := filepath.Join(testDirectory, "test2", "..")
-	t2Abs, err := ensureAbsGenesisDir(t2, "")
+	t2Abs, err := ensureAbsGenesisDir(t2, "myGenesisID")
 	require.NoError(t, err)
-	require.Equal(t, testDirectory, t2Abs)
+	require.DirExists(t, t2Abs)
+	require.Equal(t, testDirectory+"/myGenesisID", t2Abs)
 }
 
 // TestEnsureProvidedPaths confirms that paths provided in the config are resolved to absolute paths and are created if relevant
