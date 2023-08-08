@@ -77,7 +77,8 @@ type Local struct {
 	BaseLoggerDebugLevel uint32 `version[0]:"1" version[1]:"4"`
 	// if this is 0, do not produce agreement.cadaver
 	CadaverSizeTarget uint64 `version[0]:"1073741824" version[24]:"0"`
-	CadaverDirectory  string `version[27]:""`
+	// if this is not set, MakeService will attempt to use ColdDataDir instead
+	CadaverDirectory string `version[27]:""`
 
 	// Optional Data Directories
 	// data dirs are used to house data related to the operation of the node.
