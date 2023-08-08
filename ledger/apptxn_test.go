@@ -2156,8 +2156,6 @@ func TestInnerCreatedAppsAreCallable(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	l := newTestLedger(t, genBalances)
-	defer l.Close()
 
 	// 31 allowed inner appl.
 	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {

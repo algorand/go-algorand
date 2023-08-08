@@ -838,28 +838,26 @@ var OpSpecs = []OpSpec{
 
 	// Needs more benchmarking, but roughly:
 	// BN cost is 18k per elt, BLS is 45k + 40k per elt.
-	// The number below are all reduced by a factor of 100 to allow testing
-	// before we decide how to allow such large costs.
 	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:i"), pairingVersion,
 		costByFieldAndLength("g", &EcGroups, []linearCost{
 			BN254g1: {
 				baseCost:  1,
-				chunkCost: 18_0,
+				chunkCost: 18_000,
 				chunkSize: bn254g1Size,
 			},
 			BN254g2: {
 				baseCost:  1,
-				chunkCost: 18_0,
+				chunkCost: 18_000,
 				chunkSize: bn254g2Size,
 			},
 			BLS12_381g1: {
-				baseCost:  45_0,
-				chunkCost: 40_0,
+				baseCost:  45_000,
+				chunkCost: 40_000,
 				chunkSize: bls12381g1Size,
 			},
 			BLS12_381g2: {
-				baseCost:  45_0,
-				chunkCost: 40_0,
+				baseCost:  45_000,
+				chunkCost: 40_000,
 				chunkSize: bls12381g2Size,
 			}})},
 
@@ -869,27 +867,26 @@ var OpSpecs = []OpSpec{
 	// bnG2 seems to be 18000 + 900 /elt (VERY ERRATIC TIMINGS)
 	// blsG1 seems to be 14000 + 400 /elt
 	// blsG2 seems to be 35000 + 1800 /elt
-	// All currently reduced by a factor of 100.
 	{0xe3, "ec_multi_exp", opEcMultiExp, proto("bb:b"), pairingVersion,
 		costByFieldAndLength("g", &EcGroups, []linearCost{
 			BN254g1: {
-				baseCost:  8_0,
-				chunkCost: 3,
+				baseCost:  8_000,
+				chunkCost: 300,
 				chunkSize: scalarSize,
 			},
 			BN254g2: {
-				baseCost:  18_0,
-				chunkCost: 9,
+				baseCost:  18_000,
+				chunkCost: 900,
 				chunkSize: scalarSize,
 			},
 			BLS12_381g1: {
-				baseCost:  14_0,
-				chunkCost: 4,
+				baseCost:  14_000,
+				chunkCost: 400,
 				chunkSize: scalarSize,
 			},
 			BLS12_381g2: {
-				baseCost:  35_0,
-				chunkCost: 18,
+				baseCost:  35_000,
+				chunkCost: 1800,
 				chunkSize: scalarSize,
 			}})},
 

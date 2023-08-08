@@ -183,10 +183,13 @@ int 7; itob;`+mul+`
 
 func TestPairCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	//nolint:paralleltest // Not parallel because it modifies testLogicBudget
+
+	was := testLogicBudget
+	testLogicBudget = 16 * 20_000
+	defer func() { testLogicBudget = was }()
 
 	t.Run("bn254", func(t *testing.T) {
-		t.Parallel()
 		var g1GenNeg bn254.G1Affine
 		g1GenNeg.Neg(&bnG1Gen)
 		g1points := []bn254.G1Affine{g1GenNeg, bnG1Gen}
@@ -200,7 +203,6 @@ func TestPairCheck(t *testing.T) {
 	})
 
 	t.Run("bls12-381", func(t *testing.T) {
-		t.Parallel()
 		var g1GenNeg bls12381.G1Affine
 		g1GenNeg.Neg(&blsG1Gen)
 		g1points := []bls12381.G1Affine{g1GenNeg, blsG1Gen}
@@ -216,7 +218,11 @@ func TestPairCheck(t *testing.T) {
 
 func TestEcMultiExp(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	//nolint:paralleltest // Not parallel because it modifies testLogicBudget
+
+	was := testLogicBudget
+	testLogicBudget = 16 * 20_000
+	defer func() { testLogicBudget = was }()
 
 	curves := []curveConstants{bnCurves[0], bnCurves[1], blsCurves[0], blsCurves[1]}
 	for _, c := range curves {
@@ -363,7 +369,11 @@ func TestBnG2LargeSmallEquivalent(t *testing.T) {
 // TestAgreement ensures that scalar muls and adds is the same as multi_exp
 func TestAgreement(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	//nolint:paralleltest // Not parallel because it modifies testLogicBudget
+
+	was := testLogicBudget
+	testLogicBudget = 16 * 20_000
+	defer func() { testLogicBudget = was }()
 
 	k1 := "2F53" // any old int
 
@@ -448,7 +458,7 @@ func TestSlowMapTo(t *testing.T) {
 	//nolint:paralleltest // Not parallel because it modifies testLogicBudget
 
 	was := testLogicBudget
-	testLogicBudget = 1_000_000
+	testLogicBudget = 16 * 20_000
 	defer func() { testLogicBudget = was }()
 	for _, curve := range []string{"BN254g2", "BLS12_381g2"} {
 		testPanics(t, fmt.Sprintf("int 27; itob; ec_map_to %s; ec_subgroup_check %s",
