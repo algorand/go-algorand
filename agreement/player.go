@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -281,44 +282,46 @@ func (p *player) handleWinningPayloadArrival(payload proposal, ver protocol.Cons
 
 func (p *player) resizePayloadArrivals(ver protocol.ConsensusVersion) {
 	proto := config.Consensus[ver]
-	if len(p.payloadArrivals) > proto.AgreementPipelineDelayHistory {
-		p.payloadArrivals = p.payloadArrivals[len(p.payloadArrivals)-proto.AgreementPipelineDelayHistory:]
+	if len(p.payloadArrivals) > proto.DynamicFilterPayloadArriavalHistory {
+		p.payloadArrivals = p.payloadArrivals[len(p.payloadArrivals)-proto.DynamicFilterPayloadArriavalHistory:]
 	}
-	for len(p.payloadArrivals) < proto.AgreementPipelineDelayHistory {
+	for len(p.payloadArrivals) < proto.DynamicFilterPayloadArriavalHistory {
 		p.payloadArrivals = append([]time.Duration{FilterTimeout(0, ver)}, p.payloadArrivals...)
 	}
 }
 
 // calculateFilterTimeout chooses the appropriate filter timeout for a new round.
 func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVersion) time.Duration {
+
 	proto := config.Consensus[ver]
 
 	if !proto.DynamicFilterTimeout || period != 0 {
+		// Either dynamic lambda is disabled, or we're not in period 0 and
+		// therefore can't use dynamic lambda
 		return FilterTimeout(period, ver)
 	}
 
 	var dynamicDelay time.Duration
-	if proto.AgreementPipelineDelay <= 0 {
-		dynamicDelay = 0
-	} else if proto.AgreementPipelineDelay > len(p.payloadArrivals) {
+	if proto.DynamicFilterPayloadArriavalHistory <= 0 {
+		// we don't keep any history, use the default
+		dynamicDelay = FilterTimeout(0, ver)
+	} else if proto.DynamicFilterPayloadArriavalHistory > len(p.payloadArrivals) {
+		// not enough smaples, use the default
 		dynamicDelay = FilterTimeout(0, ver)
 	} else {
 		sortedArrivals := make([]time.Duration, len(p.payloadArrivals))
 		copy(sortedArrivals[:], p.payloadArrivals[:])
 		sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
-		dynamicDelay = sortedArrivals[proto.AgreementPipelineDelay-1]
+		dynamicDelay = sortedArrivals[proto.DynamicFilterPayloadArriavalHistory-1]
 	}
 
-	// Make sure the dynamic delay is not too small; we want to
-	// evenly space out the pipelined rounds across FilterTimeout,
-	// which is the fastest we could agree on blocks anyway (not
-	// including the soft vote / cert vote times).
-	if proto.AgreementPipelineDepth > 0 {
-		evenSpacing := FilterTimeout(0, ver) / time.Duration(proto.AgreementPipelineDepth)
-		if dynamicDelay < evenSpacing {
-			dynamicDelay = evenSpacing
-		}
+	// Make sure the dynamic delay is not too small
+	if dynamicDelay < proto.DynamicFilterTimeoutLowerBound {
+		dynamicDelay = proto.DynamicFilterTimeoutLowerBound
 	}
+
+	//dynamicDelay = FilterTimeout(period, ver)
+	fmt.Println("dynamic delay", dynamicDelay, "payload arrivals", len(p.payloadArrivals))
 
 	return dynamicDelay
 }
