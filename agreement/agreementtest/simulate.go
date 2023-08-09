@@ -68,7 +68,7 @@ func (i *instant) TimeoutAt(d time.Duration, timeoutType timers.Timeout) <-chan 
 		return ta
 	}
 
-	if timeoutType == timers.Filter && !i.HasPending("pseudonode") {
+	if timeoutType == timers.Filter && !i.HasPending("pseudonode") { //d == agreement.FilterTimeout(0, protocol.ConsensusCurrentVersion) && !i.HasPending("pseudonode") {
 		close(ta)
 	}
 	return ta

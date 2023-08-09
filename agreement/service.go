@@ -80,7 +80,7 @@ type parameters Parameters
 
 // externalDemuxSignals used to syncronize the external signals that goes to the demux with the main loop.
 type externalDemuxSignals struct {
-	Deadline             time.Duration
+	Deadline             Deadline
 	FastRecoveryDeadline time.Duration
 	CurrentRound         round
 }
@@ -212,7 +212,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		status = player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+		status = player{Round: nextRound, Step: soft, Deadline: Deadline{Deadline: FilterTimeout(0, nextVersion), Type: timers.Filter}}
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: s.Ledger.NextRound()}

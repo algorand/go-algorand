@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-type Timeout int
+type Timeout int8
 
 const (
 	Deadline Timeout = iota

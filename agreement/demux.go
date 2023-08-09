@@ -191,7 +191,7 @@ func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, 
 // next blocks until it observes an external input event of interest for the state machine.
 //
 // If ok is false, there are no more events so the agreement service should quit.
-func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Duration, currentRound round) (e externalEvent, ok bool) {
+func (d *demux) next(s *Service, deadline Deadline, fastDeadline time.Duration, currentRound round) (e externalEvent, ok bool) {
 	defer func() {
 		if !ok {
 			return
@@ -251,7 +251,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	}
 
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound)
-	deadlineCh := s.Clock.TimeoutAt(deadline, timers.Deadline)
+	deadlineCh := s.Clock.TimeoutAt(deadline.Deadline, deadline.Type)
 	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline, timers.Fast)
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)

@@ -21,7 +21,14 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/timers"
 )
+
+type Deadline struct {
+	_struct  struct{} `codec:","`
+	Deadline time.Duration
+	Type     timers.Timeout
+}
 
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
@@ -40,7 +47,7 @@ type player struct {
 
 	// Deadline contains the time of the next timeout expected by the player
 	// state machine (relevant to the start of the current period).
-	Deadline time.Duration
+	Deadline Deadline
 	// Napping is set when the player is expecting a random timeout (i.e.,
 	// to determine when the player chooses to send a next-vote).
 	Napping bool
@@ -111,7 +118,8 @@ func (p *player) handle(r routerHandle, e event) []action {
 			delta := time.Duration(e.RandomEntropy % uint64(upper-lower))
 
 			p.Napping = true
-			p.Deadline = lower + delta
+			p.Deadline.Deadline = lower + delta
+			p.Deadline.Type = timers.Deadline
 			return actions
 		}
 	case roundInterruptionEvent:
@@ -145,7 +153,8 @@ func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
 
 func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 	defer func() {
-		p.Deadline = deadlineTimeout
+		p.Deadline.Deadline = deadlineTimeout
+		p.Deadline.Type = timers.Deadline
 	}()
 
 	e := r.dispatch(*p, proposalFrozenEvent{}, proposalMachinePeriod, p.Round, p.Period, 0)
@@ -213,7 +222,8 @@ func (p *player) issueNextVote(r routerHandle) []action {
 
 	_, upper := p.Step.nextVoteRanges()
 	p.Napping = false
-	p.Deadline = upper
+	p.Deadline.Deadline = upper
+	p.Deadline.Type = timers.Deadline
 	return actions
 }
 
@@ -327,7 +337,8 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.Deadline = FilterTimeout(target, source.Proto)
+	p.Deadline.Deadline = FilterTimeout(target, source.Proto)
+	p.Deadline.Type = timers.Filter
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -375,11 +386,14 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 
 	switch source := source.(type) {
 	case roundInterruptionEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
+		p.Deadline.Deadline = FilterTimeout(0, source.Proto.Version)
+		p.Deadline.Type = timers.Filter
 	case thresholdEvent:
-		p.Deadline = FilterTimeout(0, source.Proto)
+		p.Deadline.Deadline = FilterTimeout(0, source.Proto)
+		p.Deadline.Type = timers.Filter
 	case filterableMessageEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
+		p.Deadline.Deadline = FilterTimeout(0, source.Proto.Version)
+		p.Deadline.Type = timers.Filter
 	}
 
 	// update tracer state to match player

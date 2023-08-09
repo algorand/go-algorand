@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/timers"
 )
 
 var playerTracer tracer
@@ -500,7 +501,7 @@ func TestPlayerLateBlockProposalPeriod0(t *testing.T) {
 
 func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
 	// Set up a composed test machine starting at specified rps
-	rRouter := makeRootRouter(player{Round: r, Period: p, Step: s, Deadline: FilterTimeout(p, protocol.ConsensusCurrentVersion)})
+	rRouter := makeRootRouter(player{Round: r, Period: p, Step: s, Deadline: Deadline{Deadline: FilterTimeout(p, protocol.ConsensusCurrentVersion), Type: timers.Filter}})
 	concreteMachine := ioAutomataConcretePlayer{rootRouter: &rRouter}
 	plyr = concreteMachine.underlying()
 	pMachine = &concreteMachine
