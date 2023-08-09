@@ -208,13 +208,22 @@ func (n *P2PNetwork) GetGenesisID() string {
 
 // Address returns a string and whether that is a 'final' address or guessed.
 func (n *P2PNetwork) Address() (string, bool) {
-	addrs := n.service.Host().Addrs()
+	addrInfo := peer.AddrInfo{
+		ID:    n.service.Host().ID(),
+		Addrs: n.service.Host().Addrs(),
+	}
+	addrs, err := peer.AddrInfoToP2pAddrs(&addrInfo)
+	if err != nil {
+		n.log.Warnf("Failed to generate valid multiaddr: %v", err)
+		return "", false
+	}
 	if len(addrs) == 0 {
 		return "", false
 	}
 	if len(addrs) > 1 {
 		n.log.Infof("Multiple addresses found, using first one from %v", addrs)
 	}
+
 	return addrs[0].String(), true
 }
 

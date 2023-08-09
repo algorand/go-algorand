@@ -27,6 +27,10 @@ func TestP2PTwoNodes(t *testing.T) {
 	testP2PWithConfig(t, "TwoNodes50EachP2P.json")
 }
 
+func TestP2PThreeNodesEvenDist(t *testing.T) {
+	testP2PWithConfig(t, "ThreeNodesEvenDistP2P.json")
+}
+
 func TestP2PFiveNodes(t *testing.T) {
 	testP2PWithConfig(t, "P2pFiveNodes.json")
 }
