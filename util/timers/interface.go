@@ -24,8 +24,9 @@ import (
 type Timeout int
 
 const (
-	Filter Timeout = iota
+	Deadline Timeout = iota
 	Fast
+	Filter
 )
 
 // Clock provides timeout events which fire at some point after a point in time.
