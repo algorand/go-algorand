@@ -253,7 +253,7 @@ func TestConfiguredDataDirs_Follower(t *testing.T) {
 
 }
 
-// TestConfiguredResourcePaths tests to see that when TrackerDbFilePath, BlockDbFilePath, StateproofDir, and CrashFilePath are set, underlying resources are created in the correct locations
+// TestConfiguredResourcePaths tests to see that when individual paths are set, underlying resources are created in the correct locations
 func TestConfiguredResourcePaths_Follower(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
