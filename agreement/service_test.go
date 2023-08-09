@@ -874,7 +874,13 @@ func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds
 	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
 }
 
-func maxFilterTimeoutPeriod0(services []*Service, version protocol.ConsensusVersion) time.Duration {
+func maxFilterTimeoutPeriod0(services []*Service, version protocol.ConsensusVersion, iter int) time.Duration {
+	if iter < 32 { // TODO: 32 is the history length we track for dynamic lambda. We need to change this param
+		return FilterTimeout(0, version)
+	} else {
+		return time.Second // this is the min filter timeout we're using.
+	}
+
 	if len(services) == 0 {
 		return FilterTimeout(0, version)
 	}
@@ -902,10 +908,11 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 
 	// run round with round-specific consensus version first (since fix in #1896)
 	version, _ := baseLedger.ConsensusVersion(ParamsRound(startRound))
-	zeroes = runRound(clocks, activityMonitor, zeroes, maxFilterTimeoutPeriod0(services, version))
+	zeroes = runRound(clocks, activityMonitor, zeroes, maxFilterTimeoutPeriod0(services, version, 0))
 	for j := 1; j < numRounds; j++ {
+		// TODO: remove this: time.Sleep(100 * time.Millisecond)
 		version, _ := baseLedger.ConsensusVersion(ParamsRound(baseLedger.NextRound() + basics.Round(j-1)))
-		zeroes = runRound(clocks, activityMonitor, zeroes, maxFilterTimeoutPeriod0(services, version))
+		zeroes = runRound(clocks, activityMonitor, zeroes, maxFilterTimeoutPeriod0(services, version, j))
 	}
 
 	for i := 0; i < numNodes; i++ {
