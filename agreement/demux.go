@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/timers"
 )
 
 const (
@@ -250,8 +251,8 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	}
 
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound)
-	deadlineCh := s.Clock.TimeoutAt(deadline)
-	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
+	deadlineCh := s.Clock.TimeoutAt(deadline, timers.Deadline)
+	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline, timers.Fast)
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)

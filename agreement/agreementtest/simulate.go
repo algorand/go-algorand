@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
 )
@@ -60,7 +59,7 @@ func (i *instant) Encode() []byte {
 	return nil
 }
 
-func (i *instant) TimeoutAt(d time.Duration) <-chan time.Time {
+func (i *instant) TimeoutAt(d time.Duration, timeoutType timers.Timeout) <-chan time.Time {
 	ta := make(chan time.Time)
 	select {
 	case <-i.timeoutAtCalled:
@@ -69,7 +68,7 @@ func (i *instant) TimeoutAt(d time.Duration) <-chan time.Time {
 		return ta
 	}
 
-	if d == agreement.FilterTimeout(0, protocol.ConsensusCurrentVersion) && !i.HasPending("pseudonode") {
+	if timeoutType == timers.Filter && !i.HasPending("pseudonode") {
 		close(ta)
 	}
 	return ta

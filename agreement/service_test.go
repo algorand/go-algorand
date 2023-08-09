@@ -49,14 +49,14 @@ type testingClock struct {
 
 	zeroes uint
 
-	TA map[time.Duration]chan time.Time // TimeoutAt
+	TA map[timers.Timeout]map[time.Duration]chan time.Time // TimeoutAt
 
 	monitor *coserviceMonitor
 }
 
 func makeTestingClock(m *coserviceMonitor) *testingClock {
 	c := new(testingClock)
-	c.TA = make(map[time.Duration]chan time.Time)
+	c.TA = make(map[timers.Timeout]map[time.Duration]chan time.Time)
 	c.monitor = m
 	return c
 }
@@ -66,7 +66,7 @@ func (c *testingClock) Zero() timers.Clock {
 	defer c.mu.Unlock()
 
 	c.zeroes++
-	c.TA = make(map[time.Duration]chan time.Time)
+	c.TA = make(map[timers.Timeout]map[time.Duration]chan time.Time)
 	c.monitor.clearClock()
 	return c
 }
@@ -75,14 +75,18 @@ func (c *testingClock) Since() time.Duration {
 	return 0
 }
 
-func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
+func (c *testingClock) TimeoutAt(d time.Duration, timeoutType timers.Timeout) <-chan time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	ta := c.TA[d]
+	if _, ok := c.TA[timeoutType]; !ok {
+		c.TA[timeoutType] = make(map[time.Duration]chan time.Time)
+	}
+
+	ta := c.TA[timeoutType][d]
 	if ta == nil {
-		c.TA[d] = make(chan time.Time)
-		ta = c.TA[d]
+		c.TA[timeoutType][d] = make(chan time.Time)
+		ta = c.TA[timeoutType][d]
 	}
 	return ta
 }
@@ -99,14 +103,18 @@ func (c *testingClock) prepareToFire() {
 	c.monitor.inc(clockCoserviceType)
 }
 
-func (c *testingClock) fire(d time.Duration) {
+func (c *testingClock) fire(d time.Duration, timeoutType timers.Timeout) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.TA[d] == nil {
-		c.TA[d] = make(chan time.Time)
+	if _, ok := c.TA[timeoutType]; !ok {
+		c.TA[timeoutType] = make(map[time.Duration]chan time.Time)
 	}
-	close(c.TA[d])
+
+	if c.TA[timeoutType][d] == nil {
+		c.TA[timeoutType][d] = make(chan time.Time)
+	}
+	close(c.TA[timeoutType][d])
 }
 
 type testingNetwork struct {
@@ -830,12 +838,12 @@ func expectNoNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
 	return zeroes
 }
 
-func triggerGlobalTimeout(d time.Duration, clocks []timers.Clock, activityMonitor *activityMonitor) {
+func triggerGlobalTimeout(d time.Duration, timeoutType timers.Timeout, clocks []timers.Clock, activityMonitor *activityMonitor) {
 	for i := range clocks {
 		clocks[i].(*testingClock).prepareToFire()
 	}
 	for i := range clocks {
-		clocks[i].(*testingClock).fire(d)
+		clocks[i].(*testingClock).fire(d, timeoutType)
 	}
 	activityMonitor.waitForActivity()
 	activityMonitor.waitForQuiet()

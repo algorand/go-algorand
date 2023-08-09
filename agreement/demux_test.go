@@ -428,8 +428,8 @@ func (t *demuxTester) Zero() timers.Clock {
 }
 
 // implement timers.Clock
-func (t *demuxTester) TimeoutAt(delta time.Duration) <-chan time.Time {
-	if delta == fastTimeoutChTime {
+func (t *demuxTester) TimeoutAt(delta time.Duration, timeoutType timers.Timeout) <-chan time.Time {
+	if timeoutType == timers.Fast {
 		return nil
 	}
 
