@@ -175,13 +175,17 @@ type TxnWithStatus struct {
 
 // MakeFull sets up an Algorand full node
 // (i.e., it returns a node that participates in consensus)
-func MakeFull(log logging.Logger, genesisDirs config.ResolvedGenesisDirs, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
+func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 	node := new(AlgorandFullNode)
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
 	node.config = cfg
+	genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
+	if err != nil {
+		return nil, err
+	}
 	node.genesisDirs = genesisDirs
 
 	// tie network, block fetcher, and agreement services together

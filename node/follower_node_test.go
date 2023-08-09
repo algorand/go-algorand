@@ -67,8 +67,7 @@ func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
 	cfg.EnableFollowMode = true
 	genesis := followNodeDefaultGenesis()
 	root := t.TempDir()
-	paths, _ := cfg.EnsureAndResolveGenesisDirs(root, genesis.ID())
-	node, err := MakeFollower(logging.Base(), paths, cfg, []string{}, genesis)
+	node, err := MakeFollower(logging.Base(), root, cfg, []string{}, genesis)
 	require.NoError(t, err)
 	return node
 }
@@ -82,8 +81,7 @@ func remakeableFollowNode(t *testing.T, tempDir string, maxAcctLookback uint64) 
 	if tempDir == "" {
 		tempDir = t.TempDir()
 	}
-	paths, _ := cfg.EnsureAndResolveGenesisDirs(tempDir, genesis.ID())
-	followNode, err := MakeFollower(logging.Base(), paths, cfg, []string{}, genesis)
+	followNode, err := MakeFollower(logging.Base(), tempDir, cfg, []string{}, genesis)
 	require.NoError(t, err)
 	return followNode, tempDir
 }
@@ -141,8 +139,7 @@ func TestDevModeWarning(t *testing.T) {
 	logger, hook := test.NewNullLogger()
 	tlogger := logging.NewWrappedLogger(logger)
 	root := t.TempDir()
-	paths, _ := cfg.EnsureAndResolveGenesisDirs(root, genesis.ID())
-	_, err := MakeFollower(tlogger, paths, cfg, []string{}, genesis)
+	_, err := MakeFollower(tlogger, root, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	// check for the warning
@@ -192,14 +189,10 @@ func TestDefaultResourcePaths_Follower(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 
-	// normally handled by the server
-	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
-	require.NoError(t, err)
-
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFollower(log, dirs, cfg, []string{}, genesis)
+	n, err := MakeFollower(log, testDirectory, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()
@@ -237,14 +230,10 @@ func TestConfiguredDataDirs_Follower(t *testing.T) {
 	cfg.CatchpointTracking = 2
 	cfg.CatchpointInterval = 1
 
-	// normally handled by the server
-	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
-	require.NoError(t, err)
-
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFollower(log, dirs, cfg, []string{}, genesis)
+	n, err := MakeFollower(log, testDirectory, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()
@@ -294,14 +283,10 @@ func TestConfiguredResourcePaths_Follower(t *testing.T) {
 	cfg.CatchpointTracking = 2
 	cfg.CatchpointInterval = 1
 
-	// normally handled by the server
-	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
-	require.NoError(t, err)
-
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFollower(log, dirs, cfg, []string{}, genesis)
+	n, err := MakeFollower(log, testDirectory, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()

@@ -179,8 +179,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		rootDirectory := rootDirs[i]
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
-		paths, _ := cfg.EnsureAndResolveGenesisDirs(rootDirectory, g.ID())
-		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), paths, cfg, nodeNeighbors, g)
+		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, nodeNeighbors, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
@@ -489,6 +488,34 @@ func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interfac
 	require.Contains(m.t, fmtStr, "Unable to create genesis directory")
 }
 
+// TestMismatchingGenesisDirectoryPermissions tests to see that the os.MkDir check we have in MakeFull works as expected. It tests both the return error as well as the logged error.
+func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectroy := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	log := mismatchingDirectroyPermissionsLog{logging.TestingLog(t), t}
+
+	require.NoError(t, os.Chmod(testDirectroy, 0200))
+
+	node, err := MakeFull(log, testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
+
+	require.Nil(t, node)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "permission denied")
+
+	require.NoError(t, os.Chmod(testDirectroy, 1700))
+	require.NoError(t, os.RemoveAll(testDirectroy))
+}
+
 // TestDefaultResourcePaths confirms that when no extra configuration is provided, all resources are created in the dataDir
 func TestDefaultResourcePaths(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -505,15 +532,10 @@ func TestDefaultResourcePaths(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 
-	// normally handled by the server
-	genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
-	require.NoError(t, err)
-	//	rootGenesis := genesisDirs.RootGenesisDir
-
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFull(log, genesisDirs, cfg, []string{}, genesis)
+	n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
 
 	n.Start()
 	defer n.Stop()
@@ -560,14 +582,10 @@ func TestConfiguredDataDirs(t *testing.T) {
 	cfg.CatchpointTracking = 2
 	cfg.CatchpointInterval = 1
 
-	// normally handled by the server
-	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
-	require.NoError(t, err)
-
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFull(log, dirs, cfg, []string{}, genesis)
+	n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()
@@ -626,13 +644,10 @@ func TestConfiguredResourcePaths(t *testing.T) {
 	cfg.StateproofDir = stateproofDir
 	cfg.CrashDBDir = crashPath
 
-	// normally handled by the server
-	dirs, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, genesis.ID())
-	require.NoError(t, err)
 	// the logger is set up by the server, so we don't test this here
 	log := logging.Base()
 
-	n, err := MakeFull(log, dirs, cfg, []string{}, genesis)
+	n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	n.Start()

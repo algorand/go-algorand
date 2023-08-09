@@ -77,12 +77,16 @@ type AlgorandFollowerNode struct {
 }
 
 // MakeFollower sets up an Algorand data node
-func MakeFollower(log logging.Logger, genesisDirs config.ResolvedGenesisDirs, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFollowerNode, error) {
+func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFollowerNode, error) {
 	node := new(AlgorandFollowerNode)
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
+	genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
+	if err != nil {
+		return nil, err
+	}
 	node.genesisDirs = genesisDirs
 
 	if node.devMode {

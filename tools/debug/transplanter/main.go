@@ -381,12 +381,7 @@ func main() {
 		l.Close()
 
 		fmt.Printf("Catching up from %d to %d\n", latest, *roundStart)
-		paths, perr := cfg.EnsureAndResolveGenesisDirs(rootPath, genesis.ID())
-		if perr != nil {
-			fmt.Fprintf(os.Stderr, "Cannot init data directory: %v", err)
-			os.Exit(1)
-		}
-		followerNode, err = node.MakeFollower(log, paths, cfg, []string{}, genesis)
+		followerNode, err = node.MakeFollower(log, rootPath, cfg, []string{}, genesis)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot init follower node: %v", err)
 			os.Exit(1)
