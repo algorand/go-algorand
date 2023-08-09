@@ -13,6 +13,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/timers"
 )
 
 // The following msgp objects are implemented in this file:
@@ -4124,33 +4125,33 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "Period":
 				{
-					var zb0006 uint64
-					zb0006, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0008 uint64
+					zb0008, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Period")
 						return
 					}
-					(*z).Period = period(zb0006)
+					(*z).Period = period(zb0008)
 				}
 			case "Step":
 				{
-					var zb0007 uint64
-					zb0007, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0009 uint64
+					zb0009, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Step")
 						return
 					}
-					(*z).Step = step(zb0007)
+					(*z).Step = step(zb0009)
 				}
 			case "LastConcluding":
 				{
-					var zb0008 uint64
-					zb0008, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0010 uint64
+					zb0010, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "LastConcluding")
 						return
 					}
-					(*z).LastConcluding = step(zb0008)
+					(*z).LastConcluding = step(zb0010)
 				}
 			case "TimersDeadline":
 				bts, err = (*z).Deadline.UnmarshalMsg(bts)

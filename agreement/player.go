@@ -21,7 +21,14 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/timers"
 )
+
+type Deadline struct {
+	_struct  struct{} `codec:","`
+	Deadline time.Duration
+	Type     timers.Timeout
+}
 
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
