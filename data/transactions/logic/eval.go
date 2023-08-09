@@ -247,10 +247,21 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// boxRef is the "hydrated" form of a BoxRef - it has the actual app id, not an index
-type boxRef struct {
-	app  basics.AppIndex
-	name string
+// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual app id, not an index
+type BoxRef struct {
+	App  basics.AppIndex
+	Name string
+}
+
+// UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
+// This should only be used during simulation or debugging.
+type UnnamedResourcePolicy interface {
+	AvailableAccount(addr basics.Address) bool
+	AvailableAsset(asset basics.AssetIndex) bool
+	AvailableApp(app basics.AppIndex) bool
+	AllowsHolding(addr basics.Address, asset basics.AssetIndex) bool
+	AllowsLocal(addr basics.Address, app basics.AppIndex) bool
+	AvailableBox(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) bool
 }
 
 // EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
@@ -260,6 +271,10 @@ type EvalConstants struct {
 
 	// MaxLogCalls is the limit of total log calls during a program execution
 	MaxLogCalls uint64
+
+	// UnnamedResources, if provided, allows resources to be used without being named according to
+	// this policy.
+	UnnamedResources UnnamedResourcePolicy
 }
 
 // RuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
@@ -325,6 +340,11 @@ type EvalParams struct {
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
 
+	// SurplusReadBudget is the number of bytes from the IO budget that were not used for reading
+	// in boxes before evaluation began. In other words, the txn group could have read in
+	// SurplusReadBudget more box bytes, but did not.
+	SurplusReadBudget uint64
+
 	EvalConstants
 
 	// Caching these here means the hashes can be shared across the TxnGroup
@@ -344,6 +364,21 @@ type EvalParams struct {
 // this returns nil.
 func (ep *EvalParams) GetCaller() *EvalContext {
 	return ep.caller
+}
+
+// GetIOBudget returns the current IO budget for the group.
+func (ep *EvalParams) GetIOBudget() uint64 {
+	return ep.ioBudget
+}
+
+// SetIOBudget sets the IO budget for the group.
+func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
+	ep.ioBudget = ioBudget
+}
+
+// BoxDirtyBytes returns the number of bytes that have been written to boxes
+func (ep *EvalParams) BoxDirtyBytes() uint64 {
+	return ep.available.dirtyBytes
 }
 
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
@@ -434,7 +469,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedApps:     make(map[basics.AppIndex]struct{}),
 		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
 		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
-		boxes:          make(map[boxRef]bool),
+		boxes:          make(map[BoxRef]bool),
 	}
 	for i := range ep.TxnGroup {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
@@ -650,6 +685,11 @@ func (cx *EvalContext) GroupIndex() int {
 // RunMode returns the evaluation context's mode (signature or application)
 func (cx *EvalContext) RunMode() RunMode {
 	return cx.runMode
+}
+
+// ProgramVersion returns the AVM version of the current program.
+func (cx *EvalContext) ProgramVersion() uint64 {
+	return cx.version
 }
 
 // PC returns the program counter of the current application being evaluated
@@ -977,7 +1017,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		// make any "0 index" box refs available now that we have an appID.
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
-				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = false
+				cx.EvalParams.available.boxes[BoxRef{cx.appID, string(br.Name)}] = false
 			}
 		}
 		// and add the appID to `createdApps`
@@ -999,12 +1039,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 		used := uint64(0)
 		for br := range cx.available.boxes {
-			if len(br.name) == 0 {
+			if len(br.Name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
 				// may have been used to add I/O budget.
 				continue
 			}
-			box, ok, err := cx.Ledger.GetBox(br.app, br.name)
+			box, ok, err := cx.Ledger.GetBox(br.App, br.Name)
 			if err != nil {
 				return false, nil, err
 			}
@@ -1024,6 +1064,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 		}
 		cx.readBudgetChecked = true
+		cx.SurplusReadBudget = cx.ioBudget - used
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
@@ -3063,9 +3104,9 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case ClearStateProgram:
 		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
 	case NumApprovalProgramPages:
-		sv.Uint = uint64(divCeil(len(txn.ApprovalProgram), maxStringSize))
+		sv.Uint = uint64(basics.DivCeil(len(txn.ApprovalProgram), maxStringSize))
 	case ApprovalProgramPages:
-		pageCount := divCeil(len(txn.ApprovalProgram), maxStringSize)
+		pageCount := basics.DivCeil(len(txn.ApprovalProgram), maxStringSize)
 		if arrayFieldIdx >= uint64(pageCount) {
 			return sv, fmt.Errorf("invalid ApprovalProgramPages index %d", arrayFieldIdx)
 		}
@@ -3076,9 +3117,9 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		}
 		sv.Bytes = txn.ApprovalProgram[first:last]
 	case NumClearStateProgramPages:
-		sv.Uint = uint64(divCeil(len(txn.ClearStateProgram), maxStringSize))
+		sv.Uint = uint64(basics.DivCeil(len(txn.ClearStateProgram), maxStringSize))
 	case ClearStateProgramPages:
-		pageCount := divCeil(len(txn.ClearStateProgram), maxStringSize)
+		pageCount := basics.DivCeil(len(txn.ClearStateProgram), maxStringSize)
 		if arrayFieldIdx >= uint64(pageCount) {
 			return sv, fmt.Errorf("invalid ClearStateProgramPages index %d", arrayFieldIdx)
 		}
@@ -3523,8 +3564,8 @@ func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
 	return uint64(ts), nil
 }
 
-// getApplicationAddress memoizes app.Address() across a tx group's evaluation
-func (ep *EvalParams) getApplicationAddress(app basics.AppIndex) basics.Address {
+// GetApplicationAddress memoizes app.Address() across a tx group's evaluation
+func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address {
 	/* Do not instantiate the cache here, that would mask a programming error.
 	   The cache must be instantiated at EvalParams construction time, so that
 	   proper sharing with inner EvalParams can work. */
@@ -3568,7 +3609,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case CurrentApplicationID:
 		sv.Uint = uint64(cx.appID)
 	case CurrentApplicationAddress:
-		addr := cx.getApplicationAddress(cx.appID)
+		addr := cx.GetApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
@@ -3584,7 +3625,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		}
 	case CallerApplicationAddress:
 		if cx.caller != nil {
-			addr := cx.caller.getApplicationAddress(cx.caller.appID)
+			addr := cx.caller.GetApplicationAddress(cx.caller.appID)
 			sv.Bytes = addr[:]
 		} else {
 			sv.Bytes = zeroAddress[:]
@@ -4352,7 +4393,7 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
 		for appID := range cx.available.createdApps {
-			createdAddress := cx.getApplicationAddress(appID)
+			createdAddress := cx.GetApplicationAddress(appID)
 			if addr == createdAddress {
 				return true
 			}
@@ -4369,14 +4410,18 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	// Allow an address for an app that was provided in the foreign apps array.
 	if cx.version >= appAddressAvailableVersion {
 		for _, appID := range cx.txn.Txn.ForeignApps {
-			foreignAddress := cx.getApplicationAddress(appID)
+			foreignAddress := cx.GetApplicationAddress(appID)
 			if addr == foreignAddress {
 				return true
 			}
 		}
 	}
 
-	if cx.getApplicationAddress(cx.appID) == addr {
+	if cx.GetApplicationAddress(cx.appID) == addr {
+		return true
+	}
+
+	if cx.UnnamedResources != nil && cx.UnnamedResources.AvailableAccount(addr) {
 		return true
 	}
 
@@ -5140,8 +5185,8 @@ func authorizedSender(cx *EvalContext, addr basics.Address) error {
 	if err != nil {
 		return err
 	}
-	if cx.getApplicationAddress(cx.appID) != authorizer {
-		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.getApplicationAddress(cx.appID), authorizer)
+	if cx.GetApplicationAddress(cx.appID) != authorizer {
+		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.GetApplicationAddress(cx.appID), authorizer)
 	}
 	return nil
 }
@@ -5149,7 +5194,7 @@ func authorizedSender(cx *EvalContext, addr basics.Address) error {
 // addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
 // defaults.
 func addInnerTxn(cx *EvalContext) error {
-	addr := cx.getApplicationAddress(cx.appID)
+	addr := cx.GetApplicationAddress(cx.appID)
 
 	// For compatibility with v5, in which failures only occurred in the submit,
 	// we only fail here if we are already over the max inner limit.  Thus this
@@ -5253,6 +5298,10 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 		}
 	}
 
+	if aid > lastForbiddenResource && cx.UnnamedResources != nil && cx.UnnamedResources.AvailableAsset(aid) {
+		return true
+	}
+
 	return false
 }
 
@@ -5295,6 +5344,10 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 		if _, ok := cx.available.sharedApps[aid]; ok {
 			return true
 		}
+	}
+
+	if aid > lastForbiddenResource && cx.UnnamedResources != nil && cx.UnnamedResources.AvailableApp(aid) {
+		return true
 	}
 
 	return false
