@@ -38,7 +38,7 @@ func (m *Frozen) Zero() Clock {
 }
 
 // TimeoutAt returns a channel that will signal when the duration has elapsed.
-func (m *Frozen) TimeoutAt(delta time.Duration) <-chan time.Time {
+func (m *Frozen) TimeoutAt(delta time.Duration, timeoutType Timeout) <-chan time.Time {
 	return m.timeoutCh
 }
 

@@ -17,10 +17,11 @@
 package timers
 
 import (
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func polled(ch <-chan time.Time) bool {
@@ -42,7 +43,7 @@ func TestMonotonicDelta(t *testing.T) {
 	d := time.Millisecond * 100
 
 	c = m.Zero()
-	ch = c.TimeoutAt(d)
+	ch = c.TimeoutAt(d, Filter)
 	if polled(ch) {
 		t.Errorf("channel fired ~100ms early")
 	}
@@ -52,7 +53,7 @@ func TestMonotonicDelta(t *testing.T) {
 		t.Errorf("channel failed to fire at 100ms")
 	}
 
-	ch = c.TimeoutAt(d / 2)
+	ch = c.TimeoutAt(d/2, Filter)
 	if !polled(ch) {
 		t.Errorf("channel failed to fire at 50ms")
 	}
@@ -66,7 +67,7 @@ func TestMonotonicZeroDelta(t *testing.T) {
 	var ch <-chan time.Time
 
 	c = m.Zero()
-	ch = c.TimeoutAt(0)
+	ch = c.TimeoutAt(0, Filter)
 	if !polled(ch) {
 		t.Errorf("read failed on channel at zero timeout")
 	}
@@ -80,7 +81,7 @@ func TestMonotonicNegativeDelta(t *testing.T) {
 	var ch <-chan time.Time
 
 	c = m.Zero()
-	ch = c.TimeoutAt(-time.Second)
+	ch = c.TimeoutAt(-time.Second, Filter)
 	if !polled(ch) {
 		t.Errorf("read failed on channel at negative timeout")
 	}
@@ -96,7 +97,7 @@ func TestMonotonicZeroTwice(t *testing.T) {
 	d := time.Millisecond * 100
 
 	c = m.Zero()
-	ch = c.TimeoutAt(d)
+	ch = c.TimeoutAt(d, Filter)
 	if polled(ch) {
 		t.Errorf("channel fired ~100ms early")
 	}
@@ -107,7 +108,7 @@ func TestMonotonicZeroTwice(t *testing.T) {
 	}
 
 	c = c.Zero()
-	ch = c.TimeoutAt(d)
+	ch = c.TimeoutAt(d, Filter)
 	if polled(ch) {
 		t.Errorf("channel fired ~100ms early after call to Zero")
 	}
@@ -150,5 +151,45 @@ func TestMonotonicEncodeDecode(t *testing.T) {
 			},
 		)
 		singleTest(c, "random")
+	}
+}
+
+func TestTimeoutTypes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var m Monotonic
+	var c Clock
+
+	d := time.Millisecond * 100
+
+	c = m.Zero()
+	ch1 := c.TimeoutAt(d, Filter)
+	ch2 := c.TimeoutAt(d, Fast)
+	if polled(ch1) {
+		t.Errorf("channel fired ~100ms early")
+	}
+	if polled(ch2) {
+		t.Errorf("channel fired ~100ms early")
+	}
+
+	if ch1 == ch2 {
+		t.Errorf("equal channels for different timeout types")
+	}
+
+	<-time.After(d * 2)
+	if !polled(ch1) {
+		t.Errorf("channel failed to fire at 100ms")
+	}
+	if !polled(ch2) {
+		t.Errorf("channel failed to fire at 100ms")
+	}
+
+	ch1 = c.TimeoutAt(d/2, Filter)
+	if !polled(ch1) {
+		t.Errorf("channel failed to fire at 50ms")
+	}
+	ch2 = c.TimeoutAt(d/2, Filter)
+	if !polled(ch2) {
+		t.Errorf("channel failed to fire at 50ms")
 	}
 }

@@ -21,6 +21,13 @@ import (
 	"time"
 )
 
+type Timeout int
+
+const (
+	Filter Timeout = iota
+	Fast
+)
+
 // Clock provides timeout events which fire at some point after a point in time.
 type Clock interface {
 	// Zero returns a reset Clock. TimeoutAt channels will use the point
@@ -32,10 +39,13 @@ type Clock interface {
 	Since() time.Duration
 
 	// TimeoutAt returns a channel that fires delta time after Zero was called.
+	// timeoutType is specifies the reason for this timeout. If there are two
+	// timeouts of the same type at the same time, then only one of them fires.
 	// If delta has already passed, it returns a closed channel.
 	//
-	// TimeoutAt must be called after Zero; otherwise, the channel's behavior is undefined.
-	TimeoutAt(delta time.Duration) <-chan time.Time
+	// TimeoutAt must be called after Zero; otherwise, the channel's behavior is
+	// undefined.
+	TimeoutAt(delta time.Duration, timeoutType Timeout) <-chan time.Time
 
 	// Encode serializes the Clock into a byte slice.
 	Encode() []byte
