@@ -954,6 +954,12 @@ type BlockResponse struct {
 	Cert *map[string]interface{} `json:"cert,omitempty"`
 }
 
+// BlockTxidsResponse defines model for BlockTxidsResponse.
+type BlockTxidsResponse struct {
+	// BlockTxids Block transaction IDs.
+	BlockTxids []string `json:"blockTxids"`
+}
+
 // BoxResponse Box name and its content.
 type BoxResponse = Box
 
