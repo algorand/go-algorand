@@ -630,7 +630,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	}
 
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -655,11 +655,40 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
+// GetBlockTxids gets all top level TxIDs in a block for the given round.
+// (GET /v2/blocks/{round}/txids)
+func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.Block(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	txids := make([]string, 0, len(txns))
+	for ids := range txns {
+		txids = append(txids, txns[ids].ID().String())
+	}
+
+	response := model.BlockTxidsResponse{BlockTxids: txids}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // GetBlockHash gets the block hash for the given round.
 // (GET /v2/blocks/{round}/hash)
 func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -688,7 +717,7 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 	}
 
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}

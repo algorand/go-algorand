@@ -350,6 +350,28 @@
         },
         "description": "Encoded block object."
       },
+      "BlockTxidsResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "blockTxids": {
+                  "description": "Block transaction IDs.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "blockTxids"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Top level transaction IDs in a block."
+      },
       "BoxResponse": {
         "content": {
           "application/json": {
@@ -3940,6 +3962,96 @@
           }
         },
         "summary": "Get a proof for a transaction in a block.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/blocks/{round}/txids": {
+      "get": {
+        "operationId": "GetBlockTxids",
+        "parameters": [
+          {
+            "description": "The round from which to fetch block transaction IDs.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "blockTxids": {
+                      "description": "Block transaction IDs.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "blockTxids"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Top level transaction IDs in a block."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Non integer number"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non existing block"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get the top level transaction IDs for the block on the given round.",
         "tags": [
           "public",
           "nonparticipating"

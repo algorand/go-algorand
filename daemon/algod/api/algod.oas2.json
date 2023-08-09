@@ -578,6 +578,64 @@
         }
       ]
     },
+    "/v2/blocks/{round}/txids": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the top level transaction IDs for the block on the given round.",
+        "operationId": "GetBlockTxids",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block transaction IDs.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockTxidsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Non existing block",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/blocks/{round}/hash": {
       "get": {
         "tags": [
@@ -4474,6 +4532,24 @@
             "description": "Optional certificate object. This is only included when the format is set to message pack.",
             "type": "object",
             "x-algorand-format": "BlockCertificate"
+          }
+        }
+      }
+    },
+    "BlockTxidsResponse": {
+      "description": "Top level transaction IDs in a block.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "blockTxids"
+        ],
+        "properties": {
+          "blockTxids": {
+            "description": "Block transaction IDs.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }
