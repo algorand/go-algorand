@@ -21,6 +21,13 @@ import (
 	"time"
 )
 
+type Timeout int
+
+const (
+	Filter Timeout = iota
+	Fast
+)
+
 // Clock provides timeout events which fire at some point after a point in time.
 type Clock[TimeoutType comparable] interface {
 	// Zero returns a reset Clock. TimeoutAt channels will use the point
