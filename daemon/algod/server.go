@@ -136,7 +136,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		fdRequired = ot.Add(fdRequired, 1000)
 		if ot.Overflowed {
 			return errors.New(
-				"Initialize() overflowed when adding up fdRequired and 1000 needed for pebbledb decrease them")
+				"Initialize() overflowed when adding up fdRequired and 1000 needed for pebbledb")
 		}
 		err = util.SetFdSoftLimit(fdRequired)
 		if err != nil {
