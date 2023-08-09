@@ -23,7 +23,7 @@ require (
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0 // indirect
 	github.com/algorand/sortition v1.0.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
-	github.com/aws/aws-sdk-go v1.33.0 // indirect
+	github.com/aws/aws-sdk-go v1.34.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cockroachdb/errors v1.8.1 // indirect
