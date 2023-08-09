@@ -32,25 +32,49 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	txn "github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/tools/block-generator/util"
 )
 
 // ---- templates ----
 
 //go:embed teal/poap_boxes.teal
 var approvalBoxes string
+var approvalBoxesBytes interface{}
 
 //go:embed teal/poap_clear.teal
 var clearBoxes string
+var clearBoxesBytes interface{}
 
 //go:embed teal/swap_amm.teal
 var approvalSwap string
+var approvalSwapBytes interface{}
 
 //go:embed teal/swap_clear.teal
 var clearSwap string
+var clearSwapBytes interface{}
+
+func init() {
+	prog, err := logic.AssembleString(approvalBoxes)
+	util.MaybeFail(err, "failed to assemble approval program")
+	approvalBoxesBytes = prog.Program
+
+	prog, err = logic.AssembleString(clearBoxes)
+	util.MaybeFail(err, "failed to assemble clear program")
+	clearBoxesBytes = prog.Program
+
+	prog, err = logic.AssembleString(approvalSwap)
+	util.MaybeFail(err, "failed to assemble approvalSwap program")
+	approvalSwapBytes = prog.Program
+
+	prog, err = logic.AssembleString(clearSwap)
+	util.MaybeFail(err, "failed to assemble clearSwap program")
+	clearSwapBytes = prog.Program
+}
 
 // ---- constructors ----
 
@@ -305,8 +329,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		}
 		return nil
 	}
-	// round == nextRound case
 
+	// round == nextRound case
 	err := g.startRound()
 	if err != nil {
 		return err
@@ -321,6 +345,15 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		// we'll write genesis block / offset round for non-empty database
 		cert.Block, _, _ = g.ledger.BlockCert(basics.Round(round - g.roundOffset))
 	} else {
+		start := time.Now()
+		var generated, evaluated, validated time.Time
+		if g.verbose {
+			defer func() {
+				fmt.Printf("block generation stats txn generation (%s), ledger eval (%s), ledger add block (%s)\n",
+					generated.Sub(start), evaluated.Sub(generated), validated.Sub(evaluated))
+			}()
+		}
+
 		g.setBlockHeader(&cert)
 
 		intra := uint64(0)
@@ -337,6 +370,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 			intra += numTxns
 		}
+		generated = time.Now()
 
 		vBlock, ledgerTxnCount, err := g.evaluateBlock(cert.Block.BlockHeader, txGroupsAD, int(intra))
 		if err != nil {
@@ -345,11 +379,13 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		if ledgerTxnCount != g.txnCounter+intra {
 			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter+intra)
 		}
+		evaluated = time.Now()
 
 		err = g.ledger.AddValidatedBlock(*vBlock, cert.Certificate)
 		if err != nil {
 			return fmt.Errorf("failed to add validated block: %w", err)
 		}
+		validated = time.Now()
 
 		cert.Block.Payset = vBlock.Block().Payset
 
