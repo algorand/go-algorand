@@ -80,9 +80,10 @@ type parameters Parameters
 
 // externalDemuxSignals used to syncronize the external signals that goes to the demux with the main loop.
 type externalDemuxSignals struct {
-	Deadline             time.Duration
-	FastRecoveryDeadline time.Duration
-	CurrentRound         round
+	Deadline                    time.Duration
+	FastRecoveryDeadline        time.Duration
+	SpeculativeBlockAsmDeadline time.Duration
+	CurrentRound                round
 }
 
 // MakeService creates a new Agreement Service instance given a set of Parameters.
@@ -147,6 +148,7 @@ func (s *Service) Start() {
 	input := make(chan externalEvent)
 	output := make(chan []action)
 	ready := make(chan externalDemuxSignals)
+	// TODO: use demuxOne() inside of mainLoop() instead of this nonsense pair of threads
 	go s.demuxLoop(ctx, input, output, ready)
 	go s.mainLoop(input, output, ready)
 }
@@ -166,7 +168,7 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 	for a := range output {
 		s.do(ctx, a)
 		extSignals := <-ready
-		e, ok := s.demux.next(s, extSignals.Deadline, extSignals.FastRecoveryDeadline, extSignals.CurrentRound)
+		e, ok := s.demux.next(s, extSignals.Deadline, extSignals.FastRecoveryDeadline, extSignals.SpeculativeBlockAsmDeadline, extSignals.CurrentRound)
 		if !ok {
 			close(input)
 			break
@@ -177,6 +179,12 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 	s.loopback.Quit()
 	s.voteVerifier.Quit()
 	close(s.done)
+}
+
+// TODO: use demuxOne() inside mainLoop() instead of having a pair of synchronous go threads trading off via chan
+func (s *Service) demuxOne(ctx context.Context, a []action, extSignals externalDemuxSignals) (e externalEvent, ok bool) {
+	s.do(ctx, a)
+	return s.demux.next(s, extSignals.Deadline, extSignals.FastRecoveryDeadline, extSignals.SpeculativeBlockAsmDeadline, extSignals.CurrentRound)
 }
 
 // mainLoop drives the state machine.
@@ -225,8 +233,17 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	}
 
 	for {
+		status.ConsensusVersion, err = s.Ledger.ConsensusVersion(status.Round.SubSaturate(2))
+		if err != nil {
+			s.Panicf("cannot read latest consensus version, round %d: %v", status.Round.SubSaturate(2), err)
+		}
+
+		// set speculative block assembly based on the current local configuration
+		specClock := SpeculativeBlockAsmTime(status.Period, status.ConsensusVersion, s.parameters.Local.SpeculativeAsmTimeOffset)
+
+		// TODO: e, ok := s.demuxOne(ctx, a, externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: specClock, CurrentRound: status.Round})
 		output <- a
-		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, CurrentRound: status.Round}
+		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, SpeculativeBlockAsmDeadline: specClock, CurrentRound: status.Round}
 		e, ok := <-input
 		if !ok {
 			break

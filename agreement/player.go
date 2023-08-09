@@ -52,6 +52,9 @@ type player struct {
 	// Pending holds the player's proposalTable, which stores proposals that
 	// must be verified after some vote has been verified.
 	Pending proposalTable
+
+	// the current consensus version
+	ConsensusVersion protocol.ConsensusVersion
 }
 
 func (p *player) T() stateMachineTag {
@@ -83,6 +86,10 @@ func (p *player) handle(r routerHandle, e event) []action {
 
 		if !p.Napping {
 			r.t.logTimeout(*p)
+		}
+
+		if e.T == speculationTimeout {
+			return p.handleSpeculationTimeout(r, e)
 		}
 
 		switch p.Step {
@@ -123,6 +130,16 @@ func (p *player) handle(r routerHandle, e event) []action {
 	}
 }
 
+// handleSpeculationTimeout TODO: rename this 'timeout' is the START of speculative assembly.
+func (p *player) handleSpeculationTimeout(r routerHandle, e timeoutEvent) []action {
+	if e.Proto.Err != nil {
+		r.t.log.Errorf("failed to read protocol version for speculationTimeout event (proto %v): %v", e.Proto.Version, e.Proto.Err)
+		return nil
+	}
+
+	return p.startSpeculativeBlockAsm(r, nil, false)
+}
+
 func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
 	if e.Proto.Err != nil {
 		r.t.log.Errorf("failed to read protocol version for fastTimeout event (proto %v): %v", e.Proto.Version, e.Proto.Err)
@@ -161,6 +178,7 @@ func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 		// If we arrive due to fast-forward/soft threshold; then answer.Bottom = false and answer.Proposal = bottom
 		// and we should soft-vote normally (not based on the starting value)
 		a.Proposal = nextStatus.Proposal
+		// TODO: how do we speculative block assemble based on nextStatus.Proposal?
 		return append(actions, a)
 	}
 
@@ -177,8 +195,10 @@ func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 		return nil
 	}
 
-	// original proposal: vote for it
-	return append(actions, a)
+	// original proposal: vote for it, maybe build
+	actions = append(actions, a)
+	actions = p.startSpeculativeBlockAsm(r, actions, false)
+	return actions
 }
 
 // A committableEvent is the trigger for issuing a cert vote.
@@ -214,6 +234,27 @@ func (p *player) issueNextVote(r routerHandle) []action {
 	_, upper := p.Step.nextVoteRanges()
 	p.Napping = false
 	p.Deadline = upper
+	return actions
+}
+
+func (p *player) startSpeculativeBlockAsm(r routerHandle, actions []action, onlyIfStarted bool) []action {
+	if p.Period != 0 {
+		// If not period 0, cautiously do a simpler protocol.
+		return actions
+	}
+	// get the best proposal we have
+	re := readLowestEvent{T: readLowestPayload, Round: p.Round, Period: p.Period}
+	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
+
+	// if we have its payload and its been validated already, start speculating on top of it
+	if re.PayloadOK && re.Payload.ve != nil {
+		a := pseudonodeAction{T: speculativeAssembly, Round: p.Round, Period: p.Period, ValidatedBlock: re.Payload.ve, Proposal: re.Proposal}
+		if onlyIfStarted {
+			// only re-start speculation if we had already started it but got a better block
+			a.T = speculativeAssemblyIfStarted
+		}
+		return append(actions, a)
+	}
 	return actions
 }
 
@@ -583,6 +624,13 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 
 			a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
 			actions = append(actions, a)
+		}
+
+		// StartSpeculativeBlockAssembly every time we validate a proposal
+		// TODO: maybe only do this if after speculation has started; interrupt speculation on a block when we get a better block
+		// TODO: maybe don't do this at all and just delete it?
+		if ef.t() == payloadAccepted {
+			actions = p.startSpeculativeBlockAsm(r, actions, true)
 		}
 
 		// If the payload is valid, check it against any received cert threshold.

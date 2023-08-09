@@ -3753,9 +3753,12 @@ func PeriodRouterMaxSize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *player) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 8
+	// map header, size 9
+	// string "ConsensusVersion"
+	o = append(o, 0x89, 0xb0, 0x43, 0x6f, 0x6e, 0x73, 0x65, 0x6e, 0x73, 0x75, 0x73, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
+	o = (*z).ConsensusVersion.MarshalMsg(o)
 	// string "Deadline"
-	o = append(o, 0x88, 0xa8, 0x44, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65)
+	o = append(o, 0xa8, 0x44, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65)
 	o = msgp.AppendDuration(o, (*z).Deadline)
 	// string "FastRecoveryDeadline"
 	o = append(o, 0xb4, 0x46, 0x61, 0x73, 0x74, 0x52, 0x65, 0x63, 0x6f, 0x76, 0x65, 0x72, 0x79, 0x44, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65)
@@ -3876,6 +3879,14 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).ConsensusVersion.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ConsensusVersion")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -3958,6 +3969,12 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Pending")
 					return
 				}
+			case "ConsensusVersion":
+				bts, err = (*z).ConsensusVersion.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ConsensusVersion")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -3978,13 +3995,13 @@ func (_ *player) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *player) Msgsize() (s int) {
-	s = 1 + 6 + (*z).Round.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + (*z).Pending.Msgsize()
+	s = 1 + 6 + (*z).Round.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + (*z).Pending.Msgsize() + 17 + (*z).ConsensusVersion.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *player) MsgIsZero() bool {
-	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).LastConcluding == 0) && ((*z).Deadline == 0) && ((*z).Napping == false) && ((*z).FastRecoveryDeadline == 0) && ((*z).Pending.MsgIsZero())
+	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).LastConcluding == 0) && ((*z).Deadline == 0) && ((*z).Napping == false) && ((*z).FastRecoveryDeadline == 0) && ((*z).Pending.MsgIsZero()) && ((*z).ConsensusVersion.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type

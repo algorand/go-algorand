@@ -1,5 +1,5 @@
 {
-    "Version": 29,
+    "Version": 30,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AgreementIncomingBundlesQueueLength": 15,
@@ -101,9 +101,9 @@
     "RestReadTimeoutSeconds": 15,
     "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
-    "SpeculativeAsmTimeOffset": 0,
-    "SpeculativeAssemblyDisable": false,
     "StorageEngine": "sqlite",
+	"SpeculativeAsmTimeOffset": 400000000,
+    "SpeculativeAssemblyDisable": false,
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,
     "TLSCertFile": "",

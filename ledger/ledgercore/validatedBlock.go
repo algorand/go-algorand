@@ -17,8 +17,11 @@
 package ledgercore
 
 import (
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/transactions"
 )
 
 // ValidatedBlock represents the result of a block validation.  It can
@@ -48,6 +51,27 @@ func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
 		blk:   newblock,
 		delta: vb.delta,
 	}
+}
+
+// CheckDup checks whether a txn is a duplicate
+func (vb ValidatedBlock) CheckDup(currentProto config.ConsensusParams, firstValid, lastValid basics.Round, txid transactions.Txid, txl Txlease) error {
+	_, present := vb.delta.Txids[txid]
+	if present {
+		return &TransactionInLedgerError{Txid: txid}
+	}
+
+	if currentProto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {
+		expires, ok := vb.delta.Txleases[txl]
+		if ok && vb.blk.Round() <= expires {
+			return MakeLeaseInLedgerError(txid, txl, false)
+		}
+	}
+	return nil
+}
+
+// Hash returns the hash of the block
+func (vb ValidatedBlock) Hash() bookkeeping.BlockHash {
+	return vb.blk.Hash()
 }
 
 // MakeValidatedBlock creates a validated block.

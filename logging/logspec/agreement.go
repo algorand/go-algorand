@@ -58,6 +58,7 @@ const (
 	// has been reached for a given value during some (round, period, step).
 	ThresholdReached
 	// BlockAssembled is emitted when the source receives all parts of a block.
+	// BlockAssembled is not when the local node has assembled a block, but when a block has been _received_ and verified from the network, or possibly when a locally assembled block has been added to the proposal cache of blocks validaded and available for voting for the next round. TODO: rename?
 	BlockAssembled
 	// BlockCommittable is emitted when the source observes a
 	// block B and a threshold of soft-votes for H(B).  It is

@@ -37,6 +37,7 @@ import (
 )
 
 const fastTimeoutChTime = 2
+const speculativeBlockAsmTime = time.Duration(5 * time.Microsecond)
 
 type demuxTester struct {
 	*testing.T
@@ -65,8 +66,10 @@ type demuxTestUsecase struct {
 	verifiedProposal    testChanState
 	verifiedBundle      testChanState
 	// expected output
-	e  event
-	ok bool
+	e                  event
+	ok                 bool
+	speculativeAsmTime time.Duration
+	desc               string
 }
 
 var demuxTestUsecases = []demuxTestUsecase{
@@ -195,6 +198,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		verifiedBundle:      testChanState{eventCount: 0, closed: false},
 		e:                   messageEvent{T: votePresent},
 		ok:                  true,
+		desc:                "one vote one prop",
 	},
 	{
 		queue:               []testChanState{},
@@ -411,6 +415,26 @@ var demuxTestUsecases = []demuxTestUsecase{
 		verifiedBundle:      testChanState{eventCount: 0, closed: false},
 		e:                   messageEvent{T: votePresent},
 		ok:                  true,
+		desc:                "one prop",
+	},
+	{
+		queue:               []testChanState{{eventCount: 0, closed: false}},
+		rawVotes:            testChanState{eventCount: 0, closed: false},
+		rawProposals:        testChanState{eventCount: 0, closed: false},
+		rawBundles:          testChanState{eventCount: 0, closed: false},
+		compoundProposals:   false,
+		quit:                false,
+		voteChannelFull:     false,
+		proposalChannelFull: false,
+		bundleChannelFull:   false,
+		ledgerRoundReached:  false,
+		deadlineReached:     false,
+		verifiedVote:        testChanState{eventCount: 0, closed: false},
+		verifiedProposal:    testChanState{eventCount: 0, closed: false},
+		verifiedBundle:      testChanState{eventCount: 0, closed: false},
+		e:                   timeoutEvent{T: speculationTimeout},
+		ok:                  true,
+		speculativeAsmTime:  speculativeBlockAsmTime,
 	},
 }
 
@@ -431,6 +455,9 @@ func (t *demuxTester) Zero() timers.Clock {
 func (t *demuxTester) TimeoutAt(delta time.Duration) <-chan time.Time {
 	if delta == fastTimeoutChTime {
 		return nil
+	}
+	if delta == speculativeBlockAsmTime {
+		return time.After(delta)
 	}
 
 	c := make(chan time.Time, 2)
@@ -653,6 +680,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 
 	dmx := &demux{}
 
+	dmx.log = logging.TestingLog(t)
 	dmx.crypto = t
 	dmx.ledger = t
 	dmx.rawVotes = t.makeRawChannel(protocol.AgreementVoteTag, testcase.rawVotes, false)
@@ -674,14 +702,13 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 	if testcase.quit {
 		close(s.quit)
 	}
-
-	e, ok := dmx.next(s, time.Second, fastTimeoutChTime, 300)
+	e, ok := dmx.next(s, time.Second, fastTimeoutChTime, testcase.speculativeAsmTime, 300)
 
 	if !assert.Equal(t, testcase.ok, ok) {
 		return false
 	}
 
-	if !assert.Equalf(t, strings.Replace(testcase.e.String(), "{test_index}", fmt.Sprintf("%d", t.testIdx), 1), e.String(), "Test case %d failed.", t.testIdx+1) {
+	if !assert.Equalf(t, strings.Replace(testcase.e.String(), "{test_index}", fmt.Sprintf("%d", t.testIdx), 1), e.String(), "Test case %d (%s) failed.", t.testIdx+1, testcase.desc) {
 		return false
 	}
 

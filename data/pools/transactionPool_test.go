@@ -19,12 +19,14 @@ package pools
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
 	"runtime"
 	"runtime/pprof"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -44,6 +46,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/stateproof/verify"
@@ -1198,7 +1201,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i])
+		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i], false)
 	}
 	b.StopTimer()
 	if profF != nil {
@@ -1528,7 +1531,7 @@ func TestStateProofLogging(t *testing.T) {
 
 	err = transactionPool.RememberOne(stxn)
 	require.NoError(t, err)
-	transactionPool.recomputeBlockEvaluator(nil, 0)
+	transactionPool.recomputeBlockEvaluator(nil, 0, false)
 	_, err = transactionPool.AssembleBlock(514, time.Time{})
 	require.NoError(t, err)
 
@@ -1611,4 +1614,310 @@ func generateProofForTesting(
 	require.NoError(t, err)
 
 	return proof
+}
+
+func TestSpeculativeBlockAssembly(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfAccounts := 10
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	log := logging.TestingLog(t)
+	transactionPool := MakeTransactionPool(mockLedger, cfg, log)
+
+	savedTransactions := 0
+	for i, sender := range addresses {
+		amount := uint64(0)
+		for _, receiver := range addresses {
+			if sender != receiver {
+				tx := transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + amount},
+						FirstValid:  0,
+						LastValid:   10,
+						Note:        make([]byte, 0),
+						GenesisHash: mockLedger.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: receiver,
+						Amount:   basics.MicroAlgos{Raw: 0},
+					},
+				}
+				amount++
+
+				signedTx := tx.Sign(secrets[i])
+				require.NoError(t, transactionPool.RememberOne(signedTx))
+				savedTransactions++
+			}
+		}
+	}
+	pending := transactionPool.PendingTxGroups()
+	require.Len(t, pending, savedTransactions)
+
+	secret := keypair()
+	recv := basics.Address(secret.SignatureVerifier)
+
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   10,
+			Note:        []byte{1},
+			GenesisHash: mockLedger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: recv,
+			Amount:   basics.MicroAlgos{Raw: 0},
+		},
+	}
+	signedTx := tx.Sign(secrets[0])
+
+	blockEval := newBlockEvaluator(t, mockLedger)
+	err := blockEval.Transaction(signedTx, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	// simulate this transaction was applied
+	block, err := blockEval.GenerateBlock()
+	require.NoError(t, err)
+
+	t.Logf("prev block digest %s", block.Block().Digest().String())
+	t.Logf("prev block hash %s", block.Block().Hash().String())
+
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
+	// TODO(yg): shouldn't we wait for it to finish?
+	//<-transactionPool.specAsmDone
+
+	// add the block
+	err = mockLedger.AddBlock(block.Block(), agreement.Certificate{})
+	require.NoError(t, err)
+
+	// empty tx pool
+	transactionPool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)
+	transactionPool.pendingTxGroups = nil
+
+	// check that we still assemble the block
+	specBlock, err := transactionPool.AssembleBlock(block.Block().Round()+1, time.Now().Add(time.Second))
+	require.NoError(t, err)
+	require.Equal(t, specBlock.Block().Branch, block.Block().Hash(), "spec.Branch %s", specBlock.Block().Branch.String())
+	require.NotNil(t, specBlock)
+	require.Len(t, specBlock.Block().Payset, savedTransactions)
+}
+
+func TestSpeculativeBlockAssemblyWithOverlappingBlock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfAccounts := 10
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base())
+
+	savedTransactions := 0
+	pendingTxn := transactions.SignedTxn{}
+	pendingTxIDSet := make(map[crypto.Signature]bool)
+	for i, sender := range addresses {
+		amount := uint64(0)
+		for _, receiver := range addresses {
+			if sender != receiver {
+				tx := transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + amount},
+						FirstValid:  0,
+						LastValid:   10,
+						Note:        make([]byte, 0),
+						GenesisHash: mockLedger.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: receiver,
+						Amount:   basics.MicroAlgos{Raw: 0},
+					},
+				}
+				amount++
+
+				pendingTxn = tx.Sign(secrets[i])
+				require.NoError(t, transactionPool.RememberOne(pendingTxn))
+				pendingTxIDSet[pendingTxn.Sig] = true
+				savedTransactions++
+			}
+		}
+	}
+	pending := transactionPool.PendingTxGroups()
+	require.Len(t, pending, savedTransactions)
+	require.Len(t, pendingTxIDSet, savedTransactions)
+
+	blockEval := newBlockEvaluator(t, mockLedger)
+	err := blockEval.Transaction(pendingTxn, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	// simulate this transaction was applied
+	block, err := blockEval.GenerateBlock()
+	require.NoError(t, err)
+
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
+	//<-transactionPool.specAsmDone
+	var stats telemetryspec.AssembleBlockMetrics
+	specBlock, specErr := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), block.Block().Round()+1, time.Now().Add(time.Second), &stats)
+	require.NoError(t, specErr)
+	require.NotNil(t, specBlock)
+	// assembled block doesn't have txn in the speculated block
+	require.Len(t, specBlock.Block().Payset, savedTransactions-1)
+
+	// tx pool unaffected
+	require.Len(t, transactionPool.PendingTxIDs(), savedTransactions)
+
+	for _, txn := range specBlock.Block().Payset {
+		require.NotEqual(t, txn.SignedTxn.Sig, pendingTxn.Sig)
+		require.True(t, pendingTxIDSet[txn.SignedTxn.Sig])
+	}
+}
+
+// This test runs the speculative block assembly and adds txns to the pool in another thread
+func TestSpeculativeBlockAssemblyDataRace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfAccounts := 10
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base())
+
+	savedTransactions := 0
+	pendingTxn := transactions.SignedTxn{}
+	pendingTxIDSet := make(map[crypto.Signature]bool)
+	for i, sender := range addresses {
+		amount := uint64(0)
+		for _, receiver := range addresses {
+			if sender != receiver {
+				tx := transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender:      sender,
+						Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + amount},
+						FirstValid:  0,
+						LastValid:   10,
+						Note:        make([]byte, 0),
+						GenesisHash: mockLedger.GenesisHash(),
+					},
+					PaymentTxnFields: transactions.PaymentTxnFields{
+						Receiver: receiver,
+						Amount:   basics.MicroAlgos{Raw: 0},
+					},
+				}
+				amount++
+
+				pendingTxn = tx.Sign(secrets[i])
+				require.NoError(t, transactionPool.RememberOne(pendingTxn))
+				pendingTxIDSet[pendingTxn.Sig] = true
+				savedTransactions++
+			}
+		}
+	}
+	t.Logf("savedTransactions=%d", savedTransactions)
+	pending := transactionPool.PendingTxGroups()
+	require.Len(t, pending, savedTransactions)
+	require.Len(t, pendingTxIDSet, savedTransactions)
+
+	blockEval := newBlockEvaluator(t, mockLedger)
+	err := blockEval.Transaction(pendingTxn, transactions.ApplyData{})
+	require.NoError(t, err)
+
+	// simulate this transaction was applied
+	block, err := blockEval.GenerateBlock()
+	require.NoError(t, err)
+
+	transactionPool.StartSpeculativeBlockAssembly(context.Background(), block, crypto.Digest{}, false)
+	newSavedTransactions := 0
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i, sender := range addresses {
+			amount := uint64(0)
+			for _, receiver := range addresses {
+				if sender != receiver {
+					tx := transactions.Transaction{
+						Type: protocol.PaymentTx,
+						Header: transactions.Header{
+							Sender:      sender,
+							Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + amount},
+							FirstValid:  0,
+							LastValid:   11,
+							Note:        make([]byte, 0),
+							GenesisHash: mockLedger.GenesisHash(),
+						},
+						PaymentTxnFields: transactions.PaymentTxnFields{
+							Receiver: receiver,
+							Amount:   basics.MicroAlgos{Raw: 0},
+						},
+					}
+					amount++
+
+					pendingTxn = tx.Sign(secrets[i])
+					require.NoError(t, transactionPool.RememberOne(pendingTxn))
+					pendingTxIDSet[pendingTxn.Sig] = true
+					newSavedTransactions++
+				}
+			}
+		}
+	}()
+	wg.Wait()
+	t.Logf("newSavedTransactions=%d", newSavedTransactions)
+
+	// tx pool should have old txns and new txns
+	require.Len(t, transactionPool.PendingTxIDs(), savedTransactions+newSavedTransactions)
+
+	var stats telemetryspec.AssembleBlockMetrics
+	specBlock, specErr := transactionPool.tryReadSpeculativeBlock(block.Block().Hash(), block.Block().Round()+1, time.Now().Add(time.Second), &stats)
+	require.NoError(t, specErr)
+	require.NotNil(t, specBlock)
+	// assembled block doesn't have txn in the speculated block
+	require.Len(t, specBlock.Block().Payset, savedTransactions-1, "len(Payset)=%d, savedTransactions=%d", len(specBlock.Block().Payset), savedTransactions)
+
+	for _, txn := range specBlock.Block().Payset {
+		require.NotEqual(t, txn.SignedTxn.Sig, pendingTxn.Sig)
+		require.True(t, pendingTxIDSet[txn.SignedTxn.Sig])
+	}
 }

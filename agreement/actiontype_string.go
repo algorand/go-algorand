@@ -23,12 +23,14 @@ func _() {
 	_ = x[attest-12]
 	_ = x[assemble-13]
 	_ = x[repropose-14]
-	_ = x[checkpoint-15]
+	_ = x[speculativeAssembly-15]
+	_ = x[speculativeAssemblyIfStarted-16]
+	_ = x[checkpoint-17]
 }
 
-const _actionType_name = "noopignorebroadcastrelaydisconnectbroadcastVotesverifyVoteverifyPayloadverifyBundleensurestageDigestrezeroattestassemblereproposecheckpoint"
+const _actionType_name = "noopignorebroadcastrelaydisconnectbroadcastVotesverifyVoteverifyPayloadverifyBundleensurestageDigestrezeroattestassemblereproposespeculativeAssemblyspeculativeAssemblyIfStartedcheckpoint"
 
-var _actionType_index = [...]uint8{0, 4, 10, 19, 24, 34, 48, 58, 71, 83, 89, 100, 106, 112, 120, 129, 139}
+var _actionType_index = [...]uint8{0, 4, 10, 19, 24, 34, 48, 58, 71, 83, 89, 100, 106, 112, 120, 129, 148, 176, 186}
 
 func (i actionType) String() string {
 	if i >= actionType(len(_actionType_index)-1) {

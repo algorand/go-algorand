@@ -184,6 +184,10 @@ func (f testBlockFactory) AssembleBlock(r basics.Round) (ValidatedBlock, error) 
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
+func (f testBlockFactory) StartSpeculativeBlockAssembly(context.Context, ValidatedBlock, crypto.Digest, bool) {
+	return
+}
+
 // If we try to read from high rounds, we panic and do not emit an error to find bugs during testing.
 type testLedger struct {
 	mu deadlock.Mutex

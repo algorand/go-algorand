@@ -60,10 +60,13 @@ type demux struct {
 
 	queue             []<-chan externalEvent
 	processingMonitor EventsProcessingMonitor
-	monitor           *coserviceMonitor
 	cancelTokenizers  context.CancelFunc
 
 	log logging.Logger
+
+	// coserviceMonitor is unit test instrumentation.
+	// should be fast no-op if monitor == nil
+	monitor *coserviceMonitor
 }
 
 // demuxParams contains the parameters required to initliaze a new demux object
@@ -74,7 +77,10 @@ type demuxParams struct {
 	voteVerifier      *AsyncVoteVerifier
 	processingMonitor EventsProcessingMonitor
 	log               logging.Logger
-	monitor           *coserviceMonitor
+
+	// coserviceMonitor is unit test instrumentation.
+	// should be fast no-op if monitor == nil
+	monitor *coserviceMonitor
 }
 
 // makeDemux initializes the goroutines needed to process external events, setting up the appropriate channels.
@@ -190,7 +196,7 @@ func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, 
 // next blocks until it observes an external input event of interest for the state machine.
 //
 // If ok is false, there are no more events so the agreement service should quit.
-func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Duration, currentRound round) (e externalEvent, ok bool) {
+func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Duration, speculationDeadline time.Duration, currentRound round) (e externalEvent, ok bool) {
 	defer func() {
 		if !ok {
 			return
@@ -253,6 +259,14 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	deadlineCh := s.Clock.TimeoutAt(deadline)
 	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
 
+	var speculationDeadlineCh <-chan time.Time
+	// zero timeout means we don't have enough time to speculate on block assembly
+	if speculationDeadline != 0 {
+		speculationDeadlineCh = s.Clock.TimeoutAt(speculationDeadline)
+	}
+
+	//d.log.Infof("demux deadline %d, fastD %d, specD %d, d.monitor %v", deadline, fastDeadline, speculationDeadline, d.monitor) // not threadsafe in some tests
+
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)
 
@@ -269,7 +283,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		// the pseudonode channel got closed. remove it from the queue and try again.
 		d.queue = d.queue[1:]
 		d.UpdateEventsQueue(eventQueuePseudonode, 0)
-		return d.next(s, deadline, fastDeadline, currentRound)
+		return d.next(s, deadline, fastDeadline, speculationDeadline, currentRound)
 
 	// control
 	case <-s.quit:
@@ -300,6 +314,11 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		d.monitor.dec(clockCoserviceType)
 	case <-fastDeadlineCh:
 		e = timeoutEvent{T: fastTimeout, RandomEntropy: s.RandomSource.Uint64(), Round: nextRound}
+		d.UpdateEventsQueue(eventQueueDemux, 1)
+		d.monitor.inc(demuxCoserviceType)
+		d.monitor.dec(clockCoserviceType)
+	case <-speculationDeadlineCh:
+		e = timeoutEvent{T: speculationTimeout, RandomEntropy: s.RandomSource.Uint64(), Round: nextRound}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(clockCoserviceType)
@@ -358,6 +377,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 }
 
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together
+// TODO: does this ever really see something other than empty .Vote?
 func setupCompoundMessage(l LedgerReader, m message) (res externalEvent) {
 	compound := m.CompoundMessage
 	if compound.Vote == (unauthenticatedVote{}) {

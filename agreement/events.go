@@ -122,8 +122,11 @@ const (
 	// period.
 	//
 	// fastTimeout is like timeout but for fast partition recovery.
+	// speculation timeout marks when the player should start speculative
+	// block assembly.
 	timeout
 	fastTimeout
+	speculationTimeout
 
 	// Other events are delivered from one state machine to another to
 	// communicate some message or as a reply to some message.  These events
@@ -196,6 +199,14 @@ const (
 
 	// readPinned is sent to the proposalStore to read the pinned value, if it exists.
 	readPinned
+
+	// readLowestValue is sent to the proposalPeriodMachine to read the
+	// proposal-vote with the lowest credential.
+	readLowestValue
+
+	// readLowestPayload is sent to the proposalStore to read the payload
+	// corresponding to the lowest-credential proposal-vote, if it exists.
+	readLowestPayload
 
 	/*
 	 * The following are event types that replace queries, and may warrant
@@ -363,7 +374,7 @@ func (e roundInterruptionEvent) AttachConsensusVersion(v ConsensusVersionView) e
 }
 
 type timeoutEvent struct {
-	// {timeout,fastTimeout}
+	// {timeout,fastTimeout,speculationTimeout}
 	T eventType
 
 	RandomEntropy uint64
@@ -404,6 +415,38 @@ func (e newRoundEvent) String() string {
 }
 
 func (e newRoundEvent) ComparableStr() string {
+	return e.String()
+}
+
+type readLowestEvent struct {
+	// T is either readLowestValue or readLowestPayload
+	T eventType
+
+	// Round and Period are the round and period for which to query
+	// the lowest-credential value and payload.  This type of event
+	// is only sent for pipelining, which only makes sense for period
+	// 0, but the Period is here anyway to route to the appropriate
+	// proposalMachinePeriod.
+	Round  round
+	Period period
+
+	// Proposal holds the lowest-credential value.
+	Proposal proposalValue
+	// Payload holds the payload, if one exists (which is the case if PayloadOK is set).
+	Payload proposal
+	// PayloadOK is set if and only if a payload was received for the lowest-credential value.
+	PayloadOK bool
+}
+
+func (e readLowestEvent) t() eventType {
+	return e.T
+}
+
+func (e readLowestEvent) String() string {
+	return fmt.Sprintf("%v: %.5v", e.t().String(), e.Proposal.BlockDigest.String())
+}
+
+func (e readLowestEvent) ComparableStr() string {
 	return e.String()
 }
 
@@ -744,7 +787,7 @@ func zeroEvent(t eventType) event {
 		return messageEvent{}
 	case roundInterruption:
 		return roundInterruptionEvent{}
-	case timeout, fastTimeout:
+	case timeout, fastTimeout, speculationTimeout:
 		return timeoutEvent{}
 	case newRound:
 		return newRoundEvent{}

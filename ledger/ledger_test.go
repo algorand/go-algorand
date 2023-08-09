@@ -1102,7 +1102,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		VoteLast:        10000,
 	}
 
-	// depends on what the concensus is need to generate correct KeyregTxnFields.
+	// depends on what the consensus is need to generate correct KeyregTxnFields.
 	if proto.EnableStateProofKeyregCheck {
 		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
 		store, err := db.MakeAccessor("test-DB", false, true)

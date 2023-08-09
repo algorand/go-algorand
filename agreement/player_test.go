@@ -114,13 +114,28 @@ func simulateProposalPayloads(t *testing.T, router *rootRouter, player *player, 
 	}
 }
 
+// most player code returns a fixed number of actions, but some player code sometimes adds an exctra speculative block assembly action that we filter out to make tests simpler
+func ignoreSpeculativeAssembly(a []action) []action {
+	var out []action
+	for _, ia := range a {
+		switch ia.t() {
+		case speculativeAssembly, speculativeAssemblyIfStarted:
+			// do not copy out
+		default:
+			out = append(out, ia)
+		}
+	}
+	return out
+}
+
 func simulateProposals(t *testing.T, router *rootRouter, player *player, voteBatch []event, payloadBatch []event) {
 	for i, e := range voteBatch {
 		var res []action
 		*player, res = router.submitTop(&playerTracer, *player, e)
 
-		earlier := res
+		earlier := ignoreSpeculativeAssembly(res)
 		*player, res = router.submitTop(&playerTracer, *player, payloadBatch[i])
+		res = ignoreSpeculativeAssembly(res)
 		if len(res) != len(earlier) {
 			panic("proposal action mismatch")
 		}
@@ -136,13 +151,25 @@ func simulateTimeoutExpectSoft(t *testing.T, router *rootRouter, player *player,
 	var res []action
 	e := makeTimeoutEvent()
 	*player, res = router.submitTop(&playerTracer, *player, e)
-	if len(res) != 1 {
-		panic("wrong number of actions")
-	}
+	// one or two actions, one must be attest, other _may_ be speculativeAssembly
+	require.True(t, 1 <= len(res) && len(res) <= 2, "wrong number of actions")
 
-	a1x := res[0]
-	if a1x.t() != attest {
-		panic("action 1 is not attest")
+	hasAttest := false
+	var a1x action
+
+	for _, ax := range res {
+		switch ax.t() {
+		case attest:
+			hasAttest = true
+			a1x = ax
+		case speculativeAssembly:
+			// ok
+		default:
+			t.Fatalf("bad action type: %v", ax.t())
+		}
+	}
+	if !hasAttest {
+		panic("missing attest")
 	}
 
 	a1 := a1x.(pseudonodeAction)

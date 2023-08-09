@@ -84,7 +84,7 @@ func (p unauthenticatedProposal) value() proposalValue {
 	}
 }
 
-// A proposal is an Block along with everything needed to validate it.
+// A proposal is a Block along with everything needed to validate it.
 type proposal struct {
 	unauthenticatedProposal
 

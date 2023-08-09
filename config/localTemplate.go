@@ -517,6 +517,9 @@ type Local struct {
 	// only relevant if TxIncomingFilteringFlags is non-zero
 	TxIncomingFilterMaxSize uint64 `version[28]:"500000"`
 
+	SpeculativeAsmTimeOffset   time.Duration `version[30]:"400000000"`
+	SpeculativeAssemblyDisable bool          `version[30]:"false"`
+
 	// BlockServiceMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
 	// When it exceeds this capacity, it redirects the block requests to a different node
 	BlockServiceMemCap uint64 `version[28]:"500000000"`
