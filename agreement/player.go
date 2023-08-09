@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"fmt"
 	"sort"
 	"time"
 
@@ -323,7 +322,7 @@ func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVer
 	}
 
 	//dynamicDelay = FilterTimeout(period, ver)
-	fmt.Println("dynamic delay", dynamicDelay, "payload arrivals", len(p.payloadArrivals))
+	//fmt.Println("dynamic delay", dynamicDelay, "payload arrivals", len(p.payloadArrivals))
 
 	return dynamicDelay
 }
