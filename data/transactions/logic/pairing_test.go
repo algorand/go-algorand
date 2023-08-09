@@ -521,9 +521,25 @@ func BenchmarkBn254(b *testing.B) {
 		benchmarkOperation(b, byteG1, byteK+"ec_scalar_mul BN254g1", "pop; int 1")
 	})
 
+	for _, size := range []int{1, 10, 20, 30, 40, 50} {
+		g1s := byteRepeat(g1bytes, size)
+		ks := byteRepeat(kbytes, size)
+		b.Run(fmt.Sprintf("g1 multi_exp %d", size), func(b *testing.B) {
+			benchmarkOperation(b, "", g1s+ks+"ec_multi_exp BN254g1; pop", "int 1")
+		})
+	}
+
 	b.Run("g2 scalar_mul", func(b *testing.B) {
 		benchmarkOperation(b, byteG2, byteK+"ec_scalar_mul BN254g2", "pop; int 1")
 	})
+
+	for _, size := range []int{1, 5, 10, 15, 20, 25} {
+		g2s := byteRepeat(g2bytes, size)
+		ks := byteRepeat(kbytes, size)
+		b.Run(fmt.Sprintf("g2 multi_exp %d", size), func(b *testing.B) {
+			benchmarkOperation(b, "", g2s+ks+"ec_multi_exp BN254g2; pop", "int 1")
+		})
+	}
 
 	b.Run("g1 pairing f", func(b *testing.B) {
 		benchmarkOperation(b, "", byteG1+byteG2+"ec_pairing_check BN254g1; !; assert", "int 1")
@@ -554,21 +570,6 @@ func BenchmarkBn254(b *testing.B) {
 		benchmarkOperation(b, "",
 			g2pbytes+g2pbytes+"concat;"+g1pbytes+g1pbytes+"concat; ec_pairing_check BN254g2; assert", "int 1")
 	})
-
-	for _, size := range []int{1, 10, 20, 30, 40, 50} {
-		g1s := byteRepeat(g1bytes, size)
-		ks := byteRepeat(kbytes, size)
-		b.Run(fmt.Sprintf("g1 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, "", g1s+ks+"ec_multi_exp BN254g1; pop", "int 1")
-		})
-	}
-	for _, size := range []int{1, 5, 10, 15, 20, 25} {
-		g2s := byteRepeat(g2bytes, size)
-		ks := byteRepeat(kbytes, size)
-		b.Run(fmt.Sprintf("g2 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, "", g2s+ks+"ec_multi_exp BN254g2; pop", "int 1")
-		})
-	}
 
 	b.Run("g1 subgroup", func(b *testing.B) {
 		benchmarkOperation(b, "", byteG1+"ec_subgroup_check BN254g1; pop", "int 1")
