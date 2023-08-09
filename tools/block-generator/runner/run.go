@@ -35,13 +35,17 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/block-generator/generator"
 	"github.com/algorand/go-algorand/tools/block-generator/util"
-	"github.com/algorand/go-deadlock"
 )
 
 //go:embed template/conduit.yml.tmpl
 var conduitConfigTmpl string
+
+const pad = "  "
 
 // Args are all the things needed to run a performance test.
 type Args struct {
@@ -54,12 +58,13 @@ type Args struct {
 	RunDuration              time.Duration
 	RunnerVerbose            bool
 	ConduitLogLevel          string
-	ReportDirectory          string
+	BaseReportDirectory      string
 	ResetReportDir           bool
 	RunValidation            bool
 	KeepDataDir              bool
 	GenesisFile              string
 	ResetDB                  bool
+	Times                    uint64
 }
 
 type config struct {
@@ -74,43 +79,57 @@ type config struct {
 // The test will run against the generator configuration file specified by 'args.Path'.
 // If 'args.Path' is a directory it should contain generator configuration files, a test will run using each file.
 func Run(args Args) error {
-	if _, err := os.Stat(args.ReportDirectory); !os.IsNotExist(err) {
-		if args.ResetReportDir {
-			fmt.Printf("Resetting existing report directory '%s'\n", args.ReportDirectory)
-			if err := os.RemoveAll(args.ReportDirectory); err != nil {
-				return fmt.Errorf("failed to reset report directory: %w", err)
-			}
-		} else {
-			return fmt.Errorf("report directory '%s' already exists", args.ReportDirectory)
-		}
-	}
-	err := os.Mkdir(args.ReportDirectory, os.ModeDir|os.ModePerm)
-	if err != nil {
-		return err
-	}
-
 	defer fmt.Println("Done running tests!")
-	return filepath.Walk(args.Path, func(path string, info os.FileInfo, err error) error {
+	for i := uint64(0); i < args.Times; i++ {
+		reportDirectory := args.BaseReportDirectory
+		if args.Times != 1 {
+			fmt.Println("* Starting test", i+1, "of", args.Times, "times")
+			reportDirectory = fmt.Sprintf("%s_%d", args.BaseReportDirectory, i+1)
+		}
+		if _, err := os.Stat(reportDirectory); !os.IsNotExist(err) {
+			if args.ResetReportDir {
+				fmt.Printf("Resetting existing report directory '%s'\n", reportDirectory)
+				if err := os.RemoveAll(reportDirectory); err != nil {
+					return fmt.Errorf("failed to reset report directory: %w", err)
+				}
+			} else {
+				return fmt.Errorf("report directory '%s' already exists", reportDirectory)
+			}
+		}
+		err := os.Mkdir(reportDirectory, os.ModeDir|os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("run.go Run(): failed to walk path: %w", err)
+			return err
 		}
-		// Ignore the directory
-		if info.IsDir() {
-			return nil
+
+		err = filepath.Walk(args.Path, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return fmt.Errorf("run.go Run(): failed to walk path: %w", err)
+			}
+			// Ignore the directory
+			if info.IsDir() {
+				return nil
+			}
+			runnerArgs := args
+			runnerArgs.Path = path
+			fmt.Printf("%s----------------------------------------------------------------------\n", pad)
+			fmt.Printf("%sRunning test for configuration: %s\n", pad, info.Name())
+			fmt.Printf("%s----------------------------------------------------------------------\n", pad)
+			return runnerArgs.run(reportDirectory)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to walk path: %w", err)
 		}
-		runnerArgs := args
-		runnerArgs.Path = path
-		fmt.Printf("Running test for configuration '%s'\n", path)
-		return runnerArgs.run()
-	})
+	}
+	return nil
 }
 
-func (r *Args) run() error {
+func (r *Args) run(reportDirectory string) error {
 	baseName := filepath.Base(r.Path)
 	baseNameNoExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
-	reportfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
-	logfile := path.Join(r.ReportDirectory, fmt.Sprintf("%s.conduit-log", baseNameNoExt))
-	dataDir := path.Join(r.ReportDirectory, fmt.Sprintf("%s_data", baseNameNoExt))
+	reportfile := path.Join(reportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
+	conduitlogfile := path.Join(reportDirectory, fmt.Sprintf("%s.conduit-log", baseNameNoExt))
+	ledgerlogfile := path.Join(reportDirectory, fmt.Sprintf("%s.ledger-log", baseNameNoExt))
+	dataDir := path.Join(reportDirectory, fmt.Sprintf("%s_data", baseNameNoExt))
 	// create the data directory.
 	if err := os.Mkdir(dataDir, os.ModeDir|os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
@@ -132,6 +151,7 @@ func (r *Args) run() error {
 	var nextRound uint64
 	var err error
 	if r.ResetDB {
+		fmt.Printf("%sPostgreSQL resetting.\n", pad)
 		if err = util.EmptyDB(r.PostgresConnectionString); err != nil {
 			return fmt.Errorf("emptyDB err: %w", err)
 		}
@@ -143,35 +163,39 @@ func (r *Args) run() error {
 		} else if err != nil {
 			return fmt.Errorf("getNextRound err: %w", err)
 		}
+		fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
 	}
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
-	generatorShutdownFunc, _ := startGenerator(r.Path, nextRound, r.GenesisFile, r.RunnerVerbose, algodNet, blockMiddleware)
+	generatorShutdownFunc, _ := startGenerator(ledgerlogfile, r.Path, nextRound, r.GenesisFile, r.RunnerVerbose, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
+		fmt.Printf("%sShutting down generator...\n", pad)
 		if err := generatorShutdownFunc(); err != nil {
 			fmt.Printf("failed to shutdown generator: %s\n", err)
 		}
+		fmt.Printf("%sGenerator shutdown complete\n", pad)
 	}()
-	// get conduit config template
+
+	// create conduit config from template
 	t, err := template.New("conduit").Parse(conduitConfigTmpl)
 	if err != nil {
 		return fmt.Errorf("unable to parse conduit config template: %w", err)
 	}
-
 	// create config file in the right data directory
 	f, err := os.Create(path.Join(dataDir, "conduit.yml"))
 	if err != nil {
 		return fmt.Errorf("problem creating conduit.yml: %w", err)
 	}
 	defer f.Close()
-
-	conduitConfig := config{r.ConduitLogLevel, logfile,
-		fmt.Sprintf(":%d", r.MetricsPort),
-		algodNet, r.PostgresConnectionString,
+	conduitConfig := config{
+		LogLevel:                 r.ConduitLogLevel,
+		LogFile:                  conduitlogfile,
+		MetricsPort:              fmt.Sprintf(":%d", r.MetricsPort),
+		AlgodNet:                 algodNet,
+		PostgresConnectionString: r.PostgresConnectionString,
 	}
-
 	err = t.Execute(f, conduitConfig)
 	if err != nil {
 		return fmt.Errorf("problem executing template file: %w", err)
@@ -184,9 +208,11 @@ func (r *Args) run() error {
 	}
 	defer func() {
 		// Shutdown conduit
+		fmt.Printf("%sShutting down Conduit...\n", pad)
 		if sdErr := conduitShutdownFunc(); sdErr != nil {
 			fmt.Printf("failed to shutdown Conduit: %s\n", sdErr)
 		}
+		fmt.Printf("%sConduit shutdown complete\n", pad)
 	}()
 
 	// Create the report file
@@ -213,6 +239,7 @@ func (r *Args) run() error {
 	if err = r.runTest(report, metricsNet, algodNet); err != nil {
 		return err
 	}
+	fmt.Printf("%sTest completed successfully\n", pad)
 
 	return nil
 }
@@ -350,15 +377,19 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 
 	// Run for r.RunDuration
 	start := time.Now()
+	fmt.Printf("%sduration starting now: %s\n", pad, start)
 	count := 1
 	for time.Since(start) < r.RunDuration {
 		time.Sleep(r.RunDuration / 10)
+		fmt.Printf("%scollecting metrics (%d)\n", pad, count)
 
 		if err := collector.Collect(AllMetricNames...); err != nil {
 			return fmt.Errorf("problem collecting metrics (%d / %s): %w", count, time.Since(start), err)
 		}
 		count++
 	}
+
+	fmt.Printf("%scollecting final metrics\n", pad)
 	if err := collector.Collect(AllMetricNames...); err != nil {
 		return fmt.Errorf("problem collecting final metrics (%d / %s): %w", count, time.Since(start), err)
 	}
@@ -426,14 +457,20 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 }
 
 // startGenerator starts the generator server.
-func startGenerator(configFile string, dbround uint64, genesisFile string, verbose bool, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFile string, verbose bool, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+	f, err := os.OpenFile(ledgerLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	util.MaybeFail(err, "unable to open ledger log file '%s'", ledgerLogFile)
+	log := logging.NewLogger()
+	log.SetLevel(logging.Warn)
+	log.SetOutput(f)
+
 	// Start generator.
-	server, generator := generator.MakeServerWithMiddleware(dbround, genesisFile, configFile, verbose, addr, blockMiddleware)
+	server, generator := generator.MakeServerWithMiddleware(log, dbround, genesisFile, configFile, verbose, addr, blockMiddleware)
 
 	// Start the server
 	go func() {
 		// always returns error. ErrServerClosed on graceful close
-		fmt.Printf("generator serving on %s\n", server.Addr)
+		fmt.Printf("%sgenerator serving on %s\n", pad, server.Addr)
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			util.MaybeFail(err, "ListenAndServe() failure to start with config file '%s'", configFile)
 		}
@@ -452,16 +489,19 @@ func startGenerator(configFile string, dbround uint64, genesisFile string, verbo
 
 // startConduit starts the conduit binary.
 func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
-	cmd := exec.Command(
+	fmt.Printf("%sConduit starting with data directory: %s\n", pad, dataDir)
+	ctx, cf := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(
+		ctx,
 		conduitBinary,
 		"-r", strconv.FormatUint(round, 10),
 		"-d", dataDir,
 	)
+	cmd.WaitDelay = 5 * time.Second
 
 	var stdout bytes.Buffer
-	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stderr = os.Stderr // pass errors to Stderr
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failure calling Start(): %w", err)
@@ -469,14 +509,9 @@ func startConduit(dataDir string, conduitBinary string, round uint64) (func() er
 	// conduit doesn't have health check endpoint. so, no health check for now
 
 	return func() error {
-		if err := cmd.Process.Signal(os.Interrupt); err != nil {
-			fmt.Printf("failed to kill conduit process: %s\n", err)
-			if err := cmd.Process.Kill(); err != nil {
-				return fmt.Errorf("failed to kill conduit process: %w", err)
-			}
-		}
+		cf()
 		if err := cmd.Wait(); err != nil {
-			fmt.Printf("exiting block generator runner: %s\n", err)
+			fmt.Printf("%sConduit exiting: %s\n", pad, err)
 		}
 		return nil
 	}, nil

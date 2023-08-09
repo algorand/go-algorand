@@ -350,6 +350,28 @@
         },
         "description": "Encoded block object."
       },
+      "BlockTxidsResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "blockTxids": {
+                  "description": "Block transaction IDs.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "blockTxids"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Top level transaction IDs in a block."
+      },
       "BoxResponse": {
         "content": {
           "application/json": {
@@ -3817,6 +3839,96 @@
         ]
       }
     },
+    "/v2/blocks/{round}/txids": {
+      "get": {
+        "operationId": "GetBlockTxids",
+        "parameters": [
+          {
+            "description": "The round from which to fetch block transaction IDs.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "blockTxids": {
+                      "description": "Block transaction IDs.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "blockTxids"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Top level transaction IDs in a block."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Non integer number"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non existing block"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get the top level transaction IDs for the block on the given round.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
     "/v2/catchup/{catchpoint}": {
       "delete": {
         "description": "Given a catchpoint, it aborts catching up to this catchpoint",
@@ -5499,7 +5611,7 @@
     },
     "/v2/status/wait-for-block-after/{round}": {
       "get": {
-        "description": "Waits for a block to appear after round {round} and returns the node's status at the time.",
+        "description": "Waits for a block to appear after round {round} and returns the node's status at the time. There is a 1 minute timeout, when reached the current status is returned regardless of whether or not it is the round after the given round.",
         "operationId": "WaitForBlock",
         "parameters": [
           {
@@ -5648,7 +5760,7 @@
                 }
               }
             },
-            "description": "Bad Request -- number must be non-negative integer "
+            "description": "Bad Request -- number must be non-negative integer"
           },
           "401": {
             "content": {
@@ -6060,6 +6172,77 @@
         "tags": [
           "public",
           "participating"
+        ],
+        "x-codegen-request-body-name": "rawtxn"
+      }
+    },
+    "/v2/transactions/async": {
+      "post": {
+        "operationId": "RawTransactionAsync",
+        "requestBody": {
+          "content": {
+            "application/x-binary": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "The byte encoded signed transaction to broadcast to network",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {}
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Malformed Algorand transaction "
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Fast track for broadcasting a raw transaction or transaction group to the network through the tx handler without performing most of the checks and reporting detailed errors. Should be only used for development and performance testing.",
+        "tags": [
+          "experimental"
         ],
         "x-codegen-request-body-name": "rawtxn"
       }

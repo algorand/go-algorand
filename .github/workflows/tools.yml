@@ -9,9 +9,6 @@ on:
       - 'tools/block-generator/**'
       - 'tools/x-repo-types/**'
   pull_request:
-    paths:
-      - 'tools/block-generator/**'
-      - 'tools/x-repo-types/**'
 
 jobs:
   tools_test:

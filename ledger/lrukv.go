@@ -79,7 +79,7 @@ func (m *lruKV) read(key string) (data trackerdb.PersistedKVData, has bool) {
 func (m *lruKV) flushPendingWrites() {
 	pendingEntriesCount := len(m.pendingKVs)
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
-		m.log.Warnf("lruKV: number of entries in pendingKVs(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
+		m.log.Infof("lruKV: number of entries in pendingKVs(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
 	}
 	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
 		select {

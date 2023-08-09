@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,8 +163,10 @@ type lruKVTestLogger struct {
 	warnMsgCount  int
 }
 
-func (cl *lruKVTestLogger) Warnf(s string, args ...interface{}) {
-	cl.warnMsgCount++
+func (cl *lruKVTestLogger) Infof(s string, args ...interface{}) {
+	if strings.Contains(s, "exceed the warning threshold of") {
+		cl.warnMsgCount++
+	}
 }
 
 func TestLRUKVPendingWritesWarning(t *testing.T) {

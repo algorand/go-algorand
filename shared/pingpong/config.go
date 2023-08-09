@@ -74,6 +74,7 @@ type PpConfig struct {
 	AppLocalKeys    uint32
 	Rekey           bool
 	MaxRuntime      time.Duration
+	AsyncSending    bool
 
 	// asset spam; make lots of NFT ASAs
 	NftAsaPerSecond       uint32 // e.g. 100

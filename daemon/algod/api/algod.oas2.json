@@ -578,6 +578,64 @@
         }
       ]
     },
+    "/v2/blocks/{round}/txids": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the top level transaction IDs for the block on the given round.",
+        "operationId": "GetBlockTxids",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block transaction IDs.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockTxidsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Non existing block",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/blocks/{round}/hash": {
       "get": {
         "tags": [
@@ -1111,7 +1169,7 @@
           "public",
           "nonparticipating"
         ],
-        "description": "Waits for a block to appear after round {round} and returns the node's status at the time.",
+        "description": "Waits for a block to appear after round {round} and returns the node's status at the time. There is a 1 minute timeout, when reached the current status is returned regardless of whether or not it is the round after the given round.",
         "produces": [
           "application/json"
         ],
@@ -1132,10 +1190,11 @@
         ],
         "responses": {
           "200": {
+            "description": "The round after the given round, or the current round if a timeout occurs.",
             "$ref": "#/responses/NodeStatusResponse"
           },
           "400": {
-            "description": "Bad Request -- number must be non-negative integer ",
+            "description": "Bad Request -- number must be non-negative integer",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1204,6 +1263,65 @@
         "responses": {
           "200": {
             "$ref": "#/responses/PostTransactionsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Malformed Algorand transaction ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/transactions/async": {
+      "post": {
+        "tags": [
+          "experimental"
+        ],
+        "consumes": [
+          "application/x-binary"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Fast track for broadcasting a raw transaction or transaction group to the network through the tx handler without performing most of the checks and reporting detailed errors. Should be only used for development and performance testing.",
+        "operationId": "RawTransactionAsync",
+        "parameters": [
+          {
+            "description": "The byte encoded signed transaction to broadcast to network",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "type": "object"
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction ",
@@ -4286,6 +4404,24 @@
             "description": "Optional certificate object. This is only included when the format is set to message pack.",
             "type": "object",
             "x-algorand-format": "BlockCertificate"
+          }
+        }
+      }
+    },
+    "BlockTxidsResponse": {
+      "description": "Top level transaction IDs in a block.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "blockTxids"
+        ],
+        "properties": {
+          "blockTxids": {
+            "description": "Block transaction IDs.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

@@ -406,3 +406,16 @@ func TestCommitRoundIOError(t *testing.T) {
 	// which triggered Fatal logging (and would therefore call any registered exit handlers)
 	a.True(flag)
 }
+
+func TestAccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	aul := &accountUpdatesLedgerEvaluator{
+		prevHeader: bookkeeping.BlockHeader{},
+		tail:       &txTail{},
+	}
+	hdr, err := aul.BlockHdr(99)
+	require.Error(t, err)
+	require.Equal(t, ledgercore.ErrNoEntry{}, err)
+	require.Equal(t, bookkeeping.BlockHeader{}, hdr)
+}
