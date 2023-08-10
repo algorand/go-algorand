@@ -21,11 +21,16 @@ import (
 	"time"
 )
 
+// TimeoutType annotates timeout events scheduled via TimeoutAt
 type TimeoutType int8
 
 const (
+	// Deadline annotates timeout events in the agreement protocol (e.g., for
+	// receiving a block)
 	Deadline TimeoutType = iota
+	// FastRecovery annotates the fast recovery timeout in the agreement protocol
 	FastRecovery
+	// Filter annotates the filter step timeout event in the agreement protocol
 	Filter
 )
 
