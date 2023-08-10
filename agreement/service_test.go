@@ -990,16 +990,23 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 	simulateAgreement(t, 5, 50, disabled)
 }
 
-func TestAgreementSynchronousFuture5_50(t *testing.T) {
+func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	if testing.Short() {
 		t.Skip("Skipping agreement integration test")
 	}
+
 	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusFuture, nil
 	}
-	simulateAgreementWithConsensusVersion(t, 5, 50, disabled, consensusVersion)
+
+	cfg := config.Consensus[protocol.ConsensusFuture]
+	if !cfg.DynamicFilterTimeout {
+		return
+	}
+
+	simulateAgreementWithConsensusVersion(t, 5, cfg.DynamicFilterPayloadArriavalHistory+20, disabled, consensusVersion)
 }
 
 func TestAgreementSynchronousFuture1(t *testing.T) {
