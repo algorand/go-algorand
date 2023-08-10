@@ -296,8 +296,6 @@ func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVer
 
 	proto := config.Consensus[ver]
 
-	//return FilterTimeout(period, ver)
-
 	if !proto.DynamicFilterTimeout || period != 0 {
 		// Either dynamic lambda is disabled, or we're not in period 0 and
 		// therefore, can't use dynamic lambda
@@ -309,7 +307,7 @@ func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVer
 		// we don't keep any history, use the default
 		dynamicDelay = FilterTimeout(0, ver)
 	} else if proto.DynamicFilterPayloadArriavalHistory > len(p.payloadArrivals) {
-		// not enough smaples, use the default
+		// not enough samples, use the default
 		dynamicDelay = FilterTimeout(0, ver)
 	} else {
 		sortedArrivals := make([]time.Duration, len(p.payloadArrivals))
@@ -322,9 +320,6 @@ func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVer
 	if dynamicDelay < proto.DynamicFilterTimeoutLowerBound {
 		dynamicDelay = proto.DynamicFilterTimeoutLowerBound
 	}
-
-	//dynamicDelay = FilterTimeout(period, ver)
-	//fmt.Println("dynamic delay", dynamicDelay, "payload arrivals", len(p.payloadArrivals))
 
 	return dynamicDelay
 }
