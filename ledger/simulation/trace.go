@@ -36,6 +36,14 @@ type TxnResult struct {
 	AppBudgetConsumed      uint64
 	LogicSigBudgetConsumed uint64
 	Trace                  *TransactionTrace
+
+	// UnnamedResourcesAccessed is present if all of the following are true:
+	//  * AllowUnnamedResources is true
+	//  * The transaction cannot use shared resources (pre-v9 program)
+	//  * The transaction accessed unnamed resources.
+	//
+	// In that case, it will be populated with the unnamed resources accessed by this transaction.
+	UnnamedResourcesAccessed *ResourceTracker
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group
@@ -50,6 +58,15 @@ type TxnGroupResult struct {
 	AppBudgetAdded uint64
 	// AppBudgetConsumed is the total opcode cost used for this group
 	AppBudgetConsumed uint64
+
+	// UnnamedResourcesAccessed will be present if AllowUnnamedResources is true. In that case, it
+	// will be populated with the unnamed resources accessed by this transaction group from
+	// transactions which can benefit from shared resources (v9 or higher programs).
+	//
+	// Any unnamed resources accessed from transactions which cannot benefit from shared resources
+	// will be placed in the corresponding `UnnamedResourcesAccessed` field in the appropriate
+	// TxnResult struct.
+	UnnamedResourcesAccessed *ResourceTracker
 }
 
 func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
@@ -67,10 +84,11 @@ const ResultLatestVersion = uint64(2)
 
 // ResultEvalOverrides contains the limits and parameters during a call to Simulator.Simulate
 type ResultEvalOverrides struct {
-	AllowEmptySignatures bool
-	MaxLogCalls          *uint64
-	MaxLogSize           *uint64
-	ExtraOpcodeBudget    uint64
+	AllowEmptySignatures  bool
+	AllowUnnamedResources bool
+	MaxLogCalls           *uint64
+	MaxLogSize            *uint64
+	ExtraOpcodeBudget     uint64
 }
 
 // LogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
@@ -172,8 +190,9 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 	}
 
 	resultEvalConstants := ResultEvalOverrides{
-		AllowEmptySignatures: request.AllowEmptySignatures,
-		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
+		AllowEmptySignatures:  request.AllowEmptySignatures,
+		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
+		AllowUnnamedResources: request.AllowUnnamedResources,
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
 	if err := validateSimulateRequest(request, developerAPI); err != nil {

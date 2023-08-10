@@ -30,6 +30,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -67,17 +69,11 @@ func (info TxnInfo) NewTxn(txn txntest.Txn) txntest.Txn {
 	return txn
 }
 
-// InnerTxn sets network- and parent-specific values to the given inner transaction. This is only
-// useful for creating an expected inner transaction to compare against.
-func (info TxnInfo) InnerTxn(parent transactions.SignedTxn, inner txntest.Txn) txntest.Txn {
-	inner.FirstValid = parent.Txn.FirstValid
-	inner.LastValid = parent.Txn.LastValid
-	inner.FillDefaults(info.CurrentProtocolParams())
-	return inner
-}
-
-// Environment contains the ledger and testing environment for transaction simulations
+// Environment contains the ledger and testing environment for transaction simulations. It also
+// provides convenience methods to execute transactions against the ledger prior to simulation. This
+// allows you to create specific a ledger state before running a simulation.
 type Environment struct {
+	t      *testing.T
 	Ledger *data.Ledger
 	// Accounts is a list of all accounts in the ledger, excluding the fee sink and rewards pool
 	Accounts           []Account
@@ -91,8 +87,154 @@ func (env *Environment) Close() {
 	env.Ledger.Close()
 }
 
+// nextBlock begins evaluation of a new block, after ledger creation or endBlock()
+func (env *Environment) nextBlock() *eval.BlockEvaluator {
+	env.t.Helper()
+	rnd := env.Ledger.Latest()
+	hdr, err := env.Ledger.BlockHdr(rnd)
+	require.NoError(env.t, err)
+
+	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
+	evaluator, err := env.Ledger.StartEvaluator(nextHdr, 0, 0, nil)
+	require.NoError(env.t, err)
+	return evaluator
+}
+
+// endBlock completes the block being created, returns the ValidatedBlock for inspection
+func (env *Environment) endBlock(evaluator *eval.BlockEvaluator) *ledgercore.ValidatedBlock {
+	env.t.Helper()
+	validatedBlock, err := evaluator.GenerateBlock()
+	require.NoError(env.t, err)
+	err = env.Ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	require.NoError(env.t, err)
+	return validatedBlock
+}
+
+// Txn creates and executes a new block with the given transaction and returns its ApplyData
+func (env *Environment) Txn(txn transactions.SignedTxn) transactions.ApplyData {
+	env.t.Helper()
+
+	evaluator := env.nextBlock()
+	err := evaluator.Transaction(txn, transactions.ApplyData{})
+	require.NoError(env.t, err)
+	newBlock := env.endBlock(evaluator).Block()
+
+	require.Len(env.t, newBlock.Payset, 1)
+
+	env.TxnInfo.LatestHeader = newBlock.BlockHeader
+
+	return newBlock.Payset[0].ApplyData
+}
+
+// CreateAsset creates an asset with the given parameters and returns its ID
+func (env *Environment) CreateAsset(creator basics.Address, params basics.AssetParams) basics.AssetIndex {
+	env.t.Helper()
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:        protocol.AssetConfigTx,
+		Sender:      creator,
+		AssetParams: params,
+	})
+
+	ad := env.Txn(txn.SignedTxn())
+	require.NotZero(env.t, ad.ConfigAsset)
+
+	return ad.ConfigAsset
+}
+
+// AppParams mirrors basics.AppParams, but allows the approval and clear state programs to have the
+// same values that txntest.Txn accepts
+type AppParams struct {
+	ApprovalProgram   interface{}
+	ClearStateProgram interface{}
+	GlobalState       basics.TealKeyValue
+	LocalStateSchema  basics.StateSchema
+	GlobalStateSchema basics.StateSchema
+	ExtraProgramPages uint32
+}
+
+// CreateApp creates an application with the given parameters and returns its ID
+func (env *Environment) CreateApp(creator basics.Address, params AppParams) basics.AppIndex {
+	env.t.Helper()
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            creator,
+		ApprovalProgram:   params.ApprovalProgram,
+		ClearStateProgram: params.ClearStateProgram,
+		GlobalStateSchema: params.GlobalStateSchema,
+		LocalStateSchema:  params.LocalStateSchema,
+		ExtraProgramPages: params.ExtraProgramPages,
+	})
+
+	ad := env.Txn(txn.SignedTxn())
+	require.NotZero(env.t, ad.ApplicationID)
+
+	return ad.ApplicationID
+}
+
+// TransferAlgos transfers the given amount of Algos from one account to another
+func (env *Environment) TransferAlgos(from, to basics.Address, amount uint64) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   from,
+		Receiver: to,
+		Amount:   amount,
+	})
+	env.Txn(txn.SignedTxn())
+}
+
+// TransferAsset transfers the given amount of an asset from one account to another
+func (env *Environment) TransferAsset(from, to basics.Address, assetID basics.AssetIndex, amount uint64) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.AssetTransferTx,
+		Sender:        from,
+		AssetReceiver: to,
+		XferAsset:     assetID,
+		AssetAmount:   amount,
+	})
+	env.Txn(txn.SignedTxn())
+}
+
+// OptIntoAsset opts the given account into the given asset
+func (env *Environment) OptIntoAsset(address basics.Address, assetID basics.AssetIndex) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.AssetTransferTx,
+		Sender:        address,
+		AssetReceiver: address,
+		XferAsset:     assetID,
+	})
+	env.Txn(txn.SignedTxn())
+}
+
+// OptIntoApp opts the given account into the given application
+func (env *Environment) OptIntoApp(address basics.Address, appID basics.AppIndex) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        address,
+		ApplicationID: appID,
+		OnCompletion:  transactions.OptInOC,
+	})
+	env.Txn(txn.SignedTxn())
+}
+
+// Rekey rekeys the given account to the given authorizer
+func (env *Environment) Rekey(account, rekeyTo basics.Address) {
+	env.t.Helper()
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:    protocol.KeyRegistrationTx,
+		Sender:  account,
+		RekeyTo: rekeyTo,
+	})
+	env.Txn(txn.SignedTxn())
+}
+
 // PrepareSimulatorTest creates an environment to test transaction simulations. The caller is
-// responsible for calling Close() on the returned environment.
+// responsible for calling Close() on the returned Environment.
 func PrepareSimulatorTest(t *testing.T) Environment {
 	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 100)
 
@@ -152,6 +294,7 @@ func PrepareSimulatorTest(t *testing.T) Environment {
 	}
 
 	return Environment{
+		t:                  t,
 		Ledger:             ledger,
 		Accounts:           accounts,
 		FeeSinkAccount:     feeSinkAccount,

@@ -342,6 +342,38 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 	return handler, c, rec, stx, releasefunc
 }
 
+func TestGetBlockTxids(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, stx, releasefunc := addBlockHelper(t)
+	defer releasefunc()
+
+	var response model.BlockTxidsResponse
+	err := handler.GetBlockTxids(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	data := rec.Body.Bytes()
+	err = protocol.DecodeJSON(data, &response)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(response.BlockTxids))
+
+	c, rec = newReq(t)
+	err = handler.GetBlockTxids(c, 2)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	c, rec = newReq(t)
+	err = handler.GetBlockTxids(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	data = rec.Body.Bytes()
+	err = protocol.DecodeJSON(data, &response)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(response.BlockTxids))
+	require.Equal(t, stx.ID().String(), response.BlockTxids[0])
+}
+
 func TestGetBlockHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
