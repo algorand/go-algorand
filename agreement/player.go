@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/timers"
 )
 
 // Deadline marks a timeout event of type Type that the player schedules to
@@ -30,7 +29,7 @@ import (
 type Deadline struct {
 	_struct  struct{} `codec:","`
 	Duration time.Duration
-	Type     timers.TimeoutType
+	Type     TimeoutType
 }
 
 // The player implements the top-level state machine functionality of the

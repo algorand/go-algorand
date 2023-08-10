@@ -84,6 +84,14 @@ type externalDemuxSignals struct {
 	CurrentRound         round
 }
 
+type TimeoutType int8
+
+const (
+	TimeoutDeadline TimeoutType = iota
+	TimeoutFastRecovery
+	TimeoutFilter
+)
+
 // MakeService creates a new Agreement Service instance given a set of Parameters.
 //
 // Call Start to start execution and Shutdown to finish execution.
