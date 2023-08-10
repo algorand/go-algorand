@@ -25,6 +25,8 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
+// Deadline marks a timeout event of type Type that the player schedules to
+// happen after Duration time.
 type Deadline struct {
 	_struct  struct{} `codec:","`
 	Duration time.Duration
