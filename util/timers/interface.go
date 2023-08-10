@@ -21,11 +21,11 @@ import (
 	"time"
 )
 
-type Timeout int8
+type TimeoutType int8
 
 const (
-	Deadline Timeout = iota
-	Fast
+	Deadline TimeoutType = iota
+	FastRecovery
 	Filter
 )
 

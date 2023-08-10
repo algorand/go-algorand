@@ -26,8 +26,8 @@ import (
 
 type Deadline struct {
 	_struct  struct{} `codec:","`
-	Deadline time.Duration
-	Type     timers.Timeout
+	Duration time.Duration
+	Type     timers.TimeoutType
 }
 
 // The player implements the top-level state machine functionality of the

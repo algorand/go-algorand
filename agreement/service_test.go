@@ -1525,11 +1525,7 @@ func TestAgreementLateCertBug(t *testing.T) {
 		closeFn()
 		baseNetwork.repairAll()
 
-<<<<<<< HEAD
 		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
-=======
-		triggerGlobalTimeout(deadlineTimeout, timers.Deadline, clocks, activityMonitor)
->>>>>>> 1fc2f90d3 (fix failing tests)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
