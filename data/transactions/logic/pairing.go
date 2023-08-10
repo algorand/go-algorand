@@ -262,12 +262,11 @@ const (
 var bls12381Modulus = bls12381fp.Modulus()
 
 func bytesToBLS12381Field(b []byte) (bls12381fp.Element, error) {
-	var big big.Int
-	big.SetBytes(b)
+	big := new(big.Int).SetBytes(b)
 	if big.Cmp(bls12381Modulus) >= 0 {
-		return bls12381fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", &big, bls12381Modulus)
+		return bls12381fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", big, bls12381Modulus)
 	}
-	return *new(bls12381fp.Element).SetBigInt(&big), nil
+	return *new(bls12381fp.Element).SetBigInt(big), nil
 }
 
 func bytesToBLS12381G1(b []byte) (bls12381.G1Affine, error) {
@@ -579,12 +578,11 @@ func bls12381G2SubgroupCheck(pointBytes []byte) (bool, error) {
 var bn254Modulus = bn254fp.Modulus()
 
 func bytesToBN254Field(b []byte) (bn254fp.Element, error) {
-	var big big.Int
-	big.SetBytes(b)
+	big := new(big.Int).SetBytes(b)
 	if big.Cmp(bn254Modulus) >= 0 {
-		return bn254fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", &big, bn254Modulus)
+		return bn254fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", big, bn254Modulus)
 	}
-	return *new(bn254fp.Element).SetBigInt(&big), nil
+	return *new(bn254fp.Element).SetBigInt(big), nil
 }
 
 func bytesToBN254G1(b []byte) (bn254.G1Affine, error) {
