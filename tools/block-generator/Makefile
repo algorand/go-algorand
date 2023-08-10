@@ -1,13 +1,16 @@
-SCENARIO = scenarios/config.allmixed.small.yml
+SCENARIO = scenarios/benchmarks/stress.50000.yml # scenarios/config.allmixed.small.yml
+PG_UP = --start-postgres
 SKIP = --skip-runner
-RESETDB = --reset-db
+RESETDB = # --reset-db
 REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 DURATION = 30s
 VERBOSE = --verbose
 CONDUIT = ./conduit
 PGUSER = algorand
 PGDB = generator_db
+PGCONT = "generator-test-container"
 PGCONN = "host=localhost user=$(PGUSER) password=algorand dbname=$(PGDB) port=15432 sslmode=disable"
+
 
 block-generator: clean-generator
 	go build
@@ -15,20 +18,16 @@ block-generator: clean-generator
 clean-generator:
 	rm -f block-generator
 
-debug-blockgen:
-	python scripts/run_runner.py \
-	--conduit-binary $(CONDUIT) \
-	--scenario $(SCENARIO) \
-	--report-directory $(REPORTS) \
-	--keep-alive $(SKIP) \
-	--test-duration $(DURATION) \
-	$(RESETDB)
+pg-up:
+	docker run --name $(PGCONT) -p 15432:5432 -e POSTGRES_USER=algorand -e POSTGRES_PASSWORD=algorand -d postgres
+	sleep 5
+	docker exec -it generator-test-container psql -Ualgorand -c "create database generator_db"
 
-enter-pg:
-	docker exec -it generator-test-container psql -U $(PGUSER) -d $(PGDB)
+pg-enter:
+	docker exec -it $(PGCONT) psql -U $(PGUSER) -d $(PGDB)
 
-clean-docker:
-	docker rm -f generator-test-container
+pg-down:
+	docker rm -f $(PGCONT)
 
 run-runner: block-generator
 	./block-generator runner --conduit-binary $(CONDUIT) \
