@@ -1008,6 +1008,18 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 	simulateAgreement(t, 5, 50, disabled)
 }
 
+func TestAgreementSynchronousFuture5_50(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusFuture, nil
+	}
+	simulateAgreementWithConsensusVersion(t, 5, 50, disabled, consensusVersion)
+}
+
 func TestAgreementSynchronousFuture1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
