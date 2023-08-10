@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -339,6 +340,38 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 	require.NoError(t, err)
 
 	return handler, c, rec, stx, releasefunc
+}
+
+func TestGetBlockTxids(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	handler, c, rec, stx, releasefunc := addBlockHelper(t)
+	defer releasefunc()
+
+	var response model.BlockTxidsResponse
+	err := handler.GetBlockTxids(c, 0)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	data := rec.Body.Bytes()
+	err = protocol.DecodeJSON(data, &response)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(response.BlockTxids))
+
+	c, rec = newReq(t)
+	err = handler.GetBlockTxids(c, 2)
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Code)
+
+	c, rec = newReq(t)
+	err = handler.GetBlockTxids(c, 1)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	data = rec.Body.Bytes()
+	err = protocol.DecodeJSON(data, &response)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(response.BlockTxids))
+	require.Equal(t, stx.ID().String(), response.BlockTxids[0])
 }
 
 func TestGetBlockHash(t *testing.T) {
@@ -793,13 +826,13 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
-func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transactions.SignedTxn) []byte) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
+func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transactions.SignedTxn) []byte, cfg config.Local) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
 	numAccounts := 5
 	numTransactions := 5
 	offlineAccounts := true
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	mockNode := makeMockNodeWithConfig(mockLedger, t.Name(), nil, cannedStatusReportGolden, false, cfg)
 	handler = v2.Handlers{
 
 		Node:     mockNode,
@@ -819,13 +852,18 @@ func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transaction
 	return
 }
 
-func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
+func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, enableExperimental bool) {
 	txnPrep := func(stxn transactions.SignedTxn) []byte {
 		return protocol.Encode(&stxn)
 	}
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
+	cfg := config.GetDefaultLocal()
+	cfg.EnableExperimentalAPI = enableExperimental
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep, cfg)
 	defer releasefunc()
-	err := handler.RawTransaction(c)
+	results := reflect.ValueOf(&handler).MethodByName(method).Call([]reflect.Value{reflect.ValueOf(c)})
+	require.Equal(t, 1, len(results))
+	// if the method returns nil, the cast would fail so use type assertion test
+	err, _ := results[0].Interface().(error)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }
@@ -834,8 +872,18 @@ func TestPostTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	postTransactionTest(t, -1, 400)
-	postTransactionTest(t, 0, 200)
+	postTransactionTest(t, -1, 400, "RawTransaction", false)
+	postTransactionTest(t, 0, 200, "RawTransaction", false)
+}
+
+func TestPostTransactionAsync(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	postTransactionTest(t, -1, 404, "RawTransactionAsync", false)
+	postTransactionTest(t, 0, 404, "RawTransactionAsync", false)
+	postTransactionTest(t, -1, 400, "RawTransactionAsync", true)
+	postTransactionTest(t, 0, 200, "RawTransactionAsync", true)
 }
 
 func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
@@ -849,7 +897,7 @@ func simulateTransactionTest(t *testing.T, txnToUse int, format string, expected
 		}
 		return protocol.EncodeReflect(&request)
 	}
-	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep)
+	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep, config.GetDefaultLocal())
 	defer releasefunc()
 	err := handler.SimulateTransaction(c, model.SimulateTransactionParams{Format: (*model.SimulateTransactionParamsFormat)(&format)})
 	require.NoError(t, err)

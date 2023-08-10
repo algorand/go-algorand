@@ -132,7 +132,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
-	au.close()
+	au.close() // it is OK to close it here - no data race since commitSyncer is not active
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	mockCommitData := make([]verificationCommitContext, 0)
@@ -258,7 +258,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
-	au.close()
+	au.close() // it is OK to close it here - no data race since commitSyncer is not active
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -425,7 +425,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
-	au.close()
+	au.close() // it is OK to close it here - no data race since commitSyncer is not active
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {

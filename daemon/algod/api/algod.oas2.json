@@ -578,6 +578,64 @@
         }
       ]
     },
+    "/v2/blocks/{round}/txids": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the top level transaction IDs for the block on the given round.",
+        "operationId": "GetBlockTxids",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block transaction IDs.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockTxidsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Non existing block",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/blocks/{round}/hash": {
       "get": {
         "tags": [
@@ -1205,6 +1263,65 @@
         "responses": {
           "200": {
             "$ref": "#/responses/PostTransactionsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Malformed Algorand transaction ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/transactions/async": {
+      "post": {
+        "tags": [
+          "experimental"
+        ],
+        "consumes": [
+          "application/x-binary"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Fast track for broadcasting a raw transaction or transaction group to the network through the tx handler without performing most of the checks and reporting detailed errors. Should be only used for development and performance testing.",
+        "operationId": "RawTransactionAsync",
+        "parameters": [
+          {
+            "description": "The byte encoded signed transaction to broadcast to network",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "type": "object"
           },
           "400": {
             "description": "Bad Request - Malformed Algorand transaction ",
@@ -2976,6 +3093,46 @@
         }
       }
     },
+    "AssetHoldingReference": {
+      "description": "References an asset held by an account.",
+      "type": "object",
+      "required": [
+        "account",
+        "asset"
+      ],
+      "properties": {
+        "account": {
+          "description": "Address of the account holding the asset.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "asset": {
+          "description": "Asset ID of the holding.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "ApplicationLocalReference": {
+      "description": "References an account's local state for an application.",
+      "type": "object",
+      "required": [
+        "account",
+        "app"
+      ],
+      "properties": {
+        "account": {
+          "description": "Address of the account with the local state.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "app": {
+          "description": "Application ID of the local state application.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
     "ApplicationStateSchema": {
       "description": "Specifies maximums on the number of each type that may be stored.",
       "type": "object",
@@ -3473,11 +3630,15 @@
           }
         },
         "allow-empty-signatures": {
-          "description": "Allow transactions without signatures to be simulated as if they had correct signatures.",
+          "description": "Allows transactions without signatures to be simulated as if they had correct signatures.",
           "type": "boolean"
         },
         "allow-more-logging": {
           "description": "Lifts limits on log opcode usage during simulation.",
+          "type": "boolean"
+        },
+        "allow-unnamed-resources": {
+          "description": "Allows access to unnamed resources during simulation.",
           "type": "boolean"
         },
         "extra-opcode-budget": {
@@ -3558,6 +3719,25 @@
         "name"
       ],
       "properties": {
+        "name": {
+          "description": "Base64 encoded box name",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "BoxReference": {
+      "description": "References a box of an application.",
+      "type": "object",
+      "required": [
+        "app",
+        "name"
+      ],
+      "properties": {
+        "app": {
+          "description": "Application ID which this box belongs to",
+          "type": "integer"
+        },
         "name": {
           "description": "Base64 encoded box name",
           "type": "string",
@@ -3757,6 +3937,9 @@
         "app-budget-consumed": {
           "description": "Total budget consumed during execution of app calls in the transaction group.",
           "type": "integer"
+        },
+        "unnamed-resources-accessed": {
+          "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
         }
       }
     },
@@ -3780,6 +3963,9 @@
         },
         "exec-trace": {
           "$ref": "#/definitions/SimulationTransactionExecTrace"
+        },
+        "unnamed-resources-accessed": {
+          "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
         }
       }
     },
@@ -3869,6 +4055,10 @@
       "properties": {
         "allow-empty-signatures": {
           "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
+          "type": "boolean"
+        },
+        "allow-unnamed-resources": {
+          "description": "If true, allows access to unnamed resources during simulation.",
           "type": "boolean"
         },
         "max-log-calls": {
@@ -3970,6 +4160,61 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/SimulationTransactionExecTrace"
+          }
+        }
+      }
+    },
+    "SimulateUnnamedResourcesAccessed": {
+      "description": "These are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, the unnamed resources it contains may or may not qualify for group resource sharing. If this is a field in SimulateTransactionGroupResult, the resources do qualify, but if this is a field in SimulateTransactionResult, they do not qualify. In order to make this group valid for actual submission, resources that qualify for group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.",
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "description": "The unnamed accounts that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "x-algorand-format": "Address"
+          }
+        },
+        "assets": {
+          "description": "The unnamed assets that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "apps": {
+          "description": "The unnamed applications that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "boxes": {
+          "description": "The unnamed boxes that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BoxReference"
+          }
+        },
+        "extra-box-refs": {
+          "description": "The number of extra box references used to increase the IO budget. This is in addition to the references defined in the input transaction group and any referenced to unnamed boxes.",
+          "type": "integer"
+        },
+        "asset-holdings": {
+          "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AssetHoldingReference"
+          }
+        },
+        "app-locals": {
+          "description": "The unnamed application local states that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationLocalReference"
           }
         }
       }
@@ -4287,6 +4532,24 @@
             "description": "Optional certificate object. This is only included when the format is set to message pack.",
             "type": "object",
             "x-algorand-format": "BlockCertificate"
+          }
+        }
+      }
+    },
+    "BlockTxidsResponse": {
+      "description": "Top level transaction IDs in a block.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "blockTxids"
+        ],
+        "properties": {
+          "blockTxids": {
+            "description": "Block transaction IDs.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }
