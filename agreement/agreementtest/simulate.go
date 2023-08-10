@@ -59,7 +59,7 @@ func (i *instant) Encode() []byte {
 	return nil
 }
 
-func (i *instant) TimeoutAt(d time.Duration, timeoutType timers.TimeoutType) <-chan time.Time {
+func (i *instant) TimeoutAt(d time.Duration, timeoutType TimeoutType) <-chan time.Time {
 	ta := make(chan time.Time)
 	select {
 	case <-i.timeoutAtCalled:

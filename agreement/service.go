@@ -68,7 +68,7 @@ type Parameters struct {
 	BlockFactory
 	RandomSource
 	EventsProcessingMonitor
-	timers.Clock
+	timers.Clock[TimeoutType]
 	db.Accessor
 	logging.Logger
 	config.Local
@@ -84,6 +84,14 @@ type externalDemuxSignals struct {
 	FastRecoveryDeadline time.Duration
 	CurrentRound         round
 }
+
+type TimeoutType int8
+
+const (
+	TimeoutDeadline TimeoutType = iota
+	TimeoutFastRecovery
+	TimeoutFilter
+)
 
 // MakeService creates a new Agreement Service instance given a set of Parameters.
 //
@@ -188,7 +196,7 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 // 4. If necessary, persist state to disk.
 func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, ready chan<- externalDemuxSignals) {
 	// setup
-	var clock timers.Clock
+	var clock timers.Clock[TimeoutType]
 	var router rootRouter
 	var status player
 	var a []action
@@ -212,7 +220,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		status = player{Round: nextRound, Step: soft, Deadline: Deadline{Duration: FilterTimeout(0, nextVersion), Type: timers.Filter}}
+		status = player{Round: nextRound, Step: soft, Deadline: Deadline{Duration: FilterTimeout(0, nextVersion), Type: TimeoutFilter}}
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: s.Ledger.NextRound()}

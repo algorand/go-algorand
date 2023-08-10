@@ -375,7 +375,7 @@ func (n *NetworkFacade) Rezero() {
 // Since implements the Clock interface.
 func (n *NetworkFacade) Since() time.Duration { return 0 }
 
-func (n *NetworkFacade) TimeoutAt(d time.Duration, timeoutType timers.TimeoutType) <-chan time.Time {
+func (n *NetworkFacade) TimeoutAt(d time.Duration, timeoutType TimeoutType) <-chan time.Time {
 	defer n.timeoutAtInitOnce.Do(func() {
 		n.timeoutAtInitWait.Done()
 	})
