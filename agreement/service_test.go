@@ -1543,7 +1543,7 @@ func TestAgreementLateCertBug(t *testing.T) {
 		closeFn()
 		baseNetwork.repairAll()
 
-		triggerGlobalTimeout(deadlineTimeout, timers.Filter, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, timers.Deadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -2436,6 +2436,6 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 	default:
 		require.Fail(t, "ready channel was empty while it should have contained a single entry")
 	}
-	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.Deadline)
+	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.Deadline.Deadline)
 	require.Equal(t, baseLedger.NextRound(), demuxSignal.CurrentRound)
 }
