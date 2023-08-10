@@ -331,7 +331,7 @@ func openLedgerDB(dbPrefixes DirsAndPrefix, dbMem bool, cfg config.Local, log lo
 		var lerr error
 		switch cfg.StorageEngine {
 		case "pebbledb":
-			dir := dbPathPrefix + "/tracker.pebble"
+			dir := trackerDBPrefix + "/tracker.pebble"
 			trackerDBs, lerr = pebbledbdriver.Open(dir, dbMem, config.Consensus[protocol.ConsensusCurrentVersion], log)
 		// anything else will initialize a sqlite engine.
 		case "sqlite":
