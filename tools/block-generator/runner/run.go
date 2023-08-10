@@ -461,7 +461,7 @@ func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFil
 	f, err := os.OpenFile(ledgerLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	util.MaybeFail(err, "unable to open ledger log file '%s'", ledgerLogFile)
 	log := logging.NewLogger()
-	log.SetLevel(logging.Warn)
+	log.SetLevel(logging.Info)
 	log.SetOutput(f)
 
 	// Start generator.
