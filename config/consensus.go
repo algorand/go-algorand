@@ -517,9 +517,12 @@ type ConsensusParams struct {
 	// by state proofs to use the same method (rather than excluding stake from the top N stakeholders as before).
 	ExcludeExpiredCirculation bool
 
-	// DynamicFilterTimeout
+	// DynamicFilterTimeout specifies whether the timeout for the filter step
+	// should be determined dynamically, at run-time.
 	DynamicFilterTimeout bool
 
+	// DynamicFilterTimeoutLowerBound specifies a minimal duration that the
+	// filter timeout must meet.
 	DynamicFilterTimeoutLowerBound time.Duration
 
 	// DynamicFilterPayloadArriavalHistory specifies the number of past block arrivals

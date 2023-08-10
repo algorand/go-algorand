@@ -303,12 +303,13 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	}
 
 	var dynamicDelay time.Duration
+	defaultDelay := FilterTimeout(0, ver)
 	if proto.DynamicFilterPayloadArriavalHistory <= 0 {
 		// we don't keep any history, use the default
-		dynamicDelay = FilterTimeout(0, ver)
+		dynamicDelay = defaultDelay
 	} else if proto.DynamicFilterPayloadArriavalHistory > len(p.payloadArrivals) {
 		// not enough samples, use the default
-		dynamicDelay = FilterTimeout(0, ver)
+		dynamicDelay = defaultDelay
 	} else {
 		sortedArrivals := make([]time.Duration, len(p.payloadArrivals))
 		copy(sortedArrivals[:], p.payloadArrivals[:])
@@ -316,11 +317,16 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 		dynamicDelay = sortedArrivals[proto.DynamicFilterPayloadArriavalHistory-1]
 	}
 
-	// Make sure the dynamic delay is not too small
+	// Make sure the dynamic delay is not too small or too large
 	if dynamicDelay < proto.DynamicFilterTimeoutLowerBound {
-		tracer.log.Infof("Calculated dynamic delay = %v for round %v, period %v. It's too low, setting to %v\n", dynamicDelay, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
+		if tracer != nil {
+			tracer.log.Infof("Calculated dynamic delay = %v for round %v, period %v. It's too low, setting to %v\n", dynamicDelay, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
+		}
 		dynamicDelay = proto.DynamicFilterTimeoutLowerBound
-	} else {
+	} else if dynamicDelay > defaultDelay {
+		dynamicDelay = defaultDelay
+		tracer.log.Warnf("Calculated dynamic delay = %v for round %v, period %v. It's higher than the default %v\n", dynamicDelay, p.Round, p.Period, defaultDelay)
+	} else if tracer != nil {
 		tracer.log.Infof("Calculated dynamic delay = %v for round %v, period %v.\n", dynamicDelay, p.Round, p.Period)
 	}
 
