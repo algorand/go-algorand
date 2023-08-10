@@ -323,14 +323,14 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	// Make sure the dynamic delay is not too small or too large
 	if dynamicDelay < proto.DynamicFilterTimeoutLowerBound {
 		if tracer != nil {
-			tracer.log.Infof("Calculated dynamic delay = %v for round %v, period %v. It's too low, setting to %v\n", dynamicDelay, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
+			tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v. It's too low, setting to %v\n", dynamicDelay, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
 		}
 		dynamicDelay = proto.DynamicFilterTimeoutLowerBound
 	} else if dynamicDelay > defaultDelay {
 		dynamicDelay = defaultDelay
 		tracer.log.Warnf("Calculated dynamic delay = %v for round %v, period %v. It's higher than the default %v\n", dynamicDelay, p.Round, p.Period, defaultDelay)
 	} else if tracer != nil {
-		tracer.log.Infof("Calculated dynamic delay = %v for round %v, period %v.\n", dynamicDelay, p.Round, p.Period)
+		tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v.\n", dynamicDelay, p.Round, p.Period)
 	}
 
 	return dynamicDelay

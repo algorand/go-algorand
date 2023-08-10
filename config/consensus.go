@@ -1359,10 +1359,6 @@ func initConsensusProtocols() {
 
 	v38.AgreementFilterTimeoutPeriod0 = 3000 * time.Millisecond
 
-	v38.DynamicFilterTimeout = true
-	v38.DynamicFilterPayloadArriavalHistory = 32
-	v38.DynamicFilterTimeoutLowerBound = time.Second
-
 	Consensus[protocol.ConsensusV38] = v38
 
 	// v37 can be upgraded to v38, with an update delay of 12h:
@@ -1378,6 +1374,10 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
+
+	vFuture.DynamicFilterTimeout = true
+	vFuture.DynamicFilterTimeoutLowerBound = time.Second
+	vFuture.DynamicFilterPayloadArriavalHistory = 32
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
