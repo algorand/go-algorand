@@ -294,15 +294,15 @@ func (p *player) resizePayloadArrivals(ver protocol.ConsensusVersion) {
 	}
 }
 
-// calculateFilterTimeout chooses the appropriate filter timeout for a new round.
-func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVersion) time.Duration {
+// calculateFilterTimeout chooses the appropriate filter timeout.
+func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *tracer) time.Duration {
 
 	proto := config.Consensus[ver]
 
-	if !proto.DynamicFilterTimeout || period != 0 {
+	if !proto.DynamicFilterTimeout || p.Period != 0 {
 		// Either dynamic lambda is disabled, or we're not in period 0 and
 		// therefore, can't use dynamic lambda
-		return FilterTimeout(period, ver)
+		return FilterTimeout(p.Period, ver)
 	}
 
 	var dynamicDelay time.Duration
@@ -321,7 +321,10 @@ func (p *player) calculateFilterTimeout(period period, ver protocol.ConsensusVer
 
 	// Make sure the dynamic delay is not too small
 	if dynamicDelay < proto.DynamicFilterTimeoutLowerBound {
+		tracer.log.Infof("Calculated dynamic delay = %v for round %v, period %v. It's too low, setting to %v\n", dynamicDelay, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
 		dynamicDelay = proto.DynamicFilterTimeoutLowerBound
+	} else {
+		tracer.log.Infof("Calculated dynamic delay = %v for round %v, period %v.\n", dynamicDelay, p.Round, p.Period)
 	}
 
 	return dynamicDelay
