@@ -17,6 +17,7 @@
 package generator
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -33,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	txn "github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -281,6 +283,23 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 	return err
 }
 
+func waitForRound(ctx context.Context, l *ledger.Ledger, round basics.Round) error {
+	start := time.Now()
+	defer fmt.Println("waitForRound", round, "took", time.Since(start))
+	// Wait for the round to be available in the ledger.
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if l.LatestTrackerCommitted() >= round {
+			return nil
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+}
+
 // WriteBlock generates a block full of new transactions and writes it to the writer.
 // The most recent round is cached, allowing requests to the same round multiple times.
 // This is motivated by the fact that Conduit's logic requests the initial round during
@@ -345,6 +364,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		// we'll write genesis block / offset round for non-empty database
 		cert.Block, _, _ = g.ledger.BlockCert(basics.Round(round - g.roundOffset))
 	} else {
+		waitForRound(context.Background(), g.ledger, basics.Round(round))
 		start := time.Now()
 		var generated, evaluated, validated time.Time
 		if g.verbose {
