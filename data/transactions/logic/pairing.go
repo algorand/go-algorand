@@ -152,16 +152,16 @@ func opEcPairingCheck(cx *EvalContext) error {
 // Input: Top of stack is slice of k scalars, second to top is slice of k group points as uncompressed bytes
 // Output: Single byte slice that contains uncompressed bytes for point equivalent to p_1*e_1 + p_2*e_2 + ... + p_k*e_k, where p_i is i'th point from input and e_i is i'th scalar
 func opEcMultiExp(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	prev := last - 1
-	pointBytes := cx.Stack[prev].Bytes
-	scalarBytes := cx.Stack[last].Bytes
-
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
 	if !ok { // no version check yet, both appeared at once
 		return fmt.Errorf("invalid ec_multiexp group %s", group)
 	}
+
+	last := len(cx.Stack) - 1
+	prev := last - 1
+	pointBytes := cx.Stack[prev].Bytes
+	scalarBytes := cx.Stack[last].Bytes
 
 	var res []byte
 	var err error
@@ -752,7 +752,7 @@ func bn254PairingCheck(g1Bytes, g2Bytes []byte) (bool, error) {
 	return ok, nil
 }
 
-const bn254G1MultiExpThreshold = 2 // determined by BenchmarkFindMultiExpCutoff
+const bn254G1MultiExpThreshold = 3 // determined by BenchmarkFindMultiExpCutoff
 
 func bn254G1MultiExp(pointBytes, scalarBytes []byte) ([]byte, error) {
 	points, err := bytesToBN254G1s(pointBytes, false)

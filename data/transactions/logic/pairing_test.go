@@ -486,67 +486,46 @@ ec_subgroup_check BLS12_381g2`, pairingVersion)
 }
 
 func BenchmarkBn254(b *testing.B) {
-	if pairingVersion > LogicVersion {
-		b.Skip()
-	}
-
 	was := eccMontgomery.NbTasks
 	eccMontgomery.NbTasks = 1
 	defer func() { eccMontgomery.NbTasks = was }()
 
-	fpbytes := fmt.Sprintf("byte 0x%s\n",
-		strings.Repeat("00", 1)+strings.Repeat("22", bn254fpSize-1))
-	fp2bytes := fpbytes + fpbytes + "concat\n"
-
-	kbytes := make([]byte, scalarSize)
-	rand.Read(kbytes)
-	byteK := tealBytes(kbytes)
-
 	g1point := bn254RandomG1()
-	g1bytes := bn254G1ToBytes(&g1point)
-	byteG1 := tealBytes(g1bytes)
+	g1teal := tealBytes(bn254G1ToBytes(&g1point))
 
 	g2point := bn254RandomG2()
-	g2bytes := bn254G2ToBytes(&g2point)
-	byteG2 := tealBytes(g2bytes)
+	g2teal := tealBytes(bn254G2ToBytes(&g2point))
 
 	b.Run("g1 add", func(b *testing.B) {
-		benchmarkOperation(b, byteG1, "dup; ec_add BN254g1", "pop; int 1")
+		benchmarkOperation(b, g1teal, "dup; ec_add BN254g1", "len")
 	})
 	b.Run("g2 add", func(b *testing.B) {
-		benchmarkOperation(b, byteG2, "dup; ec_add BN254g2", "pop; int 1")
+		benchmarkOperation(b, g2teal, "dup; ec_add BN254g2", "len")
 	})
 
 	b.Run("g1 scalar_mul", func(b *testing.B) {
-		benchmarkOperation(b, byteG1, byteK+"ec_scalar_mul BN254g1", "pop; int 1")
+		benchmarkOperation(b, g1teal, "dup; extract 0 32; ec_scalar_mul BN254g1", "len")
 	})
 
-	for _, size := range []int{1, 10, 20, 30, 40, 50} {
-		g1s := byteRepeat(g1bytes, size)
-		ks := byteRepeat(kbytes, size)
+	for i := 0; i < 7; i++ {
+		size := 1 << uint(i)
+		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g1 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, "", g1s+ks+"ec_multi_exp BN254g1; pop", "int 1")
+			benchmarkOperation(b, g1teal, dups+"dup; extract 0 32;"+dups+"ec_multi_exp BN254g1", "len")
 		})
 	}
 
 	b.Run("g2 scalar_mul", func(b *testing.B) {
-		benchmarkOperation(b, byteG2, byteK+"ec_scalar_mul BN254g2", "pop; int 1")
+		benchmarkOperation(b, g2teal, "dup; extract 0 32; ec_scalar_mul BN254g2", "len")
 	})
 
-	for _, size := range []int{1, 5, 10, 15, 20, 25} {
-		g2s := byteRepeat(g2bytes, size)
-		ks := byteRepeat(kbytes, size)
+	for i := 0; i < 6; i++ {
+		size := 1 << uint(i)
+		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g2 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, "", g2s+ks+"ec_multi_exp BN254g2; pop", "int 1")
+			benchmarkOperation(b, g2teal, dups+"dup; extract 0 32;"+dups+"ec_multi_exp BN254g2", "len")
 		})
 	}
-
-	b.Run("g1 pairing f", func(b *testing.B) {
-		benchmarkOperation(b, "", byteG1+byteG2+"ec_pairing_check BN254g1; !; assert", "int 1")
-	})
-	b.Run("g2 pairing f", func(b *testing.B) {
-		benchmarkOperation(b, "", byteG2+byteG1+"ec_pairing_check BN254g2; !; assert", "int 1")
-	})
 
 	var g1GenNeg bn254.G1Affine
 	g1GenNeg.Neg(&bnG1Gen)
@@ -556,27 +535,29 @@ func BenchmarkBn254(b *testing.B) {
 	g1pbytes := tealBytes(bn254G1sToBytes(g1points))
 	g2pbytes := tealBytes(bn254G2sToBytes(g2points))
 
-	b.Run("g1 pairing t2", func(b *testing.B) {
-		benchmarkOperation(b, "", g1pbytes+g2pbytes+"ec_pairing_check BN254g1; assert", "int 1")
+	b.Run("pairing 1", func(b *testing.B) {
+		benchmarkOperation(b, "", g1teal+g2teal+"ec_pairing_check BN254g1; !; assert", "int 1")
 	})
-	b.Run("g2 pairing t2", func(b *testing.B) {
-		benchmarkOperation(b, "", g2pbytes+g1pbytes+"ec_pairing_check BN254g2; assert", "int 1")
-	})
-	b.Run("g1 pairing t4", func(b *testing.B) {
-		benchmarkOperation(b, "",
-			g1pbytes+g1pbytes+"concat;"+g2pbytes+g2pbytes+"concat; ec_pairing_check BN254g1; assert", "int 1")
-	})
-	b.Run("g2 pairing t4", func(b *testing.B) {
-		benchmarkOperation(b, "",
-			g2pbytes+g2pbytes+"concat;"+g1pbytes+g1pbytes+"concat; ec_pairing_check BN254g2; assert", "int 1")
-	})
+	for i := 0; i < 4; i++ {
+		size := 1 << uint(i)
+		dups := strings.Repeat("dup; concat;", i)
+
+		// size * 2 in name because we start with two points
+		b.Run(fmt.Sprintf("pairing %d", size*2), func(b *testing.B) {
+			benchmarkOperation(b, "", g1pbytes+dups+g2pbytes+dups+"ec_pairing_check BN254g1; assert", "int 1")
+		})
+	}
 
 	b.Run("g1 subgroup", func(b *testing.B) {
-		benchmarkOperation(b, "", byteG1+"ec_subgroup_check BN254g1; pop", "int 1")
+		benchmarkOperation(b, "", g1teal+"ec_subgroup_check BN254g1; assert", "int 1")
 	})
 	b.Run("g2 subgroup", func(b *testing.B) {
-		benchmarkOperation(b, "", byteG2+"ec_subgroup_check BN254g2; pop", "int 1")
+		benchmarkOperation(b, "", g2teal+"ec_subgroup_check BN254g2; assert", "int 1")
 	})
+
+	fpbytes := fmt.Sprintf("byte 0x%s\n",
+		strings.Repeat("00", 1)+strings.Repeat("22", bn254fpSize-1))
+	fp2bytes := fpbytes + fpbytes + "concat\n"
 
 	b.Run("g1 map to", func(b *testing.B) {
 		benchmarkOperation(b, "", fpbytes+"ec_map_to BN254g1; pop", "int 1")
@@ -593,30 +574,40 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 		rand.Read(kbytes)
 		{
 			g1points := make([]bls12381.G1Affine, i)
-			for j := 0; j < i; j++ {
-				g1points[j] = bls12381RandomG1()
-			}
 			b.Run(fmt.Sprintf("bls g1 small %02d", i), func(b *testing.B) {
 				for r := 0; r < b.N; r++ {
+					for j := 0; j < i; j++ {
+						g1points[j] = bls12381RandomG1()
+					}
+					rand.Read(kbytes)
 					bls12381G1MultiExpSmall(g1points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bls g1 large %02d", i), func(b *testing.B) {
 				for r := 0; r < b.N; r++ {
+					for j := 0; j < i; j++ {
+						g1points[j] = bls12381RandomG1()
+					}
+					rand.Read(kbytes)
 					bls12381G1MultiExpLarge(g1points, kbytes)
 				}
 			})
 
 			g2points := make([]bls12381.G2Affine, i)
-			for j := 0; j < i; j++ {
-				g2points[j] = bls12381RandomG2()
-			}
 			b.Run(fmt.Sprintf("bls g2 small %02d", i), func(b *testing.B) {
+				for j := 0; j < i; j++ {
+					g2points[j] = bls12381RandomG2()
+				}
+				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
 					bls12381G2MultiExpSmall(g2points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bls g2 large %02d", i), func(b *testing.B) {
+				for j := 0; j < i; j++ {
+					g2points[j] = bls12381RandomG2()
+				}
+				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
 					bls12381G2MultiExpLarge(g2points, kbytes)
 				}
@@ -625,10 +616,11 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 
 		{
 			g1points := make([]bn254.G1Affine, i)
-			for j := 0; j < i; j++ {
-				g1points[j] = bn254RandomG1()
-			}
 			b.Run(fmt.Sprintf("bn g1 small %02d", i), func(b *testing.B) {
+				for j := 0; j < i; j++ {
+					g1points[j] = bn254RandomG1()
+				}
+				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
 					bn254G1MultiExpSmall(g1points, kbytes)
 				}
@@ -640,15 +632,20 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 			})
 
 			g2points := make([]bn254.G2Affine, i)
-			for j := 0; j < i; j++ {
-				g2points[j] = bn254RandomG2()
-			}
 			b.Run(fmt.Sprintf("bn g2 small %02d", i), func(b *testing.B) {
+				for j := 0; j < i; j++ {
+					g2points[j] = bn254RandomG2()
+				}
+				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
 					bn254G2MultiExpSmall(g2points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bn g2 large %02d", i), func(b *testing.B) {
+				for j := 0; j < i; j++ {
+					g2points[j] = bn254RandomG2()
+				}
+				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
 					bn254G2MultiExpLarge(g2points, kbytes)
 				}
@@ -679,42 +676,40 @@ func BenchmarkBls12381(b *testing.B) {
 	eccMontgomery.NbTasks = 0
 	defer func() { eccMontgomery.NbTasks = was }()
 
-	fpbytes := fmt.Sprintf("byte 0x%s\n",
-		strings.Repeat("00", 1)+strings.Repeat("22", bls12381fpSize-1))
-	fp2bytes := fpbytes + fpbytes + "concat\n"
-
-	kbytes := make([]byte, scalarSize)
-	rand.Read(kbytes)
-	byteK := tealBytes(kbytes)
-
 	g1point := bls12381RandomG1()
-	g1bytes := bls12381G1ToBytes(&g1point)
-	byteG1 := tealBytes(g1bytes)
+	g1teal := tealBytes(bls12381G1ToBytes(&g1point))
 
 	g2point := bls12381RandomG2()
-	g2bytes := bls12381G2ToBytes(&g2point)
-	byteG2 := byteRepeat(g2bytes, 1)
+	g2teal := tealBytes(bls12381G2ToBytes(&g2point))
 
 	b.Run("g1 add", func(b *testing.B) {
-		benchmarkOperation(b, byteG1, "dup; ec_add BLS12_381g1", "pop; int 1")
+		benchmarkOperation(b, g1teal, "dup; ec_add BLS12_381g1", "len")
 	})
 	b.Run("g2 add", func(b *testing.B) {
-		benchmarkOperation(b, byteG2, "dup; ec_add BLS12_381g2", "pop; int 1")
+		benchmarkOperation(b, g2teal, "dup; ec_add BLS12_381g2", "len")
 	})
 
 	b.Run("g1 scalar_mul", func(b *testing.B) {
-		benchmarkOperation(b, byteG1, byteK+"ec_scalar_mul BLS12_381g1", "pop; int 1")
+		benchmarkOperation(b, g1teal, "dup; extract 0 32; ec_scalar_mul BLS12_381g1", "len")
 	})
-	b.Run("g2 scalar_mul", func(b *testing.B) {
-		benchmarkOperation(b, byteG2, byteK+"ec_scalar_mul BLS12_381g2", "pop; int 1")
-	})
+	for i := 0; i < 6; i++ {
+		size := 1 << uint(i)
+		dups := strings.Repeat("dup; concat;", i)
+		b.Run(fmt.Sprintf("g1 multi_exp %d", size), func(b *testing.B) {
+			benchmarkOperation(b, g1teal, dups+"dup; extract 0 32;"+dups+"ec_multi_exp BLS12_381g1", "len")
+		})
+	}
 
-	b.Run("g1 pairing f", func(b *testing.B) {
-		benchmarkOperation(b, "", byteG1+byteG2+"ec_pairing_check BLS12_381g1; pop", "int 1")
+	b.Run("g2 scalar_mul", func(b *testing.B) {
+		benchmarkOperation(b, g2teal, "dup; extract 0 32; ec_scalar_mul BLS12_381g2", "len")
 	})
-	b.Run("g2 pairing f", func(b *testing.B) {
-		benchmarkOperation(b, "", byteG2+byteG1+"ec_pairing_check BLS12_381g2; pop", "int 1")
-	})
+	for i := 0; i < 5; i++ {
+		size := 1 << uint(i)
+		dups := strings.Repeat("dup; concat;", i)
+		b.Run(fmt.Sprintf("g2 multi_exp %d", size), func(b *testing.B) {
+			benchmarkOperation(b, g2teal, dups+"dup; extract 0 32;"+dups+"ec_multi_exp BLS12_381g2", "len")
+		})
+	}
 
 	var g1GenNeg bls12381.G1Affine
 	g1GenNeg.Neg(&blsG1Gen)
@@ -724,42 +719,29 @@ func BenchmarkBls12381(b *testing.B) {
 	g1pbytes := tealBytes(bls12381G1sToBytes(g1points))
 	g2pbytes := tealBytes(bls12381G2sToBytes(g2points))
 
-	b.Run("g1 pairing t2", func(b *testing.B) {
-		benchmarkOperation(b, "", g1pbytes+g2pbytes+"ec_pairing_check BLS12_381g1; assert", "int 1")
+	b.Run("g1 pairing f", func(b *testing.B) {
+		benchmarkOperation(b, "", g1teal+g2teal+"ec_pairing_check BLS12_381g1; !; assert", "int 1")
 	})
-	b.Run("g2 pairing t2", func(b *testing.B) {
-		benchmarkOperation(b, "", g2pbytes+g1pbytes+"ec_pairing_check BLS12_381g2; assert", "int 1")
-	})
-	b.Run("g1 pairing t4", func(b *testing.B) {
-		benchmarkOperation(b, "",
-			g1pbytes+g1pbytes+"concat;"+g2pbytes+g2pbytes+"concat; ec_pairing_check BLS12_381g1; assert", "int 1")
-	})
-	b.Run("g2 pairing t4", func(b *testing.B) {
-		benchmarkOperation(b, "",
-			g2pbytes+g2pbytes+"concat;"+g1pbytes+g1pbytes+"concat; ec_pairing_check BLS12_381g2; assert", "int 1")
-	})
+	for i := 0; i < 4; i++ {
+		size := 1 << uint(i)
+		dups := strings.Repeat("dup; concat;", i)
 
-	for _, size := range []int{1, 5, 10, 15, 20, 25} {
-		g1s := byteRepeat(g1bytes, size)
-		ks := byteRepeat(kbytes, size)
-		b.Run(fmt.Sprintf("g1 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, "", g1s+ks+"ec_multi_exp BLS12_381g1; pop", "int 1")
-		})
-	}
-	for _, size := range []int{1, 3, 5, 7, 9, 11} {
-		g2s := byteRepeat(g2bytes, size)
-		ks := byteRepeat(kbytes, size)
-		b.Run(fmt.Sprintf("g2 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, "", g2s+ks+"ec_multi_exp BLS12_381g2; pop", "int 1")
+		// size * 2 in name because we start with two points
+		b.Run(fmt.Sprintf("pairing %d", size*2), func(b *testing.B) {
+			benchmarkOperation(b, "", g1pbytes+dups+g2pbytes+dups+"ec_pairing_check BLS12_381g1; assert", "int 1")
 		})
 	}
 
 	b.Run("g1 subgroup", func(b *testing.B) {
-		benchmarkOperation(b, "", byteG1+"ec_subgroup_check BLS12_381g1; pop", "int 1")
+		benchmarkOperation(b, "", g1teal+"ec_subgroup_check BLS12_381g1; pop", "int 1")
 	})
 	b.Run("g2 subgroup", func(b *testing.B) {
-		benchmarkOperation(b, "", byteG2+"ec_subgroup_check BLS12_381g2; pop", "int 1")
+		benchmarkOperation(b, "", g2teal+"ec_subgroup_check BLS12_381g2; pop", "int 1")
 	})
+
+	fpbytes := fmt.Sprintf("byte 0x%s\n",
+		strings.Repeat("00", 1)+strings.Repeat("22", bls12381fpSize-1))
+	fp2bytes := fpbytes + fpbytes + "concat\n"
 
 	b.Run("g1 map to", func(b *testing.B) {
 		benchmarkOperation(b, "", fpbytes+"ec_map_to BLS12_381g1; pop", "int 1")
