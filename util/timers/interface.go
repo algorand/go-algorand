@@ -21,11 +21,11 @@ import (
 	"time"
 )
 
-type Timeout int8
+type TimeoutType int8
 
 const (
-	Deadline Timeout = iota
-	Fast
+	Deadline TimeoutType = iota
+	FastRecovery
 	Filter
 )
 
@@ -46,7 +46,7 @@ type Clock interface {
 	//
 	// TimeoutAt must be called after Zero; otherwise, the channel's behavior is
 	// undefined.
-	TimeoutAt(delta time.Duration, timeoutType Timeout) <-chan time.Time
+	TimeoutAt(delta time.Duration, timeoutType TimeoutType) <-chan time.Time
 
 	// Encode serializes the Clock into a byte slice.
 	Encode() []byte

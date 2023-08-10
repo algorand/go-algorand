@@ -49,14 +49,14 @@ type testingClock struct {
 
 	zeroes uint
 
-	TA map[timers.Timeout]map[time.Duration]chan time.Time // TimeoutAt
+	TA map[timers.TimeoutType]map[time.Duration]chan time.Time // TimeoutAt
 
 	monitor *coserviceMonitor
 }
 
 func makeTestingClock(m *coserviceMonitor) *testingClock {
 	c := new(testingClock)
-	c.TA = make(map[timers.Timeout]map[time.Duration]chan time.Time)
+	c.TA = make(map[timers.TimeoutType]map[time.Duration]chan time.Time)
 	c.monitor = m
 	return c
 }
@@ -66,7 +66,7 @@ func (c *testingClock) Zero() timers.Clock {
 	defer c.mu.Unlock()
 
 	c.zeroes++
-	c.TA = make(map[timers.Timeout]map[time.Duration]chan time.Time)
+	c.TA = make(map[timers.TimeoutType]map[time.Duration]chan time.Time)
 	c.monitor.clearClock()
 	return c
 }
@@ -75,7 +75,7 @@ func (c *testingClock) Since() time.Duration {
 	return 0
 }
 
-func (c *testingClock) TimeoutAt(d time.Duration, timeoutType timers.Timeout) <-chan time.Time {
+func (c *testingClock) TimeoutAt(d time.Duration, timeoutType timers.TimeoutType) <-chan time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -103,7 +103,7 @@ func (c *testingClock) prepareToFire() {
 	c.monitor.inc(clockCoserviceType)
 }
 
-func (c *testingClock) fireType(timeoutType timers.Timeout) {
+func (c *testingClock) fireType(timeoutType timers.TimeoutType) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -119,7 +119,7 @@ func (c *testingClock) fireType(timeoutType timers.Timeout) {
 	}
 }
 
-func (c *testingClock) fire(d time.Duration, timeoutType timers.Timeout) {
+func (c *testingClock) fire(d time.Duration, timeoutType timers.TimeoutType) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -854,7 +854,7 @@ func expectNoNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
 	return zeroes
 }
 
-func triggerGlobalTimeout(d time.Duration, timeoutType timers.Timeout, clocks []timers.Clock, activityMonitor *activityMonitor) {
+func triggerGlobalTimeout(d time.Duration, timeoutType timers.TimeoutType, clocks []timers.Clock, activityMonitor *activityMonitor) {
 	for i := range clocks {
 		clocks[i].(*testingClock).prepareToFire()
 	}
@@ -865,7 +865,7 @@ func triggerGlobalTimeout(d time.Duration, timeoutType timers.Timeout, clocks []
 	activityMonitor.waitForQuiet()
 }
 
-func triggerGlobalTimeoutType(timeoutType timers.Timeout, clocks []timers.Clock, activityMonitor *activityMonitor) {
+func triggerGlobalTimeoutType(timeoutType timers.TimeoutType, clocks []timers.Clock, activityMonitor *activityMonitor) {
 	for i := range clocks {
 		clocks[i].(*testingClock).prepareToFire()
 	}
@@ -1080,10 +1080,10 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 		triggerGlobalTimeoutType(timers.Deadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, timers.Fast, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, timers.FastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(firstFPR, timers.Fast, clocks, activityMonitor)
+		triggerGlobalTimeout(firstFPR, timers.FastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1137,7 +1137,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 		triggerGlobalTimeout(deadlineTimeout, timers.Deadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, timers.Fast, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, timers.FastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		firstClocks := clocks[:4]
@@ -1147,7 +1147,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR, timers.Fast)
+			firstClocks[i].(*testingClock).fire(firstFPR, timers.FastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1158,13 +1158,13 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR, timers.Fast)
+			restClocks[i].(*testingClock).fire(firstFPR, timers.FastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(secondFPR, timers.Fast, clocks, activityMonitor)
+		triggerGlobalTimeout(secondFPR, timers.FastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1238,7 +1238,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 		triggerGlobalTimeout(deadlineTimeout, timers.Deadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, timers.Fast, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, timers.FastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		baseNetwork.dropAllVotes()
 
@@ -1249,7 +1249,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR, timers.Fast)
+			firstClocks[i].(*testingClock).fire(firstFPR, timers.FastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1260,13 +1260,13 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR, timers.Fast)
+			restClocks[i].(*testingClock).fire(firstFPR, timers.FastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(secondFPR, timers.Fast, clocks, activityMonitor)
+		triggerGlobalTimeout(secondFPR, timers.FastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1351,7 +1351,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 		triggerGlobalTimeout(deadlineTimeout, timers.Deadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, timers.Fast, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, timers.FastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		baseNetwork.dropAllVotes()
 
@@ -1362,7 +1362,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR, timers.Fast)
+			firstClocks[i].(*testingClock).fire(firstFPR, timers.FastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1373,13 +1373,13 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR, timers.Fast)
+			restClocks[i].(*testingClock).fire(firstFPR, timers.FastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(secondFPR, timers.Fast, clocks, activityMonitor)
+		triggerGlobalTimeout(secondFPR, timers.FastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1392,7 +1392,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 		triggerGlobalTimeout(deadlineTimeout, timers.Deadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, timers.Fast, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, timers.FastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		baseNetwork.dropAllVotes()
 
@@ -1403,7 +1403,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR, timers.Fast)
+			firstClocks[i].(*testingClock).fire(firstFPR, timers.FastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1414,13 +1414,13 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR, timers.Fast)
+			restClocks[i].(*testingClock).fire(firstFPR, timers.FastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(secondFPR, timers.Fast, clocks, activityMonitor)
+		triggerGlobalTimeout(secondFPR, timers.FastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -2436,6 +2436,6 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 	default:
 		require.Fail(t, "ready channel was empty while it should have contained a single entry")
 	}
-	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.Deadline.Deadline)
+	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.Deadline.Duration)
 	require.Equal(t, baseLedger.NextRound(), demuxSignal.CurrentRound)
 }

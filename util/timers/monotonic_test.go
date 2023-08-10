@@ -164,7 +164,7 @@ func TestTimeoutTypes(t *testing.T) {
 
 	c = m.Zero()
 	ch1 := c.TimeoutAt(d, Filter)
-	ch2 := c.TimeoutAt(d, Fast)
+	ch2 := c.TimeoutAt(d, FastRecovery)
 	if polled(ch1) {
 		t.Errorf("channel fired ~100ms early")
 	}

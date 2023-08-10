@@ -251,8 +251,8 @@ func (d *demux) next(s *Service, deadline Deadline, fastDeadline time.Duration, 
 	}
 
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound)
-	deadlineCh := s.Clock.TimeoutAt(deadline.Deadline, deadline.Type)
-	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline, timers.Fast)
+	deadlineCh := s.Clock.TimeoutAt(deadline.Duration, deadline.Type)
+	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline, timers.FastRecovery)
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)

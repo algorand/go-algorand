@@ -26,7 +26,7 @@ import (
 // Monotonic uses the system's monotonic clock to emit timeouts.
 type Monotonic struct {
 	zero     time.Time
-	timeouts map[Timeout]map[time.Duration]<-chan time.Time
+	timeouts map[TimeoutType]map[time.Duration]<-chan time.Time
 }
 
 // MakeMonotonicClock creates a new monotonic clock with a given zero point.
@@ -44,9 +44,9 @@ func (m *Monotonic) Zero() Clock {
 }
 
 // TimeoutAt returns a channel that will signal when the duration has elapsed.
-func (m *Monotonic) TimeoutAt(delta time.Duration, timeoutType Timeout) <-chan time.Time {
+func (m *Monotonic) TimeoutAt(delta time.Duration, timeoutType TimeoutType) <-chan time.Time {
 	if m.timeouts == nil {
-		m.timeouts = make(map[Timeout]map[time.Duration]<-chan time.Time)
+		m.timeouts = make(map[TimeoutType]map[time.Duration]<-chan time.Time)
 	}
 
 	if _, ok := m.timeouts[timeoutType]; !ok {

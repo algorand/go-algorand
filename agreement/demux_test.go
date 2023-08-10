@@ -428,8 +428,8 @@ func (t *demuxTester) Zero() timers.Clock {
 }
 
 // implement timers.Clock
-func (t *demuxTester) TimeoutAt(delta time.Duration, timeoutType timers.Timeout) <-chan time.Time {
-	if timeoutType == timers.Fast {
+func (t *demuxTester) TimeoutAt(delta time.Duration, timeoutType timers.TimeoutType) <-chan time.Time {
+	if timeoutType == timers.FastRecovery {
 		return nil
 	}
 
@@ -675,7 +675,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 		close(s.quit)
 	}
 
-	e, ok := dmx.next(s, Deadline{Deadline: time.Second, Type: timers.Deadline}, fastTimeoutChTime, 300)
+	e, ok := dmx.next(s, Deadline{Duration: time.Second, Type: timers.Deadline}, fastTimeoutChTime, 300)
 
 	if !assert.Equal(t, testcase.ok, ok) {
 		return false

@@ -59,7 +59,7 @@ func (i *instant) Encode() []byte {
 	return nil
 }
 
-func (i *instant) TimeoutAt(d time.Duration, timeoutType timers.Timeout) <-chan time.Time {
+func (i *instant) TimeoutAt(d time.Duration, timeoutType timers.TimeoutType) <-chan time.Time {
 	ta := make(chan time.Time)
 	select {
 	case <-i.timeoutAtCalled:
@@ -68,7 +68,7 @@ func (i *instant) TimeoutAt(d time.Duration, timeoutType timers.Timeout) <-chan 
 		return ta
 	}
 
-	if timeoutType == timers.Filter && !i.HasPending("pseudonode") { //d == agreement.FilterTimeout(0, protocol.ConsensusCurrentVersion) && !i.HasPending("pseudonode") {
+	if timeoutType == timers.Filter && !i.HasPending("pseudonode") {
 		close(ta)
 	}
 	return ta

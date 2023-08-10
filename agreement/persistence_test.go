@@ -38,7 +38,7 @@ func TestAgreementSerialization(t *testing.T) {
 
 	// todo : we need to deserialize some more meaningful state.
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
-	status := player{Round: 350, Step: soft, Deadline: Deadline{Deadline: time.Duration(23) * time.Second, Type: timers.Deadline}}
+	status := player{Round: 350, Step: soft, Deadline: Deadline{Duration: time.Duration(23) * time.Second, Type: timers.Deadline}}
 	router := makeRootRouter(status)
 	a := []action{checkpointAction{}, disconnectAction(messageEvent{}, nil)}
 
@@ -59,7 +59,7 @@ func BenchmarkAgreementSerialization(b *testing.B) {
 	b.SkipNow()
 
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
-	status := player{Round: 350, Step: soft, Deadline: Deadline{Deadline: time.Duration(23) * time.Second, Type: timers.Deadline}}
+	status := player{Round: 350, Step: soft, Deadline: Deadline{Duration: time.Duration(23) * time.Second, Type: timers.Deadline}}
 	router := makeRootRouter(status)
 	a := []action{}
 
@@ -74,7 +74,7 @@ func BenchmarkAgreementDeserialization(b *testing.B) {
 	b.SkipNow()
 
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
-	status := player{Round: 350, Step: soft, Deadline: Deadline{Deadline: time.Duration(23) * time.Second, Type: timers.Deadline}}
+	status := player{Round: 350, Step: soft, Deadline: Deadline{Duration: time.Duration(23) * time.Second, Type: timers.Deadline}}
 	router := makeRootRouter(status)
 	a := []action{}
 
@@ -244,7 +244,7 @@ func TestDecodeFailures(t *testing.T) {
 	clock := timers.MakeMonotonicClock(time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	ce := clock.Encode()
 	log := makeServiceLogger(logging.Base())
-	player := player{Round: 350, Step: soft, Deadline: Deadline{Deadline: time.Duration(23) * time.Second, Type: timers.Deadline}}
+	player := player{Round: 350, Step: soft, Deadline: Deadline{Duration: time.Duration(23) * time.Second, Type: timers.Deadline}}
 	router := makeRootRouter(player)
 	pe := protocol.Encode(&player)
 	re := protocol.Encode(&router)
