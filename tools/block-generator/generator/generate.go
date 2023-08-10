@@ -289,6 +289,8 @@ func waitForRound(ctx context.Context, l *ledger.Ledger, round basics.Round) err
 	// Wait for the round to be available in the ledger.
 	for {
 		select {
+		case <-time.After(time.Minute):
+			return fmt.Errorf("timed out waiting for round %d", round)
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
@@ -364,7 +366,9 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		// we'll write genesis block / offset round for non-empty database
 		cert.Block, _, _ = g.ledger.BlockCert(basics.Round(round - g.roundOffset))
 	} else {
-		waitForRound(context.Background(), g.ledger, basics.Round(round))
+		if err := waitForRound(context.Background(), g.ledger, basics.Round(round)-1); err != nil {
+			return err
+		}
 		start := time.Now()
 		var generated, evaluated, validated time.Time
 		if g.verbose {
