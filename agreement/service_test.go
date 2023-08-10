@@ -880,6 +880,10 @@ func runRound(clocks []timers.Clock, activityMonitor *activityMonitor, zeroes ui
 	triggerGlobalTimeout(filterTimeout, timers.Filter, clocks, activityMonitor)
 	return expectNewPeriod(clocks, zeroes)
 }
+func runRoundTriggerFilter(clocks []timers.Clock, activityMonitor *activityMonitor, zeroes uint) (newzeroes uint) {
+	triggerGlobalTimeoutType(timers.Filter, clocks, activityMonitor)
+	return expectNewPeriod(clocks, zeroes)
+}
 
 func sanityCheck(startRound round, numRounds round, ledgers []Ledger) {
 	for i := range ledgers {
@@ -909,26 +913,6 @@ func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds
 	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
 }
 
-func maxFilterTimeoutPeriod0(services []*Service, version protocol.ConsensusVersion, iter int) time.Duration {
-	if iter < 32 { // TODO: 32 is the history length we track for dynamic lambda. We need to change this param
-		return FilterTimeout(0, version)
-	} else {
-		return time.Second // this is the min filter timeout we're using.
-	}
-
-	if len(services) == 0 {
-		return FilterTimeout(0, version)
-	}
-	maxFilter := services[0].persistStatus.calculateFilterTimeout(0, version)
-	for _, service := range services {
-		curr := service.persistStatus.calculateFilterTimeout(0, version)
-		if maxFilter < curr {
-			maxFilter = curr
-		}
-	}
-	return maxFilter
-}
-
 func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) {
 	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, traceLevel, ledgerFactory)
 	startRound := baseLedger.NextRound()
@@ -942,12 +926,9 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	zeroes := expectNewPeriod(clocks, 0)
 
 	// run round with round-specific consensus version first (since fix in #1896)
-	version, _ := baseLedger.ConsensusVersion(ParamsRound(startRound))
-	zeroes = runRound(clocks, activityMonitor, zeroes, maxFilterTimeoutPeriod0(services, version, 0))
+	zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
 	for j := 1; j < numRounds; j++ {
-		// TODO: remove this: time.Sleep(100 * time.Millisecond)
-		version, _ := baseLedger.ConsensusVersion(ParamsRound(baseLedger.NextRound() + basics.Round(j-1)))
-		zeroes = runRound(clocks, activityMonitor, zeroes, maxFilterTimeoutPeriod0(services, version, j))
+		zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
 	}
 
 	for i := 0; i < numNodes; i++ {
