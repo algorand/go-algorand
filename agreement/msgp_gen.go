@@ -4001,57 +4001,57 @@ func (_ *player) CanMarshalMsg(z interface{}) bool {
 func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
-	var zb0001 int
-	var zb0002 bool
-	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0001 > 0 {
-			zb0001--
+		if zb0002 > 0 {
+			zb0002--
 			bts, err = (*z).Round.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Round")
 				return
 			}
 		}
-		if zb0001 > 0 {
-			zb0001--
-			{
-				var zb0003 uint64
-				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Period")
-					return
-				}
-				(*z).Period = period(zb0003)
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
+		if zb0002 > 0 {
+			zb0002--
 			{
 				var zb0004 uint64
 				zb0004, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Step")
+					err = msgp.WrapError(err, "struct-from-array", "Period")
 					return
 				}
-				(*z).Step = step(zb0004)
+				(*z).Period = period(zb0004)
 			}
 		}
-		if zb0001 > 0 {
-			zb0001--
+		if zb0002 > 0 {
+			zb0002--
 			{
 				var zb0005 uint64
 				zb0005, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Step")
+					return
+				}
+				(*z).Step = step(zb0005)
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			{
+				var zb0006 uint64
+				zb0006, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "LastConcluding")
 					return
 				}
-				(*z).LastConcluding = step(zb0005)
+				(*z).LastConcluding = step(zb0006)
 			}
 		}
 		if zb0001 > 0 {
@@ -4070,32 +4070,32 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		}
-		if zb0001 > 0 {
-			zb0001--
+		if zb0002 > 0 {
+			zb0002--
 			(*z).Napping, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Napping")
 				return
 			}
 		}
-		if zb0001 > 0 {
-			zb0001--
+		if zb0002 > 0 {
+			zb0002--
 			(*z).FastRecoveryDeadline, bts, err = msgp.ReadDurationBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FastRecoveryDeadline")
 				return
 			}
 		}
-		if zb0001 > 0 {
-			zb0001--
+		if zb0002 > 0 {
+			zb0002--
 			bts, err = (*z).Pending.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Pending")
 				return
 			}
 		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -4106,11 +4106,11 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 {
+		if zb0003 {
 			(*z) = player{}
 		}
-		for zb0001 > 0 {
-			zb0001--
+		for zb0002 > 0 {
+			zb0002--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -4125,33 +4125,33 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "Period":
 				{
-					var zb0008 uint64
-					zb0008, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0009 uint64
+					zb0009, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Period")
 						return
 					}
-					(*z).Period = period(zb0008)
+					(*z).Period = period(zb0009)
 				}
 			case "Step":
-				{
-					var zb0009 uint64
-					zb0009, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0009)
-				}
-			case "LastConcluding":
 				{
 					var zb0010 uint64
 					zb0010, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
+						err = msgp.WrapError(err, "Step")
+						return
+					}
+					(*z).Step = step(zb0010)
+				}
+			case "LastConcluding":
+				{
+					var zb0011 uint64
+					zb0011, bts, err = msgp.ReadUint64Bytes(bts)
+					if err != nil {
 						err = msgp.WrapError(err, "LastConcluding")
 						return
 					}
-					(*z).LastConcluding = step(zb0010)
+					(*z).LastConcluding = step(zb0011)
 				}
 			case "TimersDeadline":
 				bts, err = (*z).Deadline.UnmarshalMsg(bts)
