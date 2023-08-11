@@ -105,10 +105,9 @@ var listRecordsCmd = &cobra.Command{
 	Long:  "List the A/SRV entries of the given network",
 	Run: func(cmd *cobra.Command, args []string) {
 		recordType = strings.ToUpper(recordType)
-		if recordType == "" || recordType == "A" || recordType == "CNAME" || recordType == "SRV" || recordType == "TXT" {
-			listEntries(listNetwork, recordType)
-		} else {
-			fmt.Fprintf(os.Stderr, "Invalid recordType specified.\n")
+		err := listEntries(listNetwork, recordType)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
 	},
@@ -438,23 +437,31 @@ func checkedDelete(toDelete []cloudflare.DNSRecordResponseEntry, cloudflareDNS *
 	return nil
 }
 
-func listEntries(listNetwork string, recordType string) {
+func listEntries(listNetwork string, recordType string) error {
+	recordTypes := []string{"A", "CNAME", "SRV", "TXT"}
+	isKnown := false
+	for _, known := range append(recordTypes, "") {
+		if recordType == known {
+			isKnown = true
+			break
+		}
+	}
+	if !isKnown {
+		return fmt.Errorf("invalid recordType specified %s", recordType)
+	}
 	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error getting DNS credentials: %v", err)
-		return
+		return fmt.Errorf("error getting DNS credentials: %v", err)
 	}
 
 	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
-	recordTypes := []string{"A", "CNAME", "SRV", "TXT"}
 	if recordType != "" {
 		recordTypes = []string{recordType}
 	}
 	for _, recType := range recordTypes {
-		records, err := cloudflareDNS.ListDNSRecord(context.Background(), recType, "", "", "", "", "")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing DNS entries: %v\n", err)
-			os.Exit(1)
+		records, err0 := cloudflareDNS.ListDNSRecord(context.Background(), recType, "", "", "", "", "")
+		if err0 != nil {
+			return fmt.Errorf("error listing DNS entries %w", err)
 		}
 
 		for _, record := range records {
@@ -463,6 +470,7 @@ func listEntries(listNetwork string, recordType string) {
 			}
 		}
 	}
+	return nil
 }
 
 func doExportZone(network string, outputFilename string) bool {
