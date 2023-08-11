@@ -1,75 +1,66 @@
-ARG GO_VERSION=1.17.5
-FROM golang:$GO_VERSION-bullseye as builder
+FROM ubuntu:20.04 as builder
 
-ARG CHANNEL=nightly
-ARG URL=
-ARG BRANCH=
-ARG SHA=
+ARG GO_VERSION="1.20.5"
+
+ARG CHANNEL
+ARG URL
+ARG BRANCH
+ARG SHA
+ARG TARGETARCH
+
+ADD https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz /go.tar.gz
 
 # Basic dependencies.
-ENV HOME /node
-ENV DEBIAN_FRONTEND noninteractive
+ENV HOME="/node" DEBIAN_FRONTEND="noninteractive" GOPATH="/dist"
+
 RUN apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
     apt-utils \
     bsdmainutils \
     curl \
     git \
-    git-core \
-    python3
+    && rm -rf /var/lib/apt/lists/* && \
+    \
+    tar -C /usr/local -xzf /go.tar.gz && \
+    rm -rf /go.tar.gz
 
-COPY ./docker/files/ /node/files
-COPY ./installer/genesis /node/files/run/genesis
-COPY ./cmd/updater/update.sh /node/files/build/update.sh
-COPY ./installer/config.json.example /node/files/build/config.json
+ENV PATH="/usr/local/go/bin:${PATH}"
 
-RUN find /node/files
+COPY ./docker/files/ /dist/files
+COPY ./installer/genesis /dist/files/run/genesis
+COPY ./cmd/updater/update.sh /dist/files/build/update.sh
+COPY ./installer/config.json.example /dist/files/run/config.json.example
 
 # Install algod binaries.
-RUN /node/files/build/install.sh \
-    -p "/node/bin" \
-    -d "/node/data" \
+RUN /dist/files/build/install.sh \
+    -p "${GOPATH}/bin" \
+    -d "/algod/data" \
     -c "${CHANNEL}" \
     -u "${URL}" \
     -b "${BRANCH}" \
     -s "${SHA}"
 
-# Copy binaries into a clean image
-# TODO: We don't need most of the binaries.
-#       Should we delete everything except goal/algod/algocfg/tealdbg?
-FROM debian:bullseye-slim as final
-COPY --from=builder "/node/bin/" "/node/bin"
-COPY --from=builder "/node/data/" "/node/dataTemplate"
-COPY --from=builder "/node/files/run" "/node/run"
+FROM debian:bookworm-20230703-slim as final
 
-ENV BIN_DIR="/node/bin"
-ENV PATH="$BIN_DIR:${PATH}"
-ENV ALGOD_PORT=8080
-ENV ALGORAND_DATA="/algod/data"
-RUN mkdir -p "$ALGORAND_DATA"
-WORKDIR /node/data
+ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" KMD_PORT="7833" ALGORAND_DATA="/algod/data"
 
 # curl is needed to lookup the fast catchup url
-RUN apt-get update && apt-get install -y \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gosu && \
+    update-ca-certificates && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p "$ALGORAND_DATA" && \
+    groupadd --gid=999 --system algorand && \
+    useradd --uid=999 --no-log-init --create-home --system --gid algorand algorand && \
+    chown -R algorand:algorand /algod
 
-# TODO: This works fine, but causes problems when mounting a volume
-# Use algorand user instead of root
-#RUN groupadd -r algorand && \
-#  useradd --no-log-init -r -g algorand algorand && \
-#  chown -R algorand.algorand /node && \
-#  chown -R algorand.algorand /algod
-#USER algorand
+COPY --chown=algorand:algorand --from=builder "/dist/bin/" "/node/bin/"
+COPY --chown=algorand:algorand --from=builder "/dist/files/run/" "/node/run/"
 
-# Algod REST API
-EXPOSE $ALGOD_PORT
+# Expose Algod REST API, KMD REST API, Algod Gossip, and Prometheus Metrics ports
+EXPOSE $ALGOD_PORT $KMD_PORT 4160 9100
 
-# Algod Gossip Port
-EXPOSE 4160
-
-# Prometheus Metrics
-EXPOSE 9100
+WORKDIR /algod
 
 CMD ["/node/run/run.sh"]
-#CMD ["/bin/bash"]

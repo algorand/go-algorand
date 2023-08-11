@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package ledger
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -180,7 +180,7 @@ func (bt *producePrepareBlockingTracker) prepareCommit(*deferredCommitContext) e
 }
 
 // commitRound is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (bt *producePrepareBlockingTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 
@@ -191,8 +191,8 @@ func (bt *producePrepareBlockingTracker) postCommit(ctx context.Context, dcc *de
 func (bt *producePrepareBlockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-// handleUnorderedCommit is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) handleUnorderedCommit(*deferredCommitContext) {
+// handleUnorderedCommitOrError is not used by the blockingTracker
+func (bt *producePrepareBlockingTracker) handleUnorderedCommitOrError(*deferredCommitContext) {
 }
 
 // close is not used by the blockingTracker
@@ -300,4 +300,17 @@ func TestTrackerDbRoundDataRace(t *testing.T) {
 	// unblock the notifyCommit (scheduleCommit) goroutine
 	stallingTracker.cancelTasks = true
 	close(stallingTracker.produceReleaseLock)
+}
+
+func TestAccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	aul := &accountUpdatesLedgerEvaluator{
+		prevHeader: bookkeeping.BlockHeader{},
+		tail:       &txTail{},
+	}
+	hdr, err := aul.BlockHdr(99)
+	require.Error(t, err)
+	require.Equal(t, ledgercore.ErrNoEntry{}, err)
+	require.Equal(t, bookkeeping.BlockHeader{}, hdr)
 }

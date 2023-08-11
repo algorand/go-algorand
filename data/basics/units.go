@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,6 +108,12 @@ func (a MicroAlgos) MsgIsZero() bool {
 	return a.Raw == 0
 }
 
+// MicroAlgosMaxSize returns maximum possible msgp encoded size of MicroAlgos in bytes.
+// It is expected by msgp generated MaxSize functions
+func MicroAlgosMaxSize() (s int) {
+	return msgp.Uint64Size
+}
+
 // Round represents a protocol round index
 type Round uint64
 
@@ -134,4 +140,9 @@ func (round Round) SubSaturate(x Round) Round {
 // RoundUpToMultipleOf rounds up round to the next multiple of n.
 func (round Round) RoundUpToMultipleOf(n Round) Round {
 	return (round + n - 1) / n * n
+}
+
+// RoundDownToMultipleOf rounds down round to a multiple of n.
+func (round Round) RoundDownToMultipleOf(n Round) Round {
+	return (round / n) * n
 }

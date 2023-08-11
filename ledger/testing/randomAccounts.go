@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,16 @@ import (
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
+
+// PoolAddr returns a copy of the test pool address
+func PoolAddr() basics.Address {
+	return testPoolAddr
+}
+
+// SinkAddr returns a copy of the test sink address
+func SinkAddr() basics.Address {
+	return testSinkAddr
+}
 
 // RandomAddress generates a random address
 func RandomAddress() basics.Address {
@@ -90,7 +100,7 @@ func RandomAssetParams() basics.AssetParams {
 		DefaultFrozen: crypto.RandUint64()%2 == 0,
 	}
 	if crypto.RandUint64()%5 != 0 {
-		ap.UnitName = fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffffff))
+		ap.UnitName = fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffff))
 	}
 	if crypto.RandUint64()%5 != 0 {
 		ap.AssetName = fmt.Sprintf("an%x", uint32(crypto.RandUint64()%0x7fffffff))

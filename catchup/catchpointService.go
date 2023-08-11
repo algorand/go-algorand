@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/stateproof"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -33,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/stateproof"
 )
 
 const (
@@ -157,11 +156,19 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 }
 
 // Start starts the catchpoint catchup service ( continue in the process )
-func (cs *CatchpointCatchupService) Start(ctx context.Context) {
+func (cs *CatchpointCatchupService) Start(ctx context.Context) error {
+	// Only check catchpoint ledger validity if we're starting new
+	if cs.stage == ledger.CatchpointCatchupStateInactive {
+		err := cs.checkLedgerDownload()
+		if err != nil {
+			return fmt.Errorf("aborting catchup Start(): %s", err)
+		}
+	}
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(ctx)
 	cs.abortCtx, cs.abortCtxFunc = context.WithCancel(context.Background())
 	cs.running.Add(1)
 	go cs.run()
+	return nil
 }
 
 // Abort aborts the catchpoint catchup process
@@ -259,6 +266,7 @@ func (cs *CatchpointCatchupService) processStageInactive() (err error) {
 	if err != nil {
 		return cs.abort(fmt.Errorf("processStageInactive failed to set a catchpoint label : %v", err))
 	}
+
 	err = cs.updateStage(ledger.CatchpointCatchupStateLedgerDownload)
 	if err != nil {
 		return cs.abort(fmt.Errorf("processStageInactive failed to update stage : %v", err))
@@ -802,4 +810,27 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
 			})
 	}
+}
+
+// checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
+// before actually starting the catchup process.
+// The error returned is either from an unsuccessful request or a successful request that did not return a 200.
+func (cs *CatchpointCatchupService) checkLedgerDownload() error {
+	round, _, err := ledgercore.ParseCatchpointLabel(cs.stats.CatchpointLabel)
+	if err != nil {
+		return fmt.Errorf("failed to parse catchpoint label : %v", err)
+	}
+	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
+	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
+	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
+		psp, peerError := peerSelector.getNextPeer()
+		if peerError != nil {
+			return err
+		}
+		err = ledgerFetcher.headLedger(context.Background(), psp.Peer, round)
+		if err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("checkLedgerDownload(): catchpoint '%s' unavailable from peers: %s", cs.stats.CatchpointLabel, err)
 }

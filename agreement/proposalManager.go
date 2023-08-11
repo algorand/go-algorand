@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,15 +43,15 @@ func (m *proposalManager) underlying() listener {
 
 // A proposalManager handles eight types of events:
 //
-// - It applies message relay rules to votePresent, voteVerified,
-//   payloadPresent, and payloadVerified events.
+//   - It applies message relay rules to votePresent, voteVerified,
+//     payloadPresent, and payloadVerified events.
 //
 // - It enters a new round given a roundInterruption.
 //
-// - It enters a new period given a nextThreshold event.  It also enters a new
-//   period given a softThreshold/certThreshold event, if necessary.
-//    - On entering a new period due to a softThreshold/certThreshold, it
-//      dispatches this event to the proposalMachineRound.
+//   - It enters a new period given a nextThreshold event.  It also enters a new
+//     period given a softThreshold/certThreshold event, if necessary.
+//   - On entering a new period due to a softThreshold/certThreshold, it
+//     dispatches this event to the proposalMachineRound.
 //
 // For more details, see each method's respective documentation below.
 func (m *proposalManager) handle(r routerHandle, p player, e event) event {
@@ -99,30 +99,30 @@ func (m *proposalManager) handleNewPeriod(r routerHandle, p player, e thresholdE
 
 // handleMessageEvent is called for {vote,payload}{Present,Verified} events.
 //
-// - A votePresent event is delivered when the state machine receives a new
-//   proposal-vote.  A voteFiltered event is returned if the proposal-vote is
-//   not fresh or is a duplicate.  Otherwise, an empty event is returned.
+//   - A votePresent event is delivered when the state machine receives a new
+//     proposal-vote.  A voteFiltered event is returned if the proposal-vote is
+//     not fresh or is a duplicate.  Otherwise, an empty event is returned.
 //
-// - A voteVerified event is delievered after verification was attempted on a
-//   proposal-vote.  A voteMalformed event is returned if the proposal-vote is
-//   ill-formed and resulted from a corrupt process.  A voteFiltered event is
-//   emitted if the vote is not fresh or is a duplicate.  Otherwise the
-//   proposal-vote is dispatched to the proposalMachineRound, and a voteFiltered
-//   or a proposalAccepted event is returned.
+//   - A voteVerified event is delievered after verification was attempted on a
+//     proposal-vote.  A voteMalformed event is returned if the proposal-vote is
+//     ill-formed and resulted from a corrupt process.  A voteFiltered event is
+//     emitted if the vote is not fresh or is a duplicate.  Otherwise the
+//     proposal-vote is dispatched to the proposalMachineRound, and a voteFiltered
+//     or a proposalAccepted event is returned.
 //
-// - A payloadPresent event is delivered when the state machine receives a new
-//   proposal payload.  The payload is dispatched to both the
-//   proposalMachineRound for the current round and the proposalMachineRound for
-//   the next round.  If both state machines return payloadRejected,
-//   proposalManager also returns payloadRejected.  Otherwise, one state machine
-//   returned payloadPipelined, and the proposalManager propagates this event to
-//   the parent, setting the event's round properly.
+//   - A payloadPresent event is delivered when the state machine receives a new
+//     proposal payload.  The payload is dispatched to both the
+//     proposalMachineRound for the current round and the proposalMachineRound for
+//     the next round.  If both state machines return payloadRejected,
+//     proposalManager also returns payloadRejected.  Otherwise, one state machine
+//     returned payloadPipelined, and the proposalManager propagates this event to
+//     the parent, setting the event's round properly.
 //
-// - A payloadVerified event is delivered after validation was attempted on a
-//   proposal payload.  If the proposal payload was invalid, a payloadMalformed
-//   event is returned.  Otherwise, the event is dispatched to the
-//   proposalMachineRound, and then the resulting payload{Rejected,Accepted} or
-//   proposalCommittable event is returned.
+//   - A payloadVerified event is delivered after validation was attempted on a
+//     proposal payload.  If the proposal payload was invalid, a payloadMalformed
+//     event is returned.  Otherwise, the event is dispatched to the
+//     proposalMachineRound, and then the resulting payload{Rejected,Accepted} or
+//     proposalCommittable event is returned.
 func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filterableMessageEvent) (res event) {
 	var pipelinedRound round
 	var pipelinedPeriod period

@@ -334,7 +334,7 @@ function check_for_updater() {
 function check_for_update() {
     determine_current_version
     check_for_updater
-    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | sed -n '2 p')"
+    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | tail -1)"
     if [ $? -ne 0 ]; then
         echo "No remote updates found"
         return 1
@@ -537,7 +537,7 @@ function install_new_binaries() {
     if [ ! -d ${UPDATESRCDIR}/bin ]; then
         return 0
     else
-        echo "Installing new binary files..."
+        echo "Installing new binary files into ${BINDIR}"
         ROLLBACKBIN=1
         rm -rf ${BINDIR}/new
         mkdir ${BINDIR}/new

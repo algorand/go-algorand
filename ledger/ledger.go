@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,11 +31,14 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/apply"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -48,7 +51,7 @@ type Ledger struct {
 	// Database connections to the DBs storing blocks and tracker state.
 	// We use potentially different databases to avoid SQLite contention
 	// during catchup.
-	trackerDBs db.Pair
+	trackerDBs trackerdb.Store
 	blockDBs   db.Pair
 
 	// blockQ is the buffer of added blocks that will be flushed to
@@ -76,18 +79,17 @@ type Ledger struct {
 	genesisProtoVersion protocol.ConsensusVersion
 
 	// State-machine trackers
-	accts       accountUpdates
-	acctsOnline onlineAccounts
-	catchpoint  catchpointTracker
-	txTail      txTail
-	bulletin    bulletin
-	notifier    blockNotifier
-	metrics     metricsTracker
+	accts          accountUpdates
+	acctsOnline    onlineAccounts
+	catchpoint     catchpointTracker
+	txTail         txTail
+	bulletin       bulletin
+	notifier       blockNotifier
+	metrics        metricsTracker
+	spVerification spVerificationTracker
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
-
-	headerCache blockHeaderCache
 
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
@@ -95,6 +97,8 @@ type Ledger struct {
 	cfg config.Local
 
 	dbPathPrefix string
+
+	tracer logic.EvalTracer
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
@@ -110,6 +114,10 @@ func OpenLedger(
 		verifiedCacheSize = cfg.TxPoolSize
 		log.Warnf("The VerifiedTranscationsCacheSize in the config file was misconfigured to have smaller size then the TxPoolSize; The verified cache size was adjusted from %d to %d.", cfg.VerifiedTranscationsCacheSize, cfg.TxPoolSize)
 	}
+	var tracer logic.EvalTracer
+	if cfg.EnableTxnEvalTracer {
+		tracer = eval.MakeTxnGroupDeltaTracer(cfg.MaxAcctLookback)
+	}
 
 	l := &Ledger{
 		log:                            log,
@@ -123,9 +131,8 @@ func OpenLedger(
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
 		dbPathPrefix:                   dbPathPrefix,
+		tracer:                         tracer,
 	}
-
-	l.headerCache.initialize()
 
 	defer func() {
 		if err != nil {
@@ -133,15 +140,11 @@ func OpenLedger(
 		}
 	}()
 
-	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem, cfg, log)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
 	}
-	l.trackerDBs.Rdb.SetLogger(log)
-	l.trackerDBs.Wdb.SetLogger(log)
-	l.blockDBs.Rdb.SetLogger(log)
-	l.blockDBs.Wdb.SetLogger(log)
 
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
 
@@ -160,6 +163,11 @@ func OpenLedger(
 		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
+	l.blockQ, err = newBlockQueue(l)
+	if err != nil {
+		return nil, err
+	}
+
 	err = l.reloadLedger()
 	if err != nil {
 		return nil, err
@@ -168,19 +176,12 @@ func OpenLedger(
 	return l, nil
 }
 
-// ReloadLedger is exported for the benefit of tests in the internal
-// package. Revisit this when we rename / restructure that thing
-func (l *Ledger) ReloadLedger() error {
-	return l.reloadLedger()
-}
-
 func (l *Ledger) reloadLedger() error {
 	// similar to the Close function, we want to start by closing the blockQ first. The
 	// blockQ is having a sync goroutine which indirectly calls other trackers. We want to eliminate that go-routine first,
 	// and follow up by taking the trackers lock.
 	if l.blockQ != nil {
-		l.blockQ.close()
-		l.blockQ = nil
+		l.blockQ.stop()
 	}
 
 	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
@@ -192,9 +193,9 @@ func (l *Ledger) reloadLedger() error {
 
 	// init block queue
 	var err error
-	l.blockQ, err = bqInit(l)
+	err = l.blockQ.start()
 	if err != nil {
-		err = fmt.Errorf("reloadLedger.bqInit %v", err)
+		err = fmt.Errorf("reloadLedger.blockQ.start %v", err)
 		return err
 	}
 
@@ -206,13 +207,14 @@ func (l *Ledger) reloadLedger() error {
 
 	// set account updates tracker as a driver to calculate tracker db round and committing offsets
 	trackers := []ledgerTracker{
-		&l.accts,       // update the balances
-		&l.catchpoint,  // catchpoints tracker : update catchpoint labels, create catchpoint files
-		&l.acctsOnline, // update online account balances history
-		&l.txTail,      // update the transaction tail, tracking the recent 1000 txn
-		&l.bulletin,    // provide closed channel signaling support for completed rounds
-		&l.notifier,    // send OnNewBlocks to subscribers
-		&l.metrics,     // provides metrics reporting support
+		&l.accts,          // update the balances
+		&l.catchpoint,     // catchpoints tracker : update catchpoint labels, create catchpoint files
+		&l.acctsOnline,    // update online account balances history
+		&l.txTail,         // update the transaction tail, tracking the recent 1000 txn
+		&l.bulletin,       // provide closed channel signaling support for completed rounds
+		&l.notifier,       // send OnNewBlocks to subscribers
+		&l.metrics,        // provides metrics reporting support
+		&l.spVerification, // provides state proof verification support
 	}
 
 	l.accts.initialize(l.cfg)
@@ -275,12 +277,9 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs db.Pair, err error) {
+func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
-	var trackerDBFilename string
-	var blockDBFilename string
-
 	if !dbMem {
 		commonDBFilename := dbPathPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
@@ -293,20 +292,32 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs
 		}
 	}
 
-	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-	blockDBFilename = dbPathPrefix + ".block.sqlite"
-
 	outErr := make(chan error, 2)
 	go func() {
 		var lerr error
-		trackerDBs, lerr = db.OpenPair(trackerDBFilename, dbMem)
+		switch cfg.StorageEngine {
+		case "sqlite":
+			fallthrough
+		// anything else will initialize a sqlite engine.
+		default:
+			file := dbPathPrefix + ".tracker.sqlite"
+			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
+		}
+
 		outErr <- lerr
 	}()
 
 	go func() {
 		var lerr error
+		blockDBFilename := dbPathPrefix + ".block.sqlite"
 		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
-		outErr <- lerr
+		if lerr != nil {
+			outErr <- lerr
+			return
+		}
+		blockDBs.Rdb.SetLogger(log)
+		blockDBs.Wdb.SetLogger(log)
+		outErr <- nil
 	}()
 
 	err = <-outErr
@@ -330,7 +341,7 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 		return
 	}
 
-	err = l.trackerDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
+	err = l.trackerDBs.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
 		l.log.Warnf("ledger.setSynchronousMode unable to set synchronous mode on trackers db: %v", err)
 		return
@@ -378,11 +389,10 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 // Close reclaims resources used by the ledger (namely, the database connection
 // and goroutines used by trackers).
 func (l *Ledger) Close() {
-	// we shut the the blockqueue first, since it's sync goroutine dispatches calls
+	// we shut the blockqueue first, since it's sync goroutine dispatches calls
 	// back to the trackers.
 	if l.blockQ != nil {
-		l.blockQ.close()
-		l.blockQ = nil
+		l.blockQ.stop()
 	}
 
 	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
@@ -399,16 +409,36 @@ func (l *Ledger) Close() {
 
 // RegisterBlockListeners registers listeners that will be called when a
 // new block is added to the ledger.
-func (l *Ledger) RegisterBlockListeners(listeners []BlockListener) {
+func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
 	l.notifier.register(listeners)
+}
+
+// RegisterVotersCommitListener registers a listener that will be called when a
+// commit is about to cover a round.
+func (l *Ledger) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	l.acctsOnline.voters.registerPrepareCommitListener(listener)
+}
+
+// UnregisterVotersCommitListener unregisters the commit listener.
+func (l *Ledger) UnregisterVotersCommitListener() {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	l.acctsOnline.voters.unregisterPrepareCommitListener()
 }
 
 // notifyCommit informs the trackers that all blocks up to r have been
 // written to disk.  Returns the minimum block number that must be kept
 // in the database.
 func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 	minToSave := l.trackers.committedUpTo(r)
 
 	if l.archival {
@@ -451,31 +481,26 @@ func (l *Ledger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta,
 	return l.accts.lookupStateDelta(rnd)
 }
 
+// GetTracer returns the logic.EvalTracer attached to the ledger--can be nil.
+func (l *Ledger) GetTracer() logic.EvalTracer {
+	return l.tracer
+}
+
 // VotersForStateProof returns the top online accounts at round rnd.
 // The result might be nil, even with err=nil, if there are no voters
 // for that round because state proofs were not enabled.
 func (l *Ledger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.voters.getVoters(rnd)
+	return l.acctsOnline.voters.VotersForStateProof(rnd)
 }
 
-// ListAssets takes a maximum asset index and maximum result length, and
-// returns up to that many CreatableLocators from the database where app idx is
-// less than or equal to the maximum.
-func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
+// GetStateProofVerificationContext returns the data required to verify the state proof whose last attested round is
+// stateProofLastAttestedRound.
+func (l *Ledger) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.ListAssets(maxAssetIdx, maxResults)
-}
-
-// ListApplications takes a maximum app index and maximum result length, and
-// returns up to that many CreatableLocators from the database where app idx is
-// less than or equal to the maximum.
-func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.ListApplications(maxAppIdx, maxResults)
+	return l.spVerification.LookupVerificationContext(stateProofLastAttestedRound)
 }
 
 // LookupLatest uses the accounts tracker to return the account state (including
@@ -594,17 +619,16 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 	return l.accts.LatestTotals()
 }
 
-// OnlineTotals returns the online totals of all accounts at the end of round rnd.
-func (l *Ledger) OnlineTotals(rnd basics.Round) (basics.MicroAlgos, error) {
+// OnlineCirculation returns the online totals of all accounts at the end of round rnd.
+// It implements agreement's calls for Circulation(rnd)
+func (l *Ledger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.onlineTotals(rnd)
+	return l.acctsOnline.onlineCirculation(rnd, voteRnd)
 }
 
 // CheckDup return whether a transaction is a duplicate one.
 func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
@@ -629,16 +653,22 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 
 // BlockHdr returns the BlockHeader of the block for round rnd.
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	blk, exists := l.headerCache.get(rnd)
-	if exists {
-		return
-	}
 
-	blk, err = l.blockQ.getBlockHdr(rnd)
-	if err == nil {
-		l.headerCache.put(blk)
+	// Expected availability range in txTail.blockHeader is [Latest - MaxTxnLife, Latest]
+	// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+	// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
+	// and currently set to 1.
+	// Explanation:
+	// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
+	// and because a txn is alive when the current round <= txn.LastValid
+	// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
+	// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
+	// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
+	hdr, ok := l.txTail.blockHeader(rnd)
+	if !ok {
+		hdr, err = l.blockQ.getBlockHdr(rnd)
 	}
-	return
+	return hdr, err
 }
 
 // EncodedBlockCert returns the encoded block and the corresponding encoded certificate of the block for round rnd.
@@ -657,7 +687,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := internal.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
+	updates, err := eval.Eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil, l.tracer)
 	if err != nil {
 		if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
 			return ledgercore.BlockInLedgerError{
@@ -679,15 +709,19 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 // behaves like AddBlock.
 func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error {
 	// Grab the tracker lock first, to ensure newBlock() is notified before committedUpTo().
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 
 	blk := vb.Block()
 	err := l.blockQ.putBlock(blk, cert)
 	if err != nil {
 		return err
 	}
-	l.headerCache.put(blk.BlockHeader)
 	l.trackers.newBlock(blk, vb.Delta())
 	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil
@@ -730,27 +764,6 @@ func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
 }
 
-// BlockHdrCached returns the block header if available.
-// Expected availability range is [Latest - MaxTxnLife, Latest]
-// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
-// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
-// and currently set to 1.
-// Explanation:
-// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
-// and because a txn is alive when the current round <= txn.LastValid
-// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
-// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
-// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
-func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	hdr, ok := l.txTail.blockHeader(rnd)
-	if !ok {
-		err = fmt.Errorf("no cached header data for round %d", rnd)
-	}
-	return hdr, err
-}
-
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
 func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {
 	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)
@@ -768,7 +781,7 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 }
 
 // ledgerForTracker methods
-func (l *Ledger) trackerDB() db.Pair {
+func (l *Ledger) trackerDB() trackerdb.Store {
 	return l.trackerDBs
 }
 
@@ -784,9 +797,9 @@ func (l *Ledger) trackerLog() logging.Logger {
 // trackerEvalVerified is used by the accountUpdates to reconstruct the ledgercore.StateDelta from a given block during it's loadFromDisk execution.
 // when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eval.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
-	return internal.Eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
+	return eval.Eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil, l.tracer)
 }
 
 // IsWritingCatchpointDataFile returns true when a catchpoint file is being generated.
@@ -795,7 +808,7 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger int
 func (l *Ledger) IsWritingCatchpointDataFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.catchpoint.IsWritingCatchpointDataFile()
+	return l.catchpoint.isWritingCatchpointDataFile()
 }
 
 // VerifiedTransactionCache returns the verify.VerifiedTransactionCache
@@ -810,13 +823,20 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 // provides a cap on the size of a single generated block size, when a non-zero value is passed.
 // If a value of zero or less is passed to maxTxnBytesPerBlock, the consensus MaxTxnBytesPerBlock would
 // be used instead.
-func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int) (*internal.BlockEvaluator, error) {
-	return internal.StartEvaluator(l, hdr,
-		internal.EvaluatorOptions{
+// The tracer argument is a logic.EvalTracer which will be attached to the evaluator and have its hooked invoked during
+// the eval process for each block. A nil tracer will default to the tracer attached to the ledger.
+func (l *Ledger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
+	tracerForEval := tracer
+	if tracerForEval == nil {
+		tracerForEval = l.tracer
+	}
+	return eval.StartEvaluator(l, hdr,
+		eval.EvaluatorOptions{
 			PaysetHint:          paysetHint,
 			Generate:            true,
 			Validate:            true,
 			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
+			Tracer:              tracerForEval,
 		})
 }
 
@@ -830,7 +850,7 @@ func (l *Ledger) FlushCaches() {
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
-	delta, err := internal.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	delta, err := eval.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool, l.tracer)
 	if err != nil {
 		return nil, err
 	}
@@ -839,15 +859,22 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 	return &vb, nil
 }
 
+// LatestTrackerCommitted returns the trackers' dbRound which "is always exactly accountsRound()"
+func (l *Ledger) LatestTrackerCommitted() basics.Round {
+	return l.trackers.getDbRound()
+}
+
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.
-type DebuggerLedger = internal.LedgerForCowBase
+type DebuggerLedger = eval.LedgerForCowBase
 
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
 func MakeDebugBalances(l DebuggerLedger, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
-	return internal.MakeDebugBalances(l, round, proto, prevTimestamp)
+	return eval.MakeDebugBalances(l, round, proto, prevTimestamp)
 }
 
 var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")
 var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")
 var ledgerVerifygenhashCount = metrics.NewCounter("ledger_verifygenhash_count", "calls")
 var ledgerVerifygenhashMicros = metrics.NewCounter("ledger_verifygenhash_micros", "µs spent")
+var ledgerTrackerMuLockCount = metrics.NewCounter("ledger_lock_trackermu_count", "calls")
+var ledgerTrackerMuLockMicros = metrics.NewCounter("ledger_lock_trackermu_micros", "µs spent")

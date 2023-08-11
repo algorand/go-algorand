@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -210,7 +210,6 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 // signed a Hashable message.
 //
 // It returns true if this is the case; otherwise, it returns false.
-//
 func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 	cryptoSigSecretsVerifyTotal.Inc(nil)
 	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))

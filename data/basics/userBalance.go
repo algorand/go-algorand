@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/slices"
 )
 
 // Status is the delegation status of an account's MicroAlgos
@@ -105,6 +106,7 @@ type VotingData struct {
 }
 
 // OnlineAccountData contains the voting information for a single account.
+//
 //msgp:ignore OnlineAccountData
 type OnlineAccountData struct {
 	MicroAlgosWithRewards MicroAlgos
@@ -267,10 +269,8 @@ type StateSchemas struct {
 // affecting the original
 func (ap *AppParams) Clone() (res AppParams) {
 	res = *ap
-	res.ApprovalProgram = make([]byte, len(ap.ApprovalProgram))
-	copy(res.ApprovalProgram, ap.ApprovalProgram)
-	res.ClearStateProgram = make([]byte, len(ap.ClearStateProgram))
-	copy(res.ClearStateProgram, ap.ClearStateProgram)
+	res.ApprovalProgram = slices.Clone(ap.ApprovalProgram)
+	res.ClearStateProgram = slices.Clone(ap.ClearStateProgram)
 	res.GlobalState = ap.GlobalState.Clone()
 	return
 }
@@ -372,14 +372,14 @@ type AssetParams struct {
 
 	// UnitName specifies a hint for the name of a unit of
 	// this asset.
-	UnitName string `codec:"un"`
+	UnitName string `codec:"un,allocbound=config.MaxAssetUnitNameBytes"`
 
 	// AssetName specifies a hint for the name of the asset.
-	AssetName string `codec:"an"`
+	AssetName string `codec:"an,allocbound=config.MaxAssetNameBytes"`
 
 	// URL specifies a URL where more information about the asset can be
 	// retrieved
-	URL string `codec:"au"`
+	URL string `codec:"au,allocbound=config.MaxAssetURLBytes"`
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.
@@ -412,11 +412,6 @@ func (app AppIndex) ToBeHashed() (protocol.HashID, []byte) {
 // Address yields the "app address" of the app
 func (app AppIndex) Address() Address {
 	return Address(crypto.HashObj(app))
-}
-
-// MakeAccountData returns a UserToken
-func MakeAccountData(status Status, algos MicroAlgos) AccountData {
-	return AccountData{Status: status, MicroAlgos: algos}
 }
 
 // Money returns the amount of MicroAlgos associated with the user's account
@@ -577,7 +572,7 @@ func (u AccountData) IsZero() bool {
 	return reflect.DeepEqual(u, AccountData{})
 }
 
-// NormalizedOnlineBalance returns a ``normalized'' balance for this account.
+// NormalizedOnlineBalance returns a “normalized” balance for this account.
 //
 // The normalization compensates for rewards that have not yet been applied,
 // by computing a balance normalized to round 0.  To normalize, we estimate
@@ -599,7 +594,7 @@ func (u AccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint6
 	return NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, proto)
 }
 
-// NormalizedOnlineAccountBalance returns a ``normalized'' balance for an account
+// NormalizedOnlineAccountBalance returns a “normalized” balance for an account
 // with the given parameters.
 //
 // The normalization compensates for rewards that have not yet been applied,

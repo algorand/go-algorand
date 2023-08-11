@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,32 +28,47 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
 
-func newSimpleLedger(t testing.TB, balances bookkeeping.GenesisBalances) *Ledger {
-	return newSimpleLedgerWithConsensusVersion(t, balances, protocol.ConsensusFuture)
+type simpleLedgerCfg struct {
+	onDisk      bool // default is in-memory
+	notArchival bool // default is archival
 }
 
-func newSimpleLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) *Ledger {
+type simpleLedgerOption func(*simpleLedgerCfg)
+
+func simpleLedgerOnDisk() simpleLedgerOption {
+	return func(cfg *simpleLedgerCfg) { cfg.onDisk = true }
+}
+
+func simpleLedgerNotArchival() simpleLedgerOption {
+	return func(cfg *simpleLedgerCfg) { cfg.notArchival = true }
+}
+
+func newSimpleLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local, opts ...simpleLedgerOption) *Ledger {
 	var genHash crypto.Digest
 	crypto.RandBytes(genHash[:])
-	return newSimpleLedgerFull(t, balances, cv, genHash)
+	return newSimpleLedgerFull(t, balances, cv, genHash, cfg, opts...)
 }
 
-func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, genHash crypto.Digest) *Ledger {
+func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, genHash crypto.Digest, cfg config.Local, opts ...simpleLedgerOption) *Ledger {
+	var slCfg simpleLedgerCfg
+	for _, opt := range opts {
+		opt(&slCfg)
+	}
 	genBlock, err := bookkeeping.MakeGenesisBlock(cv, balances, "test", genHash)
 	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, true, ledgercore.InitState{
+	dbName = strings.Replace(dbName, "/", "_", -1)
+	cfg.Archival = !slCfg.notArchival
+	l, err := OpenLedger(logging.Base(), dbName, !slCfg.onDisk, ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,
@@ -63,14 +78,14 @@ func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv 
 }
 
 // nextBlock begins evaluation of a new block, after ledger creation or endBlock()
-func nextBlock(t testing.TB, ledger *Ledger) *internal.BlockEvaluator {
+func nextBlock(t testing.TB, ledger *Ledger) *eval.BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
 
 	nextHdr := bookkeeping.MakeBlock(hdr).BlockHeader
 	nextHdr.TimeStamp = hdr.TimeStamp + 1 // ensure deterministic tests
-	eval, err := internal.StartEvaluator(ledger, nextHdr, internal.EvaluatorOptions{
+	eval, err := eval.StartEvaluator(ledger, nextHdr, eval.EvaluatorOptions{
 		Generate: true,
 		Validate: true, // Do the complete checks that a new txn would be subject to
 	})
@@ -78,7 +93,7 @@ func nextBlock(t testing.TB, ledger *Ledger) *internal.BlockEvaluator {
 	return eval
 }
 
-func fillDefaults(t testing.TB, ledger *Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn) {
+func fillDefaults(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn) {
 	if txn.GenesisHash.IsZero() && ledger.GenesisProto().SupportGenesisHash {
 		txn.GenesisHash = ledger.GenesisHash()
 	}
@@ -89,14 +104,14 @@ func fillDefaults(t testing.TB, ledger *Ledger, eval *internal.BlockEvaluator, t
 	txn.FillDefaults(ledger.GenesisProto())
 }
 
-func txns(t testing.TB, ledger *Ledger, eval *internal.BlockEvaluator, txns ...*txntest.Txn) {
+func txns(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) {
 	t.Helper()
 	for _, txn1 := range txns {
 		txn(t, ledger, eval, txn1)
 	}
 }
 
-func txn(t testing.TB, ledger *Ledger, eval *internal.BlockEvaluator, txn *txntest.Txn, problem ...string) {
+func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
 	err := eval.Transaction(txn.SignedTxn(), transactions.ApplyData{})
@@ -111,18 +126,18 @@ func txn(t testing.TB, ledger *Ledger, eval *internal.BlockEvaluator, txn *txnte
 	require.True(t, len(problem) == 0 || problem[0] == "")
 }
 
-func txgroup(t testing.TB, ledger *Ledger, eval *internal.BlockEvaluator, txns ...*txntest.Txn) error {
+func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
 	t.Helper()
 	for _, txn := range txns {
 		fillDefaults(t, ledger, eval, txn)
 	}
-	txgroup := txntest.SignedTxns(txns...)
+	txgroup := txntest.Group(txns...)
 
 	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
 }
 
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
-func endBlock(t testing.TB, ledger *Ledger, eval *internal.BlockEvaluator) *ledgercore.ValidatedBlock {
+func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator) *ledgercore.ValidatedBlock {
 	validatedBlock, err := eval.GenerateBlock()
 	require.NoError(t, err)
 	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
@@ -184,4 +199,20 @@ func asaParams(t testing.TB, ledger *Ledger, asset basics.AssetIndex) (basics.As
 		return params, nil
 	}
 	return basics.AssetParams{}, fmt.Errorf("bad lookup (%d)", asset)
+}
+
+// globals gets the AppParams for an address, app index pair (only works if addr is the creator)
+func globals(t testing.TB, ledger *Ledger, addr basics.Address, app basics.AppIndex) (basics.AppParams, bool) {
+	if globals, ok := lookup(t, ledger, addr).AppParams[app]; ok {
+		return globals, true
+	}
+	return basics.AppParams{}, false
+}
+
+// locals gets the AppLocalState for an address, app index pair
+func locals(t testing.TB, ledger *Ledger, addr basics.Address, app basics.AppIndex) (basics.AppLocalState, bool) {
+	if locals, ok := lookup(t, ledger, addr).AppLocalStates[app]; ok {
+		return locals, true
+	}
+	return basics.AppLocalState{}, false
 }

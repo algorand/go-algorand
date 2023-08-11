@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -144,7 +144,7 @@ func (c *wsPeerMsgDataConverter) convert(tag protocol.Tag, data []byte) ([]byte,
 
 func makeWsPeerMsgDataConverter(wp *wsPeer) *wsPeerMsgDataConverter {
 	c := wsPeerMsgDataConverter{
-		log:    wp.net.log,
+		log:    wp.log,
 		origin: wp.originAddress,
 	}
 

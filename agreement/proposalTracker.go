@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,34 +90,34 @@ func (t *proposalTracker) underlying() listener {
 
 // A proposalTracker handles five types of events.
 //
-// - voteFilterRequest returns a voteFiltered event if a given proposal-vote
-//   from a given sender has already been seen.  Otherwise it returns an empty
-//   event.
+//   - voteFilterRequest returns a voteFiltered event if a given proposal-vote
+//     from a given sender has already been seen.  Otherwise it returns an empty
+//     event.
 //
-// - voteVerified is issued when a relevant proposal-vote has passed
-//   cryptographic verification.  If the proposalTracker has already seen a
-//   proposal-vote from the same sender, a voteFiltered event is returned.  If
-//   the proposal-vote's credential is not lowest than the current lowest
-//   credential, or if a proposalFrozen or softThreshold event has already been delivered,
-//   voteFiltered is also returned.  Otherwise, a proposalAccepted event is
-//   returned.  The returned event contains the proposal-value relevant to the
-//   current period.
+//   - voteVerified is issued when a relevant proposal-vote has passed
+//     cryptographic verification.  If the proposalTracker has already seen a
+//     proposal-vote from the same sender, a voteFiltered event is returned.  If
+//     the proposal-vote's credential is not lowest than the current lowest
+//     credential, or if a proposalFrozen or softThreshold event has already been delivered,
+//     voteFiltered is also returned.  Otherwise, a proposalAccepted event is
+//     returned.  The returned event contains the proposal-value relevant to the
+//     current period.
 //
-// - proposalFrozen is issued after the state machine has timed out waiting for
-//   the vote with the lowest credential value and has settled on a value to
-//   soft-vote.  A proposalFrozen event tells this state machine to stop
-//   accepting new proposal-votes.  The proposalFrozen is returned and the best
-//   vote proposal-value is returned.  If none exists, bottom is returned.
+//   - proposalFrozen is issued after the state machine has timed out waiting for
+//     the vote with the lowest credential value and has settled on a value to
+//     soft-vote.  A proposalFrozen event tells this state machine to stop
+//     accepting new proposal-votes.  The proposalFrozen is returned and the best
+//     vote proposal-value is returned.  If none exists, bottom is returned.
 //
-// - softThreshold is issued after the state machine has received a threshold of
-//   soft votes for some value in the proposalTracker's period.  The
-//   softThreshold event sets the proposalTracker's staging value.  A
-//   proposalAccepted event is returned, which contains the proposal-value
-//   relevant to the current period.
+//   - softThreshold is issued after the state machine has received a threshold of
+//     soft votes for some value in the proposalTracker's period.  The
+//     softThreshold event sets the proposalTracker's staging value.  A
+//     proposalAccepted event is returned, which contains the proposal-value
+//     relevant to the current period.
 //
-// - readStaging returns the a stagingValueEvent with the proposal-value
-//   believed to be the staging value (i.e., sigma(S, r, p)) by the
-//   proposalTracker in period p.
+//   - readStaging returns the a stagingValueEvent with the proposal-value
+//     believed to be the staging value (i.e., sigma(S, r, p)) by the
+//     proposalTracker in period p.
 func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 	switch e.t() {
 	case voteFilterRequest:

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
@@ -112,10 +113,12 @@ func TestVrfVerify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, _, _ := makeSampleEnv()
+	ep := defaultAppParams()
 	testApp(t, notrack("int 1; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 0 wanted")
 	testApp(t, notrack("byte 0x1122; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 1 wanted")
 	testApp(t, notrack("byte 0x1122; byte 0x2233; int 3; vrf_verify VrfAlgorand"), ep, "arg 2 wanted")
+
+	ep = defaultSigParams()
 	testLogic(t, "byte 0x1122; byte 0x2233; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf proof wrong size")
 	// 80 byte proof
 	testLogic(t, "byte 0x1122; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf pubkey wrong size")
@@ -147,18 +150,27 @@ func BenchmarkVerify(b *testing.B) {
 	benches := [][]string{
 		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
 		{"add", "", "int 1234576; int 6712; +; pop", "int 1"},
-		/*
-					{"ed25519verify_bare", "", `byte 0x
-			byte 0x
-			addr
-			ed25519verify_bare
-			assert`, "int 1"},*/
-		{"ecdsa_verify", "", `byte 0x71a5910445820f57989c027bdf9391c80097874d249e0f38bf90834fdec2877f
+		{"ed25519verify_bare", "", `
+byte 0x62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd
+byte 0xaab40a8b4f1f386504af2473804abbc03bbd94506e8e0c8db881fc2b2c3aee65b867b25caa47fa25ae2105bf1731398df336213707f2d25f9b1d31b3dc133307;
+addr C7ZCK6N2AJQMVEP4FRTK2UW45UFR6DKPRJHJVWB5O4VQOZMFPK2KCMR7M4
+ed25519verify_bare; assert
+`, "int 1"},
+		{"ecdsa_verify k1", "", `
+byte 0x71a5910445820f57989c027bdf9391c80097874d249e0f38bf90834fdec2877f
 byte 0x5eb27782eb1a5df8de9a5d51613ad5ca730840ddf4af919c6feb15cde14f9978
 byte 0x0cb3c0d636ed991ee030d09c295de3121eb166cb9e1552cf0ef0fb2358f35f0f
 byte 0x79de0699673571df1de8486718d06a3e7838f6831ec4ef3fb963788fbfb773b7
 byte 0xd76446a3393af3e2eefada16df80cc6a881a56f4cf41fa2ab4769c5708ce878d
 ecdsa_verify Secp256k1
+assert`, "int 1"},
+		{"ecdsa_verify r1", "", `
+byte 0x71a5910445820f57989c027bdf9391c80097874d249e0f38bf90834fdec2877f
+byte 0xc010fc83ea196d6f5ce8a44637060bdcfb5bf1199cfc5bb893684d450c4f160c
+byte 0x8e391a7b9cd75a99e8ebfe703036caebd9e91ae8339bd7e2abfb0f273eb8e972
+byte 0x13e49a19378bbfa8d55ac81a35b87d7bae456c79fcf04a78803d8eb45b253fab
+byte 0xa2d237cd897ca70787abf04d2155c6dc2fbe26fd642e0472cd75c13dc919ef1a
+ecdsa_verify Secp256r1
 assert`, "int 1"},
 		{"vrf_verify", "", `byte 0x72
 byte 0xae5b66bdf04b4c010bfe32b2fc126ead2107b697634f6f7337b9bff8785ee111200095ece87dde4dbe87343f6df3b107d91798c8a7eb1245d3bb9c5aafb093358c13e6ae1111a55717e895fd15f99f07
@@ -200,18 +212,18 @@ ed25519verify`, pkStr), v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn))
+			testLogicBytes(t, ops.Program, defaultSigParams(txn))
 
 			// short sig will fail
 			txn.Lsig.Args[1] = sig[1:]
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "invalid signature")
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "invalid signature")
 
 			// flip a bit and it should not pass
 			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "REJECT")
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
 		})
 	}
 }
@@ -240,18 +252,18 @@ ed25519verify_bare`, pkStr), v)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn))
+			testLogicBytes(t, ops.Program, defaultSigParams(txn))
 
 			// short sig will fail
 			txn.Lsig.Args[1] = sig[1:]
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "invalid signature")
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "invalid signature")
 
 			// flip a bit and it should not pass
 			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			testLogicBytes(t, ops.Program, defaultEvalParams(txn), "REJECT")
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
 		})
 	}
 }
@@ -322,8 +334,7 @@ load 0
 byte 0x%s
 ==
 &&`
-	pkTampered1 := make([]byte, len(pk))
-	copy(pkTampered1, pk)
+	pkTampered1 := slices.Clone(pk)
 	pkTampered1[0] = 0                     // first byte is a prefix of either 0x02 or 0x03
 	pkTampered2 := make([]byte, len(pk)-1) // must be 33 bytes length
 	copy(pkTampered2, pk)
@@ -337,7 +348,9 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
+		i, test, source := i, test, source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
@@ -367,8 +380,7 @@ ecdsa_verify Secp256k1
 	s := sign[32:64]
 	v := int(sign[64])
 
-	rTampered := make([]byte, len(r))
-	copy(rTampered, r)
+	rTampered := slices.Clone(r)
 	rTampered[0] += byte(1) // intentional overflow
 
 	var verifyTests = []struct {
@@ -381,7 +393,9 @@ ecdsa_verify Secp256k1
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
+		test, source := test, source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
@@ -428,7 +442,9 @@ load 1
 	pkExpanded := secp256k1.S256().Marshal(key.PublicKey.X, key.PublicKey.Y)
 
 	for i, test := range recoverTests {
+		i, test, source := i, test, source
 		t.Run(fmt.Sprintf("recover/%d", i), func(t *testing.T) {
+			t.Parallel()
 			src := fmt.Sprintf(source, hex.EncodeToString(msg[:]), test.v, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y), hex.EncodeToString(pkExpanded))
 			test.checker(t, src, 5)
 		})
@@ -446,7 +462,7 @@ ecdsa_verify Secp256k1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, 5)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(5, txn))
+	pass, err := EvalSignature(0, defaultSigParamsWithVersion(5, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -472,8 +488,7 @@ load 0
 byte 0x%s
 ==
 &&`
-	pkTampered1 := make([]byte, len(pk))
-	copy(pkTampered1, pk)
+	pkTampered1 := slices.Clone(pk)
 	pkTampered1[0] = 0                     // first byte is a prefix of either 0x02 or 0x03
 	pkTampered2 := make([]byte, len(pk)-1) // must be 33 bytes length
 	copy(pkTampered2, pk)
@@ -487,7 +502,9 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
+		i, test, source := i, test, source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			t.Log("decompressTests i", i)
 			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
@@ -516,8 +533,7 @@ ecdsa_verify Secp256r1
 	r := ri.Bytes()
 	s := si.Bytes()
 
-	rTampered := make([]byte, len(r))
-	copy(rTampered, r)
+	rTampered := slices.Clone(r)
 	rTampered[0] += byte(1) // intentional overflow
 
 	var verifyTests = []struct {
@@ -530,7 +546,9 @@ ecdsa_verify Secp256r1
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
+		test, source := test, source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
+			t.Parallel()
 			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, fidoVersion)
@@ -552,7 +570,7 @@ ecdsa_verify Secp256r1`, hex.EncodeToString(r), hex.EncodeToString(s), hex.Encod
 	ops := testProg(t, source, fidoVersion)
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = ops.Program
-	pass, err := EvalSignature(0, defaultEvalParamsWithVersion(fidoVersion, txn))
+	pass, err := EvalSignature(0, defaultSigParamsWithVersion(fidoVersion, txn))
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -691,7 +709,7 @@ ed25519verify`, pkStr), AssemblerMaxVersion)
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = programs[i]
 		txn.Lsig.Args = [][]byte{data[i][:], signatures[i][:]}
-		ep := defaultEvalParams(txn)
+		ep := defaultSigParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(programs[i]))
@@ -776,7 +794,7 @@ func benchmarkEcdsa(b *testing.B, source string, curve EcdsaCurve) {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].msg[:], data[i].r, data[i].s, data[i].x, data[i].y, data[i].pk, {uint8(data[i].v)}}
-		ep := defaultEvalParams(txn)
+		ep := defaultSigParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))
@@ -899,7 +917,7 @@ func benchmarkBn256(b *testing.B, source string) {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = data[i].programs
 		txn.Lsig.Args = [][]byte{data[i].a, data[i].k, data[i].g1, data[i].g2}
-		ep := defaultEvalParams(txn)
+		ep := defaultSigParams(txn)
 		pass, err := EvalSignature(0, ep)
 		if !pass {
 			b.Log(hex.EncodeToString(data[i].programs))

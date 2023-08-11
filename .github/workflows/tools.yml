@@ -1,0 +1,41 @@
+# Test tools directories that have their own go.mod files, and
+# otherwise wouldn't get tested along with the main go-algorand build.
+name: Test tools modules
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'tools/block-generator/**'
+      - 'tools/x-repo-types/**'
+  pull_request:
+
+jobs:
+  tools_test:
+    name: Test tools modules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3.5.3
+      # move go out of the way temporarily to avoid "go list ./..." from installing modules
+      - name: Make libsodium.a
+        run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+      - name: Add bin to PATH
+        run: |
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+          echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
+      - name: Determine Go version
+        id: go_version
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      - name: Install go version
+        uses: actions/setup-go@v4.0.1
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Test tools/block-generator
+        run: |
+          cd tools/block-generator
+          go test -v ./...
+      - name: Test tools/x-repo-types
+        run: |
+          cd tools/x-repo-types
+          go test -v ./...

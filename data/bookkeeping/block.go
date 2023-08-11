@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -53,7 +53,7 @@ type (
 		TimeStamp int64 `codec:"ts"`
 
 		// Genesis ID to which this block belongs.
-		GenesisID string `codec:"gen"`
+		GenesisID string `codec:"gen,allocbound=config.MaxGenesisIDLen"`
 
 		// Genesis hash to which this block belongs.
 		GenesisHash crypto.Digest `codec:"gh"`
@@ -109,14 +109,9 @@ type (
 		UpgradeState
 		UpgradeVote
 
-		// TxnCounter counts the number of transactions committed in the
-		// ledger, from the time at which support for this feature was
-		// introduced.
-		//
-		// Specifically, TxnCounter is the number of the next transaction
-		// that will be committed after this block.  It is 0 when no
-		// transactions have ever been committed (since TxnCounter
-		// started being supported).
+		// TxnCounter is the number of the next transaction that will be
+		// committed after this block.  Genesis blocks can start at either
+		// 0 or 1000, depending on a consensus parameter (AppForbidLowResources).
 		TxnCounter uint64 `codec:"tc"`
 
 		// StateProofTracking tracks the status of the state proofs, potentially
@@ -239,7 +234,7 @@ type (
 	// A Block contains the Payset and metadata corresponding to a given Round.
 	Block struct {
 		BlockHeader
-		Payset transactions.Payset `codec:"txns"`
+		Payset transactions.Payset `codec:"txns,maxtotalbytes=config.MaxTxnBytesPerBlock"`
 	}
 )
 

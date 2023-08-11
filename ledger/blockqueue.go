@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,10 +52,29 @@ type blockQueue struct {
 	closed  chan struct{}
 }
 
-func bqInit(l *Ledger) (*blockQueue, error) {
+func newBlockQueue(l *Ledger) (*blockQueue, error) {
 	bq := &blockQueue{}
 	bq.cond = sync.NewCond(&bq.mu)
 	bq.l = l
+	return bq, nil
+}
+
+func (bq *blockQueue) start() error {
+	bq.mu.Lock()
+	defer bq.mu.Unlock()
+
+	if bq.running {
+		// this should be harmless, but it should also be impossible
+		bq.l.log.Warn("blockQueue.start() already started")
+		return nil
+	}
+	if bq.closed != nil {
+		// a previus close() is still waiting on a previous syncer() to finish
+		oldsyncer := bq.closed
+		bq.mu.Unlock()
+		<-oldsyncer
+		bq.mu.Lock()
+	}
 	bq.running = true
 	bq.closed = make(chan struct{})
 	ledgerBlockqInitCount.Inc(nil)
@@ -67,33 +86,32 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 	})
 	ledgerBlockqInitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	go bq.syncer()
-	return bq, nil
+	return nil
 }
 
-func (bq *blockQueue) close() {
+func (bq *blockQueue) stop() {
 	bq.mu.Lock()
-	defer func() {
-		bq.mu.Unlock()
-		// we want to block here until the sync go routine is done.
-		// it's not (just) for the sake of a complete cleanup, but rather
-		// to ensure that the sync goroutine isn't busy in a notifyCommit
-		// call which might be blocked inside one of the trackers.
-		<-bq.closed
-	}()
-
+	closechan := bq.closed
 	if bq.running {
 		bq.running = false
 		bq.cond.Broadcast()
 	}
+	bq.mu.Unlock()
 
+	// we want to block here until the sync go routine is done.
+	// it's not (just) for the sake of a complete cleanup, but rather
+	// to ensure that the sync goroutine isn't busy in a notifyCommit
+	// call which might be blocked inside one of the trackers.
+	if closechan != nil {
+		<-closechan
+	}
 }
 
 func (bq *blockQueue) syncer() {
-	defer close(bq.closed)
 	bq.mu.Lock()
 	for {
 		for bq.running && len(bq.q) == 0 {
@@ -101,6 +119,8 @@ func (bq *blockQueue) syncer() {
 		}
 
 		if !bq.running {
+			close(bq.closed)
+			bq.closed = nil
 			bq.mu.Unlock()
 			return
 		}

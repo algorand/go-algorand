@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -109,6 +109,7 @@ type txSaltedCache struct {
 	curSalt  [4]byte
 	prevSalt [4]byte
 	ctx      context.Context
+	wg       sync.WaitGroup
 }
 
 func makeSaltedCache(size int) *txSaltedCache {
@@ -117,9 +118,10 @@ func makeSaltedCache(size int) *txSaltedCache {
 	}
 }
 
-func (c *txSaltedCache) start(ctx context.Context, refreshInterval time.Duration) {
+func (c *txSaltedCache) Start(ctx context.Context, refreshInterval time.Duration) {
 	c.ctx = ctx
 	if refreshInterval != 0 {
+		c.wg.Add(1)
 		go c.salter(refreshInterval)
 	}
 
@@ -128,9 +130,14 @@ func (c *txSaltedCache) start(ctx context.Context, refreshInterval time.Duration
 	c.moreSalt()
 }
 
+func (c *txSaltedCache) WaitForStop() {
+	c.wg.Wait()
+}
+
 // salter is a goroutine refreshing the cache by schedule
 func (c *txSaltedCache) salter(refreshInterval time.Duration) {
 	ticker := time.NewTicker(refreshInterval)
+	defer c.wg.Done()
 	defer ticker.Stop()
 	for {
 		select {
@@ -219,6 +226,12 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 		d, found = c.innerCheck(msg)
 		if found {
 			// already added to cache between RUnlock() and Lock(), return
+			return d, found
+		}
+	} else {
+		// Do another check to see if another copy of the transaction won the race to write it to the cache
+		// Only check current to save a lookup since swaps are rare and no need to re-hash
+		if _, found := c.cur[*d]; found {
 			return d, found
 		}
 	}

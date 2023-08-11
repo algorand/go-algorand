@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,7 +59,7 @@ func (d *mockUnicastPeer) Version() string {
 func (d *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics network.Topics) (resp *network.Response, e error) {
 	return nil, nil
 }
-func (d *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, topics network.Topics) (e error) {
+func (d *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, outMsg network.OutgoingMessage) (e error) {
 	return nil
 }
 
@@ -381,12 +381,12 @@ func TestPeersDownloadFailed(t *testing.T) {
 	if len(peerSelector.pools) == 2 {
 		b1orb2 := peerAddress(peerSelector.pools[0].peers[1].peer) == "b1" || peerAddress(peerSelector.pools[0].peers[1].peer) == "b2"
 		require.True(t, b1orb2)
-		require.Equal(t, peerSelector.pools[1].rank, 900)
+		require.Equal(t, peerSelector.pools[1].rank, peerRankDownloadFailed)
 		require.Equal(t, len(peerSelector.pools[1].peers), 3)
 	} else { // len(pools) == 3
 		b1orb2 := peerAddress(peerSelector.pools[1].peers[0].peer) == "b1" || peerAddress(peerSelector.pools[1].peers[0].peer) == "b2"
 		require.True(t, b1orb2)
-		require.Equal(t, peerSelector.pools[2].rank, 900)
+		require.Equal(t, peerSelector.pools[2].rank, peerRankDownloadFailed)
 		require.Equal(t, len(peerSelector.pools[2].peers), 3)
 	}
 
@@ -459,6 +459,7 @@ func TestPeerDownloadDurationToRank(t *testing.T) {
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 	peers3 := []network.Peer{&mockHTTPPeer{address: "c1"}, &mockHTTPPeer{address: "c2"}}
 	peers4 := []network.Peer{&mockHTTPPeer{address: "d1"}, &mockHTTPPeer{address: "b2"}}
+	peers5 := []network.Peer{&mockHTTPPeer{address: "e1"}, &mockHTTPPeer{address: "b2"}}
 
 	peerSelector := makePeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
@@ -469,15 +470,18 @@ func TestPeerDownloadDurationToRank(t *testing.T) {
 					peers = append(peers, peers2...)
 				} else if opt == network.PeersConnectedOut {
 					peers = append(peers, peers3...)
-				} else {
+				} else if opt == network.PeersPhonebookArchivalNodes {
 					peers = append(peers, peers4...)
+				} else { // PeersConnectedIn
+					peers = append(peers, peers5...)
 				}
 			}
 			return
 		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 			{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
-			{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn}},
+			{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookArchivalNodes},
+			{initialRank: peerRankInitialFifthPriority, peerClass: network.PeersConnectedIn}},
 	)
 
 	_, err := peerSelector.getNextPeer()
@@ -490,7 +494,10 @@ func TestPeerDownloadDurationToRank(t *testing.T) {
 	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank2LowBlockTime, peerRank2HighBlockTime),
 		peerSelector.peerDownloadDurationToRank(&peerSelectorPeer{peers3[0], network.PeersConnectedOut}, 500*time.Millisecond))
 	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank3LowBlockTime, peerRank3HighBlockTime),
-		peerSelector.peerDownloadDurationToRank(&peerSelectorPeer{peers4[0], network.PeersConnectedIn}, 500*time.Millisecond))
+		peerSelector.peerDownloadDurationToRank(&peerSelectorPeer{peers4[0], network.PeersPhonebookArchivalNodes}, 500*time.Millisecond))
+	require.Equal(t, downloadDurationToRank(500*time.Millisecond, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank4LowBlockTime, peerRank4HighBlockTime),
+		peerSelector.peerDownloadDurationToRank(&peerSelectorPeer{peers5[0], network.PeersConnectedIn}, 500*time.Millisecond))
+
 }
 
 func TestLowerUpperBounds(t *testing.T) {
@@ -499,29 +506,56 @@ func TestLowerUpperBounds(t *testing.T) {
 	classes := []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 		{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 		{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
-		{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn}}
+		{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn},
+		{initialRank: peerRankInitialFifthPriority, peerClass: network.PeersConnectedIn}}
 
 	require.Equal(t, peerRank0LowBlockTime, lowerBound(classes[0]))
 	require.Equal(t, peerRank1LowBlockTime, lowerBound(classes[1]))
 	require.Equal(t, peerRank2LowBlockTime, lowerBound(classes[2]))
 	require.Equal(t, peerRank3LowBlockTime, lowerBound(classes[3]))
+	require.Equal(t, peerRank4LowBlockTime, lowerBound(classes[4]))
 
 	require.Equal(t, peerRank0HighBlockTime, upperBound(classes[0]))
 	require.Equal(t, peerRank1HighBlockTime, upperBound(classes[1]))
 	require.Equal(t, peerRank2HighBlockTime, upperBound(classes[2]))
 	require.Equal(t, peerRank3HighBlockTime, upperBound(classes[3]))
+	require.Equal(t, peerRank4HighBlockTime, upperBound(classes[4]))
 }
 
 func TestFullResetRequestPenalty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	class := peerClass{initialRank: 10, peerClass: network.PeersPhonebookArchivers}
+	class := peerClass{initialRank: 0, peerClass: network.PeersPhonebookArchivers}
 	hs := makeHistoricStatus(10, class)
 	hs.push(5, 1, class)
 	require.Equal(t, 1, len(hs.requestGaps))
 
 	hs.resetRequestPenalty(0, 0, class)
 	require.Equal(t, 0, len(hs.requestGaps))
+}
+
+// TesPenaltyBounds makes sure that the penalty does not demote the peer to a lower class,
+// and resetting the penalty of a demoted peer does not promote it back
+func TestPenaltyBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	class := peerClass{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivers}
+	hs := makeHistoricStatus(peerHistoryWindowSize, class)
+	for x := 0; x < 65; x++ {
+		r0 := hs.push(peerRank2LowBlockTime+50, uint64(x+1), class)
+		require.LessOrEqual(t, peerRank2LowBlockTime, r0)
+		require.GreaterOrEqual(t, peerRank2HighBlockTime, r0)
+	}
+
+	r1 := hs.resetRequestPenalty(4, peerRankInitialThirdPriority, class)
+	r2 := hs.resetRequestPenalty(10, peerRankInitialThirdPriority, class)
+	r3 := hs.resetRequestPenalty(10, peerRankDownloadFailed, class)
+
+	// r2 is at a better rank than r1 because it has one penalty less
+	require.Greater(t, r1, r2)
+
+	// r3 is worse rank at peerRankDownloadFailed because it was demoted and resetRequestPenalty should not improve it
+	require.Equal(t, peerRankDownloadFailed, r3)
 }
 
 // TestClassUpperBound makes sure the peer rank does not exceed the class upper bound
@@ -613,7 +647,7 @@ func TestEvictionAndUpgrade(t *testing.T) {
 	_, err := peerSelector.getNextPeer()
 	require.NoError(t, err)
 	for i := 0; i < 10; i++ {
-		if peerSelector.pools[len(peerSelector.pools)-1].rank == 900 {
+		if peerSelector.pools[len(peerSelector.pools)-1].rank == peerRankDownloadFailed {
 			require.Equal(t, 6, i)
 			break
 		}

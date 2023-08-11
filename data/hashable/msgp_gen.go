@@ -14,6 +14,7 @@ import (
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> MessageMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -120,4 +121,11 @@ func (z *Message) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Message) MsgIsZero() bool {
 	return ((*z).Message == "")
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func MessageMaxSize() (s int) {
+	s = 1 + 4
+	panic("Unable to determine max size: String type z.Message is unbounded")
+	return
 }

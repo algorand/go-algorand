@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,8 +47,8 @@ func (il indexerLedgerForEvalImpl) LatestBlockHdr() (bookkeeping.BlockHeader, er
 	return il.l.BlockHdr(il.latestRound)
 }
 
-func (il indexerLedgerForEvalImpl) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return il.l.BlockHdrCached(round)
+func (il indexerLedgerForEvalImpl) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return il.l.BlockHdr(round)
 }
 
 // The value of the returned map is nil iff the account was not found.

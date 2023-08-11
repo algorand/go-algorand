@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -77,7 +77,7 @@ func MakeNetworkFacade(fuzzer *Fuzzer, nodeID int) *NetworkFacade {
 	n := &NetworkFacade{
 		fuzzer:         fuzzer,
 		nodeID:         nodeID,
-		mux:            network.MakeMultiplexer(fuzzer.log),
+		mux:            network.MakeMultiplexer(),
 		clocks:         make(map[int]chan time.Time),
 		eventsQueues:   make(map[string]int),
 		eventsQueuesCh: make(chan int, 1000),

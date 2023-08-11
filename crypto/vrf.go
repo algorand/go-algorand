@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,6 +41,11 @@ func init() {
 
 // VRFVerifier is a deprecated name for VrfPubkey
 type VRFVerifier = VrfPubkey
+
+// VRFVerifierMaxSize forwards to base implementation since it's expected by the msgp generated MaxSize functions
+func VRFVerifierMaxSize() int {
+	return VrfPubkeyMaxSize()
+}
 
 // VRFProof is a deprecated name for VrfProof
 type VRFProof = VrfProof

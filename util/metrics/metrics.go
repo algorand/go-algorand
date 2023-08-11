@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,6 +55,8 @@ var (
 	OutgoingNetworkMessageFilteredOutTotal = MetricName{Name: "algod_outgoing_network_message_filtered_out_total", Description: "Total number of messages that were not sent per peer request"}
 	// OutgoingNetworkMessageFilteredOutBytesTotal Total number of bytes saved by not sending messages that were asked not to be sent by peer
 	OutgoingNetworkMessageFilteredOutBytesTotal = MetricName{Name: "algod_outgoing_network_message_filtered_out_bytes_total", Description: "Total number of bytes saved by not sending messages that were asked not to be sent by peer"}
+	// UnknownProtocolTagMessagesTotal Total number of out-of-protocol tag messages received from the network
+	UnknownProtocolTagMessagesTotal = MetricName{Name: "algod_network_unk_tag_messages_total", Description: "Total number of unknown protocol tag messages received from the network"}
 	// CryptoGenSigSecretsTotal Total number of calls to GenerateSignatureSecrets()
 	CryptoGenSigSecretsTotal = MetricName{Name: "algod_crypto_signature_secrets_generate_total", Description: "Total number of calls to GenerateSignatureSecrets"}
 	// CryptoSigSecretsSignTotal Total number of calls to SignatureSecrets.Sign
@@ -79,6 +81,8 @@ var (
 	LedgerRewardClaimsTotal = MetricName{Name: "algod_ledger_reward_claims_total", Description: "Total number of reward claims written to the ledger"}
 	// LedgerRound Last round written to ledger
 	LedgerRound = MetricName{Name: "algod_ledger_round", Description: "Last round written to ledger"}
+	// LedgerDBRound Last round written to ledger
+	LedgerDBRound = MetricName{Name: "algod_ledger_dbround", Description: "Last round written to the ledger DB"}
 
 	// AgreementMessagesHandled "Number of agreement messages handled"
 	AgreementMessagesHandled = MetricName{Name: "algod_agreement_handled", Description: "Number of agreement messages handled"}
@@ -95,6 +99,8 @@ var (
 	TransactionMessagesAlreadyCommitted = MetricName{Name: "algod_transaction_messages_err_or_committed", Description: "Number of duplicate or error transaction messages after TX handler backlog"}
 	// TransactionMessagesTxGroupInvalidFee "Number of transaction messages with invalid txgroup fee"
 	TransactionMessagesTxGroupInvalidFee = MetricName{Name: "algod_transaction_messages_txgroup_invalid_fee", Description: "Number of transaction messages with invalid txgroup fee"}
+	// TransactionMessagesTxnDroppedCongestionManagement "Number of transaction messages dropped because the tx backlog is under congestion management"
+	TransactionMessagesTxnDroppedCongestionManagement = MetricName{Name: "algod_transaction_messages_txn_dropped_congestion_ctrl", Description: "Number of transaction messages dropped because the tx backlog is under congestion management"}
 	// TransactionMessagesTxnNotWellFormed "Number of transaction messages not well formed"
 	TransactionMessagesTxnNotWellFormed = MetricName{Name: "algod_transaction_messages_txn_notwell_formed", Description: "Number of transaction messages not well formed"}
 	// TransactionMessagesTxnSigNotWellFormed "Number of transaction messages with bad formed signature"
@@ -126,4 +132,9 @@ var (
 	TransactionGroupTxSyncRemember = MetricName{Name: "algod_transaction_group_txsync_remember", Description: "Number of transaction groups remembered via txsync"}
 	// TransactionGroupTxSyncAlreadyCommitted "Number of duplicate or error transaction groups received via txsync"
 	TransactionGroupTxSyncAlreadyCommitted = MetricName{Name: "algod_transaction_group_txsync_err_or_committed", Description: "Number of duplicate or error transaction groups received via txsync"}
+
+	// BroadcastSignedTxGroupSucceeded "Number of successful broadcasts of local signed transaction groups"
+	BroadcastSignedTxGroupSucceeded = MetricName{Name: "algod_broadcast_txgroup_succeeded", Description: "Number of successful broadcasts of local signed transaction groups"}
+	// BroadcastSignedTxGroupFailed "Number of failed broadcasts of local signed transaction groups"
+	BroadcastSignedTxGroupFailed = MetricName{Name: "algod_broadcast_txgroup_failed", Description: "Number of failed broadcasts of local signed transaction groups"}
 )

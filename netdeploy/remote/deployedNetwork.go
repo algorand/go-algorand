@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -92,6 +92,9 @@ type netState struct {
 	assetPerAcct int
 	appsPerAcct  int
 
+	deterministicKeys         bool
+	deterministicAccountCount uint64
+
 	genesisID   string
 	genesisHash crypto.Digest
 	poolAddr    basics.Address
@@ -153,6 +156,7 @@ func replaceTokens(original string, buildConfig BuildConfig) (expanded string, e
 	tokenPairs = append(tokenPairs, "{{APIEndpoint3}}", buildConfig.APIEndpoint3)
 	tokenPairs = append(tokenPairs, "{{APIEndpoint4}}", buildConfig.APIEndpoint4)
 	tokenPairs = append(tokenPairs, "{{APIToken}}", buildConfig.APIToken)
+	tokenPairs = append(tokenPairs, "{{AdminAPIToken}}", buildConfig.AdminAPIToken)
 	tokenPairs = append(tokenPairs, "{{EnableTelemetry}}", strconv.FormatBool(buildConfig.EnableTelemetry))
 	tokenPairs = append(tokenPairs, "{{TelemetryURI}}", buildConfig.TelemetryURI)
 	tokenPairs = append(tokenPairs, "{{MetricsURI}}", buildConfig.MetricsURI)
@@ -351,7 +355,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 	return
 }
 
-//GenerateDatabaseFiles generates database files according to the configurations
+// GenerateDatabaseFiles generates database files according to the configurations
 func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, genesisFolder string) error {
 
 	accounts := make(map[basics.Address]basics.AccountData)
@@ -384,23 +388,24 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 		default:
 		}
 
-		accounts[addr] = alloc.State
+		accounts[addr] = alloc.State.AccountData()
 	}
 
 	//initial state
 	log := logging.NewLogger()
 
 	bootstrappedNet := netState{
-		nAssets:       fileCfgs.GeneratedAssetsCount,
-		nApplications: fileCfgs.GeneratedApplicationCount,
-		txnState:      protocol.PaymentTx,
-		roundTxnCnt:   fileCfgs.RoundTransactionsCount,
-		round:         basics.Round(0),
-		genesisID:     genesis.ID(),
-		genesisHash:   genesis.Hash(),
-		poolAddr:      poolAddr,
-		sinkAddr:      sinkAddr,
-		log:           log,
+		nAssets:           fileCfgs.GeneratedAssetsCount,
+		nApplications:     fileCfgs.GeneratedApplicationCount,
+		txnState:          protocol.PaymentTx,
+		roundTxnCnt:       fileCfgs.RoundTransactionsCount,
+		round:             basics.Round(0),
+		genesisID:         genesis.ID(),
+		genesisHash:       genesis.Hash(),
+		poolAddr:          poolAddr,
+		sinkAddr:          sinkAddr,
+		log:               log,
+		deterministicKeys: fileCfgs.DeterministicKeys,
 	}
 
 	var params config.ConsensusParams
@@ -422,6 +427,9 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	rand.Seed(time.Now().UnixNano())
 	min := fileCfgs.BalanceRange[0]
 	max := fileCfgs.BalanceRange[1]
+	// TODO: Randomly assigning target balance in a range may cause tests to behave unpredictably,
+	// if the randomly selected balance is too low for proper testing.
+	// consider inserting a hardcoded balance sufficient for your tests.
 	bal := rand.Int63n(max-min) + min
 	bootstrappedNet.fundPerAccount = basics.MicroAlgos{Raw: uint64(bal)}
 	srcAcct := accounts[src]
@@ -455,6 +463,10 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	for i := uint64(bootstrappedNet.round); i < fileCfgs.NumRounds; i++ {
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, fileCfgs.RoundTransactionsCount, &bootstrappedNet, params, log)
+		// don't allow the ledger to fall more than 10 rounds behind before adding more
+		for int(bootstrappedNet.round)-int(l.LatestTrackerCommitted()) > 10 {
+			time.Sleep(100 * time.Millisecond)
+		}
 		err = l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
 			fmt.Printf("Error  %v\n", err)
@@ -486,6 +498,15 @@ func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bo
 	return bookkeeping.GenesisAllocation{}
 }
 
+// deterministicKeypair returns a key based on the provided index
+func deterministicKeypair(i uint64) *crypto.SignatureSecrets {
+	var seed crypto.Seed
+	binary.LittleEndian.PutUint64(seed[:], i)
+	s := crypto.GenerateSignatureSecrets(seed)
+	return s
+}
+
+// keypair returns a random key
 func keypair() *crypto.SignatureSecrets {
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
@@ -576,6 +597,10 @@ func generateAccounts(src basics.Address, roundTxnCnt uint64, prev bookkeeping.B
 		//create accounts
 		bootstrappedNet.round++
 		blk, _ := createBlock(src, prev, roundTxnCnt, bootstrappedNet, csParams, log)
+		// don't allow the ledger to fall more than 10 rounds behind before adding more
+		for int(bootstrappedNet.round)-int(l.LatestTrackerCommitted()) > 10 {
+			time.Sleep(100 * time.Millisecond)
+		}
 		err := l.AddBlock(blk, agreement.Certificate{Round: bootstrappedNet.round})
 		if err != nil {
 			fmt.Printf("Error %v\n", err)
@@ -659,7 +684,13 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 
 		if !bootstrappedNet.accountsCreated {
 			for i := uint64(0); i < n; i++ {
-				secretDst := keypair()
+				var secretDst *crypto.SignatureSecrets
+				if bootstrappedNet.deterministicKeys {
+					secretDst = deterministicKeypair(bootstrappedNet.deterministicAccountCount)
+					bootstrappedNet.deterministicAccountCount++
+				} else {
+					secretDst = keypair()
+				}
 				dst := basics.Address(secretDst.SignatureVerifier)
 				bootstrappedNet.accounts = append(bootstrappedNet.accounts, dst)
 
@@ -757,7 +788,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 			return []transactions.SignedTxn{}, err
 		}
 		approval := ops.Program
-		ops, err = logic.AssembleString("#pragma version 2 int 1")
+		ops, err = logic.AssembleString("#pragma version 2\nint 1")
 		if err != nil {
 			panic(err)
 		}
@@ -1064,6 +1095,9 @@ func computeRootStorage(nodeCount, relayCount int) int {
 	// 10 per node should be good for a week (add relayCount * 0 so param is used)
 	minGB := 20 + (nodeCount * 10) + (relayCount * 50)
 	return minGB
+	// TODO: this function appears to insufficiently provision EBS nodes in some cases
+	// if your nodes have insufficient storage, consider using a reasonable hardcoded value like
+	// return 256
 }
 
 func computeSSDStorage(nodeCount, relayCount int) int {

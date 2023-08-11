@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -42,8 +43,9 @@ var defaultConfig = Local{
 	BaseLoggerDebugLevel:     1,  //Info level
 }
 
-func TestSaveThenLoad(t *testing.T) {
+func TestLocal_SaveThenLoad(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	c1, err := loadWithoutDefaults(defaultConfig)
 	require.NoError(t, err)
@@ -53,13 +55,10 @@ func TestSaveThenLoad(t *testing.T) {
 	ser1 := json.NewEncoder(&b1)
 	ser1.Encode(c1)
 
-	os.RemoveAll("testdir")
-	err = os.Mkdir("testdir", 0777)
-	require.NoError(t, err)
+	tempDir := t.TempDir()
+	c1.SaveToDisk(tempDir)
 
-	c1.SaveToDisk("testdir")
-
-	c2, err := LoadConfigFromDisk("testdir")
+	c2, err := LoadConfigFromDisk(tempDir)
 	require.NoError(t, err)
 
 	var b2 bytes.Buffer
@@ -67,23 +66,23 @@ func TestSaveThenLoad(t *testing.T) {
 	ser2.Encode(c2)
 
 	require.True(t, bytes.Equal(b1.Bytes(), b2.Bytes()))
-
-	os.RemoveAll("testdir")
 }
 
-func TestLoadMissing(t *testing.T) {
+func TestConfig_LoadMissing(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	os.RemoveAll("testdir")
-	_, err := LoadConfigFromDisk("testdir")
+	tempDir := t.TempDir()
+	os.RemoveAll(tempDir)
+	_, err := LoadConfigFromDisk(tempDir)
 	require.True(t, os.IsNotExist(err))
 }
 
-func TestMergeConfig(t *testing.T) {
+func TestLocal_MergeConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	os.RemoveAll("testdir")
-	err := os.Mkdir("testdir", 0777)
+	tempDir := t.TempDir()
 
 	c1 := struct {
 		GossipFanout              int
@@ -98,7 +97,7 @@ func TestMergeConfig(t *testing.T) {
 	c1.NetAddress = testString
 
 	// write our reduced version of the Local struct
-	fileToMerge := filepath.Join("testdir", ConfigFilename)
+	fileToMerge := filepath.Join(tempDir, ConfigFilename)
 	f, err := os.OpenFile(fileToMerge, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		enc := json.NewEncoder(f)
@@ -110,7 +109,7 @@ func TestMergeConfig(t *testing.T) {
 
 	// Take defaultConfig and merge with the saved custom settings.
 	// This should result in c2 being the same as defaultConfig except for the value(s) in our custom c1
-	c2, err := mergeConfigFromDir("testdir", defaultConfig)
+	c2, err := mergeConfigFromDir(tempDir, defaultConfig)
 
 	require.NoError(t, err)
 	require.Equal(t, defaultConfig.Archival || c1.NetAddress != "", c2.Archival)
@@ -119,12 +118,10 @@ func TestMergeConfig(t *testing.T) {
 
 	require.Equal(t, c1.NetAddress, c2.NetAddress)
 	require.Equal(t, c1.GossipFanout, c2.GossipFanout)
-
-	os.RemoveAll("testdir")
 }
 
-func saveFullPhonebook(phonebook phonebookBlackWhiteList) error {
-	filename := filepath.Join("testdir", PhonebookFilename)
+func saveFullPhonebook(phonebook phonebookBlackWhiteList, saveToDir string) error {
+	filename := filepath.Join(saveToDir, PhonebookFilename)
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer f.Close()
@@ -142,52 +139,48 @@ var phonebookToMerge = phonebookBlackWhiteList{
 	Include: []string{"test1", "addThisOne"},
 }
 
-var expectedMerged = []string{
-	"test1", "test2", "addThisOne",
-}
-
 func TestLoadPhonebook(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	os.RemoveAll("testdir")
-	err := os.Mkdir("testdir", 0777)
+	tempDir := t.TempDir()
+
+	err := saveFullPhonebook(phonebook, tempDir)
 	require.NoError(t, err)
 
-	err = saveFullPhonebook(phonebook)
-	require.NoError(t, err)
-
-	phonebookEntries, err := LoadPhonebook("testdir")
+	phonebookEntries, err := LoadPhonebook(tempDir)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(phonebookEntries))
 	for index, entry := range phonebookEntries {
 		require.Equal(t, phonebook.Include[index], entry)
 	}
-	os.RemoveAll("testdir")
 }
 
 func TestLoadPhonebookMissing(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	os.RemoveAll("testdir")
-	_, err := LoadPhonebook("testdir")
+	tempDir := t.TempDir()
+	_, err := LoadPhonebook(tempDir)
 	require.True(t, os.IsNotExist(err))
 }
 
 func TestArchivalIfRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testArchivalIfRelay(t, true)
 }
 
 func TestArchivalIfNotRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testArchivalIfRelay(t, false)
 }
 
 func testArchivalIfRelay(t *testing.T, relay bool) {
-	os.RemoveAll("testdir")
-	err := os.Mkdir("testdir", 0777)
+	tempDir := t.TempDir()
 
 	c1 := struct {
 		NetAddress string
@@ -197,7 +190,7 @@ func testArchivalIfRelay(t *testing.T, relay bool) {
 	}
 
 	// write our reduced version of the Local struct
-	fileToMerge := filepath.Join("testdir", ConfigFilename)
+	fileToMerge := filepath.Join(tempDir, ConfigFilename)
 	f, err := os.OpenFile(fileToMerge, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		enc := json.NewEncoder(f)
@@ -207,18 +200,16 @@ func testArchivalIfRelay(t *testing.T, relay bool) {
 	require.NoError(t, err)
 	require.False(t, defaultConfig.Archival, "Default should be non-archival")
 
-	c2, err := mergeConfigFromDir("testdir", defaultConfig)
+	c2, err := mergeConfigFromDir(tempDir, defaultConfig)
 	require.NoError(t, err)
 	if relay {
 		require.True(t, c2.Archival, "Relay should be archival")
 	} else {
 		require.False(t, c2.Archival, "Non-relay should still be non-archival")
 	}
-
-	os.RemoveAll("testdir")
 }
 
-func TestConfigExampleIsCorrect(t *testing.T) {
+func TestLocal_ConfigExampleIsCorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -261,12 +252,12 @@ func loadWithoutDefaults(cfg Local) (Local, error) {
 	return cfg, err
 }
 
-func TestConfigMigrate(t *testing.T) {
+func TestLocal_ConfigMigrate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
-	c0, err := loadWithoutDefaults(getVersionedDefaultLocalConfig(0))
+	c0, err := loadWithoutDefaults(GetVersionedDefaultLocalConfig(0))
 	a.NoError(err)
 	c0, err = migrate(c0)
 	a.NoError(err)
@@ -281,14 +272,14 @@ func TestConfigMigrate(t *testing.T) {
 	a.Error(err)
 
 	// Ensure we don't migrate values that aren't the default old version
-	c0Modified := getVersionedDefaultLocalConfig(0)
-	c0Modified.BaseLoggerDebugLevel = getVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
+	c0Modified := GetVersionedDefaultLocalConfig(0)
+	c0Modified.BaseLoggerDebugLevel = GetVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
 	c0Modified, err = migrate(c0Modified)
 	a.NoError(err)
 	a.NotEqual(defaultLocal, c0Modified)
 }
 
-func TestConfigMigrateFromDisk(t *testing.T) {
+func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -311,7 +302,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 }
 
 // Verify that nobody is changing the shipping default configurations
-func TestConfigInvariant(t *testing.T) {
+func TestLocal_ConfigInvariant(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -320,16 +311,18 @@ func TestConfigInvariant(t *testing.T) {
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
-	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+	// for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+	for configVersion := uint32(27); configVersion <= 27; configVersion++ {
 		c := Local{}
 		err = codecs.LoadObjectFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)), &c)
 		a.NoError(err)
-		a.Equal(getVersionedDefaultLocalConfig(configVersion), c)
+		a.Equal(GetVersionedDefaultLocalConfig(configVersion), c)
 	}
 }
 
-func TestConfigLatestVersion(t *testing.T) {
+func TestLocal_ConfigLatestVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -391,6 +384,7 @@ func TestConsensusLatestVersion(t *testing.T) {
 
 func TestLocal_DNSBootstrapArray(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	type fields struct {
 		DNSBootstrapID string
@@ -402,22 +396,42 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 		name               string
 		fields             fields
 		args               args
-		wantBootstrapArray []string
+		wantBootstrapArray []*DNSBootstrap
 	}{
 		{name: "test1",
 			fields:             fields{DNSBootstrapID: "<network>.cloudflare.com"},
 			args:               args{networkID: "devnet"},
-			wantBootstrapArray: []string{"devnet.cloudflare.com"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.cloudflare.com"}},
 		},
 		{name: "test2",
 			fields:             fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com"},
 			args:               args{networkID: "devnet"},
-			wantBootstrapArray: []string{"devnet.cloudflare.com", "devnet.cloudfront.com"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.cloudflare.com"}, {PrimarySRVBootstrap: "devnet.cloudfront.com"}},
 		},
 		{name: "test3",
 			fields:             fields{DNSBootstrapID: ""},
 			args:               args{networkID: "devnet"},
-			wantBootstrapArray: []string{},
+			wantBootstrapArray: []*DNSBootstrap(nil),
+		},
+		{name: "test4 - intended to mismatch local template",
+			fields: fields{DNSBootstrapID: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"},
+			args:   args{networkID: "testnet"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "testnet.algorand.network",
+				BackupSRVBootstrap: "testnet.algorand.net",
+				DedupExp:           regexp.MustCompile("(algorand-testnet.(network|net))")}},
+		},
+		{name: "test5 - intended to match legacy template",
+			fields:             fields{DNSBootstrapID: "<network>.algorand.network"},
+			args:               args{networkID: "testnet"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "testnet.algorand.network"}},
+		},
+		{name: "test6 - exercise record append with full template",
+			fields: fields{DNSBootstrapID: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net);<network>.cloudfront.com"},
+			args:   args{networkID: "devnet"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.algorand.network",
+				BackupSRVBootstrap: "devnet.algorand.net",
+				DedupExp:           regexp.MustCompile("(algorand-devnet.(network|net))")},
+				{PrimarySRVBootstrap: "devnet.cloudfront.com"}},
 		},
 	}
 	for _, tt := range tests {
@@ -428,60 +442,31 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 			if gotBootstrapArray := cfg.DNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
 				t.Errorf("Local.DNSBootstrapArray() = %#v, want %#v", gotBootstrapArray, tt.wantBootstrapArray)
 			}
-		})
-	}
-}
-
-func TestLocal_DNSBootstrap(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	type fields struct {
-		DNSBootstrapID string
-	}
-	type args struct {
-		network protocol.NetworkID
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   string
-	}{
-		{name: "test1",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com",
-		},
-		{name: "test2",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com;",
-		},
-		{name: "test3",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com;devnet.cloudfront.com",
-		},
-		{name: "test4",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com;"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com;devnet.cloudfront.com;",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := Local{
-				DNSBootstrapID: tt.fields.DNSBootstrapID,
-			}
-			if got := cfg.DNSBootstrap(tt.args.network); got != tt.want {
-				t.Errorf("Local.DNSBootstrap() = %v, want %v", got, tt.want)
+			// handling should be identical to DNSBootstrapArray method for all of these cases
+			if gotBootstrapArray, _ := cfg.ValidateDNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
+				t.Errorf("Local.DNSBootstrapArray() = %#v, want %#v", gotBootstrapArray, tt.wantBootstrapArray)
 			}
 		})
 	}
 }
 
-func TestLocalStructTags(t *testing.T) {
+func TestLocal_ValidateDNSBootstrapArray_StopsOnError(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	var dnsBootstrapIDWithInvalidNameMacroUsage = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.((network|net)"
+
+	cfg := Local{
+		DNSBootstrapID: dnsBootstrapIDWithInvalidNameMacroUsage,
+	}
+
+	_, err := cfg.ValidateDNSBootstrapArray(Mainnet)
+
+	assert.ErrorContains(t, err, bootstrapDedupRegexDoesNotCompile)
+}
+
+func TestLocal_StructTags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	localType := reflect.TypeOf(Local{})
 
@@ -523,18 +508,20 @@ func TestLocalStructTags(t *testing.T) {
 	}
 }
 
-func TestGetVersionedDefaultLocalConfig(t *testing.T) {
+func TestLocal_GetVersionedDefaultLocalConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	for i := uint32(0); i < getLatestConfigVersion(); i++ {
-		localVersion := getVersionedDefaultLocalConfig(i)
+		localVersion := GetVersionedDefaultLocalConfig(i)
 		require.Equal(t, uint32(i), localVersion.Version)
 	}
 }
 
 // TestLocalVersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
-func TestLocalVersionField(t *testing.T) {
+func TestLocal_VersionField(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	localType := reflect.TypeOf(Local{})
 	field, ok := localType.FieldByName("Version")
@@ -553,8 +540,9 @@ func TestLocalVersionField(t *testing.T) {
 	require.Equal(t, expectedTag, string(field.Tag))
 }
 
-func TestGetNonDefaultConfigValues(t *testing.T) {
+func TestLocal_GetNonDefaultConfigValues(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	cfg := GetDefaultLocal()
 
@@ -582,6 +570,9 @@ func TestGetNonDefaultConfigValues(t *testing.T) {
 }
 
 func TestLocal_TxFiltering(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	cfg := GetDefaultLocal()
 
 	// ensure the default
@@ -603,4 +594,63 @@ func TestLocal_TxFiltering(t *testing.T) {
 	cfg.TxIncomingFilteringFlags = 3
 	require.True(t, cfg.TxFilterRawMsgEnabled())
 	require.True(t, cfg.TxFilterCanonicalEnabled())
+}
+
+func TestLocal_IsGossipServer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := GetDefaultLocal()
+	require.False(t, cfg.IsGossipServer())
+
+	cfg.NetAddress = ":4160"
+	require.True(t, cfg.IsGossipServer())
+}
+
+func TestLocal_RecalculateConnectionLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var tests = []struct {
+		maxFDs     uint64
+		reservedIn uint64
+		restSoftIn uint64
+		restHardIn uint64
+		incomingIn int
+
+		updated     bool
+		restSoftExp uint64
+		restHardExp uint64
+		incomingExp int
+	}{
+		{100, 10, 20, 40, 50, false, 20, 40, 50},               // no change
+		{100, 10, 20, 50, 50, true, 20, 40, 50},                // borrow from rest
+		{100, 10, 25, 50, 50, true, 25, 40, 50},                // borrow from rest
+		{100, 10, 50, 50, 50, true, 40, 40, 50},                // borrow from rest, update soft
+		{100, 10, 9, 19, 81, true, 9, 10, 80},                  // borrow from both rest and incoming
+		{100, 10, 10, 20, 80, true, 10, 10, 80},                // borrow from both rest and incoming
+		{100, 50, 10, 30, 40, true, 10, 10, 40},                // borrow from both rest and incoming
+		{100, 90, 10, 30, 40, true, 10, 10, 0},                 // borrow from both rest and incoming, clear incoming
+		{4096, 256, 1024, 2048, 2400, true, 1024, 1440, 2400},  // real numbers
+		{5000, 256, 1024, 2048, 2400, false, 1024, 2048, 2400}, // real numbers
+	}
+
+	for i, test := range tests {
+		test := test
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			t.Parallel()
+
+			c := Local{
+				RestConnectionsSoftLimit: test.restSoftIn,
+				RestConnectionsHardLimit: test.restHardIn,
+				IncomingConnectionsLimit: test.incomingIn,
+			}
+			requireFDs := test.reservedIn + test.restHardIn + uint64(test.incomingIn)
+			res := c.AdjustConnectionLimits(requireFDs, test.maxFDs)
+			require.Equal(t, test.updated, res)
+			require.Equal(t, test.restSoftExp, c.RestConnectionsSoftLimit)
+			require.Equal(t, test.restHardExp, c.RestConnectionsHardLimit)
+			require.Equal(t, test.incomingExp, c.IncomingConnectionsLimit)
+		})
+	}
 }

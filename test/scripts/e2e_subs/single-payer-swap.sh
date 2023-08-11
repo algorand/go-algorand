@@ -40,10 +40,10 @@ ${gcmd} clerk send -a 100 -f "${MOOCHER}" -t "${PAYER}" --fee 0 -o cheap.txn
 # Since goal was modified to allow zero when this feature was added, let's confirm
 # that it's not encoded (should be "omitempty")
 set +e
-FOUND=$(msgpacktool -d < cheap.txn | grep fee)
+FOUND=$(msgpacktool -d < cheap.txn | grep '"fee"')
 set -e
 if [[ $FOUND != "" ]]; then
-    date "+{scriptname} FAIL fee was improperly encoded $FOUND %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL fee was improperly encoded $FOUND %Y%m%d_%H%M%S"
     false
 fi
 

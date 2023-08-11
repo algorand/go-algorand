@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -170,6 +170,19 @@ func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, 
 		return
 	}
 	return resp.TxId, nil
+}
+
+// BroadcastTransactionAsync broadcasts a signed transaction to the network by appending it into tx handler queue.
+func (c *Client) BroadcastTransactionAsync(stx transactions.SignedTxn) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	_, err = algod.SendRawTransactionAsync(stx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // BroadcastTransactionGroup broadcasts a signed transaction group to the network using algod

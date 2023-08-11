@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,13 +32,14 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
-	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -82,51 +83,26 @@ var poolAddrResponseGolden = model.AccountResponse{
 	MinBalance:                  100000,
 }
 var txnPoolGolden = make([]transactions.SignedTxn, 2)
-var poolDeltaResponseGolden = model.LedgerStateDelta{
-	Accts: &model.AccountDeltas{
-		Accounts: &[]model.AccountBalanceRecord{
-			{
-				AccountData: model.Account{
-					Address:                     poolAddr.String(),
-					Amount:                      50000000000,
-					AmountWithoutPendingRewards: 50000000000,
-					MinBalance:                  100000,
-					CreatedApps:                 &[]model.Application{},
-					AppsTotalSchema:             &appsTotalSchema,
-					AppsLocalState:              &[]model.ApplicationLocalState{},
-					Status:                      "Not Participating",
-					RewardBase:                  &poolAddrRewardBaseGolden,
-					CreatedAssets:               &[]model.Asset{},
-					Assets:                      &[]model.AssetHolding{},
-				},
-				Address: poolAddr.String(),
-			},
-		},
-	},
-	Totals: &model.AccountTotals{
-		NotParticipating: 100000000000,
-		Offline:          0,
-		Online:           658511,
-		RewardsLevel:     0,
-	},
-}
 
 // ordinarily mockNode would live in `components/mocks`
 // but doing this would create an import cycle, as mockNode needs
 // package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
 	mock.Mock
-	ledger    v2.LedgerForAPI
-	genesisID string
-	config    config.Local
-	err       error
-	id        account.ParticipationID
-	keys      account.StateProofKeys
-	usertxns  map[basics.Address][]node.TxnWithStatus
+	ledger          v2.LedgerForAPI
+	genesisID       string
+	config          config.Local
+	err             error
+	id              account.ParticipationID
+	keys            account.StateProofKeys
+	usertxns        map[basics.Address][]node.TxnWithStatus
+	status          node.StatusReport
+	devmode         bool
+	timestampOffset *int64
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
-	panic("implement me")
+	return account.ParticipationID{}, nil
 }
 
 func (m *mockNode) ListParticipationKeys() ([]account.ParticipationRecord, error) {
@@ -160,23 +136,27 @@ func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys acco
 	return m.err
 }
 
-func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error) *mockNode {
+func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, status node.StatusReport, devMode bool) *mockNode {
+	return makeMockNodeWithConfig(ledger, genesisID, nodeError, status, devMode, config.GetDefaultLocal())
+}
+
+func makeMockNodeWithConfig(ledger v2.LedgerForAPI, genesisID string, nodeError error, status node.StatusReport, devMode bool, cfg config.Local) *mockNode {
 	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
-		config:    config.GetDefaultLocal(),
+		config:    cfg,
 		err:       nodeError,
 		usertxns:  map[basics.Address][]node.TxnWithStatus{},
+		status:    status,
+		devmode:   devMode,
 	}
 }
 
 func (m *mockNode) LedgerForAPI() v2.LedgerForAPI {
 	return m.ledger
 }
-
-func (m *mockNode) Status() (s node.StatusReport, err error) {
-	s = cannedStatusReportGolden
-	return
+func (m *mockNode) Status() (node.StatusReport, error) {
+	return m.status, nil
 }
 func (m *mockNode) GenesisID() string {
 	return m.genesisID
@@ -188,6 +168,15 @@ func (m *mockNode) GenesisHash() crypto.Digest {
 
 func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
 	return m.err
+}
+
+func (m *mockNode) AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
+	return m.err
+}
+
+func (m *mockNode) Simulate(request simulation.Request) (simulation.Result, error) {
+	simulator := simulation.MakeSimulator(m.ledger.(*data.Ledger), m.config.EnableDeveloperAPI)
+	return simulator.Simulate(request)
 }
 
 func (m *mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
@@ -229,10 +218,6 @@ func (m *mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, m
 	return node.TxnWithStatus{}, false
 }
 
-func (m *mockNode) PoolStats() node.PoolStats {
-	return node.PoolStats{}
-}
-
 func (m *mockNode) IsArchival() bool {
 	return false
 }
@@ -241,10 +226,6 @@ func (m *mockNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDel
 
 func (m *mockNode) Uint64() uint64 {
 	return 1
-}
-
-func (m *mockNode) Indexer() (*indexer.Indexer, error) {
-	return nil, fmt.Errorf("indexer not implemented")
 }
 
 func (m *mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (node.TxnWithStatus, error) {
@@ -263,6 +244,23 @@ func (m *mockNode) AbortCatchup(catchpoint string) error {
 	return m.err
 }
 
+func (m *mockNode) SetBlockTimeStampOffset(offset int64) error {
+	if !m.devmode {
+		return fmt.Errorf("cannot set block timestamp when not in dev mode")
+	}
+	m.timestampOffset = &offset
+	return nil
+}
+
+func (m *mockNode) GetBlockTimeStampOffset() (*int64, error) {
+	if !m.devmode {
+		return nil, fmt.Errorf("cannot get block timestamp when not in dev mode")
+	} else if m.timestampOffset == nil {
+		return nil, nil
+	}
+	return m.timestampOffset, nil
+}
+
 ////// mock ledger testing environment follows
 
 var sinkAddr = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
@@ -271,13 +269,17 @@ var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
 var genesisID = "testingid"
 var retOneProgram = []byte{2, 0x20, 1, 1, 0x22}
 
-var proto = config.Consensus[protocol.ConsensusCurrentVersion]
+var proto = config.Consensus[protocol.ConsensusFuture]
 
 func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+	minMoneyAtStart := 100000  // min money start
+	maxMoneyAtStart := 1000000 // max money start
+	return testingenvWithBalances(t, minMoneyAtStart, maxMoneyAtStart, numAccounts, numTxs, offlineAccounts)
+}
+
+func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
 	P := numAccounts               // n accounts
 	TXs := numTxs                  // n txns
-	maxMoneyAtStart := 1000000     // max money start
-	minMoneyAtStart := 100000      // max money start
 	transferredMoney := 100        // max money/txn
 	maxFee := 10                   // max maxFee/txn
 	lastValid := basics.Round(500) // max round
@@ -314,7 +316,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		}
 		accessors = append(accessors, access)
 
-		part, err := account.FillDBWithParticipationKeys(access, root.Address(), 0, lastValid, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
+		part, err := account.FillDBWithParticipationKeys(access, root.Address(), 0, lastValid, proto.DefaultKeyDilution)
 		if err != nil {
 			panic(err)
 		}
@@ -326,9 +328,9 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		short := root.Address()
 
 		if offlineAccounts && i > P/2 {
-			genesis[short] = basics.MakeAccountData(basics.Offline, startamt)
+			genesis[short] = basics_testing.MakeAccountData(basics.Offline, startamt)
 		} else {
-			data := basics.MakeAccountData(basics.Online, startamt)
+			data := basics_testing.MakeAccountData(basics.Online, startamt)
 			data.SelectionID = parts[i].VRFSecrets().PK
 			data.VoteID = parts[i].VotingSecrets().OneTimeSignatureVerifier
 			genesis[short] = data
@@ -336,13 +338,13 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		part.Close()
 	}
 
-	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
+	genesis[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 
 	program := logic.Program(retOneProgram)
 	lhash := crypto.HashObj(&program)
 	var addr basics.Address
 	copy(addr[:], lhash[:])
-	ad := basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
+	ad := basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 	ad.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{1: {}}
 	genesis[addr] = ad
 
@@ -352,7 +354,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, cfg)
+	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusFuture, bootstrap, genesisID, genesisHash, nil, cfg)
 	if err != nil {
 		panic(err)
 	}

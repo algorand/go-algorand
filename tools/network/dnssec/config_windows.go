@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,12 +42,12 @@ const (
 
 const ip_size = 16
 
-// typedef struct _IP_ADDR_STRING {
-// 	struct _IP_ADDR_STRING *Next;
-// 	IP_ADDRESS_STRING      IpAddress;  // The String member is a char array of size 16. This array holds an IPv4 address in dotted decimal notation.
-// 	IP_MASK_STRING         IpMask;     // The String member is a char array of size 16. This array holds the IPv4 subnet mask in dotted decimal notation.
-// 	DWORD                  Context;
-//   } IP_ADDR_STRING, *PIP_ADDR_STRING;
+//	typedef struct _IP_ADDR_STRING {
+//		struct _IP_ADDR_STRING *Next;
+//		IP_ADDRESS_STRING      IpAddress;  // The String member is a char array of size 16. This array holds an IPv4 address in dotted decimal notation.
+//		IP_MASK_STRING         IpMask;     // The String member is a char array of size 16. This array holds the IPv4 subnet mask in dotted decimal notation.
+//		DWORD                  Context;
+//	  } IP_ADDR_STRING, *PIP_ADDR_STRING;
 //
 // https://docs.microsoft.com/en-us/windows/win32/api/iptypes/ns-iptypes-ip_addr_string
 type ipAddrString struct {
@@ -57,17 +57,17 @@ type ipAddrString struct {
 	Context   uint32
 }
 
-// typedef struct {
-// 	char            HostName[MAX_HOSTNAME_LEN + 4];
-// 	char            DomainName[MAX_DOMAIN_NAME_LEN + 4];
-// 	PIP_ADDR_STRING CurrentDnsServer;
-// 	IP_ADDR_STRING  DnsServerList;
-// 	UINT            NodeType;
-// 	char            ScopeId[MAX_SCOPE_ID_LEN + 4];
-// 	UINT            EnableRouting;
-// 	UINT            EnableProxy;
-// 	UINT            EnableDns;
-//   } FIXED_INFO_W2KSP1, *PFIXED_INFO_W2KSP1;
+//	typedef struct {
+//		char            HostName[MAX_HOSTNAME_LEN + 4];
+//		char            DomainName[MAX_DOMAIN_NAME_LEN + 4];
+//		PIP_ADDR_STRING CurrentDnsServer;
+//		IP_ADDR_STRING  DnsServerList;
+//		UINT            NodeType;
+//		char            ScopeId[MAX_SCOPE_ID_LEN + 4];
+//		UINT            EnableRouting;
+//		UINT            EnableProxy;
+//		UINT            EnableDns;
+//	  } FIXED_INFO_W2KSP1, *PFIXED_INFO_W2KSP1;
 //
 // https://docs.microsoft.com/en-us/windows/win32/api/iptypes/ns-iptypes-fixed_info_w2ksp1
 type fixedInfo struct {

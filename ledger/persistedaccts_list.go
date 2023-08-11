@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 package ledger
 
-import "github.com/algorand/go-algorand/ledger/store"
+import "github.com/algorand/go-algorand/ledger/store/trackerdb"
 
 // persistedAccountDataList represents a doubly linked list.
 // must initiate with newPersistedAccountList.
@@ -33,7 +33,7 @@ type persistedAccountDataListNode struct {
 	// element (l.Front()).
 	next, prev *persistedAccountDataListNode
 
-	Value *store.PersistedAccountData
+	Value *trackerdb.PersistedAccountData
 }
 
 func newPersistedAccountList() *persistedAccountDataList {
@@ -101,7 +101,7 @@ func (l *persistedAccountDataList) remove(e *persistedAccountDataListNode) {
 }
 
 // pushFront inserts a new element e with value v at the front of list l and returns e.
-func (l *persistedAccountDataList) pushFront(v *store.PersistedAccountData) *persistedAccountDataListNode {
+func (l *persistedAccountDataList) pushFront(v *trackerdb.PersistedAccountData) *persistedAccountDataListNode {
 	newNode := l.getNewNode()
 	newNode.Value = v
 	return l.insertValue(newNode, &l.root)

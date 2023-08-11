@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -74,6 +75,11 @@ func (m *catchpointCatchupAccessorMock) GetCatchupBlockRound(ctx context.Context
 
 func (m *catchpointCatchupAccessorMock) Ledger() (l ledger.CatchupAccessorClientLedger) {
 	return m.l
+}
+
+// GetVerifyData returns the balances hash, spver hash and totals used by VerifyCatchpoint
+func (m *catchpointCatchupAccessorMock) GetVerifyData(ctx context.Context) (balancesHash crypto.Digest, spverHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
+	return crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, nil
 }
 
 // TestCatchpointServicePeerRank ensures CatchpointService does not crash when a block fetched

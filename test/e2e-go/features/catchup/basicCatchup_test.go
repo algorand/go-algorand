@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,9 +35,6 @@ func TestBasicCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -48,12 +45,12 @@ func TestBasicCatchup(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
-	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
+	// and so that its proposal isn't dropped. Otherwise, the test burns 17s to recover. We don't care about stake
 	// distribution for catchup so this is fine.
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
 	defer fixture.Shutdown()
 
-	// Get 2nd node so we wait until we know they're at target block
+	// Get 2nd node, so we wait until we know they're at target block
 	nc, err := fixture.GetNodeController("Node")
 	a.NoError(err)
 
@@ -75,6 +72,24 @@ func TestBasicCatchup(t *testing.T) {
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
 	a.NoError(err)
+
+	cloneNC := fixture.GetNodeControllerForDataDir(cloneDataDir)
+	cloneRestClient := fixture.GetAlgodClientForController(cloneNC)
+
+	// an immediate call for ready will error, for sync time != 0
+	a.Error(cloneRestClient.ReadyCheck())
+
+	for {
+		status, err := cloneRestClient.Status()
+		a.NoError(err)
+
+		if status.LastRound < 10 {
+			time.Sleep(250 * time.Millisecond)
+			continue
+		}
+		a.NoError(cloneRestClient.ReadyCheck())
+		break
+	}
 }
 
 // TestCatchupOverGossip tests catchup across network versions

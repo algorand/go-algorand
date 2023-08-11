@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,12 +19,18 @@ package network
 import (
 	"encoding/binary"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 	"unsafe"
 
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/stretchr/testify/require"
@@ -104,6 +110,11 @@ func TestAtomicVariablesAlignment(t *testing.T) {
 	require.True(t, (unsafe.Offsetof(p.lastPacketTime)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.intermittentOutgoingMessageEnqueueTime)%8) == 0)
 	require.True(t, (unsafe.Offsetof(p.duplicateFilterCount)%8) == 0)
+	require.True(t, (unsafe.Offsetof(p.txMessageCount)%8) == 0)
+	require.True(t, (unsafe.Offsetof(p.miMessageCount)%8) == 0)
+	require.True(t, (unsafe.Offsetof(p.ppMessageCount)%8) == 0)
+	require.True(t, (unsafe.Offsetof(p.avMessageCount)%8) == 0)
+	require.True(t, (unsafe.Offsetof(p.unkMessageCount)%8) == 0)
 }
 
 func TestTagCounterFiltering(t *testing.T) {
@@ -179,4 +190,95 @@ func TestVersionToFeature(t *testing.T) {
 			require.Equal(t, test.expected, f)
 		})
 	}
+}
+
+func TestPeerReadLoopSwitchAllTags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	allTags := getProtocolTags(t)
+	foundTags := []string{}
+
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "wsPeer.go", nil, 0)
+	require.NoError(t, err)
+
+	getCases := func(n ast.Node) (ret bool) {
+		switch x := n.(type) {
+		case *ast.SwitchStmt:
+			// look for "switch msg.Tag"
+			if tagSel, ok := x.Tag.(*ast.SelectorExpr); ok {
+				if tagSel.Sel.Name != "Tag" {
+					return false
+				}
+				if id, ok := tagSel.X.(*ast.Ident); ok && id.Name != "msg" {
+					return false
+				}
+			}
+			// found switch msg.Tag, go through case statements
+			for _, s := range x.Body.List {
+				cl, ok := s.(*ast.CaseClause)
+				if !ok {
+					continue
+				}
+				for i := range cl.List {
+					if selExpr, ok := cl.List[i].(*ast.SelectorExpr); ok {
+						xid, ok := selExpr.X.(*ast.Ident)
+						require.True(t, ok)
+						require.Equal(t, "protocol", xid.Name)
+						foundTags = append(foundTags, selExpr.Sel.Name)
+					}
+				}
+			}
+		}
+		return true
+	}
+
+	readLoopFound := false
+	ast.Inspect(f, func(n ast.Node) bool {
+		// look for "readLoop" function
+		fn, ok := n.(*ast.FuncDecl)
+		if ok && fn.Name.Name == "readLoop" {
+			readLoopFound = true
+			ast.Inspect(fn, getCases)
+			return false
+		}
+		return true
+	})
+	require.True(t, readLoopFound)
+	require.NotEmpty(t, foundTags)
+	sort.Strings(allTags)
+	sort.Strings(foundTags)
+	require.Equal(t, allTags, foundTags)
+}
+
+func getProtocolTags(t *testing.T) []string {
+	file := filepath.Join("../protocol", "tags.go")
+	fset := token.NewFileSet()
+	f, _ := parser.ParseFile(fset, file, nil, parser.ParseComments)
+
+	// look for const declarations in protocol/tags.go
+	var declaredTags []string
+	// Iterate through the declarations in the file
+	for _, d := range f.Decls {
+		genDecl, ok := d.(*ast.GenDecl)
+		// Check if the declaration is a constant and if not, continue
+		if !ok || genDecl.Tok != token.CONST {
+			continue
+		}
+		// Iterate through the specs (specifications) in the declaration
+		for _, spec := range genDecl.Specs {
+			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+				for _, n := range valueSpec.Names {
+					if strings.HasSuffix(n.Name, "MaxSize") || n.Name == "TagLength" {
+						continue
+					}
+					declaredTags = append(declaredTags, n.Name)
+				}
+			}
+		}
+	}
+	// assert these AST-discovered tags are complete (match the size of protocol.TagList)
+	require.Len(t, declaredTags, len(protocol.TagList))
+	return declaredTags
 }

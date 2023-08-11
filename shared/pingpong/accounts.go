@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -197,9 +197,9 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 				srcAcctPresent = true
 			}
 
-			ai, err := ac.AccountInformation(addr, true)
-			if err != nil {
-				return err
+			ai, aiErr := ac.AccountInformation(addr, true)
+			if aiErr != nil {
+				return aiErr
 			}
 			amt := ai.Amount
 

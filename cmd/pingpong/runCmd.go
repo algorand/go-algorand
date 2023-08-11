@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,6 +90,8 @@ var generatedAccountsCount uint64
 var generatedAccountsOffset uint64
 var generatedAccountSampleMethod string
 var configPath string
+var latencyPath string
+var asyncSending bool
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -111,6 +113,7 @@ func init() {
 	runCmd.Flags().StringVar(&refreshTime, "refresh", "", "Duration of time (seconds) between refilling accounts with money (0 means no refresh)")
 	runCmd.Flags().StringVar(&logicProg, "program", "", "File containing the compiled program to include as a logic sig")
 	runCmd.Flags().StringVar(&configPath, "config", "", "path to read config json from, or json literal")
+	runCmd.Flags().StringVar(&latencyPath, "latency", "", "path to write txn latency log to (.gz for compressed)")
 	runCmd.Flags().BoolVar(&saveConfig, "save", false, "Save the effective configuration to disk")
 	runCmd.Flags().BoolVar(&useDefault, "reset", false, "Reset to the default configuration (not read from disk)")
 	runCmd.Flags().BoolVar(&quietish, "quiet", false, "quietish stdout logging")
@@ -130,6 +133,7 @@ func init() {
 	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 	runCmd.Flags().BoolVar(&rekey, "rekey", false, "Create RekeyTo transactions. Requires groupsize=2 and any of random flags exc random dst")
 	runCmd.Flags().Uint32Var(&duration, "duration", 0, "The number of seconds to run the pingpong test, forever if 0")
+	runCmd.Flags().BoolVar(&asyncSending, "async", false, "Use async sending mode")
 	runCmd.Flags().Uint32Var(&nftAsaPerSecond, "nftasapersecond", 0, "The number of NFT-style ASAs to create per second")
 	runCmd.Flags().StringVar(&pidFile, "pidfile", "", "path to write process id of this pingpong")
 	runCmd.Flags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
@@ -151,14 +155,14 @@ var runCmd = &cobra.Command{
 			reportErrorf("Cannot make temp dir: %v\n", err)
 		}
 		if cpuprofile != "" {
-			proff, err := os.Create(cpuprofile)
-			if err != nil {
-				reportErrorf("%s: %v\n", cpuprofile, err)
+			proff, profErr := os.Create(cpuprofile)
+			if profErr != nil {
+				reportErrorf("%s: %v\n", cpuprofile, profErr)
 			}
 			defer proff.Close()
-			err = pprof.StartCPUProfile(proff)
-			if err != nil {
-				reportErrorf("%s: StartCPUProfile %v\n", cpuprofile, err)
+			profErr = pprof.StartCPUProfile(proff)
+			if profErr != nil {
+				reportErrorf("%s: StartCPUProfile %v\n", cpuprofile, profErr)
 			}
 			defer pprof.StopCPUProfile()
 		}
@@ -170,18 +174,18 @@ var runCmd = &cobra.Command{
 		}
 
 		if pidFile != "" {
-			pidf, err := os.Create(pidFile)
-			if err != nil {
-				reportErrorf("%s: %v\n", pidFile, err)
+			pidf, pidErr := os.Create(pidFile)
+			if pidErr != nil {
+				reportErrorf("%s: %v\n", pidFile, pidErr)
 			}
 			defer os.Remove(pidFile)
-			_, err = fmt.Fprintf(pidf, "%d", os.Getpid())
-			if err != nil {
-				reportErrorf("%s: %v\n", pidFile, err)
+			_, pidErr = fmt.Fprintf(pidf, "%d", os.Getpid())
+			if pidErr != nil {
+				reportErrorf("%s: %v\n", pidFile, pidErr)
 			}
-			err = pidf.Close()
-			if err != nil {
-				reportErrorf("%s: %v\n", pidFile, err)
+			pidErr = pidf.Close()
+			if pidErr != nil {
+				reportErrorf("%s: %v\n", pidFile, pidErr)
 			}
 		}
 
@@ -292,6 +296,9 @@ var runCmd = &cobra.Command{
 		if duration > 0 {
 			cfg.MaxRuntime = time.Duration(uint32(duration)) * time.Second
 		}
+		if asyncSending {
+			cfg.AsyncSending = true
+		}
 		if randomNote {
 			cfg.RandomNote = true
 		}
@@ -316,7 +323,7 @@ var runCmd = &cobra.Command{
 			}
 			ops, err := logic.AssembleString(programStr)
 			if err != nil {
-				ops.ReportProblems(teal, os.Stderr)
+				ops.ReportMultipleErrors(teal, os.Stderr)
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}
 			cfg.Program = ops.Program
@@ -436,8 +443,14 @@ var runCmd = &cobra.Command{
 			cfg.GeneratedAccountSampleMethod = generatedAccountSampleMethod
 		}
 		// check if numAccounts is greater than the length of the mnemonic list, if provided
-		if cfg.DeterministicKeys && cfg.NumPartAccounts > uint32(len(cfg.GeneratedAccountsMnemonics)) {
+		if cfg.DeterministicKeys &&
+			len(cfg.GeneratedAccountsMnemonics) > 0 &&
+			cfg.NumPartAccounts > uint32(len(cfg.GeneratedAccountsMnemonics)) {
 			reportErrorf("numAccounts is greater than number of account mnemonics provided")
+		}
+
+		if latencyPath != "" {
+			cfg.TotalLatencyOut = latencyPath
 		}
 
 		cfg.SetDefaultWeights()

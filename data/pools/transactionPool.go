@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -841,7 +841,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0, nil)
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
 		// we want to remove the interface itself rather then keeping an interface
@@ -958,21 +958,13 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 	}
 
 	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
-	lastRoundHdr, err := pool.ledger.BlockHdr(lastSPRound)
+	verificationCtx, err := pool.ledger.GetStateProofVerificationContext(lastSPRound)
 	if err != nil {
 		return stateProofStats
 	}
 
-	proto := config.Consensus[lastRoundHdr.CurrentProtocol]
-	votersRound := lastSPRound.SubSaturate(basics.Round(proto.StateProofInterval))
-	votersRoundHdr, err := pool.ledger.BlockHdr(votersRound)
-	if err != nil {
-		return stateProofStats
-	}
-
-	totalWeight := votersRoundHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.Raw
-	stateProofStats.ProvenWeight, _ = basics.Muldiv(totalWeight, uint64(proto.StateProofWeightThreshold), 1<<32)
-
+	totalWeight := verificationCtx.OnlineTotalWeight.Raw
+	stateProofStats.ProvenWeight, _ = basics.Muldiv(totalWeight, uint64(config.Consensus[verificationCtx.Version].StateProofWeightThreshold), 1<<32)
 	return stateProofStats
 }
 
@@ -1022,7 +1014,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 					}
 					stats.TotalLength += uint64(encodedLen)
 					if txib.Txn.Type == protocol.StateProofTx {
-						stats.StateProofStats = pool.getStateProofStats(&txib, encodedLen)
+						stats.StateProofStats = pool.getStateProofStats(&payset[i], encodedLen)
 					}
 				}
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)
@@ -1041,7 +1033,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	// if the transaction pool is more than two rounds behind, we don't want to wait.
 	if pool.assemblyResults.roundStartedEvaluating <= round.SubSaturate(2) {
 		pool.log.Infof("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.roundStartedEvaluating, round)
-		stats.StopReason = telemetryspec.AssembleBlockEmpty
+		stats.StopReason = telemetryspec.AssembleBlockPoolBehind
 		pool.assemblyMu.Unlock()
 		return pool.assembleEmptyBlock(round)
 	}
@@ -1106,7 +1098,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		if !pool.assemblyResults.ok {
 			// it didn't. Lucky us - we already prepared an empty block, so we can return this right now.
 			pool.log.Warnf("AssembleBlock: ran out of time for round %d", round)
-			stats.StopReason = telemetryspec.AssembleBlockTimeout
+			stats.StopReason = telemetryspec.AssembleBlockTimeoutEmpty
 			if emptyBlockErr != nil {
 				emptyBlockErr = fmt.Errorf("AssembleBlock: failed to construct empty block : %w", emptyBlockErr)
 			}
@@ -1127,7 +1119,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		return nil, ErrStaleBlockAssemblyRequest
 	} else if pool.assemblyResults.roundStartedEvaluating == round.SubSaturate(1) {
 		pool.log.Warnf("AssembleBlock: assembled block round did not catch up to requested round: %d != %d", pool.assemblyResults.roundStartedEvaluating, round)
-		stats.StopReason = telemetryspec.AssembleBlockTimeout
+		stats.StopReason = telemetryspec.AssembleBlockEvalOld
 		return pool.assembleEmptyBlock(round)
 	} else if pool.assemblyResults.roundStartedEvaluating < round {
 		return nil, fmt.Errorf("AssembleBlock: assembled block round much behind requested round: %d != %d",
@@ -1149,7 +1141,7 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 		return nil, err
 	}
 	next := bookkeeping.MakeBlock(prev)
-	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0, 0)
+	blockEval, err := pool.ledger.StartEvaluator(next.BlockHeader, 0, 0, nil)
 	if err != nil {
 		var nonSeqBlockEval ledgercore.ErrNonSequentialBlockEval
 		if errors.As(err, &nonSeqBlockEval) {

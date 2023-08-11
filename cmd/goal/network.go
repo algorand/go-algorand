@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,12 +17,16 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/util"
@@ -35,6 +39,7 @@ var startNode string
 var noImportKeys bool
 var noClean bool
 var devModeOverride bool
+var startOnCreation bool
 
 func init() {
 	networkCmd.AddCommand(networkCreateCmd)
@@ -43,10 +48,10 @@ func init() {
 
 	networkCreateCmd.Flags().StringVarP(&networkName, "network", "n", "", "Specify the name to use for the private network")
 	networkCreateCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
-	networkCreateCmd.MarkFlagRequired("template")
 	networkCreateCmd.Flags().BoolVarP(&noImportKeys, "noimportkeys", "K", false, "Do not import root keys when creating the network (by default will import)")
 	networkCreateCmd.Flags().BoolVar(&noClean, "noclean", false, "Prevents auto-cleanup on error - for diagnosing problems")
 	networkCreateCmd.Flags().BoolVar(&devModeOverride, "devMode", false, "Forces the configuration to enable DevMode, returns an error if the template is not compatible with DevMode.")
+	networkCreateCmd.Flags().BoolVarP(&startOnCreation, "start", "s", false, "Automatically start the network after creating it.")
 
 	networkStartCmd.Flags().StringVarP(&startNode, "node", "n", "", "Specify the name of a specific node to start")
 
@@ -70,6 +75,9 @@ The basic idea is that we create one or more data directories and wallets to for
 	},
 }
 
+//go:embed defaultNetworkTemplate.json
+var defaultNetworkTemplate string
+
 var networkCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a private named network from a template",
@@ -80,10 +88,25 @@ var networkCreateCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		networkTemplateFile, err := filepath.Abs(networkTemplateFile)
-		if err != nil {
-			panic(err)
+
+		var templateReader io.Reader
+
+		if networkTemplateFile == "" {
+			templateReader = strings.NewReader(defaultNetworkTemplate)
+		} else {
+			networkTemplateFile, err = filepath.Abs(networkTemplateFile)
+			if err != nil {
+				panic(err)
+			}
+			file, osErr := os.Open(networkTemplateFile)
+			if osErr != nil {
+				reportErrorf(errorCreateNetwork, osErr)
+			}
+
+			defer file.Close()
+			templateReader = file
 		}
+
 		// Make sure target directory does not exist or is empty
 		if util.FileExists(networkRootDir) && !util.IsEmpty(networkRootDir) {
 			reportErrorf(infoNetworkAlreadyExists, networkRootDir)
@@ -94,14 +117,14 @@ var networkCreateCmd = &cobra.Command{
 			panic(err)
 		}
 
-		dataDir := maybeSingleDataDir()
+		dataDir := datadir.MaybeSingleDataDir()
 		var consensus config.ConsensusProtocols
 		if dataDir != "" {
 			// try to load the consensus from there. If there is none, we can just use the built in one.
 			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, consensus, devModeOverride)
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, templateReader, binDir, !noImportKeys, nil, consensus, devModeOverride)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)
@@ -112,6 +135,15 @@ var networkCreateCmd = &cobra.Command{
 		}
 
 		reportInfof(infoNetworkCreated, network.Name(), networkRootDir)
+
+		if startOnCreation {
+			network, binDir := getNetworkAndBinDir()
+			err := network.Start(binDir, false)
+			if err != nil {
+				reportErrorf(errorStartingNetwork, err)
+			}
+			reportInfof(infoNetworkStarted, networkRootDir)
+		}
 	},
 }
 

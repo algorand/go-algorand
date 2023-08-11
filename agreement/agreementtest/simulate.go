@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -129,7 +129,7 @@ func (b *blackhole) Address() (string, bool) {
 // CryptoRandomSource is a random source that is based off our crypto library.
 type CryptoRandomSource struct{}
 
-// Uint64 implements the randomness by calling hte crypto library.
+// Uint64 implements the randomness by calling the crypto library.
 func (c *CryptoRandomSource) Uint64() uint64 {
 	return crypto.RandUint64()
 }
@@ -170,7 +170,10 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 	}
 	_ = accessor
 
-	service := agreement.MakeService(parameters)
+	service, err := agreement.MakeService(parameters)
+	if err != nil {
+		return err
+	}
 	service.Start()
 	defer service.Shutdown()
 	defer stopwatch.shutdown()

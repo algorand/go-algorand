@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -84,6 +85,13 @@ func (nc NodeController) ServerURL() (url.URL, error) {
 	addr, err := nc.GetHostAddress()
 	if err != nil {
 		return url.URL{}, err
+	}
+	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") {
+		u, err := url.Parse(addr)
+		if err != nil {
+			return url.URL{}, err
+		}
+		return *u, nil
 	}
 	return url.URL{Scheme: "http", Host: addr}, nil
 }

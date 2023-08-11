@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ func TestGenesis_Balances(t *testing.T) {
 			_struct: struct{}{},
 			Address: addr,
 			Comment: "",
-			State: basics.AccountData{
+			State: GenesisAccountData{
 				MicroAlgos: basics.MicroAlgos{Raw: algos},
 			},
 		}
@@ -79,7 +79,7 @@ func TestGenesis_Balances(t *testing.T) {
 			},
 			want: GenesisBalances{
 				Balances: map[basics.Address]basics.AccountData{
-					mustAddr(allocation1.Address): allocation1.State,
+					mustAddr(allocation1.Address): allocation1.State.AccountData(),
 				},
 				FeeSink:     goodAddr,
 				RewardsPool: goodAddr,
@@ -96,8 +96,8 @@ func TestGenesis_Balances(t *testing.T) {
 			},
 			want: GenesisBalances{
 				Balances: map[basics.Address]basics.AccountData{
-					mustAddr(allocation1.Address): allocation1.State,
-					mustAddr(allocation2.Address): allocation2.State,
+					mustAddr(allocation1.Address): allocation1.State.AccountData(),
+					mustAddr(allocation2.Address): allocation2.State.AccountData(),
 				},
 				FeeSink:     goodAddr,
 				RewardsPool: goodAddr,

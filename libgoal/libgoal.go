@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -504,11 +504,10 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 //
 // validRounds | lastValid | result (lastValid)
 // -------------------------------------------------
-// 	  	 0     |     0     | firstValid + maxTxnLife
-// 		 0     |     N     | lastValid
-// 		 M     |     0     | first + validRounds - 1
-// 		 M     |     M     | error
-//
+// 0           |     0     | firstValid + maxTxnLife
+// 0           |     N     | lastValid
+// M           |     0     | first + validRounds - 1
+// M           |     M     | error
 func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (first, last, latest uint64, err error) {
 	params, err := c.cachedSuggestedParams()
 	if err != nil {
@@ -529,7 +528,17 @@ func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxn
 	}
 
 	if firstValid == 0 {
-		firstValid = lastRound + 1
+		// current node might be a bit ahead of the network, and to prevent sibling nodes from rejecting the transaction
+		// because it's FirstValid is greater than their pending block evaluator.
+		// For example, a node just added block 100 and immediately sending a new transaction.
+		// The other side is lagging behind by 100ms and its LastRound is 99 so its transaction pools accepts txns for rounds 100+.
+		// This means the node client have to set FirstValid to 100 or below.
+		if lastRound > 0 {
+			firstValid = lastRound
+		} else {
+			// there is no practical sense to set FirstValid to 0, so we set it to 1
+			firstValid = 1
+		}
 	}
 
 	if validRounds != 0 {
@@ -765,7 +774,7 @@ func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64) (resp model.Bo
 }
 
 // GetApplicationBoxByName takes an app's index and box name and returns its value.
-// The box name should be of the form `encoding:value`. See logic.AppCallBytes for more information.
+// The box name should be of the form `encoding:value`. See apps.AppCallBytes for more information.
 func (c *Client) GetApplicationBoxByName(index uint64, name string) (resp model.BoxResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
@@ -1025,7 +1034,7 @@ func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID s
 func (c *Client) RemoveParticipationKey(participationID string) error {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	return algod.RemoveParticipationKeyByID(participationID)
@@ -1270,6 +1279,26 @@ func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
 	return
 }
 
+// SimulateTransactionsRaw simulates a transaction group by taking raw request bytes and returns relevant simulation results.
+func (c *Client) SimulateTransactionsRaw(encodedRequest []byte) (result v2.PreEncodedSimulateResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return
+	}
+	var resp []byte
+	resp, err = algod.RawSimulateRawTransaction(encodedRequest)
+	if err != nil {
+		return
+	}
+	err = protocol.DecodeReflect(resp, &result)
+	return
+}
+
+// SimulateTransactions simulates transactions and returns relevant simulation results.
+func (c *Client) SimulateTransactions(request v2.PreEncodedSimulateRequest) (result v2.PreEncodedSimulateResponse, err error) {
+	return c.SimulateTransactionsRaw(protocol.EncodeReflect(&request))
+}
+
 // TransactionProof returns a Merkle proof for a transaction in a block.
 func (c *Client) TransactionProof(txid string, round uint64, hashType crypto.HashType) (resp model.TransactionProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -1284,6 +1313,33 @@ func (c *Client) LightBlockHeaderProof(round uint64) (resp model.LightBlockHeade
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.LightBlockHeaderProof(round)
+	}
+	return
+}
+
+// SetSyncRound sets the sync round on a node w/ EnableFollowMode
+func (c *Client) SetSyncRound(round uint64) (err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.SetSyncRound(round)
+	}
+	return
+}
+
+// GetSyncRound gets the sync round on a node w/ EnableFollowMode
+func (c *Client) GetSyncRound() (rep model.GetSyncRoundResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetSyncRound()
+	}
+	return
+}
+
+// GetLedgerStateDelta gets the LedgerStateDelta on a node w/ EnableFollowMode
+func (c *Client) GetLedgerStateDelta(round uint64) (rep model.LedgerStateDeltaResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetLedgerStateDelta(round)
 	}
 	return
 }

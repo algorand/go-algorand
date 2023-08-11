@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -314,8 +314,8 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 	}
 
 	defer func() {
-		if err := deleteLedgerFiles(!loadOnly); err != nil {
-			reportWarnf("Error deleting ledger files: %v", err)
+		if delErr := deleteLedgerFiles(!loadOnly); delErr != nil {
+			reportWarnf("Error deleting ledger files: %v", delErr)
 		}
 	}()
 	defer l.Close()
@@ -358,6 +358,10 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 			return err
 		}
 		err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
+		if err != nil {
+			return err
+		}
+		err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
 		if err != nil {
 			return err
 		}

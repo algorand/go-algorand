@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ const sourceMapVersion = 3
 const b64table string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 // SourceMap contains details from the source to assembly process.
-// Currently contains the map between TEAL source line to
+// Currently, contains the map between TEAL source line to
 // the assembled bytecode position and details about
 // the template variables contained in the source file.
 type SourceMap struct {

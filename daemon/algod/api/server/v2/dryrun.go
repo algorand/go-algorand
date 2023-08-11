@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -181,24 +181,22 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) model.Dryr
 	return st
 }
 
-// Register is fired on program creation (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) error {
+// Register is fired on program creation (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) {
 	ddr.disassembly = state.Disassembly
 	ddr.lines = strings.Split(state.Disassembly, "\n")
-	return nil
 }
 
-// Update is fired on every step (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) error {
+// Update is fired on every step (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) {
 	st := ddr.stateToState(state)
 	ddr.history = append(ddr.history, st)
 	ddr.updateScratch()
-	return nil
 }
 
-// Complete is called when the program exits (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
-	return ddr.Update(state)
+// Complete is called when the program exits (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) {
+	ddr.Update(state)
 }
 
 type dryrunLedger struct {
@@ -243,12 +241,12 @@ func (dl *dryrunLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) 
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (dl *dryrunLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, nil
-}
-
 func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
+}
+
+func (dl *dryrunLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("dryrunLedger: GetStateProofVerificationContext, needed for state proof verification, is not implemented in dryrun")
 }
 
 func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
@@ -397,7 +395,8 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
 	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
 	specials := transactions.SpecialAddresses{}
-	ep := logic.NewEvalParams(txgroup, &proto, &specials)
+	ep := logic.NewAppEvalParams(txgroup, &proto, &specials)
+	sep := logic.NewSigEvalParams(dr.Txns, &proto, &dl)
 
 	origEnableAppCostPooling := proto.EnableAppCostPooling
 	// Enable EnableAppCostPooling so that dryrun
@@ -419,11 +418,10 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 	response.Txns = make([]model.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		var result model.DryrunTxnResult
-		if len(stxn.Lsig.Logic) > 0 {
+		if !stxn.Lsig.Blank() {
 			var debug dryrunDebugReceiver
-			ep.Debugger = &debug
-			ep.SigLedger = &dl
-			pass, err := logic.EvalSignature(ti, ep)
+			sep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
+			pass, err := logic.EvalSignature(ti, sep)
 			var messages []string
 			result.Disassembly = debug.lines          // Keep backwards compat
 			result.LogicSigDisassembly = &debug.lines // Also add to Lsig specific
@@ -474,7 +472,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 							}
 						}
 						if !found {
-							(*acct.AppsLocalState) = append(*acct.AppsLocalState, ls)
+							*acct.AppsLocalState = append(*acct.AppsLocalState, ls)
 						}
 					}
 					dl.dr.Accounts[idx] = acct
@@ -505,7 +503,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
 			} else {
 				var debug dryrunDebugReceiver
-				ep.Debugger = &debug
+				ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
 				var program []byte
 				messages = make([]string, 1)
 				if stxn.Txn.OnCompletion == transactions.ClearStateOC {

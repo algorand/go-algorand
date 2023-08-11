@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -363,6 +363,7 @@ func init() {
 }
 
 func checkLogicSigPass(t *testing.T, response *model.DryrunResponse) {
+	t.Helper()
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
@@ -486,7 +487,7 @@ func TestDryrunGlobal2(t *testing.T) {
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: 1,
+					ApplicationID: 1234,
 					ApplicationArgs: [][]byte{
 						[]byte("check"),
 						[]byte("bar"),
@@ -503,7 +504,7 @@ func TestDryrunGlobal2(t *testing.T) {
 	}
 	dr.Apps = []model.Application{
 		{
-			Id: 1,
+			Id: 1234,
 			Params: model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
@@ -691,7 +692,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: 1,
+					ApplicationID: 1234,
 					ApplicationArgs: [][]byte{
 						[]byte("check"),
 						[]byte("bar"),
@@ -702,13 +703,13 @@ func TestDryrunLocalCheck(t *testing.T) {
 	}
 	dr.Apps = []model.Application{
 		{
-			Id: 1,
+			Id: 1234,
 			Params: model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
 	}
-	localv := make(model.TealKeyValueStore, 1)
+	localv := make(model.TealKeyValueStore, 1234)
 	localv[0] = model.TealKeyValue{
 		Key: b64("foo"),
 		Value: model.TealValue{
@@ -722,7 +723,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 			Status:  "Online",
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]model.ApplicationLocalState{{
-				Id:       1,
+				Id:       1234,
 				KeyValue: &localv,
 			}},
 		},

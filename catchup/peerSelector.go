@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,12 +47,16 @@ const (
 	peerRank3LowBlockTime         = 601
 	peerRank3HighBlockTime        = 799
 
+	peerRankInitialFifthPriority = 800
+	peerRank4LowBlockTime        = 801
+	peerRank4HighBlockTime       = 999
+
 	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
 	// have clear resolution
-	peerRankDownloadFailed = 900
+	peerRankDownloadFailed = 10000
 	// peerRankInvalidDownload is used for responses which are likely to be invalid - whether it's serving the wrong content
 	// or attempting to serve malicious content
-	peerRankInvalidDownload = 1000
+	peerRankInvalidDownload = 12000
 
 	// once a block is downloaded, the download duration is clamped into the range of [lowBlockDownloadThreshold..highBlockDownloadThreshold] and
 	// then mapped into the a ranking range.
@@ -383,8 +387,10 @@ func (ps *peerSelector) peerDownloadDurationToRank(psp *peerSelectorPeer, blockD
 		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank1LowBlockTime, peerRank1HighBlockTime)
 	case peerRankInitialThirdPriority:
 		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank2LowBlockTime, peerRank2HighBlockTime)
-	default: // i.e. peerRankInitialFourthPriority
+	case peerRankInitialFourthPriority:
 		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank3LowBlockTime, peerRank3HighBlockTime)
+	default: // i.e. peerRankInitialFifthPriority
+		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank4LowBlockTime, peerRank4HighBlockTime)
 	}
 }
 
@@ -520,8 +526,10 @@ func lowerBound(class peerClass) int {
 		return peerRank1LowBlockTime
 	case peerRankInitialThirdPriority:
 		return peerRank2LowBlockTime
-	default: // i.e. peerRankInitialFourthPriority
+	case peerRankInitialFourthPriority:
 		return peerRank3LowBlockTime
+	default: // i.e. peerRankInitialFifthPriority
+		return peerRank4LowBlockTime
 	}
 }
 
@@ -533,8 +541,10 @@ func upperBound(class peerClass) int {
 		return peerRank1HighBlockTime
 	case peerRankInitialThirdPriority:
 		return peerRank2HighBlockTime
-	default: // i.e. peerRankInitialFourthPriority
+	case peerRankInitialFourthPriority:
 		return peerRank3HighBlockTime
+	default: // i.e. peerRankInitialFifthPriority
+		return peerRank4HighBlockTime
 	}
 }
 

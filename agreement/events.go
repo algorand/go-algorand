@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -149,7 +149,7 @@ const (
 	// that a certificate has formed for that proposal-value.
 	proposalCommittable
 
-	// proposalCommittable is returned by the proposal state machines when a
+	// proposalAccepted is returned by the proposal state machines when a
 	// proposal-value is accepted.
 	proposalAccepted
 
@@ -712,12 +712,12 @@ func (e thresholdEvent) ComparableStr() string {
 //
 // The ordering is given as follows:
 //
-//  - certThreshold events are fresher than all other non-certThreshold events.
-//  - Events from a later period are fresher than events from an older period.
-//  - nextThreshold events are fresher than softThreshold events from the same
-//    period.
-//  - nextThreshold events for the bottom proposal-value are fresher than
-//    nextThreshold events for some other value.
+//   - certThreshold events are fresher than all other non-certThreshold events.
+//   - Events from a later period are fresher than events from an older period.
+//   - nextThreshold events are fresher than softThreshold events from the same
+//     period.
+//   - nextThreshold events for the bottom proposal-value are fresher than
+//     nextThreshold events for some other value.
 //
 // Precondition: e.Round == o.Round if e.T != none and o.T != none
 func (e thresholdEvent) fresherThan(o thresholdEvent) bool {
@@ -989,7 +989,22 @@ func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
 	return e
 }
 
+// AttachReceivedAt looks for an unauthenticatedProposal inside a
+// payloadPresent or votePresent messageEvent, and attaches the given
+// time to the proposal's receivedAt field.
 func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
-	e.Input.Proposal.receivedAt = d
+	if e.T == payloadPresent {
+		e.Input.UnauthenticatedProposal.receivedAt = d
+	} else if e.T == votePresent {
+		// Check for non-nil Tail, indicating this votePresent event
+		// contains a synthetic payloadPresent event that was attached
+		// to it by setupCompoundMessage.
+		if e.Tail != nil && e.Tail.T == payloadPresent {
+			// The tail event is payloadPresent, serialized together
+			// with the proposal vote as a single CompoundMessage
+			// using a protocol.ProposalPayloadTag network message.
+			e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+		}
+	}
 	return e
 }

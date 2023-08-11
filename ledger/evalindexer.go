@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
@@ -45,7 +45,7 @@ type indexerLedgerForEval interface {
 	LatestTotals() (ledgercore.AccountTotals, error)
 	LookupKv(basics.Round, string) ([]byte, error)
 
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 // FoundAddress is a wrapper for an address and a boolean.
@@ -90,11 +90,6 @@ func (l indexerLedgerConnector) BlockHdr(round basics.Round) (bookkeeping.BlockH
 			round, l.latestRound)
 	}
 	return l.il.LatestBlockHdr()
-}
-
-// BlockHdrCached is part of LedgerForEvaluator interface.
-func (l indexerLedgerConnector) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return l.il.BlockHdrCached(round)
 }
 
 // CheckDup is part of LedgerForEvaluator interface.
@@ -215,6 +210,11 @@ func (l indexerLedgerConnector) VotersForStateProof(_ basics.Round) (*ledgercore
 	return nil, errors.New("VotersForStateProof() not implemented")
 }
 
+// GetStateProofVerificationContext is part of LedgerForEvaluator interface.
+func (l indexerLedgerConnector) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, errors.New("GetStateProofVerificationContext() not implemented")
+}
+
 func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Digest, genesisProto config.ConsensusParams, latestRound basics.Round, roundResources EvalForIndexerResources) indexerLedgerConnector {
 	return indexerLedgerConnector{
 		il:             il,
@@ -233,9 +233,9 @@ func makeIndexerLedgerConnector(il indexerLedgerForEval, genesisHash crypto.Dige
 func EvalForIndexer(il indexerLedgerForEval, block *bookkeeping.Block, proto config.ConsensusParams, resources EvalForIndexerResources) (ledgercore.StateDelta, []transactions.SignedTxnInBlock, error) {
 	ilc := makeIndexerLedgerConnector(il, block.GenesisHash(), proto, block.Round()-1, resources)
 
-	eval, err := internal.StartEvaluator(
+	eval, err := eval.StartEvaluator(
 		ilc, block.BlockHeader,
-		internal.EvaluatorOptions{
+		eval.EvaluatorOptions{
 			PaysetHint:  len(block.Payset),
 			ProtoParams: &proto,
 			Generate:    false,

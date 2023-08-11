@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -144,8 +144,8 @@ func TestMetricCounterMixed(t *testing.T) {
 
 	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
 
-	counter.Add(5.25, nil)
-	counter.Add(8.25, map[string]string{})
+	counter.AddUint64(5, nil)
+	counter.AddUint64(8, map[string]string{})
 	for i := 0; i < 20; i++ {
 		counter.Inc(nil)
 		// wait half-a cycle
@@ -169,7 +169,7 @@ func TestMetricCounterMixed(t *testing.T) {
 	for k, v := range test.metrics {
 		// we have increased each one of the labels exactly 4 times. See that the counter was counting correctly.
 		// ( counters starts at zero )
-		require.Equal(t, "35.5", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
+		require.Equal(t, "35", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
 	}
 }
 
@@ -188,13 +188,13 @@ testname{host="myhost"} 0
 `
 	require.Equal(t, expected, sbOut.String())
 
-	c.Add(2.3, nil)
+	c.AddUint64(2, nil)
 	// ensure non-zero counters are logged
 	sbOut = strings.Builder{}
 	c.WriteMetric(&sbOut, `host="myhost"`)
 	expected = `# HELP testname testhelp
 # TYPE testname counter
-testname{host="myhost"} 2.3
+testname{host="myhost"} 2
 `
 	require.Equal(t, expected, sbOut.String())
 }
@@ -210,4 +210,24 @@ func TestGetValue(t *testing.T) {
 	require.Equal(t, uint64(1), c.GetUint64Value())
 	c.Inc(nil)
 	require.Equal(t, uint64(2), c.GetUint64Value())
+}
+
+func TestGetValueForLabels(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	c := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+	c.Deregister(nil)
+
+	labels := map[string]string{"a": "b"}
+	require.Equal(t, uint64(0), c.GetUint64ValueForLabels(labels))
+	c.Inc(labels)
+	require.Equal(t, uint64(1), c.GetUint64ValueForLabels(labels))
+	c.Inc(labels)
+	require.Equal(t, uint64(2), c.GetUint64ValueForLabels(labels))
+	// confirm that the value is not shared between labels
+	c.Inc(nil)
+	require.Equal(t, uint64(2), c.GetUint64ValueForLabels(labels))
+	labels2 := map[string]string{"a": "c"}
+	c.Inc(labels2)
+	require.Equal(t, uint64(1), c.GetUint64ValueForLabels(labels2))
 }

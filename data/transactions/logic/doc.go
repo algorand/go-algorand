@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,8 @@
 package logic
 
 import (
+	"strings"
+
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -219,84 +221,113 @@ func OpDoc(opName string) string {
 	return opDocByName[opName]
 }
 
-var opcodeImmediateNotes = map[string]string{
-	"intcblock":  "{varuint count} [{varuint value}, ...]",
-	"intc":       "{uint8 int constant index}",
-	"pushint":    "{varuint int}",
-	"pushints":   "{varuint count} [{varuint value}, ...]",
-	"bytecblock": "{varuint count} [({varuint length} bytes), ...]",
-	"bytec":      "{uint8 byte constant index}",
-	"pushbytes":  "{varuint length} {bytes}",
-	"pushbytess": "{varuint count} [({varuint length} bytes), ...]",
+var opcodeImmediateNotes = map[string][]string{
+	"intcblock":  {"a block of int constant values"},
+	"intc":       {"an index in the intcblock"},
+	"pushint":    {"an int constant"},
+	"pushints":   {"a list of int constants"},
+	"bytecblock": {"a block of byte constant values"},
+	"bytec":      {"an index in the bytecblock"},
+	"pushbytes":  {"a byte constant"},
+	"pushbytess": {"a list of byte constants"},
 
-	"arg":    "{uint8 arg index}",
-	"global": "{uint8 global field index}",
+	"arg":    {"an arg index"},
+	"global": {"a global field index"},
 
-	"txn":     "{uint8 transaction field index}",
-	"gtxn":    "{uint8 transaction group index} {uint8 transaction field index}",
-	"gtxns":   "{uint8 transaction field index}",
-	"txna":    "{uint8 transaction field index} {uint8 transaction field array index}",
-	"gtxna":   "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
-	"gtxnsa":  "{uint8 transaction field index} {uint8 transaction field array index}",
-	"txnas":   "{uint8 transaction field index}",
-	"gtxnas":  "{uint8 transaction group index} {uint8 transaction field index}",
-	"gtxnsas": "{uint8 transaction field index}",
+	"txn":     {"transaction field index"},
+	"gtxn":    {"transaction group index", "transaction field index"},
+	"gtxns":   {"transaction field index"},
+	"txna":    {"transaction field index", "transaction field array index"},
+	"gtxna":   {"transaction group index", "transaction field index", "transaction field array index"},
+	"gtxnsa":  {"transaction field index", "transaction field array index"},
+	"txnas":   {"transaction field index"},
+	"gtxnas":  {"transaction group index", "transaction field index"},
+	"gtxnsas": {"transaction field index"},
 
-	"bnz":     "{int16 branch offset, big-endian}",
-	"bz":      "{int16 branch offset, big-endian}",
-	"b":       "{int16 branch offset, big-endian}",
-	"callsub": "{int16 branch offset, big-endian}",
+	"bnz":     {"branch offset"},
+	"bz":      {"branch offset"},
+	"b":       {"branch offset"},
+	"callsub": {"branch offset"},
 
-	"load":   "{uint8 position in scratch space to load from}",
-	"store":  "{uint8 position in scratch space to store to}",
-	"gload":  "{uint8 transaction group index} {uint8 position in scratch space to load from}",
-	"gloads": "{uint8 position in scratch space to load from}",
-	"gaid":   "{uint8 transaction group index}",
+	"load":   {"position in scratch space to load from"},
+	"store":  {"position in scratch space to store to"},
+	"gload":  {"transaction group index", "position in scratch space to load from"},
+	"gloads": {"position in scratch space to load from"},
+	"gaid":   {"transaction group index"},
 
-	"substring": "{uint8 start position} {uint8 end position}",
-	"extract":   "{uint8 start position} {uint8 length}",
-	"replace2":  "{uint8 start position}",
-	"dig":       "{uint8 depth}",
-	"bury":      "{uint8 depth}",
-	"cover":     "{uint8 depth}",
-	"uncover":   "{uint8 depth}",
+	"substring": {"start position", "end position"},
+	"extract":   {"start position", "length"},
+	"replace2":  {"start position"},
+	"dig":       {"depth"},
+	"bury":      {"depth"},
+	"cover":     {"depth"},
+	"uncover":   {"depth"},
 
-	"asset_holding_get": "{uint8 asset holding field index}",
-	"asset_params_get":  "{uint8 asset params field index}",
-	"app_params_get":    "{uint8 app params field index}",
-	"acct_params_get":   "{uint8 account params field index}",
+	"asset_holding_get": {"asset holding field index"},
+	"asset_params_get":  {"asset params field index"},
+	"app_params_get":    {"app params field index"},
+	"acct_params_get":   {"account params field index"},
 
-	"itxn_field": "{uint8 transaction field index}",
-	"itxn":       "{uint8 transaction field index}",
-	"itxna":      "{uint8 transaction field index} {uint8 transaction field array index}",
-	"itxnas":     "{uint8 transaction field index}",
-	"gitxn":      "{uint8 transaction group index} {uint8 transaction field index}",
-	"gitxna":     "{uint8 transaction group index} {uint8 transaction field index} {uint8 transaction field array index}",
-	"gitxnas":    "{uint8 transaction group index} {uint8 transaction field index}",
+	"itxn_field": {"transaction field index"},
+	"itxn":       {"transaction field index"},
+	"itxna":      {"transaction field index", "a transaction field array index"},
+	"itxnas":     {"transaction field index"},
+	"gitxn":      {"transaction group index", "transaction field index"},
+	"gitxna":     {"transaction group index", "transaction field index", "transaction field array index"},
+	"gitxnas":    {"transaction group index", "transaction field index"},
 
-	"ecdsa_verify":        "{uint8 curve index}",
-	"ecdsa_pk_decompress": "{uint8 curve index}",
-	"ecdsa_pk_recover":    "{uint8 curve index}",
+	"ecdsa_verify":        {"curve index"},
+	"ecdsa_pk_decompress": {"curve index"},
+	"ecdsa_pk_recover":    {"curve index"},
 
-	"base64_decode": "{uint8 encoding index}",
-	"json_ref":      "{uint8 return type index}",
+	"base64_decode": {"encoding index"},
+	"json_ref":      {"return type index"},
 
-	"vrf_verify": "{uint8 parameters index}",
-	"block":      "{uint8 block field index}",
+	"vrf_verify": {" parameters index"},
+	"block":      {" block field index"},
 
-	"switch": "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
-	"match":  "{uint8 branch count} [{int16 branch offset, big-endian}, ...]",
+	"switch": {"list of labels"},
+	"match":  {"list of labels"},
 
-	"proto":      "{uint8 arguments} {uint8 return values}",
-	"frame_dig":  "{int8 frame slot}",
-	"frame_bury": "{int8 frame slot}",
-	"popn":       "{uint8 stack depth}",
-	"dupn":       "{uint8 copy count}",
+	"proto":      {"number of arguments", "number of return values"},
+	"frame_dig":  {"frame slot"},
+	"frame_bury": {"frame slot"},
+	"popn":       {"stack depth"},
+	"dupn":       {"copy count"},
 }
 
-// OpImmediateNote returns a short string about immediate data which follows the op byte
-func OpImmediateNote(opName string) string {
-	return opcodeImmediateNotes[opName]
+// OpImmediateDetails contains information about the an immediate argument for
+// a given opcode, combining OpSpec details with the extra note in
+// the opcodeImmediateNotes map
+type OpImmediateDetails struct {
+	Comment   string `json:",omitempty"`
+	Encoding  string `json:",omitempty"`
+	Name      string `json:",omitempty"`
+	Reference string `json:",omitempty"`
+}
+
+// OpImmediateDetailsFromSpec provides a slice of OpImmediateDetails
+// for a given OpSpec
+func OpImmediateDetailsFromSpec(spec OpSpec) []OpImmediateDetails {
+	argNotes := opcodeImmediateNotes[spec.Name]
+	if len(argNotes) == 0 {
+		return nil
+	}
+
+	details := make([]OpImmediateDetails, len(spec.Immediates))
+	for idx, imm := range spec.Immediates {
+		details[idx] = OpImmediateDetails{
+			Name:     strings.ToTitle(imm.Name),
+			Comment:  argNotes[idx],
+			Encoding: imm.kind.String(),
+		}
+
+		if imm.Group != nil {
+			details[idx].Reference = imm.Group.Name
+		}
+	}
+
+	return details
 }
 
 // further documentation on the function of the opcode
@@ -337,8 +368,8 @@ var opDocExtras = map[string]string{
 	"pushints":            "pushints args are not added to the intcblock during assembly processes",
 	"getbit":              "see explanation of bit ordering in setbit",
 	"setbit":              "When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.",
-	"balance":             "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
-	"min_balance":         "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
+	"balance":             "params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.",
+	"min_balance":         "params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.",
 	"app_opted_in":        "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
 	"app_local_get":       "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
 	"app_local_get_ex":    "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
@@ -357,7 +388,7 @@ var opDocExtras = map[string]string{
 	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 
 	"base64_decode": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
-	"json_ref": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
+	"json_ref":      "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
 
 	"match": "`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.",
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/algorand/go-algorand/util"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -158,10 +159,33 @@ func run() int {
 	}
 	defer fileLock.Unlock()
 
+	// Delete legacy indexer.sqlite files if they happen to exist
+	checkAndDeleteIndexerFile := func(fileName string) {
+		indexerDBFilePath := filepath.Join(absolutePath, genesis.ID(), fileName)
+
+		if util.FileExists(indexerDBFilePath) {
+			if idxFileRemoveErr := os.Remove(indexerDBFilePath); idxFileRemoveErr != nil {
+				fmt.Fprintf(os.Stderr, "Error removing %s file from data directory: %v\n", fileName, idxFileRemoveErr)
+			} else {
+				fmt.Fprintf(os.Stdout, "Removed legacy %s file from data directory\n", fileName)
+			}
+		}
+	}
+
+	checkAndDeleteIndexerFile("indexer.sqlite")
+	checkAndDeleteIndexerFile("indexer.sqlite-shm")
+	checkAndDeleteIndexerFile("indexer.sqlite-wal")
+
 	cfg, err := config.LoadConfigFromDisk(absolutePath)
 	if err != nil && !os.IsNotExist(err) {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Cannot load config: %v", err)
+	}
+
+	_, err = cfg.ValidateDNSBootstrapArray(genesis.Network)
+	if err != nil {
+		// log is not setup yet, this will log to stderr
+		log.Fatalf("Error validating DNSBootstrap input: %v", err)
 	}
 
 	err = config.LoadConfigurableConsensusProtocols(absolutePath)
@@ -284,10 +308,15 @@ func run() int {
 		if err != nil {
 			log.Errorf("cannot locate node executable: %s", err)
 		} else {
-			phonebookDir := filepath.Dir(ex)
-			phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
-			if err != nil {
-				log.Debugf("Cannot load static phonebook: %v", err)
+			phonebookDirs := []string{filepath.Dir(ex), dataDir}
+			for _, phonebookDir := range phonebookDirs {
+				phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
+				if err == nil {
+					log.Debugf("Static phonebook loaded from %s", phonebookDir)
+					break
+				} else {
+					log.Debugf("Cannot load static phonebook from %s dir: %v", phonebookDir, err)
+				}
 			}
 		}
 	}
@@ -344,7 +373,17 @@ func run() int {
 
 		// Send a heartbeat event every 10 minutes as a sign of life
 		go func() {
-			ticker := time.NewTicker(10 * time.Minute)
+			var interval time.Duration
+			defaultIntervalSecs := config.GetDefaultLocal().HeartbeatUpdateInterval
+			switch {
+			case cfg.HeartbeatUpdateInterval <= 0: // use default
+				interval = time.Second * time.Duration(defaultIntervalSecs)
+			case cfg.HeartbeatUpdateInterval < 60: // min frequency 1 minute
+				interval = time.Minute
+			default:
+				interval = time.Second * time.Duration(cfg.HeartbeatUpdateInterval)
+			}
+			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 
 			sendHeartbeat := func() {

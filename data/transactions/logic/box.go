@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package logic
 
 import (
-	"encoding/binary"
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -38,7 +37,7 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 
 	dirty, ok := cx.available.boxes[boxRef{cx.appID, name}]
 	if !ok {
-		return nil, false, fmt.Errorf("invalid Box reference %v", name)
+		return nil, false, fmt.Errorf("invalid Box reference %#x", name)
 	}
 
 	// Since the box is in cx.available, we know this GetBox call is cheap. It
@@ -106,11 +105,11 @@ func argCheck(cx *EvalContext, name string, size uint64) error {
 }
 
 func opBoxCreate(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // size
+	last := len(cx.Stack) - 1 // size
 	prev := last - 1          // name
 
-	name := string(cx.stack[prev].Bytes)
-	size := cx.stack[last].Uint
+	name := string(cx.Stack[prev].Bytes)
+	size := cx.Stack[last].Uint
 
 	err := argCheck(cx, name, size)
 	if err != nil {
@@ -128,19 +127,19 @@ func opBoxCreate(cx *EvalContext) error {
 		}
 	}
 
-	cx.stack[prev] = boolToSV(!exists)
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev] = boolToSV(!exists)
+	cx.Stack = cx.Stack[:last]
 	return err
 }
 
 func opBoxExtract(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // length
+	last := len(cx.Stack) - 1 // length
 	prev := last - 1          // start
 	pprev := prev - 1         // name
 
-	name := string(cx.stack[pprev].Bytes)
-	start := cx.stack[prev].Uint
-	length := cx.stack[last].Uint
+	name := string(cx.Stack[pprev].Bytes)
+	start := cx.Stack[prev].Uint
+	length := cx.Stack[last].Uint
 
 	err := argCheck(cx, name, basics.AddSaturate(start, length))
 	if err != nil {
@@ -151,23 +150,23 @@ func opBoxExtract(cx *EvalContext) error {
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("no such box %#v", name)
+		return fmt.Errorf("no such box %#x", name)
 	}
 
 	bytes, err := extractCarefully(contents, start, length)
-	cx.stack[pprev].Bytes = bytes
-	cx.stack = cx.stack[:prev]
+	cx.Stack[pprev].Bytes = bytes
+	cx.Stack = cx.Stack[:prev]
 	return err
 }
 
 func opBoxReplace(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // replacement
+	last := len(cx.Stack) - 1 // replacement
 	prev := last - 1          // start
 	pprev := prev - 1         // name
 
-	replacement := cx.stack[last].Bytes
-	start := cx.stack[prev].Uint
-	name := string(cx.stack[pprev].Bytes)
+	replacement := cx.Stack[last].Bytes
+	start := cx.Stack[prev].Uint
+	name := string(cx.Stack[pprev].Bytes)
 
 	err := argCheck(cx, name, basics.AddSaturate(start, uint64(len(replacement))))
 	if err != nil {
@@ -179,20 +178,20 @@ func opBoxReplace(cx *EvalContext) error {
 		return err
 	}
 	if !exists {
-		return fmt.Errorf("no such box %#v", name)
+		return fmt.Errorf("no such box %#x", name)
 	}
 
 	bytes, err := replaceCarefully(contents, replacement, start)
 	if err != nil {
 		return err
 	}
-	cx.stack = cx.stack[:pprev]
+	cx.Stack = cx.Stack[:pprev]
 	return cx.Ledger.SetBox(cx.appID, name, bytes)
 }
 
 func opBoxDel(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // name
-	name := string(cx.stack[last].Bytes)
+	last := len(cx.Stack) - 1 // name
+	name := string(cx.Stack[last].Bytes)
 
 	err := argCheck(cx, name, 0)
 	if err != nil {
@@ -209,13 +208,13 @@ func opBoxDel(cx *EvalContext) error {
 			return err
 		}
 	}
-	cx.stack[last] = boolToSV(exists)
+	cx.Stack[last] = boolToSV(exists)
 	return nil
 }
 
 func opBoxLen(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // name
-	name := string(cx.stack[last].Bytes)
+	last := len(cx.Stack) - 1 // name
+	name := string(cx.Stack[last].Bytes)
 
 	err := argCheck(cx, name, 0)
 	if err != nil {
@@ -226,14 +225,14 @@ func opBoxLen(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[last] = stackValue{Uint: uint64(len(contents))}
-	cx.stack = append(cx.stack, boolToSV(exists))
+	cx.Stack[last] = stackValue{Uint: uint64(len(contents))}
+	cx.Stack = append(cx.Stack, boolToSV(exists))
 	return nil
 }
 
 func opBoxGet(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // name
-	name := string(cx.stack[last].Bytes)
+	last := len(cx.Stack) - 1 // name
+	name := string(cx.Stack[last].Bytes)
 
 	err := argCheck(cx, name, 0)
 	if err != nil {
@@ -246,17 +245,17 @@ func opBoxGet(cx *EvalContext) error {
 	if !exists {
 		contents = []byte{}
 	}
-	cx.stack[last].Bytes = contents // Will rightly panic if too big
-	cx.stack = append(cx.stack, boolToSV(exists))
+	cx.Stack[last].Bytes = contents // Will rightly panic if too big
+	cx.Stack = append(cx.Stack, boolToSV(exists))
 	return nil
 }
 
 func opBoxPut(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // value
+	last := len(cx.Stack) - 1 // value
 	prev := last - 1          // name
 
-	value := cx.stack[last].Bytes
-	name := string(cx.stack[prev].Bytes)
+	value := cx.Stack[last].Bytes
+	name := string(cx.Stack[prev].Bytes)
 
 	err := argCheck(cx, name, uint64(len(value)))
 	if err != nil {
@@ -269,7 +268,7 @@ func opBoxPut(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = cx.stack[:prev]
+	cx.Stack = cx.Stack[:prev]
 
 	if exists {
 		/* the replacement must match existing size */
@@ -282,37 +281,4 @@ func opBoxPut(cx *EvalContext) error {
 	/* The box did not exist, so create it. */
 	appAddr := cx.getApplicationAddress(cx.appID)
 	return cx.Ledger.NewBox(cx.appID, name, value, appAddr)
-}
-
-const boxPrefix = "bx:"
-const boxPrefixLength = len(boxPrefix)
-const boxNameIndex = boxPrefixLength + 8 // len("bx:") + 8 (appIdx, big-endian)
-
-// MakeBoxKey creates the key that a box named `name` under app `appIdx` should use.
-func MakeBoxKey(appIdx basics.AppIndex, name string) string {
-	/* This format is chosen so that a simple indexing scheme on the key would
-	   allow for quick lookups of all the boxes of a certain app, or even all
-	   the boxes of a certain app with a certain prefix.
-
-	   The "bx:" prefix is so that the kvstore might be usable for things
-	   besides boxes.
-	*/
-	key := make([]byte, boxNameIndex+len(name))
-	copy(key, boxPrefix)
-	binary.BigEndian.PutUint64(key[boxPrefixLength:], uint64(appIdx))
-	copy(key[boxNameIndex:], name)
-	return string(key)
-}
-
-// SplitBoxKey extracts an appid and box name from a string that was created by MakeBoxKey()
-func SplitBoxKey(key string) (basics.AppIndex, string, error) {
-	if len(key) < boxNameIndex {
-		return 0, "", fmt.Errorf("SplitBoxKey() cannot extract AppIndex as key (%s) too short (length=%d)", key, len(key))
-	}
-	if key[:boxPrefixLength] != boxPrefix {
-		return 0, "", fmt.Errorf("SplitBoxKey() illegal app box prefix in key (%s). Expected prefix '%s'", key, boxPrefix)
-	}
-	keyBytes := []byte(key)
-	app := basics.AppIndex(binary.BigEndian.Uint64(keyBytes[boxPrefixLength:boxNameIndex]))
-	return app, key[boxNameIndex:], nil
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,11 +19,12 @@ package ledger
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
@@ -41,12 +42,12 @@ import (
 // then temporarily placed in `generate` mode so that the entire block can be
 // generated in the copy second ledger, and compared.
 type DoubleLedger struct {
-	t *testing.T
+	t testing.TB
 
 	generator *Ledger
 	validator *Ledger
 
-	eval *internal.BlockEvaluator
+	eval *eval.BlockEvaluator
 }
 
 func (dl DoubleLedger) Close() {
@@ -55,18 +56,18 @@ func (dl DoubleLedger) Close() {
 }
 
 // NewDoubleLedger creates a new DoubleLedger with the supplied balances and consensus version.
-func NewDoubleLedger(t *testing.T, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion) DoubleLedger {
-	g := newSimpleLedgerWithConsensusVersion(t, balances, cv)
-	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash())
+func NewDoubleLedger(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local, opts ...simpleLedgerOption) DoubleLedger {
+	g := newSimpleLedgerWithConsensusVersion(t, balances, cv, cfg, opts...)
+	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash(), cfg, opts...)
 	return DoubleLedger{t, g, v, nil}
 }
 
-func (dl *DoubleLedger) beginBlock() *internal.BlockEvaluator {
+func (dl *DoubleLedger) beginBlock() *eval.BlockEvaluator {
 	dl.eval = nextBlock(dl.t, dl.generator)
 	return dl.eval
 }
 
-func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) {
+func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) (stib *transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
@@ -75,25 +76,34 @@ func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) {
 			if len(problem) > 0 {
 				dl.eval = nil
 			} else {
-				dl.endBlock()
+				vb := dl.endBlock()
+				// It should have a stib, but don't panic here because of an earlier problem.
+				if len(vb.Block().Payset) > 0 {
+					stib = &vb.Block().Payset[0]
+				}
 			}
 		}()
 	}
 	txn(dl.t, dl.generator, dl.eval, tx, problem...)
+	return nil
 }
 
-func (dl *DoubleLedger) txns(txns ...*txntest.Txn) {
+func (dl *DoubleLedger) txns(txns ...*txntest.Txn) (payset []transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
-		defer dl.endBlock()
+		defer func() {
+			vb := dl.endBlock()
+			payset = vb.Block().Payset
+		}()
 	}
 	for _, tx := range txns {
 		dl.txn(tx)
 	}
+	return nil
 }
 
-func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
+func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) (payset []transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
@@ -102,7 +112,8 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
 			if problem != "" {
 				dl.eval = nil
 			} else {
-				dl.endBlock()
+				vb := dl.endBlock()
+				payset = vb.Block().Payset
 			}
 		}()
 	}
@@ -113,6 +124,7 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
 		require.Error(dl.t, err)
 		require.Contains(dl.t, err.Error(), problem)
 	}
+	return nil
 }
 
 func (dl *DoubleLedger) fullBlock(txs ...*txntest.Txn) *ledgercore.ValidatedBlock {
@@ -152,11 +164,11 @@ func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source s
 }
 
 func (dl *DoubleLedger) reloadLedgers() {
-	require.NoError(dl.t, dl.generator.ReloadLedger())
-	require.NoError(dl.t, dl.validator.ReloadLedger())
+	require.NoError(dl.t, dl.generator.reloadLedger())
+	require.NoError(dl.t, dl.validator.reloadLedger())
 }
 
-func checkBlock(t *testing.T, checkLedger *Ledger, vb *ledgercore.ValidatedBlock) {
+func checkBlock(t testing.TB, checkLedger *Ledger, vb *ledgercore.ValidatedBlock) {
 	bl := vb.Block()
 	msg := bl.MarshalMsg(nil)
 	var reconstituted bookkeeping.Block
@@ -201,7 +213,7 @@ func checkBlock(t *testing.T, checkLedger *Ledger, vb *ledgercore.ValidatedBlock
 	// require.Equal(t, vb.Delta().Accts, cb.Delta().Accts)
 }
 
-func nextCheckBlock(t testing.TB, ledger *Ledger, rs bookkeeping.RewardsState) *internal.BlockEvaluator {
+func nextCheckBlock(t testing.TB, ledger *Ledger, rs bookkeeping.RewardsState) *eval.BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
@@ -210,7 +222,7 @@ func nextCheckBlock(t testing.TB, ledger *Ledger, rs bookkeeping.RewardsState) *
 	nextHdr.RewardsState = rs
 	// follow nextBlock, which does this for determinism
 	nextHdr.TimeStamp = hdr.TimeStamp + 1
-	eval, err := internal.StartEvaluator(ledger, nextHdr, internal.EvaluatorOptions{
+	eval, err := eval.StartEvaluator(ledger, nextHdr, eval.EvaluatorOptions{
 		Generate: false,
 		Validate: true, // Do the complete checks that a new txn would be subject to
 	})

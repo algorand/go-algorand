@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,24 +59,29 @@ const txnPerWorksetThreshold = 32
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
 const concurrentWorksets = 16
 
-// GroupContext is the set of parameters external to a transaction which
-// stateless checks are performed against.
+// GroupContext holds values used to evaluate the LogicSigs in a group.  The
+// first set are the parameters external to a transaction which could
+// potentially change the result of LogicSig evaluation. Example: If the
+// consensusVersion changes, a rule might change that matters. Certainly this is
+// _very_ rare, but we don't want to use the result of a LogicSig evaluation
+// across a protocol upgrade boundary.
 //
-// For efficient caching, these parameters should either be constant
-// or change slowly over time.
-//
-// Group data are omitted because they are committed to in the
-// transaction and its ID.
+// The second set are derived from the first set and from the transaction
+// data. They are stored here only for efficiency, not for correctness, so they
+// are not checked in Equal()
 type GroupContext struct {
+	// These fields determine whether a logicsig must be re-evaluated.
 	specAddrs        transactions.SpecialAddresses
 	consensusVersion protocol.ConsensusVersion
-	consensusParams  config.ConsensusParams
-	minAvmVersion    uint64
-	signedGroupTxns  []transactions.SignedTxn
-	ledger           logic.LedgerForSignature
+
+	// These fields just hold useful data that ought not be recomputed (unless the above changes)
+	consensusParams config.ConsensusParams
+	signedGroupTxns []transactions.SignedTxn
+	evalParams      *logic.EvalParams
 }
 
 var errTxGroupInvalidFee = errors.New("txgroup fee requirement overflow")
+var errTxGroupInsuffientLsigBudget = errors.New("txgroup lsig expectations exceed available budget")
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
 var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
@@ -108,8 +113,11 @@ const (
 // TxGroupError is an error from txn pre-validation (well form-ness, signature format, etc).
 // It can be unwrapped into underlying error, as well as has a specific failure reason code.
 type TxGroupError struct {
-	err    error
-	Reason TxGroupErrorReason
+	err error
+	// GroupIndex is the index of the transaction in the group that failed. NOTE: this will be -1 if
+	// the error is not specific to a single transaction.
+	GroupIndex int
+	Reason     TxGroupErrorReason
 }
 
 // Error returns an error message from the underlying error
@@ -122,9 +130,8 @@ func (e *TxGroupError) Unwrap() error {
 	return e.err
 }
 
-// PrepareGroupContext prepares a verification group parameter object for a given transaction
-// group.
-func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature) (*GroupContext, error) {
+// PrepareGroupContext prepares a GroupCtx for a given transaction group.
+func PrepareGroupContext(group []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, ledger logic.LedgerForSignature, evalTracer logic.EvalTracer) (*GroupContext, error) {
 	if len(group) == 0 {
 		return nil, nil
 	}
@@ -132,6 +139,9 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 	if !ok {
 		return nil, protocol.Error(contextHdr.CurrentProtocol)
 	}
+
+	ep := logic.NewSigEvalParams(group, &consensusParams, ledger)
+	ep.Tracer = evalTracer
 	return &GroupContext{
 		specAddrs: transactions.SpecialAddresses{
 			FeeSink:     contextHdr.FeeSink,
@@ -139,39 +149,47 @@ func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.
 		},
 		consensusVersion: contextHdr.CurrentProtocol,
 		consensusParams:  consensusParams,
-		minAvmVersion:    logic.ComputeMinAvmVersion(transactions.WrapSignedTxnsWithAD(group)),
 		signedGroupTxns:  group,
-		ledger:           ledger,
+		evalParams:       ep,
 	}, nil
 }
 
 // Equal compares two group contexts to see if they would represent the same verification context for a given transaction.
 func (g *GroupContext) Equal(other *GroupContext) bool {
 	return g.specAddrs == other.specAddrs &&
-		g.consensusVersion == other.consensusVersion &&
-		g.minAvmVersion == other.minAvmVersion
+		g.consensusVersion == other.consensusVersion
 }
 
 // txnBatchPrep verifies a SignedTxn having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 // It is the caller responsibility to call batchVerifier.Verify().
-func txnBatchPrep(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) *TxGroupError {
+func txnBatchPrep(gi int, groupCtx *GroupContext, verifier *crypto.BatchVerifier) *TxGroupError {
+	s := &groupCtx.signedGroupTxns[gi]
 	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
-		return &TxGroupError{err: errRekeyingNotSupported, Reason: TxGroupErrorReasonGeneric}
+		return &TxGroupError{err: errRekeyingNotSupported, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
 	}
 
 	if err := s.Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
-		return &TxGroupError{err: err, Reason: TxGroupErrorReasonNotWellFormed}
+		return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonNotWellFormed}
 	}
 
-	return stxnCoreChecks(s, txnIdx, groupCtx, verifier)
+	return stxnCoreChecks(gi, groupCtx, verifier)
 }
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
-func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature) (groupCtx *GroupContext, err error) {
+func TxnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature) (groupCtx *GroupContext, err error) {
+	return txnGroup(stxs, contextHdr, cache, ledger, nil)
+}
+
+// TxnGroupWithTracer verifies a []SignedTxn as being signed and having no obviously inconsistent data, while using a tracer.
+func TxnGroupWithTracer(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, evalTracer logic.EvalTracer) (groupCtx *GroupContext, err error) {
+	return txnGroup(stxs, contextHdr, cache, ledger, evalTracer)
+}
+
+func txnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, cache VerifiedTransactionCache, ledger logic.LedgerForSignature, evalTracer logic.EvalTracer) (groupCtx *GroupContext, err error) {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if groupCtx, err = txnGroupBatchPrep(stxs, contextHdr, ledger, batchVerifier); err != nil {
+	if groupCtx, err = txnGroupBatchPrep(stxs, contextHdr, ledger, batchVerifier, evalTracer); err != nil {
 		return nil, err
 	}
 
@@ -188,8 +206,8 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 
 // txnGroupBatchPrep verifies a []SignedTxn having no obviously inconsistent data.
 // it is the caller responsibility to call batchVerifier.Verify()
-func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier) (*GroupContext, error) {
-	groupCtx, err := PrepareGroupContext(stxs, contextHdr, ledger)
+func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader, ledger logic.LedgerForSignature, verifier *crypto.BatchVerifier, evalTracer logic.EvalTracer) (*GroupContext, error) {
+	groupCtx, err := PrepareGroupContext(stxs, contextHdr, ledger, evalTracer)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +215,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
 	for i, stxn := range stxs {
-		prepErr := txnBatchPrep(&stxn, i, groupCtx, verifier)
+		prepErr := txnBatchPrep(i, groupCtx, verifier)
 		if prepErr != nil {
 			// re-wrap the error with more details
 			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
@@ -210,7 +228,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 	}
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
 	if overflow {
-		err = &TxGroupError{err: errTxGroupInvalidFee, Reason: TxGroupErrorReasonInvalidFee}
+		err = &TxGroupError{err: errTxGroupInvalidFee, GroupIndex: -1, Reason: TxGroupErrorReasonInvalidFee}
 		return nil, err
 	}
 	// feesPaid may have saturated. That's ok. Since we know
@@ -221,7 +239,8 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 			err: fmt.Errorf(
 				"txgroup had %d in fees, which is less than the minimum %d * %d",
 				feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee),
-			Reason: TxGroupErrorReasonInvalidFee,
+			GroupIndex: -1,
+			Reason:     TxGroupErrorReasonInvalidFee,
 		}
 		return nil, err
 	}
@@ -229,76 +248,90 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr bookkeeping.Blo
 	return groupCtx, nil
 }
 
-// stxnCoreChecks runs signatures validity checks and enqueues signature into batchVerifier for verification.
-func stxnCoreChecks(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) *TxGroupError {
-	numSigs := 0
-	hasSig := false
-	hasMsig := false
-	hasLogicSig := false
-	if s.Sig != (crypto.Signature{}) {
-		numSigs++
-		hasSig = true
+type sigOrTxnType int
+
+const regularSig sigOrTxnType = 1
+const multiSig sigOrTxnType = 2
+const logicSig sigOrTxnType = 3
+const stateProofTxn sigOrTxnType = 4
+
+// checkTxnSigTypeCounts checks the number of signature types and reports an error in case of a violation
+func checkTxnSigTypeCounts(s *transactions.SignedTxn, groupIndex int) (sigType sigOrTxnType, err *TxGroupError) {
+	numSigCategories := 0
+	if !s.Sig.Blank() {
+		numSigCategories++
+		sigType = regularSig
 	}
 	if !s.Msig.Blank() {
-		numSigs++
-		hasMsig = true
+		numSigCategories++
+		sigType = multiSig
 	}
 	if !s.Lsig.Blank() {
-		numSigs++
-		hasLogicSig = true
+		numSigCategories++
+		sigType = logicSig
 	}
-	if numSigs == 0 {
+	if numSigCategories == 0 {
 		// Special case: special sender address can issue special transaction
 		// types (state proof txn) without any signature.  The well-formed
 		// check ensures that this transaction cannot pay any fee, and
 		// cannot have any other interesting fields, except for the state proof payload.
 		if s.Txn.Sender == transactions.StateProofSender && s.Txn.Type == protocol.StateProofTx {
-			return nil
+			return stateProofTxn, nil
 		}
-		return &TxGroupError{err: errTxnSigHasNoSig, Reason: TxGroupErrorReasonHasNoSig}
+		return 0, &TxGroupError{err: errTxnSigHasNoSig, GroupIndex: groupIndex, Reason: TxGroupErrorReasonHasNoSig}
 	}
-	if numSigs > 1 {
-		return &TxGroupError{err: errTxnSigNotWellFormed, Reason: TxGroupErrorReasonSigNotWellFormed}
+	if numSigCategories > 1 {
+		return 0, &TxGroupError{err: errTxnSigNotWellFormed, GroupIndex: groupIndex, Reason: TxGroupErrorReasonSigNotWellFormed}
+	}
+	return sigType, nil
+}
+
+// stxnCoreChecks runs signatures validity checks and enqueues signature into batchVerifier for verification.
+func stxnCoreChecks(gi int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) *TxGroupError {
+	s := &groupCtx.signedGroupTxns[gi]
+	sigType, err := checkTxnSigTypeCounts(s, gi)
+	if err != nil {
+		return err
 	}
 
-	if hasSig {
+	switch sigType {
+	case regularSig:
 		batchVerifier.EnqueueSignature(crypto.SignatureVerifier(s.Authorizer()), s.Txn, s.Sig)
 		return nil
-	}
-	if hasMsig {
+	case multiSig:
 		if err := crypto.MultisigBatchPrep(s.Txn, crypto.Digest(s.Authorizer()), s.Msig, batchVerifier); err != nil {
-			return &TxGroupError{err: fmt.Errorf("multisig validation failed: %w", err), Reason: TxGroupErrorReasonMsigNotWellFormed}
+			return &TxGroupError{err: fmt.Errorf("multisig validation failed: %w", err), GroupIndex: gi, Reason: TxGroupErrorReasonMsigNotWellFormed}
 		}
-		counter := 0
-		for _, subsigi := range s.Msig.Subsigs {
-			if (subsigi.Sig != crypto.Signature{}) {
-				counter++
-			}
-		}
-		if counter <= 4 {
+		sigs := s.Msig.Signatures()
+		if sigs <= 4 {
 			msigLessOrEqual4.Inc(nil)
-		} else if counter <= 10 {
+		} else if sigs <= 10 {
 			msigLessOrEqual10.Inc(nil)
 		} else {
 			msigMore10.Inc(nil)
 		}
 		return nil
-	}
-	if hasLogicSig {
-		if err := logicSigVerify(s, txnIdx, groupCtx); err != nil {
-			return &TxGroupError{err: err, Reason: TxGroupErrorReasonLogicSigFailed}
+
+	case logicSig:
+		if err := logicSigVerify(gi, groupCtx); err != nil {
+			return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonLogicSigFailed}
 		}
 		return nil
+
+	case stateProofTxn:
+		return nil
+
+	default:
+		return &TxGroupError{err: errUnknownSignature, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
 	}
-	return &TxGroupError{err: errUnknownSignature, Reason: TxGroupErrorReasonGeneric}
 }
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
-func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
+func LogicSigSanityCheck(gi int, groupCtx *GroupContext) error {
 	batchVerifier := crypto.MakeBatchVerifier()
 
-	if err := logicSigSanityCheckBatchPrep(txn, groupIndex, groupCtx, batchVerifier); err != nil {
+	if err := logicSigSanityCheckBatchPrep(gi, groupCtx, batchVerifier); err != nil {
 		return err
 	}
 	return batchVerifier.Verify()
@@ -307,12 +340,17 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *
 // logicSigSanityCheckBatchPrep checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 // it is the caller responsibility to call batchVerifier.Verify()
-func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
-	lsig := txn.Lsig
-
+func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier *crypto.BatchVerifier) error {
 	if groupCtx.consensusParams.LogicSigVersion == 0 {
 		return errors.New("LogicSig not enabled")
 	}
+
+	if gi < 0 {
+		return errors.New("negative group index")
+	}
+	txn := &groupCtx.signedGroupTxns[gi]
+	lsig := txn.Lsig
+
 	if len(lsig.Logic) == 0 {
 		return errors.New("LogicSig.Logic empty")
 	}
@@ -327,24 +365,14 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 		return errors.New("LogicSig.Logic too long")
 	}
 
-	if groupIndex < 0 {
-		return errors.New("negative groupIndex")
-	}
-	txngroup := transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns)
-	ep := logic.EvalParams{
-		Proto:         &groupCtx.consensusParams,
-		TxnGroup:      txngroup,
-		MinAvmVersion: &groupCtx.minAvmVersion,
-		SigLedger:     groupCtx.ledger, // won't be needed for CheckSignature
-	}
-	err := logic.CheckSignature(groupIndex, &ep)
+	err := logic.CheckSignature(gi, groupCtx.evalParams)
 	if err != nil {
 		return err
 	}
 
 	hasMsig := false
 	numSigs := 0
-	if lsig.Sig != (crypto.Signature{}) {
+	if !lsig.Sig.Blank() {
 		numSigs++
 	}
 	if !lsig.Msig.Blank() {
@@ -372,15 +400,10 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 		if err := crypto.MultisigBatchPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); err != nil {
 			return fmt.Errorf("logic multisig validation failed: %w", err)
 		}
-		counter := 0
-		for _, subsigi := range lsig.Msig.Subsigs {
-			if (subsigi.Sig != crypto.Signature{}) {
-				counter++
-			}
-		}
-		if counter <= 4 {
+		sigs := lsig.Msig.Signatures()
+		if sigs <= 4 {
 			msigLsigLessOrEqual4.Inc(nil)
-		} else if counter <= 10 {
+		} else if sigs <= 10 {
 			msigLsigLessOrEqual10.Inc(nil)
 		} else {
 			msigLsigMore10.Inc(nil)
@@ -390,29 +413,20 @@ func logicSigSanityCheckBatchPrep(txn *transactions.SignedTxn, groupIndex int, g
 }
 
 // logicSigVerify checks that the signature is valid, executing the program.
-func logicSigVerify(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
-	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
+func logicSigVerify(gi int, groupCtx *GroupContext) error {
+	err := LogicSigSanityCheck(gi, groupCtx)
 	if err != nil {
 		return err
 	}
 
-	if groupIndex < 0 {
-		return errors.New("negative groupIndex")
-	}
-	ep := logic.EvalParams{
-		Proto:         &groupCtx.consensusParams,
-		TxnGroup:      transactions.WrapSignedTxnsWithAD(groupCtx.signedGroupTxns),
-		MinAvmVersion: &groupCtx.minAvmVersion,
-		SigLedger:     groupCtx.ledger,
-	}
-	pass, cx, err := logic.EvalSignatureFull(groupIndex, &ep)
+	pass, cx, err := logic.EvalSignatureFull(gi, groupCtx.evalParams)
 	if err != nil {
 		logicErrTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic err=%v", txn.ID(), err)
+		return fmt.Errorf("transaction %v: %w", groupCtx.signedGroupTxns[gi].ID(), err)
 	}
 	if !pass {
 		logicRejTotal.Inc(nil)
-		return fmt.Errorf("transaction %v: rejected by logic", txn.ID())
+		return fmt.Errorf("transaction %v: rejected by logic", groupCtx.signedGroupTxns[gi].ID())
 	}
 	logicGoodTotal.Inc(nil)
 	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)
@@ -463,7 +477,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 
 					batchVerifier := crypto.MakeBatchVerifierWithHint(len(payset))
 					for i, signTxnsGrp := range txnGroups {
-						groupCtxs[i], grpErr = txnGroupBatchPrep(signTxnsGrp, blkHeader, ledger, batchVerifier)
+						groupCtxs[i], grpErr = txnGroupBatchPrep(signTxnsGrp, &blkHeader, ledger, batchVerifier, nil)
 						// abort only if it's a non-cache error.
 						if grpErr != nil {
 							return grpErr

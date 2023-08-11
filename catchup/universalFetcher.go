@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -151,17 +151,22 @@ func (w *wsFetcherClient) address() string {
 	return fmt.Sprintf("[ws] (%s)", w.target.GetAddress())
 }
 
-// requestBlock send a request for block <round> and wait until it receives a response or a context expires.
-func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) ([]byte, error) {
+// makeBlockRequestTopics builds topics for requesting a block.
+func makeBlockRequestTopics(r basics.Round) network.Topics {
 	roundBin := make([]byte, binary.MaxVarintLen64)
-	binary.PutUvarint(roundBin, uint64(round))
-	topics := network.Topics{
+	binary.PutUvarint(roundBin, uint64(r))
+	return network.Topics{
 		network.MakeTopic(rpcs.RequestDataTypeKey,
 			[]byte(rpcs.BlockAndCertValue)),
 		network.MakeTopic(
 			rpcs.RoundKey,
 			roundBin),
 	}
+}
+
+// requestBlock send a request for block <round> and wait until it receives a response or a context expires.
+func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) ([]byte, error) {
+	topics := makeBlockRequestTopics(round)
 	resp, err := w.target.Request(ctx, protocol.UniEnsBlockReqTag, topics)
 	if err != nil {
 		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), err.Error())

@@ -9,7 +9,7 @@
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=869194
 # https://github.com/boto/s3transfer/pull/102
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y jq git python python-pip python3-boto3 ssh && \
     pip install awscli
