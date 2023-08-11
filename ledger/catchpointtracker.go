@@ -967,7 +967,7 @@ func (ct *catchpointTracker) handlePrepareCommitError(dcc *deferredCommitContext
 func (ct *catchpointTracker) handleCommitError(dcc *deferredCommitContext) {
 	// in cases where the commitRound fails, it is not certain that the merkle trie is in a clean state, and should be cleared.
 	// Specifically, modifications to the trie happen through accountsUpdateBalances,
-	// which happens before comit to disk. Errors in this tracker, subsequent trackers, or the commit to disk may cause the trie cache to be incorrect,
+	// which happens before commit to disk. Errors in this tracker, subsequent trackers, or the commit to disk may cause the trie cache to be incorrect,
 	// affecting the perceived root on subsequent rounds
 	ct.balancesTrie = nil
 	ct.cancelWrite(dcc)
