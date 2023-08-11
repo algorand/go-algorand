@@ -1,7 +1,7 @@
 SCENARIO = scenarios/benchmarks/stress.50000.yml # scenarios/config.allmixed.small.yml
 PG_UP = --start-postgres
-SKIP = --skip-runner
 RESETDB = # --reset-db
+TIMES = 1
 REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 DURATION = 30s
 VERBOSE = --verbose
@@ -39,6 +39,7 @@ run-runner: block-generator
 	$(RESETDB) \
 	$(VERBOSE) \
 	--report-directory $(REPORTS)
+	--times $(TIMES)
 
 clean-reports:
 	rm -rf $(REPORTS)

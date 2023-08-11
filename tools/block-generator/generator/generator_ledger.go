@@ -154,6 +154,11 @@ func (g *generator) finishRound() {
 	g.resetPendingApps()
 }
 
+func (g *generator) cleanPending() {
+	g.pendingAssets = nil
+	g.resetPendingApps()
+}
+
 // ---- ledger block evaluator ----
 
 func (g *generator) startEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) (*eval.BlockEvaluator, error) {
