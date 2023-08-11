@@ -37,7 +37,7 @@ import (
 )
 
 const fastTimeoutChTime = 2
-const speculativeBlockAsmTime = time.Duration(5 * time.Microsecond)
+const speculativeBlockAsmTime = 5 * time.Microsecond
 
 type demuxTester struct {
 	*testing.T

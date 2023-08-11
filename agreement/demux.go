@@ -253,10 +253,12 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	deadlineCh := s.Clock.TimeoutAt(deadline)
 	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
 
-	speculationDeadlineCh := s.Clock.TimeoutAt(speculationDeadline)
-	// zero timeout means we don't have enough time to speculate on block assembly
+	speculationDeadlineCh := make(<-chan time.Time)
 	if speculationDeadline == 0 {
+		// zero timeout means we don't have enough time to speculate on block assembly
 		speculationDeadlineCh = nil
+	} else {
+		speculationDeadlineCh = s.Clock.TimeoutAt(speculationDeadline)
 	}
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
