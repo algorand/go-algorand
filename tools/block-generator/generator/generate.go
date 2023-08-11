@@ -357,7 +357,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		g.setBlockHeader(&cert)
 
 		intra := uint64(0)
-		txGroupsAD := [][]txn.SignedTxnWithAD{}
+		var txGroupsAD [][]txn.SignedTxnWithAD
 		for intra < minTxnsForBlock {
 			txGroupAD, numTxns, err := g.generateTxGroup(g.round, intra)
 			if err != nil {
