@@ -133,9 +133,8 @@ func OpenLedger[T string | DirsAndPrefix](
 	if s, ok := any(dbPathPrefix).(string); ok {
 		dirs.HotGenesisDir = s
 		dirs.ColdGenesisDir = s
-	}
-	// if a DirsAndPrefix has been supplied, use it.
-	if ds, ok := any(dbPathPrefix).(DirsAndPrefix); ok {
+	} else if ds, ok := any(dbPathPrefix).(DirsAndPrefix); ok {
+		// if a DirsAndPrefix has been supplied, use it.
 		dirs = ds
 	}
 
@@ -309,8 +308,6 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 }
 
 func openLedgerDB(dbPrefixes DirsAndPrefix, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
-	outErr := make(chan error, 2)
-
 	// resolve paths to tracker and block databases
 	trackerDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.RootGenesisDir, dbPrefixes.DBFilePrefix)
 	blockDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.RootGenesisDir, dbPrefixes.DBFilePrefix)
@@ -327,6 +324,7 @@ func openLedgerDB(dbPrefixes DirsAndPrefix, dbMem bool, cfg config.Local, log lo
 		blockDBPrefix = filepath.Join(dbPrefixes.ResolvedGenesisDirs.BlockGenesisDir, dbPrefixes.DBFilePrefix)
 	}
 
+	outErr := make(chan error, 2)
 	go func() {
 		var lerr error
 		switch cfg.StorageEngine {
