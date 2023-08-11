@@ -297,15 +297,7 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 //   - requested round < generator's round + offset - 1 ---> error
 //
 // NOTE: nextRound represents the generator's expectations about the next database round.
-func (g *generator) WriteBlock(output io.Writer, round uint64) (err error) {
-	finishRound := false
-	defer func(){
-		if err == nil && finishRound {
-				g.finishRound()
-		}
-		g.cleanPending()
-	}()
-
+func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	if round < g.roundOffset {
 		return fmt.Errorf("cannot generate block for round %d, already in database", round)
 	}
@@ -330,7 +322,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) (err error) {
 		}
 		if len(g.latestBlockMsgp) != 0 {
 			// write the msgpack bytes for a block
-			_, err = output.Write(g.latestBlockMsgp)
+			_, err := output.Write(g.latestBlockMsgp)
 			if err != nil {
 				return err
 			}
@@ -338,10 +330,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) (err error) {
 		return nil
 	}
 
-	finishRound = true
-
 	// round == nextRound case
-	err = g.startRound()
+	err := g.startRound()
 	if err != nil {
 		return err
 	}
@@ -415,6 +405,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) (err error) {
 		return err
 	}
 
+	g.finishRound()
 	return nil
 }
 

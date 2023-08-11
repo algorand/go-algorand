@@ -48,30 +48,30 @@ const (
 
 // baseAccountsPendingAccountsBufferSize defines the size of the base account pending accounts buffer size.
 // At the beginning of a new round, the entries from this buffer are being flushed into the base accounts map.
-const baseAccountsPendingAccountsBufferSize = 100000
+const baseAccountsPendingAccountsBufferSize = 1000000
 
 // baseAccountsPendingAccountsWarnThreshold defines the threshold at which the lruAccounts would generate a warning
 // after we've surpassed a given pending account size. The warning is being generated when the pending accounts data
 // is being flushed into the main base account cache.
-const baseAccountsPendingAccountsWarnThreshold = 85000
+const baseAccountsPendingAccountsWarnThreshold = 985000
 
 // baseResourcesPendingAccountsBufferSize defines the size of the base resources pending accounts buffer size.
 // At the beginning of a new round, the entries from this buffer are being flushed into the base resources map.
-const baseResourcesPendingAccountsBufferSize = 10000
+const baseResourcesPendingAccountsBufferSize = 100000
 
 // baseResourcesPendingAccountsWarnThreshold defines the threshold at which the lruResources would generate a warning
 // after we've surpassed a given pending account resources size. The warning is being generated when the pending accounts data
 // is being flushed into the main base resources cache.
-const baseResourcesPendingAccountsWarnThreshold = 8500
+const baseResourcesPendingAccountsWarnThreshold = 98500
 
 // baseKVPendingBufferSize defines the size of the base KVs pending buffer size.
 // At the beginning of a new round, the entries from this buffer are being flushed into the base KVs map.
-const baseKVPendingBufferSize = 5000
+const baseKVPendingBufferSize = 50000
 
 // baseKVPendingWarnThreshold defines the threshold at which the lruKV would generate a warning
 // after we've surpassed a given pending kv size. The warning is being generated when the pending kv data
 // is being flushed into the main base kv cache.
-const baseKVPendingWarnThreshold = 4250
+const baseKVPendingWarnThreshold = 49250
 
 // initializeCachesReadaheadBlocksStream defines how many block we're going to attempt to queue for the
 // initializeCaches method before it can process and store the account changes to disk.
