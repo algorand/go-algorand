@@ -87,8 +87,8 @@ func (z *netPrioResponse) unmarshalMsg(bts []byte, validate bool) (o []byte, err
 				err = msgp.WrapError(err, "struct-from-array", "Nonce")
 				return
 			}
-			if zb0005 > netPrioChallengeSize {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(netPrioChallengeSize))
+			if zb0005 > netPrioChallengeSizeBase64Encoded {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(netPrioChallengeSizeBase64Encoded))
 				return
 			}
 			(*z).Nonce, bts, err = msgp.ReadStringBytes(bts)
@@ -131,8 +131,8 @@ func (z *netPrioResponse) unmarshalMsg(bts []byte, validate bool) (o []byte, err
 					err = msgp.WrapError(err, "Nonce")
 					return
 				}
-				if zb0006 > netPrioChallengeSize {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(netPrioChallengeSize))
+				if zb0006 > netPrioChallengeSizeBase64Encoded {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(netPrioChallengeSizeBase64Encoded))
 					return
 				}
 				(*z).Nonce, bts, err = msgp.ReadStringBytes(bts)
@@ -298,8 +298,8 @@ func (z *netPrioResponseSigned) unmarshalMsg(bts []byte, validate bool) (o []byt
 						err = msgp.WrapError(err, "struct-from-array", "Response", "struct-from-array", "Nonce")
 						return
 					}
-					if zb0009 > netPrioChallengeSize {
-						err = msgp.ErrOverflow(uint64(zb0009), uint64(netPrioChallengeSize))
+					if zb0009 > netPrioChallengeSizeBase64Encoded {
+						err = msgp.ErrOverflow(uint64(zb0009), uint64(netPrioChallengeSizeBase64Encoded))
 						return
 					}
 					(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
@@ -342,8 +342,8 @@ func (z *netPrioResponseSigned) unmarshalMsg(bts []byte, validate bool) (o []byt
 							err = msgp.WrapError(err, "struct-from-array", "Response", "Nonce")
 							return
 						}
-						if zb0010 > netPrioChallengeSize {
-							err = msgp.ErrOverflow(uint64(zb0010), uint64(netPrioChallengeSize))
+						if zb0010 > netPrioChallengeSizeBase64Encoded {
+							err = msgp.ErrOverflow(uint64(zb0010), uint64(netPrioChallengeSizeBase64Encoded))
 							return
 						}
 						(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
@@ -440,8 +440,8 @@ func (z *netPrioResponseSigned) unmarshalMsg(bts []byte, validate bool) (o []byt
 							err = msgp.WrapError(err, "Response", "struct-from-array", "Nonce")
 							return
 						}
-						if zb0015 > netPrioChallengeSize {
-							err = msgp.ErrOverflow(uint64(zb0015), uint64(netPrioChallengeSize))
+						if zb0015 > netPrioChallengeSizeBase64Encoded {
+							err = msgp.ErrOverflow(uint64(zb0015), uint64(netPrioChallengeSizeBase64Encoded))
 							return
 						}
 						(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)
@@ -484,8 +484,8 @@ func (z *netPrioResponseSigned) unmarshalMsg(bts []byte, validate bool) (o []byt
 								err = msgp.WrapError(err, "Response", "Nonce")
 								return
 							}
-							if zb0016 > netPrioChallengeSize {
-								err = msgp.ErrOverflow(uint64(zb0016), uint64(netPrioChallengeSize))
+							if zb0016 > netPrioChallengeSizeBase64Encoded {
+								err = msgp.ErrOverflow(uint64(zb0016), uint64(netPrioChallengeSizeBase64Encoded))
 								return
 							}
 							(*z).Response.Nonce, bts, err = msgp.ReadStringBytes(bts)

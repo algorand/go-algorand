@@ -13,6 +13,7 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalValidateMsg
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
@@ -56,16 +57,24 @@ func (_ *creatableEntry) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *creatableEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *creatableEntry) unmarshalMsg(bts []byte, validate bool) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 int
+	var zb0003 string
+	var zb0004 bool
 	var zb0002 bool
+	_ = zb0003
+	_ = zb0004
 	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
 		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
+			return
+		}
+		if validate {
+			err = &msgp.ErrNonCanonical{}
 			return
 		}
 		if zb0001 > 0 {
@@ -108,17 +117,27 @@ func (z *creatableEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "Ctype":
+				if validate && zb0004 && "Ctype" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				bts, err = (*z).Ctype.UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Ctype")
 					return
 				}
+				zb0003 = "Ctype"
 			case "CreatorAddr":
+				if validate && zb0004 && "CreatorAddr" < zb0003 {
+					err = &msgp.ErrNonCanonical{}
+					return
+				}
 				(*z).CreatorAddr, bts, err = msgp.ReadBytesBytes(bts, (*z).CreatorAddr)
 				if err != nil {
 					err = msgp.WrapError(err, "CreatorAddr")
 					return
 				}
+				zb0003 = "CreatorAddr"
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -126,12 +145,19 @@ func (z *creatableEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0004 = true
 		}
 	}
 	o = bts
 	return
 }
 
+func (z *creatableEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, false)
+}
+func (z *creatableEntry) UnmarshalValidateMsg(bts []byte) (o []byte, err error) {
+	return z.unmarshalMsg(bts, true)
+}
 func (_ *creatableEntry) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*creatableEntry)
 	return ok
