@@ -20,7 +20,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -83,11 +82,11 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
-	genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
+	var err error
+	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
 	if err != nil {
 		return nil, err
 	}
-	node.genesisDirs = genesisDirs
 
 	if node.devMode {
 		log.Warn("Follower running on a devMode network. Must submit txns to a different node.")
@@ -105,16 +104,14 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	p2pNode.DeregisterMessageInterest(protocol.VoteBundleTag)
 	node.net = p2pNode
 
-	hotGenesisDir := node.genesisDirs.RootGenesisDir
-	coldGenesisDir := node.genesisDirs.RootGenesisDir
-
-	if cfg.HotDataDir != "" {
-		hotGenesisDir = filepath.Join(cfg.HotDataDir, node.genesisID)
+	// if the node's HotGenesisDir is not defined, set it to the root genesis dir
+	if node.genesisDirs.HotGenesisDir == "" {
+		node.genesisDirs.HotGenesisDir = node.genesisDirs.RootGenesisDir
 	}
-	if cfg.ColdDataDir != "" {
-		coldGenesisDir = filepath.Join(cfg.ColdDataDir, node.genesisID)
+	if node.genesisDirs.ColdGenesisDir == "" {
+		// if the node's ColdGenesisDir is not defined, set it to the root genesis dir
+		node.genesisDirs.ColdGenesisDir = node.genesisDirs.RootGenesisDir
 	}
-
 	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
@@ -124,15 +121,8 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	ledgerPaths := ledger.DirsAndPrefix{
-		DBFilePrefix: config.LedgerFilenamePrefix,
-		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
-			RootGenesisDir:       node.genesisDirs.RootGenesisDir,
-			HotGenesisDir:        hotGenesisDir,
-			ColdGenesisDir:       coldGenesisDir,
-			TrackerGenesisDir:    node.genesisDirs.TrackerGenesisDir,
-			BlockGenesisDir:      node.genesisDirs.BlockGenesisDir,
-			CatchpointGenesisDir: node.genesisDirs.CatchpointGenesisDir,
-		},
+		DBFilePrefix:        config.LedgerFilenamePrefix,
+		ResolvedGenesisDirs: node.genesisDirs,
 	}
 	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {

@@ -182,11 +182,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
 	node.config = cfg
-	genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
+	var err error
+	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
 	if err != nil {
 		return nil, err
 	}
-	node.genesisDirs = genesisDirs
 
 	// tie network, block fetcher, and agreement services together
 	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
@@ -197,15 +197,13 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
 
-	// by default, the genesis directories are all based in the root directory
-	hotGenesisDir := node.genesisDirs.RootGenesisDir
-	coldGenesisDir := node.genesisDirs.RootGenesisDir
-	// however, if the genesis directories are specified in genesisDirs, use those instead
-	if genesisDirs.HotGenesisDir != "" {
-		hotGenesisDir = node.genesisDirs.HotGenesisDir
+	// if the node's HotGenesisDir is not defined, set it to the root genesis dir
+	if node.genesisDirs.HotGenesisDir == "" {
+		node.genesisDirs.HotGenesisDir = node.genesisDirs.RootGenesisDir
 	}
-	if genesisDirs.ColdGenesisDir != "" {
-		coldGenesisDir = node.genesisDirs.ColdGenesisDir
+	if node.genesisDirs.ColdGenesisDir == "" {
+		// if the node's ColdGenesisDir is not defined, set it to the root genesis dir
+		node.genesisDirs.ColdGenesisDir = node.genesisDirs.RootGenesisDir
 	}
 
 	genalloc, err := genesis.Balances()
@@ -218,15 +216,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
 	ledgerPaths := ledger.DirsAndPrefix{
-		DBFilePrefix: config.LedgerFilenamePrefix,
-		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
-			RootGenesisDir:       node.genesisDirs.RootGenesisDir,
-			HotGenesisDir:        hotGenesisDir,
-			ColdGenesisDir:       coldGenesisDir,
-			TrackerGenesisDir:    node.genesisDirs.TrackerGenesisDir,
-			BlockGenesisDir:      node.genesisDirs.BlockGenesisDir,
-			CatchpointGenesisDir: node.genesisDirs.CatchpointGenesisDir,
-		},
+		DBFilePrefix:        config.LedgerFilenamePrefix,
+		ResolvedGenesisDirs: node.genesisDirs,
 	}
 	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
@@ -262,9 +253,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	// crash data is stored in the cold data directory unless otherwise specified
-	crashPathname := filepath.Join(coldGenesisDir, config.CrashFilename)
-	if genesisDirs.CrashGenesisDir != "" {
-		crashPathname = filepath.Join(genesisDirs.CrashGenesisDir, config.CrashFilename)
+	crashPathname := filepath.Join(node.genesisDirs.ColdGenesisDir, config.CrashFilename)
+	if node.genesisDirs.CrashGenesisDir != "" {
+		crashPathname = filepath.Join(node.genesisDirs.CrashGenesisDir, config.CrashFilename)
 	}
 	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
 	if err != nil {
@@ -304,7 +295,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
-	registry, err := ensureParticipationDB(coldGenesisDir, node.log)
+	registry, err := ensureParticipationDB(node.genesisDirs.ColdGenesisDir, node.log)
 	if err != nil {
 		log.Errorf("unable to initialize the participation registry database: %v", err)
 		return nil, err
@@ -338,9 +329,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
 	// stateproof worker should use hot genesis dir by default, or uses the specified stateproof dir
-	stateproofWorkerDir := hotGenesisDir
-	if genesisDirs.StateproofGenesisDir != "" {
-		stateproofWorkerDir = genesisDirs.StateproofGenesisDir
+	stateproofWorkerDir := node.genesisDirs.HotGenesisDir
+	if node.genesisDirs.StateproofGenesisDir != "" {
+		stateproofWorkerDir = node.genesisDirs.StateproofGenesisDir
 	}
 	node.stateProofWorker = stateproof.NewWorker(stateproofWorkerDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 

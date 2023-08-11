@@ -95,7 +95,7 @@ type Local struct {
 	// For expert node operation: specify any of the directories to customize the node's data storage.
 
 	// Hot Data Directory stores data that is frequently accessed by the node. This includes:
-	// - ledger
+	// - accounts database
 	// - log file
 	// if not specified, the node will use the datadir for these files.
 	// these individual resources may themselves have their own directories specified, which would override this
@@ -113,21 +113,21 @@ type Local struct {
 	// these individual resources may themselves have their own directories specified, which would override this
 	ColdDataDir string `version[29]:""`
 
-	// TrackerDbDir stores the tracker database. if not specified, the node will use the hotdatadir
+	// TrackerDbDir stores the tracker database. if not specified, the node will use the HotDataDir
 	TrackerDBDir string `version[29]:""`
-	// BlockDBDir stores the block database. if not specified, the node will use the colddatadir
+	// BlockDBDir stores the block database. if not specified, the node will use the ColdDataDir
 	BlockDBDir string `version[29]:""`
-	// CatchpointDir stores the catchpoint files. if not specified, the node will use the colddatadir
+	// CatchpointDir stores the catchpoint files. if not specified, the node will use the ColdDataDir
 	CatchpointDir string `version[29]:""`
-	// StateproofDir stores the stateproof database. if not specified, the node will use the colddatadir
+	// StateproofDir stores the stateproof database. if not specified, the node will use the ColdDataDir
 	StateproofDir string `version[29]:""`
-	// CrashDBDir stores the crash database. if not specified, the node will use the colddatadir
+	// CrashDBDir stores the crash database. if not specified, the node will use the ColdDataDir
 	CrashDBDir string `version[29]:""`
 
 	// LogFilePath and LogArchiveDir do not create subdirectories for GenesisDir, as their current behavior is to act at the root of the data dir
-	// LogFilePath stores the log file. if not specified, the node will use the hotdatadir + "node.log"
+	// LogFilePath stores the log file. if not specified, the node will use the HotDataDir + "node.log"
 	LogFilePath string `version[29]:""`
-	// LogArchiveDir stores the log archive. if not specified, the node will use the colddatadir
+	// LogArchiveDir stores the log archive. if not specified, the node will use the ColdDataDir
 	LogArchiveDir string `version[29]:""`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
