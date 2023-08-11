@@ -1414,7 +1414,11 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-func (au *accountUpdates) handleUnorderedCommitOrError(dcc *deferredCommitContext) {
+func (au *accountUpdates) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (au *accountUpdates) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (au *accountUpdates) handleCommitError(dcc *deferredCommitContext) {
 }
 
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
