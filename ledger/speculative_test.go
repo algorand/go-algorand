@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,8 +25,9 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/eval"
+
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/internal"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -58,7 +59,7 @@ func TestSpeculative(t *testing.T) {
 
 	require.NoError(t, err)
 
-	state, err := internal.Eval(context.Background(), l, blk1, false, l.VerifiedTransactionCache(), nil)
+	state, err := eval.Eval(context.Background(), l, blk1, false, l.VerifiedTransactionCache(), nil, nil)
 	require.NoError(t, err)
 	vblk1 := ledgercore.MakeValidatedBlock(blk1, state)
 
@@ -97,7 +98,7 @@ func TestSpeculative(t *testing.T) {
 		HasGenesisID: true,
 	})
 
-	state, err = internal.Eval(context.Background(), blk1aslfe, blk2, false, blk1aslfe.VerifiedTransactionCache(), nil)
+	state, err = eval.Eval(context.Background(), blk1aslfe, blk2, false, blk1aslfe.VerifiedTransactionCache(), nil, nil)
 	require.NoError(t, err)
 	vblk2 := ledgercore.MakeValidatedBlock(blk2, state)
 

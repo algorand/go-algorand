@@ -1,5 +1,5 @@
 {
-    "Version": 29,
+    "Version": 30,
     "AccountUpdatesStatsInterval": 5000000000,
     "AccountsRebuildSynchronousMode": 1,
     "AgreementIncomingBundlesQueueLength": 15,
@@ -101,11 +101,8 @@
     "RestReadTimeoutSeconds": 15,
     "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
-<<<<<<< HEAD
     "SpeculativeBlockAssemblyGraceTime": 50000000,
-=======
     "StorageEngine": "sqlite",
->>>>>>> master
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,
     "TLSCertFile": "",

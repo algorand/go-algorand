@@ -4040,7 +4040,7 @@ func (z *player) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func PlayerMaxSize() (s int) {
-	s = 1 + 6 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + ProposalTableMaxSize()
+	s = 1 + 6 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 28 + msgp.DurationSize + 8 + ProposalTableMaxSize() + 17 + protocol.ConsensusVersionMaxSize() + 27 + msgp.DurationSize
 	return
 }
 
