@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/algorand/avm-abi/apps"
 	cconfig "github.com/algorand/go-algorand/config"
@@ -173,9 +174,16 @@ func (g *generator) evaluateBlock(hdr bookkeeping.BlockHeader, txGroups [][]txn.
 		return nil, 0, fmt.Errorf("could not start evaluator: %w", err)
 	}
 	for i, txGroup := range txGroups {
-		err := eval.TransactionGroup(txGroup)
-		if err != nil {
-			return nil, 0, fmt.Errorf("could not evaluate transaction group %d: %w", i, err)
+		for {
+			err := eval.TransactionGroup(txGroup)
+			if err != nil {
+				if strings.Contains(err.Error(), "database table is locked") {
+					// sometimes the database is locked, so we retry
+					continue
+				}
+				return nil, 0, fmt.Errorf("could not evaluate transaction group %d: %w", i, err)
+			}
+			break
 		}
 	}
 	lvb, err := eval.GenerateBlock()
