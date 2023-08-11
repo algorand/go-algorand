@@ -412,7 +412,7 @@ func TestCatchpointCommitErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, root1, root3)
 
-	// also demonstrate that lazy initialization allows a nil trie to go back to root2 immediatly after error if the same delta is applied
+	// also demonstrate that lazy initialization allows a nil trie to go back to root2 immediately after error if the same delta is applied
 	txn, err = ml.dbs.BeginTransaction(context.Background())
 	require.NoError(t, err)
 	ct.handleCommitError(&dcc) // clear trie
