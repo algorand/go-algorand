@@ -253,7 +253,7 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	deadlineCh := s.Clock.TimeoutAt(deadline)
 	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
 
-	speculationDeadlineCh := make(<-chan time.Time)
+	var speculationDeadlineCh <-chan time.Time
 	if speculationDeadline == 0 {
 		// zero timeout means we don't have enough time to speculate on block assembly
 		speculationDeadlineCh = nil
