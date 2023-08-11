@@ -677,6 +677,8 @@ func TestEnsureAbsDir(t *testing.T) {
 
 // TestEnsureProvidedPaths confirms that paths provided in the config are resolved to absolute paths and are created if relevant
 func TestEnsureAndResolveGenesisDirs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	cfg := GetDefaultLocal()
 
 	testDirectory := t.TempDir()
@@ -705,6 +707,8 @@ func TestEnsureAndResolveGenesisDirs(t *testing.T) {
 
 // TestEnsureProvidedPathsError confirms that if a path can't be created, an error is returned
 func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	cfg := GetDefaultLocal()
 
 	testDirectory := t.TempDir()
