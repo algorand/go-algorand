@@ -3010,7 +3010,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	}
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
-		1, proto.StateProofInterval, false, stateproofTrackingLoc)
+		1, proto.StateProofInterval, false, spverDBLoc)
 
 	addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 
@@ -3034,7 +3034,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	triggerTrackerFlush(t, l, genesisInitState)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
-		numOfStateProofs, proto.StateProofInterval, true, stateproofTrackingLoc)
+		numOfStateProofs, proto.StateProofInterval, true, spverDBLoc)
 
 	blk := makeNewEmptyBlock(t, l, t.Name(), genesisInitState.Accounts)
 	var stateProofReceived bookkeeping.StateProofTrackingData
@@ -3060,9 +3060,9 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	triggerTrackerFlush(t, l, genesisInitState)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
-		1, proto.StateProofInterval, false, stateproofTrackingLoc)
+		1, proto.StateProofInterval, false, spverDBLoc)
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound+proto.StateProofInterval),
-		numOfStateProofs-1, proto.StateProofInterval, true, stateproofTrackingLoc)
+		numOfStateProofs-1, proto.StateProofInterval, true, spverDBLoc)
 }
 
 func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
@@ -3166,7 +3166,7 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	numTrackedDataFirstCatchpoint := (cfg.CatchpointInterval - proto.MaxBalLookback) / proto.StateProofInterval
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofDataTargetRound),
-		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, stateproofTrackingLoc)
+		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, spverDBLoc)
 	l.Close()
 
 	l, err = OpenLedger(log, dbName, inMem, genesisInitState, cfg)
@@ -3174,7 +3174,7 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	defer l.Close()
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofDataTargetRound),
-		numTrackedDataFirstCatchpoint, proto.StateProofInterval, false, stateproofTrackingLoc)
+		numTrackedDataFirstCatchpoint, proto.StateProofInterval, false, spverDBLoc)
 
 	catchpointAccessor, accessorProgress := initializeTestCatchupAccessor(t, l, uint64(len(initkeys)))
 
@@ -3187,7 +3187,7 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	require.NoError(t, err)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofDataTargetRound),
-		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, stateproofTrackingLoc)
+		numTrackedDataFirstCatchpoint, proto.StateProofInterval, true, spverDBLoc)
 }
 
 func TestLedgerSPTrackerAfterReplay(t *testing.T) {
@@ -3224,7 +3224,7 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	}
 
 	// 1024
-	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, stateproofTrackingLoc)
+	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, spverDBLoc)
 	a.Equal(0, len(l.spVerification.pendingDeleteContexts))
 
 	// Add StateProof transaction (for round 512) and apply without validating, advancing the NextStateProofRound to 768
@@ -3233,7 +3233,7 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	a.NoError(err)
 	a.Equal(1, len(l.spVerification.pendingDeleteContexts))
 	// To be deleted, but not yet deleted (waiting for commit)
-	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, stateproofTrackingLoc)
+	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, spverDBLoc)
 
 	// first ensure the block is committed into blockdb
 	l.WaitForCommit(l.Latest())
@@ -3252,5 +3252,5 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	a.NoError(err)
 
 	a.Equal(1, len(l.spVerification.pendingDeleteContexts))
-	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, stateproofTrackingLoc)
+	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, spverDBLoc)
 }
