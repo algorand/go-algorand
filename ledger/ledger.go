@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -91,8 +92,6 @@ type Ledger struct {
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
 
-	headerCache blockHeaderCache
-
 	// verifiedTxnCache holds all the verified transactions state
 	verifiedTxnCache verify.VerifiedTransactionCache
 
@@ -135,8 +134,6 @@ func OpenLedger(
 		dbPathPrefix:                   dbPathPrefix,
 		tracer:                         tracer,
 	}
-
-	l.headerCache.initialize()
 
 	defer func() {
 		if err != nil {
@@ -300,9 +297,12 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging
 	go func() {
 		var lerr error
 		switch cfg.StorageEngine {
+		case "pebbledb":
+			dir := dbPathPrefix + "/tracker.pebble"
+			trackerDBs, lerr = pebbledbdriver.Open(dir, dbMem, config.Consensus[protocol.ConsensusCurrentVersion], log)
+		// anything else will initialize a sqlite engine.
 		case "sqlite":
 			fallthrough
-		// anything else will initialize a sqlite engine.
 		default:
 			file := dbPathPrefix + ".tracker.sqlite"
 			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
@@ -436,8 +436,13 @@ func (l *Ledger) UnregisterVotersCommitListener() {
 // written to disk.  Returns the minimum block number that must be kept
 // in the database.
 func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 	minToSave := l.trackers.committedUpTo(r)
 
 	if l.archival {
@@ -628,8 +633,6 @@ func (l *Ledger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basi
 
 // CheckDup return whether a transaction is a duplicate one.
 func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
@@ -654,16 +657,22 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 
 // BlockHdr returns the BlockHeader of the block for round rnd.
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	blk, exists := l.headerCache.get(rnd)
-	if exists {
-		return
-	}
 
-	blk, err = l.blockQ.getBlockHdr(rnd)
-	if err == nil {
-		l.headerCache.put(blk)
+	// Expected availability range in txTail.blockHeader is [Latest - MaxTxnLife, Latest]
+	// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+	// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
+	// and currently set to 1.
+	// Explanation:
+	// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
+	// and because a txn is alive when the current round <= txn.LastValid
+	// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
+	// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
+	// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
+	hdr, ok := l.txTail.blockHeader(rnd)
+	if !ok {
+		hdr, err = l.blockQ.getBlockHdr(rnd)
 	}
-	return
+	return hdr, err
 }
 
 // EncodedBlockCert returns the encoded block and the corresponding encoded certificate of the block for round rnd.
@@ -704,15 +713,19 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 // behaves like AddBlock.
 func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error {
 	// Grab the tracker lock first, to ensure newBlock() is notified before committedUpTo().
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 
 	blk := vb.Block()
 	err := l.blockQ.putBlock(blk, cert)
 	if err != nil {
 		return err
 	}
-	l.headerCache.put(blk.BlockHeader)
 	l.trackers.newBlock(blk, vb.Delta())
 	l.log.Debugf("ledger.AddValidatedBlock: added blk %d", blk.Round())
 	return nil
@@ -753,27 +766,6 @@ func (l *Ledger) GenesisProtoVersion() protocol.ConsensusVersion {
 // GenesisAccounts returns initial accounts for this ledger.
 func (l *Ledger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return l.genesisAccounts
-}
-
-// BlockHdrCached returns the block header if available.
-// Expected availability range is [Latest - MaxTxnLife, Latest]
-// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
-// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
-// and currently set to 1.
-// Explanation:
-// Clients are expected to query blocks at rounds (txn.LastValid - (MaxTxnLife + 1)),
-// and because a txn is alive when the current round <= txn.LastValid
-// and valid if txn.LastValid - txn.FirstValid <= MaxTxnLife
-// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
-// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
-func (l *Ledger) BlockHdrCached(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	hdr, ok := l.txTail.blockHeader(rnd)
-	if !ok {
-		err = fmt.Errorf("no cached header data for round %d", rnd)
-	}
-	return hdr, err
 }
 
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
@@ -888,3 +880,5 @@ var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "c
 var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")
 var ledgerVerifygenhashCount = metrics.NewCounter("ledger_verifygenhash_count", "calls")
 var ledgerVerifygenhashMicros = metrics.NewCounter("ledger_verifygenhash_micros", "µs spent")
+var ledgerTrackerMuLockCount = metrics.NewCounter("ledger_lock_trackermu_count", "calls")
+var ledgerTrackerMuLockMicros = metrics.NewCounter("ledger_lock_trackermu_micros", "µs spent")

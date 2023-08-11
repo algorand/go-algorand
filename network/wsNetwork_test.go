@@ -543,7 +543,7 @@ func TestWebsocketNetworkArray(t *testing.T) {
 
 	tags := []protocol.Tag{protocol.TxnTag, protocol.TxnTag, protocol.TxnTag}
 	data := [][]byte{[]byte("foo"), []byte("bar"), []byte("algo")}
-	netA.BroadcastArray(context.Background(), tags, data, false, nil)
+	netA.broadcaster.BroadcastArray(context.Background(), tags, data, false, nil)
 
 	select {
 	case <-counterDone:
@@ -571,7 +571,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	cancel()
 
 	// try calling BroadcastArray
-	netA.BroadcastArray(ctx, tags, data, true, nil)
+	netA.broadcaster.BroadcastArray(ctx, tags, data, true, nil)
 
 	select {
 	case <-counterDone:
@@ -583,7 +583,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	// try calling innerBroadcast
 	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	peers, _ := netA.peerSnapshot([]*wsPeer{})
-	netA.innerBroadcast(request, true, peers)
+	netA.broadcaster.innerBroadcast(request, true, peers)
 
 	select {
 	case <-counterDone:
@@ -760,9 +760,11 @@ func TestAddrToGossipAddr(t *testing.T) {
 type nopConn struct{}
 
 func (nc *nopConn) RemoteAddr() net.Addr                        { return nil }
+func (nc *nopConn) RemoteAddrString() string                    { return "" }
 func (nc *nopConn) NextReader() (int, io.Reader, error)         { return 0, nil, nil }
 func (nc *nopConn) WriteMessage(int, []byte) error              { return nil }
 func (nc *nopConn) WriteControl(int, []byte, time.Time) error   { return nil }
+func (nc *nopConn) CloseWithMessage([]byte, time.Time) error    { return nil }
 func (nc *nopConn) SetReadLimit(limit int64)                    {}
 func (nc *nopConn) CloseWithoutFlush() error                    { return nil }
 func (nc *nopConn) SetPingHandler(h func(appData string) error) {}
@@ -799,7 +801,7 @@ func TestSlowHandlers(t *testing.T) {
 	// start slow handler calls that will block all handler threads
 	for i := 0; i < incomingThreads; i++ {
 		data := []byte{byte(i)}
-		node.readBuffer <- IncomingMessage{Sender: &injectionPeers[ipi], Tag: slowTag, Data: data, Net: node}
+		node.handler.readBuffer <- IncomingMessage{Sender: &injectionPeers[ipi], Tag: slowTag, Data: data, Net: node}
 		ipi++
 	}
 	defer slowCounter.Broadcast()
@@ -807,7 +809,7 @@ func TestSlowHandlers(t *testing.T) {
 	// start fast handler calls that won't get to run
 	for i := 0; i < incomingThreads; i++ {
 		data := []byte{byte(i)}
-		node.readBuffer <- IncomingMessage{Sender: &injectionPeers[ipi], Tag: fastTag, Data: data, Net: node}
+		node.handler.readBuffer <- IncomingMessage{Sender: &injectionPeers[ipi], Tag: fastTag, Data: data, Net: node}
 		ipi++
 	}
 	ok := false
@@ -890,7 +892,7 @@ func TestFloodingPeer(t *testing.T) {
 				}
 
 				select {
-				case node.readBuffer <- IncomingMessage{Sender: &injectionPeers[myIpi], Tag: slowTag, Data: data, Net: node, processing: processed}:
+				case node.handler.readBuffer <- IncomingMessage{Sender: &injectionPeers[myIpi], Tag: slowTag, Data: data, Net: node, processing: processed}:
 				case <-ctx.Done():
 					return
 				}
@@ -912,7 +914,7 @@ func TestFloodingPeer(t *testing.T) {
 	fastCounterDone := fastCounter.done
 	for ipi < len(injectionPeers) {
 		data := []byte{byte(ipi)}
-		node.readBuffer <- IncomingMessage{Sender: &injectionPeers[ipi], Tag: fastTag, Data: data, Net: node}
+		node.handler.readBuffer <- IncomingMessage{Sender: &injectionPeers[ipi], Tag: fastTag, Data: data, Net: node}
 		numFast++
 		ipi++
 	}
@@ -2176,7 +2178,7 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 			networkBroadcastsDropped.WriteMetric(&buf, "")
 			t.Errorf(
 				"a out queue=%d, metric: %s",
-				len(netA.broadcastQueueBulk),
+				len(netA.broadcaster.broadcastQueueBulk),
 				buf.String(),
 			)
 			return
@@ -2450,9 +2452,9 @@ func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte
 	tagArr[0] = tag
 	request := broadcastRequest{tags: tagArr, data: msgArr, enqueueTime: when, ctx: context.Background()}
 
-	broadcastQueue := wn.broadcastQueueBulk
+	broadcastQueue := wn.broadcaster.broadcastQueueBulk
 	if highPriorityTag(tagArr) {
-		broadcastQueue = wn.broadcastQueueHighPrio
+		broadcastQueue = wn.broadcaster.broadcastQueueHighPrio
 	}
 	// no wait
 	select {
@@ -2508,13 +2510,13 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	wn := &WebsocketNetwork{
-		log:                            log,
-		config:                         defaultConfig,
-		phonebook:                      MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:                      genesisID,
-		NetworkID:                      config.Devtestnet,
-		slowWritingPeerMonitorInterval: time.Millisecond * 50,
+		log:       log,
+		config:    defaultConfig,
+		phonebook: MakePhonebook(1, 1*time.Millisecond),
+		GenesisID: genesisID,
+		NetworkID: config.Devtestnet,
 	}
+	wn.broadcaster.slowWritingPeerMonitorInterval = time.Millisecond * 50
 	wn.setup()
 	wn.eventualReadyDelay = time.Second
 	wn.messagesOfInterest = nil // clear this before starting the network so that we won't be sending a MOI upon connection.
@@ -3705,7 +3707,7 @@ func TestPreparePeerData(t *testing.T) {
 
 	peers := []*wsPeer{}
 	wn := WebsocketNetwork{}
-	data, comp, digests, seenPrioPPTag := wn.preparePeerData(req, false, peers)
+	data, comp, digests, seenPrioPPTag := wn.broadcaster.preparePeerData(req, false, peers)
 	require.NotEmpty(t, data)
 	require.Empty(t, comp)
 	require.NotEmpty(t, digests)
@@ -3725,7 +3727,7 @@ func TestPreparePeerData(t *testing.T) {
 		features: pfCompressedProposal,
 	}
 	peers = []*wsPeer{&peer1, &peer2}
-	data, comp, digests, seenPrioPPTag = wn.preparePeerData(req, true, peers)
+	data, comp, digests, seenPrioPPTag = wn.broadcaster.preparePeerData(req, true, peers)
 	require.NotEmpty(t, data)
 	require.NotEmpty(t, comp)
 	require.NotEmpty(t, digests)
@@ -4303,6 +4305,40 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		}
 
 		assert.ElementsMatch(t, dedupedArchiveDomains, archiveAddrs)
+	})
+}
+
+func TestUpdatePhonebookAddressesPersistentPeers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	rapid.Check(t, func(t1 *rapid.T) {
+		nw := makeTestWebsocketNode(t)
+		// Generate a new set of relay domains
+		// Dont overlap with archive nodes previously specified, duplicates between them not stored in phonebook as of this writing
+		relayDomainsGen := rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", nil), 0, 200)
+		relayDomains := relayDomainsGen.Draw(t1, "relayDomains")
+
+		var persistentPeers []string
+		// Add an initial set of relay domains as Persistent Peers in the Phonebook,
+		persistentPeers = rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", relayDomains), 0, 200).Draw(t1, "")
+		nw.phonebook.AddPersistentPeers(persistentPeers, string(nw.NetworkID), PhoneBookEntryRelayRole)
+
+		// run updatePhonebookAddresses
+		nw.updatePhonebookAddresses(relayDomains, nil)
+
+		// Check that entries are in fact in phonebook less any duplicates
+		dedupedRelayDomains := removeDuplicateStr(relayDomains, false)
+		require.Equal(t, 0, len(relayDomains)-len(dedupedRelayDomains))
+
+		relayPeers := nw.GetPeers(PeersPhonebookRelays)
+		require.Equal(t, len(dedupedRelayDomains)+len(persistentPeers), len(relayPeers))
+
+		relayAddrs := make([]string, 0, len(relayPeers))
+		for _, peer := range relayPeers {
+			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
+		}
+
+		require.ElementsMatch(t, append(dedupedRelayDomains, persistentPeers...), relayAddrs)
 	})
 }
 

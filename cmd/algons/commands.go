@@ -25,6 +25,7 @@ import (
 
 func init() {
 	rootCmd.AddCommand(dnsCmd)
+	rootCmd.AddCommand(dnsaddrCmd)
 }
 
 var rootCmd = &cobra.Command{

@@ -103,7 +103,7 @@ func (m *lruResources) readAll(addr basics.Address) (ret []trackerdb.PersistedRe
 func (m *lruResources) flushPendingWrites() {
 	pendingEntriesCount := len(m.pendingResources)
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
-		m.log.Warnf("lruResources: number of entries in pendingResources(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
+		m.log.Infof("lruResources: number of entries in pendingResources(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
 	}
 
 outer:
