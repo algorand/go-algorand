@@ -41,7 +41,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitely, otherwise, only the most recent blocks
@@ -520,6 +520,18 @@ type Local struct {
 	// BlockServiceMemCap is the memory capacity in bytes which is allowed for the block service to use for HTTP block requests.
 	// When it exceeds this capacity, it redirects the block requests to a different node
 	BlockServiceMemCap uint64 `version[28]:"500000000"`
+
+	// P2PEnable turns on the peer to peer network
+	P2PEnable bool `version[29]:"false"`
+
+	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
+	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
+	P2PPersistPeerID bool `version[29]:"true"`
+
+	// P2PPrivateKeyLocation allows the user to specify a custom path to the private key used for the node's PeerID.
+	// The private key provided must be an ed25519 private key.
+	// This is only used when P2PEnable is true. If the parameter is not set, it uses the default location.
+	P2PPrivateKeyLocation string `version[29]:""`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

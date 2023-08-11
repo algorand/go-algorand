@@ -23,19 +23,29 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
+// BoxOperation is an enum of box operation types
+type BoxOperation int
+
 const (
-	boxCreate = iota
-	boxRead
-	boxWrite
-	boxDelete
+	// BoxCreateOperation creates a box
+	BoxCreateOperation BoxOperation = iota
+	// BoxReadOperation reads a box
+	BoxReadOperation
+	// BoxWriteOperation writes to a box
+	BoxWriteOperation
+	// BoxDeleteOperation deletes a box
+	BoxDeleteOperation
 )
 
-func (cx *EvalContext) availableBox(name string, operation int, createSize uint64) ([]byte, bool, error) {
+func (cx *EvalContext) availableBox(name string, operation BoxOperation, createSize uint64) ([]byte, bool, error) {
 	if cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		return nil, false, fmt.Errorf("boxes may not be accessed from ClearState program")
 	}
 
-	dirty, ok := cx.available.boxes[boxRef{cx.appID, name}]
+	dirty, ok := cx.available.boxes[BoxRef{cx.appID, name}]
+	if !ok && cx.UnnamedResources != nil {
+		ok = cx.UnnamedResources.AvailableBox(cx.appID, name, operation, createSize)
+	}
 	if !ok {
 		return nil, false, fmt.Errorf("invalid Box reference %#x", name)
 	}
@@ -50,7 +60,7 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 	}
 
 	switch operation {
-	case boxCreate:
+	case BoxCreateOperation:
 		if exists {
 			if createSize != uint64(len(content)) {
 				return nil, false, fmt.Errorf("box size mismatch %d %d", uint64(len(content)), createSize)
@@ -58,11 +68,11 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 			// Since it exists, we have no dirty work to do. The weird case of
 			// box_put, which seems like a combination of create and write, is
 			// properly handled because already used boxWrite to declare the
-			// intent to write (and tracky dirtiness).
+			// intent to write (and track dirtiness).
 			return content, exists, nil
 		}
 		fallthrough // If it doesn't exist, a create is like write
-	case boxWrite:
+	case BoxWriteOperation:
 		writeSize := createSize
 		if exists {
 			writeSize = uint64(len(content))
@@ -71,15 +81,15 @@ func (cx *EvalContext) availableBox(name string, operation int, createSize uint6
 			cx.available.dirtyBytes += writeSize
 		}
 		dirty = true
-	case boxDelete:
+	case BoxDeleteOperation:
 		if dirty {
 			cx.available.dirtyBytes -= uint64(len(content))
 		}
 		dirty = false
-	case boxRead:
+	case BoxReadOperation:
 		/* nothing to do */
 	}
-	cx.available.boxes[boxRef{cx.appID, name}] = dirty
+	cx.available.boxes[BoxRef{cx.appID, name}] = dirty
 
 	if cx.available.dirtyBytes > cx.ioBudget {
 		return nil, false, fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)
@@ -115,12 +125,12 @@ func opBoxCreate(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	_, exists, err := cx.availableBox(name, boxCreate, size)
+	_, exists, err := cx.availableBox(name, BoxCreateOperation, size)
 	if err != nil {
 		return err
 	}
 	if !exists {
-		appAddr := cx.getApplicationAddress(cx.appID)
+		appAddr := cx.GetApplicationAddress(cx.appID)
 		err = cx.Ledger.NewBox(cx.appID, name, make([]byte, size), appAddr)
 		if err != nil {
 			return err
@@ -145,7 +155,7 @@ func opBoxExtract(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	contents, exists, err := cx.availableBox(name, boxRead, 0)
+	contents, exists, err := cx.availableBox(name, BoxReadOperation, 0)
 	if err != nil {
 		return err
 	}
@@ -173,7 +183,7 @@ func opBoxReplace(cx *EvalContext) error {
 		return err
 	}
 
-	contents, exists, err := cx.availableBox(name, boxWrite, 0 /* size is already known */)
+	contents, exists, err := cx.availableBox(name, BoxWriteOperation, 0 /* size is already known */)
 	if err != nil {
 		return err
 	}
@@ -197,12 +207,12 @@ func opBoxDel(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	_, exists, err := cx.availableBox(name, boxDelete, 0)
+	_, exists, err := cx.availableBox(name, BoxDeleteOperation, 0)
 	if err != nil {
 		return err
 	}
 	if exists {
-		appAddr := cx.getApplicationAddress(cx.appID)
+		appAddr := cx.GetApplicationAddress(cx.appID)
 		_, err := cx.Ledger.DelBox(cx.appID, name, appAddr)
 		if err != nil {
 			return err
@@ -220,7 +230,7 @@ func opBoxLen(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	contents, exists, err := cx.availableBox(name, boxRead, 0)
+	contents, exists, err := cx.availableBox(name, BoxReadOperation, 0)
 	if err != nil {
 		return err
 	}
@@ -238,7 +248,7 @@ func opBoxGet(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	contents, exists, err := cx.availableBox(name, boxRead, 0)
+	contents, exists, err := cx.availableBox(name, BoxReadOperation, 0)
 	if err != nil {
 		return err
 	}
@@ -263,7 +273,7 @@ func opBoxPut(cx *EvalContext) error {
 	}
 
 	// This boxWrite usage requires the size, because the box may not exist.
-	contents, exists, err := cx.availableBox(name, boxWrite, uint64(len(value)))
+	contents, exists, err := cx.availableBox(name, BoxWriteOperation, uint64(len(value)))
 	if err != nil {
 		return err
 	}
@@ -279,6 +289,6 @@ func opBoxPut(cx *EvalContext) error {
 	}
 
 	/* The box did not exist, so create it. */
-	appAddr := cx.getApplicationAddress(cx.appID)
+	appAddr := cx.GetApplicationAddress(cx.appID)
 	return cx.Ledger.NewBox(cx.appID, name, value, appAddr)
 }

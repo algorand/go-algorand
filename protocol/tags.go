@@ -60,7 +60,7 @@ const MsgOfInterestTagMaxSize = 45
 const MsgDigestSkipTagMaxSize = 69
 
 // NetPrioResponseTagMaxSize is the maximum size of a NetPrioResponseTag message
-const NetPrioResponseTagMaxSize = 838
+const NetPrioResponseTagMaxSize = 850
 
 // NetIDVerificationTagMaxSize is the maximum size of a NetIDVerificationTag message
 const NetIDVerificationTagMaxSize = 215

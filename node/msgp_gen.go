@@ -179,7 +179,7 @@ func (z *netPrioResponse) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func NetPrioResponseMaxSize() (s int) {
-	s = 1 + 6 + msgp.StringPrefixSize + netPrioChallengeSize
+	s = 1 + 6 + msgp.StringPrefixSize + netPrioChallengeSizeBase64Encoded
 	return
 }
 
@@ -576,6 +576,6 @@ func (z *netPrioResponseSigned) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func NetPrioResponseSignedMaxSize() (s int) {
-	s = 1 + 9 + 1 + 6 + msgp.StringPrefixSize + netPrioChallengeSize + 6 + basics.RoundMaxSize() + 7 + basics.AddressMaxSize() + 4 + crypto.OneTimeSignatureMaxSize()
+	s = 1 + 9 + 1 + 6 + msgp.StringPrefixSize + netPrioChallengeSizeBase64Encoded + 6 + basics.RoundMaxSize() + 7 + basics.AddressMaxSize() + 4 + crypto.OneTimeSignatureMaxSize()
 	return
 }

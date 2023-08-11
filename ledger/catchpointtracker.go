@@ -953,10 +953,27 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	}
 }
 
-// handleUnorderedCommitOrError is a special method for handling deferred commits that are out of order.
-// Tracker might update own state in this case. For example, account catchpoint tracker cancels
-// scheduled catchpoint writing that deferred commit.
-func (ct *catchpointTracker) handleUnorderedCommitOrError(dcc *deferredCommitContext) {
+// when the deferred commit is found to be out of order, cancel writing
+func (ct *catchpointTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
+	ct.cancelWrite(dcc)
+}
+
+// if an error is encountered during commit preparation, cancel writing
+func (ct *catchpointTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
+	ct.cancelWrite(dcc)
+}
+
+// if an error is encountered during commit, cancel writing and clear the balances trie
+func (ct *catchpointTracker) handleCommitError(dcc *deferredCommitContext) {
+	// in cases where the commitRound fails, it is not certain that the merkle trie is in a clean state, and should be cleared.
+	// Specifically, modifications to the trie happen through accountsUpdateBalances,
+	// which happens before commit to disk. Errors in this tracker, subsequent trackers, or the commit to disk may cause the trie cache to be incorrect,
+	// affecting the perceived root on subsequent rounds
+	ct.balancesTrie = nil
+	ct.cancelWrite(dcc)
+}
+
+func (ct *catchpointTracker) cancelWrite(dcc *deferredCommitContext) {
 	// if the node is configured to generate catchpoint files, we might need to update the catchpointWriting variable.
 	if ct.enableGeneratingCatchpointFiles {
 		// determine if this was a catchpoint round
@@ -1147,17 +1164,17 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		chunkExecutionDuration = shortChunkExecutionDuration
 	}
 
-	var catchpointWriter *catchpointWriter
+	var catchpointWriter *catchpointFileWriter
 
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err = ct.dbs.SnapshotContext(ctx, func(dbCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		catchpointWriter, err = makeCatchpointWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
+		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return
 		}
 
-		err = catchpointWriter.WriteStateProofVerificationContext(encodedSPData)
+		err = catchpointWriter.FileWriteSPVerificationContext(encodedSPData)
 		if err != nil {
 			return
 		}
@@ -1165,7 +1182,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(dbCtx, chunkExecutionDuration)
 			writeStepStartTime := time.Now()
-			more, err = catchpointWriter.WriteStep(stepCtx)
+			more, err = catchpointWriter.FileWriteStep(stepCtx)
 			// accumulate the actual time we've spent writing in this step.
 			catchpointGenerationStats.CPUTime += uint64(time.Since(writeStepStartTime).Nanoseconds())
 			stepCancelFunction()

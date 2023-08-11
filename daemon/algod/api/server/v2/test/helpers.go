@@ -137,10 +137,14 @@ func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys acco
 }
 
 func makeMockNode(ledger v2.LedgerForAPI, genesisID string, nodeError error, status node.StatusReport, devMode bool) *mockNode {
+	return makeMockNodeWithConfig(ledger, genesisID, nodeError, status, devMode, config.GetDefaultLocal())
+}
+
+func makeMockNodeWithConfig(ledger v2.LedgerForAPI, genesisID string, nodeError error, status node.StatusReport, devMode bool, cfg config.Local) *mockNode {
 	return &mockNode{
 		ledger:    ledger,
 		genesisID: genesisID,
-		config:    config.GetDefaultLocal(),
+		config:    cfg,
 		err:       nodeError,
 		usertxns:  map[basics.Address][]node.TxnWithStatus{},
 		status:    status,
@@ -163,6 +167,10 @@ func (m *mockNode) GenesisHash() crypto.Digest {
 }
 
 func (m *mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
+	return m.err
+}
+
+func (m *mockNode) AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
 	return m.err
 }
 

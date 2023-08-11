@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -142,6 +143,59 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	a.Equal(expectedOffset, dc.offset)
 }
 
+type ioErrorTracker struct {
+}
+
+// loadFromDisk is not implemented in the blockingTracker.
+func (io *ioErrorTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
+	return nil
+}
+
+// newBlock is not implemented in the blockingTracker.
+func (io *ioErrorTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+}
+
+// committedUpTo in the blockingTracker just stores the committed round.
+func (io *ioErrorTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
+	return 0, basics.Round(0)
+}
+
+func (io *ioErrorTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+	return dcr
+}
+
+// prepareCommit, is not used by the blockingTracker
+func (io *ioErrorTracker) prepareCommit(*deferredCommitContext) error {
+	return nil
+}
+
+// commitRound is not used by the blockingTracker
+func (io *ioErrorTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
+	return sqlite3.Error{Code: sqlite3.ErrIoErr}
+}
+
+func (io *ioErrorTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+// postCommitUnlocked implements entry/exit blockers, designed for testing.
+func (io *ioErrorTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+// control functions are not used by the blockingTracker
+func (io *ioErrorTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (io *ioErrorTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (io *ioErrorTracker) handleCommitError(dcc *deferredCommitContext) {
+}
+
+// close is not used by the blockingTracker
+func (io *ioErrorTracker) close() {
+}
+
+func (io *ioErrorTracker) reset() {
+}
+
 type producePrepareBlockingTracker struct {
 	produceReleaseLock       chan struct{}
 	prepareCommitEntryLock   chan struct{}
@@ -191,8 +245,12 @@ func (bt *producePrepareBlockingTracker) postCommit(ctx context.Context, dcc *de
 func (bt *producePrepareBlockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-// handleUnorderedCommitOrError is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) handleUnorderedCommitOrError(*deferredCommitContext) {
+// control functions are not used by the blockingTracker
+func (bt *producePrepareBlockingTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (bt *producePrepareBlockingTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (bt *producePrepareBlockingTracker) handleCommitError(dcc *deferredCommitContext) {
 }
 
 // close is not used by the blockingTracker
@@ -300,4 +358,64 @@ func TestTrackerDbRoundDataRace(t *testing.T) {
 	// unblock the notifyCommit (scheduleCommit) goroutine
 	stallingTracker.cancelTasks = true
 	close(stallingTracker.produceReleaseLock)
+}
+
+func TestCommitRoundIOError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1)
+	const inMem = true
+	log := logging.TestingLogWithoutFatalExit(t)
+	log.SetLevel(logging.Warn)
+	cfg := config.GetDefaultLocal()
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	a.NoError(err, "could not open ledger")
+	defer ledger.Close()
+
+	// flip the flag when the exit handler is called,
+	// which happens when Fatal logging is called
+	flag := false
+	logging.RegisterExitHandler(func() {
+		flag = true
+	})
+
+	io := &ioErrorTracker{}
+	ledger.trackerMu.Lock()
+	ledger.trackers.mu.Lock()
+	ledger.trackers.trackers = append([]ledgerTracker{io}, ledger.trackers.trackers...)
+	ledger.trackers.mu.Unlock()
+	ledger.trackerMu.Unlock()
+
+	// create update content which would trigger a commit
+	targetRound := basics.Round(100)
+	blk := genesisInitState.Block
+	for i := basics.Round(0); i < targetRound-1; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err := ledger.AddBlock(blk, agreement.Certificate{})
+		a.NoError(err)
+	}
+	blk.BlockHeader.Round++
+	blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+	err = ledger.AddBlock(blk, agreement.Certificate{})
+	a.NoError(err)
+
+	// confirm that after 100 blocks, the scheduled commit generated an error
+	// which triggered Fatal logging (and would therefore call any registered exit handlers)
+	a.True(flag)
+}
+
+func TestAccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	aul := &accountUpdatesLedgerEvaluator{
+		prevHeader: bookkeeping.BlockHeader{},
+		tail:       &txTail{},
+	}
+	hdr, err := aul.BlockHdr(99)
+	require.Error(t, err)
+	require.Equal(t, ledgercore.ErrNoEntry{}, err)
+	require.Equal(t, bookkeeping.BlockHeader{}, hdr)
 }

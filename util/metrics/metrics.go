@@ -132,4 +132,9 @@ var (
 	TransactionGroupTxSyncRemember = MetricName{Name: "algod_transaction_group_txsync_remember", Description: "Number of transaction groups remembered via txsync"}
 	// TransactionGroupTxSyncAlreadyCommitted "Number of duplicate or error transaction groups received via txsync"
 	TransactionGroupTxSyncAlreadyCommitted = MetricName{Name: "algod_transaction_group_txsync_err_or_committed", Description: "Number of duplicate or error transaction groups received via txsync"}
+
+	// BroadcastSignedTxGroupSucceeded "Number of successful broadcasts of local signed transaction groups"
+	BroadcastSignedTxGroupSucceeded = MetricName{Name: "algod_broadcast_txgroup_succeeded", Description: "Number of successful broadcasts of local signed transaction groups"}
+	// BroadcastSignedTxGroupFailed "Number of failed broadcasts of local signed transaction groups"
+	BroadcastSignedTxGroupFailed = MetricName{Name: "algod_broadcast_txgroup_failed", Description: "Number of failed broadcasts of local signed transaction groups"}
 )

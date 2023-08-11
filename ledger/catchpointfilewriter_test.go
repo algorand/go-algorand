@@ -132,7 +132,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
-	au.close()
+	au.close() // it is OK to close it here - no data race since commitSyncer is not active
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	mockCommitData := make([]verificationCommitContext, 0)
@@ -147,7 +147,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	require.NoError(t, err)
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
+		writer, err := makeCatchpointFileWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return err
 		}
@@ -157,12 +157,12 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 		}
 		_, encodedData := crypto.EncodeAndHash(catchpointStateProofVerificationContext{Data: rawData})
 
-		err = writer.WriteStateProofVerificationContext(encodedData)
+		err = writer.FileWriteSPVerificationContext(encodedData)
 		if err != nil {
 			return err
 		}
 		for {
-			more, err := writer.WriteStep(context.Background())
+			more, err := writer.FileWriteStep(context.Background())
 			require.NoError(t, err)
 			if !more {
 				break
@@ -258,11 +258,11 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
-	au.close()
+	au.close() // it is OK to close it here - no data race since commitSyncer is not active
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
+		writer, err := makeCatchpointFileWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
 		if err != nil {
 			return err
 		}
@@ -271,12 +271,12 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			return err
 		}
 		_, encodedData := crypto.EncodeAndHash(catchpointStateProofVerificationContext{Data: rawData})
-		err = writer.WriteStateProofVerificationContext(encodedData)
+		err = writer.FileWriteSPVerificationContext(encodedData)
 		if err != nil {
 			return err
 		}
 		for {
-			more, err := writer.WriteStep(context.Background())
+			more, err := writer.FileWriteStep(context.Background())
 			require.NoError(t, err)
 			if !more {
 				break
@@ -306,7 +306,7 @@ func testWriteCatchpoint(t *testing.T, rdb trackerdb.Store, datapath string, fil
 	}
 
 	err := rdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointWriter(context.Background(), datapath, tx, maxResourcesPerChunk)
+		writer, err := makeCatchpointFileWriter(context.Background(), datapath, tx, maxResourcesPerChunk)
 		if err != nil {
 			return err
 		}
@@ -320,12 +320,12 @@ func testWriteCatchpoint(t *testing.T, rdb trackerdb.Store, datapath string, fil
 			return err
 		}
 		_, encodedData := crypto.EncodeAndHash(catchpointStateProofVerificationContext{Data: rawData})
-		err = writer.WriteStateProofVerificationContext(encodedData)
+		err = writer.FileWriteSPVerificationContext(encodedData)
 		if err != nil {
 			return err
 		}
 		for {
-			more, err := writer.WriteStep(context.Background())
+			more, err := writer.FileWriteStep(context.Background())
 			require.NoError(t, err)
 			if !more {
 				break
@@ -425,7 +425,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 	au, _ := newAcctUpdates(t, ml, conf)
 	err := au.loadFromDisk(ml, 0)
 	require.NoError(t, err)
-	au.close()
+	au.close() // it is OK to close it here - no data race since commitSyncer is not active
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -433,7 +433,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		totalChunks := 0
-		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
+		cw, err := makeCatchpointFileWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
 		require.NoError(t, err)
 
 		ar, err := tx.MakeAccountsReader()
@@ -539,7 +539,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
-		cw, err := makeCatchpointWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
+		cw, err := makeCatchpointFileWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
 		require.NoError(t, err)
 
 		// repeat this until read all accts

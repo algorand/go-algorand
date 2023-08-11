@@ -122,9 +122,8 @@ func TestVoterTrackerDeleteVotersAfterStateproofConfirmed(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	// To cause all blocks to be committed, for easier processing by the voters tracker.
 	conf.MaxAcctLookback = 0
-	au, ao := newAcctUpdates(t, ml, conf)
-	defer au.close()
-	defer ao.close()
+	_, ao := newAcctUpdates(t, ml, conf)
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	i := uint64(1)
 	// adding blocks to the voterstracker (in order to pass the numOfIntervals*stateproofInterval we add 1)
@@ -177,9 +176,8 @@ func TestLimitVoterTracker(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	// To cause all blocks to be committed, for easier processing by the voters tracker.
 	conf.MaxAcctLookback = 0
-	au, ao := newAcctUpdates(t, ml, conf)
-	defer au.close()
-	defer ao.close()
+	_, ao := newAcctUpdates(t, ml, conf)
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	i := uint64(1)
 
@@ -261,9 +259,8 @@ func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	au, ao := newAcctUpdates(t, ml, conf)
-	defer au.close()
-	defer ao.close()
+	_, ao := newAcctUpdates(t, ml, conf)
+	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
 	i := uint64(1)
 	for ; i < (intervalForTest)+1; i++ {
