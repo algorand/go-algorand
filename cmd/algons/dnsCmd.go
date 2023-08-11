@@ -437,7 +437,7 @@ func checkedDelete(toDelete []cloudflare.DNSRecordResponseEntry, cloudflareDNS *
 	return nil
 }
 
-func listEntries(listNetwork string, recordType string) error {
+func getEntries(getNetwork string, recordType string) ([]cloudflare.DNSRecordResponseEntry, error) {
 	recordTypes := []string{"A", "CNAME", "SRV", "TXT"}
 	isKnown := false
 	for _, known := range append(recordTypes, "") {
@@ -447,27 +447,35 @@ func listEntries(listNetwork string, recordType string) error {
 		}
 	}
 	if !isKnown {
-		return fmt.Errorf("invalid recordType specified %s", recordType)
+		return nil, fmt.Errorf("invalid recordType specified %s", recordType)
 	}
 	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
-		return fmt.Errorf("error getting DNS credentials: %v", err)
+		return nil, fmt.Errorf("error getting DNS credentials: %v", err)
 	}
 
 	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 	if recordType != "" {
 		recordTypes = []string{recordType}
 	}
+	var records []cloudflare.DNSRecordResponseEntry
 	for _, recType := range recordTypes {
-		records, err0 := cloudflareDNS.ListDNSRecord(context.Background(), recType, "", "", "", "", "")
-		if err0 != nil {
-			return fmt.Errorf("error listing DNS entries %w", err)
+		records, err = cloudflareDNS.ListDNSRecord(context.Background(), recType, getNetwork, "", "", "", "")
+		if err != nil {
+			return nil, fmt.Errorf("error listing DNS entries %w", err)
 		}
+	}
+	return records, nil
+}
 
-		for _, record := range records {
-			if strings.HasSuffix(record.Name, listNetwork) {
-				fmt.Printf("%v\n", record.Name)
-			}
+func listEntries(listNetwork string, recordType string) error {
+	records, err := getEntries("", recordType)
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		if strings.HasSuffix(record.Name, listNetwork) {
+			fmt.Printf("%v\n", record.Name)
 		}
 	}
 	return nil

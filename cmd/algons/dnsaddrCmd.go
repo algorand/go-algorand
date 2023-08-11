@@ -139,6 +139,18 @@ var dnsaddrTreeCreateCmd = &cobra.Command{
 			dnsaddrsTo = append(dnsaddrsTo, fmt.Sprintf("%d%s", i, dnsaddrDomain))
 		}
 		dnsaddrsFrom := []string{fmt.Sprintf("_dnsaddr.%s", dnsaddrDomain)}
+		entries, err := getEntries(dnsaddrsFrom[0], "TXT")
+		if err != nil {
+			fmt.Printf("failed fetching entries for %s\n", dnsaddrsFrom[0])
+			os.Exit(1)
+		}
+		if len(entries) > 0 {
+			for _, entry := range entries {
+				fmt.Printf("found entry %s => %s\n", entry.Name, entry.Content)
+			}
+			fmt.Printf("found entries already existing at %s, bailing out\n", dnsaddrsFrom[0])
+			os.Exit(1)
+		}
 		for _, addrTo := range dnsaddrsTo {
 			dnsaddrsFrom = append(dnsaddrsFrom, fmt.Sprintf("_dnsaddr.%s", addrTo))
 		}
@@ -150,7 +162,7 @@ var dnsaddrTreeCreateCmd = &cobra.Command{
 					err := doAddTXT(from, newDnsaddr)
 					if err != nil {
 						fmt.Printf("failed writing dnsaddr entry %s: %s\n", newDnsaddr, err)
-						return
+						os.Exit(1)
 					}
 					dnsaddrsTo = dnsaddrsTo[:len(dnsaddrsTo)-1]
 					continue
@@ -160,7 +172,7 @@ var dnsaddrTreeCreateCmd = &cobra.Command{
 				err := doAddTXT(from, newDnsaddr)
 				if err != nil {
 					fmt.Printf("failed writing dns entry %s\n", err)
-					return
+					os.Exit(1)
 				}
 				cmdMultiaddrs = cmdMultiaddrs[:len(cmdMultiaddrs)-1]
 				if len(cmdMultiaddrs) == 0 {
