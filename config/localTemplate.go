@@ -738,69 +738,107 @@ func (rgd ResolvedGenesisDirs) String() string {
 	return ret
 }
 
+// ResolveLogPaths will return the most appropriate location for liveLog and archive, given user config
+func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
+	// the default locations of log and archive are root
+	liveLog = filepath.Join(rootDir, "node.log")
+	archive = filepath.Join(rootDir, cfg.LogArchiveName)
+	// if hot data dir is set, use it for the base of logs
+	if cfg.HotDataDir != "" {
+		liveLog = filepath.Join(cfg.HotDataDir, "node.log")
+	}
+	// if cold data dir is set, use it for the base of archives
+	if cfg.HotDataDir != "" {
+		archive = filepath.Join(cfg.ColdDataDir, cfg.LogArchiveName)
+	}
+	// if LogFilePath is set, use it instead
+	if cfg.LogFilePath != "" {
+		liveLog = cfg.LogFilePath
+	}
+	// if LogArchivePath is set, use it instead
+	if cfg.LogArchiveDir != "" {
+		archive = filepath.Join(cfg.LogArchiveDir, cfg.LogArchiveName)
+	}
+	return liveLog, archive
+}
+
 // EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each
 // returns a ResolvedGenesisDirs struct with the resolved paths for use during runtime
 func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (ResolvedGenesisDirs, error) {
-	var root, hot, cold, tracker, block, catchpoint, stateproof, crash string
+	var resolved ResolvedGenesisDirs
 	var err error
 	if rootDir != "" {
-		root, err = ensureAbsGenesisDir(rootDir, genesisID)
+		resolved.RootGenesisDir, err = ensureAbsGenesisDir(rootDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
+	} else {
+		return ResolvedGenesisDirs{}, fmt.Errorf("rootDir is required")
 	}
+	// if HotDataDir is not set, use RootDataDir
 	if cfg.HotDataDir != "" {
-		hot, err = ensureAbsGenesisDir(cfg.HotDataDir, genesisID)
+		resolved.HotGenesisDir, err = ensureAbsGenesisDir(cfg.HotDataDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
+	} else {
+		resolved.HotGenesisDir = resolved.RootGenesisDir
 	}
+	// if ColdDataDir is not set, use RootDataDir
 	if cfg.ColdDataDir != "" {
-		cold, err = ensureAbsGenesisDir(cfg.ColdDataDir, genesisID)
+		resolved.ColdGenesisDir, err = ensureAbsGenesisDir(cfg.ColdDataDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
+	} else {
+		resolved.ColdGenesisDir = resolved.RootGenesisDir
 	}
+	// if TrackerDBDir is not set, use HotDataDir
 	if cfg.TrackerDBDir != "" {
-		tracker, err = ensureAbsGenesisDir(cfg.TrackerDBDir, genesisID)
+		resolved.TrackerGenesisDir, err = ensureAbsGenesisDir(cfg.TrackerDBDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
+	} else {
+		resolved.TrackerGenesisDir = resolved.HotGenesisDir
 	}
+	// if BlockDBDir is not set, use ColdDataDir
 	if cfg.BlockDBDir != "" {
-		block, err = ensureAbsGenesisDir(cfg.BlockDBDir, genesisID)
+		resolved.BlockGenesisDir, err = ensureAbsGenesisDir(cfg.BlockDBDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
+	} else {
+		resolved.BlockGenesisDir = resolved.ColdGenesisDir
 	}
+	// if CatchpointDir is not set, use ColdDataDir
 	if cfg.CatchpointDir != "" {
-		catchpoint, err = ensureAbsGenesisDir(cfg.CatchpointDir, genesisID)
+		resolved.CatchpointGenesisDir, err = ensureAbsGenesisDir(cfg.CatchpointDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
+	} else {
+		resolved.CatchpointGenesisDir = resolved.ColdGenesisDir
 	}
+	// if StateproofDir is not set, use HotDataDir
 	if cfg.StateproofDir != "" {
-		stateproof, err = ensureAbsGenesisDir(cfg.StateproofDir, genesisID)
+		resolved.StateproofGenesisDir, err = ensureAbsGenesisDir(cfg.StateproofDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
+	} else {
+		resolved.StateproofGenesisDir = resolved.HotGenesisDir
 	}
+	// if CrashDBDir is not set, use ColdDataDir
 	if cfg.CrashDBDir != "" {
-		crash, err = ensureAbsGenesisDir(cfg.CrashDBDir, genesisID)
+		resolved.CrashGenesisDir, err = ensureAbsGenesisDir(cfg.CrashDBDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
+	} else {
+		resolved.CrashGenesisDir = resolved.ColdGenesisDir
 	}
-	return ResolvedGenesisDirs{
-		RootGenesisDir:       root,
-		HotGenesisDir:        hot,
-		ColdGenesisDir:       cold,
-		TrackerGenesisDir:    tracker,
-		BlockGenesisDir:      block,
-		CatchpointGenesisDir: catchpoint,
-		StateproofGenesisDir: stateproof,
-		CrashGenesisDir:      crash,
-	}, nil
+	return resolved, nil
 }
 
 // AdjustConnectionLimits updates RestConnectionsSoftLimit, RestConnectionsHardLimit, IncomingConnectionsLimit

@@ -675,7 +675,7 @@ func TestEnsureAbsDir(t *testing.T) {
 	require.Equal(t, testDirectory+"/myGenesisID", t2Abs)
 }
 
-// TestEnsureProvidedPaths confirms that paths provided in the config are resolved to absolute paths and are created if relevant
+// TestEnsureAndResolveGenesisDirs confirms that paths provided in the config are resolved to absolute paths and are created if relevant
 func TestEnsureAndResolveGenesisDirs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -705,7 +705,48 @@ func TestEnsureAndResolveGenesisDirs(t *testing.T) {
 	require.DirExists(t, paths.CatchpointGenesisDir)
 }
 
-// TestEnsureProvidedPathsError confirms that if a path can't be created, an error is returned
+// TestEnsureAndResolveGenesisDirs_hierarchy confirms that when only some directories are specified, other directories defer to them
+func TestEnsureAndResolveGenesisDirs_hierarchy(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	testDirectory := t.TempDir()
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
+	require.NoError(t, err)
+	// confirm that if only the root is specified, it is used for all directories
+	require.Equal(t, testDirectory+"/myGenesisID", paths.TrackerGenesisDir)
+	require.DirExists(t, paths.TrackerGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.BlockGenesisDir)
+	require.DirExists(t, paths.BlockGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.CrashGenesisDir)
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.StateproofGenesisDir)
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.CatchpointGenesisDir)
+	require.DirExists(t, paths.CatchpointGenesisDir)
+
+	cfg = GetDefaultLocal()
+	testDirectory = t.TempDir()
+	hot := filepath.Join(testDirectory, "hot")
+	cold := filepath.Join(testDirectory, "cold")
+	cfg.HotDataDir = hot
+	cfg.ColdDataDir = cold
+	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
+	require.NoError(t, err)
+	// confirm that if hot/cold are specified, hot/cold are used for appropriate directories
+	require.Equal(t, hot+"/myGenesisID", paths.TrackerGenesisDir)
+	require.DirExists(t, paths.TrackerGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.BlockGenesisDir)
+	require.DirExists(t, paths.BlockGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.CrashGenesisDir)
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, hot+"/myGenesisID", paths.StateproofGenesisDir)
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.CatchpointGenesisDir)
+	require.DirExists(t, paths.CatchpointGenesisDir)
+}
+
+// TestEnsureAndResolveGenesisDirsError confirms that if a path can't be created, an error is returned
 func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -719,10 +760,46 @@ func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
 	cfg.StateproofDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
 	cfg.CatchpointDir = filepath.Join(testDirectory, "custom_catchpoint")
 
+	// first try an error with an empty root dir
+	paths, err := cfg.EnsureAndResolveGenesisDirs("", "myGenesisID")
+	require.Empty(t, paths)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "rootDir is required")
+
 	require.NoError(t, os.Chmod(testDirectory, 0200))
 
-	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
+	// now try an error with a root dir that can't be written to
+	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
 	require.Empty(t, paths)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "permission denied")
+}
+
+// TestResolveLogPaths confirms that log paths are resolved to the most appropriate data directory of the supplied config
+func TestResolveLogPaths(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// on default settings, the log paths should be in the root directory
+	cfg := GetDefaultLocal()
+	log, archive := cfg.ResolveLogPaths("root")
+	require.Equal(t, "root/node.log", log)
+	require.Equal(t, "root/node.archive.log", archive)
+
+	// with supplied hot/cold data directories, they resolve to hot/cold
+	cfg = GetDefaultLocal()
+	cfg.HotDataDir = "hot"
+	cfg.ColdDataDir = "cold"
+	log, archive = cfg.ResolveLogPaths("root")
+	require.Equal(t, "hot/node.log", log)
+	require.Equal(t, "cold/node.archive.log", archive)
+
+	// with supplied hot/cold data AND specific paths directories, they resolve to the specific paths
+	cfg = GetDefaultLocal()
+	cfg.HotDataDir = "hot"
+	cfg.ColdDataDir = "cold"
+	cfg.LogFilePath = "mycoolLogPath.log"
+	cfg.LogArchiveDir = "myCoolLogArchive"
+	log, archive = cfg.ResolveLogPaths("root")
+	require.Equal(t, "mycoolLogPath.log", log)
+	require.Equal(t, "myCoolLogArchive/node.archive.log", archive)
 }

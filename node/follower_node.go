@@ -104,14 +104,6 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	p2pNode.DeregisterMessageInterest(protocol.VoteBundleTag)
 	node.net = p2pNode
 
-	// if the node's HotGenesisDir is not defined, set it to the root genesis dir
-	if node.genesisDirs.HotGenesisDir == "" {
-		node.genesisDirs.HotGenesisDir = node.genesisDirs.RootGenesisDir
-	}
-	if node.genesisDirs.ColdGenesisDir == "" {
-		// if the node's ColdGenesisDir is not defined, set it to the root genesis dir
-		node.genesisDirs.ColdGenesisDir = node.genesisDirs.RootGenesisDir
-	}
 	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)

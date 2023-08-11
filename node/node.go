@@ -197,15 +197,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	p2pNode.SetPrioScheme(node)
 	node.net = p2pNode
 
-	// if the node's HotGenesisDir is not defined, set it to the root genesis dir
-	if node.genesisDirs.HotGenesisDir == "" {
-		node.genesisDirs.HotGenesisDir = node.genesisDirs.RootGenesisDir
-	}
-	if node.genesisDirs.ColdGenesisDir == "" {
-		// if the node's ColdGenesisDir is not defined, set it to the root genesis dir
-		node.genesisDirs.ColdGenesisDir = node.genesisDirs.RootGenesisDir
-	}
-
 	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
@@ -253,10 +244,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	// crash data is stored in the cold data directory unless otherwise specified
-	crashPathname := filepath.Join(node.genesisDirs.ColdGenesisDir, config.CrashFilename)
-	if node.genesisDirs.CrashGenesisDir != "" {
-		crashPathname = filepath.Join(node.genesisDirs.CrashGenesisDir, config.CrashFilename)
-	}
+	crashPathname := filepath.Join(node.genesisDirs.CrashGenesisDir, config.CrashFilename)
 	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
 	if err != nil {
 		log.Errorf("Cannot load crash data: %v", err)
@@ -328,12 +316,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
-	// stateproof worker should use hot genesis dir by default, or uses the specified stateproof dir
-	stateproofWorkerDir := node.genesisDirs.HotGenesisDir
-	if node.genesisDirs.StateproofGenesisDir != "" {
-		stateproofWorkerDir = node.genesisDirs.StateproofGenesisDir
-	}
-	node.stateProofWorker = stateproof.NewWorker(stateproofWorkerDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	node.stateProofWorker = stateproof.NewWorker(node.genesisDirs.StateproofGenesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }

@@ -308,24 +308,9 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 }
 
 func openLedgerDB(dbPrefixes DirsAndPrefix, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
-	// resolve paths to tracker and block databases
-	trackerDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.RootGenesisDir, dbPrefixes.DBFilePrefix)
-	blockDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.RootGenesisDir, dbPrefixes.DBFilePrefix)
-	if dbPrefixes.ResolvedGenesisDirs.HotGenesisDir != "" {
-		trackerDBPrefix = filepath.Join(dbPrefixes.ResolvedGenesisDirs.HotGenesisDir, dbPrefixes.DBFilePrefix)
-	}
-	if dbPrefixes.ResolvedGenesisDirs.TrackerGenesisDir != "" {
-		trackerDBPrefix = filepath.Join(dbPrefixes.ResolvedGenesisDirs.TrackerGenesisDir, dbPrefixes.DBFilePrefix)
-	}
-	if dbPrefixes.ResolvedGenesisDirs.ColdGenesisDir != "" {
-		blockDBPrefix = filepath.Join(dbPrefixes.ResolvedGenesisDirs.ColdGenesisDir, dbPrefixes.DBFilePrefix)
-	}
-	if dbPrefixes.ResolvedGenesisDirs.BlockGenesisDir != "" {
-		blockDBPrefix = filepath.Join(dbPrefixes.ResolvedGenesisDirs.BlockGenesisDir, dbPrefixes.DBFilePrefix)
-	}
-
 	outErr := make(chan error, 2)
 	go func() {
+		trackerDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.TrackerGenesisDir, dbPrefixes.DBFilePrefix)
 		var lerr error
 		switch cfg.StorageEngine {
 		case "pebbledb":
@@ -342,6 +327,7 @@ func openLedgerDB(dbPrefixes DirsAndPrefix, dbMem bool, cfg config.Local, log lo
 	}()
 
 	go func() {
+		blockDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.BlockGenesisDir, dbPrefixes.DBFilePrefix)
 		var lerr error
 		blockDBs, lerr = db.OpenPair(blockDBPrefix+".block.sqlite", dbMem)
 		if lerr != nil {
