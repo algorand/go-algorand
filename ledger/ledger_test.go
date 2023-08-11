@@ -2334,10 +2334,16 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	cfg.MaxAcctLookback = proto.MaxBalLookback
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info) // prevent spamming with ledger.AddValidatedBlock debug message
+	// Set basic Directory for all resources
 	dirs := DirsAndPrefix{
 		DBFilePrefix: "",
 		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
-			RootGenesisDir: dbName,
+			RootGenesisDir:       dbName,
+			HotGenesisDir:        dbName,
+			ColdGenesisDir:       dbName,
+			TrackerGenesisDir:    dbName,
+			BlockGenesisDir:      dbName,
+			CatchpointGenesisDir: dbName,
 		},
 	}
 	trackerDB, blockDB, err := openLedgerDB(dirs, inMem, cfg, log)
