@@ -466,7 +466,7 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 
 	if _, ok := v1.(msgp.UnmarshalerValidator); ok {
 		vValidate := reflect.New(reflect.TypeOf(template).Elem()).Interface().(msgp.UnmarshalerValidator)
-		err = (DecodeValidate(ee1, vValidate))
+		err = (DecodeCanonicalMsg(ee1, vValidate))
 		if err != nil {
 			return err
 		}

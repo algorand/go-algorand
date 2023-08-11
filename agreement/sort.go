@@ -101,7 +101,7 @@ func (a SortProposalValue) Less(i, j int) bool {
 
 func (a SortProposalValue) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 
-// ProposalLess is necessary for msgp:sort directive
+// ProposalValueLess is necessary for msgp:sort directive
 // which used to generate UnmarshalValidateMsg generators
 func ProposalValueLess(a, b proposalValue) bool {
 	if a.OriginalPeriod != b.OriginalPeriod {

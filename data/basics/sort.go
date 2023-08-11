@@ -31,10 +31,6 @@ func (a SortUint64) Len() int           { return len(a) }
 func (a SortUint64) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortUint64) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
-// Uint64Less is necessary for msgp:sort directive
-// which used to generate UnmarshalValidateMsg generators
-func Uint64Less(a, b uint64) bool { return a < b }
-
 // SortAssetIndex implements sorting by AssetIndex keys for
 // canonical encoding of maps in msgpack format.
 //

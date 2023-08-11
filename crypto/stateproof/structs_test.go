@@ -34,10 +34,10 @@ const (
 	wrongMapOrder
 )
 
-// TestDecodeValidate ensures that DecodeValidate detects non-canonical encodings
+// TestDecodeCanonicalMsg ensures that DecodeValidate detects non-canonical encodings
 // this is tested here because StateProof contains an example of a map and is itself contained within
 // Transaction message which is a relevant message to check canonical encoding for.
-func TestDecodeValidate(t *testing.T) {
+func TestDecodeCanonicalMsg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -51,25 +51,25 @@ func TestDecodeValidate(t *testing.T) {
 	b := protocol.Encode(&z)
 	var zDecode, zDecodeValidate StateProof
 	require.NoError(t, protocol.Decode(b, &zDecode))
-	require.NoError(t, protocol.DecodeValidate(b, &zDecodeValidate))
+	require.NoError(t, protocol.DecodeCanonicalMsg(b, &zDecodeValidate))
 
 	zDecode = StateProof{}
 	zDecodeValidate = StateProof{}
 	bCorrect := z.marshalWrongOrder(nil, canonical)
 	require.NoError(t, protocol.Decode(bCorrect, &zDecode))
-	require.NoError(t, protocol.DecodeValidate(bCorrect, &zDecodeValidate))
+	require.NoError(t, protocol.DecodeCanonicalMsg(bCorrect, &zDecodeValidate))
 
 	zDecode = StateProof{}
 	zDecodeValidate = StateProof{}
 	bWrongMapOrder := z.marshalWrongOrder(nil, wrongMapOrder)
 	require.NoError(t, protocol.Decode(bWrongMapOrder, &zDecode))
-	require.ErrorContains(t, protocol.DecodeValidate(bWrongMapOrder, &zDecodeValidate), "msgp: non-canonical encoding detected")
+	require.ErrorContains(t, protocol.DecodeCanonicalMsg(bWrongMapOrder, &zDecodeValidate), "msgp: non-canonical encoding detected")
 
 	zDecode = StateProof{}
 	zDecodeValidate = StateProof{}
 	bWrongStructOrder := z.marshalWrongOrder(nil, wrongStructOrder)
 	require.NoError(t, protocol.Decode(bWrongStructOrder, &zDecode))
-	require.ErrorContains(t, protocol.DecodeValidate(bWrongStructOrder, &zDecodeValidate), "msgp: non-canonical encoding detected")
+	require.ErrorContains(t, protocol.DecodeCanonicalMsg(bWrongStructOrder, &zDecodeValidate), "msgp: non-canonical encoding detected")
 
 }
 
