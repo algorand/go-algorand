@@ -17,14 +17,11 @@
 package peerstore
 
 import (
-	"context"
 	"fmt"
 
-	ds "github.com/ipfs/go-datastore"
-	pebbledb "github.com/ipfs/go-ds-pebble"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2p "github.com/libp2p/go-libp2p/core/peerstore"
-	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoreds"
+	pstore "github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 )
 
 // PeerStore implements libp2p.Peerstore
@@ -32,18 +29,9 @@ type PeerStore struct {
 	libp2p.Peerstore
 }
 
-func initDBStore(path string) (ds.Batching, error) {
-	store, err := pebbledb.NewDatastore(path, nil)
-	return store, err
-}
-
 // NewPeerStore creates a new peerstore backed by a datastore.
-func NewPeerStore(ctx context.Context, path string, addrInfo []*peer.AddrInfo) (*PeerStore, error) {
-	datastore, err := initDBStore(path)
-	if err != nil {
-		return nil, fmt.Errorf("cannot initialize a peerstore, invalid path for datastore: %w", err)
-	}
-	ps, err := pstoreds.NewPeerstore(ctx, datastore, pstoreds.DefaultOpts())
+func NewPeerStore(addrInfo []*peer.AddrInfo) (*PeerStore, error) {
+	ps, err := pstore.NewPeerstore()
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize a peerstore: %w", err)
 	}
