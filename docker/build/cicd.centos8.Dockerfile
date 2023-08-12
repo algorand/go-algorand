@@ -10,7 +10,6 @@ RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.n
     libffi-devel openssl-devel
 RUN dnf install -y epel-release && \
     dnf update && \
-    dnf -y install sqlite && \
     dnf -y --enablerepo=powertools install libstdc++-static && \
     dnf -y install make
 RUN echo "${BOLD}Downloading and installing binaries...${RESET}" && \

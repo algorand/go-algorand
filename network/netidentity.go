@@ -325,6 +325,8 @@ func (i identityVerificationMessageSigned) Verify(key crypto.PublicKey) bool {
 // sender's claimed identity and the challenge that was assigned to it. If the identity is available,
 // the peer is loaded into the identity tracker. Otherwise, we ask the network to disconnect the peer.
 func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
+	wn := message.Net.(*WebsocketNetwork)
+
 	peer := message.Sender.(*wsPeer)
 	// avoid doing work (crypto and potentially taking a lock) if the peer is already verified
 	if atomic.LoadUint32(&peer.identityVerified) == 1 {
@@ -335,27 +337,27 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 	err := protocol.Decode(message.Data, &msg)
 	if err != nil {
 		networkPeerIdentityError.Inc(nil)
-		peer.net.log.With("err", err).With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification could not be decoded, disconnecting")
+		peer.log.With("err", err).With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification could not be decoded, disconnecting")
 		return OutgoingMessage{Action: Disconnect, reason: disconnectBadIdentityData}
 	}
 	if peer.identityChallenge != msg.Msg.ResponseChallenge {
 		networkPeerIdentityError.Inc(nil)
-		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification challenge does not match, disconnecting")
+		peer.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification challenge does not match, disconnecting")
 		return OutgoingMessage{Action: Disconnect, reason: disconnectBadIdentityData}
 	}
 	if !msg.Verify(peer.identity) {
 		networkPeerIdentityError.Inc(nil)
-		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification is incorrectly signed, disconnecting")
+		peer.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification is incorrectly signed, disconnecting")
 		return OutgoingMessage{Action: Disconnect, reason: disconnectBadIdentityData}
 	}
 	atomic.StoreUint32(&peer.identityVerified, 1)
 	// if the identity could not be claimed by this peer, it means the identity is in use
-	peer.net.peersLock.Lock()
-	ok := peer.net.identityTracker.setIdentity(peer)
-	peer.net.peersLock.Unlock()
+	wn.peersLock.Lock()
+	ok := wn.identityTracker.setIdentity(peer)
+	wn.peersLock.Unlock()
 	if !ok {
 		networkPeerIdentityDisconnect.Inc(nil)
-		peer.net.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity already in use, disconnecting")
+		peer.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity already in use, disconnecting")
 		return OutgoingMessage{Action: Disconnect, reason: disconnectDuplicateConnection}
 	}
 	return OutgoingMessage{}

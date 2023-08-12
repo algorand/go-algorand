@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -744,17 +745,19 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		if cert.Round == fetchedCert.Round &&
 			cert.Proposal.BlockDigest != fetchedCert.Proposal.BlockDigest &&
 			fetchedCert.Authenticate(*block, s.ledger, verifier) == nil {
-			s := "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
-			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "fetchRound called with a cert authenticating block with hash %v.\n"
-			s += "We fetched a valid cert authenticating a different block, %v. This indicates a fork.\n\n"
-			s += "Cert from our agreement service:\n%#v\n\n"
-			s += "Cert from the fetcher:\n%#v\n\n"
-			s += "Block from the fetcher:\n%#v\n\n"
-			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-			s += "!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n"
-			s += "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+			var builder strings.Builder
+			builder.WriteString("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+			builder.WriteString("!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n")
+			builder.WriteString("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+			builder.WriteString("fetchRound called with a cert authenticating block with hash %v.\n")
+			builder.WriteString("We fetched a valid cert authenticating a different block, %v. This indicates a fork.\n\n")
+			builder.WriteString("Cert from our agreement service:\n%#v\n\n")
+			builder.WriteString("Cert from the fetcher:\n%#v\n\n")
+			builder.WriteString("Block from the fetcher:\n%#v\n\n")
+			builder.WriteString("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+			builder.WriteString("!!!!!!!!!! FORK DETECTED !!!!!!!!!!!\n")
+			builder.WriteString("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+			s := builder.String()
 			s = fmt.Sprintf(s, cert.Proposal.BlockDigest, fetchedCert.Proposal.BlockDigest, cert, fetchedCert, block)
 			fmt.Println(s)
 			logging.Base().Error(s)

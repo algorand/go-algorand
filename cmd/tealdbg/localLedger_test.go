@@ -112,7 +112,7 @@ int 2
 	a.NoError(err)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	ep := logic.NewEvalParams([]transactions.SignedTxnWithAD{{SignedTxn: txn}}, &proto, &transactions.SpecialAddresses{})
+	ep := logic.NewAppEvalParams([]transactions.SignedTxnWithAD{{SignedTxn: txn}}, &proto, &transactions.SpecialAddresses{})
 	pass, delta, err := ba.StatefulEval(0, ep, appIdx, program)
 	a.NoError(err)
 	a.True(pass)

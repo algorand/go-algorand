@@ -66,6 +66,9 @@ const MaxTealSourceBytes = 200_000
 // become quite large, so we allow up to 1MB
 const MaxTealDryrunBytes = 1_000_000
 
+// WaitForBlockTimeout is the timeout for the WaitForBlock endpoint.
+var WaitForBlockTimeout = 1 * time.Minute
+
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
 	Node     NodeInterface
@@ -102,6 +105,7 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
+	AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	Simulate(request simulation.Request) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
@@ -626,7 +630,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	}
 
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -651,11 +655,40 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
+// GetBlockTxids gets all top level TxIDs in a block for the given round.
+// (GET /v2/blocks/{round}/txids)
+func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.Block(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	txids := make([]string, 0, len(txns))
+	for ids := range txns {
+		txids = append(txids, txns[ids].ID().String())
+	}
+
+	response := model.BlockTxidsResponse{BlockTxids: txids}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // GetBlockHash gets the block hash for the given round.
 // (GET /v2/blocks/{round}/hash)
 func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -684,7 +717,7 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 	}
 
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -863,7 +896,7 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	select {
 	case <-v2.Shutdown:
 		return internalError(ctx, err, errServiceShuttingDown, v2.Log)
-	case <-time.After(1 * time.Minute):
+	case <-time.After(WaitForBlockTimeout):
 	case <-ledger.Wait(basics.Round(round + 1)):
 	}
 
@@ -927,21 +960,40 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.PostTransactionsResponse{TxId: txid.String()})
 }
 
+// RawTransactionAsync broadcasts a raw transaction to the network without ensuring it is accepted by transaction pool.
+// (POST /v2/transactions/async)
+func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
+	if !v2.Node.Config().EnableExperimentalAPI {
+		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
+	}
+	txgroup, err := decodeTxGroup(ctx.Request().Body, config.MaxTxGroupSize)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	err = v2.Node.AsyncBroadcastSignedTxGroup(txgroup)
+	if err != nil {
+		return serviceUnavailable(ctx, err, err.Error(), v2.Log)
+	}
+	return ctx.NoContent(http.StatusOK)
+}
+
 // PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
 type PreEncodedSimulateTxnResult struct {
-	Txn                    PreEncodedTxInfo                      `codec:"txn-result"`
-	AppBudgetConsumed      *uint64                               `codec:"app-budget-consumed,omitempty"`
-	LogicSigBudgetConsumed *uint64                               `codec:"logic-sig-budget-consumed,omitempty"`
-	TransactionTrace       *model.SimulationTransactionExecTrace `codec:"exec-trace,omitempty"`
+	Txn                      PreEncodedTxInfo                        `codec:"txn-result"`
+	AppBudgetConsumed        *uint64                                 `codec:"app-budget-consumed,omitempty"`
+	LogicSigBudgetConsumed   *uint64                                 `codec:"logic-sig-budget-consumed,omitempty"`
+	TransactionTrace         *model.SimulationTransactionExecTrace   `codec:"exec-trace,omitempty"`
+	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
 type PreEncodedSimulateTxnGroupResult struct {
-	AppBudgetAdded    *uint64                       `codec:"app-budget-added,omitempty"`
-	AppBudgetConsumed *uint64                       `codec:"app-budget-consumed,omitempty"`
-	FailedAt          *[]uint64                     `codec:"failed-at,omitempty"`
-	FailureMessage    *string                       `codec:"failure-message,omitempty"`
-	Txns              []PreEncodedSimulateTxnResult `codec:"txn-results"`
+	AppBudgetAdded           *uint64                                 `codec:"app-budget-added,omitempty"`
+	AppBudgetConsumed        *uint64                                 `codec:"app-budget-consumed,omitempty"`
+	FailedAt                 *[]uint64                               `codec:"failed-at,omitempty"`
+	FailureMessage           *string                                 `codec:"failure-message,omitempty"`
+	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
+	Txns                     []PreEncodedSimulateTxnResult           `codec:"txn-results"`
 }
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
@@ -960,11 +1012,12 @@ type PreEncodedSimulateRequestTransactionGroup struct {
 
 // PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
-	TxnGroups            []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
-	AllowEmptySignatures bool                                        `codec:"allow-empty-signatures,omitempty"`
-	AllowMoreLogging     bool                                        `codec:"allow-more-logging,omitempty"`
-	ExtraOpcodeBudget    uint64                                      `codec:"extra-opcode-budget,omitempty"`
-	ExecTraceConfig      simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
+	TxnGroups             []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	AllowEmptySignatures  bool                                        `codec:"allow-empty-signatures,omitempty"`
+	AllowMoreLogging      bool                                        `codec:"allow-more-logging,omitempty"`
+	AllowUnnamedResources bool                                        `codec:"allow-unnamed-resources,omitempty"`
+	ExtraOpcodeBudget     uint64                                      `codec:"extra-opcode-budget,omitempty"`
+	ExecTraceConfig       simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.

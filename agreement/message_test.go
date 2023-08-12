@@ -111,6 +111,7 @@ func TestMessageBackwardCompatibility(t *testing.T) {
 		Tag: protocol.ProposalPayloadTag,
 	}
 
+	require.Containsf(t, string(encoded), "MessageHandle", "encoded message does not contain MessageHandle field")
 	var m1, m2, m3, m4 message
 	// Both msgp and reflection should decode the message containing old MessageHandle successfully
 	err = protocol.Decode(encoded, &m1)
@@ -123,6 +124,7 @@ func TestMessageBackwardCompatibility(t *testing.T) {
 	e1 := protocol.Encode(&m1)
 	e2 := protocol.EncodeReflect(&m2)
 	require.Equal(t, e1, e2)
+	require.NotContainsf(t, string(e1), "MessageHandle", "encoded message still contains MessageHandle field")
 	err = protocol.DecodeReflect(e1, &m3)
 	require.NoError(t, err)
 	err = protocol.Decode(e2, &m4)

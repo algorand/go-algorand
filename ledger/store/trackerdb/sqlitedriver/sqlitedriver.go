@@ -19,6 +19,7 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/mattn/go-sqlite3"
 )
 
 type trackerSQLStore struct {
@@ -66,60 +68,60 @@ func (s *trackerSQLStore) Batch(fn trackerdb.BatchFn) (err error) {
 }
 
 func (s *trackerSQLStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
-	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
+	return wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlBatchScope{tx, false, &sqlWriter{tx}})
-	})
+	}))
 }
 
 func (s *trackerSQLStore) BeginBatch(ctx context.Context) (trackerdb.Batch, error) {
 	handle, err := s.pair.Wdb.Handle.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, wrapIOError(err)
 	}
 	return &sqlBatchScope{handle, false, &sqlWriter{handle}}, nil
 }
 
 func (s *trackerSQLStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
-	return s.SnapshotContext(context.Background(), fn)
+	return wrapIOError(s.SnapshotContext(context.Background(), fn))
 }
 
 func (s *trackerSQLStore) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
-	return s.pair.Rdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		return fn(ctx, sqlSnapshotScope{tx, &sqlReader{tx}})
-	})
+	return wrapIOError(s.pair.Rdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
+		return fn(ctx, &sqlSnapshotScope{tx, &sqlReader{tx}})
+	}))
 }
 
 func (s *trackerSQLStore) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {
 	handle, err := s.pair.Rdb.Handle.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, wrapIOError(err)
 	}
 	return &sqlSnapshotScope{handle, &sqlReader{handle}}, nil
 }
 
 func (s *trackerSQLStore) Transaction(fn trackerdb.TransactionFn) (err error) {
-	return s.TransactionContext(context.Background(), fn)
+	return wrapIOError(s.TransactionContext(context.Background(), fn))
 }
 
 func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
-	return s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
+	return wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
-	})
+	}))
 }
 
 func (s *trackerSQLStore) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
 	handle, err := s.pair.Wdb.Handle.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, wrapIOError(err)
 	}
 	return &sqlTransactionScope{handle, false, &sqlReader{handle}, &sqlWriter{handle}, &sqlCatchpoint{handle}}, nil
 }
 
 func (s trackerSQLStore) RunMigrations(ctx context.Context, params trackerdb.Params, log logging.Logger, targetVersion int32) (mgr trackerdb.InitParams, err error) {
-	err = s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
+	err = wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		mgr, err = RunMigrations(ctx, tx, params, log, targetVersion)
 		return err
-	})
+	}))
 	return
 }
 
@@ -183,6 +185,21 @@ func (r *sqlReader) MakeCatchpointPendingHashesIterator(hashCount int) trackerdb
 	return MakeCatchpointPendingHashesIterator(hashCount, r.q)
 }
 
+// MakeCatchpointReader implements trackerdb.Reader
+func (r *sqlReader) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
+	return makeCatchpointReader(r.q), nil
+}
+
+// MakeEncodedAccoutsBatchIter implements trackerdb.Reader
+func (r *sqlReader) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
+	return MakeEncodedAccoutsBatchIter(r.q)
+}
+
+// MakeKVsIter implements trackerdb.Reader
+func (r *sqlReader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
+	return MakeKVsIter(ctx, r.q)
+}
+
 type sqlWriter struct {
 	e db.Executable
 }
@@ -236,11 +253,6 @@ type sqlCatchpoint struct {
 	e db.Executable
 }
 
-// MakeCatchpointReader implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
-	return NewCatchpointSQLReaderWriter(c.e), nil
-}
-
 // MakeCatchpointReaderWriter implements trackerdb.Catchpoint
 func (c *sqlCatchpoint) MakeCatchpointReaderWriter() (trackerdb.CatchpointReaderWriter, error) {
 	return NewCatchpointSQLReaderWriter(c.e), nil
@@ -249,16 +261,6 @@ func (c *sqlCatchpoint) MakeCatchpointReaderWriter() (trackerdb.CatchpointReader
 // MakeCatchpointWriter implements trackerdb.Catchpoint
 func (c *sqlCatchpoint) MakeCatchpointWriter() (trackerdb.CatchpointWriter, error) {
 	return NewCatchpointSQLReaderWriter(c.e), nil
-}
-
-// MakeEncodedAccoutsBatchIter implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
-	return MakeEncodedAccoutsBatchIter(c.e)
-}
-
-// MakeKVsIter implements trackerdb.Catchpoint
-func (c *sqlCatchpoint) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
-	return MakeKVsIter(ctx, c.e)
 }
 
 // MakeMerkleCommitter implements trackerdb.Catchpoint
@@ -283,7 +285,7 @@ func (bs *sqlBatchScope) ResetTransactionWarnDeadline(ctx context.Context, deadl
 
 func (bs *sqlBatchScope) Close() error {
 	if !bs.committed {
-		return bs.tx.Rollback()
+		return wrapIOError(bs.tx.Rollback())
 	}
 	return nil
 }
@@ -291,7 +293,7 @@ func (bs *sqlBatchScope) Close() error {
 func (bs *sqlBatchScope) Commit() error {
 	err := bs.tx.Commit()
 	if err != nil {
-		return err
+		return wrapIOError(err)
 	}
 	bs.committed = true
 	return nil
@@ -302,8 +304,12 @@ type sqlSnapshotScope struct {
 	trackerdb.Reader
 }
 
-func (ss sqlSnapshotScope) Close() error {
-	return ss.tx.Rollback()
+func (ss *sqlSnapshotScope) ResetTransactionWarnDeadline(ctx context.Context, deadline time.Time) (prevDeadline time.Time, err error) {
+	return db.ResetTransactionWarnDeadline(ctx, ss.tx, deadline)
+}
+
+func (ss *sqlSnapshotScope) Close() error {
+	return wrapIOError(ss.tx.Rollback())
 }
 
 type sqlTransactionScope struct {
@@ -324,7 +330,7 @@ func (txs *sqlTransactionScope) ResetTransactionWarnDeadline(ctx context.Context
 
 func (txs *sqlTransactionScope) Close() error {
 	if !txs.committed {
-		return txs.tx.Rollback()
+		return wrapIOError(txs.tx.Rollback())
 	}
 	return nil
 }
@@ -332,8 +338,28 @@ func (txs *sqlTransactionScope) Close() error {
 func (txs *sqlTransactionScope) Commit() error {
 	err := txs.tx.Commit()
 	if err != nil {
-		return err
+		return wrapIOError(err)
 	}
 	txs.committed = true
 	return nil
+}
+
+// wrapIOError allows for SQL IO Errors to be represented as trackerdb.ErrIoErr
+// in places which may enconter them.
+func wrapIOError(err error) error {
+	if err == nil {
+		return nil
+	}
+	// if it's already a trackerdb error, don't wrap it again
+	var alreadyWrapped *trackerdb.ErrIoErr
+	if errors.As(err, &alreadyWrapped) {
+		return err
+	}
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		if sqliteErr.Code == sqlite3.ErrIoErr {
+			return &trackerdb.ErrIoErr{InnerError: err}
+		}
+	}
+	return err
 }

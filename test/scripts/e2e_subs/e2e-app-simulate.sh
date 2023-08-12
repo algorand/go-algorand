@@ -384,3 +384,104 @@ if [[ $(echo "$RES" | jq '."txn-groups"[0]."app-budget-consumed"') -ne 804 ]]; t
     date '+app-simulate-test FAIL the app call to generated large TEAL should be consuming 804 budget %Y%m%d_%H%M%S'
     false
 fi
+
+###############################################################
+# WE WANT TO TEST STACK AND SCRATCH TRACE IN SIMULATION WORKS #
+###############################################################
+
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${DIR}/tealprogs/stack-scratch.teal" --clear-prog "${TEMPDIR}/simple-v8.teal" --extra-pages 1 2>&1 || true)
+
+EXPSUCCESS='Created app with app index'
+if [[ $RES != *"${EXPSUCCESS}"* ]]; then
+    date '+app-simulate-test FAIL the app creation for generated large TEAL should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
+
+${gcmd} app call --app-id $APPID --app-arg "int:10" --from $ACCOUNT 2>&1 -o "${TEMPDIR}/stack-and-scratch.tx"
+${gcmd} clerk sign -i "${TEMPDIR}/stack-and-scratch.tx" -o "${TEMPDIR}/stack-and-scratch.stx"
+RES=$(${gcmd} clerk simulate --full-trace -t "${TEMPDIR}/stack-and-scratch.stx")
+
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the app call for stack and scratch trace should pass %Y%m%d_%H%M%S'
+    false
+fi
+
+SCRATCH_STORE_UNIT=$(echo "$RES" | jq '."txn-groups"[0]."txn-results"[0]."exec-trace"."approval-program-trace"[-7]')
+
+if [[ $(echo "$SCRATCH_STORE_UNIT" | jq 'has("scratch-changes")') != $CONST_TRUE ]]; then
+    data '+app-simulate-test FAIL the app call for stack and scratch trace should return scratch changes at this unit %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$SCRATCH_STORE_UNIT" | jq '."scratch-changes" | length') != 1 ]]; then
+    data '+app-simulate-test FAIL the app call for stack and scratch trace should return scratch changes with length 1 at this unit %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$SCRATCH_STORE_UNIT" | jq 'has("stack-pop-count")') != $CONST_TRUE ]]; then
+    data '+app-simulate-test FAIL the app call for stack and scratch trace should return stack pop count at this unit %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$SCRATCH_STORE_UNIT" | jq '."stack-pop-count"') != 1 ]]; then
+    data '+app-simulate-test FAIL the app call for stack and scratch trace should return stack pop count being 1 at this unit %Y%m%d_%H%M%S'
+    false
+fi
+
+# WE DON'T TEST IN DETAILS ABOUT SCRATCH AND TRACE IN E2E SCRIPT TESTS, SEE RESTCLIENT TEST FOR DETAILS
+
+##############################################
+# TEST ALLOW UNNAMED RESOURCES IN SIMULATION #
+##############################################
+
+printf '#pragma version 9\nint 1' > "${TEMPDIR}/simple-v9.teal"
+
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${DIR}/tealprogs/unnamed-resource-access.teal" --clear-prog "${TEMPDIR}/simple-v9.teal" 2>&1 || true)
+EXPSUCCESS='Created app with app index'
+if [[ $RES != *"${EXPSUCCESS}"* ]]; then
+    date '+app-simulate-test FAIL the app creation for unnamed resource access should succeed %Y%m%d_%H%M%S'
+    false
+fi
+
+OTHERAPPID=$APPID
+APPID=$(echo "$RES" | grep Created | awk '{ print $6 }')
+APPADDR=$(${gcmd} app info --app-id $APPID | grep "Application account" | awk '{ print $3 }')
+
+${gcmd} clerk send --from $ACCOUNT --to $APPADDR --amount 200000
+
+OTHERADDR=$(${gcmd} app info --app-id $OTHERAPPID | grep "Application account" | awk '{ print $3 }')
+${gcmd} clerk send --from $ACCOUNT --to $OTHERADDR --amount 100000
+
+ASSETID=$(${gcmd} asset create --creator ${ACCOUNT} --total 100 | grep Created | awk '{ print $6 }')
+
+# Simulation with default settings should fail
+${gcmd} app call --app-id $APPID --from $ACCOUNT --app-arg "addr:$OTHERADDR" --app-arg "int:$ASSETID" --app-arg "int:$OTHERAPPID" 2>&1 -o "${TEMPDIR}/unnamed-resource-access.tx"
+${gcmd} clerk sign -i "${TEMPDIR}/unnamed-resource-access.tx" -o "${TEMPDIR}/unnamed-resource-access.stx"
+RES=$(${gcmd} clerk simulate -t "${TEMPDIR}/unnamed-resource-access.stx")
+
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the app call without allow unnamed resources should fail %Y%m%d_%H%M%S'
+    false
+fi
+
+EXPECTED_FAILURE="logic eval error: invalid Account reference $OTHERADDR"
+
+if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_FAILURE}"* ]]; then
+    date '+app-simulate-test FAIL the app call without allow unnamed resources should fail with the expected error %Y%m%d_%H%M%S'
+    false
+fi
+
+# Simulation with --allow-unnamed-resources should succeed
+RES=$(${gcmd} clerk simulate --allow-unnamed-resources -t "${TEMPDIR}/unnamed-resource-access.stx")
+
+if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONST_FALSE ]]; then
+    date '+app-simulate-test FAIL the app call with allow unnamed resources should pass %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ $(echo "$RES" | jq '."eval-overrides"."allow-unnamed-resources"') != $CONST_TRUE ]]; then
+    date '+app-simulate-test FAIL the app call with allow unnamed resources have the correct eval-overrides %Y%m%d_%H%M%S'
+    false
+fi

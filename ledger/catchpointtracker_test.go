@@ -328,15 +328,100 @@ func TestRecordCatchpointFile(t *testing.T) {
 }
 
 func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.Round, ml *mockLedgerForTracker, round basics.Round) {
+	spVerificationEncodedData, stateProofVerificationHash, err := ct.getSPVerificationData()
+	require.NoError(t, err)
+
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
-	_, _, _, biggestChunkLen, stateProofVerificationHash, err := ct.generateCatchpointData(
-		context.Background(), accountsRound, &catchpointGenerationStats)
+	_, _, _, biggestChunkLen, err := ct.generateCatchpointData(
+		context.Background(), accountsRound, &catchpointGenerationStats, spVerificationEncodedData)
 	require.NoError(t, err)
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
 
 	err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
 	require.NoError(t, err)
+}
+
+// TestCatchpointCommitErrorHandling exists to confirm that when an error occurs during catchpoint generation,
+// the catchpoint tracker will clear the appropriate state - specifically, the balancesTrie will be cleared,
+// and the balancesTrie will remain functional if loaded from disk, or if lazily loaded during commitRound
+func TestCatchpointCommitErrorHandling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	temporaryDirectory := t.TempDir()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := &catchpointTracker{}
+	conf := config.GetDefaultLocal()
+
+	conf.Archival = true
+	ct.initialize(conf, ".")
+	defer ct.close()
+	ct.dbDirectory = temporaryDirectory
+
+	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
+	require.NoError(t, err)
+
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+
+	txn, err := ml.dbs.BeginTransaction(context.Background())
+	require.NoError(t, err)
+	dcc := deferredCommitContext{
+		compactKvDeltas: map[string]modifiedKvValue{"key": {data: []byte("value")}},
+	}
+
+	// before commitRound is called, record the trie RootHash
+	require.NotNil(t, ct.balancesTrie)
+	root1, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+
+	ct.commitRound(context.Background(), txn, &dcc)
+
+	txn.Commit()
+
+	// after commitRound is called, confirm the RootHash has changed
+	root2, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.NotEqual(t, root1, root2)
+
+	// demonstrate that handleUnordered does not restore the trie
+	ct.handleUnorderedCommit(&dcc)
+	root2a, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root2a)
+
+	// demonstrate that handlePrepareCommitError does not restore the trie
+	ct.handlePrepareCommitError(&dcc)
+	root2b, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root2b)
+
+	// now have the ct handle a commit error
+	ct.handleCommitError(&dcc)
+	// after error handling, the trie should be nil
+	require.Nil(t, ct.balancesTrie)
+
+	// after reloading from disk, the trie should be equal to root1
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+	root3, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root1, root3)
+
+	// also demonstrate that lazy initialization allows a nil trie to go back to root2 immediately after error if the same delta is applied
+	txn, err = ml.dbs.BeginTransaction(context.Background())
+	require.NoError(t, err)
+	ct.handleCommitError(&dcc) // clear trie
+	require.Nil(t, ct.balancesTrie)
+	ct.commitRound(context.Background(), txn, &dcc)
+	txn.Commit()
+	root4, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root4)
 }
 
 // TestCatchpointFileWithLargeSpVerification makes sure that CatchpointFirstStageInfo.BiggestChunkLen is calculated based on state proof verification contexts
@@ -460,8 +545,10 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	require.NoError(b, err)
 
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
+	encodedSPData, _, err := ct.getSPVerificationData()
+	require.NoError(b, err)
 	b.ResetTimer()
-	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats)
+	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats, encodedSPData)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
@@ -469,7 +556,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 func TestCatchpointReproducibleLabels(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	if runtime.GOARCH == "arm" {
 		t.Skip("This test is too slow on ARM and causes CI builds to time out")
 	}
 
@@ -592,7 +679,12 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 		ml2 := ledgerHistory[rnd]
 		require.NotNil(t, ml2)
 
-		ct2 := newCatchpointTracker(t, ml2, cfg, ".")
+		cfg2 := cfg
+		// every other iteration modify CatchpointTracking to ensure labels generation does not depends on catchpoint file creation
+		if rnd%2 == 0 {
+			cfg2.CatchpointTracking = int64(crypto.RandUint63())%2 + 1 //values 1 or 2
+		}
+		ct2 := newCatchpointTracker(t, ml2, cfg2, ".")
 		defer ct2.close()
 		for i := rnd + 1; i <= lastRound; i++ {
 			blk := bookkeeping.Block{
@@ -692,8 +784,12 @@ func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferred
 	}
 }
 
-// handleUnorderedCommitOrError is not used by the blockingTracker
-func (bt *blockingTracker) handleUnorderedCommitOrError(*deferredCommitContext) {
+// control functions are not used by the blockingTracker
+func (bt *blockingTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (bt *blockingTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (bt *blockingTracker) handleCommitError(dcc *deferredCommitContext) {
 }
 
 // close is not used by the blockingTracker

@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -127,10 +126,6 @@ func (cs *roundCowState) GetLocal(addr basics.Address, appIdx basics.AppIndex, k
 
 func (cs *roundCowState) SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error {
 	return cs.setKey(addr, appIdx, false, key, value, accountIdx)
-}
-
-func (cs *roundCowState) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return cs.blockHdrCached(round)
 }
 
 func (cs *roundCowState) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {

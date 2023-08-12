@@ -14,8 +14,6 @@ set -e
 POSTGRES_CONTAINER=generator-test-container
 POSTGRES_PORT=15432
 POSTGRES_DATABASE=generator_db
-CONFIG=${1:-"$(dirname $0)/test_config.yml"}
-echo "Using config file: $CONFIG"
 
 function start_postgres() {
   docker rm -f $POSTGRES_CONTAINER > /dev/null 2>&1 || true
