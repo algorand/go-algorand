@@ -342,6 +342,88 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 	require.NoError(t, err)
 }
 
+// TestCatchpointCommitErrorHandling exists to confirm that when an error occurs during catchpoint generation,
+// the catchpoint tracker will clear the appropriate state - specifically, the balancesTrie will be cleared,
+// and the balancesTrie will remain functional if loaded from disk, or if lazily loaded during commitRound
+func TestCatchpointCommitErrorHandling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	temporaryDirectory := t.TempDir()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := &catchpointTracker{}
+	conf := config.GetDefaultLocal()
+
+	conf.Archival = true
+	ct.initialize(conf, ".")
+	defer ct.close()
+	ct.dbDirectory = temporaryDirectory
+
+	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
+	require.NoError(t, err)
+
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+
+	txn, err := ml.dbs.BeginTransaction(context.Background())
+	require.NoError(t, err)
+	dcc := deferredCommitContext{
+		compactKvDeltas: map[string]modifiedKvValue{"key": {data: []byte("value")}},
+	}
+
+	// before commitRound is called, record the trie RootHash
+	require.NotNil(t, ct.balancesTrie)
+	root1, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+
+	ct.commitRound(context.Background(), txn, &dcc)
+
+	txn.Commit()
+
+	// after commitRound is called, confirm the RootHash has changed
+	root2, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.NotEqual(t, root1, root2)
+
+	// demonstrate that handleUnordered does not restore the trie
+	ct.handleUnorderedCommit(&dcc)
+	root2a, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root2a)
+
+	// demonstrate that handlePrepareCommitError does not restore the trie
+	ct.handlePrepareCommitError(&dcc)
+	root2b, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root2b)
+
+	// now have the ct handle a commit error
+	ct.handleCommitError(&dcc)
+	// after error handling, the trie should be nil
+	require.Nil(t, ct.balancesTrie)
+
+	// after reloading from disk, the trie should be equal to root1
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+	root3, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root1, root3)
+
+	// also demonstrate that lazy initialization allows a nil trie to go back to root2 immediately after error if the same delta is applied
+	txn, err = ml.dbs.BeginTransaction(context.Background())
+	require.NoError(t, err)
+	ct.handleCommitError(&dcc) // clear trie
+	require.Nil(t, ct.balancesTrie)
+	ct.commitRound(context.Background(), txn, &dcc)
+	txn.Commit()
+	root4, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root4)
+}
+
 // TestCatchpointFileWithLargeSpVerification makes sure that CatchpointFirstStageInfo.BiggestChunkLen is calculated based on state proof verification contexts
 // as well as other chunks in the catchpoint files.
 func TestCatchpointFileWithLargeSpVerification(t *testing.T) {
@@ -702,8 +784,12 @@ func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferred
 	}
 }
 
-// handleUnorderedCommitOrError is not used by the blockingTracker
-func (bt *blockingTracker) handleUnorderedCommitOrError(*deferredCommitContext) {
+// control functions are not used by the blockingTracker
+func (bt *blockingTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (bt *blockingTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (bt *blockingTracker) handleCommitError(dcc *deferredCommitContext) {
 }
 
 // close is not used by the blockingTracker
