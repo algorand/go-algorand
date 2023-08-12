@@ -372,6 +372,14 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
+func convertTealValue(tv basics.TealValue) model.AvmValue {
+	return model.AvmValue{
+		Type:  uint64(tv.Type),
+		Uint:  omitEmpty(tv.Uint),
+		Bytes: byteOrNil([]byte(tv.Bytes)),
+	}
+}
+
 func convertScratchChanges(scratchChanges []simulation.ScratchChange) *[]model.ScratchChange {
 	if len(scratchChanges) == 0 {
 		return nil
@@ -379,29 +387,35 @@ func convertScratchChanges(scratchChanges []simulation.ScratchChange) *[]model.S
 	modelSC := make([]model.ScratchChange, len(scratchChanges))
 	for i, scratchChange := range scratchChanges {
 		modelSC[i] = model.ScratchChange{
-			Slot: scratchChange.Slot,
-			NewValue: model.AvmValue{
-				Type:  uint64(scratchChange.NewValue.Type),
-				Uint:  omitEmpty(scratchChange.NewValue.Uint),
-				Bytes: byteOrNil([]byte(scratchChange.NewValue.Bytes)),
-			},
+			Slot:     scratchChange.Slot,
+			NewValue: convertTealValue(scratchChange.NewValue),
 		}
 	}
 	return &modelSC
+}
+
+func convertAppStateChanges(stateChanges []simulation.StateOperation) *[]model.AppStateOperation {
+	if len(stateChanges) == 0 {
+		return nil
+	}
+	modelStateChanges := make([]model.AppStateOperation, len(stateChanges))
+	for i, stateChange := range stateChanges {
+		modelStateChanges[i] = model.AppStateOperation{
+			Key:           []byte(stateChange.Key),
+			NewValue:      omitEmpty(convertTealValue(stateChange.NewValue)),
+			AppId:         uint64(stateChange.AppIndex),
+			OperationType: uint64(stateChange.StateOperationT),
+			AppStateType:  uint64(stateChange.AppStateEnum),
+		}
+	}
+	return &modelStateChanges
 }
 
 func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.AvmValue {
 	if len(tvs) == 0 {
 		return nil
 	}
-	modelTvs := make([]model.AvmValue, len(tvs))
-	for i := range tvs {
-		modelTvs[i] = model.AvmValue{
-			Type:  uint64(tvs[i].Type),
-			Uint:  omitEmpty(tvs[i].Uint),
-			Bytes: byteOrNil([]byte(tvs[i].Bytes)),
-		}
-	}
+	modelTvs := convertSlice(tvs, convertTealValue)
 	return &modelTvs
 }
 
@@ -425,6 +439,7 @@ func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.Sim
 			StackAdditions: convertTealValueSliceToModel(programTrace[i].StackAdded),
 			StackPopCount:  omitEmpty(programTrace[i].StackPopCount),
 			ScratchChanges: convertScratchChanges(programTrace[i].ScratchSlotChanges),
+			StateChanges:   convertAppStateChanges(programTrace[i].StateChanges),
 		}
 	}
 	return &modelProgramTrace

@@ -4096,6 +4096,37 @@
         }
       }
     },
+    "AppStateOperation": {
+      "description": "An operation against an app global/local/box key-value pair.",
+      "required": [
+        "operation-type",
+        "app-state-type",
+        "app-id",
+        "key"
+      ],
+      "properties": {
+        "operation-type": {
+          "description": "Operation type. Value `1` is **create**, `2` is **write**, `3` is **read**, `4` is **delete**.",
+          "type": "integer"
+        },
+        "app-state-type": {
+          "description": "Type of app state. Value `1` is **global state**, `2` is **local state**, `3` is **boxes**.",
+          "type": "integer"
+        },
+        "app-id": {
+          "description": "Application index.",
+          "type": "integer"
+        },
+        "key": {
+          "description": "The key of the global/local/box state get written to.",
+          "type": "string",
+          "format": "byte"
+        },
+        "new-value": {
+          "$ref": "#/definitions/AvmValue"
+        }
+      }
+    },
     "SimulationOpcodeTraceUnit": {
       "description": "The set of trace information and effect from evaluating a single opcode.",
       "type": "object",
@@ -4112,6 +4143,13 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/ScratchChange"
+          }
+        },
+        "state-changes": {
+          "description": "The operations against app states.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AppStateOperation"
           }
         },
         "spawned-inners": {

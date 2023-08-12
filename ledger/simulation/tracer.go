@@ -306,6 +306,9 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		if tracer.result.ReturnScratchChange() {
 			tracer.recordChangedScratchSlots(cx)
 		}
+		if tracer.result.ReturnStateChange() {
+			latestOpcodeTraceUnit.appendStateOperations(cx)
+		}
 	}
 }
 
@@ -318,6 +321,20 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 			Bytes: tealValue.Bytes,
 		})
 	}
+}
+
+func (o *OpcodeTraceUnit) appendStateOperations(cx *logic.EvalContext) {
+	if cx.GetOpSpec().StateExplain == nil {
+		return
+	}
+	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().StateExplain(cx)
+	o.StateChanges = append(o.StateChanges, StateOperation{
+		StateOperationT: stateOp,
+		AppStateEnum:    appState,
+		AppIndex:        appID,
+		Key:             stateKey,
+		account:         acctAddr,
+	})
 }
 
 func (tracer *evalTracer) recordChangedScratchSlots(cx *logic.EvalContext) {
@@ -356,11 +373,18 @@ func (tracer *evalTracer) recordUpdatedScratchVars(cx *logic.EvalContext) []Scra
 	return changes
 }
 
+func (o *OpcodeTraceUnit) updateNewStateValues(cx *logic.EvalContext) {
+	for i, sc := range o.StateChanges {
+		o.StateChanges[i].NewValue = logic.AppNewStateQuerying(
+			cx, sc.AppStateEnum, sc.StateOperationT, sc.AppIndex, sc.account, sc.Key)
+	}
+}
+
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	groupIndex := cx.GroupIndex()
 
 	// NOTE: only when we have no evalError on current opcode,
-	// we can proceed for recording stack chaange
+	// we can proceed for recording stack change
 	if evalError == nil && tracer.result.ReturnTrace() {
 		var txnTrace *TransactionTrace
 		if cx.RunMode() == logic.ModeSig {
@@ -375,6 +399,9 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 		}
 		if tracer.result.ReturnScratchChange() {
 			latestOpcodeTraceUnit.ScratchSlotChanges = tracer.recordUpdatedScratchVars(cx)
+		}
+		if tracer.result.ReturnStateChange() {
+			latestOpcodeTraceUnit.updateNewStateValues(cx)
 		}
 	}
 

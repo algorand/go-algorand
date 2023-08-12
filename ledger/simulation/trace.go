@@ -221,6 +221,18 @@ type ScratchChange struct {
 	NewValue basics.TealValue
 }
 
+// StateOperation represents an operation into an app local/global/box state
+type StateOperation struct {
+	logic.StateOperationT
+	logic.AppStateEnum
+	basics.AppIndex
+	Key      string
+	NewValue basics.TealValue
+
+	// This field is only used for local state new value querying.
+	account []byte
+}
+
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
@@ -239,6 +251,9 @@ type OpcodeTraceUnit struct {
 
 	// ScratchSlotChanges stands for write operations into scratch slots
 	ScratchSlotChanges []ScratchChange
+
+	// StateChanges stands for the creation/reading/writing/deletion operations to app's state
+	StateChanges []StateOperation
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
