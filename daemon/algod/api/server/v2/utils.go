@@ -26,11 +26,14 @@ import (
 
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -65,6 +68,29 @@ func notFound(ctx echo.Context, internal error, external string, log logging.Log
 
 func notImplemented(ctx echo.Context, internal error, external string, log logging.Logger) error {
 	return returnError(ctx, http.StatusNotImplemented, internal, external, log)
+}
+
+func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
+	output := make([]Y, len(input))
+	for i := range input {
+		output[i] = fn(input[i])
+	}
+	return output
+}
+
+func uint64Slice[T ~uint64](s []T) []uint64 {
+	return convertSlice(s, func(t T) uint64 { return uint64(t) })
+}
+
+func stringSlice[T fmt.Stringer](s []T) []string {
+	return convertSlice(s, func(t T) string { return t.String() })
+}
+
+func sliceOrNil[T any](s []T) *[]T {
+	if len(s) == 0 {
+		return nil
+	}
+	return &s
 }
 
 func addrOrNil(addr basics.Address) *string {
@@ -428,10 +454,41 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
-		Txn:                    ConvertInnerTxn(&txnResult.Txn),
-		AppBudgetConsumed:      omitEmpty(txnResult.AppBudgetConsumed),
-		LogicSigBudgetConsumed: omitEmpty(txnResult.LogicSigBudgetConsumed),
-		TransactionTrace:       convertTxnTrace(txnResult.Trace),
+		Txn:                      ConvertInnerTxn(&txnResult.Txn),
+		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
+		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
+		TransactionTrace:         convertTxnTrace(txnResult.Trace),
+		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
+	}
+}
+
+func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *model.SimulateUnnamedResourcesAccessed {
+	if resources == nil {
+		return nil
+	}
+	return &model.SimulateUnnamedResourcesAccessed{
+		Accounts: sliceOrNil(stringSlice(maps.Keys(resources.Accounts))),
+		Assets:   sliceOrNil(uint64Slice(maps.Keys(resources.Assets))),
+		Apps:     sliceOrNil(uint64Slice(maps.Keys(resources.Apps))),
+		Boxes: sliceOrNil(convertSlice(maps.Keys(resources.Boxes), func(box logic.BoxRef) model.BoxReference {
+			return model.BoxReference{
+				App:  uint64(box.App),
+				Name: []byte(box.Name),
+			}
+		})),
+		ExtraBoxRefs: omitEmpty(uint64(resources.NumEmptyBoxRefs)),
+		AssetHoldings: sliceOrNil(convertSlice(maps.Keys(resources.AssetHoldings), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
+			return model.AssetHoldingReference{
+				Account: holding.Address.String(),
+				Asset:   uint64(holding.Asset),
+			}
+		})),
+		AppLocals: sliceOrNil(convertSlice(maps.Keys(resources.AppLocals), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
+			return model.ApplicationLocalReference{
+				Account: local.Address.String(),
+				App:     uint64(local.App),
+			}
+		})),
 	}
 }
 
@@ -442,10 +499,11 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	}
 
 	encoded := PreEncodedSimulateTxnGroupResult{
-		Txns:              txnResults,
-		FailureMessage:    omitEmpty(txnGroupResult.FailureMessage),
-		AppBudgetAdded:    omitEmpty(txnGroupResult.AppBudgetAdded),
-		AppBudgetConsumed: omitEmpty(txnGroupResult.AppBudgetConsumed),
+		Txns:                     txnResults,
+		FailureMessage:           omitEmpty(txnGroupResult.FailureMessage),
+		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
+		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
+		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
@@ -460,10 +518,11 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
-			AllowEmptySignatures: omitEmpty(result.EvalOverrides.AllowEmptySignatures),
-			MaxLogSize:           result.EvalOverrides.MaxLogSize,
-			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
-			ExtraOpcodeBudget:    omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
+			AllowEmptySignatures:  omitEmpty(result.EvalOverrides.AllowEmptySignatures),
+			AllowUnnamedResources: omitEmpty(result.EvalOverrides.AllowUnnamedResources),
+			MaxLogSize:            result.EvalOverrides.MaxLogSize,
+			MaxLogCalls:           result.EvalOverrides.MaxLogCalls,
+			ExtraOpcodeBudget:     omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
 		}
 	}
 
@@ -488,11 +547,12 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		txnGroups[i] = txnGroup.Txns
 	}
 	return simulation.Request{
-		TxnGroups:            txnGroups,
-		AllowEmptySignatures: request.AllowEmptySignatures,
-		AllowMoreLogging:     request.AllowMoreLogging,
-		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
-		TraceConfig:          request.ExecTraceConfig,
+		TxnGroups:             txnGroups,
+		AllowEmptySignatures:  request.AllowEmptySignatures,
+		AllowMoreLogging:      request.AllowMoreLogging,
+		AllowUnnamedResources: request.AllowUnnamedResources,
+		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
+		TraceConfig:           request.ExecTraceConfig,
 	}
 }
 
