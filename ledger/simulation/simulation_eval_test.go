@@ -2898,6 +2898,446 @@ int 1`,
 	})
 }
 
+func TestBoxChangeExecTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+		boxContent := []byte("boxWriteContent")
+
+		boxStateChangeTraceTemplate := func(opName string, units ...simulation.OpcodeTraceUnit) []simulation.OpcodeTraceUnit {
+			begin := []simulation.OpcodeTraceUnit{
+				{
+					PC: 1,
+					StackAdded: []basics.TealValue{
+						{
+							Type: basics.TealUintType,
+							Uint: uint64(futureAppID),
+						},
+					},
+				},
+				{
+					PC:            3,
+					StackPopCount: 1,
+				},
+				{
+					PC: 6,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "create",
+						},
+					},
+				},
+				{
+					PC: 14,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "delete",
+						},
+					},
+				},
+				{
+					PC: 22,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "read",
+						},
+					},
+				},
+				{
+					PC: 28,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "write",
+						},
+					},
+				},
+				{
+					PC: 35,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: opName,
+						},
+					},
+				},
+				{
+					PC:            38,
+					StackPopCount: 5,
+				},
+			}
+			end := []simulation.OpcodeTraceUnit{
+				{
+					PC: 87,
+					StackAdded: []basics.TealValue{
+						{
+							Type: basics.TealUintType,
+							Uint: 1,
+						},
+					},
+				},
+			}
+			result := append(begin, units...)
+			result = append(result, end...)
+			return result
+		}
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   0,
+			ApprovalProgram: fmt.Sprintf(boxTestProgram, 8),
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+		payment := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance * 2,
+		})
+		createBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:         logic.BoxCreateOperation,
+				name:       "A",
+				createSize: uint64(len(boxContent)),
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		writeBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: boxContent,
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		readBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:   logic.BoxReadOperation,
+				name: "A",
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		delBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:   logic.BoxDeleteOperation,
+				name: "A",
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		txntest.Group(&createTxn, &payment, &createBoxTxn, &writeBoxTxn, &readBoxTxn, &delBoxTxn)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedPay := payment.Txn().Sign(sender.Sk)
+		signedCreateBox := createBoxTxn.Txn().Sign(sender.Sk)
+		signedWriteBox := writeBoxTxn.Txn().Sign(sender.Sk)
+		signedReadBox := readBoxTxn.Txn().Sign(sender.Sk)
+		signedDelBox := delBoxTxn.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedPay, signedCreateBox, signedWriteBox, signedReadBox, signedDelBox},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 3,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            3,
+											StackPopCount: 1,
+										},
+										{
+											PC: 87,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+							// Payment
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							// BoxCreation
+							{
+								AppBudgetConsumed: 15,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("create",
+										simulation.OpcodeTraceUnit{
+											PC: 49,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 52,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string(uint64ToBytes(uint64(len(boxContent)))),
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 55,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(len(boxContent)),
+												},
+											},
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            56,
+											StackPopCount: 2,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StateChanges: []simulation.StateOperation{
+												{
+													StateOperationT: logic.StateCreate,
+													AppStateEnum:    logic.Box,
+													AppIndex:        futureAppID,
+													Key:             "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            57,
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 58,
+										},
+									),
+								},
+							},
+							// BoxWrite
+							{
+								AppBudgetConsumed: 13,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("write",
+										simulation.OpcodeTraceUnit{
+											PC: 78,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 81,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 83,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "boxWriteContent",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            86,
+											StackPopCount: 3,
+											StateChanges: []simulation.StateOperation{
+												{
+													StateOperationT: logic.StateWrite,
+													AppStateEnum:    logic.Box,
+													AppIndex:        futureAppID,
+													Key:             "A",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: string(boxContent),
+													},
+												},
+											},
+										},
+									),
+								},
+							},
+							// BoxRead
+							{
+								AppBudgetConsumed: 14,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("read",
+										simulation.OpcodeTraceUnit{
+											PC: 69,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 72,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string(boxContent),
+												},
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StackPopCount: 1,
+											StateChanges: []simulation.StateOperation{
+												{
+													StateOperationT: logic.StateRead,
+													AppStateEnum:    logic.Box,
+													AppIndex:        futureAppID,
+													Key:             "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            73,
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            74,
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 75,
+										},
+									),
+								},
+							},
+							// BoxDelete
+							{
+								AppBudgetConsumed: 13,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("delete",
+										simulation.OpcodeTraceUnit{
+											PC: 61,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 64,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StackPopCount: 1,
+											StateChanges: []simulation.StateOperation{
+												{
+													StateOperationT: logic.StateDelete,
+													AppStateEnum:    logic.Box,
+													AppIndex:        futureAppID,
+													Key:             "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            65,
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 66,
+										},
+									),
+								},
+							},
+						},
+						AppBudgetAdded:    3500,
+						AppBudgetConsumed: 58,
+					},
+				},
+			},
+		}
+	})
+}
+
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
 // within a subsequent app call
 func TestBalanceChangesWithApp(t *testing.T) {
