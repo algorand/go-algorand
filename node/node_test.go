@@ -598,7 +598,7 @@ func TestConfiguredDataDirs(t *testing.T) {
 	require.FileExists(t, filepath.Join(testDirHot, genesis.ID(), "ledger.tracker.sqlite"))
 
 	// confirm the stateproof db in the genesis dir of hot data dir
-	require.FileExists(t, filepath.Join(testDirHot, genesis.ID(), "stateproof.sqlite"))
+	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "stateproof.sqlite"))
 
 	// confirm cold data dir exists and contains a genesis dir
 	require.DirExists(t, filepath.Join(testDirCold, genesis.ID()))

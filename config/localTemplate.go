@@ -820,14 +820,14 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (Resolv
 	} else {
 		resolved.CatchpointGenesisDir = resolved.ColdGenesisDir
 	}
-	// if StateproofDir is not set, use HotDataDir
+	// if StateproofDir is not set, use ColdDataDir
 	if cfg.StateproofDir != "" {
 		resolved.StateproofGenesisDir, err = ensureAbsGenesisDir(cfg.StateproofDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
 	} else {
-		resolved.StateproofGenesisDir = resolved.HotGenesisDir
+		resolved.StateproofGenesisDir = resolved.ColdGenesisDir
 	}
 	// if CrashDBDir is not set, use ColdDataDir
 	if cfg.CrashDBDir != "" {

@@ -740,7 +740,7 @@ func TestEnsureAndResolveGenesisDirs_hierarchy(t *testing.T) {
 	require.DirExists(t, paths.BlockGenesisDir)
 	require.Equal(t, cold+"/myGenesisID", paths.CrashGenesisDir)
 	require.DirExists(t, paths.CrashGenesisDir)
-	require.Equal(t, hot+"/myGenesisID", paths.StateproofGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.StateproofGenesisDir)
 	require.DirExists(t, paths.StateproofGenesisDir)
 	require.Equal(t, cold+"/myGenesisID", paths.CatchpointGenesisDir)
 	require.DirExists(t, paths.CatchpointGenesisDir)
