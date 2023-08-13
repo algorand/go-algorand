@@ -110,18 +110,12 @@ func omitEmpty[T comparable](val T) *T {
 	return &val
 }
 
-func byteOrNil(data []byte) *[]byte {
-	if len(data) == 0 {
-		return nil
+func nilToDefault[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
 	}
-	return &data
-}
-
-func nilToZero(numPtr *uint64) uint64 {
-	if numPtr == nil {
-		return 0
-	}
-	return *numPtr
+	return *valPtr
 }
 
 func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
@@ -376,95 +370,51 @@ func convertTealValue(tv basics.TealValue) model.AvmValue {
 	return model.AvmValue{
 		Type:  uint64(tv.Type),
 		Uint:  omitEmpty(tv.Uint),
-		Bytes: byteOrNil([]byte(tv.Bytes)),
+		Bytes: sliceOrNil([]byte(tv.Bytes)),
 	}
 }
 
-func convertScratchChanges(scratchChanges []simulation.ScratchChange) *[]model.ScratchChange {
-	if len(scratchChanges) == 0 {
-		return nil
+func convertScratchChange(scratchChange simulation.ScratchChange) model.ScratchChange {
+	return model.ScratchChange{
+		Slot:     scratchChange.Slot,
+		NewValue: convertTealValue(scratchChange.NewValue),
 	}
-	modelSC := make([]model.ScratchChange, len(scratchChanges))
-	for i, scratchChange := range scratchChanges {
-		modelSC[i] = model.ScratchChange{
-			Slot:     scratchChange.Slot,
-			NewValue: convertTealValue(scratchChange.NewValue),
-		}
-	}
-	return &modelSC
 }
 
-func convertAppStateChanges(stateChanges []simulation.StateOperation) *[]model.AppStateOperation {
-	if len(stateChanges) == 0 {
-		return nil
+func convertAppStateChange(stateChange simulation.StateOperation) model.AppStateOperation {
+	return model.AppStateOperation{
+		Key:           []byte(stateChange.Key),
+		NewValue:      omitEmpty(convertTealValue(stateChange.NewValue)),
+		AppId:         uint64(stateChange.AppIndex),
+		OperationType: uint64(stateChange.StateOperationT),
+		AppStateType:  uint64(stateChange.AppStateEnum),
 	}
-	modelStateChanges := make([]model.AppStateOperation, len(stateChanges))
-	for i, stateChange := range stateChanges {
-		modelStateChanges[i] = model.AppStateOperation{
-			Key:           []byte(stateChange.Key),
-			NewValue:      omitEmpty(convertTealValue(stateChange.NewValue)),
-			AppId:         uint64(stateChange.AppIndex),
-			OperationType: uint64(stateChange.StateOperationT),
-			AppStateType:  uint64(stateChange.AppStateEnum),
-		}
-	}
-	return &modelStateChanges
 }
 
-func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.AvmValue {
-	if len(tvs) == 0 {
-		return nil
+func convertOpcodeTraceUnit(opcodeTraceUnit simulation.OpcodeTraceUnit) model.SimulationOpcodeTraceUnit {
+	return model.SimulationOpcodeTraceUnit{
+		Pc:             opcodeTraceUnit.PC,
+		SpawnedInners:  sliceOrNil(convertSlice(opcodeTraceUnit.SpawnedInners, func(v int) uint64 { return uint64(v) })),
+		StackAdditions: sliceOrNil(convertSlice(opcodeTraceUnit.StackAdded, convertTealValue)),
+		StackPopCount:  omitEmpty(opcodeTraceUnit.StackPopCount),
+		ScratchChanges: sliceOrNil(convertSlice(opcodeTraceUnit.ScratchSlotChanges, convertScratchChange)),
+		StateChanges:   sliceOrNil(convertSlice(opcodeTraceUnit.StateChanges, convertAppStateChange)),
 	}
-	modelTvs := convertSlice(tvs, convertTealValue)
-	return &modelTvs
-}
-
-func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.SimulationOpcodeTraceUnit {
-	if len(programTrace) == 0 {
-		return nil
-	}
-	modelProgramTrace := make([]model.SimulationOpcodeTraceUnit, len(programTrace))
-	for i := range programTrace {
-		var spawnedInnersPtr *[]uint64
-		if len(programTrace[i].SpawnedInners) > 0 {
-			spawnedInners := make([]uint64, len(programTrace[i].SpawnedInners))
-			for j, innerIndex := range programTrace[i].SpawnedInners {
-				spawnedInners[j] = uint64(innerIndex)
-			}
-			spawnedInnersPtr = &spawnedInners
-		}
-		modelProgramTrace[i] = model.SimulationOpcodeTraceUnit{
-			Pc:             programTrace[i].PC,
-			SpawnedInners:  spawnedInnersPtr,
-			StackAdditions: convertTealValueSliceToModel(programTrace[i].StackAdded),
-			StackPopCount:  omitEmpty(programTrace[i].StackPopCount),
-			ScratchChanges: convertScratchChanges(programTrace[i].ScratchSlotChanges),
-			StateChanges:   convertAppStateChanges(programTrace[i].StateChanges),
-		}
-	}
-	return &modelProgramTrace
 }
 
 func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTransactionExecTrace {
 	if txnTrace == nil {
 		return nil
 	}
-
-	execTraceModel := model.SimulationTransactionExecTrace{
-		ApprovalProgramTrace:   convertProgramTrace(txnTrace.ApprovalProgramTrace),
-		ClearStateProgramTrace: convertProgramTrace(txnTrace.ClearStateProgramTrace),
-		LogicSigTrace:          convertProgramTrace(txnTrace.LogicSigTrace),
+	return &model.SimulationTransactionExecTrace{
+		ApprovalProgramTrace:   sliceOrNil(convertSlice(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
+		ClearStateProgramTrace: sliceOrNil(convertSlice(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
+		LogicSigTrace:          sliceOrNil(convertSlice(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
+		InnerTrace: sliceOrNil(convertSlice(txnTrace.InnerTraces,
+			func(trace simulation.TransactionTrace) model.SimulationTransactionExecTrace {
+				return *convertTxnTrace(&trace)
+			})),
 	}
-
-	if len(txnTrace.InnerTraces) > 0 {
-		innerTraces := make([]model.SimulationTransactionExecTrace, len(txnTrace.InnerTraces))
-		for i := range txnTrace.InnerTraces {
-			innerTraces[i] = *convertTxnTrace(&txnTrace.InnerTraces[i])
-		}
-		execTraceModel.InnerTrace = &innerTraces
-	}
-
-	return &execTraceModel
 }
 
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {

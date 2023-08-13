@@ -1493,7 +1493,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	lastRound := ledger.Latest()
 	keyPrefix := apps.MakeBoxKey(uint64(appIdx), "")
 
-	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
+	requestedMax, algodMax := nilToDefault(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
 
 	if max != math.MaxUint64 {
