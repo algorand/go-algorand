@@ -419,6 +419,11 @@ type ConsensusParams struct {
 	// their account balances.
 	StateProofExcludeTotalWeightWithRewards bool
 
+	// StateProofBlockHashInLightHeader specifies that the LightBlockHeader
+	// committed to by state proofs should contain the BlockHash of each
+	// block, instead of the seed.
+	StateProofBlockHashInLightHeader bool
+
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
@@ -1361,6 +1366,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
+
+	vFuture.StateProofBlockHashInLightHeader = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
