@@ -72,7 +72,7 @@ func TestPeerstore(t *testing.T) {
 	require.Equal(t, 8, len(peers))
 
 	// remove a peer addr
-	ps.Peerstore.ClearAddrs(peerIDS[0])
+	ps.ClearAddrs(peerIDS[0])
 	peers = ps.PeersWithAddrs()
 	require.Equal(t, 7, len(peers))
 
