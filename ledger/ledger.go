@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -296,9 +297,12 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging
 	go func() {
 		var lerr error
 		switch cfg.StorageEngine {
+		case "pebbledb":
+			dir := dbPathPrefix + "/tracker.pebble"
+			trackerDBs, lerr = pebbledbdriver.Open(dir, dbMem, config.Consensus[protocol.ConsensusCurrentVersion], log)
+		// anything else will initialize a sqlite engine.
 		case "sqlite":
 			fallthrough
-		// anything else will initialize a sqlite engine.
 		default:
 			file := dbPathPrefix + ".tracker.sqlite"
 			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)

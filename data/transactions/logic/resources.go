@@ -53,7 +53,7 @@ type resources struct {
 	// of the box - has it been modified in this txngroup? If yes, the size of
 	// the box counts against the group writeBudget. So delete is NOT a dirtying
 	// operation.
-	boxes map[boxRef]bool
+	boxes map[BoxRef]bool
 
 	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
 	dirtyBytes uint64
@@ -173,14 +173,20 @@ func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) 
 	}
 	// If the address was "created" by making its app in this group, then allow for available assets.
 	for created := range r.createdApps {
-		if cx.getApplicationAddress(created) == addr {
+		if cx.GetApplicationAddress(created) == addr {
 			return cx.availableAsset(ai)
 		}
 	}
 	// If the current txn is a creation, the new appID won't be in r.createdApps
 	// yet, but it should get the same special treatment.
-	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
+	if cx.txn.Txn.ApplicationID == 0 && cx.GetApplicationAddress(cx.appID) == addr {
 		return cx.availableAsset(ai)
+	}
+	if cx.UnnamedResources != nil {
+		// Ensure that the account and asset are available before consulting cx.UnnamedResources.AllowsHolding.
+		// This way cx.UnnamedResources.AllowsHolding only needs to make a decision about the asset holding
+		// being available, not about the component resources.
+		return cx.availableAccount(addr) && cx.availableAsset(ai) && cx.UnnamedResources.AllowsHolding(addr, ai)
 	}
 	return false
 }
@@ -201,12 +207,18 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 
 	// All locals of created app accounts are available
 	for created := range r.createdApps {
-		if cx.getApplicationAddress(created) == addr {
+		if cx.GetApplicationAddress(created) == addr {
 			return cx.availableApp(ai)
 		}
 	}
-	if cx.txn.Txn.ApplicationID == 0 && cx.getApplicationAddress(cx.appID) == addr {
+	if cx.txn.Txn.ApplicationID == 0 && cx.GetApplicationAddress(cx.appID) == addr {
 		return cx.availableApp(ai)
+	}
+	if cx.UnnamedResources != nil {
+		// Ensure that the account and app are available before consulting cx.UnnamedResources.AllowsLocal.
+		// This way cx.UnnamedResources.AllowsLocal only needs to make a decision about the app local
+		// being available, not about the component resources.
+		return cx.availableApp(ai) && cx.availableAccount(addr) && cx.UnnamedResources.AllowsLocal(addr, ai)
 	}
 	return false
 }
@@ -279,11 +291,11 @@ func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header
 	// apps available, because that is already handled by looking at
 	// `createdApps`.
 	if id := tx.ApplicationID; id != 0 {
-		txAccounts = append(txAccounts, ep.getApplicationAddress(id))
+		txAccounts = append(txAccounts, ep.GetApplicationAddress(id))
 		r.sharedApps[id] = struct{}{}
 	}
 	for _, id := range tx.ForeignApps {
-		txAccounts = append(txAccounts, ep.getApplicationAddress(id))
+		txAccounts = append(txAccounts, ep.GetApplicationAddress(id))
 		r.sharedApps[id] = struct{}{}
 	}
 	for _, address := range txAccounts {
@@ -317,7 +329,7 @@ func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header
 			// now than after returning a nil.
 			app = tx.ForeignApps[br.Index-1] // shift for the 0=this convention
 		}
-		r.boxes[boxRef{app, string(br.Name)}] = false
+		r.boxes[BoxRef{app, string(br.Name)}] = false
 	}
 }
 
@@ -335,10 +347,10 @@ func (cx *EvalContext) allowsApplicationCall(hdr *transactions.Header, tx *trans
 	txAccounts = append(txAccounts, hdr.Sender)
 	txAccounts = append(txAccounts, tx.Accounts...)
 	if id := tx.ApplicationID; id != 0 {
-		txAccounts = append(txAccounts, cx.getApplicationAddress(id))
+		txAccounts = append(txAccounts, cx.GetApplicationAddress(id))
 	}
 	for _, id := range tx.ForeignApps {
-		txAccounts = append(txAccounts, cx.getApplicationAddress(id))
+		txAccounts = append(txAccounts, cx.GetApplicationAddress(id))
 	}
 	for _, address := range txAccounts {
 		for _, id := range tx.ForeignAssets {

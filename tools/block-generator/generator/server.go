@@ -29,11 +29,11 @@ import (
 )
 
 // MakeServer configures http handlers. Returns the http server.
-func MakeServer(configFile string, addr string) (*http.Server, Generator) {
+func MakeServer(configFile string, addr string, verbose bool) (*http.Server, Generator) {
 	noOp := func(next http.Handler) http.Handler {
 		return next
 	}
-	return MakeServerWithMiddleware(nil, 0, "", configFile, false, addr, noOp)
+	return MakeServerWithMiddleware(nil, 0, "", configFile, verbose, addr, noOp)
 }
 
 // BlocksMiddleware is a middleware for the blocks endpoint.
