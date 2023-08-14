@@ -1221,7 +1221,7 @@
             "$ref": "#/components/schemas/AvmValue"
           },
           "operation-type": {
-            "description": "Operation type. Value `1` is **create**, `2` is **write**, `3` is **read**, `4` is **delete**.",
+            "description": "Operation type. Value `1` is **create**, `2` is **write**, `4` is **read**, `8` is **delete**.",
             "type": "integer"
           }
         },

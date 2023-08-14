@@ -386,7 +386,7 @@ func convertAppStateChange(stateChange simulation.StateOperation) model.AppState
 		Key:           []byte(stateChange.Key),
 		NewValue:      omitEmpty(convertTealValue(stateChange.NewValue)),
 		AppId:         uint64(stateChange.AppIndex),
-		OperationType: uint64(stateChange.StateOperationT),
+		OperationType: uint64(stateChange.AppStateOperationT),
 		AppStateType:  uint64(stateChange.AppStateEnum),
 	}
 }

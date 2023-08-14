@@ -230,7 +230,7 @@ type ScratchChange struct {
 
 // StateOperation represents an operation into an app local/global/box state
 type StateOperation struct {
-	logic.StateOperationT
+	logic.AppStateOperationT
 	logic.AppStateEnum
 	basics.AppIndex
 	Key      string

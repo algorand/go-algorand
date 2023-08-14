@@ -285,7 +285,7 @@ type AppStateOperation struct {
 	// NewValue Represents an AVM value.
 	NewValue *AvmValue `json:"new-value,omitempty"`
 
-	// OperationType Operation type. Value `1` is **create**, `2` is **write**, `3` is **read**, `4` is **delete**.
+	// OperationType Operation type. Value `1` is **create**, `2` is **write**, `4` is **read**, `8` is **delete**.
 	OperationType uint64 `json:"operation-type"`
 }
 
