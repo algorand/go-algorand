@@ -2265,9 +2265,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
 	// fund app account
-	appFundTxn, err := testClient.SendPaymentFromWallet(
-		wh, nil, senderAddress, futureAppID.Address().String(),
-		0, MinBalance*uint64(MaxDepth+1), nil, "", 0, 0,
+	appFundTxn, err := testClient.ConstructPayment(
+		senderAddress, futureAppID.Address().String(),
+		0, MinBalance*uint64(MaxDepth+1), nil, "", [32]byte{}, 0, 0,
 	)
 	a.NoError(err)
 
@@ -3101,7 +3101,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
 	// fund app account
-	appFundTxn, err := testClient.SendPaymentFromWallet(
+	_, err = testClient.SendPaymentFromWallet(
 		wh, nil, senderAddress, futureAppID.Address().String(),
 		0, MinBalance, nil, "", 0, 0,
 	)
@@ -3115,14 +3115,6 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallTxn)
 	a.NoError(err)
 
-	// Group the transactions
-	gid, err := testClient.GroupID([]transactions.Transaction{appFundTxn, appCallTxn})
-	a.NoError(err)
-	appFundTxn.Group = gid
-	appCallTxn.Group = gid
-
-	appFundTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appFundTxn)
-	a.NoError(err)
 	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
 	a.NoError(err)
 
@@ -3133,7 +3125,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	}
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+			{Txns: []transactions.SignedTxn{appCallTxnSigned}},
 		},
 		ExecTraceConfig: execTraceConfig,
 	}
@@ -3151,7 +3143,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	// simulate with wrong config (not enabled trace), see expected error
 	_, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+			{Txns: []transactions.SignedTxn{appCallTxnSigned}},
 		},
 		ExecTraceConfig: simulation.ExecTraceConfig{Scratch: true},
 	})
@@ -3163,9 +3155,8 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 
 	// check if resp match expected result
 	a.Equal(execTraceConfig, resp.ExecTraceConfig)
-	a.Len(resp.TxnGroups[0].Txns, 2)
-	a.Nil(resp.TxnGroups[0].Txns[0].TransactionTrace)
-	a.NotNil(resp.TxnGroups[0].Txns[1].TransactionTrace)
+	a.Len(resp.TxnGroups[0].Txns, 1)
+	a.NotNil(resp.TxnGroups[0].Txns[0].TransactionTrace)
 
 	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
 		ApprovalProgramTrace: &[]model.SimulationOpcodeTraceUnit{
@@ -3202,7 +3193,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 			{Pc: 16},
 		},
 	}
-	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
+	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[0].TransactionTrace)
 }
 
 func TestSimulateWithUnnamedResources(t *testing.T) {
