@@ -38,10 +38,11 @@ import (
 )
 
 const (
-	BlockTotalSizeBytes  = "blocks_total_size_bytes"
-	CommitWaitTimeMS     = "commit_wait_time_ms"
-	LedgerEvalTimeMS     = "ledger_eval_time_ms"
-	LedgerValidateTimeMS = "ledger_validate_time_ms"
+	BlockTotalSizeBytes    = "blocks_total_size_bytes"
+	CommitWaitTimeMS       = "commit_wait_time_ms"
+	BlockgenGenerateTimeMS = "blockgen_generate_time_ms"
+	LedgerEvalTimeMS       = "ledger_eval_time_ms"
+	LedgerValidateTimeMS   = "ledger_validate_time_ms"
 )
 
 // ---- constructors ----
@@ -340,7 +341,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 			intra += numTxns
 		}
 		generated = time.Now()
-		g.reportData.Counters["ledger_eval_time_ms"] += uint64(generated.Sub(start).Milliseconds())
+		g.reportData.Counters[BlockgenGenerateTimeMS] += uint64(generated.Sub(start).Milliseconds())
 
 		vBlock, ledgerTxnCount, commitWaitTime, err := g.evaluateBlock(cert.Block.BlockHeader, txGroupsAD, int(intra))
 		if err != nil {

@@ -72,6 +72,7 @@ func TestWriterReport_Good(t *testing.T) {
 	collector := makeMetrics(start)
 
 	generatorReport.Counters[generator.BlockTotalSizeBytes] = 1024
+	generatorReport.Counters[generator.BlockgenGenerateTimeMS] = 0
 	generatorReport.Counters[generator.CommitWaitTimeMS] = 1000
 	generatorReport.Counters[generator.LedgerEvalTimeMS] = 2000
 	generatorReport.Counters[generator.LedgerValidateTimeMS] = 3000
