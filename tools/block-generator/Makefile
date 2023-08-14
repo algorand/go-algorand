@@ -6,7 +6,7 @@ REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 DURATION = 30s
 VERBOSE = --verbose
 CONDUIT = ./conduit
-EXP_FLAG = # --file-exporter-instead-of-pg
+TEMPLATE = # --template file-exporter (default postgres-exporter)
 PGUSER = algorand
 PGDB = generator_db
 PGCONT = "generator-test-container"
@@ -34,7 +34,7 @@ run-runner: block-generator
 	--keep-data-dir \
 	--test-duration $(DURATION) \
 	--conduit-log-level trace \
-	$(EXP_FLAG) \
+	$(TEMPLATE) \
 	--postgres-connection-string $(PGCONN) \
 	--scenario $(SCENARIO) \
 	$(RESETDB) \
@@ -43,7 +43,7 @@ run-runner: block-generator
 	--times $(TIMES)
 
 run-file-exporter:
-	make run-runner EXP_FLAG=--file-exporter-instead-of-pg TIMES=1 RESETDB=
+	make run-runner TEMPLATE="--template file-exporter" TIMES=1 RESETDB=
 
 clean-reports:
 	rm -rf $(REPORTS)

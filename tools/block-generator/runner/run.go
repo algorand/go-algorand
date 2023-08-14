@@ -56,7 +56,7 @@ type Args struct {
 	Path                     string
 	ConduitBinary            string
 	MetricsPort              uint64
-	FileExporterInsteadofPG  bool
+	Template                 string
 	PostgresConnectionString string
 	CPUProfilePath           string
 	RunDuration              time.Duration
@@ -154,9 +154,10 @@ func (r *Args) run(reportDirectory string) error {
 	// get next db round
 	var nextRound uint64
 	var err error
-	if r.FileExporterInsteadofPG {
-		fmt.Printf("%sUsing File Exporter instead of Postgres Exporter.\n", pad)
-	} else {
+	switch r.Template {
+	case "file-exporter":
+		fmt.Printf("%sUsing File Exporter to persist blocks.\n", pad)
+	case "postgres-exporter":
 		if r.ResetDB {
 			fmt.Printf("%sPostgreSQL resetting.\n", pad)
 			if err = util.EmptyDB(r.PostgresConnectionString); err != nil {
@@ -172,6 +173,8 @@ func (r *Args) run(reportDirectory string) error {
 			}
 			fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
 		}
+	default:
+		return fmt.Errorf("unknown template type: %s", r.Template)
 	}
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
@@ -188,10 +191,13 @@ func (r *Args) run(reportDirectory string) error {
 
 	// create conduit config from template
 	var conduitConfigTmpl string
-	if r.FileExporterInsteadofPG {
+	switch r.Template {
+	case "file-exporter":
 		conduitConfigTmpl = conduitFileExporterConfigTmpl
-	} else {
+	case "postgres-exporter":
 		conduitConfigTmpl = conduitPostgresConfigTmpl
+	default:
+		return fmt.Errorf("unknown template type: %s", r.Template)
 	}
 	t, err := template.New("conduit").Parse(conduitConfigTmpl)
 	if err != nil {
