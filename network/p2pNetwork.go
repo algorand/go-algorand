@@ -132,7 +132,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		broadcastQueueBulk:     make(chan broadcastRequest, 100),
 	}
 
-	net.service, err = p2p.MakeService(log, cfg, datadir, pstore, net.wsStreamHandler)
+	net.service, err = p2p.MakeService(net.ctx, log, cfg, datadir, pstore, net.wsStreamHandler)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func (n *P2PNetwork) Address() (string, bool) {
 func (n *P2PNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
 	// For tags using pubsub topics, publish to GossipSub
 	if topic, ok := n.topicTags[tag]; ok {
-		return n.service.Publish(context.TODO(), topic, data)
+		return n.service.Publish(ctx, topic, data)
 	}
 	// Otherwise broadcast over websocket protocol stream
 	return n.broadcaster.BroadcastArray(ctx, []protocol.Tag{tag}, [][]byte{data}, wait, except)
@@ -343,7 +343,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	}
 	// create a wsPeer for this stream and added it to the peers map.
 	wsp := &wsPeer{
-		wsPeerCore: makePeerCore(context.TODO(), n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(), addr),
+		wsPeerCore: makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(), addr),
 		conn:       &wsPeerConnP2PImpl{stream: stream},
 	}
 	wsp.init(n.config, outgoingMessagesBufferSize)

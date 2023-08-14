@@ -71,7 +71,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 				n.log.Infof("Failed to check old stream with %s: %v", remotePeer, err)
 			}
 			n.streams[stream.Conn().RemotePeer()] = stream
-			n.handler(context.TODO(), remotePeer, stream, true)
+			n.handler(context.Background(), remotePeer, stream, true)
 			return
 		}
 		// otherwise, the old stream is still open, so we can close the new one
@@ -80,7 +80,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	}
 	// no old stream
 	n.streams[stream.Conn().RemotePeer()] = stream
-	n.handler(context.TODO(), remotePeer, stream, true)
+	n.handler(context.Background(), remotePeer, stream, true)
 }
 
 // Connected is called when a connection is opened
@@ -107,7 +107,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	}
 
 	n.streams[remotePeer] = stream
-	n.handler(context.TODO(), remotePeer, stream, false)
+	n.handler(context.Background(), remotePeer, stream, false)
 }
 
 // Disconnected is called when a connection is closed
