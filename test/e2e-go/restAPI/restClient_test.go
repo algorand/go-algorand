@@ -34,7 +34,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/util/tokens"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -54,6 +53,7 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/tokens"
 )
 
 var fixture fixtures.RestClientFixture
