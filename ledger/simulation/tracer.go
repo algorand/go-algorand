@@ -333,7 +333,7 @@ func (o *OpcodeTraceUnit) appendStateOperations(cx *logic.EvalContext) {
 		AppStateEnum:       appState,
 		AppIndex:           appID,
 		Key:                stateKey,
-		account:            acctAddr,
+		Account:            acctAddr,
 	})
 }
 
@@ -376,7 +376,7 @@ func (tracer *evalTracer) recordUpdatedScratchVars(cx *logic.EvalContext) []Scra
 func (o *OpcodeTraceUnit) updateNewStateValues(cx *logic.EvalContext) {
 	for i, sc := range o.StateChanges {
 		o.StateChanges[i].NewValue = logic.AppNewStateQuerying(
-			cx, sc.AppStateEnum, sc.AppStateOperationT, sc.AppIndex, sc.account, sc.Key)
+			cx, sc.AppStateEnum, sc.AppStateOperationT, sc.AppIndex, sc.Account, sc.Key)
 	}
 }
 

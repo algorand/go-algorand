@@ -237,7 +237,7 @@ type StateOperation struct {
 	NewValue basics.TealValue
 
 	// This field is only used for local state new value querying.
-	account []byte
+	Account basics.TealValue
 }
 
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation.

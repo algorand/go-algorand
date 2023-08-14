@@ -58,7 +58,7 @@ const (
 // AppStateEnum stands for which app state: local/global/box,
 // AppStateOperationT stands for read/write/create/delete/check-existence,
 // together with key for touched state
-type stateChangeExplain func(ctx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string)
+type stateChangeExplain func(ctx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string)
 
 func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
 	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
@@ -171,108 +171,121 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 	return
 }
 
-func opBoxCreateStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opBoxCreateStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // size
 	prev := last - 1          // name
 
-	return Box, AppStateCreate, cx.appID, nil, string(cx.Stack[prev].Bytes)
+	return Box, AppStateCreate, cx.appID, basics.TealValue{}, string(cx.Stack[prev].Bytes)
 }
 
-func opBoxExtractStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opBoxExtractStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // length
 	prev := last - 1          // start
 	pprev := prev - 1         // name
 
-	return Box, AppStateRead, cx.appID, nil, string(cx.Stack[pprev].Bytes)
+	return Box, AppStateRead, cx.appID, basics.TealValue{}, string(cx.Stack[pprev].Bytes)
 }
 
-func opBoxReplaceStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opBoxReplaceStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // replacement
 	prev := last - 1          // start
 	pprev := prev - 1         // name
 
-	return Box, AppStateWrite, cx.appID, nil, string(cx.Stack[pprev].Bytes)
+	return Box, AppStateWrite, cx.appID, basics.TealValue{}, string(cx.Stack[pprev].Bytes)
 }
 
-func opBoxDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opBoxDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // name
 
-	return Box, AppStateDelete, cx.appID, nil, string(cx.Stack[last].Bytes)
+	return Box, AppStateDelete, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
 }
 
-func opBoxLenStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opBoxLenStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // name
 
-	return Box, AppStateRead, cx.appID, nil, string(cx.Stack[last].Bytes)
+	return Box, AppStateRead, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
 }
 
-func opBoxGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opBoxGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // name
 
-	return Box, AppStateRead, cx.appID, nil, string(cx.Stack[last].Bytes)
+	return Box, AppStateRead, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
 }
 
-func opBoxPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opBoxPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // name
 
-	return Box, AppStateCreate | AppStateWrite, cx.appID, nil, string(cx.Stack[last].Bytes)
+	return Box, AppStateCreate | AppStateWrite, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
 }
 
-func opAppLocalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opAppLocalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // account
 
-	return LocalState, AppStateRead, cx.appID, cx.Stack[prev].Bytes, string(cx.Stack[last].Bytes)
+	return LocalState, AppStateRead, cx.appID, cx.Stack[prev].ToTealValue(), string(cx.Stack[last].Bytes)
 }
 
-func opAppLocalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opAppLocalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // app id
 	pprev := prev - 1         // account
 
-	return LocalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), cx.Stack[pprev].Bytes, string(cx.Stack[last].Bytes)
+	return LocalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), cx.Stack[pprev].ToTealValue(), string(cx.Stack[last].Bytes)
 }
 
-func opAppGlobalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opAppGlobalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // app id
 
-	return GlobalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), nil, string(cx.Stack[last].Bytes)
+	return GlobalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), basics.TealValue{}, string(cx.Stack[last].Bytes)
 }
 
-func opAppGlobalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opAppGlobalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // app
 
-	return GlobalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), nil, string(cx.Stack[last].Bytes)
+	return GlobalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), basics.TealValue{}, string(cx.Stack[last].Bytes)
 }
 
-func opAppLocalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opAppLocalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // value
 	prev := last - 1          // state key
 	pprev := prev - 1         // account
 
-	return LocalState, AppStateWrite | AppStateCreate, cx.appID, cx.Stack[pprev].Bytes, string(cx.Stack[prev].Bytes)
+	return LocalState, AppStateWrite | AppStateCreate, cx.appID, cx.Stack[pprev].ToTealValue(), string(cx.Stack[prev].Bytes)
 }
 
-func opAppGlobalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opAppGlobalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // value
 	prev := last - 1          // state key
 
-	return GlobalState, AppStateWrite | AppStateCreate, cx.appID, nil, string(cx.Stack[prev].Bytes)
+	return GlobalState, AppStateWrite | AppStateCreate, cx.appID, basics.TealValue{}, string(cx.Stack[prev].Bytes)
 }
 
-func opAppLocalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opAppLocalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // key
 	prev := last - 1          // account
 
-	return LocalState, AppStateDelete, cx.appID, cx.Stack[prev].Bytes, string(cx.Stack[last].Bytes)
+	return LocalState, AppStateDelete, cx.appID, cx.Stack[prev].ToTealValue(), string(cx.Stack[last].Bytes)
 }
 
-func opAppGlobalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, []byte, string) {
+func opAppGlobalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // key
 
-	return GlobalState, AppStateDelete, cx.appID, nil, string(cx.Stack[last].Bytes)
+	return GlobalState, AppStateDelete, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
+}
+
+// tealValueToStackValue converts a teal value instance into a stackValue instance.
+// we need this method here for getting changed local state after app local put.
+func tealValueToStackValue(tv basics.TealValue) stackValue {
+	switch tv.Type {
+	case basics.TealUintType:
+		return stackValue{Uint: tv.Uint}
+	case basics.TealBytesType:
+		return stackValue{Bytes: []byte(tv.Bytes)}
+	default:
+		return stackValue{}
+	}
 }
 
 // AppNewStateQuerying is used only for simulation endpoint exec trace export:
@@ -283,7 +296,7 @@ func opAppGlobalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperation
 func AppNewStateQuerying(
 	cx *EvalContext,
 	appState AppStateEnum, stateOp AppStateOperationT,
-	appID basics.AppIndex, account []byte, key string) basics.TealValue {
+	appID basics.AppIndex, account basics.TealValue, key string) basics.TealValue {
 	if stateOp&AppStateWrite == 0 {
 		return basics.TealValue{}
 	}
@@ -304,7 +317,7 @@ func AppNewStateQuerying(
 		}
 		return globalValue
 	case LocalState:
-		addr, acctID, err := cx.mutableAccountReference(stackValue{Bytes: account})
+		addr, acctID, err := cx.mutableAccountReference(tealValueToStackValue(account))
 		if err != nil {
 			return basics.TealValue{}
 		}
