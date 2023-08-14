@@ -27,7 +27,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoreds"
 )
 
-// PeerStore implements Peerstore and CertifiedAddrBook.
+// PeerStore implements libp2p's Peerstore and CertifiedAddrBook interfaces.
 type PeerStore struct {
 	peerStoreCAB
 }
