@@ -126,7 +126,6 @@ func (g *generator) startRound() error {
 
 // finishRound tells the generator it can apply any pending state and updates its round
 func (g *generator) finishRound() {
-	g.totalBlockBytes += uint64(len(g.latestBlockMsgp))
 	g.timestamp += consensusTimeMilli
 	g.round++
 
