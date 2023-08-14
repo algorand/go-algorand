@@ -109,7 +109,6 @@ func countEffects(actual TxTypeID) uint64 {
 	return cnt
 }
 
-// TODO: Can this be removed? The inner txns are already marked as "inner" so no nened to aggregate them.
 func CumulativeEffects(report Report) EffectsReport {
 	effsReport := make(EffectsReport)
 	for txType, data := range report.Transactions {
