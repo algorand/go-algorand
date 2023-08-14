@@ -3338,6 +3338,616 @@ int 1`,
 	})
 }
 
+func TestAppLocalGlobalStateChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			LocalStateSchema:  basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+txn OnCompletion
+int OptIn
+==
+bnz end // Always allow optin
+
+byte "local"
+byte "global"
+txn ApplicationArgs 0
+match local global
+err // Unknown command
+
+local:
+  int 0
+  byte "local-int-key"
+  int 0xcafeb0ba
+  app_local_put
+  int 0
+  byte "local-bytes-key"
+  byte "xqcL"
+  app_local_put
+  b end
+
+global:
+  byte "global-int-key"
+  int 0xdeadbeef
+  app_global_put
+  byte "global-bytes-key"
+  byte "welt am draht"
+  app_global_put
+  b end
+
+end:
+  int 1
+`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		payment := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance * 2,
+		})
+
+		optIn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			OnCompletion:  transactions.OptInOC,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{[]byte("global")},
+		})
+
+		localStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{[]byte("local")},
+		})
+
+		txntest.Group(&createTxn, &payment, &optIn, &globalStateCall, &localStateCall)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedPay := payment.Txn().Sign(sender.Sk)
+		signedOptin := optIn.Txn().Sign(sender.Sk)
+		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+		signedLocalStateCall := localStateCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedPay, signedOptin, signedGlobalStateCall, signedLocalStateCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 5,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            7,
+											StackPopCount: 1,
+										},
+										{
+											PC: 153,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+							// Payment
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							// Optin
+							{
+								AppBudgetConsumed: 8,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 5,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            7,
+											StackPopCount: 1,
+										},
+										{
+											PC: 10,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 12,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 13,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC:            14,
+											StackPopCount: 1,
+										},
+										{
+											PC: 153,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+							// Global
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"global-bytes-key": basics.ValueDelta{
+													Bytes:  "welt am draht",
+													Action: basics.SetBytesAction,
+												},
+												"global-int-key": basics.ValueDelta{
+													Uint:   0xdeadbeef,
+													Action: basics.SetUintAction,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 19,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 5,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            7,
+											StackPopCount: 1,
+										},
+										{
+											PC: 10,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 12,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 13,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC:            14,
+											StackPopCount: 1,
+										},
+										{
+											PC: 17,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local",
+												},
+											},
+										},
+										{
+											PC: 24,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global",
+												},
+											},
+										},
+										{
+											PC: 32,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global",
+												},
+											},
+										},
+										{
+											PC:            35,
+											StackPopCount: 3,
+										},
+										{
+											PC: 93,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-int-key",
+												},
+											},
+										},
+										{
+											PC: 109,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0xdeadbeef,
+												},
+											},
+										},
+										{
+											PC: 115,
+											StateChanges: []simulation.StateOperation{
+												{
+													StateOperationT: logic.StateWrite,
+													AppStateEnum:    logic.GlobalState,
+													AppIndex:        futureAppID,
+													Key:             "global-int-key",
+													NewValue: basics.TealValue{
+														Type: basics.TealUintType,
+														Uint: 0xdeadbeef,
+													},
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC: 116,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-bytes-key",
+												},
+											},
+										},
+										{
+											PC: 134,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "welt am draht",
+												},
+											},
+										},
+										{
+											PC:            149,
+											StackPopCount: 2,
+											StateChanges: []simulation.StateOperation{
+												{
+													StateOperationT: logic.StateWrite,
+													AppStateEnum:    logic.GlobalState,
+													AppIndex:        futureAppID,
+													Key:             "global-bytes-key",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "welt am draht",
+													},
+												},
+											},
+										},
+										{PC: 150},
+										{
+											PC: 153,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+							// Local
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											LocalDeltas: map[uint64]basics.StateDelta{
+												0: {
+													"local-bytes-key": basics.ValueDelta{
+														Bytes:  "xqcL",
+														Action: basics.SetBytesAction,
+													},
+													"local-int-key": basics.ValueDelta{
+														Uint:   0xcafeb0ba,
+														Action: basics.SetUintAction,
+													},
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 21,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 5,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            7,
+											StackPopCount: 1,
+										},
+										{
+											PC: 10,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 12,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 13,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC:            14,
+											StackPopCount: 1,
+										},
+										{
+											PC: 17,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local",
+												},
+											},
+										},
+										{
+											PC: 24,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global",
+												},
+											},
+										},
+										{
+											PC: 32,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local",
+												},
+											},
+										},
+										{
+											PC:            35,
+											StackPopCount: 3,
+										},
+										{
+											PC: 42,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 43,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local-int-key",
+												},
+											},
+										},
+										{
+											PC: 58,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0xcafeb0ba,
+												},
+											},
+										},
+										{
+											PC: 64,
+											StateChanges: []simulation.StateOperation{
+												{
+													StateOperationT: logic.StateWrite,
+													AppStateEnum:    logic.LocalState,
+													AppIndex:        futureAppID,
+													Key:             "local-int-key",
+													NewValue: basics.TealValue{
+														Type: basics.TealUintType,
+														Uint: 0xcafeb0ba,
+													},
+												},
+											},
+											StackPopCount: 3,
+										},
+										{
+											PC: 65,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 66,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local-bytes-key",
+												},
+											},
+										},
+										{
+											PC: 83,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "xqcL",
+												},
+											},
+										},
+										{
+											PC:            89,
+											StackPopCount: 3,
+											StateChanges: []simulation.StateOperation{
+												{
+													StateOperationT: logic.StateWrite,
+													AppStateEnum:    logic.LocalState,
+													AppIndex:        futureAppID,
+													Key:             "local-bytes-key",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "xqcL",
+													},
+												},
+											},
+										},
+										{PC: 90},
+										{
+											PC: 153,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    2800,
+						AppBudgetConsumed: 52,
+					},
+				},
+			},
+		}
+	})
+}
+
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
 // within a subsequent app call
 func TestBalanceChangesWithApp(t *testing.T) {

@@ -182,6 +182,13 @@ func validateSimulateRequest(request Request, developerAPI bool) error {
 				},
 			}
 		}
+		if request.TraceConfig.State {
+			return InvalidRequestError{
+				SimulatorError{
+					err: fmt.Errorf("basic trace must be enabled when enabling app state change tracing"),
+				},
+			}
+		}
 	}
 	return nil
 }
