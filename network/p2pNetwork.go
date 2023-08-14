@@ -239,7 +239,6 @@ func (n *P2PNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byt
 
 // Relay message
 func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
-	// TODO support disabling relaying, like wsNetwork does
 	return n.Broadcast(ctx, tag, data, wait, except)
 }
 
@@ -270,14 +269,12 @@ func (n *P2PNetwork) DisconnectPeers() {
 
 // RegisterHTTPHandler path accepts gorilla/mux path annotations
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
-	// TODO support HTTP requests for blocks & catchpoint snapshots
 }
 
 // RequestConnectOutgoing asks the system to actually connect to peers.
 // `replace` optionally drops existing connections before making new ones.
 // `quit` chan allows cancellation.
 func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
-	// TODO catchup calls this to get more peers
 }
 
 // GetPeers returns a list of Peers we could potentially send a direct message to.
@@ -329,7 +326,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 			return
 		}
 	} else {
-		_, err := stream.Write([]byte("1")) // TODO add header-like info to handshake
+		_, err := stream.Write([]byte("1"))
 		if err != nil {
 			n.log.Warnf("wsStreamHandler: error sending initial message: %s", err)
 			return
@@ -434,7 +431,7 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 		return pubsub.ValidationAccept
 	}
 
-	n.peerStatsMu.Lock() // TODO this is just for testing right now
+	n.peerStatsMu.Lock()
 	peerStats, ok := n.peerStats[peerID]
 	if !ok {
 		n.peerStats[peerID] = &p2pPeerStats{txReceived: 1}

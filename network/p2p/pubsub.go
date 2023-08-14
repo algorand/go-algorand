@@ -56,12 +56,12 @@ const TXTopicName = "/algo/tx/0.1.0"
 func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.PubSub, error) {
 	//defaultParams := pubsub.DefaultGossipSubParams()
 
-	options := []pubsub.Option{ // TODO
+	options := []pubsub.Option{
 		pubsub.WithPeerScore(&pubsub.PeerScoreParams{
 			DecayInterval: pubsub.DefaultDecayInterval,
 			DecayToZero:   pubsub.DefaultDecayToZero,
 
-			AppSpecificScore: func(p peer.ID) float64 { return 1000 }, // TODO
+			AppSpecificScore: func(p peer.ID) float64 { return 1000 },
 
 			Topics: map[string]*pubsub.TopicScoreParams{
 				TXTopicName: {
@@ -134,18 +134,16 @@ func (s *Service) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subsc
 		return nil, err
 	}
 	// t.SetScoreParams() // already set in makePubSub
-	opts := []pubsub.SubOpt{} // TODO
-	return t.Subscribe(opts...)
+	return t.Subscribe()
 }
 
 // Publish publishes data to the given topic
 func (s *Service) Publish(ctx context.Context, topic string, data []byte) error {
-	t, err := s.joinTopic(topic) // TODO consider not calling joinTopic for every Publish
+	t, err := s.joinTopic(topic)
 	if err != nil {
 		return err
 	}
-	opts := []pubsub.PubOpt{} // TODO
-	return t.Publish(ctx, data, opts...)
+	return t.Publish(ctx, data)
 }
 
 // ListPeers returns a list of peers subscribed to the given topic, exported for access from the network package

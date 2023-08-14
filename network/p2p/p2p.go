@@ -72,15 +72,14 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, data
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Muxer("/yamux/1.0.0", &ymx),
 		libp2p.Peerstore(pstore),
-		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"), // TODO configuration
-		// libp2p.ConnectionGater(), // TODO
+		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"),
 	)
 	if err != nil {
 		return nil, err
 	}
 	log.Infof("P2P service started: peer ID %s addrs %s", h.ID(), h.Addrs())
 
-	sm := makeStreamManager(log, h, wsStreamHandler)
+	sm := makeStreamManager(ctx, log, h, wsStreamHandler)
 	h.Network().Notify(sm)
 	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 
