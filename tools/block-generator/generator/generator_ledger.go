@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/algorand/avm-abi/apps"
 	cconfig "github.com/algorand/go-algorand/config"
@@ -125,6 +126,7 @@ func (g *generator) startRound() error {
 
 // finishRound tells the generator it can apply any pending state and updates its round
 func (g *generator) finishRound() {
+	g.totalBlockBytes += uint64(len(g.latestBlockMsgp))
 	g.timestamp += consensusTimeMilli
 	g.round++
 
@@ -168,26 +170,30 @@ func (g *generator) startEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) 
 		})
 }
 
-func (g *generator) evaluateBlock(hdr bookkeeping.BlockHeader, txGroups [][]txn.SignedTxnWithAD, paysetHint int) (*ledgercore.ValidatedBlock, uint64 /* txnCount */, error) {
+func (g *generator) evaluateBlock(hdr bookkeeping.BlockHeader, txGroups [][]txn.SignedTxnWithAD, paysetHint int) (*ledgercore.ValidatedBlock, uint64 /* txnCount */, time.Duration /* commit wait time */, error) {
+	commitWaitTime := time.Duration(0)
+	waitDelay := 10 * time.Millisecond
 	eval, err := g.startEvaluator(hdr, paysetHint)
 	if err != nil {
-		return nil, 0, fmt.Errorf("could not start evaluator: %w", err)
+		return nil, 0, 0, fmt.Errorf("could not start evaluator: %w", err)
 	}
 	for i, txGroup := range txGroups {
 		for {
 			err := eval.TransactionGroup(txGroup)
 			if err != nil {
 				if strings.Contains(err.Error(), "database table is locked") {
+					time.Sleep(waitDelay)
+					commitWaitTime += waitDelay
 					// sometimes the database is locked, so we retry
 					continue
 				}
-				return nil, 0, fmt.Errorf("could not evaluate transaction group %d: %w", i, err)
+				return nil, 0, 0, fmt.Errorf("could not evaluate transaction group %d: %w", i, err)
 			}
 			break
 		}
 	}
 	lvb, err := eval.GenerateBlock()
-	return lvb, eval.TestingTxnCounter(), err
+	return lvb, eval.TestingTxnCounter(), commitWaitTime, err
 }
 
 func countInners(ad txn.ApplyData) int {

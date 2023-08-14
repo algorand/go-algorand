@@ -112,7 +112,8 @@ type generator struct {
 	reportData Report
 	// latestData keeps a count of how many transactions of each
 	// txType occurred in the current round.
-	latestData map[TxTypeID]uint64
+	latestData      map[TxTypeID]uint64
+	totalBlockBytes uint64
 
 	// ledger
 	ledger *ledger.Ledger
@@ -149,7 +150,10 @@ type assetHolding struct {
 }
 
 // Report is the generation report.
-type Report map[TxTypeID]TxData
+type Report struct {
+	Counters     map[string]uint64   `json:"counters"`
+	Transactions map[TxTypeID]TxData `json:"transactions"`
+}
 
 // EffectsReport collates transaction counts caused by a root transaction.
 type EffectsReport map[string]uint64

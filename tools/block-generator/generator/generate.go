@@ -105,10 +105,11 @@ func MakeGenerator(log logging.Logger, dbround uint64, bkGenesis bookkeeping.Gen
 		rewardsResidue:            0,
 		rewardsRate:               0,
 		rewardsRecalculationRound: 0,
-		reportData:                make(map[TxTypeID]TxData),
 		latestData:                make(map[TxTypeID]uint64),
 		roundOffset:               dbround,
 	}
+	gen.reportData.Transactions = make(map[TxTypeID]TxData)
+	gen.reportData.Counters = make(map[string]uint64)
 
 	gen.feeSink[31] = 1
 	gen.rewardsPool[31] = 2
@@ -371,8 +372,9 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 			intra += numTxns
 		}
 		generated = time.Now()
+		g.reportData.Counters["ledger_eval_time_ms"] += uint64(generated.Sub(start).Milliseconds())
 
-		vBlock, ledgerTxnCount, err := g.evaluateBlock(cert.Block.BlockHeader, txGroupsAD, int(intra))
+		vBlock, ledgerTxnCount, commitWaitTime, err := g.evaluateBlock(cert.Block.BlockHeader, txGroupsAD, int(intra))
 		if err != nil {
 			return fmt.Errorf("failed to evaluate block: %w", err)
 		}
@@ -380,12 +382,15 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter+intra)
 		}
 		evaluated = time.Now()
+		g.reportData.Counters["ledger_eval_time_ms"] += uint64(evaluated.Sub(generated).Milliseconds())
 
 		err = g.ledger.AddValidatedBlock(*vBlock, cert.Certificate)
 		if err != nil {
 			return fmt.Errorf("failed to add validated block: %w", err)
 		}
 		validated = time.Now()
+		g.reportData.Counters["commit_wait_time_ms"] += uint64(commitWaitTime.Milliseconds())
+		g.reportData.Counters["ledger_validate_time_ms"] += uint64((validated.Sub(evaluated) - commitWaitTime).Milliseconds())
 
 		cert.Block.Payset = vBlock.Block().Payset
 
@@ -812,7 +817,7 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 	}
 
 	if g.balances[senderIndex] < txn.Fee.ToUint64() {
-		fmt.Printf("\n\nthe sender account does not have enough algos for the transfer. idx %d, asset transaction type %v, num %d\n\n", senderIndex, actual, g.reportData[actual].GenerationCount)
+		fmt.Printf("\n\nthe sender account does not have enough algos for the transfer. idx %d, asset transaction type %v, num %d\n\n", senderIndex, actual, g.reportData.Transactions[actual].GenerationCount)
 		os.Exit(1)
 	}
 
@@ -835,10 +840,10 @@ func track(id TxTypeID) (TxTypeID, time.Time) {
 
 func (g *generator) recordData(id TxTypeID, start time.Time) {
 	g.latestData[id]++
-	data := g.reportData[id]
+	data := g.reportData.Transactions[id]
 	data.GenerationCount += 1
 	data.GenerationTime += time.Since(start)
-	g.reportData[id] = data
+	g.reportData.Transactions[id] = data
 }
 
 // ---- sign transactions ----

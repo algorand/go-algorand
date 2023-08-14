@@ -71,7 +71,7 @@ func countEffects(actual TxTypeID) uint64 {
 
 func CumulativeEffects(report Report) EffectsReport {
 	effsReport := make(EffectsReport)
-	for txType, data := range report {
+	for txType, data := range report.Transactions {
 		rootCount := data.GenerationCount
 		effsReport[string(txType)] += rootCount
 		for _, effect := range effects[txType] {
