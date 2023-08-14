@@ -30,6 +30,7 @@ import (
 
 // streamManager implements network.Notifiee to create and manage streams for use with non-gossipsub protocols.
 type streamManager struct {
+	ctx     context.Context
 	log     logging.Logger
 	host    host.Host
 	handler StreamHandler
@@ -41,8 +42,9 @@ type streamManager struct {
 // StreamHandler is called when a new bidirectional stream for a given protocol and peer is opened.
 type StreamHandler func(ctx context.Context, pid peer.ID, s network.Stream, incoming bool)
 
-func makeStreamManager(log logging.Logger, h host.Host, handler StreamHandler) *streamManager {
+func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, handler StreamHandler) *streamManager {
 	return &streamManager{
+		ctx:     ctx,
 		log:     log,
 		host:    h,
 		handler: handler,
@@ -71,7 +73,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 				n.log.Infof("Failed to check old stream with %s: %v", remotePeer, err)
 			}
 			n.streams[stream.Conn().RemotePeer()] = stream
-			n.handler(context.TODO(), remotePeer, stream, true)
+			n.handler(n.ctx, remotePeer, stream, true)
 			return
 		}
 		// otherwise, the old stream is still open, so we can close the new one
@@ -80,7 +82,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	}
 	// no old stream
 	n.streams[stream.Conn().RemotePeer()] = stream
-	n.handler(context.TODO(), remotePeer, stream, true)
+	n.handler(n.ctx, remotePeer, stream, true)
 }
 
 // Connected is called when a connection is opened
@@ -100,14 +102,14 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		return // there's already an active stream with this peer for our protocol
 	}
 
-	stream, err := n.host.NewStream(context.Background(), remotePeer, AlgorandWsProtocol)
+	stream, err := n.host.NewStream(n.ctx, remotePeer, AlgorandWsProtocol)
 	if err != nil {
 		n.log.Infof("Failed to open stream to %s: %v", remotePeer, err)
 		return
 	}
 
 	n.streams[remotePeer] = stream
-	n.handler(context.TODO(), remotePeer, stream, false)
+	n.handler(n.ctx, remotePeer, stream, false)
 }
 
 // Disconnected is called when a connection is closed

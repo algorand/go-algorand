@@ -53,7 +53,7 @@ const AlgorandWsProtocol = "/algorand-ws/1.0.0"
 const dialTimeout = 30 * time.Second
 
 // MakeService creates a P2P service instance
-func MakeService(log logging.Logger, cfg config.Local, datadir string, pstore peerstore.Peerstore, wsStreamHandler StreamHandler) (*Service, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, datadir string, pstore peerstore.Peerstore, wsStreamHandler StreamHandler) (*Service, error) {
 	// load stored peer ID, or make ephemeral peer ID
 	privKey, err := GetPrivKey(cfg, datadir)
 	if err != nil {
@@ -84,8 +84,7 @@ func MakeService(log logging.Logger, cfg config.Local, datadir string, pstore pe
 	h.Network().Notify(sm)
 	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 
-	psCtx := context.TODO()
-	ps, err := makePubSub(psCtx, cfg, h)
+	ps, err := makePubSub(ctx, cfg, h)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +94,7 @@ func MakeService(log logging.Logger, cfg config.Local, datadir string, pstore pe
 		host:      h,
 		streams:   sm,
 		pubsub:    ps,
-		pubsubCtx: psCtx,
+		pubsubCtx: ctx,
 		topics:    make(map[string]*pubsub.Topic),
 	}, nil
 }

@@ -88,7 +88,7 @@ func TestP2PSubmitTX(t *testing.T) {
 
 	// send messages from B and confirm that they get received by C (via A)
 	for i := 0; i < 10; i++ {
-		err = netB.Broadcast(context.TODO(), protocol.TxnTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
+		err = netB.Broadcast(context.Background(), protocol.TxnTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
 		require.NoError(t, err)
 	}
 
@@ -168,7 +168,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	// send messages from B and confirm that they get received by C (via A)
 	for i := 0; i < 10; i++ {
-		err = netB.Broadcast(context.TODO(), testTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
+		err = netB.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
 		require.NoError(t, err)
 	}
 
