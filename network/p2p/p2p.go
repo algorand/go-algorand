@@ -115,7 +115,7 @@ func (s *Service) DialPeers(targetConnCount int) {
 	peerIDs := s.host.Peerstore().Peers()
 	for _, peerID := range peerIDs {
 		// if we are at our target count stop trying to connect
-		if len(s.host.Network().Conns()) >= targetConnCount {
+		if len(s.host.Network().Conns()) == targetConnCount {
 			return
 		}
 		// if we are already connected to this peer, skip it
