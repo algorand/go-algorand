@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache@v3.3.1
         with:
           path: cicdtmp/golangci-lint/golangci-lint-cgo
-          key: cicd-golangci-lint-cgo-v0.0.2
+          key: cicd-golangci-lint-cgo-v0.0.2-${{ env.GO_VERSION }}
 
       - name: Build custom golangci-lint with CGO_ENABLED
         if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
