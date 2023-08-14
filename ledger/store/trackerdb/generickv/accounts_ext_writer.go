@@ -137,6 +137,8 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 	iter := w.kvr.NewIter(start[:], end[:], true)
 	defer iter.Close()
 
+	seenAddrs := make(map[basics.Address]struct{})
+
 	toDeletePrimaryIndex := make([]struct {
 		basics.Address
 		basics.Round
@@ -144,8 +146,7 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 
 	toDeleteSecondaryIndex := make([][]byte, 0)
 
-	var prevAddr basics.Address
-
+	// loop through the rounds in reverse order (latest first)
 	for iter.Next() {
 		key := iter.Key()
 
@@ -153,16 +154,14 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 		addr := extractOnlineAccountBalanceAddress(key)
 		round := extractOnlineAccountBalanceRound(key)
 
-		if addr != prevAddr {
+		// check that we have NOT seen this address before
+		if _, ok := seenAddrs[addr]; !ok {
 			// new address
-			// if the first (latest) entry is
-			//  - offline then delete all
-			//  - online then safe to delete all previous except this first (latest)
+			// if the first time (latest in rnd, order reversed) we see it the entry is:
+			//  - offline -> then delete all
+			//  - online -> then safe to delete all previous except this first (latest)
 
-			// reset the state
-			prevAddr = addr
-
-			// delete on voting empty
+			// check if voting data is empty (it means the account is offline)
 			var oad trackerdb.BaseOnlineAccountData
 			var data []byte
 			data, err = iter.Value()
@@ -174,13 +173,16 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 				return err
 			}
 			if oad.IsVotingEmpty() {
-				// delete this and all subsequent
+				// delete this entry (all subsequent will be deleted too outside the if)
 				toDeletePrimaryIndex = append(toDeletePrimaryIndex, struct {
 					basics.Address
 					basics.Round
 				}{addr, round})
 				toDeleteSecondaryIndex = append(toDeleteSecondaryIndex, key)
 			}
+
+			// mark addr as seen
+			seenAddrs[addr] = struct{}{}
 
 			// restart the loop
 			// if there are some subsequent entries, they will deleted on the next iteration
