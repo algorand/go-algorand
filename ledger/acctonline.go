@@ -349,7 +349,11 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 	return offset
 }
 
-func (ao *onlineAccounts) handleUnorderedCommitOrError(dcc *deferredCommitContext) {
+func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (ao *onlineAccounts) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (ao *onlineAccounts) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (ao *onlineAccounts) maxBalLookback() uint64 {

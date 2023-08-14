@@ -47,6 +47,7 @@ const (
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
 	"/v2/transactions":          true,
+	"/v2/transactions/async":    true,
 	"/v2/teal/dryrun":           true,
 	"/v2/teal/compile":          true,
 	"/v2/participation":         true,
@@ -524,6 +525,12 @@ func (client RestClient) SuggestedParams() (response model.TransactionParameters
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
 	err = client.post(&response, "/v2/transactions", nil, protocol.Encode(&txn), false)
+	return
+}
+
+// SendRawTransactionAsync gets a SignedTxn and broadcasts it to the network
+func (client RestClient) SendRawTransactionAsync(txn transactions.SignedTxn) (response model.PostTransactionsResponse, err error) {
+	err = client.post(&response, "/v2/transactions/async", nil, protocol.Encode(&txn), true)
 	return
 }
 

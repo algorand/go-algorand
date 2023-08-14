@@ -19,6 +19,7 @@ package trackerdb
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -29,6 +30,19 @@ import (
 
 // ErrNotFound is returned when a record is not found.
 var ErrNotFound = errors.New("trackerdb: not found")
+
+// ErrIoErr is returned when a Disk/IO error is encountered
+type ErrIoErr struct {
+	InnerError error
+}
+
+func (e *ErrIoErr) Error() string {
+	return fmt.Sprintf("trackerdb: io error: %v", e.InnerError)
+}
+
+func (e *ErrIoErr) Unwrap() error {
+	return e.InnerError
+}
 
 // AccountRef is an opaque ref to an account in the db.
 type AccountRef interface {

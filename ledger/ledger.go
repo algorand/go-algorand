@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -296,9 +297,12 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging
 	go func() {
 		var lerr error
 		switch cfg.StorageEngine {
+		case "pebbledb":
+			dir := dbPathPrefix + "/tracker.pebble"
+			trackerDBs, lerr = pebbledbdriver.Open(dir, dbMem, config.Consensus[protocol.ConsensusCurrentVersion], log)
+		// anything else will initialize a sqlite engine.
 		case "sqlite":
 			fallthrough
-		// anything else will initialize a sqlite engine.
 		default:
 			file := dbPathPrefix + ".tracker.sqlite"
 			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
@@ -432,8 +436,13 @@ func (l *Ledger) UnregisterVotersCommitListener() {
 // written to disk.  Returns the minimum block number that must be kept
 // in the database.
 func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 	minToSave := l.trackers.committedUpTo(r)
 
 	if l.archival {
@@ -704,8 +713,13 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 // behaves like AddBlock.
 func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error {
 	// Grab the tracker lock first, to ensure newBlock() is notified before committedUpTo().
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 
 	blk := vb.Block()
 	err := l.blockQ.putBlock(blk, cert)
@@ -866,3 +880,5 @@ var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "c
 var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")
 var ledgerVerifygenhashCount = metrics.NewCounter("ledger_verifygenhash_count", "calls")
 var ledgerVerifygenhashMicros = metrics.NewCounter("ledger_verifygenhash_micros", "µs spent")
+var ledgerTrackerMuLockCount = metrics.NewCounter("ledger_lock_trackermu_count", "calls")
+var ledgerTrackerMuLockMicros = metrics.NewCounter("ledger_lock_trackermu_micros", "µs spent")

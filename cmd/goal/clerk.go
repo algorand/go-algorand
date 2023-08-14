@@ -74,10 +74,11 @@ var (
 	simulateAllowMoreOpcodeBudget bool
 	simulateExtraOpcodeBudget     uint64
 
-	simulateFullTrace          bool
-	simulateEnableRequestTrace bool
-	simulateStackChange        bool
-	simulateScratchChange      bool
+	simulateFullTrace             bool
+	simulateEnableRequestTrace    bool
+	simulateStackChange           bool
+	simulateScratchChange         bool
+	simulateAllowUnnamedResources bool
 )
 
 func init() {
@@ -171,6 +172,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
 	simulateCmd.Flags().BoolVar(&simulateStackChange, "stack", false, "Report stack change during simulation time")
 	simulateCmd.Flags().BoolVar(&simulateScratchChange, "scratch", false, "Report scratch change during simulation time")
+	simulateCmd.Flags().BoolVar(&simulateAllowUnnamedResources, "allow-unnamed-resources", false, "Allow access to unnamed resources during simulation")
 }
 
 var clerkCmd = &cobra.Command{
@@ -1281,10 +1283,11 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				AllowEmptySignatures: simulateAllowEmptySignatures,
-				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
-				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
+				AllowEmptySignatures:  simulateAllowEmptySignatures,
+				AllowMoreLogging:      simulateAllowMoreLogging,
+				AllowUnnamedResources: simulateAllowUnnamedResources,
+				ExtraOpcodeBudget:     simulateExtraOpcodeBudget,
+				ExecTraceConfig:       traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			err := writeFile(requestOutFilename, protocol.EncodeJSON(simulateRequest), 0600)
 			if err != nil {
@@ -1305,10 +1308,11 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				AllowEmptySignatures: simulateAllowEmptySignatures,
-				AllowMoreLogging:     simulateAllowMoreLogging,
-				ExtraOpcodeBudget:    simulateExtraOpcodeBudget,
-				ExecTraceConfig:      traceCmdOptionToSimulateTraceConfigModel(),
+				AllowEmptySignatures:  simulateAllowEmptySignatures,
+				AllowMoreLogging:      simulateAllowMoreLogging,
+				AllowUnnamedResources: simulateAllowUnnamedResources,
+				ExtraOpcodeBudget:     simulateExtraOpcodeBudget,
+				ExecTraceConfig:       traceCmdOptionToSimulateTraceConfigModel(),
 			}
 			simulateResponse, responseErr = client.SimulateTransactions(simulateRequest)
 		} else {
