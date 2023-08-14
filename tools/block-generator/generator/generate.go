@@ -17,7 +17,6 @@
 package generator
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,49 +31,18 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	txn "github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-algorand/tools/block-generator/util"
 )
 
-// ---- templates ----
-
-//go:embed teal/poap_boxes.teal
-var approvalBoxes string
-var approvalBoxesBytes interface{}
-
-//go:embed teal/poap_clear.teal
-var clearBoxes string
-var clearBoxesBytes interface{}
-
-//go:embed teal/swap_amm.teal
-var approvalSwap string
-var approvalSwapBytes interface{}
-
-//go:embed teal/swap_clear.teal
-var clearSwap string
-var clearSwapBytes interface{}
-
-func init() {
-	prog, err := logic.AssembleString(approvalBoxes)
-	util.MaybeFail(err, "failed to assemble approval program")
-	approvalBoxesBytes = prog.Program
-
-	prog, err = logic.AssembleString(clearBoxes)
-	util.MaybeFail(err, "failed to assemble clear program")
-	clearBoxesBytes = prog.Program
-
-	prog, err = logic.AssembleString(approvalSwap)
-	util.MaybeFail(err, "failed to assemble approvalSwap program")
-	approvalSwapBytes = prog.Program
-
-	prog, err = logic.AssembleString(clearSwap)
-	util.MaybeFail(err, "failed to assemble clearSwap program")
-	clearSwapBytes = prog.Program
-}
+const (
+	blockTotalSizeBytes  = "blocks_total_size_bytes"
+	commitWaitTimeMS     = "commit_wait_time_ms"
+	ledgerEvalTimeMS     = "ledger_eval_time_ms"
+	ledgerValidateTimeMS = "ledger_validate_time_ms"
+)
 
 // ---- constructors ----
 
@@ -382,15 +350,15 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter+intra)
 		}
 		evaluated = time.Now()
-		g.reportData.Counters["ledger_eval_time_ms"] += uint64(evaluated.Sub(generated).Milliseconds())
+		g.reportData.Counters[ledgerEvalTimeMS] += uint64(evaluated.Sub(generated).Milliseconds())
 
 		err = g.ledger.AddValidatedBlock(*vBlock, cert.Certificate)
 		if err != nil {
 			return fmt.Errorf("failed to add validated block: %w", err)
 		}
 		validated = time.Now()
-		g.reportData.Counters["commit_wait_time_ms"] += uint64(commitWaitTime.Milliseconds())
-		g.reportData.Counters["ledger_validate_time_ms"] += uint64((validated.Sub(evaluated) - commitWaitTime).Milliseconds())
+		g.reportData.Counters[commitWaitTimeMS] += uint64(commitWaitTime.Milliseconds())
+		g.reportData.Counters[ledgerValidateTimeMS] += uint64((validated.Sub(evaluated) - commitWaitTime).Milliseconds())
 
 		cert.Block.Payset = vBlock.Block().Payset
 
@@ -405,6 +373,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 	// write the msgpack bytes for a block
 	g.latestBlockMsgp = protocol.EncodeMsgp(&cert)
+	g.reportData.Counters[blockTotalSizeBytes] += uint64(len(g.latestBlockMsgp))
+
 	_, err = output.Write(g.latestBlockMsgp)
 	if err != nil {
 		return err
