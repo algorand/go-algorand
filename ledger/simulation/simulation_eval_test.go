@@ -3369,7 +3369,7 @@ match local global
 err // Unknown command
 
 local:
-  int 0
+  txn Sender
   byte "local-int-key"
   int 0xcafeb0ba
   app_local_put
@@ -3470,7 +3470,7 @@ int 1`,
 											PC: 1,
 										},
 										{
-											PC: 5,
+											PC: 4,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3478,11 +3478,11 @@ int 1`,
 											},
 										},
 										{
-											PC:            7,
+											PC:            6,
 											StackPopCount: 1,
 										},
 										{
-											PC: 153,
+											PC: 154,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3506,7 +3506,7 @@ int 1`,
 											PC: 1,
 										},
 										{
-											PC: 5,
+											PC: 4,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3515,11 +3515,20 @@ int 1`,
 											},
 										},
 										{
-											PC:            7,
+											PC:            6,
 											StackPopCount: 1,
 										},
 										{
-											PC: 10,
+											PC: 9,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 11,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3535,23 +3544,14 @@ int 1`,
 													Uint: 1,
 												},
 											},
-										},
-										{
-											PC: 13,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
 											StackPopCount: 2,
 										},
 										{
-											PC:            14,
+											PC:            13,
 											StackPopCount: 1,
 										},
 										{
-											PC: 153,
+											PC: 154,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3587,7 +3587,7 @@ int 1`,
 											PC: 1,
 										},
 										{
-											PC: 5,
+											PC: 4,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3596,11 +3596,11 @@ int 1`,
 											},
 										},
 										{
-											PC:            7,
+											PC:            6,
 											StackPopCount: 1,
 										},
 										{
-											PC: 10,
+											PC: 9,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3608,7 +3608,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 12,
+											PC: 11,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3617,7 +3617,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 13,
+											PC: 12,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3626,11 +3626,11 @@ int 1`,
 											StackPopCount: 2,
 										},
 										{
-											PC:            14,
+											PC:            13,
 											StackPopCount: 1,
 										},
 										{
-											PC: 17,
+											PC: 16,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3639,7 +3639,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 24,
+											PC: 23,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3648,7 +3648,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 32,
+											PC: 31,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3657,11 +3657,11 @@ int 1`,
 											},
 										},
 										{
-											PC:            35,
+											PC:            34,
 											StackPopCount: 3,
 										},
 										{
-											PC: 93,
+											PC: 94,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3670,7 +3670,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 109,
+											PC: 110,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3679,7 +3679,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 115,
+											PC: 116,
 											StateChanges: []simulation.StateOperation{
 												{
 													AppStateOperationT: logic.AppStateWrite | logic.AppStateCreate,
@@ -3695,7 +3695,7 @@ int 1`,
 											StackPopCount: 2,
 										},
 										{
-											PC: 116,
+											PC: 117,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3704,7 +3704,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 134,
+											PC: 135,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3713,7 +3713,7 @@ int 1`,
 											},
 										},
 										{
-											PC:            149,
+											PC:            150,
 											StackPopCount: 2,
 											StateChanges: []simulation.StateOperation{
 												{
@@ -3728,9 +3728,9 @@ int 1`,
 												},
 											},
 										},
-										{PC: 150},
+										{PC: 151},
 										{
-											PC: 153,
+											PC: 154,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3768,7 +3768,7 @@ int 1`,
 											PC: 1,
 										},
 										{
-											PC: 5,
+											PC: 4,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3777,11 +3777,11 @@ int 1`,
 											},
 										},
 										{
-											PC:            7,
+											PC:            6,
 											StackPopCount: 1,
 										},
 										{
-											PC: 10,
+											PC: 9,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3789,7 +3789,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 12,
+											PC: 11,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3798,7 +3798,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 13,
+											PC: 12,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
@@ -3807,11 +3807,11 @@ int 1`,
 											StackPopCount: 2,
 										},
 										{
-											PC:            14,
+											PC:            13,
 											StackPopCount: 1,
 										},
 										{
-											PC: 17,
+											PC: 16,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3820,7 +3820,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 24,
+											PC: 23,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3829,7 +3829,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 32,
+											PC: 31,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3838,14 +3838,15 @@ int 1`,
 											},
 										},
 										{
-											PC:            35,
+											PC:            34,
 											StackPopCount: 3,
 										},
 										{
-											PC: 42,
+											PC: 41,
 											StackAdded: []basics.TealValue{
 												{
-													Type: basics.TealUintType,
+													Type:  basics.TealBytesType,
+													Bytes: string(sender.Addr[:]),
 												},
 											},
 										},
@@ -3879,7 +3880,10 @@ int 1`,
 														Type: basics.TealUintType,
 														Uint: 0xcafeb0ba,
 													},
-													Account: basics.TealValue{Type: basics.TealUintType},
+													Account: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: string(sender.Addr[:]),
+													},
 												},
 											},
 											StackPopCount: 3,
@@ -3893,7 +3897,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 66,
+											PC: 67,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3902,7 +3906,7 @@ int 1`,
 											},
 										},
 										{
-											PC: 83,
+											PC: 84,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
@@ -3911,7 +3915,7 @@ int 1`,
 											},
 										},
 										{
-											PC:            89,
+											PC:            90,
 											StackPopCount: 3,
 											StateChanges: []simulation.StateOperation{
 												{
@@ -3927,9 +3931,9 @@ int 1`,
 												},
 											},
 										},
-										{PC: 90},
+										{PC: 91},
 										{
-											PC: 153,
+											PC: 154,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,

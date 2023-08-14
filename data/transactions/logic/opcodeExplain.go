@@ -327,6 +327,6 @@ func AppNewStateQuerying(
 		}
 		return localValue
 	default:
-		panic("appState enum variable out of scope, should be either Box/GlobalState/LocalState")
+		return basics.TealValue{}
 	}
 }
