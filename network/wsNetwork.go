@@ -853,7 +853,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.messagesOfInterestRefresh = make(chan struct{}, 2)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
-		wn.RegisterMessageInterest(protocol.StateProofSigTag)
+		wn.registerMessageInterest(protocol.StateProofSigTag)
 	}
 }
 
@@ -2664,12 +2664,12 @@ func SetUserAgentHeader(header http.Header) {
 	header.Set(UserAgentHeader, ua)
 }
 
-// RegisterMessageInterest notifies the network library that this node
+// registerMessageInterest notifies the network library that this node
 // wants to receive messages with the specified tag.  This will cause
 // this node to send corresponding MsgOfInterest notifications to any
 // newly connecting peers.  This should be called before the network
 // is started.
-func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) {
+func (wn *WebsocketNetwork) registerMessageInterest(t protocol.Tag) {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
@@ -2720,7 +2720,7 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 		wantTXGossip := wn.nodeInfo.IsParticipating()
 		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
 			wn.log.Infof("postMessagesOfInterestThread: enabling TX gossip")
-			wn.RegisterMessageInterest(protocol.TxnTag)
+			wn.registerMessageInterest(protocol.TxnTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
 		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
 			wn.log.Infof("postMessagesOfInterestThread: disabling TX gossip")

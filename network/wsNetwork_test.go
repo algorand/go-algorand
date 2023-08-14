@@ -2866,7 +2866,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	// have netB asking netA to send it ft2, deregister ping handler to make sure that we aren't exceeding the maximum MOI messagesize
 	// Max MOI size is calculated by encoding all of the valid tags, since we are using a custom tag here we must deregister one in the default set.
 	netB.DeregisterMessageInterest(protocol.PingTag)
-	netB.RegisterMessageInterest(ft2)
+	netB.registerMessageInterest(ft2)
 
 	netB.Start()
 	defer netStop(t, netB, "B")
@@ -2918,7 +2918,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	// have netB asking netA to send it only AgreementVoteTag and ProposalPayloadTag
-	netB.RegisterMessageInterest(ft2)
+	netB.registerMessageInterest(ft2)
 	netB.DeregisterMessageInterest(ft1)
 	netB.DeregisterMessageInterest(ft3)
 	netB.DeregisterMessageInterest(ft4)

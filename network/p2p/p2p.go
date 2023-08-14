@@ -28,7 +28,6 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
@@ -40,7 +39,6 @@ import (
 type Service struct {
 	log       logging.Logger
 	host      host.Host
-	privKey   crypto.PrivKey
 	streams   *streamManager
 	pubsub    *pubsub.PubSub
 	pubsubCtx context.Context
@@ -94,7 +92,6 @@ func MakeService(log logging.Logger, cfg config.Local, datadir string, pstore pe
 
 	return &Service{
 		log:       log,
-		privKey:   privKey,
 		host:      h,
 		streams:   sm,
 		pubsub:    ps,
