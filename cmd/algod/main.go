@@ -237,17 +237,17 @@ func run() int {
 
 	if !cfg.DisableAPIAuth {
 		// Generate a REST API token if one was not provided
-		apiToken, wroteNewToken, err := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
+		apiToken, wroteNewToken, err2 := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
 
-		if err != nil {
-			log.Fatalf("API token error: %v", err)
+		if err2 != nil {
+			log.Fatalf("API token error: %v", err2)
 		}
 
 		if wroteNewToken {
 			fmt.Printf("No REST API Token found. Generated token: %s\n", apiToken)
 		}
 	} else {
-		fmt.Printf("Public (non-admin) API authentication disabled.Token %s not generated\n", tokens.AlgodTokenFilename)
+		fmt.Printf("Public (non-admin) API authentication disabled. %s not generated\n", tokens.AlgodTokenFilename)
 	}
 
 	// Generate a admin REST API token if one was not provided

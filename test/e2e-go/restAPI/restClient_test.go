@@ -27,12 +27,15 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/util/tokens"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -3478,4 +3481,25 @@ func TestDisabledAPIConfig(t *testing.T) {
 	a.NoError(err)
 	a.NotEmpty(statusResponse2)
 	a.True(statusResponse2.LastRound >= statusResponse.LastRound)
+
+	// Check the public token isn't created when the API authentication is disabled
+	nc, err := localFixture.GetNodeController("Primary")
+	_, err = os.Stat(path.Join(nc.GetDataDir(), tokens.AlgodAdminTokenFilename))
+	assert.NoError(t, err)
+	_, err = os.Stat(path.Join(nc.GetDataDir(), tokens.AlgodTokenFilename))
+	assert.True(t, os.IsNotExist(err))
+
+	// check public api works without a token
+	testClient.WaitForRound(1)
+	_, err = testClient.Block(1)
+	assert.NoError(t, err)
+	// check admin api works with the generated token
+	_, err = testClient.GetParticipationKeys()
+	assert.NoError(t, err)
+	// check admin api doesn't work with an invalid token
+	algodURL, err := nc.ServerURL()
+	assert.NoError(t, err)
+	client := client.MakeRestClient(algodURL, "")
+	_, err = client.GetParticipationKeys()
+	assert.Contains(t, err.Error(), "Invalid API Token")
 }
