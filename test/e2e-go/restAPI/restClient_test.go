@@ -3374,12 +3374,11 @@ end:
 		{Pc: 110},
 		{
 			Pc: 116,
-			StateChanges: &[]model.AppStateOperation{
+			StateChanges: &[]model.ApplicationStateOperation{
 				{
-					OperationType: uint64(logic.AppStateWrite | logic.AppStateCreate),
-					AppStateType:  uint64(logic.GlobalState),
-					AppId:         uint64(futureAppID),
-					Key:           []byte("global-int-key"),
+					Operation:    "w",
+					AppStateType: "g",
+					Key:          []byte("global-int-key"),
 					NewValue: &model.AvmValue{
 						Type: uint64(basics.TealUintType),
 						Uint: toPtr[uint64](0xdeadbeef),
@@ -3391,12 +3390,11 @@ end:
 		{Pc: 135},
 		{
 			Pc: 150,
-			StateChanges: &[]model.AppStateOperation{
+			StateChanges: &[]model.ApplicationStateOperation{
 				{
-					OperationType: uint64(logic.AppStateWrite | logic.AppStateCreate),
-					AppStateType:  uint64(logic.GlobalState),
-					AppId:         uint64(futureAppID),
-					Key:           []byte("global-bytes-key"),
+					Operation:    "w",
+					AppStateType: "g",
+					Key:          []byte("global-bytes-key"),
 					NewValue: &model.AvmValue{
 						Type:  uint64(basics.TealBytesType),
 						Bytes: toPtr([]byte("welt am draht")),
@@ -3434,12 +3432,11 @@ end:
 		{Pc: 58},
 		{
 			Pc: 64,
-			StateChanges: &[]model.AppStateOperation{
+			StateChanges: &[]model.ApplicationStateOperation{
 				{
-					OperationType: uint64(logic.AppStateWrite | logic.AppStateCreate),
-					AppStateType:  uint64(logic.LocalState),
-					AppId:         uint64(futureAppID),
-					Key:           []byte("local-int-key"),
+					Operation:    "w",
+					AppStateType: "l",
+					Key:          []byte("local-int-key"),
 					NewValue: &model.AvmValue{
 						Type: uint64(basics.TealUintType),
 						Uint: toPtr[uint64](0xcafeb0ba),
@@ -3452,12 +3449,11 @@ end:
 		{Pc: 84},
 		{
 			Pc: 90,
-			StateChanges: &[]model.AppStateOperation{
+			StateChanges: &[]model.ApplicationStateOperation{
 				{
-					OperationType: uint64(logic.AppStateWrite | logic.AppStateCreate),
-					AppStateType:  uint64(logic.LocalState),
-					AppId:         uint64(futureAppID),
-					Key:           []byte("local-bytes-key"),
+					Operation:    "w",
+					AppStateType: "l",
+					Key:          []byte("local-bytes-key"),
 					NewValue: &model.AvmValue{
 						Type:  uint64(basics.TealBytesType),
 						Bytes: toPtr([]byte("xqcL")),

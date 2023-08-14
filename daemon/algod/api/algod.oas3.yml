@@ -1200,39 +1200,6 @@
         ],
         "type": "object"
       },
-      "AppStateOperation": {
-        "description": "An operation against an app global/local/box key-value pair.",
-        "properties": {
-          "app-id": {
-            "description": "Application index.",
-            "type": "integer"
-          },
-          "app-state-type": {
-            "description": "Type of app state. Value `1` is **global state**, `2` is **local state**, `3` is **boxes**.",
-            "type": "integer"
-          },
-          "key": {
-            "description": "The key of the global/local/box state get written to.",
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
-          },
-          "new-value": {
-            "$ref": "#/components/schemas/AvmValue"
-          },
-          "operation-type": {
-            "description": "Operation type. Value `1` is **create**, `2` is **write**, `4` is **read**, `8` is **delete**.",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "app-id",
-          "app-state-type",
-          "key",
-          "operation-type"
-        ],
-        "type": "object"
-      },
       "Application": {
         "description": "Application index and its parameters",
         "properties": {
@@ -1330,6 +1297,34 @@
           "approval-program",
           "clear-state-program",
           "creator"
+        ],
+        "type": "object"
+      },
+      "ApplicationStateOperation": {
+        "description": "An operation against an application global/local/box key-value pair.",
+        "properties": {
+          "app-state-type": {
+            "description": "Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.",
+            "type": "string"
+          },
+          "key": {
+            "description": "The key of the global/local/box state get written to.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "new-value": {
+            "$ref": "#/components/schemas/AvmValue"
+          },
+          "operation": {
+            "description": "Operation type. Value `w` is **write**, `d` is **delete**.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app-state-type",
+          "key",
+          "operation"
         ],
         "type": "object"
       },
@@ -2136,7 +2131,7 @@
             "type": "boolean"
           },
           "state-change": {
-            "description": "A boolean option enabling returning app state changes together with execution trace during simulation.",
+            "description": "A boolean option enabling returning application state changes together with execution trace during simulation.",
             "type": "boolean"
           }
         },
@@ -2320,9 +2315,9 @@
             "type": "integer"
           },
           "state-changes": {
-            "description": "The operations against app states.",
+            "description": "The operations against application states.",
             "items": {
-              "$ref": "#/components/schemas/AppStateOperation"
+              "$ref": "#/components/schemas/ApplicationStateOperation"
             },
             "type": "array"
           }

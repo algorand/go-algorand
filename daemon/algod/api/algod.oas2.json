@@ -3686,7 +3686,7 @@
           "type": "boolean"
         },
         "state-change": {
-          "description": "A boolean option enabling returning app state changes together with execution trace during simulation.",
+          "description": "A boolean option enabling returning application state changes together with execution trace during simulation.",
           "type": "boolean"
         }
       }
@@ -4096,26 +4096,21 @@
         }
       }
     },
-    "AppStateOperation": {
-      "description": "An operation against an app global/local/box key-value pair.",
+    "ApplicationStateOperation": {
+      "description": "An operation against an application global/local/box key-value pair.",
       "required": [
-        "operation-type",
+        "operation",
         "app-state-type",
-        "app-id",
         "key"
       ],
       "properties": {
-        "operation-type": {
-          "description": "Operation type. Value `1` is **create**, `2` is **write**, `4` is **read**, `8` is **delete**.",
-          "type": "integer"
+        "operation": {
+          "description": "Operation type. Value `w` is **write**, `d` is **delete**.",
+          "type": "string"
         },
         "app-state-type": {
-          "description": "Type of app state. Value `1` is **global state**, `2` is **local state**, `3` is **boxes**.",
-          "type": "integer"
-        },
-        "app-id": {
-          "description": "Application index.",
-          "type": "integer"
+          "description": "Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.",
+          "type": "string"
         },
         "key": {
           "description": "The key of the global/local/box state get written to.",
@@ -4146,10 +4141,10 @@
           }
         },
         "state-changes": {
-          "description": "The operations against app states.",
+          "description": "The operations against application states.",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/AppStateOperation"
+            "$ref": "#/definitions/ApplicationStateOperation"
           }
         },
         "spawned-inners": {

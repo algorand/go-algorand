@@ -271,24 +271,6 @@ type AccountStateDelta struct {
 	Delta StateDelta `json:"delta"`
 }
 
-// AppStateOperation An operation against an app global/local/box key-value pair.
-type AppStateOperation struct {
-	// AppId Application index.
-	AppId uint64 `json:"app-id"`
-
-	// AppStateType Type of app state. Value `1` is **global state**, `2` is **local state**, `3` is **boxes**.
-	AppStateType uint64 `json:"app-state-type"`
-
-	// Key The key of the global/local/box state get written to.
-	Key []byte `json:"key"`
-
-	// NewValue Represents an AVM value.
-	NewValue *AvmValue `json:"new-value,omitempty"`
-
-	// OperationType Operation type. Value `1` is **create**, `2` is **write**, `4` is **read**, `8` is **delete**.
-	OperationType uint64 `json:"operation-type"`
-}
-
 // Application Application index and its parameters
 type Application struct {
 	// Id \[appidx\] application index.
@@ -341,6 +323,21 @@ type ApplicationParams struct {
 
 	// LocalStateSchema Specifies maximums on the number of each type that may be stored.
 	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
+}
+
+// ApplicationStateOperation An operation against an application global/local/box key-value pair.
+type ApplicationStateOperation struct {
+	// AppStateType Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.
+	AppStateType string `json:"app-state-type"`
+
+	// Key The key of the global/local/box state get written to.
+	Key []byte `json:"key"`
+
+	// NewValue Represents an AVM value.
+	NewValue *AvmValue `json:"new-value,omitempty"`
+
+	// Operation Operation type. Value `w` is **write**, `d` is **delete**.
+	Operation string `json:"operation"`
 }
 
 // ApplicationStateSchema Specifies maximums on the number of each type that may be stored.
@@ -734,7 +731,7 @@ type SimulateTraceConfig struct {
 	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
 	StackChange *bool `json:"stack-change,omitempty"`
 
-	// StateChange A boolean option enabling returning app state changes together with execution trace during simulation.
+	// StateChange A boolean option enabling returning application state changes together with execution trace during simulation.
 	StateChange *bool `json:"state-change,omitempty"`
 }
 
@@ -836,8 +833,8 @@ type SimulationOpcodeTraceUnit struct {
 	// StackPopCount The number of deleted stack values by this opcode.
 	StackPopCount *uint64 `json:"stack-pop-count,omitempty"`
 
-	// StateChanges The operations against app states.
-	StateChanges *[]AppStateOperation `json:"state-changes,omitempty"`
+	// StateChanges The operations against application states.
+	StateChanges *[]ApplicationStateOperation `json:"state-changes,omitempty"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.

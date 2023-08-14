@@ -110,7 +110,7 @@ func omitEmpty[T comparable](val T) *T {
 	return &val
 }
 
-func nilToDefault[T any](valPtr *T) T {
+func nilToZero[T any](valPtr *T) T {
 	if valPtr == nil {
 		var defaultV T
 		return defaultV
@@ -381,13 +381,36 @@ func convertScratchChange(scratchChange simulation.ScratchChange) model.ScratchC
 	}
 }
 
-func convertAppStateChange(stateChange simulation.StateOperation) model.AppStateOperation {
-	return model.AppStateOperation{
-		Key:           []byte(stateChange.Key),
-		NewValue:      omitEmpty(convertTealValue(stateChange.NewValue)),
-		AppId:         uint64(stateChange.AppIndex),
-		OperationType: uint64(stateChange.AppStateOperationT),
-		AppStateType:  uint64(stateChange.AppStateEnum),
+func convertApplicationState(stateEnum logic.AppStateEnum) string {
+	switch stateEnum {
+	case logic.LocalState:
+		return "l"
+	case logic.GlobalState:
+		return "g"
+	case logic.Box:
+		return "b"
+	default:
+		return ""
+	}
+}
+
+func convertApplicationStateOperation(opEnum logic.AppStateOperationT) string {
+	switch opEnum {
+	case logic.AppStateWrite:
+		return "w"
+	case logic.AppStateDelete:
+		return "d"
+	default:
+		return ""
+	}
+}
+
+func convertApplicationStateChange(stateChange simulation.StateOperation) model.ApplicationStateOperation {
+	return model.ApplicationStateOperation{
+		Key:          []byte(stateChange.Key),
+		NewValue:     omitEmpty(convertTealValue(stateChange.NewValue)),
+		Operation:    convertApplicationStateOperation(stateChange.AppStateOperationT),
+		AppStateType: convertApplicationState(stateChange.AppStateEnum),
 	}
 }
 
@@ -398,7 +421,7 @@ func convertOpcodeTraceUnit(opcodeTraceUnit simulation.OpcodeTraceUnit) model.Si
 		StackAdditions: sliceOrNil(convertSlice(opcodeTraceUnit.StackAdded, convertTealValue)),
 		StackPopCount:  omitEmpty(opcodeTraceUnit.StackPopCount),
 		ScratchChanges: sliceOrNil(convertSlice(opcodeTraceUnit.ScratchSlotChanges, convertScratchChange)),
-		StateChanges:   sliceOrNil(convertSlice(opcodeTraceUnit.StateChanges, convertAppStateChange)),
+		StateChanges:   sliceOrNil(convertSlice(opcodeTraceUnit.StateChanges, convertApplicationStateChange)),
 	}
 }
 

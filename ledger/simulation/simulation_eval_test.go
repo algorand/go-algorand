@@ -3029,18 +3029,6 @@ int 1`,
 				{Name: []byte("A")},
 			},
 		})
-		readBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
-			Type:          protocol.ApplicationCallTx,
-			Sender:        sender.Addr,
-			ApplicationID: futureAppID,
-			ApplicationArgs: boxOperation{
-				op:   logic.BoxReadOperation,
-				name: "A",
-			}.appArgs(),
-			Boxes: []transactions.BoxRef{
-				{Name: []byte("A")},
-			},
-		})
 		delBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
@@ -3053,19 +3041,18 @@ int 1`,
 				{Name: []byte("A")},
 			},
 		})
-		txntest.Group(&createTxn, &payment, &createBoxTxn, &writeBoxTxn, &readBoxTxn, &delBoxTxn)
+		txntest.Group(&createTxn, &payment, &createBoxTxn, &writeBoxTxn, &delBoxTxn)
 
 		signedCreate := createTxn.Txn().Sign(sender.Sk)
 		signedPay := payment.Txn().Sign(sender.Sk)
 		signedCreateBox := createBoxTxn.Txn().Sign(sender.Sk)
 		signedWriteBox := writeBoxTxn.Txn().Sign(sender.Sk)
-		signedReadBox := readBoxTxn.Txn().Sign(sender.Sk)
 		signedDelBox := delBoxTxn.Txn().Sign(sender.Sk)
 
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
-					{signedCreate, signedPay, signedCreateBox, signedWriteBox, signedReadBox, signedDelBox},
+					{signedCreate, signedPay, signedCreateBox, signedWriteBox, signedDelBox},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable:  true,
@@ -3169,10 +3156,14 @@ int 1`,
 											},
 											StateChanges: []simulation.StateOperation{
 												{
-													AppStateOperationT: logic.AppStateCreate,
+													AppStateOperationT: logic.AppStateWrite,
 													AppStateEnum:       logic.Box,
 													AppIndex:           futureAppID,
 													Key:                "A",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: string(make([]byte, len(boxContent))),
+													},
 												},
 											},
 										},
@@ -3236,56 +3227,6 @@ int 1`,
 									),
 								},
 							},
-							// BoxRead
-							{
-								AppBudgetConsumed: 14,
-								Trace: &simulation.TransactionTrace{
-									ApprovalProgramTrace: boxStateChangeTraceTemplate("read",
-										simulation.OpcodeTraceUnit{
-											PC: 69,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "A",
-												},
-											},
-										},
-										simulation.OpcodeTraceUnit{
-											PC: 72,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: string(boxContent),
-												},
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
-											StackPopCount: 1,
-											StateChanges: []simulation.StateOperation{
-												{
-													AppStateOperationT: logic.AppStateRead,
-													AppStateEnum:       logic.Box,
-													AppIndex:           futureAppID,
-													Key:                "A",
-												},
-											},
-										},
-										simulation.OpcodeTraceUnit{
-											PC:            73,
-											StackPopCount: 1,
-										},
-										simulation.OpcodeTraceUnit{
-											PC:            74,
-											StackPopCount: 1,
-										},
-										simulation.OpcodeTraceUnit{
-											PC: 75,
-										},
-									),
-								},
-							},
 							// BoxDelete
 							{
 								AppBudgetConsumed: 13,
@@ -3329,8 +3270,8 @@ int 1`,
 								},
 							},
 						},
-						AppBudgetAdded:    3500,
-						AppBudgetConsumed: 58,
+						AppBudgetAdded:    2800,
+						AppBudgetConsumed: 44,
 					},
 				},
 			},
@@ -3682,7 +3623,7 @@ int 1`,
 											PC: 116,
 											StateChanges: []simulation.StateOperation{
 												{
-													AppStateOperationT: logic.AppStateWrite | logic.AppStateCreate,
+													AppStateOperationT: logic.AppStateWrite,
 													AppStateEnum:       logic.GlobalState,
 													AppIndex:           futureAppID,
 													Key:                "global-int-key",
@@ -3717,7 +3658,7 @@ int 1`,
 											StackPopCount: 2,
 											StateChanges: []simulation.StateOperation{
 												{
-													AppStateOperationT: logic.AppStateWrite | logic.AppStateCreate,
+													AppStateOperationT: logic.AppStateWrite,
 													AppStateEnum:       logic.GlobalState,
 													AppIndex:           futureAppID,
 													Key:                "global-bytes-key",
@@ -3872,7 +3813,7 @@ int 1`,
 											PC: 64,
 											StateChanges: []simulation.StateOperation{
 												{
-													AppStateOperationT: logic.AppStateWrite | logic.AppStateCreate,
+													AppStateOperationT: logic.AppStateWrite,
 													AppStateEnum:       logic.LocalState,
 													AppIndex:           futureAppID,
 													Key:                "local-int-key",
@@ -3919,7 +3860,7 @@ int 1`,
 											StackPopCount: 3,
 											StateChanges: []simulation.StateOperation{
 												{
-													AppStateOperationT: logic.AppStateWrite | logic.AppStateCreate,
+													AppStateOperationT: logic.AppStateWrite,
 													AppStateEnum:       logic.LocalState,
 													AppIndex:           futureAppID,
 													Key:                "local-bytes-key",

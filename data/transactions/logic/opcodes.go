@@ -583,12 +583,12 @@ var OpSpecs = []OpSpec{
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ii:T"), 2, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ai:T"), directRefEnabledVersion, only(ModeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("ib:a").stateExplain(opAppLocalGetStateChange), 2, only(ModeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("ab:a").stateExplain(opAppLocalGetStateChange), directRefEnabledVersion, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:aT").stateExplain(opAppLocalGetExStateChange), 2, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:aT").stateExplain(opAppLocalGetExStateChange), directRefEnabledVersion, only(ModeApp)},
-	{0x64, "app_global_get", opAppGlobalGet, proto("b:a").stateExplain(opAppGlobalGetStateChange), 2, only(ModeApp)},
-	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:aT").stateExplain(opAppGlobalGetExStateChange), 2, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ab:a"), directRefEnabledVersion, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:aT"), 2, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:aT"), directRefEnabledVersion, only(ModeApp)},
+	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(ModeApp)},
+	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:aT"), 2, only(ModeApp)},
 	{0x66, "app_local_put", opAppLocalPut, proto("iba:").stateExplain(opAppLocalPutStateChange), 2, only(ModeApp)},
 	{0x66, "app_local_put", opAppLocalPut, proto("aba:").stateExplain(opAppLocalPutStateChange), directRefEnabledVersion, only(ModeApp)},
 	{0x67, "app_global_put", opAppGlobalPut, proto("ba:").stateExplain(opAppGlobalPutStateChange), 2, only(ModeApp)},
@@ -671,11 +671,11 @@ var OpSpecs = []OpSpec{
 
 	// Unlimited Global Storage - Boxes
 	{0xb9, "box_create", opBoxCreate, proto("Ni:T").stateExplain(opBoxCreateStateChange), boxVersion, only(ModeApp)},
-	{0xba, "box_extract", opBoxExtract, proto("Nii:b").stateExplain(opBoxExtractStateChange), boxVersion, only(ModeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("Nii:b"), boxVersion, only(ModeApp)},
 	{0xbb, "box_replace", opBoxReplace, proto("Nib:").stateExplain(opBoxReplaceStateChange), boxVersion, only(ModeApp)},
 	{0xbc, "box_del", opBoxDel, proto("N:T").stateExplain(opBoxDelStateChange), boxVersion, only(ModeApp)},
-	{0xbd, "box_len", opBoxLen, proto("N:iT").stateExplain(opBoxLenStateChange), boxVersion, only(ModeApp)},
-	{0xbe, "box_get", opBoxGet, proto("N:bT").stateExplain(opBoxGetStateChange), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("N:iT"), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("N:bT"), boxVersion, only(ModeApp)},
 	{0xbf, "box_put", opBoxPut, proto("Nb:").stateExplain(opBoxPutStateChange), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
