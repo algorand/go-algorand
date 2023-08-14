@@ -1,4 +1,4 @@
-SCENARIO = scenarios/benchmarks/stress.50000.yml
+SCENARIO = scenarios/config.allmixed.small.yml # scenarios/benchmarks/stress.50000.yml
 PG_UP = --start-postgres
 RESETDB = --reset-db
 TIMES = 1
@@ -6,11 +6,11 @@ REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 DURATION = 30s
 VERBOSE = --verbose
 CONDUIT = ./conduit
+EXP_FLAG = # --file-exporter-instead-of-pg
 PGUSER = algorand
 PGDB = generator_db
 PGCONT = "generator-test-container"
 PGCONN = "host=localhost user=$(PGUSER) password=algorand dbname=$(PGDB) port=15432 sslmode=disable"
-
 
 block-generator: clean-generator
 	go build
@@ -34,12 +34,16 @@ run-runner: block-generator
 	--keep-data-dir \
 	--test-duration $(DURATION) \
 	--conduit-log-level trace \
+	$(EXP_FLAG) \
 	--postgres-connection-string $(PGCONN) \
 	--scenario $(SCENARIO) \
 	$(RESETDB) \
 	$(VERBOSE) \
 	--report-directory $(REPORTS)
 	--times $(TIMES)
+
+run-file-exporter:
+	make run-runner EXP_FLAG=--file-exporter-instead-of-pg TIMES=1 RESETDB=
 
 clean-reports:
 	rm -rf $(REPORTS)

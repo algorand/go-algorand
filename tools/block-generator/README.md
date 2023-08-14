@@ -156,19 +156,20 @@ Flags:
   -i, --conduit-binary string               Path to conduit binary.
   -l, --conduit-log-level string            LogLevel to use when starting Conduit. [panic, fatal, error, warn, info, debug, trace] (default "error")
       --cpuprofile string                   Path where Conduit writes its CPU profile.
-  -f, --genesis-file string                 file path to the genesis associated with the db snapshot
+      --file-exporter-instead-of-pg         If set, use the runner will export blocks to files; otherwise, the postgres database is used.
+  -f, --genesis-file string                 The file path to the genesis associated with the db snapshot.
   -h, --help                                help for runner
-  -k, --keep-data-dir                       If set the validator will not delete the data directory after tests complete.
+  -k, --keep-data-dir                       If set, the runner will not delete the data directory after tests complete.
   -p, --metrics-port uint                   Port to start the metrics server at. (default 9999)
   -c, --postgres-connection-string string   Postgres connection string.
-  -r, --report-directory string             Location to place test reports.
-      --reset-db                            If set database will be deleted before running tests.
-      --reset-report-dir                    If set any existing report directory will be deleted before running tests.
+  -r, --report-directory string             Location to place test reports. If --times is used, this is the prefix for multiple report directories.
+      --reset-db                            If set, the database will be deleted before running tests.
+      --reset-report-dir                    If set, any existing report directory will be deleted before running tests.
   -s, --scenario string                     Directory containing scenarios, or specific scenario file.
   -d, --test-duration duration              Duration to use for each scenario. (default 5m0s)
-      --validate                            If set the validator will run after test-duration has elapsed to verify data is correct. An extra line in each report indicates validator success or failure.
-  -v, --verbose                             If set the runner will print debugging information from the generator and ledger.
- ```
+  -t, --times uint                          The number of times to run the scenario(s). (default 1)
+      --validate                            If set, the runner will run after test-duration has elapsed to verify data is correct. An extra line in each report indicates validator success or failure.
+```
 
 ## Example Run using Conduit and Postgres
 

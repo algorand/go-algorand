@@ -42,8 +42,11 @@ import (
 	"github.com/algorand/go-algorand/tools/block-generator/util"
 )
 
-//go:embed template/conduit.yml.tmpl
-var conduitConfigTmpl string
+//go:embed template/conduit_pg.yml.tmpl
+var conduitPostgresConfigTmpl string
+
+//go:embed template/conduit_fe.yml.tmpl
+var conduitFileExporterConfigTmpl string
 
 const pad = "  "
 
@@ -53,6 +56,7 @@ type Args struct {
 	Path                     string
 	ConduitBinary            string
 	MetricsPort              uint64
+	FileExporterInsteadofPG  bool
 	PostgresConnectionString string
 	CPUProfilePath           string
 	RunDuration              time.Duration
@@ -150,20 +154,24 @@ func (r *Args) run(reportDirectory string) error {
 	// get next db round
 	var nextRound uint64
 	var err error
-	if r.ResetDB {
-		fmt.Printf("%sPostgreSQL resetting.\n", pad)
-		if err = util.EmptyDB(r.PostgresConnectionString); err != nil {
-			return fmt.Errorf("emptyDB err: %w", err)
-		}
-		nextRound = 0
+	if r.FileExporterInsteadofPG {
+		fmt.Printf("%sUsing File Exporter instead of Postgres Exporter.\n", pad)
 	} else {
-		nextRound, err = util.GetNextRound(r.PostgresConnectionString)
-		if err != nil && err == util.ErrorNotInitialized {
+		if r.ResetDB {
+			fmt.Printf("%sPostgreSQL resetting.\n", pad)
+			if err = util.EmptyDB(r.PostgresConnectionString); err != nil {
+				return fmt.Errorf("emptyDB err: %w", err)
+			}
 			nextRound = 0
-		} else if err != nil {
-			return fmt.Errorf("getNextRound err: %w", err)
+		} else {
+			nextRound, err = util.GetNextRound(r.PostgresConnectionString)
+			if err != nil && err == util.ErrorNotInitialized {
+				nextRound = 0
+			} else if err != nil {
+				return fmt.Errorf("getNextRound err: %w", err)
+			}
+			fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
 		}
-		fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
 	}
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
@@ -179,6 +187,12 @@ func (r *Args) run(reportDirectory string) error {
 	}()
 
 	// create conduit config from template
+	var conduitConfigTmpl string
+	if r.FileExporterInsteadofPG {
+		conduitConfigTmpl = conduitFileExporterConfigTmpl
+	} else {
+		conduitConfigTmpl = conduitPostgresConfigTmpl
+	}
 	t, err := template.New("conduit").Parse(conduitConfigTmpl)
 	if err != nil {
 		return fmt.Errorf("unable to parse conduit config template: %w", err)
