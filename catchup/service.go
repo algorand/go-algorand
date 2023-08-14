@@ -468,7 +468,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 
 			wg.Add(1)
 			go func(r basics.Round) {
-				prev := s.ledger.WaitMem(r-1)
+				prev := s.ledger.WaitMem(r - 1)
 				seed := s.ledger.WaitMem(r.SubSaturate(basics.Round(seedLookback)))
 				done <- s.fetchAndWrite(r, prev, seed, peerSelector, ctx)
 				wg.Done()
