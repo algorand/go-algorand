@@ -38,10 +38,10 @@ import (
 )
 
 const (
-	blockTotalSizeBytes  = "blocks_total_size_bytes"
-	commitWaitTimeMS     = "commit_wait_time_ms"
-	ledgerEvalTimeMS     = "ledger_eval_time_ms"
-	ledgerValidateTimeMS = "ledger_validate_time_ms"
+	BlockTotalSizeBytes  = "blocks_total_size_bytes"
+	CommitWaitTimeMS     = "commit_wait_time_ms"
+	LedgerEvalTimeMS     = "ledger_eval_time_ms"
+	LedgerValidateTimeMS = "ledger_validate_time_ms"
 )
 
 // ---- constructors ----
@@ -350,15 +350,15 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter+intra)
 		}
 		evaluated = time.Now()
-		g.reportData.Counters[ledgerEvalTimeMS] += uint64(evaluated.Sub(generated).Milliseconds())
+		g.reportData.Counters[LedgerEvalTimeMS] += uint64(evaluated.Sub(generated).Milliseconds())
 
 		err = g.ledger.AddValidatedBlock(*vBlock, cert.Certificate)
 		if err != nil {
 			return fmt.Errorf("failed to add validated block: %w", err)
 		}
 		validated = time.Now()
-		g.reportData.Counters[commitWaitTimeMS] += uint64(commitWaitTime.Milliseconds())
-		g.reportData.Counters[ledgerValidateTimeMS] += uint64((validated.Sub(evaluated) - commitWaitTime).Milliseconds())
+		g.reportData.Counters[CommitWaitTimeMS] += uint64(commitWaitTime.Milliseconds())
+		g.reportData.Counters[LedgerValidateTimeMS] += uint64((validated.Sub(evaluated) - commitWaitTime).Milliseconds())
 
 		cert.Block.Payset = vBlock.Block().Payset
 
@@ -373,7 +373,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 	// write the msgpack bytes for a block
 	g.latestBlockMsgp = protocol.EncodeMsgp(&cert)
-	g.reportData.Counters[blockTotalSizeBytes] += uint64(len(g.latestBlockMsgp))
+	g.reportData.Counters[BlockTotalSizeBytes] += uint64(len(g.latestBlockMsgp))
 
 	_, err = output.Write(g.latestBlockMsgp)
 	if err != nil {
