@@ -27,8 +27,13 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoreds"
 )
 
-// PeerStore implements the libp2p Peerstore and CertifiedAddrBook interfaces.
-type PeerStore interface {
+// PeerStore implements Peerstore and CertifiedAddrBook.
+type PeerStore struct {
+	peerStoreCAB
+}
+
+// peerStoreCAB combines the libp2p Peerstore and CertifiedAddrBook interfaces.
+type peerStoreCAB interface {
 	libp2p.Peerstore
 	libp2p.CertifiedAddrBook
 }
@@ -39,7 +44,7 @@ func initDBStore(path string) (ds.Batching, error) {
 }
 
 // NewPeerStore creates a new peerstore backed by a datastore.
-func NewPeerStore(ctx context.Context, path string, addrInfo []*peer.AddrInfo) (PeerStore, error) {
+func NewPeerStore(ctx context.Context, path string, addrInfo []*peer.AddrInfo) (*PeerStore, error) {
 	datastore, err := initDBStore(path)
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize a peerstore, invalid path for datastore: %w", err)
@@ -54,5 +59,6 @@ func NewPeerStore(ctx context.Context, path string, addrInfo []*peer.AddrInfo) (
 		info := addrInfo[i]
 		ps.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 	}
-	return ps, nil
+	pstore := &PeerStore{ps}
+	return pstore, nil
 }

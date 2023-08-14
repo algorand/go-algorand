@@ -412,8 +412,6 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 			return
 		}
 
-		n.log.Infof("txTopicHandleLoop: received message from %s current ID: %s", msg.ReceivedFrom, n.service.Host().ID())
-
 		// discard TX message.
 		// from gossipsub's point of view, it's just waiting to hear back from the validator,
 		// and txHandler does all its work in the validator, so we don't need to do anything here
