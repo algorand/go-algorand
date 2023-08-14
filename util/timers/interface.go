@@ -21,24 +21,11 @@ import (
 	"time"
 )
 
-// TimeoutType annotates timeout events scheduled via TimeoutAt
-type TimeoutType int8
-
-const (
-	// Deadline annotates timeout events in the agreement protocol (e.g., for
-	// receiving a block)
-	Deadline TimeoutType = iota
-	// FastRecovery annotates the fast recovery timeout in the agreement protocol
-	FastRecovery
-	// Filter annotates the filter step timeout event in the agreement protocol
-	Filter
-)
-
 // Clock provides timeout events which fire at some point after a point in time.
-type Clock interface {
+type Clock[TimeoutType comparable] interface {
 	// Zero returns a reset Clock. TimeoutAt channels will use the point
 	// at which Zero was called as their reference point.
-	Zero() Clock
+	Zero() Clock[TimeoutType]
 
 	// Since returns the time spent between the last time the clock was zeroed out and the current
 	// wall clock time.
@@ -59,5 +46,5 @@ type Clock interface {
 	// Decode deserializes the Clock from a byte slice.
 	// A Clock which has been Decoded from an Encoded Clock should produce
 	// the same timeouts as the original Clock.
-	Decode([]byte) (Clock, error)
+	Decode([]byte) (Clock[TimeoutType], error)
 }

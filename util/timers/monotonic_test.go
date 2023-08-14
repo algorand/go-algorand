@@ -36,14 +36,14 @@ func polled(ch <-chan time.Time) bool {
 func TestMonotonicDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var m Monotonic
-	var c Clock
+	var m Monotonic[int]
+	var c Clock[int]
 	var ch <-chan time.Time
 
 	d := time.Millisecond * 100
 
 	c = m.Zero()
-	ch = c.TimeoutAt(d, Filter)
+	ch = c.TimeoutAt(d, 0)
 	if polled(ch) {
 		t.Errorf("channel fired ~100ms early")
 	}
@@ -53,7 +53,7 @@ func TestMonotonicDelta(t *testing.T) {
 		t.Errorf("channel failed to fire at 100ms")
 	}
 
-	ch = c.TimeoutAt(d/2, Filter)
+	ch = c.TimeoutAt(d/2, 0)
 	if !polled(ch) {
 		t.Errorf("channel failed to fire at 50ms")
 	}
@@ -62,12 +62,12 @@ func TestMonotonicDelta(t *testing.T) {
 func TestMonotonicZeroDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var m Monotonic
-	var c Clock
+	var m Monotonic[int]
+	var c Clock[int]
 	var ch <-chan time.Time
 
 	c = m.Zero()
-	ch = c.TimeoutAt(0, Filter)
+	ch = c.TimeoutAt(0, 0)
 	if !polled(ch) {
 		t.Errorf("read failed on channel at zero timeout")
 	}
@@ -76,12 +76,12 @@ func TestMonotonicZeroDelta(t *testing.T) {
 func TestMonotonicNegativeDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var m Monotonic
-	var c Clock
+	var m Monotonic[int]
+	var c Clock[int]
 	var ch <-chan time.Time
 
 	c = m.Zero()
-	ch = c.TimeoutAt(-time.Second, Filter)
+	ch = c.TimeoutAt(-time.Second, 0)
 	if !polled(ch) {
 		t.Errorf("read failed on channel at negative timeout")
 	}
@@ -90,14 +90,14 @@ func TestMonotonicNegativeDelta(t *testing.T) {
 func TestMonotonicZeroTwice(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var m Monotonic
-	var c Clock
+	var m Monotonic[int]
+	var c Clock[int]
 	var ch <-chan time.Time
 
 	d := time.Millisecond * 100
 
 	c = m.Zero()
-	ch = c.TimeoutAt(d, Filter)
+	ch = c.TimeoutAt(d, 0)
 	if polled(ch) {
 		t.Errorf("channel fired ~100ms early")
 	}
@@ -108,7 +108,7 @@ func TestMonotonicZeroTwice(t *testing.T) {
 	}
 
 	c = c.Zero()
-	ch = c.TimeoutAt(d, Filter)
+	ch = c.TimeoutAt(d, 0)
 	if polled(ch) {
 		t.Errorf("channel fired ~100ms early after call to Zero")
 	}
@@ -122,21 +122,21 @@ func TestMonotonicZeroTwice(t *testing.T) {
 func TestMonotonicEncodeDecode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	singleTest := func(c Clock, descr string) {
+	singleTest := func(c Clock[int], descr string) {
 		data := c.Encode()
 		c0, err := c.Decode(data)
 		if err != nil {
 			t.Errorf("decoding error: %v", err)
 		}
-		if !time.Time(c.(*Monotonic).zero).Equal(time.Time(c0.(*Monotonic).zero)) {
+		if !time.Time(c.(*Monotonic[int]).zero).Equal(time.Time(c0.(*Monotonic[int]).zero)) {
 			t.Errorf("%v clock not encoded properly: %v != %v", descr, c, c0)
 		}
 	}
 
-	var c Clock
-	var m Monotonic
+	var c Clock[int]
+	var m Monotonic[int]
 
-	c = Clock(&m)
+	c = Clock[int](&m)
 	singleTest(c, "empty")
 
 	c = c.Zero()
@@ -145,8 +145,8 @@ func TestMonotonicEncodeDecode(t *testing.T) {
 	now := time.Now()
 	for i := 0; i < 100; i++ {
 		r := time.Duration(rand.Int63())
-		c = Clock(
-			&Monotonic{
+		c = Clock[int](
+			&Monotonic[int]{
 				zero: now.Add(r),
 			},
 		)
@@ -157,14 +157,14 @@ func TestMonotonicEncodeDecode(t *testing.T) {
 func TestTimeoutTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	var m Monotonic
-	var c Clock
+	var m Monotonic[int]
+	var c Clock[int]
 
 	d := time.Millisecond * 100
 
 	c = m.Zero()
-	ch1 := c.TimeoutAt(d, Filter)
-	ch2 := c.TimeoutAt(d, FastRecovery)
+	ch1 := c.TimeoutAt(d, 0)
+	ch2 := c.TimeoutAt(d, 1)
 	if polled(ch1) {
 		t.Errorf("channel fired ~100ms early")
 	}
@@ -184,11 +184,11 @@ func TestTimeoutTypes(t *testing.T) {
 		t.Errorf("channel failed to fire at 100ms")
 	}
 
-	ch1 = c.TimeoutAt(d/2, Filter)
+	ch1 = c.TimeoutAt(d/2, 0)
 	if !polled(ch1) {
 		t.Errorf("channel failed to fire at 50ms")
 	}
-	ch2 = c.TimeoutAt(d/2, Filter)
+	ch2 = c.TimeoutAt(d/2, 0)
 	if !polled(ch2) {
 		t.Errorf("channel failed to fire at 50ms")
 	}

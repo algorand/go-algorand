@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/timers"
 )
 
 // Deadline marks a timeout event of type Type that the player schedules to
@@ -29,7 +28,7 @@ import (
 type Deadline struct {
 	_struct  struct{} `codec:","`
 	Duration time.Duration
-	Type     timers.TimeoutType
+	Type     TimeoutType
 }
 
 // The player implements the top-level state machine functionality of the
@@ -121,7 +120,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 
 			p.Napping = true
 			p.Deadline.Duration = lower + delta
-			p.Deadline.Type = timers.Deadline
+			p.Deadline.Type = TimeoutDeadline
 			return actions
 		}
 	case roundInterruptionEvent:
@@ -156,7 +155,7 @@ func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
 func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 	defer func() {
 		p.Deadline.Duration = deadlineTimeout
-		p.Deadline.Type = timers.Deadline
+		p.Deadline.Type = TimeoutDeadline
 	}()
 
 	e := r.dispatch(*p, proposalFrozenEvent{}, proposalMachinePeriod, p.Round, p.Period, 0)
@@ -225,7 +224,7 @@ func (p *player) issueNextVote(r routerHandle) []action {
 	_, upper := p.Step.nextVoteRanges()
 	p.Napping = false
 	p.Deadline.Duration = upper
-	p.Deadline.Type = timers.Deadline
+	p.Deadline.Type = TimeoutDeadline
 	return actions
 }
 
@@ -340,7 +339,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
 	p.Deadline.Duration = FilterTimeout(target, source.Proto)
-	p.Deadline.Type = timers.Filter
+	p.Deadline.Type = TimeoutFilter
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -389,13 +388,13 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	switch source := source.(type) {
 	case roundInterruptionEvent:
 		p.Deadline.Duration = FilterTimeout(0, source.Proto.Version)
-		p.Deadline.Type = timers.Filter
+		p.Deadline.Type = TimeoutFilter
 	case thresholdEvent:
 		p.Deadline.Duration = FilterTimeout(0, source.Proto)
-		p.Deadline.Type = timers.Filter
+		p.Deadline.Type = TimeoutFilter
 	case filterableMessageEvent:
 		p.Deadline.Duration = FilterTimeout(0, source.Proto.Version)
-		p.Deadline.Type = timers.Filter
+		p.Deadline.Type = TimeoutFilter
 	}
 
 	// update tracer state to match player

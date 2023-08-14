@@ -51,7 +51,7 @@ func makeInstant() *instant {
 	return i
 }
 
-func (i *instant) Decode([]byte) (timers.Clock, error) {
+func (i *instant) Decode([]byte) (timers.Clock[agreement.TimeoutType], error) {
 	return i, nil
 }
 
@@ -59,7 +59,7 @@ func (i *instant) Encode() []byte {
 	return nil
 }
 
-func (i *instant) TimeoutAt(d time.Duration, timeoutType timers.TimeoutType) <-chan time.Time {
+func (i *instant) TimeoutAt(d time.Duration, timeoutType agreement.TimeoutType) <-chan time.Time {
 	ta := make(chan time.Time)
 	select {
 	case <-i.timeoutAtCalled:
@@ -68,13 +68,13 @@ func (i *instant) TimeoutAt(d time.Duration, timeoutType timers.TimeoutType) <-c
 		return ta
 	}
 
-	if timeoutType == timers.Filter && !i.HasPending("pseudonode") {
+	if timeoutType == agreement.TimeoutFilter && !i.HasPending("pseudonode") {
 		close(ta)
 	}
 	return ta
 }
 
-func (i *instant) Zero() timers.Clock {
+func (i *instant) Zero() timers.Clock[agreement.TimeoutType] {
 	i.Z0 <- struct{}{}
 	// pause here until runRound is called
 	i.Z1 <- struct{}{}
