@@ -942,7 +942,12 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 }
 
 func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
-	e.Input.Proposal.validatedAt = d
+	if e.T == payloadVerified {
+		e.Input.Proposal.validatedAt = d
+	} else if e.T == voteVerified && e.Input.UnauthenticatedVote.R.Step == 0 {
+		// if this is a proposal vote (step 0), record the receivedAt time on the vote
+		e.Input.Vote.validatedAt = d
+	}
 	return e
 }
 

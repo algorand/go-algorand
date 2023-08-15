@@ -276,6 +276,12 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 }
 
 func (p *player) handleWinningPayloadArrival(payload proposal, ver protocol.ConsensusVersion) {
+
+	// look up lowest vote validatedAt time
+	//re := readLowestEvent{T: readLowestVote, Round: p.Round, Period: p.Period}
+	//re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
+	//p.payloadArrivals = append(p.payloadArrivals, re.Vote.validatedAt)
+
 	// ignoring validatedAt
 	p.payloadArrivals = append(p.payloadArrivals, payload.receivedAt)
 	p.resizePayloadArrivals(ver)
