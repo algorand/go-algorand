@@ -57,8 +57,8 @@ github.com/algorand/go-deadlock v0.2.2 h1:L7AKATSUCzoeVuOgpTipfCEjdUu5ECmlje8R7l
 github.com/algorand/go-deadlock v0.2.2/go.mod h1:Hat1OXKqKNUcN/iv74FjGhF4hsOE2l7gOgQ9ZVIq6Fk=
 github.com/algorand/go-sumhash v0.1.0 h1:b/QRhyLuF//vOcicBIxBXYW8bERNoeLxieht/dUYpVg=
 github.com/algorand/go-sumhash v0.1.0/go.mod h1:OOe7jdDWUhLkuP1XytkK5gnLu9entAviN5DfDZh6XAc=
-github.com/algorand/msgp v1.1.56 h1:lmx/7S8PdTwYA0CJkvTBAnGtgd6isYSV0VqsUMNWXec=
-github.com/algorand/msgp v1.1.56/go.mod h1:RqZQBzAFDWpwh5TlabzZkWy+6kwL9cvXfLbU0gD99EA=
+github.com/algorand/msgp v1.1.57 h1:G2xuQFfBKI1AyDjVPmO3RpglEnESzs+5su2lEIFyHyk=
+github.com/algorand/msgp v1.1.57/go.mod h1:RqZQBzAFDWpwh5TlabzZkWy+6kwL9cvXfLbU0gD99EA=
 github.com/algorand/oapi-codegen v1.12.0-algorand.0 h1:W9PvED+wAJc+9EeXPONnA+0zE9UhynEqoDs4OgAxKhk=
 github.com/algorand/oapi-codegen v1.12.0-algorand.0/go.mod h1:tIWJ9K/qrLDVDt5A1p82UmxZIEGxv2X+uoujdhEAL48=
 github.com/algorand/sortition v1.0.0 h1:PJiZtdSTBm4nArQrZXBnhlljHXhuyAXRJBqVWowQu3E=
