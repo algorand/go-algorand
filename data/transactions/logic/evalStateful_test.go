@@ -2761,12 +2761,12 @@ func TestReturnTypes(t *testing.T) {
 		"frame_bury": true, // would need a "proto" subroutine
 
 		// These should not remain here, we should be able to construct example
-		"ec_add":            true,
-		"ec_scalar_mul":     true,
-		"ec_pairing_check":  true,
-		"ec_multi_exp":      true,
-		"ec_subgroup_check": true,
-		"ec_map_to":         true,
+		"ec_add":              true,
+		"ec_scalar_mul":       true,
+		"ec_pairing_check":    true,
+		"ec_multi_scalar_mul": true,
+		"ec_subgroup_check":   true,
+		"ec_map_to":           true,
 	}
 
 	byName := OpsByName[LogicVersion]

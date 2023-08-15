@@ -35,12 +35,12 @@ var opDocByName = map[string]string{
 	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y",
 	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public key",
 
-	"ec_add":            "for curve points A and B, return the curve point A + B",
-	"ec_scalar_mul":     "for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.",
-	"ec_pairing_check":  "1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0",
-	"ec_multi_exp":      "for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
-	"ec_subgroup_check": "1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.",
-	"ec_map_to":         "maps field element A to group G",
+	"ec_add":              "for curve points A and B, return the curve point A + B",
+	"ec_scalar_mul":       "for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.",
+	"ec_pairing_check":    "1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0",
+	"ec_multi_scalar_mul": "for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
+	"ec_subgroup_check":   "1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.",
+	"ec_map_to":           "maps field element A to group G",
 
 	"+":       "A plus B. Fail on overflow.",
 	"-":       "A minus B. Fail if B > A.",
@@ -299,12 +299,12 @@ var opcodeImmediateNotes = map[string][]string{
 	"popn":       {"stack depth"},
 	"dupn":       {"copy count"},
 
-	"ec_add":            {"curve index"},
-	"ec_scalar_mul":     {"curve index"},
-	"ec_pairing_check":  {"curve index"},
-	"ec_multi_exp":      {"curve index"},
-	"ec_subgroup_check": {"curve index"},
-	"ec_map_to":         {"curve index"},
+	"ec_add":              {"curve index"},
+	"ec_scalar_mul":       {"curve index"},
+	"ec_pairing_check":    {"curve index"},
+	"ec_multi_scalar_mul": {"curve index"},
+	"ec_subgroup_check":   {"curve index"},
+	"ec_map_to":           {"curve index"},
 }
 
 // OpImmediateDetails contains information about the an immediate argument for
@@ -360,9 +360,9 @@ var opDocExtras = map[string]string{
 		"A and/or B are allowed to be the point at infinity.\n" +
 		"Does _not_ check if A and B are in the main prime-order subgroup.",
 
-	"ec_scalar_mul":    "A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.",
-	"ec_pairing_check": "A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to 4096 bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.",
-	"ec_multi_exp":     "A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe name `ec_multi_exp` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_exp` is limited by the size of the points in the group being operated upon.",
+	"ec_scalar_mul":       "A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.",
+	"ec_pairing_check":    "A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to 4096 bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.",
+	"ec_multi_scalar_mul": "A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.",
 	"ec_map_to": "BN254 points are mapped by the SVDW map. BLS12-381 points are mapped by the SSWU map.\n" +
 		"G1 element inputs are base field elements and G2 element inputs are quadratic field elements, with nearly the same encoding rules (for field elements) as defined in `ec_add`. There is one difference of encoding rule: G1 element inputs do not need to be 0-padded if they fit in less than 32 bytes for BN254 and less than 48 bytes for BLS12-381. (As usual, the empty byte array represents 0.) G2 elements inputs need to be always have the required size.",
 
@@ -432,7 +432,7 @@ func OpDocExtra(opName string) string {
 // here is the order args opcodes are presented, so place related
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
-	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_exp", "ec_subgroup_check", "ec_map_to", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
+	"Arithmetic":              {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
 	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},

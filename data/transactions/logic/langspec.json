@@ -4529,7 +4529,7 @@
     },
     {
       "Opcode": 227,
-      "Name": "ec_multi_exp",
+      "Name": "ec_multi_scalar_mul",
       "Args": [
         "[]byte",
         "[]byte"
@@ -4539,7 +4539,7 @@
       ],
       "Size": 2,
       "Doc": "for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
-      "DocExtra": "A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe name `ec_multi_exp` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_exp` is limited by the size of the points in the group being operated upon.",
+      "DocExtra": "A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.",
       "ImmediateNote": [
         {
           "Comment": "curve index",

@@ -867,7 +867,7 @@ var OpSpecs = []OpSpec{
 	// bnG2 seems to be 18000 + 900 /elt (VERY ERRATIC TIMINGS)
 	// blsG1 seems to be 14000 + 400 /elt
 	// blsG2 seems to be 35000 + 1800 /elt
-	{0xe3, "ec_multi_exp", opEcMultiExp, proto("bb:b"), pairingVersion,
+	{0xe3, "ec_multi_scalar_mul", opEcMultiScalarMul, proto("bb:b"), pairingVersion,
 		costByFieldAndLength("g", &EcGroups, []linearCost{
 			BN254g1: {
 				baseCost:  8_000,

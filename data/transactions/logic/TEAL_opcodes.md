@@ -1699,9 +1699,9 @@ A is a curve point encoded and checked as described in `ec_add`. Scalar B is int
 
 A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to 4096 bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.
 
-## ec_multi_exp
+## ec_multi_scalar_mul
 
-- Syntax: `ec_multi_exp G` ∋ G: [EC](#field-group-ec)
+- Syntax: `ec_multi_scalar_mul G` ∋ G: [EC](#field-group-ec)
 - Bytecode: 0xe3 {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn
@@ -1709,7 +1709,7 @@ A and B are concatenated points, encoded and checked as described in `ec_add`. A
 - Availability: v10
 
 A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.
-The name `ec_multi_exp` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_exp` is limited by the size of the points in the group being operated upon.
+The name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.
 
 ## ec_subgroup_check
 

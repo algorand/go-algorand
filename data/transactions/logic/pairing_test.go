@@ -42,7 +42,7 @@ const pairingNonsense = `
  ec_scalar_mul BLS12_381g2
  dup
  ec_pairing_check BN254g1
- ec_multi_exp BLS12_381g2
+ ec_multi_scalar_mul BLS12_381g2
  ec_subgroup_check BLS12_381g1
  ec_map_to BN254g2
 `
@@ -228,7 +228,7 @@ func TestEcMultiExp(t *testing.T) {
 	for _, c := range curves {
 		t.Run(c.name, func(t *testing.T) {
 			pt := tealBytes(c.rand())
-			multiexp := "ec_multi_exp " + c.name + ";"
+			multiexp := "ec_multi_scalar_mul " + c.name + ";"
 			mul := "ec_scalar_mul " + c.name + ";"
 
 			// multiply by 0 gives 0
@@ -243,9 +243,9 @@ func TestEcMultiExp(t *testing.T) {
 }
 
 func requireBlsG1Eq(t *testing.T, g1points []bls12381.G1Affine, kbytes []byte) {
-	b1, err := bls12381G1MultiExpSmall(g1points, kbytes)
+	b1, err := bls12381G1MultiMulSmall(g1points, kbytes)
 	require.NoError(t, err)
-	b2, err := bls12381G1MultiExpLarge(g1points, kbytes)
+	b2, err := bls12381G1MultiMulLarge(g1points, kbytes)
 	require.NoError(t, err)
 	require.Equal(t, b1, b2)
 }
@@ -274,9 +274,9 @@ func TestBlsG1LargeSmallEquivalent(t *testing.T) {
 }
 
 func requireBlsG2Eq(t *testing.T, g2points []bls12381.G2Affine, kbytes []byte) {
-	b1, err := bls12381G2MultiExpSmall(g2points, kbytes)
+	b1, err := bls12381G2MultiMulSmall(g2points, kbytes)
 	require.NoError(t, err)
-	b2, err := bls12381G2MultiExpLarge(g2points, kbytes)
+	b2, err := bls12381G2MultiMulLarge(g2points, kbytes)
 	require.NoError(t, err)
 	require.Equal(t, b1, b2)
 }
@@ -305,9 +305,9 @@ func TestBlsG2LargeSmallEquivalent(t *testing.T) {
 }
 
 func requireBnG1Eq(t *testing.T, g1points []bn254.G1Affine, kbytes []byte) {
-	b1, err := bn254G1MultiExpSmall(g1points, kbytes)
+	b1, err := bn254G1MultiMulSmall(g1points, kbytes)
 	require.NoError(t, err)
-	b2, err := bn254G1MultiExpLarge(g1points, kbytes)
+	b2, err := bn254G1MultiMulLarge(g1points, kbytes)
 	require.NoError(t, err)
 	require.Equal(t, b1, b2)
 }
@@ -336,9 +336,9 @@ func TestBnG1LargeSmallEquivalent(t *testing.T) {
 }
 
 func requireBnG2Eq(t *testing.T, g2points []bn254.G2Affine, kbytes []byte) {
-	b1, err := bn254G2MultiExpSmall(g2points, kbytes)
+	b1, err := bn254G2MultiMulSmall(g2points, kbytes)
 	require.NoError(t, err)
-	b2, err := bn254G2MultiExpLarge(g2points, kbytes)
+	b2, err := bn254G2MultiMulLarge(g2points, kbytes)
 	require.NoError(t, err)
 	require.Equal(t, b1, b2)
 }
@@ -383,7 +383,7 @@ func TestAgreement(t *testing.T) {
 			pt1 := tealBytes(c.rand())
 			pt2 := tealBytes(c.rand())
 
-			multiexp := "ec_multi_exp " + c.name + ";"
+			multiexp := "ec_multi_scalar_mul " + c.name + ";"
 			mul := "ec_scalar_mul " + c.name + ";"
 			add := "ec_add " + c.name + ";"
 
@@ -511,7 +511,7 @@ func BenchmarkBn254(b *testing.B) {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g1 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, g1teal, dups+"dup; extract 0 32;"+dups+"ec_multi_exp BN254g1", "len")
+			benchmarkOperation(b, g1teal, dups+"dup; extract 0 32;"+dups+"ec_multi_scalar_mul BN254g1", "len")
 		})
 	}
 
@@ -523,7 +523,7 @@ func BenchmarkBn254(b *testing.B) {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g2 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, g2teal, dups+"dup; extract 0 32;"+dups+"ec_multi_exp BN254g2", "len")
+			benchmarkOperation(b, g2teal, dups+"dup; extract 0 32;"+dups+"ec_multi_scalar_mul BN254g2", "len")
 		})
 	}
 
@@ -568,7 +568,7 @@ func BenchmarkBn254(b *testing.B) {
 
 }
 
-func BenchmarkFindMultiExpCutoff(b *testing.B) {
+func BenchmarkFindMultiMulCutoff(b *testing.B) {
 	for i := 1; i < 5; i++ {
 		kbytes := make([]byte, i*scalarSize)
 		{
@@ -579,7 +579,7 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 						g1points[j] = bls12381RandomG1()
 					}
 					rand.Read(kbytes)
-					bls12381G1MultiExpSmall(g1points, kbytes)
+					bls12381G1MultiMulSmall(g1points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bls g1 large %02d", i), func(b *testing.B) {
@@ -588,7 +588,7 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 						g1points[j] = bls12381RandomG1()
 					}
 					rand.Read(kbytes)
-					bls12381G1MultiExpLarge(g1points, kbytes)
+					bls12381G1MultiMulLarge(g1points, kbytes)
 				}
 			})
 
@@ -599,7 +599,7 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 						g2points[j] = bls12381RandomG2()
 					}
 					rand.Read(kbytes)
-					bls12381G2MultiExpSmall(g2points, kbytes)
+					bls12381G2MultiMulSmall(g2points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bls g2 large %02d", i), func(b *testing.B) {
@@ -608,7 +608,7 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 						g2points[j] = bls12381RandomG2()
 					}
 					rand.Read(kbytes)
-					bls12381G2MultiExpLarge(g2points, kbytes)
+					bls12381G2MultiMulLarge(g2points, kbytes)
 				}
 			})
 		}
@@ -621,7 +621,7 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 						g1points[j] = bn254RandomG1()
 					}
 					rand.Read(kbytes)
-					bn254G1MultiExpSmall(g1points, kbytes)
+					bn254G1MultiMulSmall(g1points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bn g1 large %02d", i), func(b *testing.B) {
@@ -630,7 +630,7 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 						g1points[j] = bn254RandomG1()
 					}
 					rand.Read(kbytes)
-					bn254G1MultiExpLarge(g1points, kbytes)
+					bn254G1MultiMulLarge(g1points, kbytes)
 				}
 			})
 
@@ -641,7 +641,7 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 						g2points[j] = bn254RandomG2()
 					}
 					rand.Read(kbytes)
-					bn254G2MultiExpSmall(g2points, kbytes)
+					bn254G2MultiMulSmall(g2points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bn g2 large %02d", i), func(b *testing.B) {
@@ -650,7 +650,7 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 						g2points[j] = bn254RandomG2()
 					}
 					rand.Read(kbytes)
-					bn254G2MultiExpLarge(g2points, kbytes)
+					bn254G2MultiMulLarge(g2points, kbytes)
 				}
 			})
 		}
@@ -699,7 +699,7 @@ func BenchmarkBls12381(b *testing.B) {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g1 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, g1teal, dups+"dup; extract 0 32;"+dups+"ec_multi_exp BLS12_381g1", "len")
+			benchmarkOperation(b, g1teal, dups+"dup; extract 0 32;"+dups+"ec_multi_scalar_mul BLS12_381g1", "len")
 		})
 	}
 
@@ -710,7 +710,7 @@ func BenchmarkBls12381(b *testing.B) {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g2 multi_exp %d", size), func(b *testing.B) {
-			benchmarkOperation(b, g2teal, dups+"dup; extract 0 32;"+dups+"ec_multi_exp BLS12_381g2", "len")
+			benchmarkOperation(b, g2teal, dups+"dup; extract 0 32;"+dups+"ec_multi_scalar_mul BLS12_381g2", "len")
 		})
 	}
 
