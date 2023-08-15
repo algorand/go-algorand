@@ -1796,6 +1796,16 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			ClearStateProgram: "#pragma version 8\nint 1",
 		})
 
+		op, err := logic.AssembleString(maxDepthTealApproval)
+		require.NoError(t, err)
+		approvalProgramBytes := op.Program
+		approvalDigest := crypto.Hash(approvalProgramBytes)
+
+		op, err = logic.AssembleString("#pragma version 8\nint 1")
+		require.NoError(t, err)
+		clearStateProgramBytes := op.Program
+		clearStateDigest := crypto.Hash(clearStateProgramBytes)
+
 		MaxDepth := 2
 		MinBalance := env.TxnInfo.CurrentProtocolParams().MinBalance
 		MinFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
@@ -2007,7 +2017,8 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 					{signedCreateTxn, signedPaymentTxn, signedCallsMaxDepth},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable: true,
+					Enable:      true,
+					ProgramHash: true,
 				},
 			},
 			developerAPI: true,
@@ -2024,6 +2035,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								AppBudgetConsumed: 7,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: creationOpcodeTrace,
+									ApprovalProgramHash:  approvalDigest,
 								},
 							},
 							{
@@ -2071,32 +2083,41 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								AppBudgetConsumed: 378,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: recursiveLongOpcodeTrace,
+									ApprovalProgramHash:  approvalDigest,
 									InnerTraces: []simulation.TransactionTrace{
 										{
 											ApprovalProgramTrace: creationOpcodeTrace,
+											ApprovalProgramHash:  approvalDigest,
 										},
 										{},
 										{
 											ApprovalProgramTrace: optInTrace,
+											ApprovalProgramHash:  approvalDigest,
 										},
 										{
 											ClearStateProgramTrace: clearStateOpcodeTrace,
+											ClearStateProgramHash:  clearStateDigest,
 										},
 										{
 											ApprovalProgramTrace: recursiveLongOpcodeTrace,
+											ApprovalProgramHash:  approvalDigest,
 											InnerTraces: []simulation.TransactionTrace{
 												{
 													ApprovalProgramTrace: creationOpcodeTrace,
+													ApprovalProgramHash:  approvalDigest,
 												},
 												{},
 												{
 													ApprovalProgramTrace: optInTrace,
+													ApprovalProgramHash:  approvalDigest,
 												},
 												{
 													ClearStateProgramTrace: clearStateOpcodeTrace,
+													ClearStateProgramHash:  clearStateDigest,
 												},
 												{
 													ApprovalProgramTrace: finalDepthTrace,
+													ApprovalProgramHash:  approvalDigest,
 												},
 											},
 										},
@@ -2109,7 +2130,8 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 					},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable: true,
+					Enable:      true,
+					ProgramHash: true,
 				},
 			},
 		}
@@ -2307,8 +2329,9 @@ func TestFailingLogicSigPCandStack(t *testing.T) {
 ` + strings.Repeat(`byte "a"; keccak256; pop
 `, 2) + `int 0; int 1; -`)
 	require.NoError(t, err)
-	program := logic.Program(op.Program)
-	lsigAddr := basics.Address(crypto.HashObj(&program))
+	logicSigProg := logic.Program(op.Program)
+	logicSigHash := crypto.Hash(logicSigProg)
+	lsigAddr := basics.Address(crypto.HashObj(&logicSigProg))
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
@@ -2331,7 +2354,7 @@ byte "hello"; log; int 1`,
 
 		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
 		signedAppCallTxn := appCallTxn.SignedTxn()
-		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: logicSigProg}
 
 		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
 
@@ -2341,8 +2364,9 @@ byte "hello"; log; int 1`,
 					{signedPayTxn, signedAppCallTxn},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable: true,
-					Stack:  true,
+					Enable:      true,
+					Stack:       true,
+					ProgramHash: true,
 				},
 			},
 			developerAPI:  true,
@@ -2351,8 +2375,9 @@ byte "hello"; log; int 1`,
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable: true,
-					Stack:  true,
+					Enable:      true,
+					Stack:       true,
+					ProgramHash: true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2408,6 +2433,7 @@ byte "hello"; log; int 1`,
 											StackPopCount: 2,
 										},
 									},
+									LogicSigHash: logicSigHash,
 								},
 							},
 						},
@@ -2426,8 +2452,9 @@ func TestFailingApp(t *testing.T) {
 ` + strings.Repeat(`byte "a"; keccak256; pop
 `, 2) + `int 1`)
 	require.NoError(t, err)
-	program := logic.Program(op.Program)
-	lsigAddr := basics.Address(crypto.HashObj(&program))
+	logicSigProg := logic.Program(op.Program)
+	logicSigHash := crypto.Hash(logicSigProg)
+	lsigAddr := basics.Address(crypto.HashObj(&logicSigProg))
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
@@ -2446,11 +2473,15 @@ byte "hello"; log; int 0`,
 			ClearStateProgram: "#pragma version 8\n int 1",
 		})
 
+		approvalOp, err := logic.AssembleString(appCallTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		approvalHash := crypto.Hash(approvalOp.Program)
+
 		txntest.Group(&payTxn, &appCallTxn)
 
 		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
 		signedAppCallTxn := appCallTxn.SignedTxn()
-		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: logicSigProg}
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -2458,7 +2489,8 @@ byte "hello"; log; int 0`,
 					{signedPayTxn, signedAppCallTxn},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable: true,
+					Enable:      true,
+					ProgramHash: true,
 				},
 			},
 			developerAPI:  true,
@@ -2467,7 +2499,8 @@ byte "hello"; log; int 0`,
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable: true,
+					Enable:      true,
+					ProgramHash: true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2491,6 +2524,7 @@ byte "hello"; log; int 0`,
 										{PC: 8},
 										{PC: 9},
 									},
+									ApprovalProgramHash: approvalHash,
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
 										{PC: 1},
 										{PC: 5},
@@ -2501,6 +2535,7 @@ byte "hello"; log; int 0`,
 										{PC: 10},
 										{PC: 11},
 									},
+									LogicSigHash: logicSigHash,
 								},
 							},
 						},

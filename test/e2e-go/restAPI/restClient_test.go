@@ -2242,6 +2242,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	ops, err := logic.AssembleString(maxDepthTealApproval)
 	a.NoError(err)
 	approval := ops.Program
+	approvalHash := crypto.Hash(approval)
 	ops, err = logic.AssembleString("#pragma version 8\nint 1")
 	a.NoError(err)
 	clearState := ops.Program
@@ -2301,8 +2302,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	// The first simulation should not pass, for simulation return PC in config has not been activated
 	execTraceConfig := simulation.ExecTraceConfig{
-		Enable: true,
-		Stack:  true,
+		Enable:      true,
+		Stack:       true,
+		ProgramHash: true,
 	}
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
@@ -3019,15 +3021,26 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
 		ApprovalProgramTrace: recursiveLongOpcodeTrace(futureAppID, 0),
+		ApprovalProgramHash:  toPtr(string(approvalHash.ToSlice())),
 		InnerTrace: &[]model.SimulationTransactionExecTrace{
-			{ApprovalProgramTrace: &creationOpcodeTrace},
+			{
+				ApprovalProgramTrace: &creationOpcodeTrace,
+				ApprovalProgramHash:  toPtr(string(approvalHash.ToSlice())),
+			},
 			{},
 			{
 				ApprovalProgramTrace: recursiveLongOpcodeTrace(futureAppID+3, 1),
+				ApprovalProgramHash:  toPtr(string(approvalHash.ToSlice())),
 				InnerTrace: &[]model.SimulationTransactionExecTrace{
-					{ApprovalProgramTrace: &creationOpcodeTrace},
+					{
+						ApprovalProgramTrace: &creationOpcodeTrace,
+						ApprovalProgramHash:  toPtr(string(approvalHash.ToSlice())),
+					},
 					{},
-					{ApprovalProgramTrace: finalDepthTrace(futureAppID+6, 2)},
+					{
+						ApprovalProgramTrace: finalDepthTrace(futureAppID+6, 2),
+						ApprovalProgramHash:  toPtr(string(approvalHash.ToSlice())),
+					},
 				},
 			},
 		},

@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -126,9 +127,10 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 type ExecTraceConfig struct {
 	_struct struct{} `codec:",omitempty"`
 
-	Enable  bool `codec:"enable"`
-	Stack   bool `codec:"stack-change"`
-	Scratch bool `codec:"scratch-change"`
+	Enable      bool `codec:"enable"`
+	Stack       bool `codec:"stack-change"`
+	Scratch     bool `codec:"scratch-change"`
+	ProgramHash bool `codec:"program-hash"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -151,6 +153,9 @@ func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
 
 // ReturnScratchChange tells if the simulation runs with scratch-change enabled.
 func (r Result) ReturnScratchChange() bool { return r.TraceConfig.Scratch }
+
+// ReturnProgramHash tells if the simulation returns hash of program bytecode executed.
+func (r Result) ReturnProgramHash() bool { return r.TraceConfig.ProgramHash }
 
 // validateSimulateRequest first checks relation between request and config variables, including developerAPI:
 // if `developerAPI` provided is turned off, this method would:
@@ -241,10 +246,16 @@ type OpcodeTraceUnit struct {
 type TransactionTrace struct {
 	// ApprovalProgramTrace stands for a slice of OpcodeTraceUnit over application call on approval program
 	ApprovalProgramTrace []OpcodeTraceUnit
+	// ApprovalProgramHash stands for the hash digest of approval program bytecode executed during simulation
+	ApprovalProgramHash crypto.Digest
 	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
 	ClearStateProgramTrace []OpcodeTraceUnit
+	// ClearStateProgramHash stands for the hash digest of clear state program bytecode executed during simulation
+	ClearStateProgramHash crypto.Digest
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
 	LogicSigTrace []OpcodeTraceUnit
+	// LogicSigHash stands for the hash digest of logic sig bytecode executed during simulation
+	LogicSigHash crypto.Digest
 	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
 	programTraceRef *[]OpcodeTraceUnit
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This

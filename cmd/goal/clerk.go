@@ -78,6 +78,7 @@ var (
 	simulateEnableRequestTrace    bool
 	simulateStackChange           bool
 	simulateScratchChange         bool
+	simulateProgramByteHash       bool
 	simulateAllowUnnamedResources bool
 )
 
@@ -172,6 +173,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
 	simulateCmd.Flags().BoolVar(&simulateStackChange, "stack", false, "Report stack change during simulation time")
 	simulateCmd.Flags().BoolVar(&simulateScratchChange, "scratch", false, "Report scratch change during simulation time")
+	simulateCmd.Flags().BoolVar(&simulateProgramByteHash, "program-byte-hash", false, "Report byte hashes of executed program bytecode during simulation time")
 	simulateCmd.Flags().BoolVar(&simulateAllowUnnamedResources, "allow-unnamed-resources", false, "Allow access to unnamed resources during simulation")
 }
 
@@ -1377,14 +1379,16 @@ func traceCmdOptionToSimulateTraceConfigModel() simulation.ExecTraceConfig {
 	var traceConfig simulation.ExecTraceConfig
 	if simulateFullTrace {
 		traceConfig = simulation.ExecTraceConfig{
-			Enable:  true,
-			Stack:   true,
-			Scratch: true,
+			Enable:      true,
+			Stack:       true,
+			Scratch:     true,
+			ProgramHash: true,
 		}
 	}
 	traceConfig.Enable = traceConfig.Enable || simulateEnableRequestTrace
 	traceConfig.Stack = traceConfig.Stack || simulateStackChange
 	traceConfig.Scratch = traceConfig.Scratch || simulateScratchChange
+	traceConfig.ProgramHash = traceConfig.ProgramHash || simulateProgramByteHash
 
 	return traceConfig
 }

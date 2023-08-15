@@ -710,6 +710,9 @@ type SimulateTraceConfig struct {
 	// Enable A boolean option for opting in execution trace features simulation endpoint.
 	Enable *bool `json:"enable,omitempty"`
 
+	// ProgramHash A boolean option enabling returning hash digests of executed program byte codes during simulation.
+	ProgramHash *bool `json:"program-hash,omitempty"`
+
 	// ScratchChange A boolean option enabling returning scratch slot changes together with execution trace during simulation.
 	ScratchChange *bool `json:"scratch-change,omitempty"`
 
@@ -818,14 +821,23 @@ type SimulationOpcodeTraceUnit struct {
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 type SimulationTransactionExecTrace struct {
+	// ApprovalProgramHash Hash digest of the approval program executed in transaction.
+	ApprovalProgramHash *string `json:"approval-program-hash,omitempty"`
+
 	// ApprovalProgramTrace Program trace that contains a trace of opcode effects in an approval program.
 	ApprovalProgramTrace *[]SimulationOpcodeTraceUnit `json:"approval-program-trace,omitempty"`
+
+	// ClearStateProgramHash Hash digest of the clear state program executed in transaction.
+	ClearStateProgramHash *string `json:"clear-state-program-hash,omitempty"`
 
 	// ClearStateProgramTrace Program trace that contains a trace of opcode effects in a clear state program.
 	ClearStateProgramTrace *[]SimulationOpcodeTraceUnit `json:"clear-state-program-trace,omitempty"`
 
 	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
 	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
+
+	// LogicSigHash Hash digest of the logic sig executed in transaction.
+	LogicSigHash *string `json:"logic-sig-hash,omitempty"`
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
