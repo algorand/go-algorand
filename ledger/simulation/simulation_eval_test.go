@@ -3204,7 +3204,7 @@ int 1`,
 											StackAdded: []basics.TealValue{
 												{
 													Type:  basics.TealBytesType,
-													Bytes: "boxWriteContent",
+													Bytes: string(boxContent),
 												},
 											},
 										},
@@ -3336,13 +3336,6 @@ end:
 int 1`,
 		})
 
-		payment := env.TxnInfo.NewTxn(txntest.Txn{
-			Type:     protocol.PaymentTx,
-			Sender:   sender.Addr,
-			Receiver: futureAppID.Address(),
-			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance * 2,
-		})
-
 		optIn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			OnCompletion:  transactions.OptInOC,
@@ -3364,10 +3357,9 @@ int 1`,
 			ApplicationArgs: [][]byte{[]byte("local")},
 		})
 
-		txntest.Group(&createTxn, &payment, &optIn, &globalStateCall, &localStateCall)
+		txntest.Group(&createTxn, &optIn, &globalStateCall, &localStateCall)
 
 		signedCreate := createTxn.Txn().Sign(sender.Sk)
-		signedPay := payment.Txn().Sign(sender.Sk)
 		signedOptin := optIn.Txn().Sign(sender.Sk)
 		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
 		signedLocalStateCall := localStateCall.Txn().Sign(sender.Sk)
@@ -3375,7 +3367,7 @@ int 1`,
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
-					{signedCreate, signedPay, signedOptin, signedGlobalStateCall, signedLocalStateCall},
+					{signedCreate, signedOptin, signedGlobalStateCall, signedLocalStateCall},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable:  true,
@@ -3433,10 +3425,6 @@ int 1`,
 										},
 									},
 								},
-							},
-							// Payment
-							{
-								Trace: &simulation.TransactionTrace{},
 							},
 							// Optin
 							{
@@ -3924,29 +3912,21 @@ end:
 int 1`,
 		})
 
-		payment := env.TxnInfo.NewTxn(txntest.Txn{
-			Type:     protocol.PaymentTx,
-			Sender:   sender.Addr,
-			Receiver: futureAppID.Address(),
-			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance * 2,
-		})
-
 		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender.Addr,
 			ApplicationID: futureAppID,
 		})
 
-		txntest.Group(&createTxn, &payment, &globalStateCall)
+		txntest.Group(&createTxn, &globalStateCall)
 
 		signedCreate := createTxn.Txn().Sign(sender.Sk)
-		signedPay := payment.Txn().Sign(sender.Sk)
 		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
 
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
-					{signedCreate, signedPay, signedGlobalStateCall},
+					{signedCreate, signedGlobalStateCall},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable:  true,
@@ -4004,10 +3984,6 @@ int 1`,
 										},
 									},
 								},
-							},
-							// Payment
-							{
-								Trace: &simulation.TransactionTrace{},
 							},
 							// Global
 							{
@@ -4125,6 +4101,180 @@ int 1`,
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 14,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestGlobalStateTypeChangeFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+			ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "global-key"
+byte "I pretend myself as an uint"
+app_global_put
+
+end:
+  int 1
+`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &globalStateCall)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedGlobalStateCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI:  true,
+			expectedError: "store bytes count 1 exceeds schema bytes count 0.",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{1},
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 3,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            3,
+											StackPopCount: 1,
+										},
+										{
+											PC: 48,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+							// Global
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"global-key": basics.ValueDelta{
+													Bytes:  "I pretend myself as an uint",
+													Action: basics.SetBytesAction,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 5,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            3,
+											StackPopCount: 1,
+										},
+										{
+											PC: 6,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-key",
+												},
+											},
+										},
+										{
+											PC: 18,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "I pretend myself as an uint",
+												},
+											},
+										},
+										{
+											PC:            47,
+											StackPopCount: 2,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-key",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 8,
 					},
 				},
 			},
