@@ -25,8 +25,6 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/google/go-querystring v1.0.0
 	github.com/gorilla/mux v1.8.0
-	github.com/ipfs/go-datastore v0.6.0
-	github.com/ipfs/go-ds-pebble v0.2.4
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/usb v0.0.2
 	github.com/labstack/echo/v4 v4.9.1
@@ -66,12 +64,10 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/invopop/yaml v0.1.0 // indirect
 	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
-	github.com/jbenet/goprocess v0.1.4 // indirect
 	github.com/jmespath/go-jmespath v0.3.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
