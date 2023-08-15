@@ -366,6 +366,9 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		re.PayloadOK = ea.Assembled
 		re.Payload = ea.Payload
 		return re
+	case readLowestVote:
+		re := e.(readLowestEvent)
+		return r.dispatch(p, re, proposalMachinePeriod, re.Round, re.Period, 0).(readLowestEvent)
 	case readPinned:
 		se := e.(pinnedValueEvent)
 		ea := store.Assemblers[store.Pinned] // If pinned is bottom, assembled/payloadOK = false, payload = bottom
