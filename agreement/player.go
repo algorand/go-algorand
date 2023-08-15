@@ -49,7 +49,12 @@ type player struct {
 
 	// Deadline contains the time of the next timeout expected by the player
 	// state machine (relevant to the start of the current period).
-	Deadline Deadline
+	Deadline Deadline `codec:"TimersDeadline"`
+
+	// Deadline contains the time of the next timeout expected by the player
+	// state machine (relevant to the start of the current period).
+	OldDeadline time.Duration `codec:"Deadline,omitempty"`
+
 	// Napping is set when the player is expecting a random timeout (i.e.,
 	// to determine when the player chooses to send a next-vote).
 	Napping bool

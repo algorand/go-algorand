@@ -244,6 +244,10 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect
 				return
 			}
 		}
+		if p2.OldDeadline != 0 {
+			p2.Deadline = Deadline{Duration: p2.OldDeadline, Type: TimeoutDeadline}
+			p2.OldDeadline = 0 // clear old value
+		}
 		rr2 = makeRootRouter(p2)
 		err = protocol.Decode(s.Router, &rr2)
 		if err != nil {
