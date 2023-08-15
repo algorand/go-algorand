@@ -37,21 +37,24 @@ func _() {
 	_ = x[newPeriod-26]
 	_ = x[readStaging-27]
 	_ = x[readPinned-28]
-	_ = x[voteFilterRequest-29]
-	_ = x[voteFilteredStep-30]
-	_ = x[nextThresholdStatusRequest-31]
-	_ = x[nextThresholdStatus-32]
-	_ = x[freshestBundleRequest-33]
-	_ = x[freshestBundle-34]
-	_ = x[dumpVotesRequest-35]
-	_ = x[dumpVotes-36]
-	_ = x[wrappedAction-37]
-	_ = x[checkpointReached-38]
+	_ = x[readLowestValue-29]
+	_ = x[readLowestVote-30]
+	_ = x[readLowestPayload-31]
+	_ = x[voteFilterRequest-32]
+	_ = x[voteFilteredStep-33]
+	_ = x[nextThresholdStatusRequest-34]
+	_ = x[nextThresholdStatus-35]
+	_ = x[freshestBundleRequest-36]
+	_ = x[freshestBundle-37]
+	_ = x[dumpVotesRequest-38]
+	_ = x[dumpVotes-39]
+	_ = x[wrappedAction-40]
+	_ = x[checkpointReached-41]
 }
 
-const _eventType_name = "nonevotePresentpayloadPresentbundlePresentvoteVerifiedpayloadVerifiedbundleVerifiedroundInterruptiontimeoutfastTimeoutsoftThresholdcertThresholdnextThresholdproposalCommittableproposalAcceptedvoteFilteredvoteMalformedbundleFilteredbundleMalformedpayloadRejectedpayloadMalformedpayloadPipelinedpayloadAcceptedproposalFrozenvoteAcceptednewRoundnewPeriodreadStagingreadPinnedvoteFilterRequestvoteFilteredStepnextThresholdStatusRequestnextThresholdStatusfreshestBundleRequestfreshestBundledumpVotesRequestdumpVoteswrappedActioncheckpointReached"
+const _eventType_name = "nonevotePresentpayloadPresentbundlePresentvoteVerifiedpayloadVerifiedbundleVerifiedroundInterruptiontimeoutfastTimeoutsoftThresholdcertThresholdnextThresholdproposalCommittableproposalAcceptedvoteFilteredvoteMalformedbundleFilteredbundleMalformedpayloadRejectedpayloadMalformedpayloadPipelinedpayloadAcceptedproposalFrozenvoteAcceptednewRoundnewPeriodreadStagingreadPinnedreadLowestValuereadLowestVotereadLowestPayloadvoteFilterRequestvoteFilteredStepnextThresholdStatusRequestnextThresholdStatusfreshestBundleRequestfreshestBundledumpVotesRequestdumpVoteswrappedActioncheckpointReached"
 
-var _eventType_index = [...]uint16{0, 4, 15, 29, 42, 54, 69, 83, 100, 107, 118, 131, 144, 157, 176, 192, 204, 217, 231, 246, 261, 277, 293, 308, 322, 334, 342, 351, 362, 372, 389, 405, 431, 450, 471, 485, 501, 510, 523, 540}
+var _eventType_index = [...]uint16{0, 4, 15, 29, 42, 54, 69, 83, 100, 107, 118, 131, 144, 157, 176, 192, 204, 217, 231, 246, 261, 277, 293, 308, 322, 334, 342, 351, 362, 372, 387, 401, 418, 435, 451, 477, 496, 517, 531, 547, 556, 569, 586}
 
 func (i eventType) String() string {
 	if i >= eventType(len(_eventType_index)-1) {

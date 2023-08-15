@@ -198,8 +198,12 @@ const (
 	readPinned
 
 	// readLowestValue is sent to the proposalPeriodMachine to read the
-	// proposal-vote with the lowest credential.
+	// proposalValue with the lowest credential.
 	readLowestValue
+
+	// readLowestVote is sent to the proposalPeriodMachine to read the
+	// proposal-vote with the lowest credential.
+	readLowestVote
 
 	// readLowestPayload is sent to the proposalStore to read the payload
 	// corresponding to the lowest-credential proposal-vote, if it exists.
@@ -429,6 +433,8 @@ type readLowestEvent struct {
 
 	// Proposal holds the lowest-credential value.
 	Proposal proposalValue
+	// Vote holds the lowest-credential vote.
+	Vote vote
 	// Payload holds the payload, if one exists (which is the case if PayloadOK is set).
 	Payload proposal
 	// PayloadOK is set if and only if a payload was received for the lowest-credential value.
