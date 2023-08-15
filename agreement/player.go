@@ -314,7 +314,7 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 		sortedArrivals := make([]time.Duration, len(p.payloadArrivals))
 		copy(sortedArrivals[:], p.payloadArrivals[:])
 		sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
-		dynamicDelay = sortedArrivals[proto.DynamicFilterCredentialArrivalHistoryIdx]
+		dynamicDelay = sortedArrivals[proto.DynamicFilterCredentialArrivalHistoryIdx] + 50*time.Millisecond
 	}
 
 	// Make sure the dynamic delay is not too small or too large
