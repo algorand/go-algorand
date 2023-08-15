@@ -28,7 +28,8 @@ import (
 type Deadline struct {
 	_struct  struct{} `codec:","`
 	Duration time.Duration
-	Type     TimeoutType
+	// Type is used to allow tests fire timeouts of specific types.
+	Type TimeoutType
 }
 
 // The player implements the top-level state machine functionality of the
