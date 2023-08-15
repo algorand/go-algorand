@@ -27,12 +27,14 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -51,6 +53,7 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/tokens"
 )
 
 var fixture fixtures.RestClientFixture
@@ -956,7 +959,7 @@ return
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.Greater(uint64(createdAppID), uint64(0))
+	a.NotZero(createdAppID)
 
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, createdAppID.Address().String(), 0, 1_000_000, nil, "", 0, 0)
@@ -988,7 +991,7 @@ return
 	a.Nil(innerTxn.ApplicationIndex)
 	a.NotNil(innerTxn.AssetIndex)
 	createdAssetID := *innerTxn.AssetIndex
-	a.Greater(createdAssetID, uint64(0))
+	a.NotZero(createdAssetID)
 
 	createdAssetInfo, err := testClient.AssetInformation(createdAssetID)
 	a.NoError(err)
@@ -1236,8 +1239,10 @@ end:
     int 1
 `
 	ops, err := logic.AssembleString(prog)
+	a.NoError(err)
 	approval := ops.Program
 	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
 	clearState := ops.Program
 
 	gl := basics.StateSchema{}
@@ -1262,7 +1267,7 @@ end:
 	a.NoError(err)
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.Greater(uint64(createdAppID), uint64(0))
+	a.NotZero(createdAppID)
 
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(
@@ -1870,7 +1875,7 @@ int 1`
 	// get app ID
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.Greater(uint64(createdAppID), uint64(0))
+	a.NotZero(createdAppID)
 
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(
@@ -1998,7 +2003,7 @@ int 1`
 	// get app ID
 	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
 	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.Greater(uint64(createdAppID), uint64(0))
+	a.NotZero(createdAppID)
 
 	// fund app account
 	appFundTxn, err := testClient.SendPaymentFromWallet(
@@ -3201,4 +3206,300 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 		},
 	}
 	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
+}
+
+func TestSimulateWithUnnamedResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(senderAddress, "no addr with funds")
+	a.NoError(err)
+
+	otherAddress := getDestAddr(t, testClient, nil, senderAddress, wh)
+
+	// fund otherAddress
+	txn, err := testClient.SendPaymentFromWallet(
+		wh, nil, senderAddress, otherAddress,
+		0, 1_000_000, nil, "", 0, 0,
+	)
+	a.NoError(err)
+	txID := txn.ID().String()
+	_, err = waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	a.NoError(err)
+
+	// create asset
+	txn, err = testClient.MakeUnsignedAssetCreateTx(100, false, "", "", "", "", "", "", "", nil, 0)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	// sign and broadcast
+	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
+	a.NoError(err)
+	confirmedTxn, err := waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	a.NoError(err)
+	// get asset ID
+	a.NotNil(confirmedTxn.AssetIndex)
+	assetID := *confirmedTxn.AssetIndex
+	a.NotZero(assetID)
+
+	// opt-in to asset
+	txn, err = testClient.MakeUnsignedAssetSendTx(assetID, 0, otherAddress, "", "")
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(otherAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	// sign and broadcast
+	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, otherAddress, txID, 30*time.Second)
+	a.NoError(err)
+
+	// transfer asset
+	txn, err = testClient.MakeUnsignedAssetSendTx(assetID, 1, otherAddress, "", "")
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	// sign and broadcast
+	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
+	a.NoError(err)
+	_, err = waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	a.NoError(err)
+
+	ops, err := logic.AssembleString("#pragma version 9\n int 1")
+	a.NoError(err)
+	alwaysApprove := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	// create app
+	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.OptInOC, alwaysApprove, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(otherAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	// sign and broadcast
+	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
+	a.NoError(err)
+	confirmedTxn, err = waitForTransaction(t, testClient, otherAddress, txID, 30*time.Second)
+	a.NoError(err)
+	// get app ID
+	a.NotNil(confirmedTxn.ApplicationIndex)
+	otherAppID := basics.AppIndex(*confirmedTxn.ApplicationIndex)
+	a.NotZero(otherAppID)
+
+	prog := fmt.Sprintf(`#pragma version 9
+txn ApplicationID
+bz end
+
+addr %s // otherAddress
+store 0
+
+int %d // assetID
+store 1
+
+int %d // otherAppID
+store 2
+
+// Account access
+load 0 // otherAddress
+balance
+assert
+
+// Asset params access
+load 1 // assetID
+asset_params_get AssetTotal
+assert
+int 100
+==
+assert
+
+// Asset holding access
+load 0 // otherAddress
+load 1 // assetID
+asset_holding_get AssetBalance
+assert
+int 1
+==
+assert
+
+// App params access
+load 2 // otherAppID
+app_params_get AppCreator
+assert
+load 0 // otherAddress
+==
+assert
+
+// App local access
+load 0 // otherAddress
+load 2 // otherAppID
+app_opted_in
+assert
+
+// Box access
+byte "A"
+int 1025
+box_create
+assert
+
+end:
+int 1
+`, otherAddress, assetID, otherAppID)
+
+	ops, err = logic.AssembleString(prog)
+	a.NoError(err)
+	approval := ops.Program
+
+	// create app
+	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.NoOpOC, approval, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	// sign and broadcast
+	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
+	a.NoError(err)
+	confirmedTxn, err = waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	a.NoError(err)
+	// get app ID
+	a.NotNil(confirmedTxn.ApplicationIndex)
+	testAppID := basics.AppIndex(*confirmedTxn.ApplicationIndex)
+	a.NotZero(testAppID)
+
+	// fund app account
+	txn, err = testClient.SendPaymentFromWallet(
+		wh, nil, senderAddress, testAppID.Address().String(),
+		0, 1_000_000, nil, "", 0, 0,
+	)
+	a.NoError(err)
+	txID = txn.ID().String()
+	_, err = waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	a.NoError(err)
+
+	// construct app call
+	txn, err = testClient.MakeUnsignedAppNoOpTx(
+		uint64(testAppID), nil, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
+	a.NoError(err)
+
+	// Cannot access these resources by default
+	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+		AllowUnnamedResources: false,
+	})
+	a.NoError(err)
+	a.Contains(*resp.TxnGroups[0].FailureMessage, "logic eval error: invalid Account reference "+otherAddress)
+	a.Equal([]uint64{0}, *resp.TxnGroups[0].FailedAt)
+
+	// It should work with AllowUnnamedResources=true
+	resp, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+		AllowUnnamedResources: true,
+	})
+	a.NoError(err)
+
+	expectedUnnamedGroupResources := model.SimulateUnnamedResourcesAccessed{
+		Accounts:     &[]string{otherAddress},
+		Assets:       &[]uint64{assetID},
+		Apps:         &[]uint64{uint64(otherAppID)},
+		Boxes:        &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
+		ExtraBoxRefs: toPtr[uint64](1),
+		AssetHoldings: &[]model.AssetHoldingReference{
+			{Account: otherAddress, Asset: assetID},
+		},
+		AppLocals: &[]model.ApplicationLocalReference{
+			{Account: otherAddress, App: uint64(otherAppID)},
+		},
+	}
+
+	budgetAdded, budgetUsed := uint64(700), uint64(40)
+	allowUnnamedResources := true
+
+	expectedResult := v2.PreEncodedSimulateResponse{
+		Version:   2,
+		LastRound: resp.LastRound,
+		EvalOverrides: &model.SimulationEvalOverrides{
+			AllowUnnamedResources: &allowUnnamedResources,
+		},
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn:               v2.PreEncodedTxInfo{Txn: stxn},
+						AppBudgetConsumed: &budgetUsed,
+					},
+				},
+				AppBudgetAdded:           &budgetAdded,
+				AppBudgetConsumed:        &budgetUsed,
+				UnnamedResourcesAccessed: &expectedUnnamedGroupResources,
+			},
+		},
+	}
+	a.Equal(expectedResult, resp)
+}
+
+func TestDisabledAPIConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "DisableAPIAuth.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	statusResponse, err := testClient.Status()
+	a.NoError(err)
+	a.NotEmpty(statusResponse)
+	statusResponse2, err := testClient.Status()
+	a.NoError(err)
+	a.NotEmpty(statusResponse2)
+	a.True(statusResponse2.LastRound >= statusResponse.LastRound)
+
+	// Check the public token isn't created when the API authentication is disabled
+	nc, err := localFixture.GetNodeController("Primary")
+	_, err = os.Stat(path.Join(nc.GetDataDir(), tokens.AlgodAdminTokenFilename))
+	assert.NoError(t, err)
+	_, err = os.Stat(path.Join(nc.GetDataDir(), tokens.AlgodTokenFilename))
+	assert.True(t, os.IsNotExist(err))
+
+	// check public api works without a token
+	testClient.WaitForRound(1)
+	_, err = testClient.Block(1)
+	assert.NoError(t, err)
+	// check admin api works with the generated token
+	_, err = testClient.GetParticipationKeys()
+	assert.NoError(t, err)
+	// check admin api doesn't work with an invalid token
+	algodURL, err := nc.ServerURL()
+	assert.NoError(t, err)
+	client := client.MakeRestClient(algodURL, "")
+	_, err = client.GetParticipationKeys()
+	assert.Contains(t, err.Error(), "Invalid API Token")
 }

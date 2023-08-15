@@ -97,6 +97,7 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 		EnableFeePooling:      true,
 
 		// Chosen to be different from one another and from normal proto
+		MaxAppBoxReferences:      2,
 		MaxAppTxnAccounts:        3,
 		MaxAppTxnForeignApps:     5,
 		MaxAppTxnForeignAssets:   6,
@@ -177,8 +178,9 @@ func defaultAppParamsWithVersion(version uint64, txns ...transactions.SignedTxn)
 	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), makeTestProtoV(version), &transactions.SpecialAddresses{})
 	if ep != nil { // If supplied no apps, ep is nil.
 		ep.Trace = &strings.Builder{}
-		ep.Ledger = NewLedger(nil)
-		ep.SigLedger = ep.Ledger
+		ledger := NewLedger(nil)
+		ep.Ledger = ledger
+		ep.SigLedger = ledger
 	}
 	return ep
 }
@@ -6031,4 +6033,13 @@ popn 255
 pop
 int 1
 `, 8)
+}
+
+func TestNoHeaderLedger(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	nhl := NoHeaderLedger{}
+	_, err := nhl.BlockHdr(1)
+	require.Error(t, err)
+	require.Equal(t, err, fmt.Errorf("no block header access"))
 }

@@ -71,7 +71,8 @@ while [ $CROUND -lt $TIMEOUT_ROUND ]; do
     CROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
-${gcmd} clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
+# send txn that valid right after the TIMEOUT_ROUND
+${gcmd} clerk send --firstvalid $((${TIMEOUT_ROUND} + 1))  --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
 
 cat >${TEMPDIR}/true.teal<<EOF
 #pragma version 2

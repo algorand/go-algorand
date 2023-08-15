@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"golang.org/x/exp/maps"
 )
 
@@ -85,12 +86,6 @@ type linearCost struct {
 	depth     int
 }
 
-// divCeil provides `math.Ceil` semantics using integer division.  The technique avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
-// The method does _not_ check for divide-by-zero.
-func divCeil(numerator int, denominator int) int {
-	return (numerator + denominator - 1) / denominator
-}
-
 func (lc linearCost) check() linearCost {
 	if lc.baseCost < 1 || lc.chunkCost < 0 || lc.chunkSize < 0 || lc.chunkSize > maxStringSize || lc.depth < 0 {
 		panic(fmt.Sprintf("bad cost configuration %+v", lc))
@@ -107,9 +102,9 @@ func (lc linearCost) check() linearCost {
 func (lc *linearCost) compute(stack []stackValue) int {
 	cost := lc.baseCost
 	if lc.chunkCost != 0 && lc.chunkSize != 0 {
-		// Uses divCeil rather than (count/chunkSize) to match how Ethereum discretizes hashing costs.
+		// Uses basics.DivCeil rather than (count/chunkSize) to match how Ethereum discretizes hashing costs.
 		count := len(stack[len(stack)-1-lc.depth].Bytes)
-		cost += lc.chunkCost * divCeil(count, lc.chunkSize)
+		cost += lc.chunkCost * basics.DivCeil(count, lc.chunkSize)
 	}
 	return cost
 }

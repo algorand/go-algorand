@@ -297,6 +297,7 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	cfg.DNSBootstrapID = ""
 	cfg.EnableProfiler = true
 	cfg.EnableRuntimeMetrics = true
+	cfg.EnableExperimentalAPI = true
 	if relaysCount == 0 {
 		cfg.DisableNetworking = true
 	}

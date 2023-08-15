@@ -940,10 +940,6 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 	return block.BlockHeader, nil
 }
 
-func (ledger *evalTestLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return ledger.BlockHdr(rnd)
-}
-
 func (ledger *evalTestLedger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
 	return nil, errors.New("untested code path")
 }
@@ -1039,10 +1035,6 @@ type testCowBaseLedger struct {
 
 func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, errors.New("not implemented")
-}
-
-func (l *testCowBaseLedger) BlockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return l.BlockHdr(rnd)
 }
 
 func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
