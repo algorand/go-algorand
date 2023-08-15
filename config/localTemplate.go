@@ -80,54 +80,47 @@ type Local struct {
 	// if this is not set, MakeService will attempt to use ColdDataDir instead
 	CadaverDirectory string `version[27]:""`
 
-	// Optional Data Directories
-	// data dirs are used to house data related to the operation of the node.
-	// by default, the only data directory that is required is the datadir,
-	// specified by -d or the os environment variable algorand_data.
-	// by specifying additional data directories, the node will store data in those directories,
-	// *instead* of the datadir. This is useful for example, if you want to store the ledger
-	// on a fast SSD, but store the logs on a slower spinning disk.
-	// In order to allow for nodes to support multiple networks, these data directories are not used directly,
-	// but instead will hold subdirectories for each network, named by its genesis id.
-	// once these paths are resolved to absolute paths with genesis directories, they are passed to the node to use.
-	// For simple node operation: do not specify any of these directories.
-	// For advanced node operation: specify the HotDataDir and ColdDataDir to separate drives
-	// For expert node operation: specify any of the directories to customize the node's data storage.
-
-	// Hot Data Directory stores data that is frequently accessed by the node. This includes:
-	// - accounts database
-	// - log file
-	// if not specified, the node will use the datadir for these files.
-	// these individual resources may themselves have their own directories specified, which would override this
+	// HotDataDir is an optional directory to store data that is frequently accessed by the node
+	// for isolation, the node will create a subdirectory in this location, named by the genesis-id of the network
+	// if not specified, the node will use the runtime supplied datadir to store this data
+	// individual resources may have their own override specified, which would override this setting for that resource
+	// Setting HotDataDir to a dedicated high performance disk allows for basic disc tuning
 	HotDataDir string `version[29]:""`
 
-	// Cold Data Directory stores data that is infrequently accessed by the node. This includes
-	// - block database
-	// - catchpoint database
-	// - stateproof database
-	// - crash database
-	// - tracker database
-	// - log archive
-	// - participation db
-	// if not specified, the node will use the datadir for these files
-	// these individual resources may themselves have their own directories specified, which would override this
+	// ColdDataDir is an optional directory to store data that is infrequently accessed by the node
+	// for isolation, the node will create a subdirectory in this location, named by the genesis-id of the network
+	// if not specified, the node will use the runtime supplied datadir
+	// individual resources may have their own override specified, which would override this setting for that resource
+	// Setting ColdDataDir to a less critical or cheaper disk allows for basic disc tuning
 	ColdDataDir string `version[29]:""`
 
-	// TrackerDbDir stores the tracker database. if not specified, the node will use the HotDataDir
+	// TrackerDbDir is an optional directory to store the tracker database
+	// for isolation, the node will create a subdirectory in this location, named by the genesis-id of the network
+	// if not specified, the node will use the HotDataDir
 	TrackerDBDir string `version[29]:""`
-	// BlockDBDir stores the block database. if not specified, the node will use the ColdDataDir
+	// BlockDBDir is an optional directory to store the block database
+	// for isolation, the node will create a subdirectory in this location, named by the genesis-id of the network
+	// if not specified, the node will use the ColdDataDir
 	BlockDBDir string `version[29]:""`
-	// CatchpointDir stores the catchpoint files. if not specified, the node will use the ColdDataDir
+	// CatchpointDir is an optional directory to store catchpoint files
+	// for isolation, the node will create a subdirectory in this location, named by the genesis-id of the network
+	// if not specified, the node will use the ColdDataDir
 	CatchpointDir string `version[29]:""`
-	// StateproofDir stores the stateproof database. if not specified, the node will use the ColdDataDir
+	// StateproofDir is an optional directory to store stateproof data
+	// for isolation, the node will create a subdirectory in this location, named by the genesis-id of the network
+	// if not specified, the node will use the ColdDataDir
 	StateproofDir string `version[29]:""`
-	// CrashDBDir stores the crash database. if not specified, the node will use the ColdDataDir
+	// CrashDBDir is an optional directory to store the crash database
+	// for isolation, the node will create a subdirectory in this location, named by the genesis-id of the network
+	// if not specified, the node will use the ColdDataDir
 	CrashDBDir string `version[29]:""`
 
-	// LogFilePath and LogArchiveDir do not create subdirectories for GenesisDir, as their current behavior is to act at the root of the data dir
-	// LogFilePath stores the log file. if not specified, the node will use the HotDataDir + "node.log"
+	// LogFilePath is an optional path to the log file
+	// if not specified, the node will use the HotDataDir
+	// the -o command line option can be used to override this output location
 	LogFilePath string `version[29]:""`
-	// LogArchiveDir stores the log archive. if not specified, the node will use the ColdDataDir
+	// LogArchiveDir is an optional directory to store the log archive
+	// if not specified, the node will use the ColdDataDir
 	LogArchiveDir string `version[29]:""`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
