@@ -4119,6 +4119,9 @@
         },
         "new-value": {
           "$ref": "#/definitions/AvmValue"
+        },
+        "account": {
+          "$ref": "#/definitions/AvmValue"
         }
       }
     },
@@ -4141,7 +4144,7 @@
           }
         },
         "state-changes": {
-          "description": "The operations against application states.",
+          "description": "The operations against the current application's states.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/ApplicationStateOperation"

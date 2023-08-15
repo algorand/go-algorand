@@ -3223,6 +3223,8 @@ func TestSimulateExecTraceStateChange(t *testing.T) {
 	a.NoError(err)
 	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
 	a.NotEmpty(senderAddress, "no addr with funds")
+
+	addressDigest, err := basics.UnmarshalChecksumAddress(senderAddress)
 	a.NoError(err)
 
 	ops, err := logic.AssembleString(
@@ -3441,6 +3443,10 @@ end:
 						Type: uint64(basics.TealUintType),
 						Uint: toPtr[uint64](0xcafeb0ba),
 					},
+					Account: &model.AvmValue{
+						Type:  uint64(basics.TealBytesType),
+						Bytes: toPtr(addressDigest[:]),
+					},
 				},
 			},
 		},
@@ -3457,6 +3463,9 @@ end:
 					NewValue: &model.AvmValue{
 						Type:  uint64(basics.TealBytesType),
 						Bytes: toPtr([]byte("xqcL")),
+					},
+					Account: &model.AvmValue{
+						Type: uint64(basics.TealUintType),
 					},
 				},
 			},

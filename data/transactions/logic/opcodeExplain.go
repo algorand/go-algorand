@@ -23,12 +23,12 @@ import "github.com/algorand/go-algorand/data/basics"
 // An opcode may delete a few variables from stack, then add a few to stack.
 type debugStackExplain func(*EvalContext) (int, int)
 
-// AppStateOperationT stands for the operation enum to app state, should be one of create, write, read, delete.
-type AppStateOperationT uint64
+// AppStateOpEnum stands for the operation enum to app state, should be one of create, write, read, delete.
+type AppStateOpEnum uint64
 
 const (
 	// AppStateWrite stands for writing to an app state.
-	AppStateWrite AppStateOperationT = iota + 1
+	AppStateWrite AppStateOpEnum = iota + 1
 
 	// AppStateDelete stands for deleting an app state.
 	AppStateDelete
@@ -44,15 +44,15 @@ const (
 	// LocalState stands for local state of an app.
 	LocalState
 
-	// Box stands for box storage of an app.
-	Box
+	// BoxState stands for box storage of an app.
+	BoxState
 )
 
 // stateChangeExplain explains how an opcode change the app's state with a quadruple:
 // AppStateEnum stands for which app state: local/global/box,
-// AppStateOperationT stands for read/write/create/delete/check-existence,
+// AppStateOpEnum stands for read/write/create/delete/check-existence,
 // together with key for touched state
-type stateChangeExplain func(ctx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string)
+type stateChangeExplain func(ctx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.TealValue, string)
 
 func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
 	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
@@ -165,34 +165,34 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 	return
 }
 
-func opBoxCreateStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
+func opBoxCreateStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // size
 	prev := last - 1          // name
 
-	return Box, AppStateWrite, cx.appID, basics.TealValue{}, string(cx.Stack[prev].Bytes)
+	return BoxState, AppStateWrite, cx.appID, basics.TealValue{}, string(cx.Stack[prev].Bytes)
 }
 
-func opBoxReplaceStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
+func opBoxReplaceStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // replacement
 	prev := last - 1          // start
 	pprev := prev - 1         // name
 
-	return Box, AppStateWrite, cx.appID, basics.TealValue{}, string(cx.Stack[pprev].Bytes)
+	return BoxState, AppStateWrite, cx.appID, basics.TealValue{}, string(cx.Stack[pprev].Bytes)
 }
 
-func opBoxDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
+func opBoxDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // name
 
-	return Box, AppStateDelete, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
+	return BoxState, AppStateDelete, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
 }
 
-func opBoxPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
+func opBoxPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // name
 
-	return Box, AppStateWrite, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
+	return BoxState, AppStateWrite, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
 }
 
-func opAppLocalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
+func opAppLocalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // value
 	prev := last - 1          // state key
 	pprev := prev - 1         // account
@@ -200,21 +200,21 @@ func opAppLocalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT
 	return LocalState, AppStateWrite, cx.appID, cx.Stack[pprev].ToTealValue(), string(cx.Stack[prev].Bytes)
 }
 
-func opAppGlobalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
+func opAppGlobalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // value
 	prev := last - 1          // state key
 
 	return GlobalState, AppStateWrite, cx.appID, basics.TealValue{}, string(cx.Stack[prev].Bytes)
 }
 
-func opAppLocalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
+func opAppLocalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // key
 	prev := last - 1          // account
 
 	return LocalState, AppStateDelete, cx.appID, cx.Stack[prev].ToTealValue(), string(cx.Stack[last].Bytes)
 }
 
-func opAppGlobalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOperationT, basics.AppIndex, basics.TealValue, string) {
+func opAppGlobalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.TealValue, string) {
 	last := len(cx.Stack) - 1 // key
 
 	return GlobalState, AppStateDelete, cx.appID, basics.TealValue{}, string(cx.Stack[last].Bytes)
@@ -240,13 +240,13 @@ func tealValueToStackValue(tv basics.TealValue) stackValue {
 // Otherwise, we find the updated new state value, and wrap up with new TealValue.
 func AppNewStateQuerying(
 	cx *EvalContext,
-	appState AppStateEnum, stateOp AppStateOperationT,
+	appState AppStateEnum, stateOp AppStateOpEnum,
 	appID basics.AppIndex, account basics.TealValue, key string) basics.TealValue {
 	if stateOp != AppStateWrite {
 		return basics.TealValue{}
 	}
 	switch appState {
-	case Box:
+	case BoxState:
 		boxBytes, exists, err := cx.Ledger.GetBox(appID, key)
 		if !exists || err != nil {
 			return basics.TealValue{}

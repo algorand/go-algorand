@@ -230,13 +230,24 @@ type ScratchChange struct {
 
 // StateOperation represents an operation into an app local/global/box state
 type StateOperation struct {
-	logic.AppStateOperationT
-	logic.AppStateEnum
-	basics.AppIndex
-	Key      string
+	// AppStateOp is one of logic.AppStateOpEnum, standing for either write or delete.
+	AppStateOp logic.AppStateOpEnum
+
+	// AppState is one of logic.AppStateEnum, standing for one of global/local/box.
+	AppState logic.AppStateEnum
+
+	// AppID is the current app's ID.
+	AppID basics.AppIndex
+
+	// Key is the app state kv-pair's key, directly casting byte slice to string.
+	Key string
+
+	// NewValue is the value write to the app's state.
+	// NOTE: if the current app state operation is del, then this value is basics.TealValue{}.
 	NewValue basics.TealValue
 
-	// This field is only used for local state new value querying.
+	// Account is the account associated to the local state an app writes to.
+	// NOTE: if the current app state is not local, then this value is basics.TealValue{}.
 	Account basics.TealValue
 }
 

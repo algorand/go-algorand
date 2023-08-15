@@ -366,7 +366,7 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertTealValue(tv basics.TealValue) model.AvmValue {
+func convertToAVMValue(tv basics.TealValue) model.AvmValue {
 	return model.AvmValue{
 		Type:  uint64(tv.Type),
 		Uint:  omitEmpty(tv.Uint),
@@ -377,7 +377,7 @@ func convertTealValue(tv basics.TealValue) model.AvmValue {
 func convertScratchChange(scratchChange simulation.ScratchChange) model.ScratchChange {
 	return model.ScratchChange{
 		Slot:     scratchChange.Slot,
-		NewValue: convertTealValue(scratchChange.NewValue),
+		NewValue: convertToAVMValue(scratchChange.NewValue),
 	}
 }
 
@@ -387,14 +387,14 @@ func convertApplicationState(stateEnum logic.AppStateEnum) string {
 		return "l"
 	case logic.GlobalState:
 		return "g"
-	case logic.Box:
+	case logic.BoxState:
 		return "b"
 	default:
 		return ""
 	}
 }
 
-func convertApplicationStateOperation(opEnum logic.AppStateOperationT) string {
+func convertApplicationStateOperation(opEnum logic.AppStateOpEnum) string {
 	switch opEnum {
 	case logic.AppStateWrite:
 		return "w"
@@ -408,9 +408,10 @@ func convertApplicationStateOperation(opEnum logic.AppStateOperationT) string {
 func convertApplicationStateChange(stateChange simulation.StateOperation) model.ApplicationStateOperation {
 	return model.ApplicationStateOperation{
 		Key:          []byte(stateChange.Key),
-		NewValue:     omitEmpty(convertTealValue(stateChange.NewValue)),
-		Operation:    convertApplicationStateOperation(stateChange.AppStateOperationT),
-		AppStateType: convertApplicationState(stateChange.AppStateEnum),
+		NewValue:     omitEmpty(convertToAVMValue(stateChange.NewValue)),
+		Operation:    convertApplicationStateOperation(stateChange.AppStateOp),
+		AppStateType: convertApplicationState(stateChange.AppState),
+		Account:      omitEmpty(convertToAVMValue(stateChange.Account)),
 	}
 }
 
@@ -418,7 +419,7 @@ func convertOpcodeTraceUnit(opcodeTraceUnit simulation.OpcodeTraceUnit) model.Si
 	return model.SimulationOpcodeTraceUnit{
 		Pc:             opcodeTraceUnit.PC,
 		SpawnedInners:  sliceOrNil(convertSlice(opcodeTraceUnit.SpawnedInners, func(v int) uint64 { return uint64(v) })),
-		StackAdditions: sliceOrNil(convertSlice(opcodeTraceUnit.StackAdded, convertTealValue)),
+		StackAdditions: sliceOrNil(convertSlice(opcodeTraceUnit.StackAdded, convertToAVMValue)),
 		StackPopCount:  omitEmpty(opcodeTraceUnit.StackPopCount),
 		ScratchChanges: sliceOrNil(convertSlice(opcodeTraceUnit.ScratchSlotChanges, convertScratchChange)),
 		StateChanges:   sliceOrNil(convertSlice(opcodeTraceUnit.StateChanges, convertApplicationStateChange)),

@@ -1303,6 +1303,9 @@
       "ApplicationStateOperation": {
         "description": "An operation against an application global/local/box key-value pair.",
         "properties": {
+          "account": {
+            "$ref": "#/components/schemas/AvmValue"
+          },
           "app-state-type": {
             "description": "Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.",
             "type": "string"
@@ -2315,7 +2318,7 @@
             "type": "integer"
           },
           "state-changes": {
-            "description": "The operations against application states.",
+            "description": "The operations against the current application's states.",
             "items": {
               "$ref": "#/components/schemas/ApplicationStateOperation"
             },
