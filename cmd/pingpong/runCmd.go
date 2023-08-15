@@ -91,6 +91,7 @@ var generatedAccountsOffset uint64
 var generatedAccountSampleMethod string
 var configPath string
 var latencyPath string
+var asyncSending bool
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -132,6 +133,7 @@ func init() {
 	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 	runCmd.Flags().BoolVar(&rekey, "rekey", false, "Create RekeyTo transactions. Requires groupsize=2 and any of random flags exc random dst")
 	runCmd.Flags().Uint32Var(&duration, "duration", 0, "The number of seconds to run the pingpong test, forever if 0")
+	runCmd.Flags().BoolVar(&asyncSending, "async", false, "Use async sending mode")
 	runCmd.Flags().Uint32Var(&nftAsaPerSecond, "nftasapersecond", 0, "The number of NFT-style ASAs to create per second")
 	runCmd.Flags().StringVar(&pidFile, "pidfile", "", "path to write process id of this pingpong")
 	runCmd.Flags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
@@ -293,6 +295,9 @@ var runCmd = &cobra.Command{
 		}
 		if duration > 0 {
 			cfg.MaxRuntime = time.Duration(uint32(duration)) * time.Second
+		}
+		if asyncSending {
+			cfg.AsyncSending = true
 		}
 		if randomNote {
 			cfg.RandomNote = true
