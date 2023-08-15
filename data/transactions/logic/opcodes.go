@@ -829,75 +829,68 @@ var OpSpecs = []OpSpec{
 
 	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
-			BN254g1: 310, BN254g2: 430,
-			BLS12_381g1: 540, BLS12_381g2: 750})}, // eip: 500, 800
+			BN254g1: 125, BN254g2: 170,
+			BLS12_381g1: 205, BLS12_381g2: 290})},
+
 	{0xe1, "ec_scalar_mul", opEcScalarMul, proto("bb:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
-			BN254g1: 2200, BN254g2: 4460,
-			BLS12_381g1: 3640, BLS12_381g2: 8530})}, // eip: 12000, 45000
+			BN254g1: 1810, BN254g2: 3430,
+			BLS12_381g1: 2950, BLS12_381g2: 6530})},
 
-	// Needs more benchmarking, but roughly:
-	// BN cost is 18k per elt, BLS is 45k + 40k per elt.
 	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:i"), pairingVersion,
 		costByFieldAndLength("g", &EcGroups, []linearCost{
 			BN254g1: {
-				baseCost:  1,
-				chunkCost: 18_000,
+				baseCost:  8000,
+				chunkCost: 7_400,
 				chunkSize: bn254g1Size,
 			},
 			BN254g2: {
-				baseCost:  1,
-				chunkCost: 18_000,
+				baseCost:  8000,
+				chunkCost: 7_400,
 				chunkSize: bn254g2Size,
 			},
 			BLS12_381g1: {
-				baseCost:  45_000,
-				chunkCost: 40_000,
+				baseCost:  13_000,
+				chunkCost: 10_000,
 				chunkSize: bls12381g1Size,
 			},
 			BLS12_381g2: {
-				baseCost:  45_000,
-				chunkCost: 40_000,
+				baseCost:  13_000,
+				chunkCost: 10_000,
 				chunkSize: bls12381g2Size,
 			}})},
 
-	// This cost must be based on the number of points. EIP proposes a
-	// complicated "discount" scheme.
-	// bnG1 seems to be 8000 + 300 /elt
-	// bnG2 seems to be 18000 + 900 /elt (VERY ERRATIC TIMINGS)
-	// blsG1 seems to be 14000 + 400 /elt
-	// blsG2 seems to be 35000 + 1800 /elt
 	{0xe3, "ec_multi_scalar_mul", opEcMultiScalarMul, proto("bb:b"), pairingVersion,
 		costByFieldAndLength("g", &EcGroups, []linearCost{
 			BN254g1: {
-				baseCost:  8_000,
-				chunkCost: 300,
+				baseCost:  3_600,
+				chunkCost: 90,
 				chunkSize: scalarSize,
 			},
 			BN254g2: {
-				baseCost:  18_000,
-				chunkCost: 900,
+				baseCost:  7_200,
+				chunkCost: 270,
 				chunkSize: scalarSize,
 			},
 			BLS12_381g1: {
-				baseCost:  14_000,
-				chunkCost: 400,
+				baseCost:  6_500,
+				chunkCost: 95,
 				chunkSize: scalarSize,
 			},
 			BLS12_381g2: {
-				baseCost:  35_000,
-				chunkCost: 1800,
+				baseCost:  14_850,
+				chunkCost: 485,
 				chunkSize: scalarSize,
 			}})},
 
 	{0xe4, "ec_subgroup_check", opEcSubgroupCheck, proto("b:i"), pairingVersion,
 		costByField("g", &EcGroups, []int{
-			BN254g1: 50, BN254g2: 11500, // g1 subgroup is pretty much a no-op
-			BLS12_381g1: 5600, BLS12_381g2: 7100})},
+			BN254g1: 20, BN254g2: 3_100, // g1 subgroup is nearly a no-op
+			BLS12_381g1: 1_850, BLS12_381g2: 2_340})},
 	{0xe5, "ec_map_to", opEcMapTo, proto("b:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
-			BN254g1: 1700, BN254g2: 11000,
-			BLS12_381g1: 5600, BLS12_381g2: 43000})}, // eip: 5500, 75000
+			BN254g1: 630, BN254g2: 3_300,
+			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
 }
 
 type sortByOpcode []OpSpec

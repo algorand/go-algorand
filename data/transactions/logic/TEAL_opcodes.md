@@ -1651,7 +1651,7 @@ Fields
 - Bytecode: 0xe0 {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - for curve points A and B, return the curve point A + B
-- **Cost**:  BN254g1=310; BN254g2=430; BLS12_381g1=540; BLS12_381g2=750
+- **Cost**:  BN254g1=125; BN254g2=170; BLS12_381g1=205; BLS12_381g2=290
 - Availability: v10
 
 ### EC
@@ -1683,7 +1683,7 @@ Does _not_ check if A and B are in the main prime-order subgroup.
 - Bytecode: 0xe1 {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.
-- **Cost**:  BN254g1=2200; BN254g2=4460; BLS12_381g1=3640; BLS12_381g2=8530
+- **Cost**:  BN254g1=1810; BN254g2=3430; BLS12_381g1=2950; BLS12_381g2=6530
 - Availability: v10
 
 A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.
@@ -1694,7 +1694,7 @@ A is a curve point encoded and checked as described in `ec_add`. Scalar B is int
 - Bytecode: 0xe2 {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., uint64
 - 1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0
-- **Cost**:  BN254g1=1 + 18000 per 64 bytes of B; BN254g2=1 + 18000 per 128 bytes of B; BLS12_381g1=45000 + 40000 per 96 bytes of B; BLS12_381g2=45000 + 40000 per 192 bytes of B
+- **Cost**:  BN254g1=8000 + 7400 per 64 bytes of B; BN254g2=8000 + 7400 per 128 bytes of B; BLS12_381g1=13000 + 10000 per 96 bytes of B; BLS12_381g2=13000 + 10000 per 192 bytes of B
 - Availability: v10
 
 A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to 4096 bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.
@@ -1705,7 +1705,7 @@ A and B are concatenated points, encoded and checked as described in `ec_add`. A
 - Bytecode: 0xe3 {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn
-- **Cost**:  BN254g1=8000 + 300 per 32 bytes of B; BN254g2=18000 + 900 per 32 bytes of B; BLS12_381g1=14000 + 400 per 32 bytes of B; BLS12_381g2=35000 + 1800 per 32 bytes of B
+- **Cost**:  BN254g1=3600 + 90 per 32 bytes of B; BN254g2=7200 + 270 per 32 bytes of B; BLS12_381g1=6500 + 95 per 32 bytes of B; BLS12_381g2=14850 + 485 per 32 bytes of B
 - Availability: v10
 
 A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.
@@ -1717,7 +1717,7 @@ The name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more co
 - Bytecode: 0xe4 {uint8}
 - Stack: ..., A: []byte &rarr; ..., uint64
 - 1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.
-- **Cost**:  BN254g1=50; BN254g2=11500; BLS12_381g1=5600; BLS12_381g2=7100
+- **Cost**:  BN254g1=20; BN254g2=3100; BLS12_381g1=1850; BLS12_381g2=2340
 - Availability: v10
 
 ## ec_map_to
@@ -1726,7 +1726,7 @@ The name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more co
 - Bytecode: 0xe5 {uint8}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - maps field element A to group G
-- **Cost**:  BN254g1=1700; BN254g2=11000; BLS12_381g1=5600; BLS12_381g2=43000
+- **Cost**:  BN254g1=630; BN254g2=3300; BLS12_381g1=1950; BLS12_381g2=8150
 - Availability: v10
 
 BN254 points are mapped by the SVDW map. BLS12-381 points are mapped by the SSWU map.
