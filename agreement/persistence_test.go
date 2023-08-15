@@ -52,6 +52,22 @@ func TestAgreementSerialization(t *testing.T) {
 	require.Equalf(t, router, router2, "Router wasn't serialized/deserialized correctly")
 	require.Equalf(t, status, status2, "Status wasn't serialized/deserialized correctly")
 	require.Equalf(t, a, a2, "Action wasn't serialized/deserialized correctly")
+
+	// also check if old version gets "upgraded" as side effect of decode
+	clock3 := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	status3 := player{Round: 350, Step: soft, OldDeadline: time.Duration(23) * time.Second}
+	router3 := makeRootRouter(status3)
+	a3 := []action{checkpointAction{}, disconnectAction(messageEvent{}, nil)}
+
+	encodedBytes2 := encode(clock3, router3, status3, a3, false)
+
+	t1 := timers.MakeMonotonicClock[TimeoutType](time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC))
+	clock4, router4, status4, a4, err := decode(encodedBytes2, t1, log, false)
+	require.NoError(t, err)
+	require.Equalf(t, clock, clock4, "Clock wasn't serialized/deserialized correctly")
+	require.Equalf(t, status, status4, "Status wasn't serialized/deserialized correctly")
+	require.Equalf(t, router, router4, "Router wasn't serialized/deserialized correctly")
+	require.Equalf(t, a, a4, "Action wasn't serialized/deserialized correctly")
 }
 
 func BenchmarkAgreementSerialization(b *testing.B) {

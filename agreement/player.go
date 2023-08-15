@@ -51,8 +51,8 @@ type player struct {
 	// state machine (relevant to the start of the current period).
 	Deadline Deadline `codec:"TimersDeadline"`
 
-	// Deadline contains the time of the next timeout expected by the player
-	// state machine (relevant to the start of the current period).
+	// OldDeadline contains the value of Deadline used from a previous version,
+	// for backwards compatibility when deserializing player.
 	OldDeadline time.Duration `codec:"Deadline,omitempty"`
 
 	// Napping is set when the player is expecting a random timeout (i.e.,
