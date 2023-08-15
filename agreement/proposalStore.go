@@ -272,6 +272,11 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 
 		a := stagedValue(p, r, p.Round, p.Period)
 		authVote := ea.authenticator(p.Period)
+
+		// attach vote receivedAt to payload
+		//ea = store.Assemblers[pv]
+		//ea.Payload.voteValidatedAt = authVote.validatedAt
+
 		if a.Proposal == pv {
 			return committableEvent{Proposal: pv, Vote: authVote}
 		}

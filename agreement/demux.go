@@ -202,6 +202,8 @@ func (d *demux) next(s *Service, deadline Deadline, fastDeadline Deadline, curre
 			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
 		case payloadPresent, votePresent:
 			e = e.(messageEvent).AttachReceivedAt(s.Clock.Since())
+		case voteVerified:
+			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
 		}
 	}()
 
