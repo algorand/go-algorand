@@ -750,7 +750,6 @@ func accountsNewRoundImpl(
 				// because of non-zero UpdateRound field in a new delta
 				// if we didn't had it before, and we don't have anything now, just skip it.
 			} else {
-				// first check if few enough accounts are already set to go offline
 				// create a new entry.
 				var ref trackerdb.AccountRef
 				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
