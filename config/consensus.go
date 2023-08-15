@@ -753,13 +753,18 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 		return err
 	}
 	if newConsensus != nil {
-		Consensus = newConsensus
-		// Set allocation limits
-		for _, p := range Consensus {
-			checkSetAllocBounds(p)
-		}
+		SetConfigurableConsensusProtocols(newConsensus)
 	}
 	return nil
+}
+
+// SetConfigurableConsensusProtocols sets the configurable protocols.
+func SetConfigurableConsensusProtocols(newConsensus ConsensusProtocols) {
+	Consensus = newConsensus
+	// Set allocation limits
+	for _, p := range Consensus {
+		checkSetAllocBounds(p)
+	}
 }
 
 // PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
