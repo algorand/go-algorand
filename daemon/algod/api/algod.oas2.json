@@ -4121,7 +4121,9 @@
           "$ref": "#/definitions/AvmValue"
         },
         "account": {
-          "$ref": "#/definitions/AvmValue"
+          "description": "Address of the account of the local state being written to.",
+          "type": "string",
+          "x-algorand-format": "Address"
         }
       }
     },

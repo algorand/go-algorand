@@ -3443,10 +3443,7 @@ end:
 						Type: uint64(basics.TealUintType),
 						Uint: toPtr[uint64](0xcafeb0ba),
 					},
-					Account: &model.AvmValue{
-						Type:  uint64(basics.TealBytesType),
-						Bytes: toPtr(addressDigest[:]),
-					},
+					Account: toPtr(addressDigest.String()),
 				},
 			},
 		},
@@ -3464,9 +3461,7 @@ end:
 						Type:  uint64(basics.TealBytesType),
 						Bytes: toPtr([]byte("xqcL")),
 					},
-					Account: &model.AvmValue{
-						Type: uint64(basics.TealUintType),
-					},
+					Account: toPtr(addressDigest.String()),
 				},
 			},
 		},

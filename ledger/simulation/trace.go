@@ -247,8 +247,8 @@ type StateOperation struct {
 	NewValue basics.TealValue
 
 	// Account is the account associated to the local state an app writes to.
-	// NOTE: if the current app state is not local, then this value is basics.TealValue{}.
-	Account basics.TealValue
+	// NOTE: if the current app state is not local, then this value is basics.Address{}.
+	Account basics.Address
 }
 
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation.

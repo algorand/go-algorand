@@ -327,8 +327,8 @@ type ApplicationParams struct {
 
 // ApplicationStateOperation An operation against an application global/local/box key-value pair.
 type ApplicationStateOperation struct {
-	// Account Represents an AVM value.
-	Account *AvmValue `json:"account,omitempty"`
+	// Account Address of the account of the local state being written to.
+	Account *string `json:"account,omitempty"`
 
 	// AppStateType Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.
 	AppStateType string `json:"app-state-type"`

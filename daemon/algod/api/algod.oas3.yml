@@ -1304,7 +1304,9 @@
         "description": "An operation against an application global/local/box key-value pair.",
         "properties": {
           "account": {
-            "$ref": "#/components/schemas/AvmValue"
+            "description": "Address of the account of the local state being written to.",
+            "type": "string",
+            "x-algorand-format": "Address"
           },
           "app-state-type": {
             "description": "Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.",

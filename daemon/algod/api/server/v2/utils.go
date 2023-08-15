@@ -411,7 +411,7 @@ func convertApplicationStateChange(stateChange simulation.StateOperation) model.
 		NewValue:     omitEmpty(convertToAVMValue(stateChange.NewValue)),
 		Operation:    convertApplicationStateOperation(stateChange.AppStateOp),
 		AppStateType: convertApplicationState(stateChange.AppState),
-		Account:      omitEmpty(convertToAVMValue(stateChange.Account)),
+		Account:      addrOrNil(stateChange.Account),
 	}
 }
 
