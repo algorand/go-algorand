@@ -283,10 +283,10 @@ func (p *player) handleWinningPayloadArrival(payload proposal, ver protocol.Cons
 
 func (p *player) resizePayloadArrivals(ver protocol.ConsensusVersion) {
 	proto := config.Consensus[ver]
-	if len(p.payloadArrivals) > proto.DynamicFilterPayloadArriavalHistory {
-		p.payloadArrivals = p.payloadArrivals[len(p.payloadArrivals)-proto.DynamicFilterPayloadArriavalHistory:]
+	if len(p.payloadArrivals) > proto.DynamicFilterCredentialArrivalHistory {
+		p.payloadArrivals = p.payloadArrivals[len(p.payloadArrivals)-proto.DynamicFilterCredentialArrivalHistory:]
 	}
-	for len(p.payloadArrivals) < proto.DynamicFilterPayloadArriavalHistory {
+	for len(p.payloadArrivals) < proto.DynamicFilterCredentialArrivalHistory {
 		p.payloadArrivals = append([]time.Duration{FilterTimeout(0, ver)}, p.payloadArrivals...)
 	}
 }
@@ -304,17 +304,17 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 
 	var dynamicDelay time.Duration
 	defaultDelay := FilterTimeout(0, ver)
-	if proto.DynamicFilterPayloadArriavalHistory <= 0 {
+	if proto.DynamicFilterCredentialArrivalHistory <= 0 {
 		// we don't keep any history, use the default
 		dynamicDelay = defaultDelay
-	} else if proto.DynamicFilterPayloadArriavalHistory > len(p.payloadArrivals) {
+	} else if proto.DynamicFilterCredentialArrivalHistory > len(p.payloadArrivals) {
 		// not enough samples, use the default
 		dynamicDelay = defaultDelay
 	} else {
 		sortedArrivals := make([]time.Duration, len(p.payloadArrivals))
 		copy(sortedArrivals[:], p.payloadArrivals[:])
 		sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
-		dynamicDelay = sortedArrivals[proto.DynamicFilterPayloadArriavalHistory-1]
+		dynamicDelay = sortedArrivals[proto.DynamicFilterCredentialArrivalHistoryIdx]
 	}
 
 	// Make sure the dynamic delay is not too small or too large

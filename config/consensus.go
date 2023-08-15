@@ -525,9 +525,11 @@ type ConsensusParams struct {
 	// filter timeout must meet.
 	DynamicFilterTimeoutLowerBound time.Duration
 
-	// DynamicFilterPayloadArriavalHistory specifies the number of past block arrivals
-	// that are measured to determine when to start pipelining the next block.
-	DynamicFilterPayloadArriavalHistory int
+	// DynamicFilterCredentialArrivalHistory specifies the number of past credential arrivals
+	// that are measured to determine the next filter timeout.
+	DynamicFilterCredentialArrivalHistory int
+
+	DynamicFilterCredentialArrivalHistoryIdx int
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1377,7 +1379,10 @@ func initConsensusProtocols() {
 
 	vFuture.DynamicFilterTimeout = true
 	vFuture.DynamicFilterTimeoutLowerBound = time.Second
-	vFuture.DynamicFilterPayloadArriavalHistory = 32
+	// history window of 40, so we have enough statistics to calculate the 95th
+	// percentile, which is the timestamp at index 37 in the history array.
+	vFuture.DynamicFilterCredentialArrivalHistory = 40
+	vFuture.DynamicFilterCredentialArrivalHistoryIdx = 37
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
