@@ -23,10 +23,15 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+type timeout struct {
+	delta time.Duration
+	ch    <-chan time.Time
+}
+
 // Monotonic uses the system's monotonic clock to emit timeouts.
 type Monotonic[TimeoutType comparable] struct {
 	zero     time.Time
-	timeouts map[TimeoutType]map[time.Duration]<-chan time.Time
+	timeouts map[TimeoutType]timeout
 }
 
 // MakeMonotonicClock creates a new monotonic clock with a given zero point.
@@ -46,29 +51,29 @@ func (m *Monotonic[TimeoutType]) Zero() Clock[TimeoutType] {
 // TimeoutAt returns a channel that will signal when the duration has elapsed.
 func (m *Monotonic[TimeoutType]) TimeoutAt(delta time.Duration, timeoutType TimeoutType) <-chan time.Time {
 	if m.timeouts == nil {
-		m.timeouts = make(map[TimeoutType]map[time.Duration]<-chan time.Time)
+		m.timeouts = make(map[TimeoutType]timeout)
 	}
 
-	if _, ok := m.timeouts[timeoutType]; !ok {
-		m.timeouts[timeoutType] = make(map[time.Duration]<-chan time.Time)
+	tmt, ok := m.timeouts[timeoutType]
+	if ok && tmt.delta == delta {
+		// if the new timeout is the same as the current one for that type,
+		// return the existing channel.
+		return tmt.ch
 	}
 
-	timeoutCh, ok := m.timeouts[timeoutType][delta]
-	if ok {
-		return timeoutCh
-	}
+	tmt = timeout{delta: delta}
 
 	target := m.zero.Add(delta)
 	left := target.Sub(time.Now())
 	if left < 0 {
-		timeout := make(chan time.Time)
-		close(timeout)
-		timeoutCh = timeout
+		ch := make(chan time.Time)
+		close(ch)
+		tmt.ch = ch
 	} else {
-		timeoutCh = time.After(left)
+		tmt.ch = time.After(left)
 	}
-	m.timeouts[timeoutType][delta] = timeoutCh
-	return timeoutCh
+	m.timeouts[timeoutType] = tmt
+	return tmt.ch
 }
 
 // Encode implements Clock.Encode.

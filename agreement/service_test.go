@@ -44,19 +44,24 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
+type testingTimeout struct {
+	delta time.Duration
+	ch    chan time.Time
+}
+
 type testingClock struct {
 	mu deadlock.Mutex
 
 	zeroes uint
 
-	TA map[TimeoutType]map[time.Duration]chan time.Time // TimeoutAt
+	TA map[TimeoutType]testingTimeout // TimeoutAt
 
 	monitor *coserviceMonitor
 }
 
 func makeTestingClock(m *coserviceMonitor) *testingClock {
 	c := new(testingClock)
-	c.TA = make(map[TimeoutType]map[time.Duration]chan time.Time)
+	c.TA = make(map[TimeoutType]testingTimeout)
 	c.monitor = m
 	return c
 }
@@ -66,7 +71,7 @@ func (c *testingClock) Zero() timers.Clock[TimeoutType] {
 	defer c.mu.Unlock()
 
 	c.zeroes++
-	c.TA = make(map[TimeoutType]map[time.Duration]chan time.Time)
+	c.TA = make(map[TimeoutType]testingTimeout)
 	c.monitor.clearClock()
 	return c
 }
@@ -79,16 +84,13 @@ func (c *testingClock) TimeoutAt(d time.Duration, timeoutType TimeoutType) <-cha
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if _, ok := c.TA[timeoutType]; !ok {
-		c.TA[timeoutType] = make(map[time.Duration]chan time.Time)
+	ta, ok := c.TA[timeoutType]
+	if !ok || ta.delta != d {
+		c.TA[timeoutType] = testingTimeout{delta: d, ch: make(chan time.Time)}
+		ta = c.TA[timeoutType]
 	}
 
-	ta := c.TA[timeoutType][d]
-	if ta == nil {
-		c.TA[timeoutType][d] = make(chan time.Time)
-		ta = c.TA[timeoutType][d]
-	}
-	return ta
+	return ta.ch
 }
 
 func (c *testingClock) Encode() []byte {
@@ -103,34 +105,14 @@ func (c *testingClock) prepareToFire() {
 	c.monitor.inc(clockCoserviceType)
 }
 
-func (c *testingClock) fireType(timeoutType TimeoutType) {
+func (c *testingClock) fire(timeoutType TimeoutType) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if _, ok := c.TA[timeoutType]; !ok {
-		c.TA[timeoutType] = make(map[time.Duration]chan time.Time)
+		panic(fmt.Errorf("no timeout of type %v", timeoutType))
 	}
-
-	for d := range c.TA[timeoutType] {
-		if c.TA[timeoutType][d] == nil {
-			c.TA[timeoutType][d] = make(chan time.Time)
-		}
-		close(c.TA[timeoutType][d])
-	}
-}
-
-func (c *testingClock) fire(d time.Duration, timeoutType TimeoutType) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if _, ok := c.TA[timeoutType]; !ok {
-		c.TA[timeoutType] = make(map[time.Duration]chan time.Time)
-	}
-
-	if c.TA[timeoutType][d] == nil {
-		c.TA[timeoutType][d] = make(chan time.Time)
-	}
-	close(c.TA[timeoutType][d])
+	close(c.TA[timeoutType].ch)
 }
 
 type testingNetwork struct {
@@ -859,7 +841,7 @@ func triggerGlobalTimeout(d time.Duration, timeoutType TimeoutType, clocks []tim
 		clocks[i].(*testingClock).prepareToFire()
 	}
 	for i := range clocks {
-		clocks[i].(*testingClock).fire(d, timeoutType)
+		clocks[i].(*testingClock).fire(timeoutType)
 	}
 	activityMonitor.waitForActivity()
 	activityMonitor.waitForQuiet()
@@ -870,7 +852,7 @@ func triggerGlobalTimeoutType(timeoutType TimeoutType, clocks []timers.Clock[Tim
 		clocks[i].(*testingClock).prepareToFire()
 	}
 	for i := range clocks {
-		clocks[i].(*testingClock).fireType(timeoutType)
+		clocks[i].(*testingClock).fire(timeoutType)
 	}
 	activityMonitor.waitForActivity()
 	activityMonitor.waitForQuiet()
@@ -1147,7 +1129,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR, TimeoutFastRecovery)
+			firstClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1158,7 +1140,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR, TimeoutFastRecovery)
+			restClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1249,7 +1231,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR, TimeoutFastRecovery)
+			firstClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1260,7 +1242,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR, TimeoutFastRecovery)
+			restClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1362,7 +1344,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR, TimeoutFastRecovery)
+			firstClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1373,7 +1355,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR, TimeoutFastRecovery)
+			restClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1403,7 +1385,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR, TimeoutFastRecovery)
+			firstClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1414,7 +1396,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR, TimeoutFastRecovery)
+			restClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
