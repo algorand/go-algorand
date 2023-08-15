@@ -156,7 +156,7 @@ func TestEcScalarMul(t *testing.T) {
 			testAccepts(t, pt+"int 0; itob;"+mul+tealInt(c.size)+"bzero; ==", pairingVersion)
 			testPanics(t, "int 63; bzero; int 1; itob;"+mul+"len", pairingVersion, "bad length")
 			testPanics(t, "int 65; bzero; int 1; itob;"+mul+"len", pairingVersion, "bad length")
-			//testPanics(t, pt+"int 33; bzero;"+mul+tealInt(c.size)+"bzero; ==", pairingVersion, "ec_scalar_mul scalar len 33")
+			testPanics(t, pt+"int 33; bzero;"+mul+tealInt(c.size)+"bzero; ==", pairingVersion, "ec_scalar_mul scalar len is 33")
 			// multiply by prime order gives 0,0 (the "point at infinity")
 			r := tealBytes(c.r.Bytes())
 			testAccepts(t, pt+r+mul+tealInt(c.size)+"bzero; ==", pairingVersion)
