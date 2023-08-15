@@ -43,6 +43,41 @@ func DeadlineTimeout() time.Duration {
 	return deadlineTimeout
 }
 
+// TimeoutType tags the type of a timeout, to distinguish simultaneous timeouts
+// of different types.
+type TimeoutType int8
+
+const (
+	// TimeoutDeadline annotates timeout events in the agreement protocol (e.g.,
+	// for receiving a block).
+	TimeoutDeadline TimeoutType = iota
+	// TimeoutFastRecovery annotates the fast recovery timeout in the agreement
+	// protocol.
+	TimeoutFastRecovery
+	// TimeoutFilter annotates the filter step timeout event in the agreement
+	// protocol.
+	TimeoutFilter
+)
+
+// Deadline marks a timeout event of type Type that the player schedules to
+// happen after Duration time.
+type Deadline struct {
+	_struct  struct{} `codec:","`
+	Duration time.Duration
+	// Type is used to allow tests fire timeouts of specific types.
+	Type TimeoutType
+}
+
+//msgp:shim Deadline as:time.Duration using:(Deadline).getDuration/setDeadlineDuration
+//msgp:ignore Deadline
+//msgp:ignore TimeoutType
+
+func (d Deadline) getDuration() time.Duration { return d.Duration }
+
+func setDeadlineDuration(dur time.Duration) Deadline {
+	return Deadline{Duration: dur, Type: TimeoutDeadline}
+}
+
 type (
 	// round denotes a single round of the agreement protocol
 	round = basics.Round

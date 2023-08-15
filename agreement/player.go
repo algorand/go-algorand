@@ -23,15 +23,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// Deadline marks a timeout event of type Type that the player schedules to
-// happen after Duration time.
-type Deadline struct {
-	_struct  struct{} `codec:","`
-	Duration time.Duration
-	// Type is used to allow tests fire timeouts of specific types.
-	Type TimeoutType
-}
-
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
 type player struct {

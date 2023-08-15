@@ -34,24 +34,6 @@ import (
 //           |-----> (*) MsgIsZero
 //           |-----> ConsensusVersionViewMaxSize()
 //
-// Deadline
-//     |-----> (*) MarshalMsg
-//     |-----> (*) CanMarshalMsg
-//     |-----> (*) UnmarshalMsg
-//     |-----> (*) CanUnmarshalMsg
-//     |-----> (*) Msgsize
-//     |-----> (*) MsgIsZero
-//     |-----> DeadlineMaxSize()
-//
-// TimeoutType
-//      |-----> MarshalMsg
-//      |-----> CanMarshalMsg
-//      |-----> (*) UnmarshalMsg
-//      |-----> (*) CanUnmarshalMsg
-//      |-----> Msgsize
-//      |-----> MsgIsZero
-//      |-----> TimeoutTypeMaxSize()
-//
 // actionType
 //      |-----> MarshalMsg
 //      |-----> CanMarshalMsg
@@ -976,183 +958,6 @@ func ConsensusVersionViewMaxSize() (s int) {
 	s = 1 + 4
 	panic("Unable to determine max size: String type string(*z.Err) is unbounded")
 	s += 8 + protocol.ConsensusVersionMaxSize()
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *Deadline) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "Duration"
-	o = append(o, 0x82, 0xa8, 0x44, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e)
-	o = msgp.AppendDuration(o, (*z).Duration)
-	// string "Type"
-	o = append(o, 0xa4, 0x54, 0x79, 0x70, 0x65)
-	o = msgp.AppendInt8(o, int8((*z).Type))
-	return
-}
-
-func (_ *Deadline) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Deadline)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *Deadline) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	var zb0002 bool
-	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0001 > 0 {
-			zb0001--
-			(*z).Duration, bts, err = msgp.ReadDurationBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Duration")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			{
-				var zb0003 int8
-				zb0003, bts, err = msgp.ReadInt8Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Type")
-					return
-				}
-				(*z).Type = TimeoutType(zb0003)
-			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = Deadline{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-			switch string(field) {
-			case "Duration":
-				(*z).Duration, bts, err = msgp.ReadDurationBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Duration")
-					return
-				}
-			case "Type":
-				{
-					var zb0004 int8
-					zb0004, bts, err = msgp.ReadInt8Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Type")
-						return
-					}
-					(*z).Type = TimeoutType(zb0004)
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-func (_ *Deadline) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*Deadline)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *Deadline) Msgsize() (s int) {
-	s = 1 + 9 + msgp.DurationSize + 5 + msgp.Int8Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *Deadline) MsgIsZero() bool {
-	return ((*z).Duration == 0) && ((*z).Type == 0)
-}
-
-// MaxSize returns a maximum valid message size for this message type
-func DeadlineMaxSize() (s int) {
-	s = 1 + 9 + msgp.DurationSize + 5 + msgp.Int8Size
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z TimeoutType) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendInt8(o, int8(z))
-	return
-}
-
-func (_ TimeoutType) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(TimeoutType)
-	if !ok {
-		_, ok = (z).(*TimeoutType)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *TimeoutType) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 int8
-		zb0001, bts, err = msgp.ReadInt8Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = TimeoutType(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (_ *TimeoutType) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*TimeoutType)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z TimeoutType) Msgsize() (s int) {
-	s = msgp.Int8Size
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z TimeoutType) MsgIsZero() bool {
-	return z == 0
-}
-
-// MaxSize returns a maximum valid message size for this message type
-func TimeoutTypeMaxSize() (s int) {
-	s = msgp.Int8Size
 	return
 }
 
@@ -3951,7 +3756,7 @@ func (z *player) MarshalMsg(b []byte) (o []byte) {
 	// map header, size 8
 	// string "Deadline"
 	o = append(o, 0x88, 0xa8, 0x44, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65)
-	o = (*z).Deadline.MarshalMsg(o)
+	o = msgp.AppendDuration(o, (Deadline).getDuration((*z).Deadline))
 	// string "FastRecoveryDeadline"
 	o = append(o, 0xb4, 0x46, 0x61, 0x73, 0x74, 0x52, 0x65, 0x63, 0x6f, 0x76, 0x65, 0x72, 0x79, 0x44, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65)
 	o = msgp.AppendDuration(o, (*z).FastRecoveryDeadline)
@@ -4040,10 +3845,14 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Deadline.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Deadline")
-				return
+			{
+				var zb0006 duration
+				zb0006, bts, err = msgp.ReadDurationBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "Deadline")
+					return
+				}
+				(*z).Deadline = setDeadlineDuration(zb0006)
 			}
 		}
 		if zb0001 > 0 {
@@ -4101,39 +3910,43 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "Period":
 				{
-					var zb0006 uint64
-					zb0006, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0007 uint64
+					zb0007, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Period")
 						return
 					}
-					(*z).Period = period(zb0006)
+					(*z).Period = period(zb0007)
 				}
 			case "Step":
-				{
-					var zb0007 uint64
-					zb0007, bts, err = msgp.ReadUint64Bytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Step")
-						return
-					}
-					(*z).Step = step(zb0007)
-				}
-			case "LastConcluding":
 				{
 					var zb0008 uint64
 					zb0008, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
+						err = msgp.WrapError(err, "Step")
+						return
+					}
+					(*z).Step = step(zb0008)
+				}
+			case "LastConcluding":
+				{
+					var zb0009 uint64
+					zb0009, bts, err = msgp.ReadUint64Bytes(bts)
+					if err != nil {
 						err = msgp.WrapError(err, "LastConcluding")
 						return
 					}
-					(*z).LastConcluding = step(zb0008)
+					(*z).LastConcluding = step(zb0009)
 				}
 			case "Deadline":
-				bts, err = (*z).Deadline.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Deadline")
-					return
+				{
+					var zb0010 duration
+					zb0010, bts, err = msgp.ReadDurationBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Deadline")
+						return
+					}
+					(*z).Deadline = setDeadlineDuration(zb0010)
 				}
 			case "Napping":
 				(*z).Napping, bts, err = msgp.ReadBoolBytes(bts)
@@ -4173,18 +3986,18 @@ func (_ *player) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *player) Msgsize() (s int) {
-	s = 1 + 6 + (*z).Round.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + (*z).Deadline.Msgsize() + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + (*z).Pending.Msgsize()
+	s = 1 + 6 + (*z).Round.Msgsize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + (*z).Pending.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *player) MsgIsZero() bool {
-	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).LastConcluding == 0) && ((*z).Deadline.MsgIsZero()) && ((*z).Napping == false) && ((*z).FastRecoveryDeadline == 0) && ((*z).Pending.MsgIsZero())
+	return ((*z).Round.MsgIsZero()) && ((*z).Period == 0) && ((*z).Step == 0) && ((*z).LastConcluding == 0) && ((*z).Deadline == 0) && ((*z).Napping == false) && ((*z).FastRecoveryDeadline == 0) && ((*z).Pending.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
 func PlayerMaxSize() (s int) {
-	s = 1 + 6 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + DeadlineMaxSize() + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + ProposalTableMaxSize()
+	s = 1 + 6 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 5 + msgp.Uint64Size + 15 + msgp.Uint64Size + 9 + msgp.DurationSize + 8 + msgp.BoolSize + 21 + msgp.DurationSize + 8 + ProposalTableMaxSize()
 	return
 }
 
