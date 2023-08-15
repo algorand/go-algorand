@@ -4,6 +4,7 @@ package agreement
 
 import (
 	"sort"
+	"time"
 
 	"github.com/algorand/msgp/msgp"
 
@@ -3846,7 +3847,7 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if zb0001 > 0 {
 			zb0001--
 			{
-				var zb0006 duration
+				var zb0006 time.Duration
 				zb0006, bts, err = msgp.ReadDurationBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Deadline")
@@ -3940,7 +3941,7 @@ func (z *player) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "Deadline":
 				{
-					var zb0010 duration
+					var zb0010 time.Duration
 					zb0010, bts, err = msgp.ReadDurationBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "Deadline")
