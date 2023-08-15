@@ -3892,6 +3892,246 @@ int 1`,
 	})
 }
 
+func TestGlobalStateTypeChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "global-key"
+int 0xdecaf
+app_global_put
+byte "global-key"
+byte "welt am draht"
+app_global_put
+
+end:
+  int 1
+`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		payment := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance * 2,
+		})
+
+		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &payment, &globalStateCall)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedPay := payment.Txn().Sign(sender.Sk)
+		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedPay, signedGlobalStateCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 14,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            16,
+											StackPopCount: 1,
+										},
+										{
+											PC: 42,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+							// Payment
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							// Global
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"global-key": basics.ValueDelta{
+													Bytes:  "welt am draht",
+													Action: basics.SetBytesAction,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 10,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 14,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            16,
+											StackPopCount: 1,
+										},
+										{
+											PC: 19,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-key",
+												},
+											},
+										},
+										{
+											PC: 20,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0xdecaf,
+												},
+											},
+										},
+										{
+											PC: 24,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-key",
+													NewValue: basics.TealValue{
+														Type: basics.TealUintType,
+														Uint: 0xdecaf,
+													},
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC: 25,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-key",
+												},
+											},
+										},
+										{
+											PC: 26,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "welt am draht",
+												},
+											},
+										},
+										{
+											PC:            41,
+											StackPopCount: 2,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-key",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "welt am draht",
+													},
+												},
+											},
+										},
+										{
+											PC: 42,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 14,
+					},
+				},
+			},
+		}
+	})
+}
+
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
 // within a subsequent app call
 func TestBalanceChangesWithApp(t *testing.T) {
