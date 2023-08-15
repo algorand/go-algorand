@@ -569,9 +569,8 @@ func BenchmarkBn254(b *testing.B) {
 }
 
 func BenchmarkFindMultiExpCutoff(b *testing.B) {
-	for i := 1; i < 10; i++ {
+	for i := 1; i < 5; i++ {
 		kbytes := make([]byte, i*scalarSize)
-		rand.Read(kbytes)
 		{
 			g1points := make([]bls12381.G1Affine, i)
 			b.Run(fmt.Sprintf("bls g1 small %02d", i), func(b *testing.B) {
@@ -595,20 +594,20 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 
 			g2points := make([]bls12381.G2Affine, i)
 			b.Run(fmt.Sprintf("bls g2 small %02d", i), func(b *testing.B) {
-				for j := 0; j < i; j++ {
-					g2points[j] = bls12381RandomG2()
-				}
-				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
+					for j := 0; j < i; j++ {
+						g2points[j] = bls12381RandomG2()
+					}
+					rand.Read(kbytes)
 					bls12381G2MultiExpSmall(g2points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bls g2 large %02d", i), func(b *testing.B) {
-				for j := 0; j < i; j++ {
-					g2points[j] = bls12381RandomG2()
-				}
-				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
+					for j := 0; j < i; j++ {
+						g2points[j] = bls12381RandomG2()
+					}
+					rand.Read(kbytes)
 					bls12381G2MultiExpLarge(g2points, kbytes)
 				}
 			})
@@ -617,36 +616,40 @@ func BenchmarkFindMultiExpCutoff(b *testing.B) {
 		{
 			g1points := make([]bn254.G1Affine, i)
 			b.Run(fmt.Sprintf("bn g1 small %02d", i), func(b *testing.B) {
-				for j := 0; j < i; j++ {
-					g1points[j] = bn254RandomG1()
-				}
-				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
+					for j := 0; j < i; j++ {
+						g1points[j] = bn254RandomG1()
+					}
+					rand.Read(kbytes)
 					bn254G1MultiExpSmall(g1points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bn g1 large %02d", i), func(b *testing.B) {
 				for r := 0; r < b.N; r++ {
+					for j := 0; j < i; j++ {
+						g1points[j] = bn254RandomG1()
+					}
+					rand.Read(kbytes)
 					bn254G1MultiExpLarge(g1points, kbytes)
 				}
 			})
 
 			g2points := make([]bn254.G2Affine, i)
 			b.Run(fmt.Sprintf("bn g2 small %02d", i), func(b *testing.B) {
-				for j := 0; j < i; j++ {
-					g2points[j] = bn254RandomG2()
-				}
-				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
+					for j := 0; j < i; j++ {
+						g2points[j] = bn254RandomG2()
+					}
+					rand.Read(kbytes)
 					bn254G2MultiExpSmall(g2points, kbytes)
 				}
 			})
 			b.Run(fmt.Sprintf("bn g2 large %02d", i), func(b *testing.B) {
-				for j := 0; j < i; j++ {
-					g2points[j] = bn254RandomG2()
-				}
-				rand.Read(kbytes)
 				for r := 0; r < b.N; r++ {
+					for j := 0; j < i; j++ {
+						g2points[j] = bn254RandomG2()
+					}
+					rand.Read(kbytes)
 					bn254G2MultiExpLarge(g2points, kbytes)
 				}
 			})
@@ -847,7 +850,6 @@ func TestLinearFieldCost(t *testing.T) { //nolint:paralleltest // manipulates op
 	// - any of the "EC" constants. The first three fields have different
 	// costs, that depend on the length of the input
 
-	fmt.Println("ECGroups", EcGroups)
 	xxx := OpSpec{
 		Opcode: 106,
 		Name:   "xxx",
