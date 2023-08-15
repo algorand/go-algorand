@@ -418,6 +418,7 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
+	node.ledger.Close()
 }
 
 // note: unlike the other two functions, this accepts a whole filename
