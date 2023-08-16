@@ -275,7 +275,7 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 		}}
 }
 
-// updateDynamicLambdaTimings is called at the end of the round (just before ensureAction
+// updateDynamicLambdaTimings is called at the end of a successful uninterrupted round (just after ensureAction
 // is generated) to collect round timings for updating dynamic lambda.
 func (p *player) updateDynamicLambdaTimings(r routerHandle, payload proposal, ver protocol.ConsensusVersion) {
 	// look up the validatedAt time of the winning proposal-vote
