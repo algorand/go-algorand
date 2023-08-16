@@ -432,7 +432,7 @@ func (e readLowestEvent) t() eventType {
 }
 
 func (e readLowestEvent) String() string {
-	return fmt.Sprintf("%s: %d\t%.10s\t%.5s", e.t().String(), e.Round, e.Period)
+	return fmt.Sprintf("%s: %d %d", e.t().String(), e.Round, e.Period)
 }
 
 func (e readLowestEvent) ComparableStr() string {
