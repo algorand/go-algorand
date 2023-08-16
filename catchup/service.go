@@ -205,8 +205,8 @@ func (s *Service) SynchronizingTime() time.Duration {
 var errLedgerAlreadyHasBlock = errors.New("ledger already has block")
 
 // function scope to make a bunch of defer statements better
-func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
-	ledgerWaitCh := s.ledger.Wait(r)
+func (s *Service) innerFetch(ctx context.Context, r basics.Round, peer network.Peer) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
+	ledgerWaitCh := s.ledger.WaitMem(r)
 	select {
 	case <-ledgerWaitCh:
 		// if our ledger already have this block, no need to attempt to fetch it.
@@ -214,14 +214,12 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 	default:
 	}
 
-	ctx, cf := context.WithCancel(s.ctx)
+	ctx, cf := context.WithCancel(ctx)
 	fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
 	defer cf()
-	stopWaitingForLedgerRound := make(chan struct{})
-	defer close(stopWaitingForLedgerRound)
 	go func() {
 		select {
-		case <-stopWaitingForLedgerRound:
+		case <-ctx.Done():
 		case <-ledgerWaitCh:
 			cf()
 		}
@@ -289,7 +287,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		peer := psp.Peer
 
 		// Try to fetch, timing out after retryInterval
-		block, cert, blockDownloadDuration, err := s.innerFetch(r, peer)
+		block, cert, blockDownloadDuration, err := s.innerFetch(ctx, r, peer)
 
 		if err != nil {
 			if err == errLedgerAlreadyHasBlock {
