@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/util"
 )
@@ -40,6 +41,7 @@ var noImportKeys bool
 var noClean bool
 var devModeOverride bool
 var startOnCreation bool
+var genesisDir string
 
 func init() {
 	networkCmd.AddCommand(networkCreateCmd)
@@ -52,14 +54,18 @@ func init() {
 	networkCreateCmd.Flags().BoolVar(&noClean, "noclean", false, "Prevents auto-cleanup on error - for diagnosing problems")
 	networkCreateCmd.Flags().BoolVar(&devModeOverride, "devMode", false, "Forces the configuration to enable DevMode, returns an error if the template is not compatible with DevMode.")
 	networkCreateCmd.Flags().BoolVarP(&startOnCreation, "start", "s", false, "Automatically start the network after creating it.")
+	networkCreateCmd.Flags().StringVar(&genesisDir, "genesisDir", "", "Specify the path to the directory with existing genesis.json, root and partkeys. By default, the genesis.json and keys will be generated on start. This should only be used on private networks.")
 
 	networkStartCmd.Flags().StringVarP(&startNode, "node", "n", "", "Specify the name of a specific node to start")
+
+	networkGenesisCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
 
 	networkCmd.AddCommand(networkStartCmd)
 	networkCmd.AddCommand(networkRestartCmd)
 	networkCmd.AddCommand(networkStopCmd)
 	networkCmd.AddCommand(networkStatusCmd)
 	networkCmd.AddCommand(networkDeleteCmd)
+	networkCmd.AddCommand(networkGenesisCmd)
 }
 
 var networkCmd = &cobra.Command{
@@ -110,6 +116,15 @@ var networkCreateCmd = &cobra.Command{
 		// Make sure target directory does not exist or is empty
 		if util.FileExists(networkRootDir) && !util.IsEmpty(networkRootDir) {
 			reportErrorf(infoNetworkAlreadyExists, networkRootDir)
+		}
+
+		// If genesisDir is specified, copy files over
+		if genesisDir != "" {
+			genesisDir, err = filepath.Abs(genesisDir)
+			if err != nil {
+				panic(err)
+			}
+			util.CopyFolder(genesisDir, networkRootDir)
 		}
 
 		binDir, err := util.ExeDir()
@@ -244,5 +259,53 @@ var networkDeleteCmd = &cobra.Command{
 			reportErrorf("Error stopping or deleting network: %v\n", err)
 		}
 		reportInfof(infoNetworkDeleted, networkRootDir)
+	},
+}
+
+var networkGenesisCmd = &cobra.Command{
+	Use:   "genesis",
+	Short: "Creates the genesis.json, root and participation keys for a wallet",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		networkRootDir, err := filepath.Abs(networkRootDir)
+		if err != nil {
+			panic(err)
+		}
+
+		var templateReader io.Reader
+
+		if networkTemplateFile == "" {
+			templateReader = strings.NewReader(defaultNetworkTemplate)
+		} else {
+			networkTemplateFile, err = filepath.Abs(networkTemplateFile)
+			if err != nil {
+				panic(err)
+			}
+			file, osErr := os.Open(networkTemplateFile)
+			if osErr != nil {
+				reportErrorf(errorCreateNetwork, osErr)
+			}
+
+			defer file.Close()
+			templateReader = file
+		}
+
+		var template netdeploy.NetworkTemplate
+		err = netdeploy.LoadTemplateFromReader(templateReader, &template)
+		if err != nil {
+			reportErrorf("Error in loading template: %v\n", err)
+		}
+
+		dataDir := datadir.MaybeSingleDataDir()
+		var consensus config.ConsensusProtocols
+		if dataDir != "" {
+			// try to load the consensus from there. If there is none, we can just use the built in one.
+			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
+		}
+		if err = template.Validate(); err != nil {
+			reportErrorf("Error in template validation: %v\n", err)
+		}
+
+		gen.GenerateGenesisFiles(template.Genesis, consensus, networkRootDir, os.Stdout)
 	},
 }
