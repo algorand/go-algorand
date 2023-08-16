@@ -25,7 +25,7 @@ import (
 
 func TestDualEngines(t *testing.T) {
 	dbFactory := func(proto config.ConsensusParams) dbForTests {
-		db := testdb.OpenForTesting(t)
+		db := testdb.OpenForTesting(t, true)
 		seedDb(t, db)
 
 		return db

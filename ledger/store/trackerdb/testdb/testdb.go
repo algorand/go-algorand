@@ -26,8 +26,9 @@ import (
 )
 
 // OpenForTesting will create a testing store to be used on tests outside of the trackerdb package.
-func OpenForTesting(t testing.TB) trackerdb.Store {
-	primaryDB, _ := sqlitedriver.OpenForTesting(t, true)
+func OpenForTesting(t testing.TB, inMemory bool) trackerdb.Store {
+	primaryDB, _ := sqlitedriver.OpenForTesting(t, inMemory)
+	// pebbledb can always be run in memory, sqlite is the one that causes problems on tests
 	secondaryDB := pebbledbdriver.OpenForTesting(t, true)
 
 	return dualdriver.MakeStore(primaryDB, secondaryDB)
