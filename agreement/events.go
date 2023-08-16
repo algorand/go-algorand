@@ -412,11 +412,11 @@ func (e newRoundEvent) ComparableStr() string {
 }
 
 type readLowestEvent struct {
-	// T is either readLowestValue or readLowestPayload
+	// T currently only supports readLowestVote
 	T eventType
 
 	// Round and Period are the round and period for which to query
-	// the lowest-credential value and payload.  This type of event
+	// the lowest-credential vote, value or payload.  This type of event
 	// is only sent for pipelining, which only makes sense for period
 	// 0, but the Period is here anyway to route to the appropriate
 	// proposalMachinePeriod.
