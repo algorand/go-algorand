@@ -84,7 +84,8 @@ type Ledger struct {
 	acctsOnline    onlineAccounts
 	catchpoint     catchpointTracker
 	txTail         txTail
-	bulletin       bulletin
+	bulletinDisk   bulletin
+	bulletinMem    bulletinMem
 	notifier       blockNotifier
 	metrics        metricsTracker
 	spVerification spVerificationTracker
@@ -212,7 +213,8 @@ func (l *Ledger) reloadLedger() error {
 		&l.catchpoint,     // catchpoints tracker : update catchpoint labels, create catchpoint files
 		&l.acctsOnline,    // update online account balances history
 		&l.txTail,         // update the transaction tail, tracking the recent 1000 txn
-		&l.bulletin,       // provide closed channel signaling support for completed rounds
+		&l.bulletinDisk,   // provide closed channel signaling support for completed rounds on disk
+		&l.bulletinMem,    // provide closed channel signaling support for completed rounds in memory
 		&l.notifier,       // send OnNewBlocks to subscribers
 		&l.metrics,        // provides metrics reporting support
 		&l.spVerification, // provides state proof verification support
@@ -745,7 +747,16 @@ func (l *Ledger) WaitForCommit(r basics.Round) {
 func (l *Ledger) Wait(r basics.Round) chan struct{} {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.bulletin.Wait(r)
+	return l.bulletinDisk.Wait(r)
+}
+
+// WaitMem returns a channel that closes once a given round is
+// available in memory in the ledger, but might not be stored
+// durably on disk yet.
+func (l *Ledger) WaitMem(r basics.Round) chan struct{} {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.bulletinMem.Wait(r)
 }
 
 // GenesisHash returns the genesis hash for this ledger.
