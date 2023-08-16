@@ -3241,7 +3241,7 @@ func TestPlayerRetainsReceivedValidatedAt(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const r = round(20239)
-	const p = period(1001)
+	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
 
@@ -3278,7 +3278,7 @@ func TestPlayerRetainsReceivedValidatedAtPP(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const r = round(20239)
-	const p = period(1001)
+	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
 
@@ -3323,7 +3323,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPP(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const r = round(20239)
-	const p = period(1001)
+	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
 
