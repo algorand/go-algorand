@@ -675,7 +675,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 		close(s.quit)
 	}
 
-	e, ok := dmx.next(s, Deadline{Duration: time.Second, Type: TimeoutDeadline}, fastTimeoutChTime, 300)
+	e, ok := dmx.next(s, Deadline{Duration: time.Second, Type: TimeoutDeadline}, Deadline{Duration: fastTimeoutChTime, Type: TimeoutFastRecovery}, 300)
 
 	if !assert.Equal(t, testcase.ok, ok) {
 		return false

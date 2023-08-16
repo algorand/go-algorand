@@ -19,7 +19,6 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
@@ -81,7 +80,7 @@ type parameters Parameters
 // externalDemuxSignals used to syncronize the external signals that goes to the demux with the main loop.
 type externalDemuxSignals struct {
 	Deadline             Deadline
-	FastRecoveryDeadline time.Duration
+	FastRecoveryDeadline Deadline
 	CurrentRound         round
 }
 
@@ -242,7 +241,8 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 
 	for {
 		output <- a
-		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, CurrentRound: status.Round}
+		fastRecoveryDeadline := Deadline{Duration: status.FastRecoveryDeadline, Type: TimeoutFastRecovery}
+		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: fastRecoveryDeadline, CurrentRound: status.Round}
 		e, ok := <-input
 		if !ok {
 			break
