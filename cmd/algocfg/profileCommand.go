@@ -44,6 +44,7 @@ var (
 			cfg.EnableDeveloperAPI = true
 			cfg.MaxAcctLookback = 256
 			cfg.EnableTxnEvalTracer = true
+			cfg.DisableAPIAuth = true
 			return cfg
 		},
 	}
