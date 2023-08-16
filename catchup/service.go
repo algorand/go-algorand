@@ -656,7 +656,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		peer := psp.Peer
 
 		// Ask the fetcher to get the block somehow
-		block, fetchedCert, _, err := s.innerFetch(cert.Round, peer)
+		block, fetchedCert, _, err := s.innerFetch(s.ctx, cert.Round, peer)
 
 		if err != nil {
 			select {
