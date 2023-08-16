@@ -197,17 +197,9 @@ const (
 	// readPinned is sent to the proposalStore to read the pinned value, if it exists.
 	readPinned
 
-	// readLowestValue is sent to the proposalPeriodMachine to read the
-	// proposalValue with the lowest credential.
-	readLowestValue
-
 	// readLowestVote is sent to the proposalPeriodMachine to read the
 	// proposal-vote with the lowest credential.
 	readLowestVote
-
-	// readLowestPayload is sent to the proposalStore to read the payload
-	// corresponding to the lowest-credential proposal-vote, if it exists.
-	readLowestPayload
 
 	/*
 	 * The following are event types that replace queries, and may warrant
@@ -431,14 +423,8 @@ type readLowestEvent struct {
 	Round  round
 	Period period
 
-	// Proposal holds the lowest-credential value.
-	Proposal proposalValue
 	// Vote holds the lowest-credential vote.
 	Vote vote
-	// Payload holds the payload, if one exists (which is the case if PayloadOK is set).
-	Payload proposal
-	// PayloadOK is set if and only if a payload was received for the lowest-credential value.
-	PayloadOK bool
 }
 
 func (e readLowestEvent) t() eventType {
@@ -446,7 +432,7 @@ func (e readLowestEvent) t() eventType {
 }
 
 func (e readLowestEvent) String() string {
-	return fmt.Sprintf("%v: %.5v", e.t().String(), e.Proposal.BlockDigest.String())
+	return fmt.Sprintf("%s: %d\t%.10s\t%.5s", e.t().String(), e.Round, e.Period)
 }
 
 func (e readLowestEvent) ComparableStr() string {
@@ -988,10 +974,10 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 }
 
 func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
-	if e.T == payloadVerified {
+	switch e.T {
+	case payloadVerified:
 		e.Input.Proposal.validatedAt = d
-	} else if e.T == voteVerified && e.Input.UnauthenticatedVote.R.Step == 0 {
-		// if this is a proposal vote (step 0), record the validatedAt time on the vote
+	case voteVerified:
 		e.Input.Vote.validatedAt = d
 	}
 	return e
