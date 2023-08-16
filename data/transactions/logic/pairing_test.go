@@ -486,9 +486,9 @@ ec_subgroup_check BLS12_381g2`, pairingVersion)
 }
 
 func BenchmarkBn254(b *testing.B) {
-	was := eccMontgomery.NbTasks
-	eccMontgomery.NbTasks = 1
-	defer func() { eccMontgomery.NbTasks = was }()
+	was := mecLimit.NbTasks
+	mecLimit.NbTasks = 1
+	defer func() { mecLimit.NbTasks = was }()
 
 	g1point := bn254RandomG1()
 	g1teal := tealBytes(bn254G1ToBytes(&g1point))
@@ -675,9 +675,9 @@ func byteRepeat(bytes []byte, count int) string {
 }
 
 func BenchmarkBls12381(b *testing.B) {
-	was := eccMontgomery.NbTasks
-	eccMontgomery.NbTasks = 0
-	defer func() { eccMontgomery.NbTasks = was }()
+	was := mecLimit.NbTasks
+	mecLimit.NbTasks = 1
+	defer func() { mecLimit.NbTasks = was }()
 
 	g1point := bls12381RandomG1()
 	g1teal := tealBytes(bls12381G1ToBytes(&g1point))

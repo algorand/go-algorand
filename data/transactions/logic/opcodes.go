@@ -832,7 +832,7 @@ var OpSpecs = []OpSpec{
 			BN254g1: 1810, BN254g2: 3430,
 			BLS12_381g1: 2950, BLS12_381g2: 6530})},
 
-	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:i"), pairingVersion,
+	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:T"), pairingVersion,
 		costByFieldAndLength("g", &EcGroups, []linearCost{
 			BN254g1: {
 				baseCost:  8000,
@@ -878,7 +878,7 @@ var OpSpecs = []OpSpec{
 				chunkSize: scalarSize,
 			}})},
 
-	{0xe4, "ec_subgroup_check", opEcSubgroupCheck, proto("b:i"), pairingVersion,
+	{0xe4, "ec_subgroup_check", opEcSubgroupCheck, proto("b:T"), pairingVersion,
 		costByField("g", &EcGroups, []int{
 			BN254g1: 20, BN254g2: 3_100, // g1 subgroup is nearly a no-op
 			BLS12_381g1: 1_850, BLS12_381g2: 2_340})},

@@ -73,8 +73,8 @@ func opEcAdd(cx *EvalContext) error {
 	return err
 }
 
-// Input: ToS is a scalar, encoded as an unsigned big-endian, second to top is
-// uncompressed bytes for g1 point
+// Input: ToS is a scalar, encoded as an unsigned big-endian, second to top are
+// bytes of an uncompressed point
 // Output: Single byte slice on top of stack which contains uncompressed bytes
 // for product of scalar and point
 func opEcScalarMul(cx *EvalContext) error {
@@ -113,8 +113,10 @@ func opEcScalarMul(cx *EvalContext) error {
 	return err
 }
 
-// Input: Two byte slices, top is concatenated uncompressed bytes for k g2 points, and second to top is same for g1
-// Output: Single uint at top representing bool for whether pairing of inputs was identity
+// Input: Two byte slices, The first (deeper) is concatenated uncompressed bytes
+// for k points of the curve given as the immediate value. The second (ToS) are
+// k points for the "associated" curve.
+// Output: bool (uint64=0,1) for whether pairing of inputs was identity
 func opEcPairingCheck(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
@@ -150,7 +152,8 @@ func opEcPairingCheck(cx *EvalContext) error {
 }
 
 // Input: Top of stack is slice of k scalars, second to top is slice of k group points as uncompressed bytes
-// Output: Single byte slice that contains uncompressed bytes for point equivalent to p_1*e_1 + p_2*e_2 + ... + p_k*e_k, where p_i is i'th point from input and e_i is i'th scalar
+// Output: Single byte slice that contains uncompressed bytes for point equivalent to
+// p_1*e_1 + p_2*e_2 + ... + p_k*e_k, where p_i is i'th point from input and e_i is i'th scalar
 func opEcMultiScalarMul(cx *EvalContext) error {
 	group := EcGroup(cx.program[cx.pc+1])
 	fs, ok := ecGroupSpecByField(group)
@@ -183,8 +186,8 @@ func opEcMultiScalarMul(cx *EvalContext) error {
 	return err
 }
 
-// Input: Single byte slice on top of stack containing uncompressed bytes for g1 point
-// Output: Single uint on stack top representing bool for whether the input was in the correct subgroup or not
+// Input: Single byte slice on top of stack containing uncompressed bytes for a point
+// Output: bool (uint64=0,1) for whether the input was in the correct subgroup or not
 func opEcSubgroupCheck(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	pointBytes := cx.Stack[last].Bytes
@@ -264,7 +267,7 @@ var bls12381Modulus = bls12381fp.Modulus()
 func bytesToBLS12381Field(b []byte) (bls12381fp.Element, error) {
 	big := new(big.Int).SetBytes(b)
 	if big.Cmp(bls12381Modulus) >= 0 {
-		return bls12381fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", big, bls12381Modulus)
+		return bls12381fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", big.String(), bls12381Modulus)
 	}
 	return *new(bls12381fp.Element).SetBigInt(big), nil
 }
@@ -362,7 +365,10 @@ func bytesToBLS12381G2s(b []byte, checkSubgroup bool) ([]bls12381.G2Affine, erro
 func bls12381G1ToBytes(g1 *bls12381.G1Affine) []byte {
 	retX := g1.X.Bytes()
 	retY := g1.Y.Bytes()
-	return append(retX[:], retY[:]...)
+	pointBytes := make([]byte, bls12381g1Size)
+	copy(pointBytes, retX[:])
+	copy(pointBytes[bls12381fpSize:], retY[:])
+	return pointBytes
 }
 
 func bls12381G2ToBytes(g2 *bls12381.G2Affine) []byte {
@@ -434,7 +440,11 @@ func bls12381PairingCheck(g1Bytes, g2Bytes []byte) (bool, error) {
 	return ok, nil
 }
 
-var eccMontgomery = ecc.MultiExpConfig{ScalarsMont: true}
+// We'll use a little concurrency to speed up the multiexp, but without a global
+// mechanism to control parallelism across different modules, we'll just use 2.
+var mecLimit = ecc.MultiExpConfig{
+	NbTasks: 2,
+}
 
 const bls12381G1MultiMulThreshold = 2 // determined by BenchmarkFindMultiMulCutoff
 
@@ -457,7 +467,7 @@ func bls12381G1MultiMulLarge(points []bls12381.G1Affine, scalarBytes []byte) ([]
 	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, err := new(bls12381.G1Affine).MultiExp(points, scalars, eccMontgomery)
+	res, err := new(bls12381.G1Affine).MultiExp(points, scalars, mecLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +514,7 @@ func bls12381G2MultiMulLarge(points []bls12381.G2Affine, scalarBytes []byte) ([]
 	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, err := new(bls12381.G2Affine).MultiExp(points, scalars, eccMontgomery)
+	res, err := new(bls12381.G2Affine).MultiExp(points, scalars, mecLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -580,7 +590,7 @@ var bn254Modulus = bn254fp.Modulus()
 func bytesToBN254Field(b []byte) (bn254fp.Element, error) {
 	big := new(big.Int).SetBytes(b)
 	if big.Cmp(bn254Modulus) >= 0 {
-		return bn254fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", big, bn254Modulus)
+		return bn254fp.Element{}, fmt.Errorf("field element %s larger than modulus %s", big.String(), bn254Modulus)
 	}
 	return *new(bn254fp.Element).SetBigInt(big), nil
 }
@@ -678,7 +688,10 @@ func bytesToBN254G2s(b []byte, checkSubgroup bool) ([]bn254.G2Affine, error) {
 func bn254G1ToBytes(g1 *bn254.G1Affine) []byte {
 	retX := g1.X.Bytes()
 	retY := g1.Y.Bytes()
-	return append(retX[:], retY[:]...)
+	pointBytes := make([]byte, bn254g1Size)
+	copy(pointBytes, retX[:])
+	copy(pointBytes[bn254fpSize:], retY[:])
+	return pointBytes
 }
 
 func bn254G2ToBytes(g2 *bn254.G2Affine) []byte {
@@ -771,7 +784,7 @@ func bn254G1MultiMulLarge(points []bn254.G1Affine, scalarBytes []byte) ([]byte, 
 	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, err := new(bn254.G1Affine).MultiExp(points, scalars, eccMontgomery)
+	res, err := new(bn254.G1Affine).MultiExp(points, scalars, mecLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -818,7 +831,7 @@ func bn254G2MultiMulLarge(points []bn254.G2Affine, scalarBytes []byte) ([]byte, 
 	for i := range scalars {
 		scalars[i].SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
 	}
-	res, err := new(bn254.G2Affine).MultiExp(points, scalars, eccMontgomery)
+	res, err := new(bn254.G2Affine).MultiExp(points, scalars, mecLimit)
 	if err != nil {
 		return nil, err
 	}
