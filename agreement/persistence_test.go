@@ -187,11 +187,13 @@ func randomizeDiskState() (rr rootRouter, p player) {
 	if err != nil {
 		return
 	}
+
 	rr2, err := protocol.RandomizeObject(&rootRouter{})
 	if err != nil {
 		return
 	}
 	p = *(p2.(*player))
+	p.OldDeadline = 0
 	rr = *(rr2.(*rootRouter))
 	return
 }
