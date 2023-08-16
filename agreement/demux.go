@@ -204,6 +204,11 @@ func (d *demux) next(s *Service, deadline Deadline, fastDeadline time.Duration, 
 			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
 		case payloadPresent, votePresent:
 			e = e.(messageEvent).AttachReceivedAt(s.Clock.Since())
+		case voteVerified:
+			// if this is a proposal vote (step 0), record the validatedAt time on the vote
+			if e.(messageEvent).Input.UnauthenticatedVote.R.Step == 0 {
+				e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
+			}
 		}
 	}()
 

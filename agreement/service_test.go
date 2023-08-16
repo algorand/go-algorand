@@ -1024,7 +1024,7 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 		return
 	}
 
-	simulateAgreementWithConsensusVersion(t, 5, cfg.DynamicFilterPayloadArriavalHistory+20, disabled, consensusVersion)
+	simulateAgreementWithConsensusVersion(t, 5, cfg.DynamicFilterCredentialArrivalHistory+20, disabled, consensusVersion)
 }
 
 func TestAgreementSynchronousFuture1(t *testing.T) {

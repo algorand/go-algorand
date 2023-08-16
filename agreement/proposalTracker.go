@@ -165,6 +165,11 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		t.Freezer = t.Freezer.freeze()
 		return e
 
+	case readLowestVote:
+		e := e.(readLowestEvent)
+		e.Vote = t.Freezer.Lowest
+		return e
+
 	case softThreshold, certThreshold:
 		e := e.(thresholdEvent)
 		t.Staging = e.Proposal

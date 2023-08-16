@@ -63,7 +63,9 @@ type player struct {
 	// must be verified after some vote has been verified.
 	Pending proposalTable
 
-	payloadArrivals []time.Duration
+	// the history of arrival times of the lowest credential from previous
+	// ronuds, used for calculating dynamic lambda.
+	lowestCredentialArrivals []time.Duration
 }
 
 func (p *player) T() stateMachineTag {
@@ -275,19 +277,29 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 		}}
 }
 
-func (p *player) handleWinningPayloadArrival(payload proposal, ver protocol.ConsensusVersion) {
-	// ignoring validatedAt
-	p.payloadArrivals = append(p.payloadArrivals, payload.receivedAt)
-	p.resizePayloadArrivals(ver)
+// updateDynamicLambdaTimings is called at the end of a successful uninterrupted round (just after ensureAction
+// is generated) to collect round timings for updating dynamic lambda.
+func (p *player) updateDynamicLambdaTimings(r routerHandle, ver protocol.ConsensusVersion) {
+	// only append to lowestCredentialArrivals if this was a successful round completing in period 0.
+	if p.Period != 0 {
+		return
+	}
+	// look up the validatedAt time of the winning proposal-vote
+	re := readLowestEvent{T: readLowestVote, Round: p.Round, Period: p.Period}
+	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
+	if re.Vote.validatedAt != 0 {
+		p.lowestCredentialArrivals = append(p.lowestCredentialArrivals, re.Vote.validatedAt)
+	}
+	p.resizeLowestCredentialArrivals(ver)
 }
 
-func (p *player) resizePayloadArrivals(ver protocol.ConsensusVersion) {
+func (p *player) resizeLowestCredentialArrivals(ver protocol.ConsensusVersion) {
 	proto := config.Consensus[ver]
-	if len(p.payloadArrivals) > proto.DynamicFilterCredentialArrivalHistory {
-		p.payloadArrivals = p.payloadArrivals[len(p.payloadArrivals)-proto.DynamicFilterCredentialArrivalHistory:]
+	if len(p.lowestCredentialArrivals) > proto.DynamicFilterCredentialArrivalHistory {
+		p.lowestCredentialArrivals = p.lowestCredentialArrivals[len(p.lowestCredentialArrivals)-proto.DynamicFilterCredentialArrivalHistory:]
 	}
-	for len(p.payloadArrivals) < proto.DynamicFilterCredentialArrivalHistory {
-		p.payloadArrivals = append([]time.Duration{FilterTimeout(0, ver)}, p.payloadArrivals...)
+	for len(p.lowestCredentialArrivals) < proto.DynamicFilterCredentialArrivalHistory {
+		p.lowestCredentialArrivals = append([]time.Duration{FilterTimeout(0, ver)}, p.lowestCredentialArrivals...)
 	}
 }
 
@@ -307,12 +319,12 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	if proto.DynamicFilterCredentialArrivalHistory <= 0 {
 		// we don't keep any history, use the default
 		dynamicDelay = defaultDelay
-	} else if proto.DynamicFilterCredentialArrivalHistory > len(p.payloadArrivals) {
+	} else if proto.DynamicFilterCredentialArrivalHistory > len(p.lowestCredentialArrivals) {
 		// not enough samples, use the default
 		dynamicDelay = defaultDelay
 	} else {
-		sortedArrivals := make([]time.Duration, len(p.payloadArrivals))
-		copy(sortedArrivals[:], p.payloadArrivals[:])
+		sortedArrivals := make([]time.Duration, len(p.lowestCredentialArrivals))
+		copy(sortedArrivals[:], p.lowestCredentialArrivals[:])
 		sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
 		dynamicDelay = sortedArrivals[proto.DynamicFilterCredentialArrivalHistoryIdx] + 50*time.Millisecond
 	}
@@ -348,7 +360,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			p.handleWinningPayloadArrival(res.Payload, e.Proto)
+			p.updateDynamicLambdaTimings(r, e.Proto)
 			as := p.enterRound(r, e, p.Round+1)
 			return append(actions, as...)
 		}
@@ -405,7 +417,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	if target != 0 {
 		// We entered a non-0 period, we should reset the filter timeout
 		// calculation mechanism.
-		p.payloadArrivals = make([]time.Duration, 0)
+		p.lowestCredentialArrivals = make([]time.Duration, 0)
 	}
 	p.Deadline.Duration = p.calculateFilterTimeout(source.Proto, r.t)
 	p.Deadline.Type = timers.Filter
@@ -678,7 +690,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				p.handleWinningPayloadArrival(e.Input.Proposal, e.Proto.Version)
+				p.updateDynamicLambdaTimings(r, e.Proto.Version)
 				as := p.enterRound(r, delegatedE, cert.Round+1)
 				return append(actions, as...)
 			}
