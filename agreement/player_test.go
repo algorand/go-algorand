@@ -3265,8 +3265,8 @@ func TestPlayerRetainsReceivedValidatedAt(t *testing.T) {
 	// assert lowest vote validateAt time was recorded into payloadArrivals
 	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterPayloadArriavalHistory
 	require.NotZero(t, historyLen)
-	require.Len(t, pWhite.payloadArrivals, historyLen)
-	require.Equal(t, 501*time.Millisecond, pWhite.payloadArrivals[historyLen-1])
+	require.Len(t, pWhite.lowestCredentialArrivals, historyLen)
+	require.Equal(t, 501*time.Millisecond, pWhite.lowestCredentialArrivals[historyLen-1])
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in proposalStore
@@ -3309,8 +3309,8 @@ func TestPlayerRetainsReceivedValidatedAtPP(t *testing.T) {
 	// assert lowest vote validateAt time was recorded into payloadArrivals
 	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterPayloadArriavalHistory
 	require.NotZero(t, historyLen)
-	require.Len(t, pWhite.payloadArrivals, historyLen)
-	require.Equal(t, 502*time.Millisecond, pWhite.payloadArrivals[historyLen-1])
+	require.Len(t, pWhite.lowestCredentialArrivals, historyLen)
+	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals[historyLen-1])
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in proposalStore
@@ -3364,8 +3364,8 @@ func TestPlayerRetainsReceivedValidatedAtAVPP(t *testing.T) {
 	// assert lowest vote validateAt time was recorded into payloadArrivals
 	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterPayloadArriavalHistory
 	require.NotZero(t, historyLen)
-	require.Len(t, pWhite.payloadArrivals, historyLen)
-	require.Equal(t, 502*time.Millisecond, pWhite.payloadArrivals[historyLen-1])
+	require.Len(t, pWhite.lowestCredentialArrivals, historyLen)
+	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals[historyLen-1])
 }
 
 func assertCorrectReceivedAtSet(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerHelper,
