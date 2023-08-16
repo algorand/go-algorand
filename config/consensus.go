@@ -529,6 +529,8 @@ type ConsensusParams struct {
 	// that are measured to determine the next filter timeout.
 	DynamicFilterCredentialArrivalHistory int
 
+	// DynamicFilterCredentialArrivalHistoryIdx specified which sample to use out of a sorted
+	// DynamicFilterCredentialArrivalHistory-sized array of time samples.
 	DynamicFilterCredentialArrivalHistoryIdx int
 }
 
