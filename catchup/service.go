@@ -245,7 +245,7 @@ func (s *Service) innerFetch(r basics.Round, peer network.Peer) (blk *bookkeepin
 //   - If we couldn't fetch the block (e.g. if there are no peers available, or we've reached the catchupRetryLimit)
 //   - If the block is already in the ledger (e.g. if agreement service has already written it)
 //   - If the retrieval of the previous block was unsuccessful
-func (s *Service) fetchAndWrite(r basics.Round, prevFetchCompleteChan chan struct{}, lookbackComplete chan struct{}, peerSelector *peerSelector, ctx context.Context) bool {
+func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCompleteChan chan struct{}, lookbackComplete chan struct{}, peerSelector *peerSelector) bool {
 	// If sync-ing this round is not intended, don't fetch it
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
 		return false
@@ -470,7 +470,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			go func(r basics.Round) {
 				prev := s.ledger.WaitMem(r - 1)
 				seed := s.ledger.WaitMem(r.SubSaturate(basics.Round(seedLookback)))
-				done <- s.fetchAndWrite(r, prev, seed, peerSelector, ctx)
+				done <- s.fetchAndWrite(ctx, r, prev, seed, peerSelector)
 				wg.Done()
 			}(nextRound)
 
