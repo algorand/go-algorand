@@ -124,7 +124,10 @@ var networkCreateCmd = &cobra.Command{
 			if err != nil {
 				panic(err)
 			}
-			util.CopyFolder(genesisDir, networkRootDir)
+			err = util.CopyFolder(genesisDir, networkRootDir)
+			if err != nil {
+				panic(err)
+			}
 		}
 
 		binDir, err := util.ExeDir()
@@ -267,7 +270,8 @@ var networkGenesisCmd = &cobra.Command{
 	Short: "Creates the genesis.json, root and participation keys for a wallet",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		networkRootDir, err := filepath.Abs(networkRootDir)
+		var err error
+		networkRootDir, err = filepath.Abs(networkRootDir)
 		if err != nil {
 			panic(err)
 		}
@@ -306,6 +310,9 @@ var networkGenesisCmd = &cobra.Command{
 			reportErrorf("Error in template validation: %v\n", err)
 		}
 
-		gen.GenerateGenesisFiles(template.Genesis, consensus, networkRootDir, os.Stdout)
+		err = gen.GenerateGenesisFiles(template.Genesis, consensus, networkRootDir, os.Stdout)
+		if err != nil {
+			reportErrorf("Cannot write genesis files: %s", err)
+		}
 	},
 }

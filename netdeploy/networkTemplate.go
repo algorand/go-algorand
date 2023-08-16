@@ -169,6 +169,7 @@ func loadTemplate(templateFile string) (NetworkTemplate, error) {
 	return template, err
 }
 
+// LoadTemplateFromReader loads and decodes a network template
 func LoadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
