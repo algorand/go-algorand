@@ -278,15 +278,15 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 		}}
 }
 
-func (p *player) handleWinningPayloadArrival(payload proposal, ver protocol.ConsensusVersion) {
-
-	// look up lowest vote validatedAt time
-	//re := readLowestEvent{T: readLowestVote, Round: p.Round, Period: p.Period}
-	//re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
-	//p.payloadArrivals = append(p.payloadArrivals, re.Vote.validatedAt)
-
-	// ignoring validatedAt
-	p.payloadArrivals = append(p.payloadArrivals, payload.receivedAt)
+// updateDynamicLambdaTimings is called at the end of the round (just before ensureAction
+// is generated) to collect round timings for updating dynamic lambda.
+func (p *player) updateDynamicLambdaTimings(r routerHandle, payload proposal, ver protocol.ConsensusVersion) {
+	// look up the validatedAt time of the winning proposal-vote
+	re := readLowestEvent{T: readLowestVote, Round: p.Round, Period: p.Period}
+	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
+	if re.Vote.validatedAt != 0 {
+		p.payloadArrivals = append(p.payloadArrivals, re.Vote.validatedAt)
+	}
 	p.resizePayloadArrivals(ver)
 }
 
@@ -357,7 +357,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			p.handleWinningPayloadArrival(res.Payload, e.Proto)
+			p.updateDynamicLambdaTimings(r, res.Payload, e.Proto)
 			as := p.enterRound(r, e, p.Round+1)
 			return append(actions, as...)
 		}
@@ -677,7 +677,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				p.handleWinningPayloadArrival(e.Input.Proposal, e.Proto.Version)
+				p.updateDynamicLambdaTimings(r, e.Input.Proposal, e.Proto.Version)
 				as := p.enterRound(r, delegatedE, cert.Round+1)
 				return append(actions, as...)
 			}

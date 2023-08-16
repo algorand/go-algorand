@@ -3247,6 +3247,7 @@ func TestPlayerRetainsReceivedValidatedAt(t *testing.T) {
 	// send voteVerified message
 	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
 	inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
+	inMsg = inMsg.AttachValidatedAt(501 * time.Millisecond)
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3259,7 +3260,13 @@ func TestPlayerRetainsReceivedValidatedAt(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m)
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, protocol.ConsensusFuture)
+
+	// assert lowest vote validateAt time was recorded into payloadArrivals
+	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterPayloadArriavalHistory
+	require.NotZero(t, historyLen)
+	require.Len(t, pWhite.payloadArrivals, historyLen)
+	require.Equal(t, 501*time.Millisecond, pWhite.payloadArrivals[historyLen-1])
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in proposalStore
@@ -3291,29 +3298,36 @@ func TestPlayerRetainsReceivedValidatedAtPP(t *testing.T) {
 
 	// send voteVerified
 	inMsg = messageEvent{T: voteVerified, Input: voteMsg, TaskIndex: 1}
+	inMsg = inMsg.AttachValidatedAt(502 * time.Millisecond)
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg)
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
+
+	// assert lowest vote validateAt time was recorded into payloadArrivals
+	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterPayloadArriavalHistory
+	require.NotZero(t, historyLen)
+	require.Len(t, pWhite.payloadArrivals, historyLen)
+	require.Equal(t, 502*time.Millisecond, pWhite.payloadArrivals[historyLen-1])
 }
 
 func assertCorrectReceivedAtSet(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerHelper,
-	r round, p period, pP *proposal, pV *proposalValue, m message) {
+	r round, p period, pP *proposal, pV *proposalValue, m message, ver protocol.ConsensusVersion) {
 	// make sure payload verify request
 	verifyEvent := ev(cryptoAction{T: verifyPayload, M: m, Round: r - 1, Period: p, Step: propose, TaskIndex: 0})
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify payload")
 
 	// payloadVerified
-	inMsg := messageEvent{T: payloadVerified, Input: message{Proposal: *pP}, Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion}}
+	inMsg := messageEvent{T: payloadVerified, Input: message{Proposal: *pP}, Proto: ConsensusVersionView{Version: ver}}
 	inMsg = inMsg.AttachValidatedAt(2 * time.Second) // call AttachValidatedAt like demux would
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
 	// gen cert to move into the next round
-	votes := make([]vote, int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
-	for i := 0; i < int(cert.threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
+	votes := make([]vote, int(cert.threshold(config.Consensus[ver])))
+	for i := 0; i < int(cert.threshold(config.Consensus[ver])); i++ {
 		votes[i] = helper.MakeVerifiedVote(t, i, r-1, p, cert, *pV)
 	}
 	bun := unauthenticatedBundle{
@@ -3330,7 +3344,7 @@ func assertCorrectReceivedAtSet(t *testing.T, pWhite *player, pM ioAutomata, hel
 			},
 			UnauthenticatedBundle: bun,
 		},
-		Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion},
+		Proto: ConsensusVersionView{Version: ver},
 	}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
