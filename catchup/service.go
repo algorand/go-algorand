@@ -459,6 +459,21 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	for {
 		for nextRound < firstRound+basics.Round(parallelRequests) {
 			if s.nextRoundIsNotSupported(nextRound) {
+				// We may get here when (1) The service starts
+				// and gets to an unsupported round.  Since in
+				// this loop we do not wait for the requests
+				// to be written to the ledger, there is no
+				// guarantee that the unsupported round will be
+				// stopped in this case.
+
+				// (2) The unsupported round is detected in the
+				// "the rest" loop, but did not cancel because
+				// the last supported round was not yet written
+				// to the ledger.
+
+				// It is sufficient to check only in the first
+				// iteration, however checking in all in favor
+				// of code simplicity.
 				s.handleUnsupportedRound(nextRound)
 				return
 			}
