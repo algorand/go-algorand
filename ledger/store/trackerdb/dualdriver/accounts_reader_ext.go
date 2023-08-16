@@ -172,8 +172,14 @@ func (ar *accountsReaderExt) LoadTxTail(ctx context.Context, dbRound basics.Roun
 
 // LookupAccountAddressFromAddressID implements trackerdb.AccountsReaderExt
 func (ar *accountsReaderExt) LookupAccountAddressFromAddressID(ctx context.Context, ref trackerdb.AccountRef) (address basics.Address, err error) {
-	addressP, errP := ar.primary.LookupAccountAddressFromAddressID(ctx, ref)
-	addressS, errS := ar.secondary.LookupAccountAddressFromAddressID(ctx, ref)
+	if ref == nil {
+		return address, trackerdb.ErrNotFound
+	}
+	// parse ref
+	xRef := ref.(accountRef)
+
+	addressP, errP := ar.primary.LookupAccountAddressFromAddressID(ctx, xRef.primary)
+	addressS, errS := ar.secondary.LookupAccountAddressFromAddressID(ctx, xRef.secondary)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
 	if err != nil {
