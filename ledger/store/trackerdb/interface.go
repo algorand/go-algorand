@@ -33,6 +33,7 @@ var ErrNotFound = errors.New("trackerdb: not found")
 // AccountRef is an opaque ref to an account in the db.
 type AccountRef interface {
 	AccountRefMarker()
+	String() string
 }
 
 // OnlineAccountRef is an opaque ref to an "online" account in the db.

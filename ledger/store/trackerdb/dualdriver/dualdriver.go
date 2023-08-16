@@ -19,6 +19,7 @@ package dualdriver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -447,6 +448,9 @@ type accountRef struct {
 
 // AccountRefMarker implements trackerdb.AccountRef
 func (accountRef) AccountRefMarker() {}
+func (ref accountRef) String() string {
+	return fmt.Sprintf("accountRef{primary: %s, secondary: %s}", ref.primary.String(), ref.secondary.String())
+}
 
 func coalesceAccountRefs(primary, secondary trackerdb.AccountRef) (trackerdb.AccountRef, error) {
 	if primary != nil && secondary != nil {
