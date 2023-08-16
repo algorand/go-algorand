@@ -197,6 +197,10 @@ const (
 	// readPinned is sent to the proposalStore to read the pinned value, if it exists.
 	readPinned
 
+	// readLowestVote is sent to the proposalPeriodMachine to read the
+	// proposal-vote with the lowest credential.
+	readLowestVote
+
 	/*
 	 * The following are event types that replace queries, and may warrant
 	 * a revision to make them more state-machine-esque.
@@ -404,6 +408,34 @@ func (e newRoundEvent) String() string {
 }
 
 func (e newRoundEvent) ComparableStr() string {
+	return e.String()
+}
+
+type readLowestEvent struct {
+	// T currently only supports readLowestVote
+	T eventType
+
+	// Round and Period are the round and period for which to query
+	// the lowest-credential vote, value or payload.  This type of event
+	// is only sent for pipelining, which only makes sense for period
+	// 0, but the Period is here anyway to route to the appropriate
+	// proposalMachinePeriod.
+	Round  round
+	Period period
+
+	// Vote holds the lowest-credential vote.
+	Vote vote
+}
+
+func (e readLowestEvent) t() eventType {
+	return e.T
+}
+
+func (e readLowestEvent) String() string {
+	return fmt.Sprintf("%s: %d %d", e.t().String(), e.Round, e.Period)
+}
+
+func (e readLowestEvent) ComparableStr() string {
 	return e.String()
 }
 
@@ -942,7 +974,12 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 }
 
 func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
-	e.Input.Proposal.validatedAt = d
+	switch e.T {
+	case payloadVerified:
+		e.Input.Proposal.validatedAt = d
+	case voteVerified:
+		e.Input.Vote.validatedAt = d
+	}
 	return e
 }
 
