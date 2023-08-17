@@ -70,7 +70,7 @@ type player struct {
 	Pending proposalTable
 
 	// the history of arrival times of the lowest credential from previous
-	// ronuds, used for calculating dynamic lambda.
+	// ronuds, used for calculating the filter timeout dynamically.
 	lowestCredentialArrivals []time.Duration
 }
 
