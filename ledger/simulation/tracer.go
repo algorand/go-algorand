@@ -19,6 +19,7 @@ package simulation
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -403,6 +404,20 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &TransactionTrace{}
 			traceRef := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 			traceRef.programTraceRef = &traceRef.LogicSigTrace
+			traceRef.LogicSigHash = crypto.Hash(cx.GetProgram())
+		}
+	}
+
+	if cx.RunMode() == logic.ModeApp && tracer.result.ReturnTrace() {
+		txnTraceStackElem := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+		currentTxn := cx.EvalParams.TxnGroup[groupIndex]
+		programHash := crypto.Hash(cx.GetProgram())
+
+		switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
+		case transactions.ClearStateOC:
+			txnTraceStackElem.ClearStateProgramHash = programHash
+		default:
+			txnTraceStackElem.ApprovalProgramHash = programHash
 		}
 	}
 

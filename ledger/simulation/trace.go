@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -241,10 +242,16 @@ type OpcodeTraceUnit struct {
 type TransactionTrace struct {
 	// ApprovalProgramTrace stands for a slice of OpcodeTraceUnit over application call on approval program
 	ApprovalProgramTrace []OpcodeTraceUnit
+	// ApprovalProgramHash stands for the hash digest of approval program bytecode executed during simulation
+	ApprovalProgramHash crypto.Digest
 	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
 	ClearStateProgramTrace []OpcodeTraceUnit
+	// ClearStateProgramHash stands for the hash digest of clear state program bytecode executed during simulation
+	ClearStateProgramHash crypto.Digest
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
 	LogicSigTrace []OpcodeTraceUnit
+	// LogicSigHash stands for the hash digest of logic sig bytecode executed during simulation
+	LogicSigHash crypto.Digest
 	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
 	programTraceRef *[]OpcodeTraceUnit
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
