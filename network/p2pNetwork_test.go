@@ -39,12 +39,8 @@ func TestP2PSubmitTX(t *testing.T) {
 	log := logging.TestingLog(t)
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet)
 	require.NoError(t, err)
-	hostA := netA.service.Host()
+	peerInfoA := netA.service.AddrInfo()
 
-	peerInfoA := peerstore.AddrInfo{
-		ID:    hostA.ID(),
-		Addrs: hostA.Addrs(),
-	}
 	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
@@ -67,7 +63,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			return len(netA.service.ListPeers(p2p.TXTopicName)) == 2 && len(netB.service.ListPeers(p2p.TXTopicName)) == 1 && len(netC.service.ListPeers(p2p.TXTopicName)) == 1
+			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) == 2 && len(netB.service.ListPeersForTopic(p2p.TXTopicName)) == 1 && len(netC.service.ListPeersForTopic(p2p.TXTopicName)) == 1
 		},
 		2*time.Second,
 		50*time.Millisecond,
@@ -96,7 +92,7 @@ func TestP2PSubmitTX(t *testing.T) {
 		t,
 		func() bool {
 			netC.peerStatsMu.Lock()
-			netCpeerStatsA, ok := netC.peerStats[netA.service.Host().ID()]
+			netCpeerStatsA, ok := netC.peerStats[netA.service.ID()]
 			netC.peerStatsMu.Unlock()
 			if !ok {
 				return false
@@ -115,12 +111,8 @@ func TestP2PSubmitWS(t *testing.T) {
 	log := logging.TestingLog(t)
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet)
 	require.NoError(t, err)
-	hostA := netA.service.Host()
 
-	peerInfoA := peerstore.AddrInfo{
-		ID:    hostA.ID(),
-		Addrs: hostA.Addrs(),
-	}
+	peerInfoA := netA.service.AddrInfo()
 	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
@@ -143,7 +135,7 @@ func TestP2PSubmitWS(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			return len(netA.service.ListPeers(p2p.TXTopicName)) == 2 && len(netB.service.ListPeers(p2p.TXTopicName)) == 1 && len(netC.service.ListPeers(p2p.TXTopicName)) == 1
+			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) == 2 && len(netB.service.ListPeersForTopic(p2p.TXTopicName)) == 1 && len(netC.service.ListPeersForTopic(p2p.TXTopicName)) == 1
 		},
 		2*time.Second,
 		50*time.Millisecond,

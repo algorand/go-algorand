@@ -104,7 +104,7 @@ func txMsgID(m *pubsub_pb.Message) string {
 	return string(h[:])
 }
 
-func (s *Service) joinTopic(topic string) (*pubsub.Topic, error) {
+func (s *serviceImpl) joinTopic(topic string) (*pubsub.Topic, error) {
 	s.topicsMu.Lock()
 	defer s.topicsMu.Unlock()
 
@@ -125,7 +125,7 @@ func (s *Service) joinTopic(topic string) (*pubsub.Topic, error) {
 }
 
 // Subscribe returns a subscription to the given topic
-func (s *Service) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subscription, error) {
+func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subscription, error) {
 	if err := s.pubsub.RegisterTopicValidator(topic, val); err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func (s *Service) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subsc
 }
 
 // Publish publishes data to the given topic
-func (s *Service) Publish(ctx context.Context, topic string, data []byte) error {
+func (s *serviceImpl) Publish(ctx context.Context, topic string, data []byte) error {
 	t, err := s.joinTopic(topic)
 	if err != nil {
 		return err
@@ -146,7 +146,7 @@ func (s *Service) Publish(ctx context.Context, topic string, data []byte) error 
 	return t.Publish(ctx, data)
 }
 
-// ListPeers returns a list of peers subscribed to the given topic, exported for access from the network package
-func (s *Service) ListPeers(topic string) []peer.ID {
+// ListPeersForTopic returns a list of peers subscribed to the given topic, exported for access from the network package
+func (s *serviceImpl) ListPeersForTopic(topic string) []peer.ID {
 	return s.pubsub.ListPeers(topic)
 }

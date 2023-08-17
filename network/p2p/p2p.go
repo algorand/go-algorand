@@ -29,14 +29,31 @@ import (
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 )
 
-// Service manages integration with libp2p
-type Service struct {
+// Service defines the interface used by the network integrating with underlying p2p implementation
+type Service interface {
+	Close() error
+	ID() peer.ID             // return peer.ID for self
+	AddrInfo() peer.AddrInfo // return addrInfo for self
+
+	DialNode(context.Context, *peer.AddrInfo) error
+	DialPeersUntilTargetCount(targetConnCount int)
+	ClosePeer(peer.ID) error
+
+	Conns() []network.Conn
+	ListPeersForTopic(topic string) []peer.ID
+	Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subscription, error)
+	Publish(ctx context.Context, topic string, data []byte) error
+}
+
+// serviceImpl manages integration with libp2p and implements the Service interface
+type serviceImpl struct {
 	log       logging.Logger
 	host      host.Host
 	streams   *streamManager
@@ -53,7 +70,7 @@ const AlgorandWsProtocol = "/algorand-ws/1.0.0"
 const dialTimeout = 30 * time.Second
 
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, datadir string, pstore peerstore.Peerstore, wsStreamHandler StreamHandler) (*Service, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, datadir string, pstore peerstore.Peerstore, wsStreamHandler StreamHandler) (*serviceImpl, error) {
 	// load stored peer ID, or make ephemeral peer ID
 	privKey, err := GetPrivKey(cfg, datadir)
 	if err != nil {
@@ -88,7 +105,7 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, data
 		return nil, err
 	}
 
-	return &Service{
+	return &serviceImpl{
 		log:       log,
 		host:      h,
 		streams:   sm,
@@ -99,17 +116,17 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, data
 }
 
 // Close shuts down the P2P service
-func (s *Service) Close() error {
+func (s *serviceImpl) Close() error {
 	return s.host.Close()
 }
 
-// Host returns the libp2p host
-func (s *Service) Host() host.Host {
-	return s.host
+// ID returns the peer.ID for self
+func (s *serviceImpl) ID() peer.ID {
+	return s.host.ID()
 }
 
-// DialPeers attempts to establish connections to the provided phonebook addresses
-func (s *Service) DialPeers(targetConnCount int) {
+// DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses
+func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 	peerIDs := s.host.Peerstore().Peers()
 	for _, peerID := range peerIDs {
 		// if we are at our target count stop trying to connect
@@ -129,7 +146,7 @@ func (s *Service) DialPeers(targetConnCount int) {
 }
 
 // DialNode attempts to establish a connection to the provided peer
-func (s *Service) DialNode(ctx context.Context, peer *peer.AddrInfo) error {
+func (s *serviceImpl) DialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	// don't try connecting to ourselves
 	if peer.ID == s.host.ID() {
 		return nil
@@ -137,4 +154,22 @@ func (s *Service) DialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
 	return s.host.Connect(ctx, *peer)
+}
+
+// AddrInfo returns the peer.AddrInfo for self
+func (s *serviceImpl) AddrInfo() peer.AddrInfo {
+	return peer.AddrInfo{
+		ID:    s.host.ID(),
+		Addrs: s.host.Addrs(),
+	}
+}
+
+// Conns returns the current connections
+func (s *serviceImpl) Conns() []network.Conn {
+	return s.host.Network().Conns()
+}
+
+// ClosePeer closes a connection to the provided peer
+func (s *serviceImpl) ClosePeer(peer peer.ID) error {
+	return s.host.Network().ClosePeer(peer)
 }

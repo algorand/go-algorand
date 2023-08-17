@@ -54,7 +54,7 @@ var outgoingMessagesBufferSize = int(
 
 // P2PNetwork implements the GossipNode interface
 type P2PNetwork struct {
-	service     *p2p.Service
+	service     p2p.Service
 	log         logging.Logger
 	config      config.Local
 	genesisID   string
@@ -169,7 +169,7 @@ func (n *P2PNetwork) Start() {
 
 	n.wg.Add(1)
 	go n.broadcaster.broadcastThread(&n.wg, n)
-	n.service.DialPeers(n.config.GossipFanout)
+	n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 
 	n.wg.Add(1)
 	go n.meshThread()
@@ -194,7 +194,7 @@ func (n *P2PNetwork) meshThread() {
 	for {
 		select {
 		case <-timer.C:
-			n.service.DialPeers(n.config.GossipFanout)
+			n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 		case <-n.ctx.Done():
 			return
 		}
@@ -208,10 +208,7 @@ func (n *P2PNetwork) GetGenesisID() string {
 
 // Address returns a string and whether that is a 'final' address or guessed.
 func (n *P2PNetwork) Address() (string, bool) {
-	addrInfo := peer.AddrInfo{
-		ID:    n.service.Host().ID(),
-		Addrs: n.service.Host().Addrs(),
-	}
+	addrInfo := n.service.AddrInfo()
 	addrs, err := peer.AddrInfoToP2pAddrs(&addrInfo)
 	if err != nil {
 		n.log.Warnf("Failed to generate valid multiaddr: %v", err)
@@ -246,7 +243,7 @@ func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, w
 func (n *P2PNetwork) Disconnect(badnode Peer) {
 	switch node := badnode.(type) {
 	case peer.ID:
-		err := n.service.Host().Network().ClosePeer(node)
+		err := n.service.ClosePeer(node)
 		if err != nil {
 			n.log.Warnf("Error disconnecting from peer %s: %v", node, err)
 		}
@@ -262,7 +259,7 @@ func (n *P2PNetwork) disconnectThread(badnode Peer, reason disconnectReason) {
 
 // DisconnectPeers is used by testing
 func (n *P2PNetwork) DisconnectPeers() {
-	for _, conn := range n.service.Host().Network().Conns() {
+	for _, conn := range n.service.Conns() {
 		conn.Close()
 	}
 }
@@ -403,7 +400,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 		msg, err := sub.Next(n.ctx)
 		if err != nil {
 			if err != pubsub.ErrSubscriptionCancelled {
-				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.Host().ID())
+				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
 			}
 			sub.Cancel()
 			return
@@ -427,7 +424,7 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	}
 
 	// if we sent the message, don't validate it
-	if inmsg.Sender == n.service.Host().ID() {
+	if inmsg.Sender == n.service.ID() {
 		return pubsub.ValidationAccept
 	}
 
