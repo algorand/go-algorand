@@ -528,13 +528,21 @@ type ConsensusParams struct {
 	// filter timeout must meet.
 	DynamicFilterTimeoutLowerBound time.Duration
 
-	// DynamicFilterCredentialArrivalHistoryIdx specified which sample to use out of a sorted
-	// DynamicFilterCredentialArrivalHistory-sized array of time samples.
-	DynamicFilterCredentialArrivalHistoryIdx int
+	// DynamicFilterTimeoutCredentialArrivalHistoryIdx specified which sample to
+	// use out of a sorted DynamicFilterCredentialArrivalHistory-sized array of
+	// time samples.
+	DynamicFilterTimeoutCredentialArrivalHistoryIdx int
 
-	// DynamicFilterGraceTime is additional extension to the dynamic filter time atop the
-	// one calculated based on the history of credential arrivals.
-	DynamicFilterGraceTime time.Duration
+	// DynamicFilterTimeoutGraceInterval is additional extension to the dynamic
+	// filter time atop the one calculated based on the history of credential
+	// arrivals.
+	DynamicFilterTimeoutGraceInterval time.Duration
+
+	// DynamicFilterTimeout indicates whether the filter timeout is set
+	// dynamically, at run time, according to the recent history of credential
+	// arrival times or is set to a static value. Even if this flag disables the
+	// dynamic filter, it will be calculated and logged (but not used).
+	DynamicFilterTimeout bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1385,9 +1393,10 @@ func initConsensusProtocols() {
 	// history window of 40, so we have enough statistics to calculate the 95th
 	// percentile, which is the timestamp at index 37 in the history array.
 	vFuture.DynamicFilterCredentialArrivalHistory = 40
-	vFuture.DynamicFilterCredentialArrivalHistoryIdx = 37
+	vFuture.DynamicFilterTimeoutCredentialArrivalHistoryIdx = 37
 	vFuture.DynamicFilterTimeoutLowerBound = time.Second
-	vFuture.DynamicFilterGraceTime = 50 * time.Millisecond
+	vFuture.DynamicFilterTimeoutGraceInterval = 50 * time.Millisecond
+	vFuture.DynamicFilterTimeout = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
