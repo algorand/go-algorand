@@ -53,6 +53,7 @@ type player struct {
 
 	// OldDeadline contains the value of Deadline used from a previous version,
 	// for backwards compatibility when deserializing player.
+	// TODO: remove after consensus upgrade that introduces the Deadline struct.
 	OldDeadline time.Duration `codec:"Deadline,omitempty"`
 
 	// Napping is set when the player is expecting a random timeout (i.e.,
