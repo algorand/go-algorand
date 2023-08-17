@@ -51,9 +51,10 @@ import (
 
 // BatchVerifier enqueues signatures to be validated in batch.
 type BatchVerifier struct {
-	messages   []Hashable // contains a slice of messages to be hashed. Each message is varible length
-	publicKeys []byte     // contains a slice of concatenated public keys. Each individual public key is 32 bytes.
-	signatures []byte     // contains a slice of concatenated signatures. Each individual signature is 64 bytes.
+	messageHashReps []byte        // contains a slice of concatenated bytes of the HashRep of the messages to be hashed. Each message is varible length
+	messageLens     []C.ulonglong // the lengths of each message in messageHashReps
+	publicKeys      []byte        // contains a slice of concatenated public keys. Each individual public key is 32 bytes.
+	signatures      []byte        // contains a slice of concatenated signatures. Each individual signature is 64 bytes.
 }
 
 const minBatchVerifierAlloc = 16
@@ -82,38 +83,44 @@ func MakeBatchVerifierWithHint(hint int) *BatchVerifier {
 		hint = minBatchVerifierAlloc
 	}
 	return &BatchVerifier{
-		messages:   make([]Hashable, 0, hint),
-		publicKeys: make([]byte, 0, hint*ed25519PublicKeySize),
-		signatures: make([]byte, 0, hint*ed25519SignatureSize),
+		messageHashReps: make([]byte, 0), // XXX can we get a better hint?
+		messageLens:     make([]C.ulonglong, hint),
+		publicKeys:      make([]byte, 0, hint*ed25519PublicKeySize),
+		signatures:      make([]byte, 0, hint*ed25519SignatureSize),
 	}
 }
 
 // EnqueueSignature enqueues a signature to be enqueued
 func (b *BatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature) {
 	// do we need to reallocate ?
-	if len(b.messages) == cap(b.messages) {
+	if len(b.messageLens) == cap(b.messageLens) {
 		b.expand()
 	}
-	b.messages = append(b.messages, message)
+	msgHashRep := HashRep(message)
+	b.messageHashReps = append(b.messageHashReps, msgHashRep...)
+	b.messageLens = append(b.messageLens, C.ulonglong(len(msgHashRep)))
 	b.publicKeys = append(b.publicKeys, sigVerifier[:]...)
 	b.signatures = append(b.signatures, sig[:]...)
 }
 
 func (b *BatchVerifier) expand() {
-	messages := make([]Hashable, len(b.messages), len(b.messages)*2)
+	messageHashReps := make([]byte, len(b.messageHashReps), len(b.messageHashReps)*2)
+	messageLens := make([]C.ulonglong, len(b.messageLens), len(b.messageLens)*2)
 	publicKeys := make([]byte, len(b.publicKeys), len(b.publicKeys)*2*ed25519PublicKeySize)
 	signatures := make([]byte, len(b.signatures), len(b.signatures)*2*ed25519SignatureSize)
-	copy(messages, b.messages)
+	copy(messageLens, b.messageLens)
+	copy(messageHashReps, b.messageHashReps)
 	copy(publicKeys, b.publicKeys)
 	copy(signatures, b.signatures)
-	b.messages = messages
+	b.messageHashReps = messageHashReps
+	b.messageLens = messageLens
 	b.publicKeys = publicKeys
 	b.signatures = signatures
 }
 
 // GetNumberOfEnqueuedSignatures returns the number of signatures currently enqueued into the BatchVerifier
 func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
-	return len(b.messages)
+	return len(b.messageLens)
 }
 
 // Verify verifies that all the signatures are valid. in that case nil is returned
@@ -130,7 +137,7 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
 		return nil, nil
 	}
-	allValid, failed := batchVerificationImpl(b.messages, b.publicKeys, b.signatures)
+	allValid, failed := batchVerificationImpl(b.messageHashReps, b.messageLens, b.publicKeys, b.signatures)
 	if allValid {
 		return failed, nil
 	}
@@ -140,16 +147,9 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
 // otherwise, returns false, and sets the indexes of the failed sigs in failed
-func batchVerificationImpl(hashables []Hashable, publicKeys []byte, signatures []byte) (allSigsValid bool, failed []bool) {
-	numberOfSignatures := len(hashables)
+func batchVerificationImpl(messageHashReps []byte, messageLens []C.ulonglong, publicKeys []byte, signatures []byte) (allSigsValid bool, failed []bool) {
+	numberOfSignatures := len(messageLens)
 
-	var messages1D []byte
-	messageLens := make([]C.ulonglong, numberOfSignatures)
-	for i := range hashables {
-		msg := HashRep(hashables[i])
-		messages1D = append(messages1D, msg...)
-		messageLens[i] = C.ulonglong(len(msg))
-	}
 	valid := make([]C.size_t, numberOfSignatures)
 
 	// allocate space for the wrapper function to fill in 2D arrays
@@ -159,7 +159,7 @@ func batchVerificationImpl(hashables []Hashable, publicKeys []byte, signatures [
 
 	// call the batch verifier
 	allValid := C.ed25519_batch_wrapper(
-		(*C.uchar)(unsafe.Pointer(&messages1D[0])),
+		(*C.uchar)(unsafe.Pointer(&messageHashReps[0])),
 		(**C.uchar)(unsafe.Pointer(&messages2D[0])),
 		(*C.ulonglong)(unsafe.Pointer(&messageLens[0])),
 		(*C.uchar)(unsafe.Pointer(&publicKeys[0])),
