@@ -17,6 +17,8 @@
 package generickv
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
@@ -38,7 +40,10 @@ type accountRef struct {
 	addr basics.Address
 }
 
-func (ref accountRef) AccountRefMarker() {}
+func (accountRef) AccountRefMarker() {}
+func (ref accountRef) String() string {
+	return fmt.Sprintf("accountRef{%s}", ref.addr.String())
+}
 
 type resourceRef struct {
 	addr basics.Address

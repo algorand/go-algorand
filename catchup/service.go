@@ -61,6 +61,7 @@ type Ledger interface {
 	EnsureBlock(block *bookkeeping.Block, c agreement.Certificate)
 	LastRound() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	IsWritingCatchpointDataFile() bool
 	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
 	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
@@ -77,7 +78,7 @@ type Service struct {
 	ledger              Ledger
 	ctx                 context.Context
 	cancel              func()
-	done                chan struct{}
+	workers             sync.WaitGroup
 	log                 logging.Logger
 	net                 network.GossipNode
 	auth                BlockAuthenticator
@@ -95,11 +96,15 @@ type Service struct {
 	InitialSyncDone              chan struct{}
 	initialSyncNotified          uint32
 	protocolErrorLogged          bool
-	lastSupportedRound           basics.Round
 	unmatchedPendingCertificates <-chan PendingUnmatchedCertificate
 	// This channel signals periodSync to attempt catchup immediately. This allows us to start fetching rounds from
 	// the network as soon as disableSyncRound is modified.
 	syncNow chan struct{}
+
+	// onceUnsupportedRound ensures that we start just one
+	// unsupportedRoundMonitor goroutine, after detecting
+	// an unsupported block.
+	onceUnsupportedRound sync.Once
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -134,17 +139,17 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 
 // Start the catchup service
 func (s *Service) Start() {
-	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	atomic.StoreUint32(&s.initialSyncNotified, 0)
 	s.InitialSyncDone = make(chan struct{})
+	s.workers.Add(1)
 	go s.periodicSync()
 }
 
 // Stop informs the catchup service that it should stop, and waits for it to stop (when periodicSync() exits)
 func (s *Service) Stop() {
 	s.cancel()
-	<-s.done
+	s.workers.Wait()
 	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
 		close(s.InitialSyncDone)
 	}
@@ -456,15 +461,13 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 
 	for {
 		for nextRound < firstRound+basics.Round(parallelRequests) {
-			if s.nextRoundIsNotSupported(nextRound) {
-				// We may get here when the service starts
-				// and gets to an unsupported round.  Since in
-				// this loop we do not wait for the requests
-				// to be written to the ledger, there is no
-				// guarantee that the unsupported round will be
-				// stopped in this case.
-				s.handleUnsupportedRound(nextRound)
-				return
+			if s.roundIsNotSupported(nextRound) {
+				// Break out of the loop to avoid fetching
+				// blocks that we don't support.  If there
+				// are no more supported blocks to fetch,
+				// s.unsupportedRoundMonitor() will cancel
+				// s.ctx and cause this function to return.
+				break
 			}
 
 			done := make(chan bool, 1)
@@ -505,9 +508,31 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	}
 }
 
+// unsupportedRoundMonitor waits for the ledger to get stuck at an unsupported
+// protocol upgrade (i.e., the next block requires upgrading to a protocol that
+// the current node does not support), and stops the catchup service when that
+// happens.
+func (s *Service) unsupportedRoundMonitor() {
+	defer s.workers.Done()
+	for {
+		nextRound := s.ledger.NextRound()
+		if s.roundIsNotSupported(nextRound) {
+			s.log.Infof("Catchup Service: finished catching up to the last supported round %d. The subsequent rounds are not supported. Service is stopping.",
+				nextRound-1)
+			s.cancel()
+		}
+
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-s.ledger.WaitMem(nextRound):
+		}
+	}
+}
+
 // periodicSync periodically asks the network for its latest round and syncs if we've fallen behind (also if our ledger stops advancing)
 func (s *Service) periodicSync() {
-	defer close(s.done)
+	defer s.workers.Done()
 	// if the catchup is disabled in the config file, just skip it.
 	if s.parallelBlocks != 0 && !s.cfg.DisableNetworking {
 		// The following request might be redundant, but it ensures we wait long enough for the DNS records to be loaded,
@@ -522,7 +547,7 @@ func (s *Service) periodicSync() {
 		select {
 		case <-s.ctx.Done():
 			return
-		case <-s.ledger.Wait(currBlock + 1):
+		case <-s.ledger.WaitMem(currBlock + 1):
 			// Ledger moved forward; likely to be by the agreement service.
 			stuckInARow = 0
 			// go to sleep for a short while, for a random duration.
@@ -636,11 +661,10 @@ func (s *Service) syncCert(cert *PendingUnmatchedCertificate) {
 // TODO this doesn't actually use the digest from cert!
 func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	// is there any point attempting to retrieve the block ?
-	if s.nextRoundIsNotSupported(cert.Round) {
+	if s.roundIsNotSupported(cert.Round) {
 		// we might get here if the agreement service was seeing the certs votes for the next
 		// block, without seeing the actual block. Since it hasn't seen the block, it couldn't
 		// tell that it's an unsupported protocol, and would try to request it from the catchup.
-		s.handleUnsupportedRound(cert.Round)
 		return
 	}
 
@@ -702,51 +726,39 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 	}
 }
 
-// nextRoundIsNotSupported returns true if the next round upgrades to a protocol version
-// which is not supported.
-// In case of an error, it returns false
-func (s *Service) nextRoundIsNotSupported(nextRound basics.Round) bool {
+// roundIsNotSupported returns whether, according to the ledger's
+// latest block, nextRound requires upgrading to a protocol version
+// that the current node does not support.
+func (s *Service) roundIsNotSupported(nextRound basics.Round) bool {
 	lastLedgerRound := s.ledger.LastRound()
-	supportedUpgrades := config.Consensus
-
-	block, err := s.ledger.Block(lastLedgerRound)
+	bh, err := s.ledger.BlockHdr(lastLedgerRound)
 	if err != nil {
-		s.log.Errorf("nextRoundIsNotSupported: could not retrieve last block (%d) from the ledger : %v", lastLedgerRound, err)
+		s.log.Errorf("roundIsNotSupported: could not retrieve last block (%d) from the ledger : %v", lastLedgerRound, err)
 		return false
 	}
-	bh := block.BlockHeader
+
+	if bh.NextProtocolSwitchOn == 0 {
+		return false
+	}
+
+	supportedUpgrades := config.Consensus
 	_, isSupportedUpgrade := supportedUpgrades[bh.NextProtocol]
-
-	if bh.NextProtocolSwitchOn > 0 && !isSupportedUpgrade {
-		// Save the last supported round number
-		// It is not necessary to check bh.NextProtocolSwitchOn < s.lastSupportedRound
-		// since there cannot be two protocol updates scheduled.
-		s.lastSupportedRound = bh.NextProtocolSwitchOn - 1
-
-		if nextRound >= bh.NextProtocolSwitchOn {
-			return true
-		}
+	if isSupportedUpgrade {
+		return false
 	}
-	return false
-}
 
-// handleUnSupportedRound receives a verified unsupported round: nextUnsupportedRound
-// Checks if the last supported round was added to the ledger, and stops the service.
-func (s *Service) handleUnsupportedRound(nextUnsupportedRound basics.Round) {
-
-	s.log.Infof("Catchup Service: round %d is not approved. Service will stop once the last supported round is added to the ledger.",
-		nextUnsupportedRound)
-
-	// If the next round is an unsupported round, need to stop the
-	// catchup service. Should stop after the last supported round
-	// is added to the ledger.
-	lr := s.ledger.LastRound()
-	// Ledger writes are in order. >= guarantees last supported round is added to the ledger.
-	if lr >= s.lastSupportedRound {
-		s.log.Infof("Catchup Service: finished catching up to the last supported round %d. The subsequent rounds are not supported. Service is stopping.",
-			lr)
-		s.cancel()
+	if nextRound < bh.NextProtocolSwitchOn {
+		return false
 	}
+
+	s.log.Infof("Catchup Service: round %d is not approved, requires upgrading to unsupported %s in round %d. Service will stop once the last supported round is added to the ledger.", nextRound, bh.NextProtocol, bh.NextProtocolSwitchOn)
+
+	s.onceUnsupportedRound.Do(func() {
+		s.workers.Add(1)
+		go s.unsupportedRoundMonitor()
+	})
+
+	return true
 }
 
 func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch bool) *peerSelector {
