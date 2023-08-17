@@ -84,22 +84,6 @@ type externalDemuxSignals struct {
 	CurrentRound         round
 }
 
-// TimeoutType taggs the type of a timeout, to distinguish simultaneous timeouts
-// of different types.
-type TimeoutType int8
-
-const (
-	// TimeoutDeadline annotates timeout events in the agreement protocol (e.g.,
-	// for receiving a block).
-	TimeoutDeadline TimeoutType = iota
-	// TimeoutFastRecovery annotates the fast recovery timeout in the agreement
-	// protocol.
-	TimeoutFastRecovery
-	// TimeoutFilter annotates the filter step timeout event in the agreement
-	// protocol.
-	TimeoutFilter
-)
-
 // MakeService creates a new Agreement Service instance given a set of Parameters.
 //
 // Call Start to start execution and Shutdown to finish execution.
