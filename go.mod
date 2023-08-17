@@ -29,7 +29,7 @@ require (
 	github.com/karalabe/usb v0.0.2
 	github.com/labstack/echo/v4 v4.9.1
 	github.com/libp2p/go-libp2p v0.29.1
-	github.com/mattn/go-sqlite3 v1.10.0
+	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/miekg/dns v1.1.55
 	github.com/multiformats/go-multiaddr v0.10.1
 	github.com/multiformats/go-multiaddr-dns v0.3.1

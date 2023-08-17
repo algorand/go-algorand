@@ -784,6 +784,10 @@ func (m *mockedLedger) Wait(r basics.Round) chan struct{} {
 	return m.chans[r]
 }
 
+func (m *mockedLedger) WaitMem(r basics.Round) chan struct{} {
+	return m.Wait(r)
+}
+
 func (m *mockedLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
