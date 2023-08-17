@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -3136,6 +3137,23 @@ func feedBlocksUntilRound(t *testing.T, l *Ledger, prevBlk bookkeeping.Block, ta
 	return prevBlk
 }
 
+func listFiles(root string) (string, error) {
+	var files []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(files, "\n"), nil
+}
+
 func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	proto := config.Consensus[protocol.ConsensusFuture]
@@ -3185,6 +3203,13 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	catchpointAccessor, accessorProgress := initializeTestCatchupAccessor(t, l, uint64(len(initkeys)))
 
 	relCatchpointFilePath := filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(basics.Round(cfg.CatchpointInterval)))
+
+	fs, _ := listFiles(trackerdb.CatchpointDirName)
+	fmt.Println("Relative ls: ", fs)
+	abs, _ := filepath.Abs(trackerdb.CatchpointDirName)
+	afs, _ := listFiles(abs)
+	fmt.Println("Absolute ls: ", afs)
+
 	catchpointData := readCatchpointFile(t, relCatchpointFilePath)
 
 	err = catchpointAccessor.ProcessStagingBalances(context.Background(), catchpointData[1].headerName, catchpointData[1].data, &accessorProgress)
