@@ -25,8 +25,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// TimeoutType taggs the type of a timeout, to distinguish simultaneous timeouts
-// of different types.
+// TimeoutType defines the type of a Deadline, to distinguish between different timeouts
+// set by agreement.
 type TimeoutType int8
 
 const (
