@@ -843,6 +843,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		With("accountsCount", dataInfo.TotalAccounts).
 		With("kvsCount", dataInfo.TotalKVs).
 		With("fileSize", fileInfo.Size()).
+		With("filepath", relCatchpointFilePath).
 		With("catchpointLabel", label).
 		Infof("Catchpoint file was created")
 
