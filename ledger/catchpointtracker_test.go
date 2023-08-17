@@ -380,9 +380,17 @@ func TestCatchpointCommitErrorHandling(t *testing.T) {
 	conf := config.GetDefaultLocal()
 
 	conf.Archival = true
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
+
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
