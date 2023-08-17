@@ -151,8 +151,7 @@ func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
 
 func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 	defer func() {
-		p.Deadline.Duration = deadlineTimeout
-		p.Deadline.Type = TimeoutDeadline
+		p.Deadline = Deadline{Duration: deadlineTimeout, Type: TimeoutDeadline}
 	}()
 
 	e := r.dispatch(*p, proposalFrozenEvent{}, proposalMachinePeriod, p.Round, p.Period, 0)
@@ -220,8 +219,7 @@ func (p *player) issueNextVote(r routerHandle) []action {
 
 	_, upper := p.Step.nextVoteRanges()
 	p.Napping = false
-	p.Deadline.Duration = upper
-	p.Deadline.Type = TimeoutDeadline
+	p.Deadline = Deadline{Duration: upper, Type: TimeoutDeadline}
 	return actions
 }
 
@@ -335,8 +333,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.Deadline.Duration = FilterTimeout(target, source.Proto)
-	p.Deadline.Type = TimeoutFilter
+	p.Deadline = Deadline{Duration: FilterTimeout(target, source.Proto), Type: TimeoutFilter}
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -384,14 +381,11 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 
 	switch source := source.(type) {
 	case roundInterruptionEvent:
-		p.Deadline.Duration = FilterTimeout(0, source.Proto.Version)
-		p.Deadline.Type = TimeoutFilter
+		p.Deadline = Deadline{Duration: FilterTimeout(0, source.Proto.Version), Type: TimeoutFilter}
 	case thresholdEvent:
-		p.Deadline.Duration = FilterTimeout(0, source.Proto)
-		p.Deadline.Type = TimeoutFilter
+		p.Deadline = Deadline{Duration: FilterTimeout(0, source.Proto), Type: TimeoutFilter}
 	case filterableMessageEvent:
-		p.Deadline.Duration = FilterTimeout(0, source.Proto.Version)
-		p.Deadline.Type = TimeoutFilter
+		p.Deadline = Deadline{Duration: FilterTimeout(0, source.Proto.Version), Type: TimeoutFilter}
 	}
 
 	// update tracer state to match player
