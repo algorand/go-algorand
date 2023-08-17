@@ -100,6 +100,11 @@ type Service struct {
 	// This channel signals periodSync to attempt catchup immediately. This allows us to start fetching rounds from
 	// the network as soon as disableSyncRound is modified.
 	syncNow chan struct{}
+
+	// onceUnsupportedRound ensures that we start just one
+	// unsupportedRoundMonitor goroutine, after detecting
+	// an unsupported block.
+	onceUnsupportedRound sync.Once
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -139,8 +144,6 @@ func (s *Service) Start() {
 	s.InitialSyncDone = make(chan struct{})
 	s.workers.Add(1)
 	go s.periodicSync()
-	s.workers.Add(1)
-	go s.unsupportedRoundMonitor()
 }
 
 // Stop informs the catchup service that it should stop, and waits for it to stop (when periodicSync() exits)
@@ -749,6 +752,12 @@ func (s *Service) roundIsNotSupported(nextRound basics.Round) bool {
 	}
 
 	s.log.Infof("Catchup Service: round %d is not approved, requires upgrading to unsupported %s in round %d. Service will stop once the last supported round is added to the ledger.", nextRound, bh.NextProtocol, bh.NextProtocolSwitchOn)
+
+	s.onceUnsupportedRound.Do(func() {
+		s.workers.Add(1)
+		go s.unsupportedRoundMonitor()
+	})
+
 	return true
 }
 
