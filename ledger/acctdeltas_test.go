@@ -1462,10 +1462,13 @@ type mockEntryRef struct {
 	id int64
 }
 
-func (ref mockEntryRef) AccountRefMarker()       {}
-func (ref mockEntryRef) OnlineAccountRefMarker() {}
-func (ref mockEntryRef) ResourceRefMarker()      {}
-func (ref mockEntryRef) CreatableRefMarker()     {}
+func (mockEntryRef) AccountRefMarker() {}
+func (ref mockEntryRef) String() string {
+	return fmt.Sprintf("mockEntryRef(%d)", ref.id)
+}
+func (mockEntryRef) OnlineAccountRefMarker() {}
+func (mockEntryRef) ResourceRefMarker()      {}
+func (mockEntryRef) CreatableRefMarker()     {}
 
 func makeMockAccountWriter() (m mockAccountWriter) {
 	m.accounts = make(map[trackerdb.AccountRef]ledgercore.AccountData)

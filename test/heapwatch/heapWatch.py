@@ -165,6 +165,12 @@ class algodDir:
     def get_goroutine_snapshot(self, snapshot_name=None, outdir=None):
         return self.get_pprof_snapshot('goroutine', snapshot_name, outdir)
 
+    def get_mutex_snapshot(self, snapshot_name=None, outdir=None):
+        return self.get_pprof_snapshot('mutex', snapshot_name, outdir)
+
+    def get_block_snapshot(self, snapshot_name=None, outdir=None):
+        return self.get_pprof_snapshot('block', snapshot_name, outdir)
+
     def get_cpu_profile(self, snapshot_name=None, outdir=None, seconds=90):
         seconds = int(seconds)
         return self.get_pprof_snapshot('profile?seconds={}'.format(seconds), snapshot_name, outdir, timeout=seconds+20)
@@ -352,6 +358,12 @@ class watcher:
         if self.args.goroutine:
             for ad in self.they:
                 ad.get_goroutine_snapshot(snapshot_name, outdir=self.args.out)
+        if self.args.mutex:
+            for ad in self.they:
+                ad.get_mutex_snapshot(snapshot_name, outdir=self.args.out)
+        if self.args.block:
+            for ad in self.they:
+                ad.get_block_snapshot(snapshot_name, outdir=self.args.out)
         if self.args.metrics:
             threads = []
             for ad in self.they:
@@ -427,7 +439,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('data_dirs', nargs='*', help='list paths to algorand datadirs to grab heap profile from')
     ap.add_argument('--no-heap', dest='heaps', default=True, action='store_false', help='disable heap snapshot capture')
+    ap.add_argument('--block', default=False, action='store_true', help='also capture goroutines block profile')
     ap.add_argument('--goroutine', default=False, action='store_true', help='also capture goroutine profile')
+    ap.add_argument('--mutex', default=False, action='store_true', help='also capture mutex profile')
     ap.add_argument('--metrics', default=False, action='store_true', help='also capture /metrics counts')
     ap.add_argument('--blockinfo', default=False, action='store_true', help='also capture block header info')
     ap.add_argument('--period', default=None, help='seconds between automatically capturing')
@@ -451,6 +465,12 @@ def main():
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    if args.block:
+        print('Ensure algod is compiled with `runtime.SetBlockProfileRate()` set')
+
+    if args.mutex:
+        print('Ensure algod is compiled with `runtime.SetMutexProfileFraction()` set')
 
     for nre in args.tf_name_re:
         try:
