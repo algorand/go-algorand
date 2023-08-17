@@ -293,10 +293,8 @@ func (p *player) updateDynamicLambdaTimings(r routerHandle, ver protocol.Consens
 	if re.Vote.validatedAt != 0 {
 		p.lowestCredentialArrivals = append(p.lowestCredentialArrivals, re.Vote.validatedAt)
 	}
-	p.resizeLowestCredentialArrivals(ver)
-}
 
-func (p *player) resizeLowestCredentialArrivals(ver protocol.ConsensusVersion) {
+	// trim history to the last proto.DynamicFilterCredentialArrivalHistory samples.
 	proto := config.Consensus[ver]
 	if len(p.payloadArrivals) > proto.DynamicFilterCredentialArrivalHistory {
 		p.payloadArrivals = p.payloadArrivals[len(p.payloadArrivals)-proto.DynamicFilterCredentialArrivalHistory:]
@@ -310,27 +308,25 @@ func (p *player) resizeLowestCredentialArrivals(ver protocol.ConsensusVersion) {
 func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *tracer) time.Duration {
 
 	proto := config.Consensus[ver]
-
-	if !proto.DynamicFilterTimeout || p.Period != 0 {
+	if proto.DynamicFilterCredentialArrivalHistory <= 0 || p.Period != 0 {
 		// Either dynamic lambda is disabled, or we're not in period 0 and
 		// therefore, can't use dynamic lambda
 		return FilterTimeout(p.Period, ver)
 	}
 
-	var dynamicDelay time.Duration
 	defaultDelay := FilterTimeout(0, ver)
 	if proto.DynamicFilterCredentialArrivalHistory <= 0 {
 		// we don't keep any history, use the default
 		dynamicDelay = defaultDelay
 	} else if proto.DynamicFilterCredentialArrivalHistory > len(p.payloadArrivals) {
 		// not enough samples, use the default
-		dynamicDelay = defaultDelay
-	} else {
-		sortedArrivals := make([]time.Duration, len(p.lowestCredentialArrivals))
-		copy(sortedArrivals[:], p.lowestCredentialArrivals[:])
-		sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
-		dynamicDelay = sortedArrivals[proto.DynamicFilterCredentialArrivalHistoryIdx] + 50*time.Millisecond
+		return defaultDelay
 	}
+
+	sortedArrivals := make([]time.Duration, len(p.lowestCredentialArrivals))
+	copy(sortedArrivals[:], p.lowestCredentialArrivals[:])
+	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
+	dynamicDelay := sortedArrivals[proto.DynamicFilterCredentialArrivalHistoryIdx] + proto.DynamicFilterGraceTime
 
 	// Make sure the dynamic delay is not too small or too large
 	if dynamicDelay < proto.DynamicFilterTimeoutLowerBound {
@@ -339,8 +335,10 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 		}
 		dynamicDelay = proto.DynamicFilterTimeoutLowerBound
 	} else if dynamicDelay > defaultDelay {
+		if tracer != nil {
+			tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v. It's higher than the default %v\n", dynamicDelay, p.Round, p.Period, defaultDelay)
+		}
 		dynamicDelay = defaultDelay
-		tracer.log.Warnf("Calculated dynamic delay = %v for round %v, period %v. It's higher than the default %v\n", dynamicDelay, p.Round, p.Period, defaultDelay)
 	} else if tracer != nil {
 		tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v.\n", dynamicDelay, p.Round, p.Period)
 	}
