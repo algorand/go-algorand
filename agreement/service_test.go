@@ -1002,7 +1002,7 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 	}
 
 	cfg := config.Consensus[protocol.ConsensusFuture]
-	if !cfg.DynamicFilterTimeout {
+	if cfg.DynamicFilterCredentialArrivalHistory <= 0 {
 		return
 	}
 

@@ -517,21 +517,24 @@ type ConsensusParams struct {
 	// by state proofs to use the same method (rather than excluding stake from the top N stakeholders as before).
 	ExcludeExpiredCirculation bool
 
-	// DynamicFilterTimeout specifies whether the timeout for the filter step
-	// should be determined dynamically, at run-time.
-	DynamicFilterTimeout bool
+	// DynamicFilterCredentialArrivalHistory specifies the number of past
+	// credential arrivals that are measured to determine the next filter
+	// timeout. If DynamicFilterCredentialArrivalHistory <= 0, then the dynamic
+	// timeout feature is off and the filter step timeout is calculated using
+	// the static configuration.
+	DynamicFilterCredentialArrivalHistory int
 
 	// DynamicFilterTimeoutLowerBound specifies a minimal duration that the
 	// filter timeout must meet.
 	DynamicFilterTimeoutLowerBound time.Duration
 
-	// DynamicFilterCredentialArrivalHistory specifies the number of past credential arrivals
-	// that are measured to determine the next filter timeout.
-	DynamicFilterCredentialArrivalHistory int
-
 	// DynamicFilterCredentialArrivalHistoryIdx specified which sample to use out of a sorted
 	// DynamicFilterCredentialArrivalHistory-sized array of time samples.
 	DynamicFilterCredentialArrivalHistoryIdx int
+
+	// DynamicFilterGraceTime is additional extention to the dynamic filter time atop the
+	// one calculated based on the history of credential arrivals.
+	DynamicFilterGraceTime time.Duration
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1379,12 +1382,12 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
 
-	vFuture.DynamicFilterTimeout = true
-	vFuture.DynamicFilterTimeoutLowerBound = time.Second
 	// history window of 40, so we have enough statistics to calculate the 95th
 	// percentile, which is the timestamp at index 37 in the history array.
 	vFuture.DynamicFilterCredentialArrivalHistory = 40
 	vFuture.DynamicFilterCredentialArrivalHistoryIdx = 37
+	vFuture.DynamicFilterTimeoutLowerBound = time.Second
+	vFuture.DynamicFilterGraceTime = 50 * time.Millisecond
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
