@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -290,7 +291,9 @@ func (p *player) updateDynamicLambdaTimings(r routerHandle, ver protocol.Consens
 	// look up the validatedAt time of the winning proposal-vote
 	re := readLowestEvent{T: readLowestVote, Round: p.Round, Period: p.Period}
 	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
+
 	if re.Vote.validatedAt != 0 {
+		fmt.Println("update dynamic lambda")
 		p.lowestCredentialArrivals = append(p.lowestCredentialArrivals, re.Vote.validatedAt)
 	}
 
@@ -306,7 +309,6 @@ func (p *player) updateDynamicLambdaTimings(r routerHandle, ver protocol.Consens
 
 // calculateFilterTimeout chooses the appropriate filter timeout.
 func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *tracer) time.Duration {
-
 	proto := config.Consensus[ver]
 	if proto.DynamicFilterCredentialArrivalHistory <= 0 || p.Period != 0 {
 		// Either dynamic lambda is disabled, or we're not in period 0 and

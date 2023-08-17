@@ -93,6 +93,17 @@ func (c *testingClock) TimeoutAt(d time.Duration, timeoutType TimeoutType) <-cha
 	return ta.ch
 }
 
+func (c *testingClock) when(timeoutType TimeoutType) (time.Duration, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	ta, ok := c.TA[timeoutType]
+	if !ok {
+		return time.Duration(0), fmt.Errorf("no timeout of type, %v", timeoutType)
+	}
+	return ta.delta, nil
+}
+
 func (c *testingClock) Encode() []byte {
 	return nil
 }
@@ -884,18 +895,18 @@ func sanityCheck(startRound round, numRounds round, ledgers []Ledger) {
 	}
 }
 
-func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel) {
-	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger)
+func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel) (filterTimeouts []time.Duration) {
+	return simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger)
 }
 
-func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) {
+func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) (filterTimeouts []time.Duration) {
 	ledgerFactory := func(data map[basics.Address]basics.AccountData) Ledger {
 		return makeTestLedgerWithConsensusVersion(data, consensusVersion)
 	}
-	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
+	return simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
 }
 
-func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) {
+func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) []time.Duration {
 	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, traceLevel, ledgerFactory)
 	startRound := baseLedger.NextRound()
 	defer cleanupFn()
@@ -907,9 +918,16 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	activityMonitor.waitForQuiet()
 	zeroes := expectNewPeriod(clocks, 0)
 
+	filterTimeouts := make([][]time.Duration, numNodes, numNodes)
+
 	// run round with round-specific consensus version first (since fix in #1896)
 	zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
 	for j := 1; j < numRounds; j++ {
+		for srvIdx, clock := range clocks {
+			delta, err := clock.(*testingClock).when(TimeoutFilter)
+			require.NoError(t, err)
+			filterTimeouts[srvIdx] = append(filterTimeouts[srvIdx], delta)
+		}
 		zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
 	}
 
@@ -918,6 +936,19 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	}
 
 	sanityCheck(startRound, round(numRounds), ledgers)
+
+	if len(clocks) == 0 {
+		return nil
+	}
+
+	for rnd := 0; rnd < numRounds-1; rnd++ {
+		delta := filterTimeouts[0][rnd]
+		for srvIdx := range clocks {
+			require.Equal(t, delta, filterTimeouts[srvIdx][rnd])
+		}
+	}
+
+	return filterTimeouts[0]
 }
 
 func TestAgreementSynchronous1(t *testing.T) {
@@ -1003,6 +1034,9 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 
 	cfg := config.Consensus[protocol.ConsensusFuture]
 	if cfg.DynamicFilterCredentialArrivalHistory <= 0 {
+		return
+	}
+	if !cfg.DynamicFilterTimeout {
 		return
 	}
 
