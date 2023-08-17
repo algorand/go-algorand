@@ -126,8 +126,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 			delta := time.Duration(e.RandomEntropy % uint64(upper-lower))
 
 			p.Napping = true
-			p.Deadline.Duration = lower + delta
-			p.Deadline.Type = TimeoutDeadline
+			p.Deadline = Deadline{Duration: lower + delta, Type: TimeoutDeadline}
 			return actions
 		}
 	case roundInterruptionEvent:
