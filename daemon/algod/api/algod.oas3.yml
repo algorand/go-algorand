@@ -2292,8 +2292,7 @@
         "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
         "properties": {
           "approval-program-hash": {
-            "description": "Hash digest of the approval program executed in transaction.",
-            "format": "bytes",
+            "description": "Base32 encoded SHA512_256 hash digest of the approval program executed in transaction.",
             "type": "string"
           },
           "approval-program-trace": {
@@ -2304,8 +2303,7 @@
             "type": "array"
           },
           "clear-state-program-hash": {
-            "description": "Hash digest of the clear state program executed in transaction.",
-            "format": "bytes",
+            "description": "Base32 encoded SHA512_256 hash digest of the clear state program executed in transaction.",
             "type": "string"
           },
           "clear-state-program-trace": {
@@ -2323,8 +2321,7 @@
             "type": "array"
           },
           "logic-sig-hash": {
-            "description": "Hash digest of the logic sig executed in transaction.",
-            "format": "bytes",
+            "description": "Base32 encoded SHA512_256 hash digest of the logic sig executed in transaction.",
             "type": "string"
           },
           "logic-sig-trace": {

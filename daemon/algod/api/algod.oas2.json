@@ -4142,9 +4142,8 @@
           }
         },
         "approval-program-hash": {
-          "description": "Hash digest of the approval program executed in transaction.",
-          "type": "string",
-          "format": "bytes"
+          "description": "Base32 encoded SHA512_256 hash digest of the approval program executed in transaction.",
+          "type": "string"
         },
         "clear-state-program-trace": {
           "description": "Program trace that contains a trace of opcode effects in a clear state program.",
@@ -4154,9 +4153,8 @@
           }
         },
         "clear-state-program-hash": {
-          "description": "Hash digest of the clear state program executed in transaction.",
-          "type": "string",
-          "format": "bytes"
+          "description": "Base32 encoded SHA512_256 hash digest of the clear state program executed in transaction.",
+          "type": "string"
         },
         "logic-sig-trace": {
           "description": "Program trace that contains a trace of opcode effects in a logic sig.",
@@ -4166,9 +4164,8 @@
           }
         },
         "logic-sig-hash": {
-          "description": "Hash digest of the logic sig executed in transaction.",
-          "type": "string",
-          "format": "bytes"
+          "description": "Base32 encoded SHA512_256 hash digest of the logic sig executed in transaction.",
+          "type": "string"
         },
         "inner-trace": {
           "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",

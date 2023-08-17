@@ -102,6 +102,14 @@ func addrOrNil(addr basics.Address) *string {
 	return &ret
 }
 
+func digestOrNil(digest crypto.Digest) *string {
+	if digest.IsZero() {
+		return nil
+	}
+	ret := digest.String()
+	return &ret
+}
+
 // omitEmpty defines a handy impl for all comparable types to convert from default value to nil ptr
 func omitEmpty[T comparable](val T) *T {
 	var defaultVal T
@@ -429,14 +437,6 @@ func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.Sim
 		}
 	}
 	return &modelProgramTrace
-}
-
-func digestOrNil(digest crypto.Digest) *string {
-	if digest.IsZero() {
-		return nil
-	}
-	digestStringFromBytes := string(digest.ToSlice())
-	return &digestStringFromBytes
 }
 
 func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTransactionExecTrace {
