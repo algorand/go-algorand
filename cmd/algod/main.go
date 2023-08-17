@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/algorand/go-algorand/util"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -27,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/gofrs/flock"
 
 	"github.com/algorand/go-algorand/config"
@@ -39,8 +37,11 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	toolsnet "github.com/algorand/go-algorand/tools/network"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
+
+	"github.com/algorand/go-deadlock"
 )
 
 var dataDirectory = flag.String("d", "", "Root Algorand daemon data path")
@@ -234,15 +235,19 @@ func run() int {
 		Genesis:  genesis,
 	}
 
-	// Generate a REST API token if one was not provided
-	apiToken, wroteNewToken, err := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
+	if !cfg.DisableAPIAuth {
+		// Generate a REST API token if one was not provided
+		apiToken, wroteNewToken, err2 := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
 
-	if err != nil {
-		log.Fatalf("API token error: %v", err)
-	}
+		if err2 != nil {
+			log.Fatalf("API token error: %v", err2)
+		}
 
-	if wroteNewToken {
-		fmt.Printf("No REST API Token found. Generated token: %s\n", apiToken)
+		if wroteNewToken {
+			fmt.Printf("No REST API Token found. Generated token: %s\n", apiToken)
+		}
+	} else {
+		fmt.Printf("Public (non-admin) API authentication disabled. %s not generated\n", tokens.AlgodTokenFilename)
 	}
 
 	// Generate a admin REST API token if one was not provided

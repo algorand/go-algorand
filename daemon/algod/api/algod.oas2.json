@@ -4183,6 +4183,11 @@
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
         },
+        "approval-program-hash": {
+          "description": "SHA512_256 hash digest of the approval program executed in transaction.",
+          "type": "string",
+          "format": "byte"
+        },
         "clear-state-program-trace": {
           "description": "Program trace that contains a trace of opcode effects in a clear state program.",
           "type": "array",
@@ -4190,12 +4195,22 @@
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
         },
+        "clear-state-program-hash": {
+          "description": "SHA512_256 hash digest of the clear state program executed in transaction.",
+          "type": "string",
+          "format": "byte"
+        },
         "logic-sig-trace": {
           "description": "Program trace that contains a trace of opcode effects in a logic sig.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
+        },
+        "logic-sig-hash": {
+          "description": "SHA512_256 hash digest of the logic sig executed in transaction.",
+          "type": "string",
+          "format": "byte"
         },
         "inner-trace": {
           "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",

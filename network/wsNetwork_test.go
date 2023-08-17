@@ -4328,7 +4328,6 @@ func TestUpdatePhonebookAddressesPersistentPeers(t *testing.T) {
 
 		// Check that entries are in fact in phonebook less any duplicates
 		dedupedRelayDomains := removeDuplicateStr(relayDomains, false)
-		require.Equal(t, 0, len(relayDomains)-len(dedupedRelayDomains))
 
 		relayPeers := nw.GetPeers(PeersPhonebookRelays)
 		require.Equal(t, len(dedupedRelayDomains)+len(persistentPeers), len(relayPeers))
@@ -4410,30 +4409,6 @@ type MergeTestDNSInputs struct {
 
 func mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen() *rapid.Generator[*MergeTestDNSInputs] {
 
-	algorand0Base := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
-		//unused/satisfying rapid expectation
-		rapid.String().Draw(t, "algorand0Base")
-		// <network>.algorand.network?backup=<network>.algorand0.network&
-		//		dedup=<name>.(algorand-<network>|n-<network>.algorand0).network
-		return &MergeTestDNSInputs{
-			dedupExpStr:           "((algorand-<network>|n-<network>.algorand0).network)",
-			primaryDomainSuffix:   "algorand-<network>.network",
-			secondaryDomainSuffix: "n-<network>.algorand0.network",
-		}
-	})
-
-	algorand0Inverse := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
-		//unused/satisfying rapid expectation
-		rapid.String().Draw(t, "algorand0Inverse")
-		// <network>.algorand0.network?backup=<network>.algorand.network&
-		//		dedup=<name>.(algorand-<network>|n-<network>.algorand0).network
-		return &MergeTestDNSInputs{
-			dedupExpStr:           "((algorand-<network>|n-<network>.algorand0).network)",
-			primaryDomainSuffix:   "n-<network>.algorand0.network",
-			secondaryDomainSuffix: "algorand-<network>.network",
-		}
-	})
-
 	algorandNetBase := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
 		//unused/satisfying rapid expectation
 		rapid.String().Draw(t, "algorandNetBase")
@@ -4458,7 +4433,7 @@ func mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen() *rapid.
 		}
 	})
 
-	return rapid.OneOf(algorand0Base, algorand0Inverse, algorandNetBase, algorandNetInverse)
+	return rapid.OneOf(algorandNetBase, algorandNetInverse)
 }
 
 func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
@@ -4516,7 +4491,7 @@ func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
 
 		network := supportedNetworkGen().Draw(t1, "network")
 		primaryDomainSuffix := strings.Replace(
-			`n-<network>.algorand0.network`, "<network>", network, -1)
+			`algorand-<network>.net`, "<network>", network, -1)
 
 		// Generate hosts for a primary network domain
 		primaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(primaryDomainSuffix, nil)

@@ -29,6 +29,7 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -98,6 +99,14 @@ func addrOrNil(addr basics.Address) *string {
 		return nil
 	}
 	ret := addr.String()
+	return &ret
+}
+
+func digestOrNil(digest crypto.Digest) *[]byte {
+	if digest.IsZero() {
+		return nil
+	}
+	ret := digest.ToSlice()
 	return &ret
 }
 
@@ -432,12 +441,16 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 	}
 	return &model.SimulationTransactionExecTrace{
 		ApprovalProgramTrace:   sliceOrNil(convertSlice(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
+		ApprovalProgramHash:    digestOrNil(txnTrace.ApprovalProgramHash),
 		ClearStateProgramTrace: sliceOrNil(convertSlice(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
+		ClearStateProgramHash:  digestOrNil(txnTrace.ClearStateProgramHash),
 		LogicSigTrace:          sliceOrNil(convertSlice(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
+		LogicSigHash:           digestOrNil(txnTrace.LogicSigHash),
 		InnerTrace: sliceOrNil(convertSlice(txnTrace.InnerTraces,
 			func(trace simulation.TransactionTrace) model.SimulationTransactionExecTrace {
 				return *convertTxnTrace(&trace)
-			})),
+			}),
+		),
 	}
 }
 
