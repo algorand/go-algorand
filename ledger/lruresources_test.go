@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"encoding/binary"
+	"strings"
 	"testing"
 	"time"
 
@@ -180,8 +181,10 @@ type lruResourcesTestLogger struct {
 	warnMsgCount  int
 }
 
-func (cl *lruResourcesTestLogger) Warnf(s string, args ...interface{}) {
-	cl.warnMsgCount++
+func (cl *lruResourcesTestLogger) Infof(s string, args ...interface{}) {
+	if strings.Contains(s, "exceed the warning threshold of") {
+		cl.warnMsgCount++
+	}
 }
 
 func TestLRUResourcesPendingWritesWarning(t *testing.T) {

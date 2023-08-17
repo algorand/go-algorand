@@ -665,6 +665,27 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	return network.OutgoingMessage{Action: network.Ignore}
 }
 
+var errBackLogFullLocal = errors.New("backlog full")
+
+// LocalTransaction is a special shortcut handler for local transactions and intended to be used
+// for performance testing and debugging purposes only since it does not have congestion control
+// and duplicates detection.
+func (handler *TxHandler) LocalTransaction(txgroup []transactions.SignedTxn) error {
+	select {
+	case handler.backlogQueue <- &txBacklogMsg{
+		rawmsg:                &network.IncomingMessage{},
+		unverifiedTxGroup:     txgroup,
+		rawmsgDataHash:        nil,
+		unverifiedTxGroupHash: nil,
+		capguard:              nil,
+	}:
+	default:
+		transactionMessagesDroppedFromBacklog.Inc(nil)
+		return errBackLogFullLocal
+	}
+	return nil
+}
+
 // checkAlreadyCommitted test to see if the given transaction ( in the txBacklogMsg ) was already committed, and
 // whether it would qualify as a candidate for the transaction pool.
 //
