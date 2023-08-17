@@ -102,7 +102,8 @@ type Local struct {
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
 	BlockDBDir string `version[29]:""`
-	// CatchpointDir is an optional directory to store catchpoint files.
+	// CatchpointDir is an optional directory to store catchpoint files,
+	// except for the in-progress temp file, which will use the HotDataDir and is not separately configurable.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
 	CatchpointDir string `version[29]:""`

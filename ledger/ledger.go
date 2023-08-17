@@ -243,7 +243,7 @@ func (l *Ledger) reloadLedger() error {
 	l.accts.initialize(l.cfg)
 	l.acctsOnline.initialize(l.cfg)
 
-	l.catchpoint.initialize(l.cfg, l.dirsAndPrefix.ResolvedGenesisDirs.CatchpointGenesisDir)
+	l.catchpoint.initialize(l.cfg, l.dirsAndPrefix)
 
 	err = l.trackers.initialize(l, trackers, l.cfg)
 	if err != nil {
