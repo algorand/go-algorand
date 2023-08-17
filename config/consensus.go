@@ -532,7 +532,7 @@ type ConsensusParams struct {
 	// DynamicFilterCredentialArrivalHistory-sized array of time samples.
 	DynamicFilterCredentialArrivalHistoryIdx int
 
-	// DynamicFilterGraceTime is additional extention to the dynamic filter time atop the
+	// DynamicFilterGraceTime is additional extension to the dynamic filter time atop the
 	// one calculated based on the history of credential arrivals.
 	DynamicFilterGraceTime time.Duration
 }
