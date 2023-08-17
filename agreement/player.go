@@ -320,30 +320,37 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 		dynamicDelay = defaultDelay
 	} else if proto.DynamicFilterCredentialArrivalHistory > len(p.payloadArrivals) {
 		// not enough samples, use the default
-		return defaultDelay
+		return defaultTimeout
 	}
 
 	sortedArrivals := make([]time.Duration, len(p.lowestCredentialArrivals))
 	copy(sortedArrivals[:], p.lowestCredentialArrivals[:])
 	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
-	dynamicDelay := sortedArrivals[proto.DynamicFilterCredentialArrivalHistoryIdx] + proto.DynamicFilterGraceTime
+	dynamicTimeout := sortedArrivals[proto.DynamicFilterTimeoutCredentialArrivalHistoryIdx] + proto.DynamicFilterTimeoutGraceInterval
 
 	// Make sure the dynamic delay is not too small or too large
-	if dynamicDelay < proto.DynamicFilterTimeoutLowerBound {
+	if dynamicTimeout < proto.DynamicFilterTimeoutLowerBound {
 		if tracer != nil {
-			tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v. It's too low, setting to %v\n", dynamicDelay, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
+			tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v. It's too low, setting to %v\n", dynamicTimeout, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
 		}
-		dynamicDelay = proto.DynamicFilterTimeoutLowerBound
-	} else if dynamicDelay > defaultDelay {
+		dynamicTimeout = proto.DynamicFilterTimeoutLowerBound
+	} else if dynamicTimeout > defaultTimeout {
 		if tracer != nil {
-			tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v. It's higher than the default %v\n", dynamicDelay, p.Round, p.Period, defaultDelay)
+			tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v. It too high, so using the default %v\n", dynamicTimeout, p.Round, p.Period, defaultTimeout)
 		}
-		dynamicDelay = defaultDelay
+		dynamicTimeout = defaultTimeout
 	} else if tracer != nil {
-		tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v.\n", dynamicDelay, p.Round, p.Period)
+		tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v.\n", dynamicTimeout, p.Round, p.Period)
 	}
 
-	return dynamicDelay
+	if !proto.DynamicFilterTimeout {
+		// If the dynamic filter is disabled, return the default filter timeout
+		// (after logging what the timeout would have been, if this feature were
+		// enabled).
+		return defaultTimeout
+	}
+
+	return dynamicTimeout
 }
 
 func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action {
