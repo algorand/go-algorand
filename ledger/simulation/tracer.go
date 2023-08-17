@@ -424,47 +424,48 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 	groupIndex := cx.GroupIndex()
 
-	// Before Program, activated for logic sig, happens before txn group execution
-	// we should create trace object for this txn result
-	if cx.RunMode() == logic.ModeSig {
+	switch cx.RunMode() {
+	case logic.ModeSig:
+		// Before Program, activated for logic sig, happens before txn group execution
+		// we should create trace object for this txn result
 		if tracer.result.ReturnTrace() {
 			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &TransactionTrace{}
 			traceRef := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 			traceRef.programTraceRef = &traceRef.LogicSigTrace
 			traceRef.LogicSigHash = crypto.Hash(cx.GetProgram())
 		}
-	}
+	case logic.ModeApp:
+		if tracer.result.ReturnTrace() {
+			txnTraceStackElem := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+			currentTxn := cx.EvalParams.TxnGroup[groupIndex]
+			programHash := crypto.Hash(cx.GetProgram())
 
-	if cx.RunMode() == logic.ModeApp && tracer.result.ReturnTrace() {
-		txnTraceStackElem := tracer.execTraceStack[len(tracer.execTraceStack)-1]
-		currentTxn := cx.EvalParams.TxnGroup[groupIndex]
-		programHash := crypto.Hash(cx.GetProgram())
-
-		switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
-		case transactions.ClearStateOC:
-			txnTraceStackElem.ClearStateProgramHash = programHash
-		default:
-			txnTraceStackElem.ApprovalProgramHash = programHash
-		}
-	}
-
-	if cx.RunMode() == logic.ModeApp && tracer.unnamedResourcePolicy != nil {
-		globalSharing := false
-		for iter := cx; iter != nil; iter = iter.GetCaller() {
-			if iter.ProgramVersion() >= 9 {
-				// If some caller in the app callstack allows global sharing, global resources can
-				// be accessed here. Otherwise the top-level txn must declare all resources locally.
-				globalSharing = true
-				break
+			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
+			case transactions.ClearStateOC:
+				txnTraceStackElem.ClearStateProgramHash = programHash
+			default:
+				txnTraceStackElem.ApprovalProgramHash = programHash
 			}
 		}
-		tracer.unnamedResourcePolicy.globalSharing = globalSharing
-		tracer.unnamedResourcePolicy.programVersion = cx.ProgramVersion()
-		if tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget == nil {
-			s := cx.SurplusReadBudget
-			tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
+
+		if tracer.unnamedResourcePolicy != nil {
+			globalSharing := false
+			for iter := cx; iter != nil; iter = iter.GetCaller() {
+				if iter.ProgramVersion() >= 9 {
+					// If some caller in the app callstack allows global sharing, global resources can
+					// be accessed here. Otherwise the top-level txn must declare all resources locally.
+					globalSharing = true
+					break
+				}
+			}
+			tracer.unnamedResourcePolicy.globalSharing = globalSharing
+			tracer.unnamedResourcePolicy.programVersion = cx.ProgramVersion()
+			if tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget == nil {
+				s := cx.SurplusReadBudget
+				tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
+			}
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
 		}
-		cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
 	}
 }
 
