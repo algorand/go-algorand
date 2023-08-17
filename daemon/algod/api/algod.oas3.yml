@@ -2094,10 +2094,6 @@
             "description": "A boolean option for opting in execution trace features simulation endpoint.",
             "type": "boolean"
           },
-          "program-hash": {
-            "description": "A boolean option enabling returning hash digests of executed program byte codes during simulation.",
-            "type": "boolean"
-          },
           "scratch-change": {
             "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
             "type": "boolean"

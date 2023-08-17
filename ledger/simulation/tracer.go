@@ -404,14 +404,11 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &TransactionTrace{}
 			traceRef := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 			traceRef.programTraceRef = &traceRef.LogicSigTrace
-		}
-		if tracer.result.ReturnProgramHash() {
-			traceRef := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 			traceRef.LogicSigHash = crypto.Hash(cx.GetProgram())
 		}
 	}
 
-	if cx.RunMode() == logic.ModeApp && tracer.result.ReturnProgramHash() {
+	if cx.RunMode() == logic.ModeApp && tracer.result.ReturnTrace() {
 		txnTraceStackElem := tracer.execTraceStack[len(tracer.execTraceStack)-1]
 		currentTxn := cx.EvalParams.TxnGroup[groupIndex]
 		programHash := crypto.Hash(cx.GetProgram())

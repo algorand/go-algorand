@@ -127,10 +127,9 @@ func (eo ResultEvalOverrides) LogicEvalConstants() logic.EvalConstants {
 type ExecTraceConfig struct {
 	_struct struct{} `codec:",omitempty"`
 
-	Enable      bool `codec:"enable"`
-	Stack       bool `codec:"stack-change"`
-	Scratch     bool `codec:"scratch-change"`
-	ProgramHash bool `codec:"program-hash"`
+	Enable  bool `codec:"enable"`
+	Stack   bool `codec:"stack-change"`
+	Scratch bool `codec:"scratch-change"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -153,9 +152,6 @@ func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
 
 // ReturnScratchChange tells if the simulation runs with scratch-change enabled.
 func (r Result) ReturnScratchChange() bool { return r.TraceConfig.Scratch }
-
-// ReturnProgramHash tells if the simulation returns hash of program bytecode executed.
-func (r Result) ReturnProgramHash() bool { return r.TraceConfig.ProgramHash }
 
 // validateSimulateRequest first checks relation between request and config variables, including developerAPI:
 // if `developerAPI` provided is turned off, this method would:

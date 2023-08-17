@@ -1029,6 +1029,9 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 			ApprovalProgram:   expensiveAppSource,
 			ClearStateProgram: "#pragma version 6\nint 1",
 		})
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		approvalHash := crypto.Hash(op.Program)
 		// Expensive 700 repetition of int 1 and pop total cost 1404
 		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
@@ -1084,12 +1087,14 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 								AppBudgetConsumed: 4,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: firstTrace,
+									ApprovalProgramHash:  approvalHash,
 								},
 							},
 							{
 								AppBudgetConsumed: 1404,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: secondTrace,
+									ApprovalProgramHash:  approvalHash,
 								},
 							},
 						},
@@ -2017,8 +2022,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 					{signedCreateTxn, signedPaymentTxn, signedCallsMaxDepth},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable:      true,
-					ProgramHash: true,
+					Enable: true,
 				},
 			},
 			developerAPI: true,
@@ -2130,8 +2134,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 					},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable:      true,
-					ProgramHash: true,
+					Enable: true,
 				},
 			},
 		}
@@ -2199,6 +2202,7 @@ func TestLogicSigPCandStackExposure(t *testing.T) {
 `, 2) + `int 1`)
 	require.NoError(t, err)
 	program := logic.Program(op.Program)
+	logicHash := crypto.Hash(program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -2217,6 +2221,10 @@ func TestLogicSigPCandStackExposure(t *testing.T) {
 byte "hello"; log; int 1`,
 			ClearStateProgram: "#pragma version 8\n int 1",
 		})
+
+		op, err = logic.AssembleString(appCallTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		approvalHash := crypto.Hash(op.Program)
 
 		txntest.Group(&payTxn, &appCallTxn)
 
@@ -2274,6 +2282,7 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues(1),
 										},
 									},
+									ApprovalProgramHash: approvalHash,
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
 										{
 											PC: 1,
@@ -2309,6 +2318,7 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues(1),
 										},
 									},
+									LogicSigHash: logicHash,
 								},
 							},
 						},
@@ -2364,9 +2374,8 @@ byte "hello"; log; int 1`,
 					{signedPayTxn, signedAppCallTxn},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable:      true,
-					Stack:       true,
-					ProgramHash: true,
+					Enable: true,
+					Stack:  true,
 				},
 			},
 			developerAPI:  true,
@@ -2375,9 +2384,8 @@ byte "hello"; log; int 1`,
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable:      true,
-					Stack:       true,
-					ProgramHash: true,
+					Enable: true,
+					Stack:  true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2489,8 +2497,7 @@ byte "hello"; log; int 0`,
 					{signedPayTxn, signedAppCallTxn},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable:      true,
-					ProgramHash: true,
+					Enable: true,
 				},
 			},
 			developerAPI:  true,
@@ -2499,8 +2506,7 @@ byte "hello"; log; int 0`,
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
 				TraceConfig: simulation.ExecTraceConfig{
-					Enable:      true,
-					ProgramHash: true,
+					Enable: true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2599,6 +2605,10 @@ func TestFrameBuryDigStackTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	op, err := logic.AssembleString(FrameBuryDigProgram)
+	require.NoError(t, err)
+	hash := crypto.Hash(op.Program)
+
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
 
@@ -2685,6 +2695,7 @@ int 1`,
 											StackPopCount: 1,
 										},
 									},
+									ApprovalProgramHash: hash,
 								},
 							},
 							{
@@ -2921,6 +2932,7 @@ int 1`,
 											StackPopCount: 1,
 										},
 									},
+									ApprovalProgramHash: hash,
 								},
 							},
 						},

@@ -710,9 +710,6 @@ type SimulateTraceConfig struct {
 	// Enable A boolean option for opting in execution trace features simulation endpoint.
 	Enable *bool `json:"enable,omitempty"`
 
-	// ProgramHash A boolean option enabling returning hash digests of executed program byte codes during simulation.
-	ProgramHash *bool `json:"program-hash,omitempty"`
-
 	// ScratchChange A boolean option enabling returning scratch slot changes together with execution trace during simulation.
 	ScratchChange *bool `json:"scratch-change,omitempty"`
 

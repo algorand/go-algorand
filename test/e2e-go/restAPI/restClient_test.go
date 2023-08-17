@@ -2302,9 +2302,8 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	// The first simulation should not pass, for simulation return PC in config has not been activated
 	execTraceConfig := simulation.ExecTraceConfig{
-		Enable:      true,
-		Stack:       true,
-		ProgramHash: true,
+		Enable: true,
+		Stack:  true,
 	}
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
@@ -3092,6 +3091,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 		 int 1`)
 	a.NoError(err)
 	approval := ops.Program
+	approvalHash := crypto.Hash(approval)
 	ops, err = logic.AssembleString("#pragma version 8\nint 1")
 	a.NoError(err)
 	clearState := ops.Program
@@ -3217,6 +3217,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 			},
 			{Pc: 16},
 		},
+		ApprovalProgramHash: toPtr(string(approvalHash.ToSlice())),
 	}
 	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
 }
