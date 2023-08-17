@@ -1226,7 +1226,10 @@ const globalV9TestProgram = globalV8TestProgram + `
 `
 
 const globalV10TestProgram = globalV9TestProgram + `
-// No new globals in v10
+global AssetCreateMinBalance
+global AssetOptInMinBalance
+>=
+&&
 `
 
 func TestGlobal(t *testing.T) {
@@ -1249,7 +1252,7 @@ func TestGlobal(t *testing.T) {
 		7:  {CallerApplicationAddress, globalV7TestProgram},
 		8:  {CallerApplicationAddress, globalV8TestProgram},
 		9:  {CallerApplicationAddress, globalV9TestProgram},
-		10: {CallerApplicationAddress, globalV10TestProgram},
+		10: {AssetOptInMinBalance, globalV10TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
