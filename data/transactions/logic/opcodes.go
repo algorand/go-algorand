@@ -299,8 +299,8 @@ func (d OpDetails) field(name string, group *FieldGroup) OpDetails {
 
 func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
 	if len(costs) != len(group.Names) {
-		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs %d != %d names",
-			immediate, group.Name, len(costs), costs, len(group.Names)))
+		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs != %d names",
+			immediate, group.Name, len(costs), len(group.Names)))
 	}
 	fieldCosts := make([]linearCost, len(costs))
 	for i, cost := range costs {
@@ -311,8 +311,8 @@ func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
 
 func costByFieldAndLength(immediate string, group *FieldGroup, costs []linearCost) OpDetails {
 	if len(costs) != len(group.Names) {
-		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs %d != %d names",
-			immediate, group.Name, len(costs), costs, len(group.Names)))
+		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs != %d names",
+			immediate, group.Name, len(costs), len(group.Names)))
 	}
 	opd := immediates(immediate)
 	opd.FullCost = linearCost{} // zero FullCost is what causes eval to look deeper
