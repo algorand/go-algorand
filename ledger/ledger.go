@@ -129,14 +129,13 @@ func OpenLedger[T string | DirsAndPrefix](
 
 	var dirs DirsAndPrefix
 	// if only a string path has been supplied for the ledger, use it for all resources
-	// and use the default filename prefix
+	// don't set the prefix, only tests provide a string for the path, and they manage paths explicitly
 	if s, ok := any(dbPathPrefix).(string); ok {
 		dirs.HotGenesisDir = s
 		dirs.TrackerGenesisDir = s
 		dirs.ColdGenesisDir = s
 		dirs.BlockGenesisDir = s
 		dirs.CatchpointGenesisDir = s
-		dirs.DBFilePrefix = config.LedgerFilenamePrefix
 	} else if ds, ok := any(dbPathPrefix).(DirsAndPrefix); ok {
 		// if a DirsAndPrefix has been supplied, use it.
 		dirs = ds
