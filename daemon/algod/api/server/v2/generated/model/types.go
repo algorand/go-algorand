@@ -325,15 +325,15 @@ type ApplicationParams struct {
 	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
 }
 
-// ApplicationStateOperation An operation against an application global/local/box key-value pair.
+// ApplicationStateOperation An operation against an application's global/local/box state.
 type ApplicationStateOperation struct {
-	// Account Address of the account of the local state being written to.
+	// Account For local state changes, the address of the account associated with the local state.
 	Account *string `json:"account,omitempty"`
 
 	// AppStateType Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.
 	AppStateType string `json:"app-state-type"`
 
-	// Key The key of the global/local/box state get written to.
+	// Key The key (name) of the global/local/box state.
 	Key []byte `json:"key"`
 
 	// NewValue Represents an AVM value.
@@ -734,7 +734,7 @@ type SimulateTraceConfig struct {
 	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
 	StackChange *bool `json:"stack-change,omitempty"`
 
-	// StateChange A boolean option enabling returning application state changes together with execution trace during simulation.
+	// StateChange A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.
 	StateChange *bool `json:"state-change,omitempty"`
 }
 

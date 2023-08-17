@@ -3686,7 +3686,7 @@
           "type": "boolean"
         },
         "state-change": {
-          "description": "A boolean option enabling returning application state changes together with execution trace during simulation.",
+          "description": "A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.",
           "type": "boolean"
         }
       }
@@ -4097,7 +4097,7 @@
       }
     },
     "ApplicationStateOperation": {
-      "description": "An operation against an application global/local/box key-value pair.",
+      "description": "An operation against an application's global/local/box state.",
       "required": [
         "operation",
         "app-state-type",
@@ -4113,7 +4113,7 @@
           "type": "string"
         },
         "key": {
-          "description": "The key of the global/local/box state get written to.",
+          "description": "The key (name) of the global/local/box state.",
           "type": "string",
           "format": "byte"
         },
@@ -4121,7 +4121,7 @@
           "$ref": "#/definitions/AvmValue"
         },
         "account": {
-          "description": "Address of the account of the local state being written to.",
+          "description": "For local state changes, the address of the account associated with the local state.",
           "type": "string",
           "x-algorand-format": "Address"
         }
