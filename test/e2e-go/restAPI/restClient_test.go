@@ -3020,25 +3020,25 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
 		ApprovalProgramTrace: recursiveLongOpcodeTrace(futureAppID, 0),
-		ApprovalProgramHash:  toPtr(approvalHash.String()),
+		ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
 		InnerTrace: &[]model.SimulationTransactionExecTrace{
 			{
 				ApprovalProgramTrace: &creationOpcodeTrace,
-				ApprovalProgramHash:  toPtr(approvalHash.String()),
+				ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
 			},
 			{},
 			{
 				ApprovalProgramTrace: recursiveLongOpcodeTrace(futureAppID+3, 1),
-				ApprovalProgramHash:  toPtr(approvalHash.String()),
+				ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
 				InnerTrace: &[]model.SimulationTransactionExecTrace{
 					{
 						ApprovalProgramTrace: &creationOpcodeTrace,
-						ApprovalProgramHash:  toPtr(approvalHash.String()),
+						ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
 					},
 					{},
 					{
 						ApprovalProgramTrace: finalDepthTrace(futureAppID+6, 2),
-						ApprovalProgramHash:  toPtr(approvalHash.String()),
+						ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
 					},
 				},
 			},
@@ -3217,7 +3217,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 			},
 			{Pc: 16},
 		},
-		ApprovalProgramHash: toPtr(approvalHash.String()),
+		ApprovalProgramHash: toPtr(approvalHash.ToSlice()),
 	}
 	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
 }

@@ -102,11 +102,11 @@ func addrOrNil(addr basics.Address) *string {
 	return &ret
 }
 
-func digestOrNil(digest crypto.Digest) *string {
+func digestOrNil(digest crypto.Digest) *[]byte {
 	if digest.IsZero() {
 		return nil
 	}
-	ret := digest.String()
+	ret := digest.ToSlice()
 	return &ret
 }
 
