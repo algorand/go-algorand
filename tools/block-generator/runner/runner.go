@@ -48,7 +48,7 @@ func init() {
 	RunnerCmd.Flags().Uint64VarP(&runnerArgs.MetricsPort, "metrics-port", "p", 9999, "Port to start the metrics server at.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.PostgresConnectionString, "postgres-connection-string", "c", "", "Postgres connection string.")
 	RunnerCmd.Flags().DurationVarP(&runnerArgs.RunDuration, "test-duration", "d", 5*time.Minute, "Duration to use for each scenario.")
-	RunnerCmd.Flags().StringVarP(&runnerArgs.ReportDirectory, "report-directory", "r", "", "Location to place test reports.")
+	RunnerCmd.Flags().StringVarP(&runnerArgs.BaseReportDirectory, "report-directory", "r", "", "Location to place test reports. If --times is used, this is the prefix for multiple report directories.")
 	RunnerCmd.Flags().BoolVarP(&runnerArgs.RunnerVerbose, "verbose", "v", false, "If set the runner will print debugging information from the generator and ledger.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.ConduitLogLevel, "conduit-log-level", "l", "error", "LogLevel to use when starting Conduit. [panic, fatal, error, warn, info, debug, trace]")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.CPUProfilePath, "cpuprofile", "", "", "Path where Conduit writes its CPU profile.")
@@ -57,6 +57,7 @@ func init() {
 	RunnerCmd.Flags().BoolVarP(&runnerArgs.KeepDataDir, "keep-data-dir", "k", false, "If set the validator will not delete the data directory after tests complete.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.GenesisFile, "genesis-file", "f", "", "file path to the genesis associated with the db snapshot")
 	RunnerCmd.Flags().BoolVarP(&runnerArgs.ResetDB, "reset-db", "", false, "If set database will be deleted before running tests.")
+	RunnerCmd.Flags().Uint64VarP(&runnerArgs.Times, "times", "t", 1, "Number of times to run the scenario(s).")
 
 	RunnerCmd.MarkFlagRequired("scenario")
 	RunnerCmd.MarkFlagRequired("conduit-binary")

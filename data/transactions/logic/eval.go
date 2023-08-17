@@ -48,9 +48,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// evalMaxVersion is the max version we can interpret and run
-const evalMaxVersion = LogicVersion
-
 // The constants below control opcode evaluation and MAY NOT be changed without
 // gating them by version. Old programs need to retain their old behavior.
 
@@ -181,13 +178,13 @@ func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 	return
 }
 
-// ComputeMinAvmVersion calculates the minimum safe AVM version that may be
+// computeMinAvmVersion calculates the minimum safe AVM version that may be
 // used by a transaction in this group. It is important to prevent
 // newly-introduced transaction fields from breaking assumptions made by older
 // versions of the AVM. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
 // anywhere in the transaction group, or the group will be rejected.
-func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
+func computeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -208,7 +205,7 @@ func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 // only exposes things that consensus has already agreed upon, so it is
 // "stateless" for signature purposes.
 type LedgerForSignature interface {
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 // NoHeaderLedger is intended for debugging situations in which it is reasonable
@@ -216,8 +213,8 @@ type LedgerForSignature interface {
 type NoHeaderLedger struct {
 }
 
-// BlockHdrCached always errors
-func (NoHeaderLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
+// BlockHdr always errors
+func (NoHeaderLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, fmt.Errorf("no block header access")
 }
 
@@ -227,7 +224,6 @@ type LedgerForLogic interface {
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	PrevTimestamp() int64
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
@@ -251,10 +247,21 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// boxRef is the "hydrated" form of a BoxRef - it has the actual app id, not an index
-type boxRef struct {
-	app  basics.AppIndex
-	name string
+// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual app id, not an index
+type BoxRef struct {
+	App  basics.AppIndex
+	Name string
+}
+
+// UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
+// This should only be used during simulation or debugging.
+type UnnamedResourcePolicy interface {
+	AvailableAccount(addr basics.Address) bool
+	AvailableAsset(asset basics.AssetIndex) bool
+	AvailableApp(app basics.AppIndex) bool
+	AllowsHolding(addr basics.Address, asset basics.AssetIndex) bool
+	AllowsLocal(addr basics.Address, app basics.AppIndex) bool
+	AvailableBox(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) bool
 }
 
 // EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
@@ -264,6 +271,10 @@ type EvalConstants struct {
 
 	// MaxLogCalls is the limit of total log calls during a program execution
 	MaxLogCalls uint64
+
+	// UnnamedResources, if provided, allows resources to be used without being named according to
+	// this policy.
+	UnnamedResources UnnamedResourcePolicy
 }
 
 // RuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
@@ -276,6 +287,8 @@ func RuntimeEvalConstants() EvalConstants {
 
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
+	runMode RunMode
+
 	Proto *config.ConsensusParams
 
 	Trace *strings.Builder
@@ -292,10 +305,9 @@ type EvalParams struct {
 	// optional tracer
 	Tracer EvalTracer
 
-	// MinAvmVersion is the minimum allowed AVM version of this program.
-	// The program must reject if its version is less than this version. If
-	// MinAvmVersion is nil, we will compute it ourselves
-	MinAvmVersion *uint64
+	// minAvmVersion is the minimum allowed AVM version of a program to be
+	// evaluated in TxnGroup.
+	minAvmVersion uint64
 
 	// Amount "overpaid" by the transactions of the group.  Often 0.  When
 	// positive, it can be spent by inner transactions.  Shared across a group's
@@ -307,6 +319,9 @@ type EvalParams struct {
 
 	// Total pool of app call budget in a group transaction (nil before budget pooling enabled)
 	PooledApplicationBudget *int
+
+	// Total pool of logicsig budget in a group transaction (nil before lsig pooling enabled)
+	PooledLogicSigBudget *int
 
 	// Total allowable inner txns in a group transaction (nil before inner pooling enabled)
 	pooledAllowedInners *int
@@ -324,6 +339,11 @@ type EvalParams struct {
 
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
+
+	// SurplusReadBudget is the number of bytes from the IO budget that were not used for reading
+	// in boxes before evaluation began. In other words, the txn group could have read in
+	// SurplusReadBudget more box bytes, but did not.
+	SurplusReadBudget uint64
 
 	EvalConstants
 
@@ -346,6 +366,21 @@ func (ep *EvalParams) GetCaller() *EvalContext {
 	return ep.caller
 }
 
+// GetIOBudget returns the current IO budget for the group.
+func (ep *EvalParams) GetIOBudget() uint64 {
+	return ep.ioBudget
+}
+
+// SetIOBudget sets the IO budget for the group.
+func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
+	ep.ioBudget = ioBudget
+}
+
+// BoxDirtyBytes returns the number of bytes that have been written to boxes
+func (ep *EvalParams) BoxDirtyBytes() uint64 {
+	return ep.available.dirtyBytes
+}
+
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
 	copy := make([]transactions.SignedTxnWithAD, len(txgroup))
 	for i := range txgroup {
@@ -355,8 +390,36 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 	return copy
 }
 
-// NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
-func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
+// NewSigEvalParams creates an EvalParams to be used while evaluating a group's logicsigs
+func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
+	lsigs := 0
+	for _, tx := range txgroup {
+		if !tx.Lsig.Blank() {
+			lsigs++
+		}
+	}
+
+	var pooledLogicBudget *int
+	if lsigs > 0 { // don't allocate if no lsigs
+		if proto.EnableLogicSigCostPooling {
+			pooledLogicBudget = new(int)
+			*pooledLogicBudget = len(txgroup) * int(proto.LogicSigMaxCost)
+		}
+	}
+
+	withADs := transactions.WrapSignedTxnsWithAD(txgroup)
+	return &EvalParams{
+		runMode:              ModeSig,
+		TxnGroup:             withADs,
+		Proto:                proto,
+		minAvmVersion:        computeMinAvmVersion(withADs),
+		SigLedger:            ls,
+		PooledLogicSigBudget: pooledLogicBudget,
+	}
+}
+
+// NewAppEvalParams creates an EvalParams to use while evaluating a top-level txgroup.
+func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
@@ -364,49 +427,38 @@ func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Consens
 		}
 	}
 
-	// Make a simpler EvalParams that is good enough to evaluate LogicSigs.
-	if apps == 0 {
-		return &EvalParams{
-			TxnGroup: txgroup,
-			Proto:    proto,
-			Specials: specials,
+	var pooledApplicationBudget *int
+	var pooledAllowedInners *int
+	var credit *uint64
+
+	if apps > 0 { // none of these allocations needed if no apps
+		credit = new(uint64)
+		*credit = feeCredit(txgroup, proto.MinTxnFee)
+
+		if proto.EnableAppCostPooling {
+			pooledApplicationBudget = new(int)
+			*pooledApplicationBudget = apps * proto.MaxAppProgramCost
+		}
+
+		if proto.EnableInnerTransactionPooling {
+			pooledAllowedInners = new(int)
+			*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
 		}
 	}
 
-	minAvmVersion := ComputeMinAvmVersion(txgroup)
-
-	var pooledApplicationBudget *int
-	var pooledAllowedInners *int
-
-	credit := feeCredit(txgroup, proto.MinTxnFee)
-
-	if proto.EnableAppCostPooling {
-		pooledApplicationBudget = new(int)
-		*pooledApplicationBudget = apps * proto.MaxAppProgramCost
-	}
-
-	if proto.EnableInnerTransactionPooling {
-		pooledAllowedInners = new(int)
-		*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
-	}
-
 	ep := &EvalParams{
+		runMode:                 ModeApp,
 		TxnGroup:                copyWithClearAD(txgroup),
 		Proto:                   proto,
 		Specials:                specials,
 		pastScratch:             make([]*scratchSpace, len(txgroup)),
-		MinAvmVersion:           &minAvmVersion,
-		FeeCredit:               &credit,
+		minAvmVersion:           computeMinAvmVersion(txgroup),
+		FeeCredit:               credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 		EvalConstants:           RuntimeEvalConstants(),
 	}
-	// resources are computed after ep is constructed because app addresses are
-	// calculated there, and we'd like to use the caching mechanism built into
-	// the EvalParams. Perhaps we can make the computation even lazier, so it is
-	// only computed if needed.
-	ep.available = ep.computeAvailability()
 	return ep
 }
 
@@ -417,7 +469,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedApps:     make(map[basics.AppIndex]struct{}),
 		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
 		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
-		boxes:          make(map[boxRef]bool),
+		boxes:          make(map[BoxRef]bool),
 	}
 	for i := range ep.TxnGroup {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
@@ -444,12 +496,12 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minAvmVersion := ComputeMinAvmVersion(txg)
+	minAvmVersion := computeMinAvmVersion(txg)
 	// Can't happen currently, since earliest inner callable version is higher
 	// than any minimum imposed otherwise.  But is correct to inherit a stronger
 	// restriction from above, in case of future restriction.
-	if minAvmVersion < *caller.MinAvmVersion {
-		minAvmVersion = *caller.MinAvmVersion
+	if minAvmVersion < caller.minAvmVersion {
+		minAvmVersion = caller.minAvmVersion
 	}
 
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
@@ -463,6 +515,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 	}
 
 	ep := &EvalParams{
+		runMode:                 ModeApp,
 		Proto:                   caller.Proto,
 		Trace:                   caller.Trace,
 		TxnGroup:                txg,
@@ -471,7 +524,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
 		Tracer:                  caller.Tracer,
-		MinAvmVersion:           &minAvmVersion,
+		minAvmVersion:           minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
@@ -534,19 +587,25 @@ func (ep *EvalParams) log() logging.Logger {
 // package. For example, after a acfg transaction is processed, the AD created
 // by the acfg is added to the EvalParams this way.
 func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
-	if ep.available == nil {
-		// This is a simplified ep. It won't be used for app evaluation, and
-		// shares the TxnGroup memory with the caller.  Don't touch anything!
-		return
+	if ep.runMode == ModeSig {
+		// We should not be touching a signature mode EvalParams as it shares
+		// memory with its caller.  LogicSigs are supposed to be stateless!
+		panic("RecordAD called in signature mode")
 	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
+		if ep.available == nil { // here, and below, we may need to make `ep.available`
+			ep.available = ep.computeAvailability()
+		}
 		if ep.available.createdAsas == nil {
 			ep.available.createdAsas = make(map[basics.AssetIndex]struct{})
 		}
 		ep.available.createdAsas[aid] = struct{}{}
 	}
 	if aid := ad.ApplicationID; aid != 0 {
+		if ep.available == nil {
+			ep.available = ep.computeAvailability()
+		}
 		if ep.available.createdApps == nil {
 			ep.available.createdApps = make(map[basics.AppIndex]struct{})
 		}
@@ -626,6 +685,11 @@ func (cx *EvalContext) GroupIndex() int {
 // RunMode returns the evaluation context's mode (signature or application)
 func (cx *EvalContext) RunMode() RunMode {
 	return cx.runMode
+}
+
+// ProgramVersion returns the AVM version of the current program.
+func (cx *EvalContext) ProgramVersion() uint64 {
+	return cx.version
 }
 
 // PC returns the program counter of the current application being evaluated
@@ -927,6 +991,9 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
 	}
+	if params.runMode != ModeApp {
+		return false, nil, fmt.Errorf("attempt to evaluate a contract with %s mode EvalParams", params.runMode)
+	}
 	cx := EvalContext{
 		EvalParams: params,
 		runMode:    ModeApp,
@@ -941,12 +1008,16 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		}
 	}
 
+	if cx.EvalParams.available == nil {
+		cx.EvalParams.available = cx.EvalParams.computeAvailability()
+	}
+
 	// If this is a creation...
 	if cx.txn.Txn.ApplicationID == 0 {
 		// make any "0 index" box refs available now that we have an appID.
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
-				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = false
+				cx.EvalParams.available.boxes[BoxRef{cx.appID, string(br.Name)}] = false
 			}
 		}
 		// and add the appID to `createdApps`
@@ -968,12 +1039,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 		used := uint64(0)
 		for br := range cx.available.boxes {
-			if len(br.name) == 0 {
+			if len(br.Name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
 				// may have been used to add I/O budget.
 				continue
 			}
-			box, ok, err := cx.Ledger.GetBox(br.app, br.name)
+			box, ok, err := cx.Ledger.GetBox(br.App, br.Name)
 			if err != nil {
 				return false, nil, err
 			}
@@ -993,6 +1064,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 		}
 		cx.readBudgetChecked = true
+		cx.SurplusReadBudget = cx.ioBudget - used
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
@@ -1029,6 +1101,9 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 	if params.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in signature eval")
+	}
+	if params.runMode != ModeSig {
+		return false, nil, fmt.Errorf("attempt to evaluate a signature with %s mode EvalParams", params.runMode)
 	}
 	cx := EvalContext{
 		EvalParams: params,
@@ -1071,20 +1146,15 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 		}
 	}()
 
-	// Avoid returning for any reason until after cx.debugState is setup. That
-	// require cx to be minimally setup, too.
-
-	version, vlen, verr := versionCheck(program, cx.EvalParams)
-	// defer verr check until after cx and debugState is setup
-
-	cx.version = version
-	cx.pc = vlen
 	// 16 is chosen to avoid growth for small programs, and so that repeated
 	// doublings lead to a number just a bit above 1000, the max stack height.
 	cx.Stack = make([]stackValue, 0, 16)
-	cx.program = program
 	cx.txn.EvalDelta.GlobalDelta = basics.StateDelta{}
 	cx.txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
+
+	// We get the error here, but defer reporting so that the Tracer can be
+	// called with an basically initialized cx.
+	verr := cx.begin(program)
 
 	if cx.Tracer != nil {
 		cx.Tracer.BeforeProgram(cx)
@@ -1184,19 +1254,15 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 		return errLogicSigNotSupported
 	}
 
-	version, vlen, err := versionCheck(program, params)
-	if err != nil {
-		return err
-	}
-
 	var cx EvalContext
-	cx.version = version
-	cx.pc = vlen
 	cx.EvalParams = params
 	cx.runMode = mode
-	cx.program = program
 	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
 	cx.instructionStarts = make([]bool, len(program)+1)
+
+	if err := cx.begin(program); err != nil {
+		return err
+	}
 
 	maxCost := cx.remainingBudget()
 	staticCost := 0
@@ -1207,7 +1273,7 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 			return fmt.Errorf("pc=%3d %w", cx.pc, err)
 		}
 		staticCost += stepCost
-		if version < backBranchEnabledVersion && staticCost > maxCost {
+		if cx.version < backBranchEnabledVersion && staticCost > maxCost {
 			return fmt.Errorf("pc=%3d static cost budget of %d exceeded", cx.pc, maxCost)
 		}
 		if cx.pc <= prevpc {
@@ -1221,26 +1287,31 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	return nil
 }
 
-func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
+func (cx *EvalContext) begin(program []byte) error {
+	cx.program = program
+
 	version, vlen, err := transactions.ProgramVersion(program)
 	if err != nil {
-		return 0, 0, err
+		return err
 	}
-	if version > evalMaxVersion {
-		return 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, evalMaxVersion)
+	if version > LogicVersion {
+		return fmt.Errorf("program version %d greater than max supported version %d", version, LogicVersion)
 	}
-	if version > params.Proto.LogicSigVersion {
-		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+	if version > cx.Proto.LogicSigVersion {
+		return fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.Proto.LogicSigVersion)
+	}
+	if err != nil {
+		return err
 	}
 
-	if params.MinAvmVersion == nil {
-		minVersion := ComputeMinAvmVersion(params.TxnGroup)
-		params.MinAvmVersion = &minVersion
+	cx.version = version
+	cx.pc = vlen
+
+	if cx.version < cx.EvalParams.minAvmVersion {
+		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d",
+			cx.minAvmVersion, cx.version)
 	}
-	if version < *params.MinAvmVersion {
-		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinAvmVersion, version)
-	}
-	return version, vlen, nil
+	return nil
 }
 
 func opCompat(expected, got avmType) bool {
@@ -1280,6 +1351,9 @@ func (cx *EvalContext) AppID() basics.AppIndex {
 
 func (cx *EvalContext) remainingBudget() int {
 	if cx.runMode == ModeSig {
+		if cx.PooledLogicSigBudget != nil {
+			return *cx.PooledLogicSigBudget
+		}
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
 
@@ -1347,23 +1421,22 @@ func (cx *EvalContext) step() error {
 			return fmt.Errorf("%3d %s returned 0 cost", cx.pc, spec.Name)
 		}
 	}
-	cx.cost += opcost
-	if cx.PooledApplicationBudget != nil {
-		*cx.PooledApplicationBudget -= opcost
-	}
 
-	if cx.remainingBudget() < 0 {
-		// We're not going to execute the instruction, so give the cost back.
-		// This only matters if this is an inner ClearState - the caller should
-		// not be over debited. (Normally, failure causes total txtree failure.)
-		cx.cost -= opcost
-		if cx.PooledApplicationBudget != nil {
-			*cx.PooledApplicationBudget += opcost
-		}
+	if opcost > cx.remainingBudget() {
 		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
 			cx.pc, spec.Name, cx.cost)
 	}
 
+	cx.cost += opcost
+	// At most one of these pooled budgets will be non-nil, perhaps we could
+	// collapse to one variable, but there are some complex callers trying to
+	// set up big budgets for debugging runs that would have to be looked at.
+	switch {
+	case cx.PooledApplicationBudget != nil:
+		*cx.PooledApplicationBudget -= opcost
+	case cx.PooledLogicSigBudget != nil:
+		*cx.PooledLogicSigBudget -= opcost
+	}
 	preheight := len(cx.Stack)
 	err := spec.op(cx)
 
@@ -1889,11 +1962,11 @@ func opShiftRight(cx *EvalContext) error {
 
 func opSqrt(cx *EvalContext) error {
 	/*
-		        It would not be safe to use math.Sqrt, because we would have to
-			convert our u64 to an f64, but f64 cannot represent all u64s exactly.
+		It would not be safe to use math.Sqrt, because we would have to convert our
+		u64 to an f64, but f64 cannot represent all u64s exactly.
 
-			This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
-			http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
+		This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
+		http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
 	*/
 
 	last := len(cx.Stack) - 1
@@ -2916,7 +2989,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		if err != nil {
 			return sv, err
 		}
-		hdr, err := cx.SigLedger.BlockHdrCached(rnd)
+		hdr, err := cx.SigLedger.BlockHdr(rnd)
 		if err != nil {
 			return sv, err
 		}
@@ -3031,9 +3104,9 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case ClearStateProgram:
 		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
 	case NumApprovalProgramPages:
-		sv.Uint = uint64(divCeil(len(txn.ApprovalProgram), maxStringSize))
+		sv.Uint = uint64(basics.DivCeil(len(txn.ApprovalProgram), maxStringSize))
 	case ApprovalProgramPages:
-		pageCount := divCeil(len(txn.ApprovalProgram), maxStringSize)
+		pageCount := basics.DivCeil(len(txn.ApprovalProgram), maxStringSize)
 		if arrayFieldIdx >= uint64(pageCount) {
 			return sv, fmt.Errorf("invalid ApprovalProgramPages index %d", arrayFieldIdx)
 		}
@@ -3044,9 +3117,9 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		}
 		sv.Bytes = txn.ApprovalProgram[first:last]
 	case NumClearStateProgramPages:
-		sv.Uint = uint64(divCeil(len(txn.ClearStateProgram), maxStringSize))
+		sv.Uint = uint64(basics.DivCeil(len(txn.ClearStateProgram), maxStringSize))
 	case ClearStateProgramPages:
-		pageCount := divCeil(len(txn.ClearStateProgram), maxStringSize)
+		pageCount := basics.DivCeil(len(txn.ClearStateProgram), maxStringSize)
 		if arrayFieldIdx >= uint64(pageCount) {
 			return sv, fmt.Errorf("invalid ClearStateProgramPages index %d", arrayFieldIdx)
 		}
@@ -3491,8 +3564,8 @@ func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
 	return uint64(ts), nil
 }
 
-// getApplicationAddress memoizes app.Address() across a tx group's evaluation
-func (ep *EvalParams) getApplicationAddress(app basics.AppIndex) basics.Address {
+// GetApplicationAddress memoizes app.Address() across a tx group's evaluation
+func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address {
 	/* Do not instantiate the cache here, that would mask a programming error.
 	   The cache must be instantiated at EvalParams construction time, so that
 	   proper sharing with inner EvalParams can work. */
@@ -3536,7 +3609,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case CurrentApplicationID:
 		sv.Uint = uint64(cx.appID)
 	case CurrentApplicationAddress:
-		addr := cx.getApplicationAddress(cx.appID)
+		addr := cx.GetApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
@@ -3552,7 +3625,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		}
 	case CallerApplicationAddress:
 		if cx.caller != nil {
-			addr := cx.caller.getApplicationAddress(cx.caller.appID)
+			addr := cx.caller.GetApplicationAddress(cx.caller.appID)
 			sv.Bytes = addr[:]
 		} else {
 			sv.Bytes = zeroAddress[:]
@@ -4320,7 +4393,7 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
 		for appID := range cx.available.createdApps {
-			createdAddress := cx.getApplicationAddress(appID)
+			createdAddress := cx.GetApplicationAddress(appID)
 			if addr == createdAddress {
 				return true
 			}
@@ -4337,14 +4410,18 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	// Allow an address for an app that was provided in the foreign apps array.
 	if cx.version >= appAddressAvailableVersion {
 		for _, appID := range cx.txn.Txn.ForeignApps {
-			foreignAddress := cx.getApplicationAddress(appID)
+			foreignAddress := cx.GetApplicationAddress(appID)
 			if addr == foreignAddress {
 				return true
 			}
 		}
 	}
 
-	if cx.getApplicationAddress(cx.appID) == addr {
+	if cx.GetApplicationAddress(cx.appID) == addr {
+		return true
+	}
+
+	if cx.UnnamedResources != nil && cx.UnnamedResources.AvailableAccount(addr) {
 		return true
 	}
 
@@ -5108,8 +5185,8 @@ func authorizedSender(cx *EvalContext, addr basics.Address) error {
 	if err != nil {
 		return err
 	}
-	if cx.getApplicationAddress(cx.appID) != authorizer {
-		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.getApplicationAddress(cx.appID), authorizer)
+	if cx.GetApplicationAddress(cx.appID) != authorizer {
+		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.GetApplicationAddress(cx.appID), authorizer)
 	}
 	return nil
 }
@@ -5117,7 +5194,7 @@ func authorizedSender(cx *EvalContext, addr basics.Address) error {
 // addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
 // defaults.
 func addInnerTxn(cx *EvalContext) error {
-	addr := cx.getApplicationAddress(cx.appID)
+	addr := cx.GetApplicationAddress(cx.appID)
 
 	// For compatibility with v5, in which failures only occurred in the submit,
 	// we only fail here if we are already over the max inner limit.  Thus this
@@ -5221,6 +5298,10 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 		}
 	}
 
+	if aid > lastForbiddenResource && cx.UnnamedResources != nil && cx.UnnamedResources.AvailableAsset(aid) {
+		return true
+	}
+
 	return false
 }
 
@@ -5263,6 +5344,10 @@ func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 		if _, ok := cx.available.sharedApps[aid]; ok {
 			return true
 		}
+	}
+
+	if aid > lastForbiddenResource && cx.UnnamedResources != nil && cx.UnnamedResources.AvailableApp(aid) {
+		return true
 	}
 
 	return false
@@ -5794,7 +5879,7 @@ func opBlock(cx *EvalContext) error {
 		return fmt.Errorf("invalid block field %s", f)
 	}
 
-	hdr, err := cx.SigLedger.BlockHdrCached(round)
+	hdr, err := cx.SigLedger.BlockHdr(round)
 	if err != nil {
 		return err
 	}

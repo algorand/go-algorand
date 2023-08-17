@@ -730,8 +730,7 @@ func TestAcctOnlineRoundParamsCache(t *testing.T) {
 
 	conf := config.GetDefaultLocal()
 	au, ao := newAcctUpdates(t, ml, conf)
-	defer au.close()
-	defer ao.close()
+	// au and ao are closed via ml.Close() -> ml.trackers.close()
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)

@@ -20,6 +20,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/algorand/avm-abi/apps"
 	cconfig "github.com/algorand/go-algorand/config"
@@ -31,7 +33,6 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/rpcs"
 )
 
@@ -40,7 +41,7 @@ import (
 func (g *generator) setBlockHeader(cert *rpcs.EncodedBlockCert) {
 	cert.Block.BlockHeader = bookkeeping.BlockHeader{
 		Round:          basics.Round(g.round),
-		TxnCounter: 	g.txnCounter,
+		TxnCounter:     g.txnCounter,
 		Branch:         bookkeeping.BlockHash{},
 		Seed:           committee.Seed{},
 		TxnCommitments: bookkeeping.TxnCommitments{NativeSha512_256Commitment: crypto.Digest{}},
@@ -63,10 +64,9 @@ func (g *generator) setBlockHeader(cert *rpcs.EncodedBlockCert) {
 	}
 }
 
-
 // ---- ledger simulation and introspection ----
 
-// initializeLedger creates a new ledger 
+// initializeLedger creates a new ledger
 func (g *generator) initializeLedger() {
 	genBal := convertToGenesisBalances(g.balances)
 	// add rewards pool with min balance
@@ -85,7 +85,7 @@ func (g *generator) initializeLedger() {
 	} else {
 		prefix = g.genesisID
 	}
-	l, err := ledger.OpenLedger(logging.Base(), prefix, true, ledgercore.InitState{
+	l, err := ledger.OpenLedger(g.log, prefix, true, ledgercore.InitState{
 		Block:       block,
 		Accounts:    bal.Balances,
 		GenesisHash: g.genesisHash,
@@ -169,19 +169,30 @@ func (g *generator) startEvaluator(hdr bookkeeping.BlockHeader, paysetHint int) 
 		})
 }
 
-func (g *generator) evaluateBlock(hdr bookkeeping.BlockHeader, txGroups [][]txn.SignedTxnWithAD, paysetHint int) (*ledgercore.ValidatedBlock, uint64 /* txnCount */, error) {
+func (g *generator) evaluateBlock(hdr bookkeeping.BlockHeader, txGroups [][]txn.SignedTxnWithAD, paysetHint int) (*ledgercore.ValidatedBlock, uint64 /* txnCount */, time.Duration /* commit wait time */, error) {
+	commitWaitTime := time.Duration(0)
+	waitDelay := 10 * time.Millisecond
 	eval, err := g.startEvaluator(hdr, paysetHint)
 	if err != nil {
-		return nil, 0, fmt.Errorf("could not start evaluator: %w", err)
+		return nil, 0, 0, fmt.Errorf("could not start evaluator: %w", err)
 	}
 	for i, txGroup := range txGroups {
-		err := eval.TransactionGroup(txGroup)
-		if err != nil {
-			return nil, 0, fmt.Errorf("could not evaluate transaction group %d: %w", i, err)
+		for {
+			err := eval.TransactionGroup(txGroup)
+			if err != nil {
+				if strings.Contains(err.Error(), "database table is locked") {
+					time.Sleep(waitDelay)
+					commitWaitTime += waitDelay
+					// sometimes the database is locked, so we retry
+					continue
+				}
+				return nil, 0, 0, fmt.Errorf("could not evaluate transaction group %d: %w", i, err)
+			}
+			break
 		}
 	}
 	lvb, err := eval.GenerateBlock()
-	return lvb, eval.TestingTxnCounter(), err
+	return lvb, eval.TestingTxnCounter(), commitWaitTime, err
 }
 
 func countInners(ad txn.ApplyData) int {

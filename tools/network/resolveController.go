@@ -20,6 +20,8 @@ import (
 	"net"
 	"time"
 
+	madns "github.com/multiformats/go-multiaddr-dns"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
 )
@@ -84,4 +86,27 @@ func (c *ResolveController) DefaultResolver() ResolverIf {
 		return dnssec.MakeDnssecResolver(dnssec.DefaultDnssecAwareNSServers, dnssec.DefaultTimeout)
 	}
 	return &Resolver{}
+}
+
+// SystemDnsaddrResolver returns the dnsaddr resolver that uses OS-defined DNS server
+func (c *ResolveController) SystemDnsaddrResolver() *madns.Resolver {
+	resolver := c.SystemResolver()
+	// ignore errors here since we madns.WithDefaultResolver can't error
+	mResv, _ := madns.NewResolver(madns.WithDefaultResolver(resolver))
+	return mResv
+}
+
+// FallbackDnsaddrResolver returns the dnsaddr resolver w/ fallback DNS address
+func (c *ResolveController) FallbackDnsaddrResolver() *madns.Resolver {
+	resolver := c.FallbackResolver()
+	// ignore errors here since we madns.WithDefaultResolver can't error
+	mResv, _ := madns.NewResolver(madns.WithDefaultResolver(resolver))
+	return mResv
+}
+
+// DefaultDnsaddrResolver returns the dnsaddr resolver w/ default DNS address
+func (c *ResolveController) DefaultDnsaddrResolver() *madns.Resolver {
+	resolver := c.DefaultResolver()
+	mResv, _ := madns.NewResolver(madns.WithDefaultResolver(resolver))
+	return mResv
 }

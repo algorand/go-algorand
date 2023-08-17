@@ -47,8 +47,8 @@ func (il indexerLedgerForEvalImpl) LatestBlockHdr() (bookkeeping.BlockHeader, er
 	return il.l.BlockHdr(il.latestRound)
 }
 
-func (il indexerLedgerForEvalImpl) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
-	return il.l.BlockHdrCached(round)
+func (il indexerLedgerForEvalImpl) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
+	return il.l.BlockHdr(round)
 }
 
 // The value of the returned map is nil iff the account was not found.

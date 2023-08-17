@@ -119,3 +119,23 @@ func TestSetJSONFormatter(t *testing.T) {
 	a.True(isJSON(bufNewLogger.String()))
 
 }
+
+// This test ensures that handler functions registered to Fatal Logging trigger
+// when Fatal logs are emitted. We attach graceful service shutdown to Fatal logging,
+// and we want to notice if changes to our logging dependencies change how these handlers are called
+func TestFatalExitHandler(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	nl := TestingLogWithoutFatalExit(t)
+
+	// Make an exit handler that sets a flag to demonstrate it was called
+	flag := false
+	RegisterExitHandler(func() {
+		flag = true
+	})
+	nl.Fatal("OH NO")
+
+	// Check that the exit handler was called
+	require.True(t, flag)
+
+}

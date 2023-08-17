@@ -145,4 +145,5 @@ assert not err, err
 assert 10 == goal.balance(app_account, asa_id)
 
 
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

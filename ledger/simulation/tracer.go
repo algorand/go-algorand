@@ -57,11 +57,6 @@ func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledg
 	tracer.relativeCursor = tracer.relativeCursor[:top]
 }
 
-func (tracer *cursorEvalTracer) relativeGroupIndex() int {
-	top := len(tracer.relativeCursor) - 1
-	return tracer.relativeCursor[top]
-}
-
 func (tracer *cursorEvalTracer) absolutePath() TxnPath {
 	path := make(TxnPath, len(tracer.relativeCursor))
 	for i, relativeGroupIndex := range tracer.relativeCursor {
@@ -83,6 +78,8 @@ type evalTracer struct {
 
 	result   *Result
 	failedAt TxnPath
+
+	unnamedResourcePolicy *resourcePolicy
 
 	// execTraceStack keeps track of the call stack:
 	// from top level transaction to the current inner txn that contains latest TransactionTrace.
@@ -110,6 +107,7 @@ func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) 
 	return &evalTracer{result: &result}, nil
 }
 
+// handleError is responsible for setting the failedAt field properly.
 func (tracer *evalTracer) handleError(evalError error) {
 	if evalError != nil && tracer.failedAt == nil {
 		tracer.failedAt = tracer.absolutePath()
@@ -167,13 +165,23 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 		*ep.PooledApplicationBudget += int(tracer.result.EvalOverrides.ExtraOpcodeBudget)
 	}
 
-	// Override runtime related constraints against ep, before entering txn group
-	ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
+	if ep.GetCaller() == nil {
+		// Override runtime related constraints against ep, before entering txn group
+		ep.EvalConstants = tracer.result.EvalOverrides.LogicEvalConstants()
+		if tracer.result.EvalOverrides.AllowUnnamedResources {
+			tracer.unnamedResourcePolicy = newResourcePolicy(ep, &tracer.result.TxnGroups[0])
+			ep.EvalConstants.UnnamedResources = tracer.unnamedResourcePolicy
+		}
+	}
 }
 
 func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	tracer.handleError(evalError)
 	tracer.cursorEvalTracer.AfterTxnGroup(ep, deltas, evalError)
+
+	if ep.GetCaller() == nil && tracer.unnamedResourcePolicy != nil {
+		tracer.unnamedResourcePolicy = nil
+	}
 }
 
 func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
@@ -227,6 +235,9 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 
 		// In both case, we need to add to transaction trace to the stack
 		tracer.execTraceStack = append(tracer.execTraceStack, txnTraceStackElem)
+	}
+	if ep.GetCaller() == nil && tracer.unnamedResourcePolicy != nil {
+		tracer.unnamedResourcePolicy.txnRootIndex = groupIndex
 	}
 	tracer.cursorEvalTracer.BeforeTxn(ep, groupIndex)
 }
@@ -367,11 +378,19 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 		}
 	}
 
-	if cx.RunMode() != logic.ModeApp {
-		// do nothing for LogicSig ops
-		return
+	if cx.RunMode() == logic.ModeApp {
+		tracer.handleError(evalError)
+		if evalError == nil && tracer.unnamedResourcePolicy != nil {
+			if err := tracer.unnamedResourcePolicy.tracker.reconcileBoxWriteBudget(cx.BoxDirtyBytes(), cx.Proto.BytesPerBoxReference); err != nil {
+				// This should never happen, since we limit the IO budget to tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget
+				// (as shown below), so we should never have to reconcile an unachievable budget.
+				panic(err.Error())
+			}
+
+			// Update box budget. It will decrease if an additional non-box resource has been accessed.
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+		}
 	}
-	tracer.handleError(evalError)
 }
 
 func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
@@ -379,19 +398,38 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 
 	// Before Program, activated for logic sig, happens before txn group execution
 	// we should create trace object for this txn result
-	if cx.RunMode() != logic.ModeApp {
+	if cx.RunMode() == logic.ModeSig {
 		if tracer.result.ReturnTrace() {
 			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &TransactionTrace{}
 			traceRef := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 			traceRef.programTraceRef = &traceRef.LogicSigTrace
 		}
 	}
+
+	if cx.RunMode() == logic.ModeApp && tracer.unnamedResourcePolicy != nil {
+		globalSharing := false
+		for iter := cx; iter != nil; iter = iter.GetCaller() {
+			if iter.ProgramVersion() >= 9 {
+				// If some caller in the app callstack allows global sharing, global resources can
+				// be accessed here. Otherwise the top-level txn must declare all resources locally.
+				globalSharing = true
+				break
+			}
+		}
+		tracer.unnamedResourcePolicy.globalSharing = globalSharing
+		tracer.unnamedResourcePolicy.programVersion = cx.ProgramVersion()
+		if tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget == nil {
+			s := cx.SurplusReadBudget
+			tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
+		}
+		cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+	}
 }
 
 func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	groupIndex := cx.GroupIndex()
 
-	if cx.RunMode() != logic.ModeApp {
+	if cx.RunMode() == logic.ModeSig {
 		// Report cost for LogicSig program and exit
 		tracer.result.TxnGroups[0].Txns[groupIndex].LogicSigBudgetConsumed = uint64(cx.Cost())
 		if tracer.result.ReturnTrace() {
