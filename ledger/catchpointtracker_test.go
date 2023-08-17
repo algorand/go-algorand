@@ -106,6 +106,7 @@ func TestCatchpointGetCatchpointStream(t *testing.T) {
 	require.NoError(t, err)
 
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	// Create the catchpoint files with dummy data
 	for i := 0; i < filesToCreate; i++ {
@@ -175,6 +176,7 @@ func TestCatchpointsDeleteStored(t *testing.T) {
 	ct := newCatchpointTracker(t, ml, conf, ".")
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	dummyCatchpointFilesToCreate := 42
 
@@ -260,6 +262,7 @@ func TestCatchpointsDeleteStoredOnSchemaUpdate(t *testing.T) {
 	ct.initialize(conf, paths)
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectroy
+	ct.tmpDir = temporaryDirectroy
 
 	_, err = trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -322,6 +325,7 @@ func TestRecordCatchpointFile(t *testing.T) {
 	ct.initialize(conf, paths)
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -467,6 +471,7 @@ func TestCatchpointFileWithLargeSpVerification(t *testing.T) {
 
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -542,6 +547,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	require.NoError(b, err)
 
 	ct.dbDirectory = temporaryDirectroy
+	ct.tmpDir = temporaryDirectroy
 
 	err = ct.loadFromDisk(ml, 0)
 	require.NoError(b, err)
@@ -1179,6 +1185,7 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 	require.NoError(t, err)
 
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	expectedNumEntries := protoParams.CatchpointLookback / cfg.CatchpointInterval
 
