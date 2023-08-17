@@ -69,7 +69,7 @@ type player struct {
 	Pending proposalTable
 
 	// the history of arrival times of the lowest credential from previous
-	// ronuds, used for calculating dynamic lambda.
+	// ronuds, used for calculating the filter timeout dynamically.
 	lowestCredentialArrivals []time.Duration
 }
 
@@ -414,7 +414,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	if target != 0 {
 		// We entered a non-0 period, we should reset the filter timeout
 		// calculation mechanism.
-		p.lowestCredentialArrivals = make([]time.Duration, 0)
+		p.lowestCredentialArrivals = nil
 	}
 	p.Deadline.Duration = p.calculateFilterTimeout(source.Proto, r.t)
 	p.Deadline.Type = TimeoutFilter
