@@ -18,12 +18,12 @@ package logic
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -888,12 +888,6 @@ var OpSpecs = []OpSpec{
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
 }
 
-type sortByOpcode []OpSpec
-
-func (a sortByOpcode) Len() int           { return len(a) }
-func (a sortByOpcode) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortByOpcode) Less(i, j int) bool { return a[i].Opcode < a[j].Opcode }
-
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
 // by copying v1 opcodes to v2, and then on to v3 to create a full list
 func OpcodesByVersion(version uint64) []OpSpec {
@@ -933,7 +927,9 @@ func OpcodesByVersion(version uint64) []OpSpec {
 		}
 	}
 	result := maps.Values(subv)
-	sort.Sort(sortByOpcode(result))
+	slices.SortFunc(result, func(a, b OpSpec) bool {
+		return a.Opcode < b.Opcode
+	})
 	return result
 }
 
