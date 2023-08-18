@@ -43,8 +43,8 @@ ${GOPATH}/bin/goal network delete -r ${NETROOTPATH}
 
 # Test that genesis generation works correctly
 ${GOPATH}/bin/goal network genesis -r ${GENFILESPATH} -t ./test/testdata/nettemplates/TwoNodes50Each.json
-# Try importing genesis files from same template 
-${GOPATH}/bin/goal network create -r ${NETROOTPATH} -n net1 -t ./test/testdata/nettemplates/TwoNodes50Each.json
+# Try importing genesis files from same template -- should reuse the root and partkey files
+${GOPATH}/bin/goal network create -r ${NETROOTPATH} -n net1 -t ./test/testdata/nettemplates/TwoNodes50Each.json --genesisDir ${GENFILESPATH}
 
 ${GOPATH}/bin/goal network start -r ${NETROOTPATH}
 
