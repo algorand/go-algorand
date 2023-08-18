@@ -797,9 +797,9 @@ func TestResolveLogPaths(t *testing.T) {
 	cfg = GetDefaultLocal()
 	cfg.HotDataDir = "hot"
 	cfg.ColdDataDir = "cold"
-	cfg.LogFilePath = "mycoolLogPath.log"
+	cfg.LogFileDir = "mycoolLogDir"
 	cfg.LogArchiveDir = "myCoolLogArchive"
 	log, archive = cfg.ResolveLogPaths("root")
-	require.Equal(t, "mycoolLogPath.log", log)
+	require.Equal(t, "mycoolLogDir/node.log", log)
 	require.Equal(t, "myCoolLogArchive/node.archive.log", archive)
 }

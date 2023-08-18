@@ -98,7 +98,7 @@ var defaultLocal = Local{
 	LogArchiveDir:                              "",
 	LogArchiveMaxAge:                           "",
 	LogArchiveName:                             "node.archive.log",
-	LogFilePath:                                "",
+	LogFileDir:                                 "",
 	LogSizeLimit:                               1073741824,
 	MaxAPIBoxPerApplication:                    100000,
 	MaxAPIResourcesPerAccount:                  100000,

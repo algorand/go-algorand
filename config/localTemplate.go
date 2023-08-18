@@ -85,44 +85,44 @@ type Local struct {
 	// If not specified, the node will use the runtime supplied datadir to store this data.
 	// Individual resources may have their own override specified, which would override this setting for that resource.
 	// Setting HotDataDir to a dedicated high performance disk allows for basic disc tuning.
-	HotDataDir string `version[29]:""`
+	HotDataDir string `version[31]:""`
 
 	// ColdDataDir is an optional directory to store data that is infrequently accessed by the node.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the runtime supplied datadir.
 	// Individual resources may have their own override specified, which would override this setting for that resource.
 	// Setting ColdDataDir to a less critical or cheaper disk allows for basic disc tuning.
-	ColdDataDir string `version[29]:""`
+	ColdDataDir string `version[31]:""`
 
 	// TrackerDbDir is an optional directory to store the tracker database.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the HotDataDir.
-	TrackerDBDir string `version[29]:""`
+	TrackerDBDir string `version[31]:""`
 	// BlockDBDir is an optional directory to store the block database.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
-	BlockDBDir string `version[29]:""`
+	BlockDBDir string `version[31]:""`
 	// CatchpointDir is an optional directory to store catchpoint files,
 	// except for the in-progress temp file, which will use the HotDataDir and is not separately configurable.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
-	CatchpointDir string `version[29]:""`
+	CatchpointDir string `version[31]:""`
 	// StateproofDir is an optional directory to store stateproof data.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
-	StateproofDir string `version[29]:""`
+	StateproofDir string `version[31]:""`
 	// CrashDBDir is an optional directory to store the crash database.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
-	CrashDBDir string `version[29]:""`
+	CrashDBDir string `version[31]:""`
 
-	// LogFilePath is an optional path to the log file.
+	// LogFileDir is an optional directory to store the log, node.log
 	// If not specified, the node will use the HotDataDir.
 	// The -o command line option can be used to override this output location.
-	LogFilePath string `version[29]:""`
+	LogFileDir string `version[31]:""`
 	// LogArchiveDir is an optional directory to store the log archive.
 	// If not specified, the node will use the ColdDataDir.
-	LogArchiveDir string `version[29]:""`
+	LogArchiveDir string `version[31]:""`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.
@@ -745,9 +745,9 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 	if cfg.HotDataDir != "" {
 		archive = filepath.Join(cfg.ColdDataDir, cfg.LogArchiveName)
 	}
-	// if LogFilePath is set, use it instead
-	if cfg.LogFilePath != "" {
-		liveLog = cfg.LogFilePath
+	// if LogFileDir is set, use it instead
+	if cfg.LogFileDir != "" {
+		liveLog = filepath.Join(cfg.LogFileDir, "node.log")
 	}
 	// if LogArchivePath is set, use it instead
 	if cfg.LogArchiveDir != "" {
