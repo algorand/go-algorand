@@ -19,7 +19,6 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
@@ -68,7 +67,7 @@ type Parameters struct {
 	BlockFactory
 	RandomSource
 	EventsProcessingMonitor
-	timers.Clock
+	timers.Clock[TimeoutType]
 	db.Accessor
 	logging.Logger
 	config.Local
@@ -80,8 +79,8 @@ type parameters Parameters
 
 // externalDemuxSignals used to syncronize the external signals that goes to the demux with the main loop.
 type externalDemuxSignals struct {
-	Deadline             time.Duration
-	FastRecoveryDeadline time.Duration
+	Deadline             Deadline
+	FastRecoveryDeadline Deadline
 	CurrentRound         round
 }
 
@@ -188,7 +187,7 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 // 4. If necessary, persist state to disk.
 func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, ready chan<- externalDemuxSignals) {
 	// setup
-	var clock timers.Clock
+	var clock timers.Clock[TimeoutType]
 	var router rootRouter
 	var status player
 	var a []action
@@ -212,7 +211,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		status = player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+		status = player{Round: nextRound, Step: soft, Deadline: Deadline{Duration: FilterTimeout(0, nextVersion), Type: TimeoutFilter}}
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: s.Ledger.NextRound()}
@@ -226,7 +225,8 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 
 	for {
 		output <- a
-		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, CurrentRound: status.Round}
+		fastRecoveryDeadline := Deadline{Duration: status.FastRecoveryDeadline, Type: TimeoutFastRecovery}
+		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: fastRecoveryDeadline, CurrentRound: status.Round}
 		e, ok := <-input
 		if !ok {
 			break
