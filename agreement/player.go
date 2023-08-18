@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"fmt"
 	"sort"
 	"time"
 
@@ -281,9 +280,10 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 		}}
 }
 
-// updateDynamicLambdaTimings is called at the end of a successful uninterrupted round (just after ensureAction
-// is generated) to collect round timings for updating dynamic lambda.
-func (p *player) updateDynamicLambdaTimings(r routerHandle, ver protocol.ConsensusVersion) {
+// updateCredentialArrivalHistory is called at the end of a successful
+// uninterrupted round (just after ensureAction is generated) to collect
+// credential arrival times to dynamically set the filter timeout.
+func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.ConsensusVersion) {
 	// only append to lowestCredentialArrivals if this was a successful round completing in period 0.
 	if p.Period != 0 {
 		return
@@ -292,10 +292,7 @@ func (p *player) updateDynamicLambdaTimings(r routerHandle, ver protocol.Consens
 	re := readLowestEvent{T: readLowestVote, Round: p.Round, Period: p.Period}
 	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
 
-	if re.Vote.validatedAt != 0 {
-		fmt.Println("update dynamic lambda")
-		p.lowestCredentialArrivals = append(p.lowestCredentialArrivals, re.Vote.validatedAt)
-	}
+	p.lowestCredentialArrivals = append(p.lowestCredentialArrivals, re.Vote.validatedAt)
 
 	// trim history to the last proto.DynamicFilterCredentialArrivalHistory samples.
 	proto := config.Consensus[ver]
@@ -311,8 +308,8 @@ func (p *player) updateDynamicLambdaTimings(r routerHandle, ver protocol.Consens
 func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *tracer) time.Duration {
 	proto := config.Consensus[ver]
 	if proto.DynamicFilterCredentialArrivalHistory <= 0 || p.Period != 0 {
-		// Either dynamic lambda is disabled, or we're not in period 0 and
-		// therefore, can't use dynamic lambda
+		// Either dynamic filter timeout is disabled, or we're not in period 0
+		// and therefore, can't use dynamic timeout
 		return FilterTimeout(p.Period, ver)
 	}
 
@@ -330,25 +327,25 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
 	dynamicTimeout := sortedArrivals[proto.DynamicFilterTimeoutCredentialArrivalHistoryIdx] + proto.DynamicFilterTimeoutGraceInterval
 
-	// Make sure the dynamic delay is not too small or too large
+	// Make sure the dynamic filter timeout is not too small nor too large
 	if dynamicTimeout < proto.DynamicFilterTimeoutLowerBound {
 		if tracer != nil {
-			tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v. It's too low, setting to %v\n", dynamicTimeout, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
+			tracer.log.Debugf("Calculated dynamic filter timeout = %v for round %v, period %v. It's too low, setting to %v\n", dynamicTimeout, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
 		}
 		dynamicTimeout = proto.DynamicFilterTimeoutLowerBound
 	} else if dynamicTimeout > defaultTimeout {
 		if tracer != nil {
-			tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v. It too high, so using the default %v\n", dynamicTimeout, p.Round, p.Period, defaultTimeout)
+			tracer.log.Debugf("Calculated dynamic filter timeout = %v for round %v, period %v. It too high, so using the default %v\n", dynamicTimeout, p.Round, p.Period, defaultTimeout)
 		}
 		dynamicTimeout = defaultTimeout
 	} else if tracer != nil {
-		tracer.log.Debugf("Calculated dynamic delay = %v for round %v, period %v.\n", dynamicTimeout, p.Round, p.Period)
+		tracer.log.Debugf("Calculated dynamic filter timeout = %v for round %v, period %v.\n", dynamicTimeout, p.Round, p.Period)
 	}
 
 	if !proto.DynamicFilterTimeout {
-		// If the dynamic filter is disabled, return the default filter timeout
-		// (after logging what the timeout would have been, if this feature were
-		// enabled).
+		// If the dynamic filter timeout is disabled, return the default filter
+		// timeout (after logging what the timeout would have been, if this
+		// feature were enabled).
 		return defaultTimeout
 	}
 
@@ -370,7 +367,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			actions = append(actions, a0)
-			p.updateDynamicLambdaTimings(r, e.Proto)
+			p.updateCredentialArrivalHistory(r, e.Proto)
 			as := p.enterRound(r, e, p.Round+1)
 			return append(actions, as...)
 		}
@@ -690,7 +687,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				actions = append(actions, a0)
-				p.updateDynamicLambdaTimings(r, e.Proto.Version)
+				p.updateCredentialArrivalHistory(r, e.Proto.Version)
 				as := p.enterRound(r, delegatedE, cert.Round+1)
 				return append(actions, as...)
 			}
