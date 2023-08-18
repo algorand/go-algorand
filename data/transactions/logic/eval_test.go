@@ -1226,10 +1226,8 @@ const globalV9TestProgram = globalV8TestProgram + `
 `
 
 const globalV10TestProgram = globalV9TestProgram + `
-global AssetCreateMinBalance
-global AssetOptInMinBalance
->=
-&&
+global AssetCreateMinBalance; int 1001; ==; &&
+global AssetOptInMinBalance; int 1001; ==; &&
 `
 
 func TestGlobal(t *testing.T) {
