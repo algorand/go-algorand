@@ -23,8 +23,10 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,7 +37,7 @@ func TestAppAccounts(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusFuture]
 	txns := make([]transactions.SignedTxnWithAD, 1)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
-	ep := logic.NewAppEvalParams(txns, &proto, nil)
+	ep := logic.NewAppEvalParams(txns, &proto, &transactions.SpecialAddresses{})
 
 	appID := basics.AppIndex(12345)
 	appAccount := appID.Address()
@@ -88,7 +90,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 	txns[1].Txn.Type = protocol.ApplicationCallTx
 	txns[2].Txn.Type = protocol.ApplicationCallTx
-	ep := logic.NewAppEvalParams(txns, &proto, nil)
+	ep := logic.NewAppEvalParams(txns, &proto, &transactions.SpecialAddresses{})
 
 	// For this test, we assume only the txn at index 1 supports group sharing.
 
@@ -295,4 +297,354 @@ func TestGlobalVsLocalResources(t *testing.T) {
 			app2: {},
 		}, groupAssignment.localTxnResources[2].Apps)
 	})
+}
+
+func TestAssignResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+
+		txgroup         []transactions.SignedTxnWithAD
+		globalResources ResourceTracker
+		localResources  []ResourceTracker
+
+		expectedExtraTxns int
+		expectedError     string
+	}{
+		{
+			name: "empty case",
+		},
+		{
+			name: "single txn no unnamed",
+			txgroup: []transactions.SignedTxnWithAD{
+				txntest.Txn{
+					Type: protocol.ApplicationCallTx,
+				}.SignedTxnWithAD(),
+			},
+			localResources: []ResourceTracker{
+				{},
+			},
+		},
+		{
+			name: "single txn one local unnamed account",
+			txgroup: []transactions.SignedTxnWithAD{
+				txntest.Txn{
+					Type: protocol.ApplicationCallTx,
+				}.SignedTxnWithAD(),
+			},
+			localResources: []ResourceTracker{
+				{
+					Accounts: map[basics.Address]struct{}{
+						{1}: {},
+					},
+				},
+			},
+		},
+		{
+			name: "single txn max local unnamed accounts",
+			txgroup: []transactions.SignedTxnWithAD{
+				txntest.Txn{
+					Type: protocol.ApplicationCallTx,
+				}.SignedTxnWithAD(),
+			},
+			localResources: []ResourceTracker{
+				{
+					Accounts: map[basics.Address]struct{}{
+						{1}: {},
+						{2}: {},
+						{3}: {},
+						{4}: {},
+					},
+				},
+			},
+		},
+		{
+			name: "single txn too many local unnamed accounts",
+			txgroup: []transactions.SignedTxnWithAD{
+				txntest.Txn{
+					Type: protocol.ApplicationCallTx,
+				}.SignedTxnWithAD(),
+			},
+			localResources: []ResourceTracker{
+				{
+					Accounts: map[basics.Address]struct{}{
+						{1}: {},
+						{2}: {},
+						{3}: {},
+						{4}: {},
+						{5}: {},
+					},
+				},
+			},
+			expectedError: "cannot assign account",
+		},
+		{
+			name: "single txn one global unnamed account",
+			txgroup: []transactions.SignedTxnWithAD{
+				txntest.Txn{
+					Type: protocol.ApplicationCallTx,
+				}.SignedTxnWithAD(),
+			},
+			localResources: []ResourceTracker{
+				{},
+			},
+			globalResources: ResourceTracker{
+				Accounts: map[basics.Address]struct{}{
+					{1}: {},
+				},
+			},
+		},
+		{
+			name: "single txn max global unnamed accounts",
+			txgroup: []transactions.SignedTxnWithAD{
+				txntest.Txn{
+					Type: protocol.ApplicationCallTx,
+				}.SignedTxnWithAD(),
+			},
+			localResources: []ResourceTracker{
+				{},
+			},
+			globalResources: ResourceTracker{
+				Accounts: map[basics.Address]struct{}{
+					{1}: {},
+					{2}: {},
+					{3}: {},
+					{4}: {},
+				},
+			},
+		},
+		{
+			name: "single txn max global unnamed accounts, 1 extra txn",
+			txgroup: []transactions.SignedTxnWithAD{
+				txntest.Txn{
+					Type: protocol.ApplicationCallTx,
+				}.SignedTxnWithAD(),
+			},
+			localResources: []ResourceTracker{
+				{},
+			},
+			globalResources: ResourceTracker{
+				Accounts: map[basics.Address]struct{}{
+					{1}: {},
+					{2}: {},
+					{3}: {},
+					{4}: {},
+					{5}: {},
+				},
+			},
+			expectedExtraTxns: 1,
+		},
+		{
+			name: "single txn max global unnamed accounts, 2 extra txns",
+			txgroup: []transactions.SignedTxnWithAD{
+				txntest.Txn{
+					Type: protocol.ApplicationCallTx,
+				}.SignedTxnWithAD(),
+			},
+			localResources: []ResourceTracker{
+				{},
+			},
+			globalResources: ResourceTracker{
+				Accounts: map[basics.Address]struct{}{
+					{1}: {},
+					{2}: {},
+					{3}: {},
+					{4}: {},
+					{5}: {},
+					{6}: {},
+					{7}: {},
+					{8}: {},
+					{9}: {},
+				},
+			},
+			expectedExtraTxns: 2,
+		},
+		{
+			name: "single txn max global unnamed accounts, 15 extra txns",
+			txgroup: []transactions.SignedTxnWithAD{
+				txntest.Txn{
+					Type: protocol.ApplicationCallTx,
+				}.SignedTxnWithAD(),
+			},
+			localResources: []ResourceTracker{
+				{},
+			},
+			globalResources: ResourceTracker{
+				Accounts: map[basics.Address]struct{}{
+					{1}:  {},
+					{2}:  {},
+					{3}:  {},
+					{4}:  {},
+					{5}:  {},
+					{6}:  {},
+					{7}:  {},
+					{8}:  {},
+					{9}:  {},
+					{10}: {},
+					{11}: {},
+					{12}: {},
+					{13}: {},
+					{14}: {},
+					{15}: {},
+					{16}: {},
+					{17}: {},
+					{18}: {},
+					{19}: {},
+					{20}: {},
+					{21}: {},
+					{22}: {},
+					{23}: {},
+					{24}: {},
+					{25}: {},
+					{26}: {},
+					{27}: {},
+					{28}: {},
+					{29}: {},
+					{30}: {},
+					{31}: {},
+					{32}: {},
+					{33}: {},
+					{34}: {},
+					{35}: {},
+					{36}: {},
+					{37}: {},
+					{38}: {},
+					{39}: {},
+					{40}: {},
+					{41}: {},
+					{42}: {},
+					{43}: {},
+					{44}: {},
+					{45}: {},
+					{46}: {},
+					{47}: {},
+					{48}: {},
+					{49}: {},
+					{50}: {},
+					{51}: {},
+					{52}: {},
+					{53}: {},
+					{54}: {},
+					{55}: {},
+					{56}: {},
+					{57}: {},
+					{58}: {},
+					{59}: {},
+					{60}: {},
+					{61}: {},
+					{62}: {},
+					{63}: {},
+					{64}: {},
+				},
+			},
+			expectedExtraTxns: 15,
+		},
+	}
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ep := logic.NewAppEvalParams(tc.txgroup, &proto, &transactions.SpecialAddresses{})
+			tracker := groupResourceTracker{
+				globalResources:   tc.globalResources,
+				localTxnResources: tc.localResources,
+			}
+			txnAssignments, extraTxnAssignments, err := assignResources(ep, &tracker)
+			if len(tc.expectedError) != 0 {
+				require.ErrorContains(t, err, tc.expectedError)
+				return
+			}
+			require.NoError(t, err)
+
+			// The number of extra txns must match
+			assert.Len(t, extraTxnAssignments, tc.expectedExtraTxns)
+
+			// All local resources must be assigned to the corresponding txn
+			for gi := range tc.localResources {
+				for account := range tc.localResources[gi].Accounts {
+					assert.Contains(t, txnAssignments[gi].Accounts, account)
+				}
+				for asset := range tc.localResources[gi].Assets {
+					assert.Contains(t, txnAssignments[gi].Assets, asset)
+				}
+				for app := range tc.localResources[gi].Apps {
+					assert.Contains(t, txnAssignments[gi].Apps, app)
+				}
+				assert.Empty(t, tc.localResources[gi].Boxes, "invalid test case")
+				assert.Empty(t, tc.localResources[gi].AssetHoldings, "invalid test case")
+				assert.Empty(t, tc.localResources[gi].AppLocals, "invalid test case")
+			}
+
+			// All global resources must be assigned anywhere in the group
+			allAssignments := append(txnAssignments, extraTxnAssignments...)
+
+			for account := range tc.globalResources.Accounts {
+				found := false
+				for _, assignment := range allAssignments {
+					if _, ok := assignment.Accounts[account]; ok {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "account %s not found in assignments: %v", account, allAssignments)
+			}
+			for asset := range tc.globalResources.Assets {
+				found := false
+				for _, assignment := range allAssignments {
+					if _, ok := assignment.Assets[asset]; ok {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "asset %d not found in assignments: %v", asset, allAssignments)
+			}
+			for app := range tc.globalResources.Apps {
+				found := false
+				for _, assignment := range allAssignments {
+					if _, ok := assignment.Apps[app]; ok {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "app %d not found in assignments: %v", app, allAssignments)
+			}
+			for box := range tc.globalResources.Boxes {
+				found := false
+				for _, assignment := range allAssignments {
+					if _, ok := assignment.Boxes[box]; ok {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "box (%d,%#x) not found in assignments: %v", box.App, box.Name, allAssignments)
+			}
+			for holding := range tc.globalResources.AssetHoldings {
+				found := false
+				for _, assignment := range allAssignments {
+					_, assetOk := assignment.Assets[holding.Asset]
+					_, accountOk := assignment.Accounts[holding.Address]
+					if assetOk && accountOk {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "asset holding (%d,%s) not found in assignments: %v", holding.Asset, holding.Address, allAssignments)
+			}
+			for local := range tc.globalResources.AppLocals {
+				found := false
+				for _, assignment := range allAssignments {
+					_, appOk := assignment.Apps[local.App]
+					_, accountOk := assignment.Accounts[local.Address]
+					if appOk && accountOk {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "app local (%d,%s) not found in assignments: %v", local.App, local.Address, allAssignments)
+			}
+		})
+	}
 }

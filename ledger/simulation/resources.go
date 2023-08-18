@@ -17,6 +17,7 @@
 package simulation
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/slices"
 )
 
 // ResourceTracker calculates the additional resources that a transaction or group could use, and
@@ -604,4 +606,303 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operatio
 		readSize = uint64(len(box))
 	}
 	return p.tracker.addBox(app, name, readSize, *p.initialBoxSurplusReadBudget, p.ep.Proto.BytesPerBoxReference)
+}
+
+type ResourceAssignment struct {
+	Accounts map[basics.Address]struct{}
+	Assets   map[basics.AssetIndex]struct{}
+	Apps     map[basics.AppIndex]struct{}
+	Boxes    map[logic.BoxRef]struct{}
+
+	NumExtraBoxRefs int
+}
+
+type resourceAssigner struct {
+	proto *config.ConsensusParams
+
+	txns        []transactions.SignedTxnWithAD
+	assignments []ResourceAssignment
+}
+
+func makeResourceAssigner(proto *config.ConsensusParams, txns []transactions.SignedTxnWithAD) resourceAssigner {
+	return resourceAssigner{
+		proto:       proto,
+		txns:        txns,
+		assignments: make([]ResourceAssignment, len(txns)),
+	}
+}
+
+func (a *resourceAssigner) clone() resourceAssigner {
+	return resourceAssigner{
+		proto:       a.proto,
+		txns:        a.txns,
+		assignments: slices.Clone(a.assignments),
+	}
+}
+
+func (a *resourceAssigner) addAssignmentTxns(count int) bool {
+	if len(a.assignments)+count > a.proto.MaxTxGroupSize {
+		return false
+	}
+	a.assignments = append(a.assignments, make([]ResourceAssignment, count)...)
+	return true
+}
+
+func (a *resourceAssigner) totalRefs(gi int) int {
+	fromTxn := 0
+	if gi < len(a.txns) {
+		fromTxn = len(a.txns[gi].Txn.Accounts) +
+			len(a.txns[gi].Txn.ForeignAssets) +
+			len(a.txns[gi].Txn.ForeignApps) +
+			len(a.txns[gi].Txn.Boxes)
+	}
+	return fromTxn +
+		len(a.assignments[gi].Accounts) +
+		len(a.assignments[gi].Assets) +
+		len(a.assignments[gi].Apps) +
+		len(a.assignments[gi].Boxes) + a.assignments[gi].NumExtraBoxRefs
+}
+
+func (a *resourceAssigner) assignAccount(addr basics.Address, gi int) bool {
+	fromTxn := 0
+	if gi < len(a.txns) {
+		if a.txns[gi].Txn.Type != protocol.ApplicationCallTx {
+			return false
+		}
+		fromTxn = len(a.txns[gi].Txn.Accounts)
+	}
+	if fromTxn+len(a.assignments[gi].Accounts) >= a.proto.MaxAppTxnAccounts {
+		return false
+	}
+	if a.totalRefs(gi) >= a.proto.MaxAppTotalTxnReferences {
+		return false
+	}
+	if a.assignments[gi].Accounts == nil {
+		a.assignments[gi].Accounts = make(map[basics.Address]struct{})
+	}
+	a.assignments[gi].Accounts[addr] = struct{}{}
+	return true
+}
+
+func (a *resourceAssigner) assignAsset(aid basics.AssetIndex, gi int) bool {
+	fromTxn := 0
+	if gi < len(a.txns) {
+		if a.txns[gi].Txn.Type != protocol.ApplicationCallTx {
+			return false
+		}
+		fromTxn = len(a.txns[gi].Txn.ForeignAssets)
+	}
+	if fromTxn+len(a.assignments[gi].Assets) >= a.proto.MaxAppTxnForeignAssets {
+		return false
+	}
+	if a.totalRefs(gi) >= a.proto.MaxAppTotalTxnReferences {
+		return false
+	}
+	if a.assignments[gi].Assets == nil {
+		a.assignments[gi].Assets = make(map[basics.AssetIndex]struct{})
+	}
+	a.assignments[gi].Assets[aid] = struct{}{}
+	return true
+}
+
+func (a *resourceAssigner) assignApp(aid basics.AppIndex, gi int) bool {
+	// TODO: fromTxn
+	if a.txns[gi].Txn.Type != protocol.ApplicationCallTx {
+		return false
+	}
+	if len(a.txns[gi].Txn.ForeignApps)+len(a.assignments[gi].Apps) >= a.proto.MaxAppTxnForeignApps {
+		return false
+	}
+	if a.totalRefs(gi) >= a.proto.MaxAppTotalTxnReferences {
+		return false
+	}
+	if a.assignments[gi].Apps == nil {
+		a.assignments[gi].Apps = make(map[basics.AppIndex]struct{})
+	}
+	a.assignments[gi].Apps[aid] = struct{}{}
+	return true
+}
+
+func (a *resourceAssigner) assignBox(box logic.BoxRef, gi int) bool {
+	// TODO: fromTxn
+	if len(a.txns[gi].Txn.Boxes)+len(a.assignments[gi].Boxes)+a.assignments[gi].NumExtraBoxRefs >= a.proto.MaxAppBoxReferences {
+		return false
+	}
+	if a.totalRefs(gi) >= a.proto.MaxAppTotalTxnReferences {
+		return false
+	}
+	if a.assignments[gi].Boxes == nil {
+		a.assignments[gi].Boxes = make(map[logic.BoxRef]struct{})
+	}
+	a.assignments[gi].Boxes[box] = struct{}{}
+	return true
+}
+
+func (a *resourceAssigner) assignExtraBoxRefs(count int, gi int) bool {
+	// TODO: fromTxn
+	if len(a.txns[gi].Txn.Boxes)+len(a.assignments[gi].Boxes)+a.assignments[gi].NumExtraBoxRefs+count > a.proto.MaxAppBoxReferences {
+		return false
+	}
+	if a.totalRefs(gi)+count > a.proto.MaxAppTotalTxnReferences {
+		return false
+	}
+	a.assignments[gi].NumExtraBoxRefs += count
+	return true
+}
+
+// TODO: return map to deduplicate
+func txnAccounts(txn transactions.SignedTxn, ep *logic.EvalParams) []basics.Address {
+	switch txn.Txn.Type {
+	case protocol.PaymentTx:
+		if !txn.Txn.CloseRemainderTo.IsZero() {
+			return []basics.Address{txn.Txn.Sender, txn.Txn.Receiver, txn.Txn.CloseRemainderTo}
+		}
+		return []basics.Address{txn.Txn.Sender, txn.Txn.Receiver}
+	case protocol.KeyRegistrationTx:
+		return []basics.Address{txn.Txn.Sender}
+	case protocol.AssetConfigTx:
+		return []basics.Address{txn.Txn.Sender}
+	case protocol.AssetTransferTx:
+		accounts := []basics.Address{txn.Txn.Sender, txn.Txn.AssetReceiver}
+		if !txn.Txn.AssetSender.IsZero() {
+			accounts = append(accounts, txn.Txn.AssetSender)
+		}
+		if !txn.Txn.AssetCloseTo.IsZero() {
+			accounts = append(accounts, txn.Txn.AssetCloseTo)
+		}
+		return accounts
+	case protocol.AssetFreezeTx:
+		return []basics.Address{txn.Txn.Sender, txn.Txn.FreezeAccount}
+	case protocol.ApplicationCallTx:
+		txAccounts := make([]basics.Address, 0, 2+len(txn.Txn.Accounts)+len(txn.Txn.ForeignApps))
+		txAccounts = append(txAccounts, txn.Txn.Sender)
+		txAccounts = append(txAccounts, txn.Txn.Accounts...)
+		if id := txn.Txn.ApplicationID; id != 0 {
+			txAccounts = append(txAccounts, ep.GetApplicationAddress(id))
+		}
+		for _, id := range txn.Txn.ForeignApps {
+			txAccounts = append(txAccounts, ep.GetApplicationAddress(id))
+		}
+		return txAccounts
+	case protocol.StateProofTx:
+		// state proof txns add nothing to availability (they can't even appear
+		// in a group with an appl. but still.)
+		return nil
+	default:
+		panic(txn.Txn.Type)
+	}
+}
+
+// TODO: return map to deduplicate
+func txnApps(txn transactions.SignedTxn) []basics.AppIndex {
+	if txn.Txn.Type != protocol.ApplicationCallTx {
+		return nil
+	}
+	apps := slices.Clone(txn.Txn.ForeignApps)
+	if id := txn.Txn.ApplicationID; id != 0 {
+		apps = append(apps, id)
+	}
+	return apps
+}
+
+// TODO: change to greedy
+func bruteForceGlobalAssignment(assigner *resourceAssigner, ep *logic.EvalParams, tracker *groupResourceTracker) bool {
+	var allApps []basics.AppIndex
+	for gi := range ep.TxnGroup {
+		allApps = append(allApps, txnApps(ep.TxnGroup[gi].SignedTxn)...)
+	}
+	appAccounts := make(map[basics.Address]basics.AppIndex, len(allApps))
+	for _, app := range allApps {
+		appAddr := ep.GetApplicationAddress(app)
+		appAccounts[appAddr] = app
+	}
+
+	for holding := range tracker.globalResources.AssetHoldings {
+		assigned := false
+		for gi := range ep.TxnGroup { // TODO: use assigner.assignments to accommodate extra txns?
+			accounts := txnAccounts(ep.TxnGroup[gi].SignedTxn, ep) // TODO: calculate outside of loop
+			assets := ep.TxnGroup[gi].Txn.ForeignAssets
+
+			_, accountPresent := assigner.assignments[gi].Accounts[holding.Address]
+			accountPresent = accountPresent || slices.Contains(accounts, holding.Address)
+
+			_, assetPresent := assigner.assignments[gi].Assets[holding.Asset]
+			assetPresent = assetPresent || slices.Contains(assets, holding.Asset)
+
+			if accountPresent && assetPresent {
+				assigned = true
+				break
+			}
+
+			// Choices:
+			// - If accountPresent, place asset in this txn (greedy)
+			// - If assetPresent, place account in this txn (greedy)
+			// - Place elsewhere
+		}
+		if !assigned {
+			return false
+		}
+	}
+
+	// for local := range tracker.globalResources.AppLocals {
+
+	// }
+
+	for addr := range tracker.globalResources.Accounts {
+		assigned := false
+		for gi := range assigner.assignments {
+			if assigner.assignAccount(addr, gi) {
+				assigned = true
+				break
+			}
+		}
+		if !assigned {
+			return false
+		}
+	}
+	return true
+}
+
+func assignResources(ep *logic.EvalParams, tracker *groupResourceTracker) ([]ResourceAssignment, []ResourceAssignment, error) {
+	if len(ep.TxnGroup) != len(tracker.localTxnResources) {
+		return nil, nil, fmt.Errorf("mismatched lengths: %d txns but %d localTxnResources", len(ep.TxnGroup), len(tracker.localTxnResources))
+	}
+
+	assigner := makeResourceAssigner(ep.Proto, ep.TxnGroup)
+
+	// First, assign all local resources to transactions
+	for gi, txn := range ep.TxnGroup {
+		localResources := tracker.localTxnResources[gi]
+
+		accounts := txnAccounts(txn.SignedTxn, ep)
+
+		for addr := range localResources.Accounts {
+			if slices.Contains(accounts, addr) {
+				continue
+			}
+			if !assigner.assignAccount(addr, gi) {
+				return nil, nil, fmt.Errorf("cannot assign account %s to txn %d", addr, gi)
+			}
+		}
+	}
+
+	// Next, assign global resources anywhere in the group
+	success := false
+	for i := 0; i <= ep.Proto.MaxTxGroupSize-len(ep.TxnGroup); i++ {
+		attempt := assigner.clone()
+		if i != 0 {
+			attempt.addAssignmentTxns(i)
+		}
+		if bruteForceGlobalAssignment(&attempt, ep, tracker) {
+			assigner = attempt
+			success = true
+			break
+		}
+	}
+
+	if !success {
+		return nil, nil, errors.New("could not find assignment")
+	}
+
+	return assigner.assignments[:len(ep.TxnGroup)], assigner.assignments[len(ep.TxnGroup):], nil
 }

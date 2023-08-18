@@ -3944,6 +3944,13 @@
         },
         "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
+        },
+        "additional-txn-packed-unnamed-resources": {
+          "description": "todo",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulatePackedUnnamedResources"
+          }
         }
       }
     },
@@ -3958,7 +3965,7 @@
           "$ref": "#/definitions/PendingTransactionResponse"
         },
         "app-budget-consumed": {
-          "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
+          "description": "Budget used during execution of an app call transaction. This value includes budget used by inner app calls spawned by this transaction.",
           "type": "integer"
         },
         "logic-sig-budget-consumed": {
@@ -3970,6 +3977,9 @@
         },
         "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
+        },
+        "packed-unnamed-resources": {
+          "$ref": "#/definitions/SimulatePackedUnnamedResources"
         }
       }
     },
@@ -4273,6 +4283,47 @@
           "items": {
             "$ref": "#/definitions/ApplicationLocalReference"
           }
+        }
+      }
+    },
+    "SimulatePackedUnnamedResources": {
+      "description": "todo",
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "description": "Account references. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "x-algorand-format": "Address"
+          }
+        },
+        "assets": {
+          "description": "Asset references. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "apps": {
+          "description": "Application references. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "boxes": {
+          "description": "Box references. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BoxReference"
+          }
+        },
+        "extra-box-refs": {
+          "description": "Extra box references",
+          "type": "integer"
         }
       }
     }
