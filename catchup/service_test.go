@@ -700,7 +700,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 	s.Start()
 	defer s.Stop()
 
-	<-s.done
+	s.workers.Wait()
 	return local, remote
 }
 
@@ -797,6 +797,11 @@ func (m *mockedLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	return m.blocks[r], nil
 }
 
+func (m *mockedLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	blk, err := m.Block(r)
+	return blk.BlockHeader, err
+}
+
 func (m *mockedLedger) Lookup(basics.Round, basics.Address) (basics.AccountData, error) {
 	return basics.AccountData{}, errors.New("not needed for mockedLedger")
 }
@@ -867,7 +872,6 @@ func (avv *MockVoteVerifier) Parallelism() int {
 
 // Start the catchup service, without starting the periodic sync.
 func (s *Service) testStart() {
-	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.InitialSyncDone = make(chan struct{})
 }
@@ -1068,8 +1072,8 @@ func TestServiceStartStop(t *testing.T) {
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	s.Start()
 	s.Stop()
-	_, ok := <-s.done
-	require.False(t, ok)
+
+	// The test ensures that Stop() returns and does not block forever.
 }
 
 func TestSynchronizingTime(t *testing.T) {

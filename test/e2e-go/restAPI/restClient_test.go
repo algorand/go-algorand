@@ -2242,6 +2242,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	ops, err := logic.AssembleString(maxDepthTealApproval)
 	a.NoError(err)
 	approval := ops.Program
+	approvalHash := crypto.Hash(approval)
 	ops, err = logic.AssembleString("#pragma version 8\nint 1")
 	a.NoError(err)
 	clearState := ops.Program
@@ -3019,15 +3020,26 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
 		ApprovalProgramTrace: recursiveLongOpcodeTrace(futureAppID, 0),
+		ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
 		InnerTrace: &[]model.SimulationTransactionExecTrace{
-			{ApprovalProgramTrace: &creationOpcodeTrace},
+			{
+				ApprovalProgramTrace: &creationOpcodeTrace,
+				ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
+			},
 			{},
 			{
 				ApprovalProgramTrace: recursiveLongOpcodeTrace(futureAppID+3, 1),
+				ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
 				InnerTrace: &[]model.SimulationTransactionExecTrace{
-					{ApprovalProgramTrace: &creationOpcodeTrace},
+					{
+						ApprovalProgramTrace: &creationOpcodeTrace,
+						ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
+					},
 					{},
-					{ApprovalProgramTrace: finalDepthTrace(futureAppID+6, 2)},
+					{
+						ApprovalProgramTrace: finalDepthTrace(futureAppID+6, 2),
+						ApprovalProgramHash:  toPtr(approvalHash.ToSlice()),
+					},
 				},
 			},
 		},
@@ -3079,6 +3091,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 		 int 1`)
 	a.NoError(err)
 	approval := ops.Program
+	approvalHash := crypto.Hash(approval)
 	ops, err = logic.AssembleString("#pragma version 8\nint 1")
 	a.NoError(err)
 	clearState := ops.Program
@@ -3204,6 +3217,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 			},
 			{Pc: 16},
 		},
+		ApprovalProgramHash: toPtr(approvalHash.ToSlice()),
 	}
 	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
 }
