@@ -92,25 +92,6 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 	return data, nil
 }
 
-// LookupOnlineTotalsHistory pulls the total Online Algos on a given round
-func (r *accountsReader) LookupOnlineTotalsHistory(round basics.Round) (basics.MicroAlgos, error) {
-	// SQL at the time of writing this:
-	//
-	// SELECT data FROM onlineroundparamstail WHERE rnd=?
-
-	value, closer, err := r.kvr.Get(onlineAccountRoundParamsKey(round))
-	if err != nil {
-		return basics.MicroAlgos{}, err
-	}
-	defer closer.Close()
-	data := ledgercore.OnlineRoundParamsData{}
-	err = protocol.Decode(value, &data)
-	if err != nil {
-		return basics.MicroAlgos{}, err
-	}
-	return basics.MicroAlgos{Raw: data.OnlineSupply}, nil
-}
-
 func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trackerdb.PersistedOnlineAccountData, rnd basics.Round, err error) {
 	low := onlineAccountOnlyPartialKey(addr)
 	high := onlineAccountOnlyPartialKey(addr)

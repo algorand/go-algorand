@@ -528,6 +528,13 @@ const (
 	// CallerApplicationAddress The Address of the caller app, else ZeroAddress
 	CallerApplicationAddress
 
+	// AssetCreateMinBalance is the additional minimum balance required to
+	// create an asset (which also opts an account into that asset)
+	AssetCreateMinBalance
+
+	// AssetOptInMinBalance is the additional minimum balance required to opt in to an asset
+	AssetOptInMinBalance
+
 	invalidGlobalField // compile-time constant for number of fields
 )
 
@@ -588,6 +595,10 @@ var globalFieldSpecs = [...]globalFieldSpec{
 		"The application ID of the application that called this application. 0 if this application is at the top-level."},
 	{CallerApplicationAddress, StackAddress, ModeApp, 6,
 		"The application address of the application that called this application. ZeroAddress if this application is at the top-level."},
+	{AssetCreateMinBalance, StackUint64, modeAny, 10,
+		"The additional minimum balance required to create (and opt-in to) an asset."},
+	{AssetOptInMinBalance, StackUint64, modeAny, 10,
+		"The additional minimum balance required to opt-in to an asset."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {

@@ -1126,7 +1126,9 @@
         "GroupID",
         "OpcodeBudget",
         "CallerApplicationID",
-        "CallerApplicationAddress"
+        "CallerApplicationAddress",
+        "AssetCreateMinBalance",
+        "AssetOptInMinBalance"
       ],
       "ArgEnumTypes": [
         "uint64",
@@ -1143,7 +1145,9 @@
         "[32]byte",
         "uint64",
         "uint64",
-        "address"
+        "address",
+        "uint64",
+        "uint64"
       ],
       "Doc": "global field F",
       "ImmediateNote": [

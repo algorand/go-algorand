@@ -1677,6 +1677,8 @@ txn NumApprovalProgramPages
 txna ApprovalProgramPages 0
 txn NumClearStateProgramPages
 txna ClearStateProgramPages 0
+global AssetCreateMinBalance
+global AssetOptInMinBalance
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {

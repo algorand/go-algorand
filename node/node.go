@@ -254,11 +254,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.ledger, node.net)
-	var agreementClock timers.Clock
+	var agreementClock timers.Clock[agreement.TimeoutType]
 	if node.devMode {
-		agreementClock = timers.MakeFrozenClock()
+		agreementClock = timers.MakeFrozenClock[agreement.TimeoutType]()
 	} else {
-		agreementClock = timers.MakeMonotonicClock(time.Now())
+		agreementClock = timers.MakeMonotonicClock[agreement.TimeoutType](time.Now())
 	}
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
@@ -418,6 +418,7 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
+	node.ledger.Close()
 }
 
 // note: unlike the other two functions, this accepts a whole filename

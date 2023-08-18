@@ -1228,7 +1228,8 @@ const globalV9TestProgram = globalV8TestProgram + `
 `
 
 const globalV10TestProgram = globalV9TestProgram + `
-// No new globals in v10
+global AssetCreateMinBalance; int 1001; ==; &&
+global AssetOptInMinBalance; int 1001; ==; &&
 `
 
 func TestGlobal(t *testing.T) {
@@ -1241,18 +1242,17 @@ func TestGlobal(t *testing.T) {
 	}
 	// Associate the highest allowed global constant with each version's test program
 	tests := map[uint64]desc{
-		0: {GroupSize, globalV1TestProgram},
-		1: {GroupSize, globalV1TestProgram},
-		2: {CurrentApplicationID, globalV2TestProgram},
-		3: {CreatorAddress, globalV3TestProgram},
-		4: {CreatorAddress, globalV4TestProgram},
-		5: {GroupID, globalV5TestProgram},
-		6: {CallerApplicationAddress, globalV6TestProgram},
-		7: {CallerApplicationAddress, globalV7TestProgram},
-		8: {CallerApplicationAddress, globalV8TestProgram},
-		9: {CallerApplicationAddress, globalV9TestProgram},
-
-		10: {CallerApplicationAddress, globalV10TestProgram},
+		0:  {GroupSize, globalV1TestProgram},
+		1:  {GroupSize, globalV1TestProgram},
+		2:  {CurrentApplicationID, globalV2TestProgram},
+		3:  {CreatorAddress, globalV3TestProgram},
+		4:  {CreatorAddress, globalV4TestProgram},
+		5:  {GroupID, globalV5TestProgram},
+		6:  {CallerApplicationAddress, globalV6TestProgram},
+		7:  {CallerApplicationAddress, globalV7TestProgram},
+		8:  {CallerApplicationAddress, globalV8TestProgram},
+		9:  {CallerApplicationAddress, globalV9TestProgram},
+		10: {AssetOptInMinBalance, globalV10TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)

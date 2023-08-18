@@ -3684,6 +3684,10 @@
         "scratch-change": {
           "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
           "type": "boolean"
+        },
+        "state-change": {
+          "description": "A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.",
+          "type": "boolean"
         }
       }
     },
@@ -4092,6 +4096,37 @@
         }
       }
     },
+    "ApplicationStateOperation": {
+      "description": "An operation against an application's global/local/box state.",
+      "required": [
+        "operation",
+        "app-state-type",
+        "key"
+      ],
+      "properties": {
+        "operation": {
+          "description": "Operation type. Value `w` is **write**, `d` is **delete**.",
+          "type": "string"
+        },
+        "app-state-type": {
+          "description": "Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.",
+          "type": "string"
+        },
+        "key": {
+          "description": "The key (name) of the global/local/box state.",
+          "type": "string",
+          "format": "byte"
+        },
+        "new-value": {
+          "$ref": "#/definitions/AvmValue"
+        },
+        "account": {
+          "description": "For local state changes, the address of the account associated with the local state.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        }
+      }
+    },
     "SimulationOpcodeTraceUnit": {
       "description": "The set of trace information and effect from evaluating a single opcode.",
       "type": "object",
@@ -4108,6 +4143,13 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/ScratchChange"
+          }
+        },
+        "state-changes": {
+          "description": "The operations against the current application's states.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationStateOperation"
           }
         },
         "spawned-inners": {
@@ -4141,6 +4183,11 @@
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
         },
+        "approval-program-hash": {
+          "description": "SHA512_256 hash digest of the approval program executed in transaction.",
+          "type": "string",
+          "format": "byte"
+        },
         "clear-state-program-trace": {
           "description": "Program trace that contains a trace of opcode effects in a clear state program.",
           "type": "array",
@@ -4148,12 +4195,22 @@
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
         },
+        "clear-state-program-hash": {
+          "description": "SHA512_256 hash digest of the clear state program executed in transaction.",
+          "type": "string",
+          "format": "byte"
+        },
         "logic-sig-trace": {
           "description": "Program trace that contains a trace of opcode effects in a logic sig.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
+        },
+        "logic-sig-hash": {
+          "description": "SHA512_256 hash digest of the logic sig executed in transaction.",
+          "type": "string",
+          "format": "byte"
         },
         "inner-trace": {
           "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
