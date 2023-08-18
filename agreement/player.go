@@ -40,7 +40,13 @@ type player struct {
 
 	// Deadline contains the time of the next timeout expected by the player
 	// state machine (relevant to the start of the current period).
-	Deadline time.Duration
+	Deadline Deadline `codec:"TimersDeadline"`
+
+	// OldDeadline contains the value of Deadline used from a previous version,
+	// for backwards compatibility when deserializing player.
+	// TODO: remove after consensus upgrade that introduces the Deadline struct.
+	OldDeadline time.Duration `codec:"Deadline,omitempty"`
+
 	// Napping is set when the player is expecting a random timeout (i.e.,
 	// to determine when the player chooses to send a next-vote).
 	Napping bool
@@ -111,7 +117,7 @@ func (p *player) handle(r routerHandle, e event) []action {
 			delta := time.Duration(e.RandomEntropy % uint64(upper-lower))
 
 			p.Napping = true
-			p.Deadline = lower + delta
+			p.Deadline = Deadline{Duration: lower + delta, Type: TimeoutDeadline}
 			return actions
 		}
 	case roundInterruptionEvent:
@@ -145,7 +151,7 @@ func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
 
 func (p *player) issueSoftVote(r routerHandle) (actions []action) {
 	defer func() {
-		p.Deadline = deadlineTimeout
+		p.Deadline = Deadline{Duration: deadlineTimeout, Type: TimeoutDeadline}
 	}()
 
 	e := r.dispatch(*p, proposalFrozenEvent{}, proposalMachinePeriod, p.Round, p.Period, 0)
@@ -213,7 +219,7 @@ func (p *player) issueNextVote(r routerHandle) []action {
 
 	_, upper := p.Step.nextVoteRanges()
 	p.Napping = false
-	p.Deadline = upper
+	p.Deadline = Deadline{Duration: upper, Type: TimeoutDeadline}
 	return actions
 }
 
@@ -327,7 +333,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.Deadline = FilterTimeout(target, source.Proto)
+	p.Deadline = Deadline{Duration: FilterTimeout(target, source.Proto), Type: TimeoutFilter}
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -375,11 +381,11 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 
 	switch source := source.(type) {
 	case roundInterruptionEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
+		p.Deadline = Deadline{Duration: FilterTimeout(0, source.Proto.Version), Type: TimeoutFilter}
 	case thresholdEvent:
-		p.Deadline = FilterTimeout(0, source.Proto)
+		p.Deadline = Deadline{Duration: FilterTimeout(0, source.Proto), Type: TimeoutFilter}
 	case filterableMessageEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
+		p.Deadline = Deadline{Duration: FilterTimeout(0, source.Proto.Version), Type: TimeoutFilter}
 	}
 
 	// update tracer state to match player
