@@ -190,7 +190,7 @@ func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, 
 // next blocks until it observes an external input event of interest for the state machine.
 //
 // If ok is false, there are no more events so the agreement service should quit.
-func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Duration, speculationDeadline time.Duration, currentRound round) (e externalEvent, ok bool) {
+func (d *demux) next(s *Service, deadline Deadline, fastDeadline Deadline, speculationDeadline Deadline, currentRound round) (e externalEvent, ok bool) {
 	defer func() {
 		if !ok {
 			return
@@ -250,15 +250,15 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	}
 
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound)
-	deadlineCh := s.Clock.TimeoutAt(deadline)
-	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
+	deadlineCh := s.Clock.TimeoutAt(deadline.Duration, deadline.Type)
+	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline.Duration, fastDeadline.Type)
 
 	var speculationDeadlineCh <-chan time.Time
-	if speculationDeadline == 0 {
+	if speculationDeadline.Duration == 0 {
 		// zero timeout means we don't have enough time to speculate on block assembly
 		speculationDeadlineCh = nil
 	} else {
-		speculationDeadlineCh = s.Clock.TimeoutAt(speculationDeadline)
+		speculationDeadlineCh = s.Clock.TimeoutAt(speculationDeadline.Duration, speculationDeadline.Type)
 	}
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)

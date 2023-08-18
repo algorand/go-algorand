@@ -29,6 +29,10 @@
     "DNSSecurityFlags": 1,
     "DeadlockDetection": 0,
     "DeadlockDetectionThreshold": 30,
+<<<<<<< HEAD
+=======
+    "DisableAPIAuth": false,
+>>>>>>> master
     "DisableLedgerLRUCache": false,
     "DisableLocalhostConnectionRateLimit": true,
     "DisableNetworking": false,
@@ -54,7 +58,11 @@
     "EnableRequestLogger": false,
     "EnableRuntimeMetrics": false,
     "EnableTopAccountsReporting": false,
+<<<<<<< HEAD
     "EnableTxBacklogRateLimiting": false,
+=======
+    "EnableTxBacklogRateLimiting": true,
+>>>>>>> master
     "EnableTxnEvalTracer": false,
     "EnableUsageLog": false,
     "EnableVerbosedTransactionSyncLogging": false,
@@ -101,7 +109,10 @@
     "RestReadTimeoutSeconds": 15,
     "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
+<<<<<<< HEAD
     "SpeculativeBlockAssemblyGraceTime": 50000000,
+=======
+>>>>>>> master
     "StorageEngine": "sqlite",
     "SuggestedFeeBlockHistory": 3,
     "SuggestedFeeSlidingWindowSize": 50,

@@ -443,14 +443,14 @@ func TestDemuxNext(t *testing.T) {
 }
 
 // implement timers.Clock
-func (t *demuxTester) Zero() timers.Clock {
+func (t *demuxTester) Zero() timers.Clock[TimeoutType] {
 	// we don't care about this function in this test.
 	return t
 }
 
 // implement timers.Clock
-func (t *demuxTester) TimeoutAt(delta time.Duration) <-chan time.Time {
-	if delta == fastTimeoutChTime {
+func (t *demuxTester) TimeoutAt(delta time.Duration, timeoutType TimeoutType) <-chan time.Time {
+	if timeoutType == TimeoutFastRecovery {
 		return nil
 	}
 	if delta == speculativeBlockAsmTime {
@@ -474,7 +474,7 @@ func (t *demuxTester) Encode() []byte {
 }
 
 // implement timers.Clock
-func (t *demuxTester) Decode([]byte) (timers.Clock, error) {
+func (t *demuxTester) Decode([]byte) (timers.Clock[TimeoutType], error) {
 	// we don't care about this function in this test.
 	return t, nil
 }
@@ -698,7 +698,8 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 	if testcase.quit {
 		close(s.quit)
 	}
-	e, ok := dmx.next(s, time.Second, fastTimeoutChTime, testcase.speculativeAsmTime, 300)
+
+	e, ok := dmx.next(s, Deadline{Duration: time.Second, Type: TimeoutDeadline}, Deadline{Duration: fastTimeoutChTime, Type: TimeoutFastRecovery}, Deadline{Duration: testcase.speculativeAsmTime, Type: SpeculativeBlockAsm}, 300)
 
 	if !assert.Equal(t, testcase.ok, ok) {
 		return false

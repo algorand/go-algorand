@@ -19,6 +19,7 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
+	"sync/atomic"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -129,13 +130,13 @@ func TestFatalExitHandler(t *testing.T) {
 	nl := TestingLogWithoutFatalExit(t)
 
 	// Make an exit handler that sets a flag to demonstrate it was called
-	flag := false
+	var flag atomic.Bool
 	RegisterExitHandler(func() {
-		flag = true
+		flag.Store(true)
 	})
 	nl.Fatal("OH NO")
 
 	// Check that the exit handler was called
-	require.True(t, flag)
+	require.True(t, flag.Load())
 
 }

@@ -176,7 +176,7 @@ type Local struct {
 
 	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager shouild be attached to the tx backlog enqueue process
 	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
-	EnableTxBacklogRateLimiting bool `version[27]:"false"`
+	EnableTxBacklogRateLimiting bool `version[27]:"false" version[30]:"true"`
 
 	// TxBacklogSize is the queue size used for receiving transactions. default of 26000 to approximate 1 block of transactions
 	// if EnableTxBacklogRateLimiting enabled, the over-all size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
@@ -534,6 +534,9 @@ type Local struct {
 	// The private key provided must be an ed25519 private key.
 	// This is only used when P2PEnable is true. If the parameter is not set, it uses the default location.
 	P2PPrivateKeyLocation string `version[29]:""`
+
+	// DisableAPIAuth turns off authentication for public (non-admin) API endpoints.
+	DisableAPIAuth bool `version[30]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

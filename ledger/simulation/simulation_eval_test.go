@@ -1029,6 +1029,9 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 			ApprovalProgram:   expensiveAppSource,
 			ClearStateProgram: "#pragma version 6\nint 1",
 		})
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		approvalHash := crypto.Hash(op.Program)
 		// Expensive 700 repetition of int 1 and pop total cost 1404
 		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
@@ -1084,12 +1087,14 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 								AppBudgetConsumed: 4,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: firstTrace,
+									ApprovalProgramHash:  approvalHash,
 								},
 							},
 							{
 								AppBudgetConsumed: 1404,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: secondTrace,
+									ApprovalProgramHash:  approvalHash,
 								},
 							},
 						},
@@ -1796,6 +1801,16 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			ClearStateProgram: "#pragma version 8\nint 1",
 		})
 
+		op, err := logic.AssembleString(maxDepthTealApproval)
+		require.NoError(t, err)
+		approvalProgramBytes := op.Program
+		approvalDigest := crypto.Hash(approvalProgramBytes)
+
+		op, err = logic.AssembleString("#pragma version 8\nint 1")
+		require.NoError(t, err)
+		clearStateProgramBytes := op.Program
+		clearStateDigest := crypto.Hash(clearStateProgramBytes)
+
 		MaxDepth := 2
 		MinBalance := env.TxnInfo.CurrentProtocolParams().MinBalance
 		MinFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
@@ -2024,6 +2039,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								AppBudgetConsumed: 7,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: creationOpcodeTrace,
+									ApprovalProgramHash:  approvalDigest,
 								},
 							},
 							{
@@ -2071,32 +2087,41 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								AppBudgetConsumed: 378,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: recursiveLongOpcodeTrace,
+									ApprovalProgramHash:  approvalDigest,
 									InnerTraces: []simulation.TransactionTrace{
 										{
 											ApprovalProgramTrace: creationOpcodeTrace,
+											ApprovalProgramHash:  approvalDigest,
 										},
 										{},
 										{
 											ApprovalProgramTrace: optInTrace,
+											ApprovalProgramHash:  approvalDigest,
 										},
 										{
 											ClearStateProgramTrace: clearStateOpcodeTrace,
+											ClearStateProgramHash:  clearStateDigest,
 										},
 										{
 											ApprovalProgramTrace: recursiveLongOpcodeTrace,
+											ApprovalProgramHash:  approvalDigest,
 											InnerTraces: []simulation.TransactionTrace{
 												{
 													ApprovalProgramTrace: creationOpcodeTrace,
+													ApprovalProgramHash:  approvalDigest,
 												},
 												{},
 												{
 													ApprovalProgramTrace: optInTrace,
+													ApprovalProgramHash:  approvalDigest,
 												},
 												{
 													ClearStateProgramTrace: clearStateOpcodeTrace,
+													ClearStateProgramHash:  clearStateDigest,
 												},
 												{
 													ApprovalProgramTrace: finalDepthTrace,
+													ApprovalProgramHash:  approvalDigest,
 												},
 											},
 										},
@@ -2177,6 +2202,7 @@ func TestLogicSigPCandStackExposure(t *testing.T) {
 `, 2) + `int 1`)
 	require.NoError(t, err)
 	program := logic.Program(op.Program)
+	logicHash := crypto.Hash(program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -2195,6 +2221,10 @@ func TestLogicSigPCandStackExposure(t *testing.T) {
 byte "hello"; log; int 1`,
 			ClearStateProgram: "#pragma version 8\n int 1",
 		})
+
+		op, err = logic.AssembleString(appCallTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		approvalHash := crypto.Hash(op.Program)
 
 		txntest.Group(&payTxn, &appCallTxn)
 
@@ -2252,6 +2282,7 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues(1),
 										},
 									},
+									ApprovalProgramHash: approvalHash,
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
 										{
 											PC: 1,
@@ -2287,6 +2318,7 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues(1),
 										},
 									},
+									LogicSigHash: logicHash,
 								},
 							},
 						},
@@ -2307,8 +2339,9 @@ func TestFailingLogicSigPCandStack(t *testing.T) {
 ` + strings.Repeat(`byte "a"; keccak256; pop
 `, 2) + `int 0; int 1; -`)
 	require.NoError(t, err)
-	program := logic.Program(op.Program)
-	lsigAddr := basics.Address(crypto.HashObj(&program))
+	logicSigProg := logic.Program(op.Program)
+	logicSigHash := crypto.Hash(logicSigProg)
+	lsigAddr := basics.Address(crypto.HashObj(&logicSigProg))
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
@@ -2331,7 +2364,7 @@ byte "hello"; log; int 1`,
 
 		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
 		signedAppCallTxn := appCallTxn.SignedTxn()
-		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: logicSigProg}
 
 		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
 
@@ -2408,6 +2441,7 @@ byte "hello"; log; int 1`,
 											StackPopCount: 2,
 										},
 									},
+									LogicSigHash: logicSigHash,
 								},
 							},
 						},
@@ -2426,8 +2460,9 @@ func TestFailingApp(t *testing.T) {
 ` + strings.Repeat(`byte "a"; keccak256; pop
 `, 2) + `int 1`)
 	require.NoError(t, err)
-	program := logic.Program(op.Program)
-	lsigAddr := basics.Address(crypto.HashObj(&program))
+	logicSigProg := logic.Program(op.Program)
+	logicSigHash := crypto.Hash(logicSigProg)
+	lsigAddr := basics.Address(crypto.HashObj(&logicSigProg))
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
@@ -2446,11 +2481,15 @@ byte "hello"; log; int 0`,
 			ClearStateProgram: "#pragma version 8\n int 1",
 		})
 
+		approvalOp, err := logic.AssembleString(appCallTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		approvalHash := crypto.Hash(approvalOp.Program)
+
 		txntest.Group(&payTxn, &appCallTxn)
 
 		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
 		signedAppCallTxn := appCallTxn.SignedTxn()
-		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: logicSigProg}
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -2491,6 +2530,7 @@ byte "hello"; log; int 0`,
 										{PC: 8},
 										{PC: 9},
 									},
+									ApprovalProgramHash: approvalHash,
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
 										{PC: 1},
 										{PC: 5},
@@ -2501,6 +2541,7 @@ byte "hello"; log; int 0`,
 										{PC: 10},
 										{PC: 11},
 									},
+									LogicSigHash: logicSigHash,
 								},
 							},
 						},
@@ -2563,6 +2604,10 @@ end:
 func TestFrameBuryDigStackTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
+	op, err := logic.AssembleString(FrameBuryDigProgram)
+	require.NoError(t, err)
+	hash := crypto.Hash(op.Program)
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
@@ -2650,6 +2695,7 @@ int 1`,
 											StackPopCount: 1,
 										},
 									},
+									ApprovalProgramHash: hash,
 								},
 							},
 							{
@@ -2886,11 +2932,1425 @@ int 1`,
 											StackPopCount: 1,
 										},
 									},
+									ApprovalProgramHash: hash,
 								},
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 44,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestBoxChangeExecTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+		boxContent := []byte("boxWriteContent")
+
+		boxStateChangeTraceTemplate := func(opName string, units ...simulation.OpcodeTraceUnit) []simulation.OpcodeTraceUnit {
+			begin := []simulation.OpcodeTraceUnit{
+				{
+					PC: 1,
+					StackAdded: []basics.TealValue{
+						{
+							Type: basics.TealUintType,
+							Uint: uint64(futureAppID),
+						},
+					},
+				},
+				{
+					PC:            3,
+					StackPopCount: 1,
+				},
+				{
+					PC: 6,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "create",
+						},
+					},
+				},
+				{
+					PC: 14,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "delete",
+						},
+					},
+				},
+				{
+					PC: 22,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "read",
+						},
+					},
+				},
+				{
+					PC: 28,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "write",
+						},
+					},
+				},
+				{
+					PC: 35,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: opName,
+						},
+					},
+				},
+				{
+					PC:            38,
+					StackPopCount: 5,
+				},
+			}
+			end := []simulation.OpcodeTraceUnit{
+				{
+					PC: 87,
+					StackAdded: []basics.TealValue{
+						{
+							Type: basics.TealUintType,
+							Uint: 1,
+						},
+					},
+				},
+			}
+			result := append(begin, units...)
+			result = append(result, end...)
+			return result
+		}
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   0,
+			ApprovalProgram: fmt.Sprintf(boxTestProgram, 8),
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		payment := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance * 2,
+		})
+		createBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:         logic.BoxCreateOperation,
+				name:       "A",
+				createSize: uint64(len(boxContent)),
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		writeBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: boxContent,
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		delBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:   logic.BoxDeleteOperation,
+				name: "A",
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		txntest.Group(&createTxn, &payment, &createBoxTxn, &writeBoxTxn, &delBoxTxn)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedPay := payment.Txn().Sign(sender.Sk)
+		signedCreateBox := createBoxTxn.Txn().Sign(sender.Sk)
+		signedWriteBox := writeBoxTxn.Txn().Sign(sender.Sk)
+		signedDelBox := delBoxTxn.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedPay, signedCreateBox, signedWriteBox, signedDelBox},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 3,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            3,
+											StackPopCount: 1,
+										},
+										{
+											PC: 87,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Payment
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							// BoxCreation
+							{
+								AppBudgetConsumed: 15,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("create",
+										simulation.OpcodeTraceUnit{
+											PC: 49,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 52,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string(uint64ToBytes(uint64(len(boxContent)))),
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 55,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(len(boxContent)),
+												},
+											},
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            56,
+											StackPopCount: 2,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.BoxState,
+													AppID:      futureAppID,
+													Key:        "A",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: string(make([]byte, len(boxContent))),
+													},
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            57,
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 58,
+										},
+									),
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// BoxWrite
+							{
+								AppBudgetConsumed: 13,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("write",
+										simulation.OpcodeTraceUnit{
+											PC: 78,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 81,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 83,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string(boxContent),
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            86,
+											StackPopCount: 3,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.BoxState,
+													AppID:      futureAppID,
+													Key:        "A",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: string(boxContent),
+													},
+												},
+											},
+										},
+									),
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// BoxDelete
+							{
+								AppBudgetConsumed: 13,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("delete",
+										simulation.OpcodeTraceUnit{
+											PC: 61,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 64,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StackPopCount: 1,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateDelete,
+													AppState:   logic.BoxState,
+													AppID:      futureAppID,
+													Key:        "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            65,
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 66,
+										},
+									),
+									ApprovalProgramHash: progHash,
+								},
+							},
+						},
+						AppBudgetAdded:    2800,
+						AppBudgetConsumed: 44,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestAppLocalGlobalStateChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			LocalStateSchema:  basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+txn OnCompletion
+int OptIn
+==
+bnz end // Always allow optin
+
+byte "local"
+byte "global"
+txn ApplicationArgs 0
+match local global
+err // Unknown command
+
+local:
+  txn Sender
+  byte "local-int-key"
+  int 0xcafeb0ba
+  app_local_put
+  int 0
+  byte "local-bytes-key"
+  byte "xqcL"
+  app_local_put
+  b end
+
+global:
+  byte "global-int-key"
+  int 0xdeadbeef
+  app_global_put
+  byte "global-bytes-key"
+  byte "welt am draht"
+  app_global_put
+  b end
+
+end:
+  int 1
+`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		optIn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			OnCompletion:  transactions.OptInOC,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{[]byte("global")},
+		})
+
+		localStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{[]byte("local")},
+		})
+
+		txntest.Group(&createTxn, &optIn, &globalStateCall, &localStateCall)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedOptin := optIn.Txn().Sign(sender.Sk)
+		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+		signedLocalStateCall := localStateCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedOptin, signedGlobalStateCall, signedLocalStateCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 4,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC: 154,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Optin
+							{
+								AppBudgetConsumed: 8,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 4,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC: 9,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 11,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 12,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC:            13,
+											StackPopCount: 1,
+										},
+										{
+											PC: 154,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Global
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"global-bytes-key": basics.ValueDelta{
+													Bytes:  "welt am draht",
+													Action: basics.SetBytesAction,
+												},
+												"global-int-key": basics.ValueDelta{
+													Uint:   0xdeadbeef,
+													Action: basics.SetUintAction,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 19,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 4,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC: 9,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 11,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 12,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC:            13,
+											StackPopCount: 1,
+										},
+										{
+											PC: 16,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local",
+												},
+											},
+										},
+										{
+											PC: 23,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global",
+												},
+											},
+										},
+										{
+											PC: 31,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global",
+												},
+											},
+										},
+										{
+											PC:            34,
+											StackPopCount: 3,
+										},
+										{
+											PC: 94,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-int-key",
+												},
+											},
+										},
+										{
+											PC: 110,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0xdeadbeef,
+												},
+											},
+										},
+										{
+											PC: 116,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-int-key",
+													NewValue: basics.TealValue{
+														Type: basics.TealUintType,
+														Uint: 0xdeadbeef,
+													},
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC: 117,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-bytes-key",
+												},
+											},
+										},
+										{
+											PC: 135,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "welt am draht",
+												},
+											},
+										},
+										{
+											PC:            150,
+											StackPopCount: 2,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-bytes-key",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "welt am draht",
+													},
+												},
+											},
+										},
+										{PC: 151},
+										{
+											PC: 154,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Local
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											LocalDeltas: map[uint64]basics.StateDelta{
+												0: {
+													"local-bytes-key": basics.ValueDelta{
+														Bytes:  "xqcL",
+														Action: basics.SetBytesAction,
+													},
+													"local-int-key": basics.ValueDelta{
+														Uint:   0xcafeb0ba,
+														Action: basics.SetUintAction,
+													},
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 21,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 4,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC: 9,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 11,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 12,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC:            13,
+											StackPopCount: 1,
+										},
+										{
+											PC: 16,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local",
+												},
+											},
+										},
+										{
+											PC: 23,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global",
+												},
+											},
+										},
+										{
+											PC: 31,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local",
+												},
+											},
+										},
+										{
+											PC:            34,
+											StackPopCount: 3,
+										},
+										{
+											PC: 41,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string(sender.Addr[:]),
+												},
+											},
+										},
+										{
+											PC: 43,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local-int-key",
+												},
+											},
+										},
+										{
+											PC: 58,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0xcafeb0ba,
+												},
+											},
+										},
+										{
+											PC: 64,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.LocalState,
+													AppID:      futureAppID,
+													Key:        "local-int-key",
+													NewValue: basics.TealValue{
+														Type: basics.TealUintType,
+														Uint: 0xcafeb0ba,
+													},
+													Account: sender.Addr,
+												},
+											},
+											StackPopCount: 3,
+										},
+										{
+											PC: 65,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 67,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local-bytes-key",
+												},
+											},
+										},
+										{
+											PC: 84,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "xqcL",
+												},
+											},
+										},
+										{
+											PC:            90,
+											StackPopCount: 3,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.LocalState,
+													AppID:      futureAppID,
+													Key:        "local-bytes-key",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "xqcL",
+													},
+													Account: sender.Addr,
+												},
+											},
+										},
+										{PC: 91},
+										{
+											PC: 154,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+						},
+						AppBudgetAdded:    2800,
+						AppBudgetConsumed: 52,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestGlobalStateTypeChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "global-key"
+int 0xdecaf
+app_global_put
+byte "global-key"
+byte "welt am draht"
+app_global_put
+
+end:
+  int 1
+`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &globalStateCall)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedGlobalStateCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 14,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            16,
+											StackPopCount: 1,
+										},
+										{
+											PC: 42,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Global
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"global-key": basics.ValueDelta{
+													Bytes:  "welt am draht",
+													Action: basics.SetBytesAction,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 10,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 14,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            16,
+											StackPopCount: 1,
+										},
+										{
+											PC: 19,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-key",
+												},
+											},
+										},
+										{
+											PC: 20,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0xdecaf,
+												},
+											},
+										},
+										{
+											PC: 24,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-key",
+													NewValue: basics.TealValue{
+														Type: basics.TealUintType,
+														Uint: 0xdecaf,
+													},
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC: 25,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-key",
+												},
+											},
+										},
+										{
+											PC: 26,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "welt am draht",
+												},
+											},
+										},
+										{
+											PC:            41,
+											StackPopCount: 2,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-key",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "welt am draht",
+													},
+												},
+											},
+										},
+										{
+											PC: 42,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 14,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestGlobalStateTypeChangeFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+			ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "global-key"
+byte "I pretend myself as an uint"
+app_global_put
+
+end:
+  int 1
+`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &globalStateCall)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedGlobalStateCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI:  true,
+			expectedError: "store bytes count 1 exceeds schema bytes count 0.",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{1},
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 3,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            3,
+											StackPopCount: 1,
+										},
+										{
+											PC: 48,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Global
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"global-key": basics.ValueDelta{
+													Bytes:  "I pretend myself as an uint",
+													Action: basics.SetBytesAction,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 5,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            3,
+											StackPopCount: 1,
+										},
+										{
+											PC: 6,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-key",
+												},
+											},
+										},
+										{
+											PC: 18,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "I pretend myself as an uint",
+												},
+											},
+										},
+										{
+											PC:            47,
+											StackPopCount: 2,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-key",
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 8,
 					},
 				},
 			},
