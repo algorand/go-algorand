@@ -24,15 +24,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// Deadline marks a timeout event of type Type that the player schedules to
-// happen after Duration time.
-type Deadline struct {
-	_struct  struct{} `codec:","`
-	Duration time.Duration
-	// Type is used to allow tests fire timeouts of specific types.
-	Type TimeoutType
-}
-
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
 type player struct {
@@ -296,11 +287,8 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 
 	// trim history to the last proto.DynamicFilterCredentialArrivalHistory samples.
 	proto := config.Consensus[ver]
-	if len(p.payloadArrivals) > proto.DynamicFilterCredentialArrivalHistory {
-		p.payloadArrivals = p.payloadArrivals[len(p.payloadArrivals)-proto.DynamicFilterCredentialArrivalHistory:]
-	}
-	for len(p.payloadArrivals) < proto.DynamicFilterCredentialArrivalHistory {
-		p.payloadArrivals = append([]time.Duration{FilterTimeout(0, ver)}, p.payloadArrivals...)
+	if len(p.lowestCredentialArrivals) > proto.DynamicFilterCredentialArrivalHistory {
+		p.lowestCredentialArrivals = p.lowestCredentialArrivals[len(p.lowestCredentialArrivals)-proto.DynamicFilterCredentialArrivalHistory:]
 	}
 }
 
@@ -313,11 +301,8 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 		return FilterTimeout(p.Period, ver)
 	}
 
-	defaultDelay := FilterTimeout(0, ver)
-	if proto.DynamicFilterCredentialArrivalHistory <= 0 {
-		// we don't keep any history, use the default
-		dynamicDelay = defaultDelay
-	} else if proto.DynamicFilterCredentialArrivalHistory > len(p.payloadArrivals) {
+	defaultTimeout := FilterTimeout(0, ver)
+	if proto.DynamicFilterCredentialArrivalHistory > len(p.lowestCredentialArrivals) {
 		// not enough samples, use the default
 		return defaultTimeout
 	}
@@ -420,6 +405,12 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
+
+	if target != 0 {
+		// We entered a non-0 period, we should reset the filter timeout
+		// calculation mechanism.
+		p.lowestCredentialArrivals = nil
+	}
 	p.Deadline = Deadline{Duration: FilterTimeout(target, source.Proto), Type: TimeoutFilter}
 
 	// update tracer state to match player
@@ -468,11 +459,11 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 
 	switch source := source.(type) {
 	case roundInterruptionEvent:
-		p.Deadline = Deadline{Duration: FilterTimeout(0, source.Proto.Version), Type: TimeoutFilter}
+		p.Deadline = Deadline{Duration: p.calculateFilterTimeout(source.Proto.Version, r.t), Type: TimeoutFilter}
 	case thresholdEvent:
-		p.Deadline = Deadline{Duration: FilterTimeout(0, source.Proto), Type: TimeoutFilter}
+		p.Deadline = Deadline{Duration: p.calculateFilterTimeout(source.Proto, r.t), Type: TimeoutFilter}
 	case filterableMessageEvent:
-		p.Deadline = Deadline{Duration: FilterTimeout(0, source.Proto.Version), Type: TimeoutFilter}
+		p.Deadline = Deadline{Duration: p.calculateFilterTimeout(source.Proto.Version, r.t), Type: TimeoutFilter}
 	}
 
 	// update tracer state to match player

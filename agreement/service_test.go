@@ -873,8 +873,8 @@ func runRound(clocks []timers.Clock[TimeoutType], activityMonitor *activityMonit
 	triggerGlobalTimeout(filterTimeout, TimeoutFilter, clocks, activityMonitor)
 	return expectNewPeriod(clocks, zeroes)
 }
-func runRoundTriggerFilter(clocks []timers.Clock, activityMonitor *activityMonitor, zeroes uint) (newzeroes uint) {
-	triggerGlobalTimeoutType(timers.Filter, clocks, activityMonitor)
+func runRoundTriggerFilter(clocks []timers.Clock[TimeoutType], activityMonitor *activityMonitor, zeroes uint) (newzeroes uint) {
+	triggerGlobalTimeoutType(TimeoutFilter, clocks, activityMonitor)
 	return expectNewPeriod(clocks, zeroes)
 }
 
@@ -1040,7 +1040,7 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 		return
 	}
 
-	simulateAgreementWithConsensusVersion(t, 5, cfg.DynamicFilterPayloadArriavalHistory+20, disabled, consensusVersion)
+	simulateAgreementWithConsensusVersion(t, 5, cfg.DynamicFilterCredentialArrivalHistory+20, disabled, consensusVersion)
 }
 
 func TestDynamicFilterTimeoutResets(t *testing.T) {

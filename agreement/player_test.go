@@ -3263,7 +3263,7 @@ func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, protocol.ConsensusFuture)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterPayloadArriavalHistory
+	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterCredentialArrivalHistory
 	require.NotZero(t, historyLen)
 	require.Len(t, pWhite.lowestCredentialArrivals, 1)
 	require.Equal(t, 501*time.Millisecond, pWhite.lowestCredentialArrivals[0])
@@ -3351,7 +3351,7 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterPayloadArriavalHistory
+	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterCredentialArrivalHistory
 	require.NotZero(t, historyLen)
 	require.Len(t, pWhite.lowestCredentialArrivals, 1)
 	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals[0])
@@ -3460,7 +3460,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterPayloadArriavalHistory
+	historyLen := config.Consensus[protocol.ConsensusFuture].DynamicFilterCredentialArrivalHistory
 	require.NotZero(t, historyLen)
 	require.Len(t, pWhite.lowestCredentialArrivals, 1)
 	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals[0])
