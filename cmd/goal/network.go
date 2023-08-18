@@ -294,6 +294,11 @@ var networkGenesisCmd = &cobra.Command{
 			templateReader = file
 		}
 
+		// Make sure target directory does not exist or is empty
+		if util.FileExists(networkRootDir) && !util.IsEmpty(networkRootDir) {
+			reportErrorf(infoNetworkAlreadyExists, networkRootDir)
+		}
+
 		var template netdeploy.NetworkTemplate
 		err = netdeploy.LoadTemplateFromReader(templateReader, &template)
 		if err != nil {
