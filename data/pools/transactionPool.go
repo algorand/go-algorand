@@ -618,7 +618,7 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 	}
 }
 
-// OnNewBlock callback calls the internal implementation, onNewBlock with the ``false'' parameter to process all transactions.
+// OnNewBlock callback calls the internal implementation, onNewBlock with the “false” parameter to process all transactions.
 func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	pool.onNewBlock(block, delta, false)
 }
