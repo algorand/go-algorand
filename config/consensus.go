@@ -1394,7 +1394,7 @@ func initConsensusProtocols() {
 	// percentile, which is the timestamp at index 37 in the history array.
 	vFuture.DynamicFilterCredentialArrivalHistory = 40
 	vFuture.DynamicFilterTimeoutCredentialArrivalHistoryIdx = 37
-	vFuture.DynamicFilterTimeoutLowerBound = time.Second
+	vFuture.DynamicFilterTimeoutLowerBound = 0
 	vFuture.DynamicFilterTimeoutGraceInterval = 50 * time.Millisecond
 	vFuture.DynamicFilterTimeout = true
 

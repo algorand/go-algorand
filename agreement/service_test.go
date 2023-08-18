@@ -77,7 +77,7 @@ func (c *testingClock) Zero() timers.Clock[TimeoutType] {
 }
 
 func (c *testingClock) Since() time.Duration {
-	return 0
+	return 1
 }
 
 func (c *testingClock) TimeoutAt(d time.Duration, timeoutType TimeoutType) <-chan time.Time {
