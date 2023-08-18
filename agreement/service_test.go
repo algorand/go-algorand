@@ -1056,6 +1056,120 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 	}
 }
 
+func TestDynamicFilterTimeoutResets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+
+	version := protocol.ConsensusFuture
+
+	cfg := config.Consensus[protocol.ConsensusFuture]
+	if cfg.DynamicFilterCredentialArrivalHistory <= 0 {
+		return
+	}
+	if !cfg.DynamicFilterTimeout {
+		return
+	}
+
+	numNodes := 5
+
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusFuture, nil
+	}
+	ledgerFactory := func(data map[basics.Address]basics.AccountData) Ledger {
+		return makeTestLedgerWithConsensusVersion(data, consensusVersion)
+	}
+
+	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, ledgerFactory)
+	startRound := baseLedger.NextRound()
+	defer cleanupFn()
+
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(clocks, 0)
+
+	filterTimeouts := make([][]time.Duration, numNodes, numNodes)
+
+	// run round with round-specific consensus version first (since fix in #1896)
+	zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
+	for j := 1; j < cfg.DynamicFilterCredentialArrivalHistory+1; j++ {
+		for srvIdx, clock := range clocks {
+			delta, err := clock.(*testingClock).when(TimeoutFilter)
+			require.NoError(t, err)
+			filterTimeouts[srvIdx] = append(filterTimeouts[srvIdx], delta)
+		}
+		zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
+	}
+
+	for i := range clocks {
+		require.Len(t, filterTimeouts[i], cfg.DynamicFilterCredentialArrivalHistory)
+		for j := 1; j < cfg.DynamicFilterCredentialArrivalHistory-1; j++ {
+			require.Equal(t, filterTimeouts[i][j-1], filterTimeouts[i][j])
+		}
+		fmt.Println(filterTimeouts[i])
+		require.Less(t, filterTimeouts[i][cfg.DynamicFilterCredentialArrivalHistory-1], filterTimeouts[i][cfg.DynamicFilterCredentialArrivalHistory-2])
+	}
+
+	// force fast partition recovery into bottom
+	{
+		baseNetwork.dropAllSoftVotes()
+		baseNetwork.dropAllSlowNextVotes()
+
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
+		zeroes = expectNoNewPeriod(clocks, zeroes)
+
+		triggerGlobalTimeoutType(TimeoutDeadline, clocks, activityMonitor)
+		zeroes = expectNoNewPeriod(clocks, zeroes)
+
+		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
+		zeroes = expectNoNewPeriod(clocks, zeroes)
+
+		triggerGlobalTimeout(firstFPR, TimeoutFastRecovery, clocks, activityMonitor)
+		zeroes = expectNewPeriod(clocks, zeroes)
+	}
+
+	// terminate on period 1
+	{
+		baseNetwork.repairAll()
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
+		zeroes = expectNewPeriod(clocks, zeroes)
+	}
+
+	filterTimeoutsPostRecovery := make([][]time.Duration, numNodes, numNodes)
+
+	// run round with round-specific consensus version first (since fix in #1896)
+	zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
+	for j := 1; j < cfg.DynamicFilterCredentialArrivalHistory+1; j++ {
+		for srvIdx, clock := range clocks {
+			delta, err := clock.(*testingClock).when(TimeoutFilter)
+			require.NoError(t, err)
+			filterTimeoutsPostRecovery[srvIdx] = append(filterTimeoutsPostRecovery[srvIdx], delta)
+		}
+		zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
+	}
+
+	for i := range clocks {
+		require.Len(t, filterTimeoutsPostRecovery[i], cfg.DynamicFilterCredentialArrivalHistory)
+		// check that history was discarded, so filter time increased back to its original default
+		require.Less(t, filterTimeouts[i][cfg.DynamicFilterCredentialArrivalHistory-1], filterTimeoutsPostRecovery[i][0])
+		require.Equal(t, filterTimeouts[i][cfg.DynamicFilterCredentialArrivalHistory-2], filterTimeoutsPostRecovery[i][0])
+
+		// check that filter timeout was updated to at the end of the history window
+		for j := 1; j < cfg.DynamicFilterCredentialArrivalHistory-1; j++ {
+			require.Equal(t, filterTimeoutsPostRecovery[i][j-1], filterTimeoutsPostRecovery[i][j])
+		}
+		fmt.Println(filterTimeoutsPostRecovery[i])
+		require.Less(t, filterTimeoutsPostRecovery[i][cfg.DynamicFilterCredentialArrivalHistory-1], filterTimeoutsPostRecovery[i][cfg.DynamicFilterCredentialArrivalHistory-2])
+	}
+
+	sanityCheck(startRound, 2*round(cfg.DynamicFilterCredentialArrivalHistory+1)+1, ledgers)
+}
+
 func TestAgreementSynchronousFuture1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
