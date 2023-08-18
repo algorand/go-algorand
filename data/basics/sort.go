@@ -35,23 +35,31 @@ func (a SortUint64) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 // canonical encoding of maps in msgpack format.
 //
 //msgp:ignore SortAssetIndex
-//msgp:sort AssetIndex SortAssetIndex
+//msgp:sort AssetIndex SortAssetIndex AssetIndexLess
 type SortAssetIndex []AssetIndex
 
 func (a SortAssetIndex) Len() int           { return len(a) }
 func (a SortAssetIndex) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortAssetIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
+// AssetIndexLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func AssetIndexLess(a, b AssetIndex) bool { return a < b }
+
 // SortAppIndex implements sorting by AppIndex keys for
 // canonical encoding of maps in msgpack format.
 //
 //msgp:ignore SortAppIndex
-//msgp:sort AppIndex SortAppIndex
+//msgp:sort AppIndex SortAppIndex AppIndexLess
 type SortAppIndex []AppIndex
 
 func (a SortAppIndex) Len() int           { return len(a) }
 func (a SortAppIndex) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortAppIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+// AppIndexLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func AppIndexLess(a, b AppIndex) bool { return a < b }
 
 // SortString implements sorting by string keys for
 // canonical encoding of maps in msgpack format.
@@ -68,9 +76,13 @@ func (a SortString) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 // canonical encoding of maps in msgpack format.
 //
 //msgp:ignore SortAddress
-//msgp:sort Address SortAddress
+//msgp:sort Address SortAddress AddressLess
 type SortAddress []Address
 
 func (a SortAddress) Len() int           { return len(a) }
 func (a SortAddress) Less(i, j int) bool { return bytes.Compare(a[i][:], a[j][:]) < 0 }
 func (a SortAddress) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+// AddressLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func AddressLess(a, b Address) bool { return bytes.Compare(a[:], b[:]) < 0 }

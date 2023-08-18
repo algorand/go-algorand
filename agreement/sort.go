@@ -22,11 +22,11 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-// These types are defined to satisfy SortInterface used by
+// These types are defined to satisfy SortInterface used by msgp
 
 // SortAddress is re-exported from basics.Address since the interface is already defined there
 //
-//msgp:sort basics.Address SortAddress
+//msgp:sort basics.Address SortAddress basics.AddressLess
 type SortAddress = basics.SortAddress
 
 // SortUint64 is re-exported from basics since the interface is already defined there
@@ -36,38 +36,50 @@ type SortUint64 = basics.SortUint64
 // SortStep defines SortInterface used by msgp to consistently sort maps with this type as key.
 //
 //msgp:ignore SortStep
-//msgp:sort step SortStep
+//msgp:sort step SortStep StepLess
 type SortStep []step
 
 func (a SortStep) Len() int           { return len(a) }
 func (a SortStep) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortStep) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
+// StepLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func StepLess(a, b step) bool { return a < b }
+
 // SortPeriod defines SortInterface used by msgp to consistently sort maps with this type as key.
 //
 //msgp:ignore SortPeriod
-//msgp:sort period SortPeriod
+//msgp:sort period SortPeriod PeriodLess
 type SortPeriod []period
 
 func (a SortPeriod) Len() int           { return len(a) }
 func (a SortPeriod) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortPeriod) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
+// PeriodLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func PeriodLess(a, b period) bool { return a < b }
+
 // SortRound defines SortInterface used by msgp to consistently sort maps with this type as key.
 // note, for type aliases the base type is used for the interface
 //
 //msgp:ignore SortRound
-//msgp:sort basics.Round SortRound
+//msgp:sort basics.Round SortRound RoundLess
 type SortRound []basics.Round
 
 func (a SortRound) Len() int           { return len(a) }
 func (a SortRound) Less(i, j int) bool { return a[i] < a[j] }
 func (a SortRound) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
+// RoundLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func RoundLess(a, b round) bool { return a < b }
+
 // SortProposalValue defines SortInterface used by msgp to consistently sort maps with this type as key.
 //
 //msgp:ignore SortProposalValue
-//msgp:sort proposalValue SortProposalValue
+//msgp:sort proposalValue SortProposalValue ProposalValueLess
 type SortProposalValue []proposalValue
 
 func (a SortProposalValue) Len() int { return len(a) }
@@ -88,3 +100,21 @@ func (a SortProposalValue) Less(i, j int) bool {
 }
 
 func (a SortProposalValue) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+
+// ProposalValueLess is necessary for msgp:sort directive
+// which used to generate UnmarshalValidateMsg generators
+func ProposalValueLess(a, b proposalValue) bool {
+	if a.OriginalPeriod != b.OriginalPeriod {
+		return a.OriginalPeriod < b.OriginalPeriod
+	}
+	cmp := bytes.Compare(a.OriginalProposer[:], b.OriginalProposer[:])
+	if cmp != 0 {
+		return cmp < 0
+	}
+	cmp = bytes.Compare(a.BlockDigest[:], b.BlockDigest[:])
+	if cmp != 0 {
+		return cmp < 0
+	}
+	cmp = bytes.Compare(a.EncodingDigest[:], b.EncodingDigest[:])
+	return cmp < 0
+}
