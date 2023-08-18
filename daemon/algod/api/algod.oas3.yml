@@ -815,6 +815,9 @@
                 "exec-trace-config": {
                   "$ref": "#/components/schemas/SimulateTraceConfig"
                 },
+                "initial-states": {
+                  "$ref": "#/components/schemas/SimulateInitialStates"
+                },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                   "type": "integer"
@@ -2064,6 +2067,10 @@
           "new-value",
           "slot"
         ],
+        "type": "object"
+      },
+      "SimulateInitialStates": {
+        "description": "Initial states of resources that were accessed during simulation.",
         "type": "object"
       },
       "SimulateRequest": {
@@ -6816,6 +6823,9 @@
                     "exec-trace-config": {
                       "$ref": "#/components/schemas/SimulateTraceConfig"
                     },
+                    "initial-states": {
+                      "$ref": "#/components/schemas/SimulateInitialStates"
+                    },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
@@ -6848,6 +6858,9 @@
                     },
                     "exec-trace-config": {
                       "$ref": "#/components/schemas/SimulateTraceConfig"
+                    },
+                    "initial-states": {
+                      "$ref": "#/components/schemas/SimulateInitialStates"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",

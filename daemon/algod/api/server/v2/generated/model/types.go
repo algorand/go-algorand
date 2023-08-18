@@ -696,6 +696,9 @@ type ScratchChange struct {
 	Slot uint64 `json:"slot"`
 }
 
+// SimulateInitialStates Initial states of resources that were accessed during simulation.
+type SimulateInitialStates = map[string]interface{}
+
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
 	// AllowEmptySignatures Allows transactions without signatures to be simulated as if they had correct signatures.
@@ -1239,6 +1242,9 @@ type SimulateResponse struct {
 
 	// ExecTraceConfig An object that configures simulation execution trace.
 	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
+
+	// InitialStates Initial states of resources that were accessed during simulation.
+	InitialStates *SimulateInitialStates `json:"initial-states,omitempty"`
 
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`

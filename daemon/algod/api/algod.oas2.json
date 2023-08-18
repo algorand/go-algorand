@@ -4275,6 +4275,33 @@
           }
         }
       }
+    },
+    "SimulateInitialStates": {
+      "description": "Initial states of resources that were accessed during simulation.",
+      "type": "object",
+      "properties": {
+        "asset-states": {
+          "description": "The initial asset states before simulation. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationLocalReference"
+          }
+        },
+        "app-states": {
+          "description": "The initial application states before simulation. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationLocalReference"
+          }
+        },
+        "account-states": {
+          "description": "The initial account states before simulation. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationLocalReference"
+          }
+        }
+      }
     }
   },
   "parameters": {
@@ -4925,6 +4952,9 @@
           },
           "exec-trace-config": {
             "$ref": "#/definitions/SimulateTraceConfig"
+          },
+          "initial-states": {
+            "$ref": "#/definitions/SimulateInitialStates"
           }
         }
       }

@@ -528,19 +528,14 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 		}
 	}
 
-	encodedSimulationResult := PreEncodedSimulateResponse{
+	return PreEncodedSimulateResponse{
 		Version:         result.Version,
 		LastRound:       uint64(result.LastRound),
-		TxnGroups:       make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		TxnGroups:       convertSlice(result.TxnGroups, convertTxnGroupResult),
 		EvalOverrides:   evalOverrides,
 		ExecTraceConfig: result.TraceConfig,
+		// TODO InitialStates
 	}
-
-	for i, txnGroup := range result.TxnGroups {
-		encodedSimulationResult.TxnGroups[i] = convertTxnGroupResult(txnGroup)
-	}
-
-	return encodedSimulationResult
 }
 
 func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {

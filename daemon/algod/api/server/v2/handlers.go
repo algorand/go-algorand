@@ -1003,6 +1003,7 @@ type PreEncodedSimulateResponse struct {
 	TxnGroups       []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
 	EvalOverrides   *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
 	ExecTraceConfig simulation.ExecTraceConfig         `codec:"exec-trace-config,omitempty"`
+	InitialStates   *model.SimulateInitialStates       `codec:"initial-states,omitempty"`
 }
 
 // PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
