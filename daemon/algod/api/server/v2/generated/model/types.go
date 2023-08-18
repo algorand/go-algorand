@@ -280,6 +280,30 @@ type Application struct {
 	Params ApplicationParams `json:"params"`
 }
 
+// ApplicationInitialStates An application's initial global/local/box state before simulation.
+type ApplicationInitialStates struct {
+	// AppBoxes An application's global/local/box state.
+	AppBoxes *ApplicationKVStorage `json:"app-boxes,omitempty"`
+
+	// AppGlobals An application's global/local/box state.
+	AppGlobals *ApplicationKVStorage `json:"app-globals,omitempty"`
+
+	// AppLocals An application's initial local states tied to different accounts.
+	AppLocals *[]ApplicationKVStorage `json:"app-locals,omitempty"`
+
+	// Id Application index.
+	Id uint64 `json:"id"`
+}
+
+// ApplicationKVStorage An application's global/local/box state.
+type ApplicationKVStorage struct {
+	// Account The address of the account associated with the local state.
+	Account *string `json:"account,omitempty"`
+
+	// Kvs Key-Value pairs representing application states.
+	Kvs []AvmKeyValue `json:"kvs"`
+}
+
 // ApplicationLocalReference References an account's local state for an application.
 type ApplicationLocalReference struct {
 	// Account Address of the account with the local state.
@@ -441,6 +465,14 @@ type AssetParams struct {
 
 	// UrlB64 Base64 encoded URL where more information about the asset can be retrieved.
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
+}
+
+// AvmKeyValue Represents an AVM key-value pair in an application store.
+type AvmKeyValue struct {
+	Key []byte `json:"key"`
+
+	// Value Represents an AVM value.
+	Value AvmValue `json:"value"`
 }
 
 // AvmValue Represents an AVM value.
@@ -697,7 +729,10 @@ type ScratchChange struct {
 }
 
 // SimulateInitialStates Initial states of resources that were accessed during simulation.
-type SimulateInitialStates = map[string]interface{}
+type SimulateInitialStates struct {
+	// AppInitialStates The initial states of accessed application before simulation. The order of this array is arbitrary.
+	AppInitialStates *[]ApplicationInitialStates `json:"app-initial-states,omitempty"`
+}
 
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {

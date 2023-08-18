@@ -133,18 +133,6 @@ type ExecTraceConfig struct {
 	State   bool `codec:"state-change"`
 }
 
-type AssetInitialState struct {
-}
-
-type AppInitialState struct {
-}
-
-// ResourcesInitialStates gathers all initial states of resources that were accessed during simulation
-type ResourcesInitialStates struct {
-	AssetInitialStates map[basics.AssetIndex]AssetInitialState
-	AppInitialStates   map[basics.AppIndex]AppInitialState
-}
-
 // Result contains the result from a call to Simulator.Simulate
 type Result struct {
 	Version       uint64
@@ -224,18 +212,13 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 		return Result{}, err
 	}
 
-	var initialState *ResourcesInitialStates
-	if request.TraceConfig.State {
-		initialState = &ResourcesInitialStates{}
-	}
-
 	return Result{
 		Version:       ResultLatestVersion,
 		LastRound:     lastRound,
 		TxnGroups:     groups,
 		EvalOverrides: resultEvalConstants,
 		TraceConfig:   request.TraceConfig,
-		InitialStates: initialState,
+		InitialStates: makeResourcesInitialStates(request),
 	}, nil
 }
 

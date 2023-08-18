@@ -3289,6 +3289,23 @@
         }
       }
     },
+    "AvmKeyValue": {
+      "description": "Represents an AVM key-value pair in an application store.",
+      "type": "object",
+      "required": [
+        "key",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "$ref": "#/definitions/AvmValue"
+        }
+      }
+    },
     "StateDelta": {
       "description": "Application state delta.",
       "type": "array",
@@ -4127,6 +4144,52 @@
         }
       }
     },
+    "ApplicationKVStorage": {
+      "description": "An application's global/local/box state.",
+      "required": [
+        "kvs"
+      ],
+      "properties": {
+        "kvs": {
+          "description": "Key-Value pairs representing application states.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AvmKeyValue"
+          }
+        },
+        "account": {
+          "description": "The address of the account associated with the local state.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        }
+      }
+    },
+    "ApplicationInitialStates": {
+      "description": "An application's initial global/local/box state before simulation.",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "description": "Application index.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "app-locals": {
+          "description": "An application's initial local states tied to different accounts.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationKVStorage"
+          }
+        },
+        "app-globals": {
+          "$ref": "#/definitions/ApplicationKVStorage"
+        },
+        "app-boxes": {
+          "$ref": "#/definitions/ApplicationKVStorage"
+        }
+      }
+    },
     "SimulationOpcodeTraceUnit": {
       "description": "The set of trace information and effect from evaluating a single opcode.",
       "type": "object",
@@ -4280,25 +4343,11 @@
       "description": "Initial states of resources that were accessed during simulation.",
       "type": "object",
       "properties": {
-        "asset-states": {
-          "description": "The initial asset states before simulation. The order of this array is arbitrary.",
+        "app-initial-states": {
+          "description": "The initial states of accessed application before simulation. The order of this array is arbitrary.",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/ApplicationLocalReference"
-          }
-        },
-        "app-states": {
-          "description": "The initial application states before simulation. The order of this array is arbitrary.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ApplicationLocalReference"
-          }
-        },
-        "account-states": {
-          "description": "The initial account states before simulation. The order of this array is arbitrary.",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ApplicationLocalReference"
+            "$ref": "#/definitions/ApplicationInitialStates"
           }
         }
       }
