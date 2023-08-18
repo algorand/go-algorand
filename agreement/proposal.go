@@ -99,8 +99,6 @@ type proposal struct {
 	// validated (and thus was ready to be delivered to the state
 	// machine), relative to the zero of that round.
 	validatedAt time.Duration
-
-	voteValidatedAt time.Duration
 }
 
 func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
