@@ -2439,7 +2439,7 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 			data = append(data, protocol.Encode(&stxn)...)
 		}
 		encodedSignedTransactionGroups =
-			append(encodedSignedTransactionGroups, network.IncomingMessage{Data: data})
+			append(encodedSignedTransactionGroups, network.IncomingMessage{Data: data, Sender: mockSender{}})
 	}
 
 	// start the handler
