@@ -313,16 +313,12 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 
 	// Make sure the dynamic filter timeout is not too small nor too large
 	if dynamicTimeout < proto.DynamicFilterTimeoutLowerBound {
-		if tracer != nil {
-			tracer.log.Debugf("Calculated dynamic filter timeout = %v for round %v, period %v. It's too low, setting to %v\n", dynamicTimeout, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
-		}
+		tracer.log.Debugf("Calculated dynamic filter timeout = %v for round %v, period %v. It's too low, setting to %v.\n", dynamicTimeout, p.Round, p.Period, proto.DynamicFilterTimeoutLowerBound)
 		dynamicTimeout = proto.DynamicFilterTimeoutLowerBound
 	} else if dynamicTimeout > defaultTimeout {
-		if tracer != nil {
-			tracer.log.Debugf("Calculated dynamic filter timeout = %v for round %v, period %v. It too high, so using the default %v\n", dynamicTimeout, p.Round, p.Period, defaultTimeout)
-		}
+		tracer.log.Debugf("Calculated dynamic filter timeout = %v for round %v, period %v. It's too high, using the default %v.\n", dynamicTimeout, p.Round, p.Period, defaultTimeout)
 		dynamicTimeout = defaultTimeout
-	} else if tracer != nil {
+	} else {
 		tracer.log.Debugf("Calculated dynamic filter timeout = %v for round %v, period %v.\n", dynamicTimeout, p.Round, p.Period)
 	}
 
