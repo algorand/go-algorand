@@ -78,6 +78,7 @@ var (
 	simulateEnableRequestTrace    bool
 	simulateStackChange           bool
 	simulateScratchChange         bool
+	simulateAppStateChange        bool
 	simulateAllowUnnamedResources bool
 )
 
@@ -172,6 +173,7 @@ func init() {
 	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
 	simulateCmd.Flags().BoolVar(&simulateStackChange, "stack", false, "Report stack change during simulation time")
 	simulateCmd.Flags().BoolVar(&simulateScratchChange, "scratch", false, "Report scratch change during simulation time")
+	simulateCmd.Flags().BoolVar(&simulateAppStateChange, "state", false, "Report application state changes during simulation time")
 	simulateCmd.Flags().BoolVar(&simulateAllowUnnamedResources, "allow-unnamed-resources", false, "Allow access to unnamed resources during simulation")
 }
 
@@ -1380,11 +1382,13 @@ func traceCmdOptionToSimulateTraceConfigModel() simulation.ExecTraceConfig {
 			Enable:  true,
 			Stack:   true,
 			Scratch: true,
+			State:   true,
 		}
 	}
 	traceConfig.Enable = traceConfig.Enable || simulateEnableRequestTrace
 	traceConfig.Stack = traceConfig.Stack || simulateStackChange
 	traceConfig.Scratch = traceConfig.Scratch || simulateScratchChange
+	traceConfig.State = traceConfig.State || simulateAppStateChange
 
 	return traceConfig
 }

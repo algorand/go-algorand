@@ -325,6 +325,24 @@ type ApplicationParams struct {
 	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
 }
 
+// ApplicationStateOperation An operation against an application's global/local/box state.
+type ApplicationStateOperation struct {
+	// Account For local state changes, the address of the account associated with the local state.
+	Account *string `json:"account,omitempty"`
+
+	// AppStateType Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.
+	AppStateType string `json:"app-state-type"`
+
+	// Key The key (name) of the global/local/box state.
+	Key []byte `json:"key"`
+
+	// NewValue Represents an AVM value.
+	NewValue *AvmValue `json:"new-value,omitempty"`
+
+	// Operation Operation type. Value `w` is **write**, `d` is **delete**.
+	Operation string `json:"operation"`
+}
+
 // ApplicationStateSchema Specifies maximums on the number of each type that may be stored.
 type ApplicationStateSchema struct {
 	// NumByteSlice \[nbs\] num of byte slices.
@@ -715,6 +733,9 @@ type SimulateTraceConfig struct {
 
 	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
 	StackChange *bool `json:"stack-change,omitempty"`
+
+	// StateChange A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.
+	StateChange *bool `json:"state-change,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -814,6 +835,9 @@ type SimulationOpcodeTraceUnit struct {
 
 	// StackPopCount The number of deleted stack values by this opcode.
 	StackPopCount *uint64 `json:"stack-pop-count,omitempty"`
+
+	// StateChanges The operations against the current application's states.
+	StateChanges *[]ApplicationStateOperation `json:"state-changes,omitempty"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.

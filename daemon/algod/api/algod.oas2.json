@@ -3684,6 +3684,10 @@
         "scratch-change": {
           "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
           "type": "boolean"
+        },
+        "state-change": {
+          "description": "A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.",
+          "type": "boolean"
         }
       }
     },
@@ -4092,6 +4096,37 @@
         }
       }
     },
+    "ApplicationStateOperation": {
+      "description": "An operation against an application's global/local/box state.",
+      "required": [
+        "operation",
+        "app-state-type",
+        "key"
+      ],
+      "properties": {
+        "operation": {
+          "description": "Operation type. Value `w` is **write**, `d` is **delete**.",
+          "type": "string"
+        },
+        "app-state-type": {
+          "description": "Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.",
+          "type": "string"
+        },
+        "key": {
+          "description": "The key (name) of the global/local/box state.",
+          "type": "string",
+          "format": "byte"
+        },
+        "new-value": {
+          "$ref": "#/definitions/AvmValue"
+        },
+        "account": {
+          "description": "For local state changes, the address of the account associated with the local state.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        }
+      }
+    },
     "SimulationOpcodeTraceUnit": {
       "description": "The set of trace information and effect from evaluating a single opcode.",
       "type": "object",
@@ -4108,6 +4143,13 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/ScratchChange"
+          }
+        },
+        "state-changes": {
+          "description": "The operations against the current application's states.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationStateOperation"
           }
         },
         "spawned-inners": {
