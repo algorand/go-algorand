@@ -1040,7 +1040,20 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 		return
 	}
 
-	simulateAgreementWithConsensusVersion(t, 5, cfg.DynamicFilterCredentialArrivalHistory+20, disabled, consensusVersion)
+	rounds := cfg.DynamicFilterCredentialArrivalHistory + 20
+
+	filterTimeouts := simulateAgreementWithConsensusVersion(t, 5, rounds, disabled, consensusVersion)
+	require.Len(t, filterTimeouts, rounds-1)
+	for i := 1; i < cfg.DynamicFilterCredentialArrivalHistory-1; i++ {
+		require.Equal(t, filterTimeouts[i-1], filterTimeouts[i])
+	}
+
+	// dynamic filter timeout kicks in when history window is full
+	require.Less(t, filterTimeouts[cfg.DynamicFilterCredentialArrivalHistory-1], filterTimeouts[cfg.DynamicFilterCredentialArrivalHistory-2])
+
+	for i := cfg.DynamicFilterCredentialArrivalHistory; i < len(filterTimeouts); i++ {
+		require.Equal(t, filterTimeouts[i-1], filterTimeouts[i])
+	}
 }
 
 func TestDynamicFilterTimeoutResets(t *testing.T) {

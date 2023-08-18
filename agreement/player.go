@@ -300,7 +300,6 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 		// and therefore, can't use dynamic timeout
 		return FilterTimeout(p.Period, ver)
 	}
-
 	defaultTimeout := FilterTimeout(0, ver)
 	if proto.DynamicFilterCredentialArrivalHistory > len(p.lowestCredentialArrivals) {
 		// not enough samples, use the default
@@ -411,7 +410,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 		// calculation mechanism.
 		p.lowestCredentialArrivals = nil
 	}
-	p.Deadline = Deadline{Duration: FilterTimeout(target, source.Proto), Type: TimeoutFilter}
+	p.Deadline = Deadline{Duration: p.calculateFilterTimeout(source.Proto, r.t), Type: TimeoutFilter}
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
