@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -168,4 +169,36 @@ func TestFastCatchupResume(t *testing.T) {
 
 	// Verify the sync was reset.
 	assert.Equal(t, uint64(0), node.GetSyncRound())
+}
+
+func TestSimulate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	node := setupFollowNode(t)
+
+	round := node.ledger.LastRound()
+
+	stxn := txntest.Txn{
+		Type:        protocol.PaymentTx,
+		Sender:      sinkAddr,
+		Receiver:    poolAddr,
+		Amount:      1,
+		Fee:         1000,
+		FirstValid:  round,
+		LastValid:   round + 1000,
+		GenesisHash: node.ledger.GenesisHash(),
+	}.SignedTxn()
+
+	request := simulation.Request{
+		TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+		AllowEmptySignatures: true,
+	}
+
+	result, err := node.Simulate(request)
+	require.NoError(t, err)
+
+	require.Len(t, result.TxnGroups, 1)
+	require.Len(t, result.TxnGroups[0].Txns, 1)
+	require.Equal(t, stxn, result.TxnGroups[0].Txns[0].Txn.SignedTxn)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
 }
