@@ -2269,9 +2269,9 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
 	// fund app account
-	appFundTxn, err := testClient.SendPaymentFromWallet(
-		wh, nil, senderAddress, futureAppID.Address().String(),
-		0, MinBalance*uint64(MaxDepth+1), nil, "", 0, 0,
+	appFundTxn, err := testClient.ConstructPayment(
+		senderAddress, futureAppID.Address().String(),
+		0, MinBalance*uint64(MaxDepth+1), nil, "", [32]byte{}, 0, 0,
 	)
 	a.NoError(err)
 
@@ -3117,7 +3117,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
 	// fund app account
-	appFundTxn, err := testClient.SendPaymentFromWallet(
+	_, err = testClient.SendPaymentFromWallet(
 		wh, nil, senderAddress, futureAppID.Address().String(),
 		0, MinBalance, nil, "", 0, 0,
 	)
@@ -3131,14 +3131,6 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallTxn)
 	a.NoError(err)
 
-	// Group the transactions
-	gid, err := testClient.GroupID([]transactions.Transaction{appFundTxn, appCallTxn})
-	a.NoError(err)
-	appFundTxn.Group = gid
-	appCallTxn.Group = gid
-
-	appFundTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appFundTxn)
-	a.NoError(err)
 	appCallTxnSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn)
 	a.NoError(err)
 
@@ -3149,7 +3141,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	}
 	simulateRequest := v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+			{Txns: []transactions.SignedTxn{appCallTxnSigned}},
 		},
 		ExecTraceConfig: execTraceConfig,
 	}
@@ -3167,7 +3159,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	// simulate with wrong config (not enabled trace), see expected error
 	_, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
-			{Txns: []transactions.SignedTxn{appFundTxnSigned, appCallTxnSigned}},
+			{Txns: []transactions.SignedTxn{appCallTxnSigned}},
 		},
 		ExecTraceConfig: simulation.ExecTraceConfig{Scratch: true},
 	})
@@ -3179,9 +3171,8 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 
 	// check if resp match expected result
 	a.Equal(execTraceConfig, resp.ExecTraceConfig)
-	a.Len(resp.TxnGroups[0].Txns, 2)
-	a.Nil(resp.TxnGroups[0].Txns[0].TransactionTrace)
-	a.NotNil(resp.TxnGroups[0].Txns[1].TransactionTrace)
+	a.Len(resp.TxnGroups[0].Txns, 1)
+	a.NotNil(resp.TxnGroups[0].Txns[0].TransactionTrace)
 
 	expectedTraceSecondTxn := &model.SimulationTransactionExecTrace{
 		ApprovalProgramTrace: &[]model.SimulationOpcodeTraceUnit{
@@ -3219,7 +3210,290 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 		},
 		ApprovalProgramHash: toPtr(approvalHash.ToSlice()),
 	}
-	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[1].TransactionTrace)
+	a.Equal(expectedTraceSecondTxn, resp.TxnGroups[0].Txns[0].TransactionTrace)
+}
+
+func TestSimulateExecTraceStateChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
+
+	// Get primary node
+	primaryNode, err := fixture.GetNodeController("Primary")
+	a.NoError(err)
+
+	fixture.Start()
+	defer primaryNode.FullStop()
+
+	// get lib goal client
+	testClient := fixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	_, err = testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := getMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(senderAddress, "no addr with funds")
+
+	addressDigest, err := basics.UnmarshalChecksumAddress(senderAddress)
+	a.NoError(err)
+
+	ops, err := logic.AssembleString(
+		`#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+txn OnCompletion
+int OptIn
+==
+bnz end // Always allow optin
+
+byte "local"
+byte "global"
+txn ApplicationArgs 0
+match local global
+err // Unknown command
+
+local:
+  txn Sender
+  byte "local-int-key"
+  int 0xcafeb0ba
+  app_local_put
+  int 0
+  byte "local-bytes-key"
+  byte "xqcL"
+  app_local_put
+  b end
+
+global:
+  byte "global-int-key"
+  int 0xdeadbeef
+  app_global_put
+  byte "global-bytes-key"
+  byte "welt am draht"
+  app_global_put
+  b end
+
+end:
+  int 1`)
+	a.NoError(err)
+	approval := ops.Program
+	approvalHash := crypto.Hash(approval)
+
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	gl := basics.StateSchema{NumByteSlice: 1, NumUint: 1}
+	lc := basics.StateSchema{NumByteSlice: 1, NumUint: 1}
+
+	MinFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
+	MinBalance := config.Consensus[protocol.ConsensusFuture].MinBalance
+
+	// create app and get the application ID
+	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
+		transactions.NoOpOC, approval, clearState, gl,
+		lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+
+	// fund app account
+	_, err = testClient.ConstructPayment(
+		senderAddress, futureAppID.Address().String(),
+		0, MinBalance*2, nil, "", [32]byte{}, 0, 0,
+	)
+	a.NoError(err)
+
+	// construct app call "global"
+	appCallGlobalTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(futureAppID), [][]byte{[]byte("global")}, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	appCallGlobalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallGlobalTxn)
+	a.NoError(err)
+	// construct app optin
+	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(uint64(futureAppID), nil, nil, nil, nil, nil)
+	a.NoError(err)
+	appOptInTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appOptInTxn)
+	// construct app call "global"
+	appCallLocalTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(futureAppID), [][]byte{[]byte("local")}, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	appCallLocalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallLocalTxn)
+	a.NoError(err)
+
+	gid, err := testClient.GroupID([]transactions.Transaction{appCallGlobalTxn, appOptInTxn, appCallLocalTxn})
+	a.NoError(err)
+	appCallGlobalTxn.Group = gid
+	appOptInTxn.Group = gid
+	appCallLocalTxn.Group = gid
+
+	appCallTxnGlobalSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallGlobalTxn)
+	a.NoError(err)
+	appOptInSigned, err := testClient.SignTransactionWithWallet(wh, nil, appOptInTxn)
+	a.NoError(err)
+	appCallTxnLocalSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallLocalTxn)
+	a.NoError(err)
+
+	// construct simulation request, with state change enabled
+	execTraceConfig := simulation.ExecTraceConfig{
+		Enable: true,
+		State:  true,
+	}
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{appCallTxnGlobalSigned, appOptInSigned, appCallTxnLocalSigned}},
+		},
+		ExecTraceConfig: execTraceConfig,
+	}
+
+	// update the configuration file to enable EnableDeveloperAPI
+	err = primaryNode.FullStop()
+	a.NoError(err)
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	cfg.EnableDeveloperAPI = true
+	err = cfg.SaveToDisk(primaryNode.GetDataDir())
+	require.NoError(t, err)
+	fixture.Start()
+
+	// start real simulating
+	resp, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	// assertions
+	a.Len(resp.TxnGroups, 1)
+	a.Nil(resp.TxnGroups[0].FailureMessage)
+	a.Len(resp.TxnGroups[0].Txns, 3)
+
+	for i := 0; i < 3; i++ {
+		a.NotNil(resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
+		a.Equal(approvalHash.ToSlice(), *resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
+	}
+
+	a.Equal([]model.SimulationOpcodeTraceUnit{
+		{Pc: 1},
+		{Pc: 4},
+		{Pc: 6},
+		{Pc: 9},
+		{Pc: 11},
+		{Pc: 12},
+		{Pc: 13},
+		{Pc: 16},
+		{Pc: 23},
+		{Pc: 31},
+		{Pc: 34},
+		{Pc: 94},
+		{Pc: 110},
+		{
+			Pc: 116,
+			StateChanges: &[]model.ApplicationStateOperation{
+				{
+					Operation:    "w",
+					AppStateType: "g",
+					Key:          []byte("global-int-key"),
+					NewValue: &model.AvmValue{
+						Type: uint64(basics.TealUintType),
+						Uint: toPtr[uint64](0xdeadbeef),
+					},
+				},
+			},
+		},
+		{Pc: 117},
+		{Pc: 135},
+		{
+			Pc: 150,
+			StateChanges: &[]model.ApplicationStateOperation{
+				{
+					Operation:    "w",
+					AppStateType: "g",
+					Key:          []byte("global-bytes-key"),
+					NewValue: &model.AvmValue{
+						Type:  uint64(basics.TealBytesType),
+						Bytes: toPtr([]byte("welt am draht")),
+					},
+				},
+			},
+		},
+		{Pc: 151},
+		{Pc: 154},
+	}, *resp.TxnGroups[0].Txns[0].TransactionTrace.ApprovalProgramTrace)
+	a.NotNil(resp.TxnGroups[0].Txns[1].TransactionTrace.ApprovalProgramHash)
+	a.Equal([]model.SimulationOpcodeTraceUnit{
+		{Pc: 1},
+		{Pc: 4},
+		{Pc: 6},
+		{Pc: 9},
+		{Pc: 11},
+		{Pc: 12},
+		{Pc: 13},
+		{Pc: 154},
+	}, *resp.TxnGroups[0].Txns[1].TransactionTrace.ApprovalProgramTrace)
+	a.Equal([]model.SimulationOpcodeTraceUnit{
+		{Pc: 1},
+		{Pc: 4},
+		{Pc: 6},
+		{Pc: 9},
+		{Pc: 11},
+		{Pc: 12},
+		{Pc: 13},
+		{Pc: 16},
+		{Pc: 23},
+		{Pc: 31},
+		{Pc: 34},
+		{Pc: 41},
+		{Pc: 43},
+		{Pc: 58},
+		{
+			Pc: 64,
+			StateChanges: &[]model.ApplicationStateOperation{
+				{
+					Operation:    "w",
+					AppStateType: "l",
+					Key:          []byte("local-int-key"),
+					NewValue: &model.AvmValue{
+						Type: uint64(basics.TealUintType),
+						Uint: toPtr[uint64](0xcafeb0ba),
+					},
+					Account: toPtr(addressDigest.String()),
+				},
+			},
+		},
+		{Pc: 65},
+		{Pc: 67},
+		{Pc: 84},
+		{
+			Pc: 90,
+			StateChanges: &[]model.ApplicationStateOperation{
+				{
+					Operation:    "w",
+					AppStateType: "l",
+					Key:          []byte("local-bytes-key"),
+					NewValue: &model.AvmValue{
+						Type:  uint64(basics.TealBytesType),
+						Bytes: toPtr([]byte("xqcL")),
+					},
+					Account: toPtr(addressDigest.String()),
+				},
+			},
+		},
+		{Pc: 91},
+		{Pc: 154},
+	}, *resp.TxnGroups[0].Txns[2].TransactionTrace.ApprovalProgramTrace)
 }
 
 func TestSimulateWithUnnamedResources(t *testing.T) {
