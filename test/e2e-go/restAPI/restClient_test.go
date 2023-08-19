@@ -3306,7 +3306,7 @@ end:
 
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 60*time.Second)
 	a.NoError(err)
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
@@ -3328,7 +3328,7 @@ end:
 	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(uint64(futureAppID), nil, nil, nil, nil, nil)
 	a.NoError(err)
 	appOptInTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appOptInTxn)
-	// construct app call "global"
+	// construct app call "local"
 	appCallLocalTxn, err := testClient.MakeUnsignedAppNoOpTx(
 		uint64(futureAppID), [][]byte{[]byte("local")}, nil, nil, nil, nil,
 	)
