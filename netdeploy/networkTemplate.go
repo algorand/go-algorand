@@ -35,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/netdeploy/remote"
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/util"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // NetworkTemplate represents the template used for creating private named networks
@@ -163,11 +162,11 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 			if pkErr != nil {
 				return nil, nil, pkErr
 			}
-			pid, pErr := peer.IDFromPublicKey(sk.GetPublic())
+			pid, pErr := p2p.PeerIDFromPublicKey(sk.GetPublic())
 			if pErr != nil {
-				return nil, nil, pkErr
+				return nil, nil, pErr
 			}
-			t.Nodes[i].P2PPeerID = pid
+			t.Nodes[i].P2PPeerID = string(pid)
 		}
 	}
 	return

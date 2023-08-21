@@ -16,8 +16,6 @@
 
 package remote
 
-import "github.com/libp2p/go-libp2p/core/peer"
-
 // NodeConfig represents the configuration settings to apply to a single node running on a host
 type NodeConfig struct {
 	Name               string `json:",omitempty"`
@@ -59,8 +57,8 @@ type NodeConfigGoal struct {
 	Name               string
 	IsRelay            bool `json:",omitempty"`
 	Wallets            []NodeWalletData
-	P2PPeerID          peer.ID `json:",omitempty"`
-	DeadlockDetection  int     `json:"-"`
-	ConfigJSONOverride string  `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
-	PeerList           string  `json:",omitempty"` // Semicolon separated list of peers to connect to. Only applicable for non-relays
+	P2PPeerID          string `json:",omitempty"`
+	DeadlockDetection  int    `json:"-"`
+	ConfigJSONOverride string `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
+	PeerList           string `json:",omitempty"` // Semicolon separated list of peers to connect to. Only applicable for non-relays
 }

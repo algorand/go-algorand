@@ -28,11 +28,15 @@ import (
 	"github.com/algorand/go-algorand/util"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // DefaultPrivKeyPath is the default path inside the node's root directory at which the private key
 // for p2p identity is found and persisted to when a new one is generated.
 const DefaultPrivKeyPath = "peerIDPrivKey.pem"
+
+// PeerID is a string representation of a peer's public key, primarily used to avoid importing libp2p into packages that shouldn't need it
+type PeerID string
 
 // GetPrivKey manages loading and creation of private keys for network PeerIDs
 // It prioritizes, in this order:
@@ -64,6 +68,15 @@ func GetPrivKey(cfg config.Local, dataDir string) (crypto.PrivKey, error) {
 		return privKey, writePrivateKeyToFile(defaultPrivKeyPath, privKey)
 	}
 	return privKey, nil
+}
+
+// PeerIDFromPublicKey returns a PeerID from a public key, thin wrapper over libp2p function doing the same
+func PeerIDFromPublicKey(pubKey crypto.PubKey) (PeerID, error) {
+	peerID, err := peer.IDFromPublicKey(pubKey)
+	if err != nil {
+		return "", err
+	}
+	return PeerID(peerID), nil
 }
 
 // loadPrivateKeyFromFile attempts to read raw privKey bytes from path
