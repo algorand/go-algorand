@@ -674,16 +674,16 @@ func TestRecordData(t *testing.T) {
 	gen := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 
 	id := TxTypeID("test")
-	data, ok := gen.reportData[id]
+	data, ok := gen.reportData.Transactions[id]
 	require.False(t, ok)
 
 	gen.recordData(id, time.Now())
-	data, ok = gen.reportData[id]
+	data, ok = gen.reportData.Transactions[id]
 	require.True(t, ok)
 	require.Equal(t, uint64(1), data.GenerationCount)
 
 	gen.recordData(id, time.Now())
-	data, ok = gen.reportData[id]
+	data, ok = gen.reportData.Transactions[id]
 	require.True(t, ok)
 	require.Equal(t, uint64(2), data.GenerationCount)
 }
@@ -725,11 +725,13 @@ func TestCumulativeEffects(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	report := Report{
-		TxTypeID("app_boxes_optin"):   {GenerationCount: uint64(42)},
-		TxTypeID("app_boxes_create"):  {GenerationCount: uint64(1337)},
-		TxTypeID("pay_pay"):           {GenerationCount: uint64(999)},
-		TxTypeID("asset_optin_total"): {GenerationCount: uint64(13)},
-		TxTypeID("app_boxes_call"):    {GenerationCount: uint64(413)},
+		Transactions: map[TxTypeID]TxData{
+			TxTypeID("app_boxes_optin"):   {GenerationCount: uint64(42)},
+			TxTypeID("app_boxes_create"):  {GenerationCount: uint64(1337)},
+			TxTypeID("pay_pay"):           {GenerationCount: uint64(999)},
+			TxTypeID("asset_optin_total"): {GenerationCount: uint64(13)},
+			TxTypeID("app_boxes_call"):    {GenerationCount: uint64(413)},
+		},
 	}
 
 	expectedEffectsReport := EffectsReport{

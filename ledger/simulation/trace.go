@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -129,6 +130,7 @@ type ExecTraceConfig struct {
 	Enable  bool `codec:"enable"`
 	Stack   bool `codec:"stack-change"`
 	Scratch bool `codec:"scratch-change"`
+	State   bool `codec:"state-change"`
 }
 
 // Result contains the result from a call to Simulator.Simulate
@@ -151,6 +153,9 @@ func (r Result) ReturnStackChange() bool { return r.TraceConfig.Stack }
 
 // ReturnScratchChange tells if the simulation runs with scratch-change enabled.
 func (r Result) ReturnScratchChange() bool { return r.TraceConfig.Scratch }
+
+// ReturnStateChange tells if the simulation runs with state-change enabled.
+func (r Result) ReturnStateChange() bool { return r.TraceConfig.State }
 
 // validateSimulateRequest first checks relation between request and config variables, including developerAPI:
 // if `developerAPI` provided is turned off, this method would:
@@ -175,6 +180,13 @@ func validateSimulateRequest(request Request, developerAPI bool) error {
 			return InvalidRequestError{
 				SimulatorError{
 					err: fmt.Errorf("basic trace must be enabled when enabling scratch slot change tracing"),
+				},
+			}
+		}
+		if request.TraceConfig.State {
+			return InvalidRequestError{
+				SimulatorError{
+					err: fmt.Errorf("basic trace must be enabled when enabling app state change tracing"),
 				},
 			}
 		}
@@ -217,6 +229,29 @@ type ScratchChange struct {
 	NewValue basics.TealValue
 }
 
+// StateOperation represents an operation into an app local/global/box state
+type StateOperation struct {
+	// AppStateOp is one of logic.AppStateOpEnum, standing for either write or delete.
+	AppStateOp logic.AppStateOpEnum
+
+	// AppState is one of logic.AppStateEnum, standing for one of global/local/box.
+	AppState logic.AppStateEnum
+
+	// AppID is the current app's ID.
+	AppID basics.AppIndex
+
+	// Key is the app state kv-pair's key, directly casting byte slice to string.
+	Key string
+
+	// NewValue is the value write to the app's state.
+	// NOTE: if the current app state operation is del, then this value is basics.TealValue{}.
+	NewValue basics.TealValue
+
+	// Account is the account associated to the local state an app writes to.
+	// NOTE: if the current app state is not local, then this value is basics.Address{}.
+	Account basics.Address
+}
+
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
@@ -235,16 +270,25 @@ type OpcodeTraceUnit struct {
 
 	// ScratchSlotChanges stands for write operations into scratch slots
 	ScratchSlotChanges []ScratchChange
+
+	// StateChanges stands for the creation/reading/writing/deletion operations to app's state
+	StateChanges []StateOperation
 }
 
 // TransactionTrace contains the trace effects of a single transaction evaluation (including its inners)
 type TransactionTrace struct {
 	// ApprovalProgramTrace stands for a slice of OpcodeTraceUnit over application call on approval program
 	ApprovalProgramTrace []OpcodeTraceUnit
+	// ApprovalProgramHash stands for the hash digest of approval program bytecode executed during simulation
+	ApprovalProgramHash crypto.Digest
 	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
 	ClearStateProgramTrace []OpcodeTraceUnit
+	// ClearStateProgramHash stands for the hash digest of clear state program bytecode executed during simulation
+	ClearStateProgramHash crypto.Digest
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
 	LogicSigTrace []OpcodeTraceUnit
+	// LogicSigHash stands for the hash digest of logic sig bytecode executed during simulation
+	LogicSigHash crypto.Digest
 	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
 	programTraceRef *[]OpcodeTraceUnit
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This

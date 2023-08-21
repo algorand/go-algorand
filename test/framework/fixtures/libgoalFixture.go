@@ -314,8 +314,12 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	if preserveData {
 		f.network.Stop(f.binDir)
 		f.dumpLogs(filepath.Join(f.PrimaryDataDir(), "node.log"))
+		f.dumpLogs(filepath.Join(f.PrimaryDataDir(), "algod-err.log"))
+		f.dumpLogs(filepath.Join(f.PrimaryDataDir(), "algod-out.log"))
 		for _, nodeDir := range f.NodeDataDirs() {
 			f.dumpLogs(filepath.Join(nodeDir, "node.log"))
+			f.dumpLogs(filepath.Join(nodeDir, "algod-err.log"))
+			f.dumpLogs(filepath.Join(nodeDir, "algod-out.log"))
 		}
 	} else {
 		f.network.Delete(f.binDir)

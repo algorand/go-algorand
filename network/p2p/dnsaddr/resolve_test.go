@@ -94,9 +94,9 @@ func TestMultiaddrsFromResolverDnsFailure(t *testing.T) {
 	}
 
 	// Fail on no resolver
-	maddrs, err := MultiaddrsFromResolver("", dnsaddrCont)
+	maddrs, err := MultiaddrsFromResolver("0.0.0.1", dnsaddrCont)
 	assert.Empty(t, maddrs)
-	assert.ErrorContains(t, err, fmt.Sprintf("passed controller has no resolvers MultiaddrsFromResolver"))
+	assert.ErrorContains(t, err, fmt.Sprintf("passed controller has no resolvers Iterate"))
 
 	resolver, _ := madns.NewResolver(madns.WithDefaultResolver(&failureResolver{}))
 	dnsaddrCont = &MultiaddrDNSResolveController{

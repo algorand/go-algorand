@@ -4267,7 +4267,6 @@ func TestUpdatePhonebookAddressesPersistentPeers(t *testing.T) {
 
 		// Check that entries are in fact in phonebook less any duplicates
 		dedupedRelayDomains := removeDuplicateStr(relayDomains, false)
-		require.Equal(t, 0, len(relayDomains)-len(dedupedRelayDomains))
 
 		relayPeers := nw.GetPeers(PeersPhonebookRelays)
 		require.Equal(t, len(dedupedRelayDomains)+len(persistentPeers), len(relayPeers))

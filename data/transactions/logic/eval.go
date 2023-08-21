@@ -3630,6 +3630,10 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		} else {
 			sv.Bytes = zeroAddress[:]
 		}
+	case AssetCreateMinBalance:
+		sv.Uint = cx.Proto.MinBalance
+	case AssetOptInMinBalance:
+		sv.Uint = cx.Proto.MinBalance
 	default:
 		err = fmt.Errorf("invalid global field %d", fs.field)
 	}
