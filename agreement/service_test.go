@@ -1111,7 +1111,6 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 		for j := 1; j < cfg.DynamicFilterCredentialArrivalHistory-1; j++ {
 			require.Equal(t, filterTimeouts[i][j-1], filterTimeouts[i][j])
 		}
-		fmt.Println(filterTimeouts[i])
 		require.Less(t, filterTimeouts[i][cfg.DynamicFilterCredentialArrivalHistory-1], filterTimeouts[i][cfg.DynamicFilterCredentialArrivalHistory-2])
 	}
 
@@ -1163,7 +1162,6 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 		for j := 1; j < cfg.DynamicFilterCredentialArrivalHistory-1; j++ {
 			require.Equal(t, filterTimeoutsPostRecovery[i][j-1], filterTimeoutsPostRecovery[i][j])
 		}
-		fmt.Println(filterTimeoutsPostRecovery[i])
 		require.Less(t, filterTimeoutsPostRecovery[i][cfg.DynamicFilterCredentialArrivalHistory-1], filterTimeoutsPostRecovery[i][cfg.DynamicFilterCredentialArrivalHistory-2])
 	}
 
