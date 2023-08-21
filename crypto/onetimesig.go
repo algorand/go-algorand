@@ -16,6 +16,7 @@
 
 package crypto
 
+import "C"
 import (
 	"encoding/binary"
 	"fmt"
@@ -319,6 +320,20 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
+	// Get the hash representations of the batch ID, offset ID, and message.
+	batchIDHashRep := HashRep(batchID)
+	offsetIDHashRep := HashRep(offsetID)
+	messageHashRep := HashRep(message)
+	// Append the hash representations and lengths to slices for batch verification.
+	msgHashReps := make([]byte, 0)
+	msgLens := make([]C.ulonglong, 0, 3)
+	msgHashReps = append(msgHashReps, batchIDHashRep...)
+	msgLens = append(msgLens, C.ulonglong(len(batchIDHashRep)))
+	msgHashReps = append(msgHashReps, offsetIDHashRep...)
+	msgLens = append(msgLens, C.ulonglong(len(offsetIDHashRep)))
+	msgHashReps = append(msgHashReps, messageHashRep...)
+	msgLens = append(msgLens, C.ulonglong(len(messageHashRep)))
+	// Append the public keys and signatures to slices for batch verification.
 	pks := make([]byte, 0, ed25519PublicKeySize*3)
 	pks = append(pks, v[:]...)
 	pks = append(pks, batchID.SubKeyPK[:]...)
@@ -327,7 +342,7 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 	sigs = append(sigs, sig.PK2Sig[:]...)
 	sigs = append(sigs, sig.PK1Sig[:]...)
 	sigs = append(sigs, sig.Sig[:]...)
-	allValid, _ := batchVerificationImpl([]Hashable{batchID, offsetID, message}, pks, sigs)
+	allValid, _ := batchVerificationImpl(msgHashReps, msgLens, pks, sigs)
 	return allValid
 }
 

@@ -35,12 +35,9 @@ package crypto
 //	sizeofULongLong = sizeof(unsigned long long),
 // };
 // int ed25519_batch_wrapper(const unsigned char *messages1D,
-//                           const unsigned char **messages2D,
 //                           const unsigned long long *mlen,
 //                           const unsigned char *publicKeys1D,
-//                           const unsigned char **publicKeys2D,
 //                           const unsigned char *signatures1D,
-//                           const unsigned char **signatures2D,
 //                           size_t num,
 //                           int *valid_p);
 import "C"
@@ -152,20 +149,12 @@ func batchVerificationImpl(messageHashReps []byte, messageLens []C.ulonglong, pu
 
 	valid := make([]C.size_t, numberOfSignatures)
 
-	// allocate space for the wrapper function to fill in 2D arrays
-	messages2D := make([]uintptr, numberOfSignatures)
-	publicKeys2D := make([]uintptr, numberOfSignatures)
-	signatures2D := make([]uintptr, numberOfSignatures)
-
 	// call the batch verifier
 	allValid := C.ed25519_batch_wrapper(
 		(*C.uchar)(unsafe.Pointer(&messageHashReps[0])),
-		(**C.uchar)(unsafe.Pointer(&messages2D[0])),
 		(*C.ulonglong)(unsafe.Pointer(&messageLens[0])),
 		(*C.uchar)(unsafe.Pointer(&publicKeys[0])),
-		(**C.uchar)(unsafe.Pointer(&publicKeys2D[0])),
 		(*C.uchar)(unsafe.Pointer(&signatures[0])),
-		(**C.uchar)(unsafe.Pointer(&signatures2D[0])),
 		C.size_t(numberOfSignatures),
 		(*C.int)(unsafe.Pointer(&valid[0])))
 
