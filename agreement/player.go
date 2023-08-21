@@ -274,16 +274,18 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 // updateCredentialArrivalHistory is called at the end of a successful
 // uninterrupted round (just after ensureAction is generated) to collect
 // credential arrival times to dynamically set the filter timeout.
-func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.ConsensusVersion) {
+// It returns the time of the lowest credential's arrival, if one was
+// collected and added to lowestCredentialArrivals, or zero otherwise.
+func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.ConsensusVersion) time.Duration {
 	// only append to lowestCredentialArrivals if this was a successful round completing in period 0.
 	if p.Period != 0 {
-		return
+		return 0
 	}
 	// look up the validatedAt time of the winning proposal-vote
 	re := readLowestEvent{T: readLowestVote, Round: p.Round, Period: p.Period}
 	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
 	if !re.Filled {
-		return
+		return 0
 	}
 
 	p.lowestCredentialArrivals = append(p.lowestCredentialArrivals, re.Vote.validatedAt)
@@ -293,6 +295,7 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 	if len(p.lowestCredentialArrivals) > proto.DynamicFilterCredentialArrivalHistory {
 		p.lowestCredentialArrivals = p.lowestCredentialArrivals[len(p.lowestCredentialArrivals)-proto.DynamicFilterCredentialArrivalHistory:]
 	}
+	return re.Vote.validatedAt
 }
 
 // calculateFilterTimeout chooses the appropriate filter timeout.
@@ -349,8 +352,8 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 		if res.Committable {
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
+			a0.voteValidatedAt = p.updateCredentialArrivalHistory(r, e.Proto)
 			actions = append(actions, a0)
-			p.updateCredentialArrivalHistory(r, e.Proto)
 			as := p.enterRound(r, e, p.Round+1)
 			return append(actions, as...)
 		}
@@ -675,8 +678,8 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			if freshestRes.Ok && freshestRes.Event.t() == certThreshold && freshestRes.Event.Proposal == e.Input.Proposal.value() {
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
+				a0.voteValidatedAt = p.updateCredentialArrivalHistory(r, e.Proto.Version)
 				actions = append(actions, a0)
-				p.updateCredentialArrivalHistory(r, e.Proto.Version)
 				as := p.enterRound(r, delegatedE, cert.Round+1)
 				return append(actions, as...)
 			}
