@@ -42,6 +42,9 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 		return
 	}
 
+	// addr is set in the sqlite impl even if we dont find the account
+	data.Addr = addr
+
 	// read latest account up to `rnd``
 	low, high := onlineAccountLatestRangePrefix(addr, rnd)
 	iter := r.kvr.NewIter(low[:], high[:], true)
@@ -55,7 +58,6 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 		// extract round
 		updRound := extractOnlineAccountRound(key)
 
-		data.Addr = addr
 		data.UpdRound = updRound
 
 		// get value for current item in the iterator
