@@ -58,6 +58,7 @@ func init() {
 	RunnerCmd.Flags().StringVarP(&runnerArgs.GenesisFile, "genesis-file", "f", "", "file path to the genesis associated with the db snapshot")
 	RunnerCmd.Flags().BoolVarP(&runnerArgs.ResetDB, "reset-db", "", false, "If set database will be deleted before running tests.")
 	RunnerCmd.Flags().Uint64VarP(&runnerArgs.Times, "times", "t", 1, "Number of times to run the scenario(s).")
+	RunnerCmd.Flags().DurationVarP(&runnerArgs.StartDelay, "start-delay", "", 0, "Duration to wait before starting a test scenario. This may be useful for snapshot tests where DB maintenance occurs after loading data.")
 
 	RunnerCmd.MarkFlagRequired("scenario")
 	RunnerCmd.MarkFlagRequired("conduit-binary")
