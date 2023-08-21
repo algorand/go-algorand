@@ -572,6 +572,13 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 		<-pool.specAsmDone
 	}
 
+	// only do speculative assembly if we relatively many transactions in the
+	// pool
+	if pool.pendingCountNoLock() > pool.cfg.SpeculativeBlockAssemblyMinTxnPoolPressure {
+		//pool.mu.Unlock()
+		//	return
+	}
+
 	// move remembered txns to pending
 	pool.rememberCommit(false)
 

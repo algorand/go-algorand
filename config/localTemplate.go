@@ -509,6 +509,8 @@ type Local struct {
 
 	SpeculativeBlockAssemblyGraceTime time.Duration `version[30]:"50000000"`
 
+	SpeculativeBlockAssemblyMinTxnPoolPressure int
+
 	// StorageEngine allows to control which type of storage to use for the ledger.
 	// Available options are:
 	// - sqlite (default)

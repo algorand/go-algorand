@@ -124,6 +124,7 @@ var defaultLocal = Local{
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
 	SpeculativeBlockAssemblyGraceTime:          50000000,
+	SpeculativeBlockAssemblyMinTxnPoolPressure: 5000,
 	StorageEngine:                              "sqlite",
 	SuggestedFeeBlockHistory:                   3,
 	SuggestedFeeSlidingWindowSize:              50,
