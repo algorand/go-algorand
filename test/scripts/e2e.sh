@@ -50,6 +50,9 @@ TEST_RUN_ID=$(${SCRIPT_PATH}/testrunid.py)
 export TEMPDIR=${SRCROOT}/tmp/out/e2e/${TEST_RUN_ID}
 echo "Test output can be found in ${TEMPDIR}"
 
+echo "TEST BASH output on CI to stderr. No e2e tests today" >&2
+exit 1
+
 function cleanup() {
   echo "Cleaning up temp dir."
 

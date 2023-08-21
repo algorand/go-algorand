@@ -81,7 +81,7 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
-UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
+UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ | grep go-algorand/node ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
 GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types

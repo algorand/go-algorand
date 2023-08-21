@@ -595,3 +595,10 @@ func TestMaxSizesCorrect(t *testing.T) {
 	tsSize := uint64(network.MaxMessageLength)
 	require.Equal(t, tsSize, protocol.TopicMsgRespTag.MaxMessageSize())
 }
+
+func TestMyNodeFail(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	fmt.Fprintln(os.Stderr, "TestMyNodeFail")
+	t.FailNow()
+}
