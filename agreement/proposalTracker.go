@@ -168,6 +168,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 	case readLowestVote:
 		e := e.(readLowestEvent)
 		e.Vote = t.Freezer.Lowest
+		e.Filled = t.Freezer.Filled
 		return e
 
 	case softThreshold, certThreshold:

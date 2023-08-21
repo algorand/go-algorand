@@ -4222,7 +4222,7 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0004Len := uint32(29)
-	var zb0004Mask uint64 /* 39 bits */
+	var zb0004Mask uint64 /* 38 bits */
 	if (*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0 {
 		zb0004Len--
 		zb0004Mask |= 0x40

@@ -425,6 +425,9 @@ type readLowestEvent struct {
 
 	// Vote holds the lowest-credential vote.
 	Vote vote
+
+	// Filled indicates whether the Vote field is filled
+	Filled bool
 }
 
 func (e readLowestEvent) t() eventType {

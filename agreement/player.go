@@ -282,6 +282,9 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 	// look up the validatedAt time of the winning proposal-vote
 	re := readLowestEvent{T: readLowestVote, Round: p.Round, Period: p.Period}
 	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
+	if !re.Filled {
+		return
+	}
 
 	p.lowestCredentialArrivals = append(p.lowestCredentialArrivals, re.Vote.validatedAt)
 
