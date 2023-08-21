@@ -413,6 +413,10 @@ func writeReport(w io.Writer, scenario string, start time.Time, runDuration time
 		return err
 	}
 
+	if err := write("initial_round:%d\n", generatorReport.InitialRound); err != nil {
+		return err
+	}
+
 	for metric, value := range generatorReport.Counters {
 		if err := write("%s:%d\n", metric, value); err != nil {
 			return err

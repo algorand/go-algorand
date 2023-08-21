@@ -17,7 +17,6 @@
 package peerstore
 
 import (
-	"context"
 	"crypto/rand"
 	"fmt"
 	"testing"
@@ -41,8 +40,7 @@ func TestPeerstore(t *testing.T) {
 	}
 
 	addrInfo, _ := PeerInfoFromAddrs(peerAddrs)
-	dir := t.TempDir()
-	ps, err := NewPeerStore(context.Background(), dir, addrInfo)
+	ps, err := NewPeerStore(addrInfo)
 	require.NoError(t, err)
 	defer ps.Close()
 
@@ -74,17 +72,8 @@ func TestPeerstore(t *testing.T) {
 	require.Equal(t, 8, len(peers))
 
 	// remove a peer addr
-	ps.Peerstore.ClearAddrs(peerIDS[0])
+	ps.ClearAddrs(peerIDS[0])
 	peers = ps.PeersWithAddrs()
 	require.Equal(t, 7, len(peers))
-
-}
-
-func TestPeerStoreInitErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	// bad datastore path
-	_, err := NewPeerStore(context.Background(), "//", []*peer.AddrInfo{})
-	require.Contains(t, err.Error(), "invalid path for datastore")
 
 }
