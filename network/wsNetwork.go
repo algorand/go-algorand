@@ -784,16 +784,7 @@ func (wn *WebsocketNetwork) setup() {
 	// roughly estimate the number of messages that could be seen at any given moment.
 	// For the late/redo/down committee, which happen in parallel, we need to allocate
 	// extra space there.
-	wn.outgoingMessagesBufferSize = int(
-		max(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers,
-			config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize,
-			config.Consensus[protocol.ConsensusCurrentVersion].CertCommitteeSize,
-			config.Consensus[protocol.ConsensusCurrentVersion].NextCommitteeSize) +
-			max(config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize,
-				config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize,
-				config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize),
-	)
-
+	wn.outgoingMessagesBufferSize = outgoingMessagesBufferSize
 	wn.wsMaxHeaderBytes = wsMaxHeaderBytes
 
 	wn.identityTracker = NewIdentityTracker()

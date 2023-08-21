@@ -20,7 +20,6 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -102,7 +101,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 			pstore.AddAddrs(addrInfo[i].ID, addrInfo[i].Addrs, p2ppeerstore.AddressTTL)
 		}
 	} else {
-		pstore, err = peerstore.NewPeerStore(context.Background(), filepath.Join(datadir, peerStorePath), addrInfo)
+		pstore, err = peerstore.NewPeerStore(addrInfo)
 		if err != nil {
 			return nil, err
 		}
