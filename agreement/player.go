@@ -315,13 +315,15 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	dynamicTimeout := sortedArrivals[proto.DynamicFilterTimeoutCredentialArrivalHistoryIdx] + proto.DynamicFilterTimeoutGraceInterval
 
 	// Make sure the dynamic filter timeout is not too small nor too large
+	clampedTimeout := dynamicTimeout
 	if dynamicTimeout < proto.DynamicFilterTimeoutLowerBound {
-		dynamicTimeout = proto.DynamicFilterTimeoutLowerBound
+		clampedTimeout = proto.DynamicFilterTimeoutLowerBound
 	}
 	if dynamicTimeout > defaultTimeout {
-		dynamicTimeout = defaultTimeout
+		clampedTimeout = defaultTimeout
 	}
-	tracer.log.Debugf("round %d, period %d: dynamicTimeout = %d, clamped timeout = %d", p.Round, p.Period, dynamicTimeout, timeout)
+	tracer.log.Debugf("round %d, period %d: dynamicTimeout = %d, clamped timeout = %d", p.Round, p.Period, dynamicTimeout, clampedTimeout)
+	dynamicTimeout = clampedTimeout
 
 	if !proto.DynamicFilterTimeout {
 		// If the dynamic filter timeout is disabled, return the default filter
