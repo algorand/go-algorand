@@ -104,24 +104,32 @@ func txMsgID(m *pubsub_pb.Message) string {
 	return string(h[:])
 }
 
-func (s *serviceImpl) joinTopic(topic string) (*pubsub.Topic, error) {
+// getOrCreateTopic returns a topic if it was already joined previously and otherwise creates it and adds it to the topics map
+func (s *serviceImpl) getOrCreateTopic(topicName string) (*pubsub.Topic, error) {
+	s.topicsMu.RLock()
+	topic, ok := s.topics[topicName]
+	s.topicsMu.RUnlock()
+	if ok {
+		return topic, nil
+	}
+
 	s.topicsMu.Lock()
 	defer s.topicsMu.Unlock()
-
-	if _, ok := s.topics[topic]; !ok {
+	// check again in case it was created while we were waiting for the lock
+	if _, ok := s.topics[topicName]; !ok {
 		var topt []pubsub.TopicOpt
-		switch topic {
+		switch topicName {
 		case TXTopicName:
 			topt = append(topt, pubsub.WithTopicMessageIdFn(txMsgID))
 		}
 
-		psTopic, err := s.pubsub.Join(topic, topt...)
+		psTopic, err := s.pubsub.Join(topicName, topt...)
 		if err != nil {
 			return nil, err
 		}
-		s.topics[topic] = psTopic
+		s.topics[topicName] = psTopic
 	}
-	return s.topics[topic], nil
+	return s.topics[topicName], nil
 }
 
 // Subscribe returns a subscription to the given topic
@@ -129,7 +137,7 @@ func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.S
 	if err := s.pubsub.RegisterTopicValidator(topic, val); err != nil {
 		return nil, err
 	}
-	t, err := s.joinTopic(topic)
+	t, err := s.getOrCreateTopic(topic)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +147,7 @@ func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.S
 
 // Publish publishes data to the given topic
 func (s *serviceImpl) Publish(ctx context.Context, topic string, data []byte) error {
-	t, err := s.joinTopic(topic)
+	t, err := s.getOrCreateTopic(topic)
 	if err != nil {
 		return err
 	}

@@ -61,7 +61,7 @@ type serviceImpl struct {
 	pubsubCtx context.Context
 
 	topics   map[string]*pubsub.Topic
-	topicsMu deadlock.Mutex
+	topicsMu deadlock.RWMutex
 }
 
 // AlgorandWsProtocol defines a libp2p protocol name for algorand's websockets messages
