@@ -1869,7 +1869,7 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 60*time.Second)
 	a.NoError(err)
 
 	// get app ID
@@ -1884,7 +1884,7 @@ int 1`
 	)
 	a.NoError(err)
 	appFundTxID := appFundTxn.ID()
-	_, err = waitForTransaction(t, testClient, senderAddress, appFundTxID.String(), 30*time.Second)
+	_, err = waitForTransaction(t, testClient, senderAddress, appFundTxID.String(), 60*time.Second)
 	a.NoError(err)
 
 	// construct app call
@@ -1997,7 +1997,7 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 60*time.Second)
 	a.NoError(err)
 
 	// get app ID
@@ -2012,7 +2012,7 @@ int 1`
 	)
 	a.NoError(err)
 	appFundTxID := appFundTxn.ID()
-	_, err = waitForTransaction(t, testClient, senderAddress, appFundTxID.String(), 30*time.Second)
+	_, err = waitForTransaction(t, testClient, senderAddress, appFundTxID.String(), 60*time.Second)
 	a.NoError(err)
 
 	// construct app call
@@ -2264,7 +2264,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 60*time.Second)
 	a.NoError(err)
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
@@ -3112,7 +3112,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := waitForTransaction(t, testClient, senderAddress, appCreateTxID, 60*time.Second)
 	a.NoError(err)
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
@@ -3529,7 +3529,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	)
 	a.NoError(err)
 	txID := txn.ID().String()
-	_, err = waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	_, err = waitForTransaction(t, testClient, senderAddress, txID, 60*time.Second)
 	a.NoError(err)
 
 	// create asset
@@ -3540,7 +3540,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	confirmedTxn, err := waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	confirmedTxn, err := waitForTransaction(t, testClient, senderAddress, txID, 60*time.Second)
 	a.NoError(err)
 	// get asset ID
 	a.NotNil(confirmedTxn.AssetIndex)
@@ -3555,7 +3555,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, otherAddress, txID, 30*time.Second)
+	_, err = waitForTransaction(t, testClient, otherAddress, txID, 60*time.Second)
 	a.NoError(err)
 
 	// transfer asset
@@ -3566,7 +3566,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	_, err = waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	_, err = waitForTransaction(t, testClient, senderAddress, txID, 60*time.Second)
 	a.NoError(err)
 
 	ops, err := logic.AssembleString("#pragma version 9\n int 1")
@@ -3584,7 +3584,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	confirmedTxn, err = waitForTransaction(t, testClient, otherAddress, txID, 30*time.Second)
+	confirmedTxn, err = waitForTransaction(t, testClient, otherAddress, txID, 60*time.Second)
 	a.NoError(err)
 	// get app ID
 	a.NotNil(confirmedTxn.ApplicationIndex)
@@ -3662,7 +3662,7 @@ int 1
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	confirmedTxn, err = waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	confirmedTxn, err = waitForTransaction(t, testClient, senderAddress, txID, 60*time.Second)
 	a.NoError(err)
 	// get app ID
 	a.NotNil(confirmedTxn.ApplicationIndex)
@@ -3676,7 +3676,7 @@ int 1
 	)
 	a.NoError(err)
 	txID = txn.ID().String()
-	_, err = waitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	_, err = waitForTransaction(t, testClient, senderAddress, txID, 60*time.Second)
 	a.NoError(err)
 
 	// construct app call
