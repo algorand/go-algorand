@@ -46,7 +46,6 @@ var genesisDir string
 func init() {
 	networkCmd.AddCommand(networkCreateCmd)
 	networkCmd.PersistentFlags().StringVarP(&networkRootDir, "rootdir", "r", "", "Root directory for the private network directories")
-	networkCmd.MarkPersistentFlagRequired("rootdir")
 
 	networkCreateCmd.Flags().StringVarP(&networkName, "network", "n", "", "Specify the name to use for the private network")
 	networkCreateCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
@@ -54,18 +53,29 @@ func init() {
 	networkCreateCmd.Flags().BoolVar(&noClean, "noclean", false, "Prevents auto-cleanup on error - for diagnosing problems")
 	networkCreateCmd.Flags().BoolVar(&devModeOverride, "devMode", false, "Forces the configuration to enable DevMode, returns an error if the template is not compatible with DevMode.")
 	networkCreateCmd.Flags().BoolVarP(&startOnCreation, "start", "s", false, "Automatically start the network after creating it.")
-	networkCreateCmd.Flags().StringVar(&genesisDir, "genesisDir", "", "Specify the path to the directory with existing genesis.json, root and partkeys. By default, the genesis.json and keys will be generated on start. This should only be used on private networks.")
-
-	networkStartCmd.Flags().StringVarP(&startNode, "node", "n", "", "Specify the name of a specific node to start")
-
-	networkGenesisCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
+	networkCreateCmd.Flags().StringVarP(&genesisDir, "genesisdir", "g", "", "Specify the path to the directory with existing genesis.json, root and partkeys to import into the network directory. By default, the genesis.json and keys will be generated on start. This should only be used on private networks.")
+	networkCreateCmd.MarkFlagRequired("rootdir")
 
 	networkCmd.AddCommand(networkStartCmd)
+	networkStartCmd.Flags().StringVarP(&startNode, "node", "n", "", "Specify the name of a specific node to start")
+	networkStartCmd.MarkFlagRequired("rootdir")
+
 	networkCmd.AddCommand(networkRestartCmd)
+	networkRestartCmd.MarkFlagRequired("rootdir")
+
 	networkCmd.AddCommand(networkStopCmd)
+	networkStopCmd.MarkFlagRequired("rootdir")
+
 	networkCmd.AddCommand(networkStatusCmd)
+	networkStatusCmd.MarkFlagRequired("rootdir")
+
 	networkCmd.AddCommand(networkDeleteCmd)
+	networkDeleteCmd.MarkFlagRequired("rootdir")
+
 	networkCmd.AddCommand(networkGenesisCmd)
+	networkGenesisCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
+	networkGenesisCmd.Flags().StringVarP(&genesisDir, "genesisdir", "g", "", "Specify the path to the directory to export genesis.json, root and partkey files. This should only be used on private networks.")
+	networkStopCmd.MarkFlagRequired("genesisdir")
 }
 
 var networkCmd = &cobra.Command{
