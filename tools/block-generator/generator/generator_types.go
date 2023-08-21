@@ -150,6 +150,7 @@ type assetHolding struct {
 
 // Report is the generation report.
 type Report struct {
+	InitialRound uint64              `json:"initial_round"`
 	Counters     map[string]uint64   `json:"counters"`
 	Transactions map[TxTypeID]TxData `json:"transactions"`
 }
