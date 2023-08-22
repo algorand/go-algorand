@@ -3950,7 +3950,7 @@ func (z *player) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(9)
-	var zb0002Mask uint16 /* 11 bits */
+	var zb0002Mask uint16 /* 12 bits */
 	if (*z).OldDeadline == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x1

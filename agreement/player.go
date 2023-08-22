@@ -63,6 +63,11 @@ type player struct {
 	// the history of arrival times of the lowest credential from previous
 	// ronuds, used for calculating the filter timeout dynamically.
 	lowestCredentialArrivals []time.Duration
+
+	// The period 0 dynamic filter timeout calculated for this round, if set,
+	// even if dynamic filter timeouts are not enabled. It is used for reporting
+	// to telemetry.
+	dynamicFilterTimeout time.Duration
 }
 
 func (p *player) T() stateMachineTag {
@@ -327,6 +332,8 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	}
 	tracer.log.Debugf("round %d, period %d: dynamicTimeout = %d, clamped timeout = %d", p.Round, p.Period, dynamicTimeout, clampedTimeout)
 	dynamicTimeout = clampedTimeout
+	// store dynamicFilterTimeout on the player for debugging & reporting
+	p.dynamicFilterTimeout = dynamicTimeout
 
 	if !proto.DynamicFilterTimeout {
 		// If the dynamic filter timeout is disabled, return the default filter
@@ -353,6 +360,7 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
 			a0.voteValidatedAt = p.updateCredentialArrivalHistory(r, e.Proto)
+			a0.dynamicFilterTimeout = p.dynamicFilterTimeout
 			actions = append(actions, a0)
 			as := p.enterRound(r, e, p.Round+1)
 			return append(actions, as...)
@@ -679,6 +687,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
 				a0.voteValidatedAt = p.updateCredentialArrivalHistory(r, e.Proto.Version)
+				a0.dynamicFilterTimeout = p.dynamicFilterTimeout
 				actions = append(actions, a0)
 				as := p.enterRound(r, delegatedE, cert.Round+1)
 				return append(actions, as...)
