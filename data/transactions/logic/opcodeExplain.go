@@ -32,6 +32,9 @@ const (
 
 	// AppStateDelete stands for deleting an app state.
 	AppStateDelete
+
+	// AppStateRead stands for reading from an app state.
+	AppStateRead
 )
 
 // AppStateEnum stands for the enum of app state type, should be one of global/local/box.
@@ -165,6 +168,26 @@ func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
 	return
 }
 
+func opBoxExtractStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // length
+	prev := last - 1          // start
+	pprev := prev - 1         // name
+
+	return BoxState, AppStateRead, cx.appID, basics.Address{}, string(cx.Stack[pprev].Bytes)
+}
+
+func opBoxLenStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // name
+
+	return BoxState, AppStateRead, cx.appID, basics.Address{}, string(cx.Stack[last].Bytes)
+}
+
+func opBoxGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // name
+
+	return BoxState, AppStateRead, cx.appID, basics.Address{}, string(cx.Stack[last].Bytes)
+}
+
 func opBoxCreateStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
 	last := len(cx.Stack) - 1 // size
 	prev := last - 1          // name
@@ -190,6 +213,45 @@ func opBoxPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.
 	last := len(cx.Stack) - 1 // name
 
 	return BoxState, AppStateWrite, cx.appID, basics.Address{}, string(cx.Stack[last].Bytes)
+}
+
+func opAppLocalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // state key
+	prev := last - 1          // account
+
+	// NOTE: we swallow the error of finding account ref, for eventually it would error in execution time,
+	// and we don't have to complain here.
+	var addr basics.Address
+	addr, _, _, _ = cx.localsReference(cx.Stack[prev], 0)
+
+	return LocalState, AppStateRead, cx.appID, addr, string(cx.Stack[last].Bytes)
+}
+
+func opAppLocalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // state key
+	prev := last - 1          // app id
+	pprev := prev - 1         // account
+
+	// NOTE: we swallow the error of finding account ref, for eventually it would error in execution time,
+	// and we don't have to complain here.
+	var addr basics.Address
+	addr, _, _, _ = cx.localsReference(cx.Stack[pprev], cx.Stack[prev].Uint)
+
+	return LocalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), addr, string(cx.Stack[last].Bytes)
+}
+
+func opAppGlobalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // state key
+	prev := last - 1          // app id
+
+	return GlobalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), basics.Address{}, string(cx.Stack[last].Bytes)
+}
+
+func opAppGlobalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // state key
+	prev := last - 1          // app
+
+	return GlobalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), basics.Address{}, string(cx.Stack[last].Bytes)
 }
 
 func opAppLocalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
@@ -230,18 +292,15 @@ func opAppGlobalDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, b
 	return GlobalState, AppStateDelete, cx.appID, basics.Address{}, string(cx.Stack[last].Bytes)
 }
 
-// AppNewStateQuerying is used only for simulation endpoint exec trace export:
+// AppStateQuerying is used for simulation endpoint exec trace export:
 // it reads *new* app state after opcode that writes to app-state.
 // Since it is collecting new/updated app state, we don't have to error again here,
 // and thus we omit the error or non-existence case, just returning empty TealValue.
 // Otherwise, we find the updated new state value, and wrap up with new TealValue.
-func AppNewStateQuerying(
+func AppStateQuerying(
 	cx *EvalContext,
 	appState AppStateEnum, stateOp AppStateOpEnum,
 	appID basics.AppIndex, account basics.Address, key string) basics.TealValue {
-	if stateOp != AppStateWrite {
-		return basics.TealValue{}
-	}
 	switch appState {
 	case BoxState:
 		boxBytes, exists, err := cx.Ledger.GetBox(appID, key)
@@ -259,7 +318,17 @@ func AppNewStateQuerying(
 		}
 		return globalValue
 	case LocalState:
-		addr, acctID, err := cx.mutableAccountReference(stackValue{Bytes: account[:]})
+		var (
+			addr   basics.Address
+			acctID uint64
+			err    error
+		)
+		switch stateOp {
+		case AppStateWrite:
+			addr, acctID, err = cx.mutableAccountReference(stackValue{Bytes: account[:]})
+		default:
+			addr, _, acctID, err = cx.localsReference(stackValue{Bytes: account[:]}, uint64(appID))
+		}
 		if err != nil {
 			return basics.TealValue{}
 		}

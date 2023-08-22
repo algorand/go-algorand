@@ -218,7 +218,7 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 		TxnGroups:     groups,
 		EvalOverrides: resultEvalConstants,
 		TraceConfig:   request.TraceConfig,
-		InitialStates: makeResourcesInitialStates(request),
+		InitialStates: newResourcesInitialStates(request),
 	}, nil
 }
 

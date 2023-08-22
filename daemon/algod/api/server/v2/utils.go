@@ -531,7 +531,7 @@ func convertAppKVStoreInstance(address basics.Address, appKVPairs simulation.App
 	}
 }
 
-func convertApplicationInitialStates(appID basics.AppIndex, states simulation.SingleAppInitialStates) model.ApplicationInitialStates {
+func convertApplicationInitialStates(appID basics.AppIndex, states *simulation.SingleAppInitialStates) model.ApplicationInitialStates {
 	return model.ApplicationInitialStates{
 		Id:         uint64(appID),
 		AppBoxes:   convertAppKVStorePtr(basics.Address{}, states.AppBoxes),
@@ -545,7 +545,7 @@ func convertSimulateInitialStates(initialStates *simulation.ResourcesInitialStat
 		return nil
 	}
 	return &model.SimulateInitialStates{
-		AppInitialStates: sliceOrNil(convertMap(initialStates.AppsInitialStates, convertApplicationInitialStates)),
+		AppInitialStates: sliceOrNil(convertMap(initialStates.AllAppsInitialStates, convertApplicationInitialStates)),
 	}
 }
 

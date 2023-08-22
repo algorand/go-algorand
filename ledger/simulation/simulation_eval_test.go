@@ -3330,6 +3330,12 @@ int 1`,
 						AppBudgetConsumed: 44,
 					},
 				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: make(simulation.AppsInitialStates),
+					CreatedApp: map[basics.AppIndex]struct{}{
+						futureAppID: {},
+					},
+				},
 			},
 		}
 	})
@@ -3939,6 +3945,12 @@ int 1`,
 						AppBudgetConsumed: 52,
 					},
 				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: make(simulation.AppsInitialStates),
+					CreatedApp: map[basics.AppIndex]struct{}{
+						futureAppID: {},
+					},
+				},
 			},
 		}
 	})
@@ -4173,6 +4185,12 @@ int 1`,
 						AppBudgetConsumed: 14,
 					},
 				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: make(simulation.AppsInitialStates),
+					CreatedApp: map[basics.AppIndex]struct{}{
+						futureAppID: {},
+					},
+				},
 			},
 		}
 	})
@@ -4351,6 +4369,12 @@ int 1`,
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 8,
+					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: make(simulation.AppsInitialStates),
+					CreatedApp: map[basics.AppIndex]struct{}{
+						futureAppID: {},
 					},
 				},
 			},
