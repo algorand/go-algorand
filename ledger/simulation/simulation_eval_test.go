@@ -144,6 +144,13 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 	runSimulationTestCase(t, env, testcase)
 }
 
+func simulationTestWithEnv(t *testing.T, env simulationtesting.Environment, f func(env simulationtesting.Environment) simulationTestCase) {
+	t.Helper()
+
+	testcase := f(env)
+	runSimulationTestCase(t, env, testcase)
+}
+
 func runSimulationTestCase(t *testing.T, env simulationtesting.Environment, testcase simulationTestCase) {
 	actual, err := simulation.MakeSimulator(env.Ledger, testcase.developerAPI).Simulate(testcase.input)
 	require.NoError(t, err)
@@ -4376,6 +4383,187 @@ int 1`,
 					CreatedApp: map[basics.AppIndex]struct{}{
 						futureAppID: {},
 					},
+				},
+			},
+		}
+	})
+}
+
+func TestAppInitialBoxStatesRecorded(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	myEnv := simulationtesting.PrepareSimulatorTest(t)
+	defer myEnv.Close()
+
+	proto := myEnv.TxnInfo.CurrentProtocolParams()
+	appCreator := myEnv.Accounts[0]
+	boxAppID := myEnv.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: fmt.Sprintf(boxTestProgram, 8),
+		ClearStateProgram: `#pragma version 8
+int 1`,
+	})
+
+	op, err := logic.AssembleString(fmt.Sprintf(boxTestProgram, 8))
+	require.NoError(t, err)
+	progHash := crypto.Hash(op.Program)
+
+	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
+	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, boxAppID.Address(), transferable)
+
+	initialBoxString := "initial box A content"
+
+	myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        appCreator.Addr,
+		ApplicationID: boxAppID,
+		ApplicationArgs: boxOperation{
+			op:         logic.BoxCreateOperation,
+			name:       "A",
+			createSize: uint64(len(initialBoxString)),
+		}.appArgs(),
+		Boxes: []transactions.BoxRef{{Name: []byte("A")}},
+	}).SignedTxn())
+
+	myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        appCreator.Addr,
+		ApplicationID: boxAppID,
+		ApplicationArgs: boxOperation{
+			op:       logic.BoxWriteOperation,
+			name:     "A",
+			contents: []byte(initialBoxString),
+		}.appArgs(),
+		Boxes: []transactions.BoxRef{{Name: []byte("A")}},
+	}).SignedTxn())
+
+	simulationTestWithEnv(t, myEnv, func(env simulationtesting.Environment) simulationTestCase {
+		readBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        appCreator.Addr,
+			ApplicationID: boxAppID,
+			ApplicationArgs: boxOperation{
+				op:   logic.BoxReadOperation,
+				name: "A",
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{{Name: []byte("A")}},
+		})
+
+		writeBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        appCreator.Addr,
+			ApplicationID: boxAppID,
+			ApplicationArgs: boxOperation{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("box A get overwritten"),
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{{Name: []byte("A")}},
+		})
+
+		txntest.Group(&readBoxTxn, &writeBoxTxn)
+
+		signedReadBoxTxn := readBoxTxn.Txn().Sign(appCreator.Sk)
+		signedWriteBoxTxn := writeBoxTxn.Txn().Sign(appCreator.Sk)
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedReadBoxTxn, signedWriteBoxTxn},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App Box Read
+							{
+								AppBudgetConsumed: 14,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 3},
+										{PC: 6},
+										{PC: 14},
+										{PC: 22},
+										{PC: 28},
+										{PC: 35},
+										{PC: 38},
+										{PC: 69},
+										{PC: 72},
+										{PC: 73},
+										{PC: 74},
+										{PC: 75},
+										{PC: 87},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// App Box Write
+							{
+								AppBudgetConsumed: 13,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{PC: 1},
+										{PC: 3},
+										{PC: 6},
+										{PC: 14},
+										{PC: 22},
+										{PC: 28},
+										{PC: 35},
+										{PC: 38},
+										{PC: 78},
+										{PC: 81},
+										{PC: 83},
+										{
+											PC: 86,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.BoxState,
+													AppID:      boxAppID,
+													Key:        "A",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "box A get overwritten",
+													},
+												},
+											},
+										},
+										{PC: 87},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 27,
+					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{
+						boxAppID: &simulation.SingleAppInitialStates{
+							AppBoxes: map[string]basics.TealValue{
+								"A": {
+									Type:  basics.TealBytesType,
+									Bytes: initialBoxString,
+								},
+							},
+							AppGlobals: map[string]basics.TealValue{},
+							AppLocals:  map[basics.Address]simulation.AppKVPairs{},
+						},
+					},
+					CreatedApp: map[basics.AppIndex]struct{}{},
 				},
 			},
 		}
