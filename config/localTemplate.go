@@ -535,6 +535,9 @@ type Local struct {
 
 	// DisableAPIAuth turns off authentication for public (non-admin) API endpoints.
 	DisableAPIAuth bool `version[30]:"false"`
+
+	// EnableDHT will turn on the hash table for use with capabilities advertisement
+	EnableDHTProviders bool `version[30]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

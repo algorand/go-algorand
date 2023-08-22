@@ -28,6 +28,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
@@ -47,6 +51,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
@@ -54,7 +59,6 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
-	"github.com/algorand/go-deadlock"
 )
 
 const (
@@ -152,6 +156,8 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
+
+	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -207,6 +213,15 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
 		return nil, err
+	}
+
+	if cfg.EnableDHTProviders {
+		caps, err := p2p.MakeCapabilitiesDiscovery(node.ctx, node.config, node.rootDir, string(genesis.Network), node.log, []*peer.AddrInfo{})
+		if err != nil {
+			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
+			return nil, err
+		}
+		node.capabilitiesDiscovery = caps
 	}
 
 	node.cryptoPool = execpool.MakePool(node)
@@ -360,6 +375,9 @@ func (node *AlgorandFullNode) Start() {
 
 		node.startMonitoringRoutines()
 	}
+	if node.capabilitiesDiscovery != nil {
+		// todo populate routing tables with bootstrap peers here
+	}
 
 }
 
@@ -419,6 +437,9 @@ func (node *AlgorandFullNode) Stop() {
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
 	node.ledger.Close()
+	if node.capabilitiesDiscovery != nil {
+		_ = node.capabilitiesDiscovery.Close()
+	}
 }
 
 // note: unlike the other two functions, this accepts a whole filename

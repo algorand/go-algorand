@@ -62,6 +62,7 @@ var defaultLocal = Local{
 	EnableBlockService:                         false,
 	EnableBlockServiceFallbackToArchiver:       true,
 	EnableCatchupFromArchiveServers:            false,
+	EnableDHTProviders:                         false,
 	EnableDeveloperAPI:                         false,
 	EnableExperimentalAPI:                      false,
 	EnableFollowMode:                           false,
