@@ -68,7 +68,7 @@ func ParseHostOrURL(addr string) (*url.URL, error) {
 // string as a valid "host:port", full URL, or multiaddr. If no error, it returns
 // a host:port address, or a multiaddr.
 func ParseHostOrURLOrMultiaddr(addr string) (string, error) {
-	if strings.HasPrefix(addr, "/") { // multiaddr starts with '/'
+	if strings.HasPrefix(addr, "/") && !strings.HasPrefix(addr, "//") { // multiaddr starts with '/' but not '//' which is possible for scheme relative URLS
 		_, err := multiaddr.NewMultiaddr(addr)
 		return addr, err
 	}

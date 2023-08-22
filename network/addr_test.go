@@ -76,11 +76,62 @@ func TestParseHostOrURL(t *testing.T) {
 				return
 			}
 		})
+		t.Run(tc.text+"-multiaddr", func(t *testing.T) {
+			v, err := ParseHostOrURLOrMultiaddr(tc.text)
+			require.NoError(t, err)
+			if tc.out.Host != v {
+				t.Errorf("url wanted %#v, got %#v", tc.text, v)
+				return
+			}
+		})
 	}
 	for _, addr := range badUrls {
 		t.Run(addr, func(t *testing.T) {
 			_, err := ParseHostOrURL(addr)
 			require.Error(t, err, "url should fail", addr)
 		})
+		t.Run(addr+"-multiaddr", func(t *testing.T) {
+			_, err := ParseHostOrURLOrMultiaddr(addr)
+			require.Error(t, err, "url should fail", addr)
+		})
 	}
+
+}
+
+func TestParseHostURLOrMultiaddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	validMultiAddrs := []string{
+		"/ip4/127.0.0.1/tcp/8080",
+		"/ip6/::1/tcp/8080",
+		"/ip4/192.168.1.1/udp/9999/quic",
+		"/ip4/192.168.1.1/tcp/8180/p2p/Qmewz5ZHN1AAGTarRbMupNPbZRfg3p5jUGoJ3JYEatJVVk",
+		"/ip4/192.255.2.8/tcp/8180/ws",
+	}
+
+	badMultiAddrs := []string{
+		"/ip4/256.256.256.256/tcp/8080", // Invalid IPv4 address.
+		"/ip4/127.0.0.1/abc/8080",       // abc is not a valid protocol.
+		"/ip4/127.0.0.1/tcp/abc",        // Port is not a valid number.
+		"/unix",                         // Unix protocol without a path is invalid.
+		"/ip4/127.0.0.1/tcp",            // Missing a port after tcp
+		"/p2p/invalidPeerID",            // Invalid peer ID after p2p.
+		"ip4/127.0.0.1/tcp/8080",        // Missing starting /.
+	}
+
+	for _, addr := range validMultiAddrs {
+		t.Run(addr, func(t *testing.T) {
+			v, err := ParseHostOrURLOrMultiaddr(addr)
+			require.NoError(t, err)
+			require.Equal(t, addr, v)
+		})
+	}
+
+	for _, addr := range badMultiAddrs {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseHostOrURLOrMultiaddr(addr)
+			require.Error(t, err)
+		})
+	}
+
 }
