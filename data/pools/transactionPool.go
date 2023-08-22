@@ -636,6 +636,7 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 }
 
 func (pool *TransactionPool) updateWithSpeculatedState(blockhash bookkeeping.BlockHash) bool {
+	return false
 	select {
 	case speculatedState := <-pool.speculatedStateCh:
 		if speculatedState.speculatedPool == nil {
@@ -687,7 +688,7 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 	}
 
 	// if we speculated on the right block, recover the pool's spec from speculation
-	if pool.updateWithSpeculatedState(block) {
+	if pool.updateWithSpeculatedState(block.Hash()) {
 		return
 	}
 
