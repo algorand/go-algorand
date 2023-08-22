@@ -75,6 +75,7 @@ func (info TxnInfo) NewTxn(txn txntest.Txn) txntest.Txn {
 type Environment struct {
 	t      *testing.T
 	Ledger *data.Ledger
+	Config config.Local
 	// Accounts is a list of all accounts in the ledger, excluding the fee sink and rewards pool
 	Accounts           []Account
 	FeeSinkAccount     Account
@@ -296,6 +297,7 @@ func PrepareSimulatorTest(t *testing.T) Environment {
 	return Environment{
 		t:                  t,
 		Ledger:             ledger,
+		Config:             cfg,
 		Accounts:           accounts,
 		FeeSinkAccount:     feeSinkAccount,
 		RewardsPoolAccount: rewardsPoolAccount,
