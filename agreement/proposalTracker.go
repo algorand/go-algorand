@@ -43,7 +43,7 @@ type proposalSeeker struct {
 func (s proposalSeeker) accept(v vote) (proposalSeeker, error) {
 	if s.Frozen {
 		// continue tracking and forwarding the lowest proposal even when frozen
-		if !s.hasLowest || v.Cred.Less(s.Lowest.Cred) {
+		if !s.hasLowest || v.Cred.Less(s.lowestEvenIfLate.Cred) {
 			s.lowestEvenIfLate = v
 			s.hasLowest = true
 			return s, nil
