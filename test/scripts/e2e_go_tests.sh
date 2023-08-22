@@ -47,7 +47,7 @@ if [[ -n $TESTPATTERNS && -n $RUN_EXPECT ]]; then
     exit 1
 fi
 
-if [ -n $RUN_EXPECT ]; then
+if [[ -z $RUN_EXPECT ]]; then
     RUN_EXPECT="FALSE"
 fi
 

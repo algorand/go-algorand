@@ -22,26 +22,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/tools/block-generator/generator"
 )
 
+const initialRound = 1234
+const entryCount = 10
+
 func makeDummyData() (time.Time, time.Duration, generator.Report, *MetricsCollector) {
 	start := time.Now().Add(-10 * time.Minute)
 	duration := time.Hour
 	generatorReport := generator.Report{
+		InitialRound: initialRound,
 		Counters:     make(map[string]uint64),
 		Transactions: make(map[generator.TxTypeID]generator.TxData),
 	}
-	collector := &MetricsCollector{Data: make([]Entry, 10)}
+	collector := &MetricsCollector{Data: make([]Entry, entryCount)}
 	return start, duration, generatorReport, collector
 }
 
 // makeMetrics creates a set of metrics for testing.
 func makeMetrics(start time.Time) *MetricsCollector {
 	collector := &MetricsCollector{}
-	for i := 0; i <= 10; i++ {
+	for i := 0; i <= entryCount; i++ {
 		var data []string
 
 		// should be converted to an average.
@@ -84,11 +89,12 @@ func TestWriterReport_Good(t *testing.T) {
 	report := builder.String()
 
 	// both rounds of metrics are reported.
-	require.Contains(t, report, "final_imported_round:10")
-	require.Contains(t, report, "early_imported_round:2")
+	assert.Contains(t, report, fmt.Sprintf("initial_round:%d", initialRound))
+	assert.Contains(t, report, fmt.Sprintf("final_imported_round:%d", entryCount))
+	assert.Contains(t, report, fmt.Sprintf("early_imported_round:%d", entryCount/5))
 
 	// counters are reported.
 	for k, v := range generatorReport.Counters {
-		require.Contains(t, report, fmt.Sprintf("%s:%d", k, v))
+		assert.Contains(t, report, fmt.Sprintf("%s:%d", k, v))
 	}
 }

@@ -25,6 +25,31 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// TimeoutType defines the type of a Deadline, to distinguish between different timeouts
+// set by agreement.
+type TimeoutType int8
+
+const (
+	// TimeoutDeadline annotates timeout events in the agreement protocol (e.g.,
+	// for receiving a block).
+	TimeoutDeadline TimeoutType = iota
+	// TimeoutFastRecovery annotates the fast recovery timeout in the agreement
+	// protocol.
+	TimeoutFastRecovery
+	// TimeoutFilter annotates the filter step timeout event in the agreement
+	// protocol.
+	TimeoutFilter
+)
+
+// Deadline marks a timeout event of type Type that the player schedules to
+// happen after Duration time.
+type Deadline struct {
+	_struct  struct{} `codec:","`
+	Duration time.Duration
+	// Type is used to allow tests fire timeouts of specific types.
+	Type TimeoutType
+}
+
 var deadlineTimeout = config.Protocol.BigLambda + config.Protocol.SmallLambda
 var partitionStep = next + 3
 var recoveryExtraTimeout = config.Protocol.SmallLambda

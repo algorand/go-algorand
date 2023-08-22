@@ -1300,6 +1300,39 @@
         ],
         "type": "object"
       },
+      "ApplicationStateOperation": {
+        "description": "An operation against an application's global/local/box state.",
+        "properties": {
+          "account": {
+            "description": "For local state changes, the address of the account associated with the local state.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "app-state-type": {
+            "description": "Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.",
+            "type": "string"
+          },
+          "key": {
+            "description": "The key (name) of the global/local/box state.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "new-value": {
+            "$ref": "#/components/schemas/AvmValue"
+          },
+          "operation": {
+            "description": "Operation type. Value `w` is **write**, `d` is **delete**.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app-state-type",
+          "key",
+          "operation"
+        ],
+        "type": "object"
+      },
       "ApplicationStateSchema": {
         "description": "Specifies maximums on the number of each type that may be stored.",
         "properties": {
@@ -2101,6 +2134,10 @@
           "stack-change": {
             "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
             "type": "boolean"
+          },
+          "state-change": {
+            "description": "A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -2281,6 +2318,13 @@
           "stack-pop-count": {
             "description": "The number of deleted stack values by this opcode.",
             "type": "integer"
+          },
+          "state-changes": {
+            "description": "The operations against the current application's states.",
+            "items": {
+              "$ref": "#/components/schemas/ApplicationStateOperation"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -2291,12 +2335,24 @@
       "SimulationTransactionExecTrace": {
         "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
         "properties": {
+          "approval-program-hash": {
+            "description": "SHA512_256 hash digest of the approval program executed in transaction.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
           "approval-program-trace": {
             "description": "Program trace that contains a trace of opcode effects in an approval program.",
             "items": {
               "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
             },
             "type": "array"
+          },
+          "clear-state-program-hash": {
+            "description": "SHA512_256 hash digest of the clear state program executed in transaction.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
           },
           "clear-state-program-trace": {
             "description": "Program trace that contains a trace of opcode effects in a clear state program.",
@@ -2311,6 +2367,12 @@
               "$ref": "#/components/schemas/SimulationTransactionExecTrace"
             },
             "type": "array"
+          },
+          "logic-sig-hash": {
+            "description": "SHA512_256 hash digest of the logic sig executed in transaction.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
           },
           "logic-sig-trace": {
             "description": "Program trace that contains a trace of opcode effects in a logic sig.",
