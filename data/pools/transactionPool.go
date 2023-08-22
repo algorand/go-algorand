@@ -38,6 +38,11 @@ import (
 	"github.com/algorand/go-algorand/util/condvar"
 )
 
+type speculatedPoolState struct {
+	speculatedPool *TransactionPool
+	blockhash      bookkeeping.BlockHash
+}
+
 // A TransactionPool prepares valid blocks for proposal and caches
 // validated transaction groups.
 //
@@ -97,6 +102,7 @@ type TransactionPool struct {
 
 	ctx                       context.Context
 	cancelSpeculativeAssembly context.CancelFunc
+	speculatedStateCh         chan speculatedPoolState
 
 	// specBlockCh has an assembled speculative block
 	specBlockCh chan *ledgercore.ValidatedBlock
@@ -575,8 +581,8 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 	// only do speculative assembly if we relatively many transactions in the
 	// pool
 	if pool.pendingCountNoLock() > pool.cfg.SpeculativeBlockAssemblyMinTxnPoolPressure {
-		//pool.mu.Unlock()
-		//	return
+		pool.mu.Unlock()
+		return
 	}
 
 	// move remembered txns to pending
@@ -586,6 +592,8 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 	// speculative block assembly.
 	speculativePool, outchan, specAsmDoneCh, err := pool.copyTransactionPoolOverSpecLedger(ctx, vb)
 	defer close(specAsmDoneCh)
+
+	pool.speculatedStateCh = make(chan speculatedPoolState, 1)
 	pool.mu.Unlock()
 
 	if err != nil {
@@ -600,11 +608,13 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 		return
 	}
 
+	// TODO: should we make this atomic?
 	select {
 	case outchan <- speculativePool.assemblyResults.blk:
 	default:
 		speculativePool.log.Errorf("failed writing speculative block to channel, channel already has a block")
 	}
+	pool.speculatedStateCh <- speculatedPoolState{speculatedPool: speculativePool, blockhash: vb.Block().Hash()}
 }
 
 func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHash) (*ledgercore.ValidatedBlock, error) {
@@ -622,6 +632,25 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 		return vb, nil
 	default:
 		return nil, fmt.Errorf("speculation block not ready")
+	}
+}
+
+func (pool *TransactionPool) updateWithSpeculatedState(blockhash bookkeeping.BlockHash) bool {
+	select {
+	case speculatedState := <-pool.speculatedStateCh:
+		if speculatedState.speculatedPool == nil {
+			return false
+		}
+		if blockhash != speculatedState.blockhash {
+			// we speculated on the wrong hash
+			return false
+		}
+		pool.pendingTxGroups = speculatedState.speculatedPool.pendingTxGroups
+
+		return true
+	default:
+		// we don't have a speculated state ready
+		return false
 	}
 }
 
@@ -655,6 +684,11 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 
 	if !stopReprocessingAtFirstAsmBlock && pool.cancelSpeculativeAssembly != nil {
 		pool.cancelSpeculativeAssembly()
+	}
+
+	// if we speculated on the right block, recover the pool's spec from speculation
+	if pool.updateWithSpeculatedState(block) {
+		return
 	}
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
