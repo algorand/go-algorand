@@ -319,8 +319,18 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
+	msgLengths := make([]int, 0, 3)
+	estimatedSize := 256
+	messageBuffer := make([]byte, 0, estimatedSize)
+	messageBuffer = HashRepToBuff(batchID, messageBuffer)
+	msgLengths = append(msgLengths, len(messageBuffer))
+	messageBuffer = HashRepToBuff(offsetID, messageBuffer)
+	msgLengths = append(msgLengths, len(messageBuffer)-msgLengths[0])
+	messageBuffer = HashRepToBuff(message, messageBuffer)
+	msgLengths = append(msgLengths, len(messageBuffer)-msgLengths[1]-msgLengths[0])
 	allValid, _ := batchVerificationImpl(
-		[][]byte{HashRep(batchID), HashRep(offsetID), HashRep(message)},
+		messageBuffer,
+		msgLengths,
 		[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},
 		[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
 	)

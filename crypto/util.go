@@ -40,6 +40,20 @@ func HashRep(h Hashable) []byte {
 	return append([]byte(hashid), data...)
 }
 
+// HashRepToBuff appends the correct hashid before the message to be hashed into the provided buffer
+func HashRepToBuff(h Hashable, buffer []byte) []byte {
+	hashid, data := h.ToBeHashed()
+	neededCapacity := len(buffer) + len((string(hashid))) + len(data)
+	if cap(buffer) < neededCapacity {
+		newBuffer := make([]byte, 0, neededCapacity)
+		newBuffer = append(newBuffer, buffer...)
+		buffer = newBuffer
+	}
+	buffer = append(buffer, hashid...)
+	buffer = append(buffer, data...)
+	return buffer
+}
+
 // DigestSize is the number of bytes in the preferred hash Digest used here.
 const DigestSize = sha512.Size256
 

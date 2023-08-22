@@ -123,11 +123,16 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
 		return nil, nil
 	}
-	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
+	msgLengths := make([]int, 0, len(b.messages))
+	var messages = make([]byte, 0, b.GetNumberOfEnqueuedSignatures()*64)
+
+	lenWas := 0
 	for i := range b.messages {
-		messages[i] = HashRep(b.messages[i])
+		messages = HashRepToBuff(b.messages[i], messages)
+		msgLengths = append(msgLengths, len(messages)-lenWas)
+		lenWas = len(messages)
 	}
-	allValid, failed := batchVerificationImpl(messages, b.publicKeys, b.signatures)
+	allValid, failed := batchVerificationImpl(messages, msgLengths, b.publicKeys, b.signatures)
 	if allValid {
 		return failed, nil
 	}
@@ -137,9 +142,9 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
 // otherwise, returns false, and sets the indexes of the failed sigs in failed
-func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
+func batchVerificationImpl(messages []byte, msgLengths []int, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
 
-	numberOfSignatures := len(messages)
+	numberOfSignatures := len(msgLengths)
 
 	messagesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
 	messagesLenAllocation := C.malloc(C.size_t(C.sizeofULongLong * numberOfSignatures))
@@ -156,10 +161,14 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		C.free(valid)
 	}()
 
+	// Pin messages, publicKeys and signatures here. remove KeepAlive calls below
+
 	// load all the data pointers into the array pointers.
+	mPos := 0
 	for i := 0; i < numberOfSignatures; i++ {
-		*(*uintptr)(unsafe.Pointer(uintptr(messagesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&messages[i][0]))
-		*(*C.ulonglong)(unsafe.Pointer(uintptr(messagesLenAllocation) + uintptr(i*C.sizeofULongLong))) = C.ulonglong(len(messages[i]))
+		*(*uintptr)(unsafe.Pointer(uintptr(messagesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&messages[mPos]))
+		mPos = mPos + msgLengths[i]
+		*(*C.ulonglong)(unsafe.Pointer(uintptr(messagesLenAllocation) + uintptr(i*C.sizeofULongLong))) = C.ulonglong(msgLengths[i])
 		*(*uintptr)(unsafe.Pointer(uintptr(publicKeysAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&publicKeys[i][0]))
 		*(*uintptr)(unsafe.Pointer(uintptr(signaturesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&signatures[i][0]))
 	}
@@ -170,7 +179,7 @@ func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, si
 		(*C.ulonglong)(unsafe.Pointer(messagesLenAllocation)),
 		(**C.uchar)(unsafe.Pointer(publicKeysAllocation)),
 		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
-		C.size_t(len(messages)),
+		C.size_t(numberOfSignatures),
 		(*C.int)(unsafe.Pointer(valid)))
 
 	runtime.KeepAlive(messages)
