@@ -35,8 +35,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	p2ppeerstore "github.com/libp2p/go-libp2p/core/peerstore"
-	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 )
 
 const peerStorePath = "peerstore.db"
@@ -90,21 +88,9 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	for malAddr, malErr := range malformedAddrs {
 		log.Infof("Ignoring malformed phonebook address %s: %s", malAddr, malErr)
 	}
-	var pstore p2ppeerstore.Peerstore
-	var err error
-	if datadir == "" { // use ephemeral peerstore if no datadir provided (e.g. during testing)
-		pstore, err = pstoremem.NewPeerstore()
-		if err != nil {
-			return nil, err
-		}
-		for i := range addrInfo {
-			pstore.AddAddrs(addrInfo[i].ID, addrInfo[i].Addrs, p2ppeerstore.AddressTTL)
-		}
-	} else {
-		pstore, err = peerstore.NewPeerStore(addrInfo)
-		if err != nil {
-			return nil, err
-		}
+	pstore, err := peerstore.NewPeerStore(addrInfo)
+	if err != nil {
+		return nil, err
 	}
 
 	net := &P2PNetwork{
