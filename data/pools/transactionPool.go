@@ -151,7 +151,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
-	pool.recomputeBlockEvaluator(nil, 0, false)
+	pool.recomputeBlockEvaluator(nil, 0, false, nil)
 	return &pool
 }
 
@@ -164,21 +164,22 @@ func (pool *TransactionPool) copyTransactionPoolOverSpecLedger(ctx context.Conte
 	copyPoolctx, cancel := context.WithCancel(ctx)
 
 	copy := TransactionPool{
-		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn), // pendingTxIds is only used for stats and hints
-		pendingTxGroups:      pool.pendingTxGroups[:],
-		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
-		expiredTxCount:       make(map[basics.Round]int),
-		ledger:               specLedger,
-		statusCache:          makeStatusCache(pool.cfg.TxPoolSize),
-		logProcessBlockStats: pool.cfg.EnableProcessBlockStats,
-		logAssembleStats:     pool.cfg.EnableAssembleStats,
-		expFeeFactor:         pool.cfg.TxPoolExponentialIncreaseFactor,
-		txPoolMaxSize:        pool.cfg.TxPoolSize,
-		proposalAssemblyTime: pool.cfg.ProposalAssemblyTime,
-		assemblyRound:        specLedger.Latest() + 1,
-		log:                  pool.log,
-		cfg:                  pool.cfg,
-		ctx:                  copyPoolctx,
+		pendingTxids:          make(map[transactions.Txid]transactions.SignedTxn), // pendingTxIds is only used for stats and hints
+		pendingTxGroups:       pool.pendingTxGroups[:],
+		rememberedTxids:       make(map[transactions.Txid]transactions.SignedTxn),
+		expiredTxCount:        make(map[basics.Round]int),
+		ledger:                specLedger,
+		statusCache:           makeStatusCache(pool.cfg.TxPoolSize),
+		logProcessBlockStats:  pool.cfg.EnableProcessBlockStats,
+		logAssembleStats:      pool.cfg.EnableAssembleStats,
+		expFeeFactor:          pool.cfg.TxPoolExponentialIncreaseFactor,
+		txPoolMaxSize:         pool.cfg.TxPoolSize,
+		proposalAssemblyTime:  pool.cfg.ProposalAssemblyTime,
+		assemblyRound:         specLedger.Latest() + 1,
+		log:                   pool.log,
+		cfg:                   pool.cfg,
+		ctx:                   copyPoolctx,
+		numPendingWholeBlocks: pool.numPendingWholeBlocks,
 	}
 	copy.cond.L = &copy.mu
 	copy.assemblyCond.L = &copy.assemblyMu
@@ -245,7 +246,7 @@ func (pool *TransactionPool) Reset() {
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
-	pool.recomputeBlockEvaluator(nil, 0, false)
+	pool.recomputeBlockEvaluator(nil, 0, false, nil)
 
 	// cancel speculative assembly and clear its result
 	if pool.cancelSpeculativeAssembly != nil {
@@ -570,7 +571,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 
 // OnNewSpeculativeBlock handles creating a speculative block
 func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledgercore.ValidatedBlock) {
-
+	return
 	pool.mu.Lock()
 	// cancel any pending speculative assembly
 	if pool.cancelSpeculativeAssembly != nil {
@@ -578,9 +579,8 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 		<-pool.specAsmDone
 	}
 
-	// only do speculative assembly if we relatively many transactions in the
-	// pool
-	if pool.pendingCountNoLock() > pool.cfg.SpeculativeBlockAssemblyMinTxnPoolPressure {
+	// only do speculative assembly if we have enough txns to fill a block
+	if pool.numPendingWholeBlocks == 0 {
 		pool.mu.Unlock()
 		return
 	}
@@ -635,23 +635,21 @@ func (pool *TransactionPool) tryReadSpeculativeBlock(branch bookkeeping.BlockHas
 	}
 }
 
-func (pool *TransactionPool) updateWithSpeculatedState(blockhash bookkeeping.BlockHash) bool {
-	return false
+func (pool *TransactionPool) updateWithSpeculatedState(blockhash bookkeeping.BlockHash) *TransactionPool {
+	return nil
 	select {
 	case speculatedState := <-pool.speculatedStateCh:
 		if speculatedState.speculatedPool == nil {
-			return false
+			return nil
 		}
 		if blockhash != speculatedState.blockhash {
 			// we speculated on the wrong hash
-			return false
+			return nil
 		}
-		pool.pendingTxGroups = speculatedState.speculatedPool.pendingTxGroups
-
-		return true
+		return speculatedState.speculatedPool
 	default:
 		// we don't have a speculated state ready
-		return false
+		return nil
 	}
 }
 
@@ -688,8 +686,11 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 	}
 
 	// if we speculated on the right block, recover the pool's spec from speculation
-	if pool.updateWithSpeculatedState(block.Hash()) {
-		return
+	speculatedPool := pool.updateWithSpeculatedState(block.Hash())
+	var processedTxnGroups [][]transactions.SignedTxn
+	if speculatedPool != nil {
+		pool.pendingBlockEvaluator = speculatedPool.pendingBlockEvaluator
+		processedTxnGroups = speculatedPool.pendingTxGroups
 	}
 
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
@@ -719,7 +720,7 @@ func (pool *TransactionPool) onNewBlock(block bookkeeping.Block, delta ledgercor
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
 		// have been committed (or that are otherwise no longer valid).
-		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted, stopReprocessingAtFirstAsmBlock)
+		stats = pool.recomputeBlockEvaluator(committedTxids, knownCommitted, stopReprocessingAtFirstAsmBlock, processedTxnGroups)
 	}
 
 	stats.KnownCommittedCount = knownCommitted
@@ -839,7 +840,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, speculativeAsm bool) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint, speculativeAsm bool, processedTxnGroups [][]transactions.SignedTxn) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
