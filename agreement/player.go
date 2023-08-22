@@ -295,10 +295,9 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 
 	p.lowestCredentialArrivals = append(p.lowestCredentialArrivals, re.Vote.validatedAt)
 
-	// trim history to the last proto.DynamicFilterCredentialArrivalHistory samples.
-	proto := config.Consensus[ver]
-	if len(p.lowestCredentialArrivals) > proto.DynamicFilterCredentialArrivalHistory {
-		p.lowestCredentialArrivals = p.lowestCredentialArrivals[len(p.lowestCredentialArrivals)-proto.DynamicFilterCredentialArrivalHistory:]
+	// trim history to the last dynamicFilterCredentialArrivalHistory samples.
+	if len(p.lowestCredentialArrivals) > dynamicFilterCredentialArrivalHistory {
+		p.lowestCredentialArrivals = p.lowestCredentialArrivals[len(p.lowestCredentialArrivals)-dynamicFilterCredentialArrivalHistory:]
 	}
 	return re.Vote.validatedAt
 }
@@ -306,13 +305,13 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 // calculateFilterTimeout chooses the appropriate filter timeout.
 func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *tracer) time.Duration {
 	proto := config.Consensus[ver]
-	if proto.DynamicFilterCredentialArrivalHistory <= 0 || p.Period != 0 {
+	if dynamicFilterCredentialArrivalHistory <= 0 || p.Period != 0 {
 		// Either dynamic filter timeout is disabled, or we're not in period 0
 		// and therefore, can't use dynamic timeout
 		return FilterTimeout(p.Period, ver)
 	}
 	defaultTimeout := FilterTimeout(0, ver)
-	if proto.DynamicFilterCredentialArrivalHistory > len(p.lowestCredentialArrivals) {
+	if dynamicFilterCredentialArrivalHistory > len(p.lowestCredentialArrivals) {
 		// not enough samples, use the default
 		return defaultTimeout
 	}
@@ -320,12 +319,12 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	sortedArrivals := make([]time.Duration, len(p.lowestCredentialArrivals))
 	copy(sortedArrivals[:], p.lowestCredentialArrivals[:])
 	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
-	dynamicTimeout := sortedArrivals[proto.DynamicFilterTimeoutCredentialArrivalHistoryIdx] + proto.DynamicFilterTimeoutGraceInterval
+	dynamicTimeout := sortedArrivals[dynamicFilterTimeoutCredentialArrivalHistoryIdx] + dynamicFilterTimeoutGraceInterval
 
 	// Make sure the dynamic filter timeout is not too small nor too large
 	clampedTimeout := dynamicTimeout
-	if clampedTimeout < proto.DynamicFilterTimeoutLowerBound {
-		clampedTimeout = proto.DynamicFilterTimeoutLowerBound
+	if clampedTimeout < dynamicFilterTimeoutLowerBound {
+		clampedTimeout = dynamicFilterTimeoutLowerBound
 	}
 	if clampedTimeout > defaultTimeout {
 		clampedTimeout = defaultTimeout

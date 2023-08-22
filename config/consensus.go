@@ -517,27 +517,6 @@ type ConsensusParams struct {
 	// by state proofs to use the same method (rather than excluding stake from the top N stakeholders as before).
 	ExcludeExpiredCirculation bool
 
-	// DynamicFilterCredentialArrivalHistory specifies the number of past
-	// credential arrivals that are measured to determine the next filter
-	// timeout. If DynamicFilterCredentialArrivalHistory <= 0, then the dynamic
-	// timeout feature is off and the filter step timeout is calculated using
-	// the static configuration.
-	DynamicFilterCredentialArrivalHistory int
-
-	// DynamicFilterTimeoutLowerBound specifies a minimal duration that the
-	// filter timeout must meet.
-	DynamicFilterTimeoutLowerBound time.Duration
-
-	// DynamicFilterTimeoutCredentialArrivalHistoryIdx specified which sample to
-	// use out of a sorted DynamicFilterCredentialArrivalHistory-sized array of
-	// time samples.
-	DynamicFilterTimeoutCredentialArrivalHistoryIdx int
-
-	// DynamicFilterTimeoutGraceInterval is additional extension to the dynamic
-	// filter time atop the one calculated based on the history of credential
-	// arrivals.
-	DynamicFilterTimeoutGraceInterval time.Duration
-
 	// DynamicFilterTimeout indicates whether the filter timeout is set
 	// dynamically, at run time, according to the recent history of credential
 	// arrival times or is set to a static value. Even if this flag disables the
@@ -1390,12 +1369,6 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
 
-	// history window of 40, so we have enough statistics to calculate the 95th
-	// percentile, which is the timestamp at index 37 in the history array.
-	vFuture.DynamicFilterCredentialArrivalHistory = 40
-	vFuture.DynamicFilterTimeoutCredentialArrivalHistoryIdx = 37
-	vFuture.DynamicFilterTimeoutLowerBound = 0
-	vFuture.DynamicFilterTimeoutGraceInterval = 50 * time.Millisecond
 	vFuture.DynamicFilterTimeout = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
