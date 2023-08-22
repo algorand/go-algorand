@@ -55,9 +55,10 @@ type player struct {
 	// partition recovery.
 	FastRecoveryDeadline time.Duration
 
-	// SpeculativeAssemblyDeadline contains the next timeout expected for
-	// speculative block assembly.
-	SpeculativeAssemblyDeadline time.Duration
+	// speculativeAssemblyDeadline contains the next timeout expected for
+	// speculative block assembly. Since this deadline gives an optimization
+	// about building a block, it need not be persistant.
+	speculativeAssemblyDeadline time.Duration
 
 	// Pending holds the player's proposalTable, which stores proposals that
 	// must be verified after some vote has been verified.
@@ -97,12 +98,12 @@ func (p *player) handle(r routerHandle, e event) []action {
 			return p.handleFastTimeout(r, e)
 		}
 
-		if !p.Napping {
-			r.t.logTimeout(*p)
-		}
-
 		if e.T == speculationTimeout {
 			return p.handleSpeculationTimeout(r, e)
+		}
+
+		if !p.Napping {
+			r.t.logTimeout(*p)
 		}
 
 		switch p.Step {
@@ -144,7 +145,6 @@ func (p *player) handle(r routerHandle, e event) []action {
 }
 
 func (p *player) handleSpeculationTimeout(r routerHandle, e timeoutEvent) []action {
-	p.SpeculativeAssemblyDeadline = 0
 	if e.Proto.Err != nil {
 		r.t.log.Errorf("failed to read protocol version for speculationTimeout event (proto %v): %v", e.Proto.Version, e.Proto.Err)
 		return nil
@@ -372,10 +372,11 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.FastRecoveryDeadline = 0 // set immediately
 	p.Deadline = Deadline{Duration: FilterTimeout(target, source.Proto), Type: TimeoutFilter}
 	if target == 0 {
-		p.SpeculativeAssemblyDeadline = SpeculativeBlockAsmTime(target, p.ConsensusVersion, p.SpeculativeAsmTimeDuration)
+		p.speculativeAssemblyDeadline = SpeculativeBlockAsmTime(target, p.ConsensusVersion, p.SpeculativeAsmTimeDuration)
+		p.speculativeAssemblyDeadline = 0
 	} else {
 		// only speculate on block assembly in period 0
-		p.SpeculativeAssemblyDeadline = 0
+		p.speculativeAssemblyDeadline = 0
 	}
 
 	// update tracer state to match player
@@ -421,7 +422,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.SpeculativeAssemblyDeadline = SpeculativeBlockAsmTime(0, p.ConsensusVersion, p.SpeculativeAsmTimeDuration)
+	//p.SpeculativeAssemblyDeadline = SpeculativeBlockAsmTime(0, p.ConsensusVersion, p.SpeculativeAsmTimeDuration)
 
 	switch source := source.(type) {
 	case roundInterruptionEvent:

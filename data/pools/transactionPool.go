@@ -571,7 +571,6 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 
 // OnNewSpeculativeBlock handles creating a speculative block
 func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledgercore.ValidatedBlock) {
-	return
 	pool.mu.Lock()
 	// cancel any pending speculative assembly
 	if pool.cancelSpeculativeAssembly != nil {
