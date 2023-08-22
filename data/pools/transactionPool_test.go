@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"os"
@@ -1200,7 +1201,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i], false)
+		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i], false, nil)
 	}
 	b.StopTimer()
 	if profF != nil {
@@ -1530,7 +1531,7 @@ func TestStateProofLogging(t *testing.T) {
 
 	err = transactionPool.RememberOne(stxn)
 	require.NoError(t, err)
-	transactionPool.recomputeBlockEvaluator(nil, 0, false)
+	transactionPool.recomputeBlockEvaluator(nil, 0, false, nil)
 	_, err = transactionPool.AssembleBlock(514, time.Time{})
 	require.NoError(t, err)
 
@@ -1632,15 +1633,18 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 
 	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
 	cfg := config.GetDefaultLocal()
-	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
 	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base())
 
 	savedTransactions := 0
+	var note uint64
+	//	for transactionPool.numPendingWholeBlocks == 0 {
 	for i, sender := range addresses {
 		amount := uint64(0)
 		for _, receiver := range addresses {
 			if sender != receiver {
+				noteBytes := make([]byte, 8, 8)
+				binary.LittleEndian.PutUint64(noteBytes, note)
 				tx := transactions.Transaction{
 					Type: protocol.PaymentTx,
 					Header: transactions.Header{
@@ -1648,7 +1652,7 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 						Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + amount},
 						FirstValid:  0,
 						LastValid:   10,
-						Note:        make([]byte, 0),
+						Note:        noteBytes,
 						GenesisHash: mockLedger.GenesisHash(),
 					},
 					PaymentTxnFields: transactions.PaymentTxnFields{
@@ -1656,7 +1660,8 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 						Amount:   basics.MicroAlgos{Raw: 0},
 					},
 				}
-				amount++
+				//					amount++
+				note++
 
 				signedTx := tx.Sign(secrets[i])
 				require.NoError(t, transactionPool.RememberOne(signedTx))
@@ -1664,6 +1669,8 @@ func TestSpeculativeBlockAssembly(t *testing.T) {
 			}
 		}
 	}
+
+	//	}
 	pending := transactionPool.PendingTxGroups()
 	require.Len(t, pending, savedTransactions)
 

@@ -579,10 +579,10 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 	}
 
 	// only do speculative assembly if we have enough txns to fill a block
-	if pool.numPendingWholeBlocks == 0 {
-		pool.mu.Unlock()
-		return
-	}
+	//	if pool.numPendingWholeBlocks == 0 {
+	//		pool.mu.Unlock()
+	//		return
+	//	}
 
 	// move remembered txns to pending
 	pool.rememberCommit(false)
@@ -1206,7 +1206,7 @@ func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.Valid
 	defer pool.mu.Unlock()
 
 	// drop the current block evaluator and start with a new one.
-	pool.recomputeBlockEvaluator(nil, 0, false)
+	pool.recomputeBlockEvaluator(nil, 0, false, nil)
 
 	// The above was already pregenerating the entire block,
 	// so there won't be any waiting on this call.
