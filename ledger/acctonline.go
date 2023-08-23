@@ -118,6 +118,9 @@ type onlineAccounts struct {
 
 	// disableCache (de)activates the LRU cache use in onlineAccounts
 	disableCache bool
+
+	// voteLastValidCache tracks which accounts
+	voteLastValidCache voteLastValidCache
 }
 
 // initialize initializes the accountUpdates structure
@@ -174,6 +177,8 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 			return err0
 		}
 		ao.onlineAccountsCache.init(onlineAccounts, onlineAccountsCacheMaxSize)
+
+		ao.voteLastValidCache.init(onlineAccounts)
 
 		return nil
 	})
@@ -496,6 +501,12 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 			})
 	}
 
+	ao.voteLastValidCache.updateFromAccountDeltas(dcc.compactAccountDeltas)
+	// drop entries behind our current round, as we don't need to know who has expired in the past
+	// TODO: I think this is trimming on the committed-to-disk round, not sure if that's the right one to trim on.
+	// since this is just for memory bounding, it should be ok to trim on the committed-to-disk round.
+	ao.voteLastValidCache.trim(newBase)
+
 	// clear the backing array to let GC collect data
 	// see the comment in acctupdates.go
 	const deltasClearThreshold = 500
@@ -812,6 +823,17 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 			return ledgercore.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: validThrough, memoryRound: currentDbRound}
 		}
 	}
+}
+
+// VoteLastValidCount returns the number of accounts that will be going offline on round r
+func (ao *onlineAccounts) VoteLastValidCount(r basics.Round) uint64 {
+	ao.accountsMu.RLock()
+	defer ao.accountsMu.RUnlock()
+	if count, ok := ao.voteLastValidCache.count(r); ok {
+		return count.Load()
+	}
+	// if not found, return 0
+	return 0
 }
 
 // TopOnlineAccounts returns the top n online accounts, sorted by their normalized
