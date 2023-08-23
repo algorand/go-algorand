@@ -2337,9 +2337,7 @@ byte "hello"; log; int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{},
-					CreatedApp: map[basics.AppIndex]struct{}{
-						basics.AppIndex(1002): {},
-					},
+					CreatedApp:           make(simulation.Set[basics.AppIndex]).Add(basics.AppIndex(1002)),
 				},
 			},
 		}
@@ -3347,9 +3345,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp: map[basics.AppIndex]struct{}{
-						futureAppID: {},
-					},
+					CreatedApp:           make(simulation.Set[basics.AppIndex]).Add(futureAppID),
 				},
 			},
 		}
@@ -3921,23 +3917,17 @@ int 1`,
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{
 						futureAppID: &simulation.SingleAppInitialStates{
-							AppLocals:  map[basics.Address]simulation.AppKVPairs{},
-							AppGlobals: simulation.AppKVPairs{},
-							AppBoxes:   simulation.AppKVPairs{},
-							CreatedGlobals: map[string]struct{}{
-								"global-bytes-key": {},
-								"global-int-key":   {},
-							},
-							CreatedBoxes: make(map[string]struct{}),
-							CreatedLocals: map[basics.Address]map[string]struct{}{
-								sender.Addr: {
-									"local-bytes-key": {},
-									"local-int-key":   {},
-								},
+							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
+							AppGlobals:     simulation.AppKVPairs{},
+							AppBoxes:       simulation.AppKVPairs{},
+							CreatedGlobals: make(simulation.Set[string]).Add("global-bytes-key", "global-int-key"),
+							CreatedBoxes:   make(simulation.Set[string]),
+							CreatedLocals: map[basics.Address]simulation.Set[string]{
+								sender.Addr: make(simulation.Set[string]).Add("local-bytes-key", "local-int-key"),
 							},
 						},
 					},
-					CreatedApp: map[basics.AppIndex]struct{}{},
+					CreatedApp: simulation.Set[basics.AppIndex]{},
 				},
 			},
 		}
@@ -4175,9 +4165,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp: map[basics.AppIndex]struct{}{
-						futureAppID: {},
-					},
+					CreatedApp:           make(simulation.Set[basics.AppIndex]).Add(futureAppID),
 				},
 			},
 		}
@@ -4361,9 +4349,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp: map[basics.AppIndex]struct{}{
-						futureAppID: {},
-					},
+					CreatedApp:           make(simulation.Set[basics.AppIndex]).Add(futureAppID),
 				},
 			},
 		}
@@ -4590,12 +4576,12 @@ int 1`,
 							AppGlobals:     make(simulation.AppKVPairs),
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppBoxes:       boxTestCase.initialBoxStates,
-							CreatedGlobals: make(map[string]struct{}),
-							CreatedBoxes:   make(map[string]struct{}),
-							CreatedLocals:  map[basics.Address]map[string]struct{}{},
+							CreatedGlobals: make(simulation.Set[string]),
+							CreatedBoxes:   make(simulation.Set[string]),
+							CreatedLocals:  map[basics.Address]simulation.Set[string]{},
 						},
 					},
-					CreatedApp: map[basics.AppIndex]struct{}{},
+					CreatedApp: simulation.Set[basics.AppIndex]{},
 				},
 			},
 		}
@@ -4900,19 +4886,19 @@ int 1`,
 		txnResults[i] = txnArgsToResult(txnArgs)
 	}
 
-	prepareKeys := map[string]struct{}{}
+	prepareKeys := make(simulation.Set[string])
 	for _, instruction := range testcase.prepareInstruction {
-		prepareKeys[string(instruction[0])] = struct{}{}
+		prepareKeys.Add(string(instruction[0]))
 	}
-	newlyCreatedGlobalKeySet := map[string]struct{}{}
+	newlyCreatedGlobalKeySet := make(simulation.Set[string])
 	for _, txnArgs := range testcase.txnsArgs {
 		if string(txnArgs[0]) != "put" {
 			continue
 		}
-		if _, ok := prepareKeys[string(txnArgs[1])]; ok {
+		if prepareKeys.IsElem(string(txnArgs[1])) {
 			continue
 		}
-		newlyCreatedGlobalKeySet[string(txnArgs[1])] = struct{}{}
+		newlyCreatedGlobalKeySet.Add(string(txnArgs[1]))
 	}
 
 	totalConsumed := uint64(0)
@@ -4953,11 +4939,11 @@ int 1`,
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppBoxes:       make(simulation.AppKVPairs),
 							CreatedGlobals: newlyCreatedGlobalKeySet,
-							CreatedBoxes:   make(map[string]struct{}),
-							CreatedLocals:  map[basics.Address]map[string]struct{}{},
+							CreatedBoxes:   make(simulation.Set[string]),
+							CreatedLocals:  map[basics.Address]simulation.Set[string]{},
 						},
 					},
-					CreatedApp: make(map[basics.AppIndex]struct{}),
+					CreatedApp: make(simulation.Set[basics.AppIndex]),
 				},
 			},
 		}

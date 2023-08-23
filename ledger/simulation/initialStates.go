@@ -30,13 +30,13 @@ type AppKVPairs map[string]basics.TealValue
 // - Application Local states (which is tied to basics.Address)
 type SingleAppInitialStates struct {
 	AppBoxes     AppKVPairs
-	CreatedBoxes map[string]struct{}
+	CreatedBoxes Set[string]
 
 	AppGlobals     AppKVPairs
-	CreatedGlobals map[string]struct{}
+	CreatedGlobals Set[string]
 
 	AppLocals     map[basics.Address]AppKVPairs
-	CreatedLocals map[basics.Address]map[string]struct{}
+	CreatedLocals map[basics.Address]Set[string]
 }
 
 // AppsInitialStates maintains a map from basics.AppIndex to SingleAppInitialStates
@@ -47,7 +47,7 @@ type ResourcesInitialStates struct {
 	// AllAppsInitialStates gathers all initial states of apps that were touched (but not created) during simulation
 	AllAppsInitialStates AppsInitialStates
 	// CreatedApp gathers all created applications by appID, blocking initial app states in these apps being recorded
-	CreatedApp map[basics.AppIndex]struct{}
+	CreatedApp Set[basics.AppIndex]
 }
 
 func newResourcesInitialStates(request Request) *ResourcesInitialStates {
@@ -56,7 +56,7 @@ func newResourcesInitialStates(request Request) *ResourcesInitialStates {
 	}
 	return &ResourcesInitialStates{
 		AllAppsInitialStates: make(AppsInitialStates),
-		CreatedApp:           make(map[basics.AppIndex]struct{}),
+		CreatedApp:           make(Set[basics.AppIndex]),
 	}
 }
 
@@ -77,12 +77,12 @@ func (appIS *SingleAppInitialStates) isRecorded(state logic.AppStateEnum, key st
 func (appIS *SingleAppInitialStates) hasBeenCreated(state logic.AppStateEnum, key string, addr basics.Address) (created bool) {
 	switch state {
 	case logic.BoxState:
-		_, created = appIS.CreatedBoxes[key]
+		created = appIS.CreatedBoxes.IsElem(key)
 	case logic.GlobalState:
-		_, created = appIS.CreatedGlobals[key]
+		created = appIS.CreatedGlobals.IsElem(key)
 	case logic.LocalState:
 		if kvs, addrLocalExists := appIS.CreatedLocals[addr]; addrLocalExists {
-			_, created = kvs[key]
+			created = kvs.IsElem(key)
 		}
 	}
 	return
@@ -91,14 +91,14 @@ func (appIS *SingleAppInitialStates) hasBeenCreated(state logic.AppStateEnum, ke
 func (appIS *SingleAppInitialStates) noteCreation(state logic.AppStateEnum, key string, addr basics.Address) {
 	switch state {
 	case logic.BoxState:
-		appIS.CreatedBoxes[key] = struct{}{}
+		appIS.CreatedBoxes.Add(key)
 	case logic.GlobalState:
-		appIS.CreatedGlobals[key] = struct{}{}
+		appIS.CreatedGlobals.Add(key)
 	case logic.LocalState:
 		if _, addrLocalExists := appIS.CreatedLocals[addr]; !addrLocalExists {
-			appIS.CreatedLocals[addr] = make(map[string]struct{})
+			appIS.CreatedLocals[addr] = make(Set[string])
 		}
-		appIS.CreatedLocals[addr][key] = struct{}{}
+		appIS.CreatedLocals[addr].Add(key)
 	}
 }
 
@@ -107,12 +107,14 @@ func (appsIS AppsInitialStates) appendInitialStates(cx *logic.EvalContext) {
 	// No matter read or write, once this code-path is triggered, something must be recorded into initial state
 	if _, ok := appsIS[appID]; !ok {
 		appsIS[appID] = &SingleAppInitialStates{
-			AppLocals:      make(map[basics.Address]AppKVPairs),
 			AppGlobals:     make(AppKVPairs),
-			AppBoxes:       make(AppKVPairs),
-			CreatedGlobals: make(map[string]struct{}),
-			CreatedBoxes:   make(map[string]struct{}),
-			CreatedLocals:  make(map[basics.Address]map[string]struct{}),
+			CreatedGlobals: make(Set[string]),
+
+			AppBoxes:     make(AppKVPairs),
+			CreatedBoxes: make(Set[string]),
+
+			AppLocals:     make(map[basics.Address]AppKVPairs),
+			CreatedLocals: make(map[basics.Address]Set[string]),
 		}
 	}
 
@@ -160,7 +162,7 @@ func (is *ResourcesInitialStates) appendInitialStates(cx *logic.EvalContext) {
 	}
 	// If this method triggers application state changes
 	if cx.GetOpSpec().AppStateExplain != nil {
-		if _, appCreated := is.CreatedApp[cx.AppID()]; appCreated {
+		if is.CreatedApp.IsElem(cx.AppID()) {
 			return
 		}
 		is.AllAppsInitialStates.appendInitialStates(cx)
