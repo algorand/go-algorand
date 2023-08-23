@@ -456,7 +456,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 			// If we are recording state changes, including initial states,
 			// then we should exclude initial states of created app during simulation.
 			if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
-				tracer.result.InitialStates.CreatedApp[cx.AppID()] = struct{}{}
+				tracer.result.InitialStates.CreatedApp.Add(cx.AppID())
 			}
 		}
 

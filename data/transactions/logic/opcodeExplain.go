@@ -210,9 +210,10 @@ func opBoxDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.
 }
 
 func opBoxPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
-	last := len(cx.Stack) - 1 // name
+	last := len(cx.Stack) - 1 // value
+	prev := last - 1          // name
 
-	return BoxState, AppStateWrite, cx.appID, basics.Address{}, string(cx.Stack[last].Bytes)
+	return BoxState, AppStateWrite, cx.appID, basics.Address{}, string(cx.Stack[prev].Bytes)
 }
 
 func opAppLocalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {

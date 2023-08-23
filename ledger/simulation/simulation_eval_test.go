@@ -4362,7 +4362,7 @@ type BoxInitialStatesTestCase struct {
 	initialBoxStates  simulation.AppKVPairs
 }
 
-func testBoxInitialStatesHelper(t *testing.T, boxTestCase BoxInitialStatesTestCase) {
+func testBoxInitialStatesHelper(t *testing.T, testcase BoxInitialStatesTestCase) {
 	t.Helper()
 
 	myEnv := simulationtesting.PrepareSimulatorTest(t)
@@ -4385,7 +4385,7 @@ int 1`,
 	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
 	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, boxAppID.Address(), transferable)
 
-	for _, boxOp := range boxTestCase.boxOpsForPrepare {
+	for _, boxOp := range testcase.boxOpsForPrepare {
 		myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          appCreator.Addr,
@@ -4473,7 +4473,21 @@ int 1`,
 						{PC: 49},
 						{PC: 52},
 						{PC: 55},
-						{PC: 56},
+						{
+							PC: 56,
+							StateChanges: []simulation.StateOperation{
+								{
+									AppStateOp: logic.AppStateWrite,
+									AppState:   logic.BoxState,
+									AppID:      boxAppID,
+									Key:        boxOp.name,
+									NewValue: basics.TealValue{
+										Type:  basics.TealBytesType,
+										Bytes: string(make([]byte, boxOp.createSize)),
+									},
+								},
+							},
+						},
 						{PC: 57},
 						{PC: 58},
 						{PC: 87},
@@ -4518,8 +4532,8 @@ int 1`,
 	}
 
 	simulationTestWithEnv(t, myEnv, func(env simulationtesting.Environment) simulationTestCase {
-		txnPtrs := make([]*txntest.Txn, len(boxTestCase.boxOpsForSimulate))
-		for i, boxOp := range boxTestCase.boxOpsForSimulate {
+		txnPtrs := make([]*txntest.Txn, len(testcase.boxOpsForSimulate))
+		for i, boxOp := range testcase.boxOpsForSimulate {
 			tempTxn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:            protocol.ApplicationCallTx,
 				Sender:          appCreator.Addr,
@@ -4531,18 +4545,36 @@ int 1`,
 		}
 
 		txntest.Group(txnPtrs...)
-		signedTxns := make([]transactions.SignedTxn, len(boxTestCase.boxOpsForSimulate))
+		signedTxns := make([]transactions.SignedTxn, len(testcase.boxOpsForSimulate))
 		for i, txn := range txnPtrs {
 			signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
 		}
 
-		txnResults := make([]simulation.TxnResult, len(boxTestCase.boxOpsForSimulate))
-		for i, boxOp := range boxTestCase.boxOpsForSimulate {
+		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
+		for i, boxOp := range testcase.boxOpsForSimulate {
 			txnResults[i] = boxOpToSimResult(boxOp)
 		}
 		totalConsumed := uint64(0)
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
+		}
+
+		prepareKeys := make(simulation.Set[string])
+		for _, instruction := range testcase.boxOpsForPrepare {
+			if instruction.op != logic.BoxWriteOperation {
+				continue
+			}
+			prepareKeys.Add(instruction.name)
+		}
+		newlyCreatedGlobalKeySet := make(simulation.Set[string])
+		for _, instruction := range testcase.boxOpsForSimulate {
+			if instruction.op != logic.BoxWriteOperation {
+				continue
+			}
+			if prepareKeys.IsElem(instruction.name) {
+				continue
+			}
+			newlyCreatedGlobalKeySet.Add(instruction.name)
 		}
 
 		return simulationTestCase{
@@ -4575,9 +4607,9 @@ int 1`,
 						boxAppID: &simulation.SingleAppInitialStates{
 							AppGlobals:     make(simulation.AppKVPairs),
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
-							AppBoxes:       boxTestCase.initialBoxStates,
+							AppBoxes:       testcase.initialBoxStates,
 							CreatedGlobals: make(simulation.Set[string]),
-							CreatedBoxes:   make(simulation.Set[string]),
+							CreatedBoxes:   newlyCreatedGlobalKeySet,
 							CreatedLocals:  map[basics.Address]simulation.Set[string]{},
 						},
 					},
@@ -4678,6 +4710,302 @@ func TestAppInitialBoxStates(t *testing.T) {
 			},
 		},
 	})
+
+	testBoxInitialStatesHelper(t, BoxInitialStatesTestCase{
+		boxOpsForPrepare: []boxOperation{
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "A",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("initial box A content"),
+			},
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "C",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "C",
+				contents: []byte("initial box C content"),
+			},
+		},
+		boxOpsForSimulate: []boxOperation{
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "B",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "B",
+				contents: []byte("initial box B content"),
+			},
+		},
+		initialBoxStates: simulation.AppKVPairs{},
+	})
+}
+
+func testBoxPutInitialStatesHelper(t *testing.T, testcase BoxInitialStatesTestCase) {
+	t.Helper()
+
+	myEnv := simulationtesting.PrepareSimulatorTest(t)
+	defer myEnv.Close()
+
+	proto := myEnv.TxnInfo.CurrentProtocolParams()
+	appCreator := myEnv.Accounts[0]
+
+	boxApprovalProgram := `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "write"
+byte "delete"
+txn ApplicationArgs 0
+match put del
+err // Unknown command
+
+put:
+txn ApplicationArgs 1
+txn ApplicationArgs 2
+box_put
+b end
+
+del:
+txn ApplicationArgs 1
+box_del
+assert
+b end
+
+end:
+int 1
+`
+	boxAppID := myEnv.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: boxApprovalProgram,
+		ClearStateProgram: `#pragma version 8
+		int 1`,
+	})
+
+	op, err := logic.AssembleString(boxApprovalProgram)
+	require.NoError(t, err)
+	progHash := crypto.Hash(op.Program)
+
+	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
+	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, boxAppID.Address(), transferable)
+
+	for _, boxOp := range testcase.boxOpsForPrepare {
+		myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          appCreator.Addr,
+			ApplicationID:   boxAppID,
+			ApplicationArgs: boxOp.appArgs(),
+			Boxes:           boxOp.boxRefs(),
+		}).SignedTxn())
+	}
+
+	boxOpToSimResult := func(boxOp boxOperation) simulation.TxnResult {
+		var res simulation.TxnResult
+		switch boxOp.op {
+		case logic.BoxWriteOperation:
+			res = simulation.TxnResult{
+				AppBudgetConsumed: 11,
+				Trace: &simulation.TransactionTrace{
+					ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+						{PC: 1},
+						{PC: 3},
+						{PC: 6},
+						{PC: 13},
+						{PC: 21},
+						{PC: 24},
+						{PC: 31},
+						{PC: 34},
+						{
+							PC: 37,
+							StateChanges: []simulation.StateOperation{
+								{
+									AppStateOp: logic.AppStateWrite,
+									AppState:   logic.BoxState,
+									AppID:      boxAppID,
+									Key:        boxOp.name,
+									NewValue: basics.TealValue{
+										Type:  basics.TealBytesType,
+										Bytes: string(boxOp.contents),
+									},
+								},
+							},
+						},
+						{PC: 38},
+						{PC: 49},
+					},
+					ApprovalProgramHash: progHash,
+				},
+			}
+		case logic.BoxDeleteOperation:
+			res = simulation.TxnResult{
+				AppBudgetConsumed: 11,
+				Trace: &simulation.TransactionTrace{
+					ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+						{PC: 1},
+						{PC: 3},
+						{PC: 6},
+						{PC: 13},
+						{PC: 21},
+						{PC: 24},
+						{PC: 31},
+						{PC: 34},
+						{PC: 37},
+						{PC: 61},
+						{
+							PC: 64,
+							StateChanges: []simulation.StateOperation{
+								{
+									AppStateOp: logic.AppStateDelete,
+									AppState:   logic.BoxState,
+									AppID:      boxAppID,
+									Key:        boxOp.name,
+								},
+							},
+						},
+						{PC: 65},
+						{PC: 66},
+						{PC: 87},
+					},
+					ApprovalProgramHash: progHash,
+				},
+			}
+		}
+		return res
+	}
+
+	simulationTestWithEnv(t, myEnv, func(env simulationtesting.Environment) simulationTestCase {
+		txnPtrs := make([]*txntest.Txn, len(testcase.boxOpsForSimulate))
+		for i, boxOp := range testcase.boxOpsForSimulate {
+			tempTxn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:            protocol.ApplicationCallTx,
+				Sender:          appCreator.Addr,
+				ApplicationID:   boxAppID,
+				ApplicationArgs: boxOp.appArgs(),
+				Boxes:           boxOp.boxRefs(),
+			})
+			txnPtrs[i] = &tempTxn
+		}
+
+		txntest.Group(txnPtrs...)
+		signedTxns := make([]transactions.SignedTxn, len(testcase.boxOpsForSimulate))
+		for i, txn := range txnPtrs {
+			signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
+		}
+
+		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
+		for i, boxOp := range testcase.boxOpsForSimulate {
+			txnResults[i] = boxOpToSimResult(boxOp)
+		}
+		totalConsumed := uint64(0)
+		for _, txnResult := range txnResults {
+			totalConsumed += txnResult.AppBudgetConsumed
+		}
+
+		prepareKeys := make(simulation.Set[string])
+		for _, instruction := range testcase.boxOpsForPrepare {
+			if instruction.op != logic.BoxWriteOperation {
+				continue
+			}
+			prepareKeys.Add(instruction.name)
+		}
+		newlyCreatedGlobalKeySet := make(simulation.Set[string])
+		for _, instruction := range testcase.boxOpsForSimulate {
+			if instruction.op != logic.BoxWriteOperation {
+				continue
+			}
+			if prepareKeys.IsElem(instruction.name) {
+				continue
+			}
+			newlyCreatedGlobalKeySet.Add(instruction.name)
+		}
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					signedTxns,
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns:              txnResults,
+						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetConsumed: totalConsumed,
+					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{
+						boxAppID: &simulation.SingleAppInitialStates{
+							AppGlobals:     make(simulation.AppKVPairs),
+							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
+							AppBoxes:       testcase.initialBoxStates,
+							CreatedGlobals: make(simulation.Set[string]),
+							CreatedBoxes:   newlyCreatedGlobalKeySet,
+							CreatedLocals:  map[basics.Address]simulation.Set[string]{},
+						},
+					},
+					CreatedApp: simulation.Set[basics.AppIndex]{},
+				},
+			},
+		}
+	})
+}
+
+func TestAppInitialBoxStatesAboutBoxPut(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testBoxPutInitialStatesHelper(t, BoxInitialStatesTestCase{
+		boxOpsForPrepare: []boxOperation{
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("initial box A content"),
+			},
+		},
+		boxOpsForSimulate: []boxOperation{
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("box A get overwritten"),
+			},
+		},
+		initialBoxStates: simulation.AppKVPairs{
+			"A": {
+				Type:  basics.TealBytesType,
+				Bytes: "initial box A content",
+			},
+		},
+	})
+
+	testBoxPutInitialStatesHelper(t, BoxInitialStatesTestCase{
+		boxOpsForSimulate: []boxOperation{
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("box A get overwritten"),
+			},
+		},
+		initialBoxStates: simulation.AppKVPairs{},
+	})
 }
 
 type GlobalInitialStatesTestCase struct {
@@ -4718,11 +5046,6 @@ func testGlobalInitialStatesHelper(t *testing.T, testcase GlobalInitialStatesTes
 txn ApplicationID
 bz end // Do nothing during create
 
-txn OnCompletion
-int OptIn
-==
-bnz end // Always allow optin
-
 byte "put"
 byte "del"
 txn ApplicationArgs 0
@@ -4758,13 +5081,6 @@ int 1`,
 	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
 	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, appID.Address(), transferable)
 
-	myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
-		Sender:        appCreator.Addr,
-		Type:          protocol.ApplicationCallTx,
-		ApplicationID: appID,
-		OnCompletion:  transactions.OptInOC,
-	}).SignedTxn())
-
 	for _, instruction := range testcase.prepareInstruction {
 		txnArgs := [][]byte{[]byte("put")}
 		txnArgs = append(txnArgs, instruction...)
@@ -4795,24 +5111,19 @@ int 1`,
 						},
 					},
 				},
-				AppBudgetConsumed: 16,
+				AppBudgetConsumed: 11,
 				Trace: &simulation.TransactionTrace{
 					ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 						{PC: 1},
-						{PC: 4},
+						{PC: 3},
 						{PC: 6},
-						{PC: 9},
 						{PC: 11},
-						{PC: 12},
-						{PC: 13},
 						{PC: 16},
-						{PC: 21},
+						{PC: 19},
 						{PC: 26},
 						{PC: 29},
-						{PC: 36},
-						{PC: 39},
 						{
-							PC: 42,
+							PC: 32,
 							StateChanges: []simulation.StateOperation{
 								{
 									AppStateOp: logic.AppStateWrite,
@@ -4826,8 +5137,8 @@ int 1`,
 								},
 							},
 						},
+						{PC: 33},
 						{PC: 43},
-						{PC: 53},
 					},
 					ApprovalProgramHash: progHash,
 				},
@@ -4845,23 +5156,18 @@ int 1`,
 						},
 					},
 				},
-				AppBudgetConsumed: 15,
+				AppBudgetConsumed: 10,
 				Trace: &simulation.TransactionTrace{
 					ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 						{PC: 1},
-						{PC: 4},
+						{PC: 3},
 						{PC: 6},
-						{PC: 9},
 						{PC: 11},
-						{PC: 12},
-						{PC: 13},
 						{PC: 16},
-						{PC: 21},
-						{PC: 26},
-						{PC: 29},
-						{PC: 46},
+						{PC: 19},
+						{PC: 36},
 						{
-							PC: 49,
+							PC: 39,
 							StateChanges: []simulation.StateOperation{
 								{
 									AppStateOp: logic.AppStateDelete,
@@ -4871,8 +5177,8 @@ int 1`,
 								},
 							},
 						},
-						{PC: 50},
-						{PC: 53},
+						{PC: 40},
+						{PC: 43},
 					},
 					ApprovalProgramHash: progHash,
 				},
@@ -4991,6 +5297,101 @@ func TestAppInitialGlobalStates(t *testing.T) {
 			},
 		},
 	)
+}
+
+type LocalInitialStatesTestCase struct {
+	initialLocalStates map[basics.Address]simulation.AppKVPairs
+}
+
+func testLocalInitialStatesHelper(t *testing.T, testcase LocalInitialStatesTestCase) {
+	t.Helper()
+
+	myEnv := simulationtesting.PrepareSimulatorTest(t)
+	defer myEnv.Close()
+
+	proto := myEnv.TxnInfo.CurrentProtocolParams()
+	appCreator := myEnv.Accounts[0]
+
+	approvalProgramSrc := `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+txn OnCompletion
+int OptIn
+==
+bnz end // Always allow optin
+
+byte "put"
+byte "get"
+byte "get_ex"
+byte "del"
+
+txn ApplicationArgs 0
+match put get get_ex del
+err // Unknown command
+
+put:
+  txn ApplicationArgs 1 // account
+  txn ApplicationArgs 2 // key
+  txn ApplicationArgs 3 // local state content
+  app_local_put
+  b end
+
+get:
+  txn ApplicationArgs 1 // account
+  txn ApplicationArgs 2 // key
+  app_local_get
+  pop
+  b end
+
+get_ex:
+  txn ApplicationArgs 1 // account address arg
+  txn ApplicationArgs 2 // applicationID arg bytes
+  btoi
+  txn ApplicationArgs 3 // key
+  app_local_get_ex
+  assert
+  pop
+  b end
+
+del:
+  txn ApplicationArgs 1 // account
+  txn ApplicationArgs 2 // key
+  app_local_del
+  b end
+
+end:
+  int 1
+`
+
+	appID := myEnv.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 8},
+		ApprovalProgram:   approvalProgramSrc,
+		ClearStateProgram: `#pragma version 8
+int 1`,
+	})
+
+	op, err := logic.AssembleString(approvalProgramSrc)
+	require.NoError(t, err)
+	_ = crypto.Hash(op.Program)
+
+	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
+	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, appID.Address(), transferable)
+
+	myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
+		Sender:        appCreator.Addr,
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: appID,
+		OnCompletion:  transactions.OptInOC,
+	}).SignedTxn())
+
+}
+
+func TestLocalInitialStates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testLocalInitialStatesHelper(t, LocalInitialStatesTestCase{})
 }
 
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
