@@ -63,7 +63,7 @@ func TestP2PThreeNodesEvenDist(t *testing.T) {
 }
 
 func TestP2PFiveNodes(t *testing.T) {
-	t.SkipNow()
+	t.Skip("Disabled due to block service timeouts. TODO: fix/reenable")
 	partitiontest.PartitionTest(t)
 	testP2PWithConfig(t, "FiveNodesP2P.json")
 }
