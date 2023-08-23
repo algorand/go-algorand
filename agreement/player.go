@@ -629,6 +629,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}
 		v := e.Input.Vote
 		a := relayAction(e, protocol.AgreementVoteTag, v.u())
+		if relayOnly {
+			return append(actions, a)
+		}
 		ep := ef.(proposalAcceptedEvent)
 		if ep.PayloadOk {
 			transmit := compoundMessage{
@@ -724,6 +727,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		} // else e.t() == voteVerified
 		v := e.Input.Vote
 		actions = append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+		if relayOnly {
+			return actions
+		}
 		a1 := p.handle(r, ef)
 		return append(actions, a1...)
 
