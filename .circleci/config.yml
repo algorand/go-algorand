@@ -21,7 +21,7 @@ parameters:
     default: "/tmp/build_test_results_<< pipeline.id >>"
   valid_nightly_branch:
     type: string
-    default: revert-5668-shant/close_ledger
+    default: /hotfix\/.*/
   # The following is intentional - hardcoding a token for public repos
   # is recommended here to allow fork access
   codecov:
