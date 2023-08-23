@@ -1439,6 +1439,7 @@ int 1`,
 		result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
 		require.NoError(t, err)
 		require.Len(t, result.TxnGroups, 1)
+		require.Empty(t, result.TxnGroups[0].FailureMessage)
 		require.Len(t, result.TxnGroups[0].Txns, 1)
 		require.Len(t, result.TxnGroups[0].Txns[0].Txn.ApplyData.EvalDelta.Logs, 1)
 		require.Equal(t, uint64(latestRound+1), bytesToUint64([]byte(result.TxnGroups[0].Txns[0].Txn.ApplyData.EvalDelta.Logs[0])))
@@ -1448,7 +1449,10 @@ int 1`,
 		t.Run(fmt.Sprintf("%d rounds before latest", i), func(t *testing.T) {
 			result, err := s.Simulate(simulation.Request{Round: latestRound - basics.Round(i), TxnGroups: [][]transactions.SignedTxn{{stxn}}})
 			require.NoError(t, err)
+			require.Len(t, result.TxnGroups, 1)
 			require.Empty(t, result.TxnGroups[0].FailureMessage)
+			require.Len(t, result.TxnGroups[0].Txns, 1)
+			require.Len(t, result.TxnGroups[0].Txns[0].Txn.ApplyData.EvalDelta.Logs, 1)
 			require.Equal(t, uint64(latestRound-basics.Round(i)+1), bytesToUint64([]byte(result.TxnGroups[0].Txns[0].Txn.ApplyData.EvalDelta.Logs[0])))
 		})
 	}

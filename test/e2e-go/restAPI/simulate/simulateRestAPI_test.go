@@ -218,6 +218,103 @@ func TestSimulateTransaction(t *testing.T) {
 	a.Zero(closeToBalance)
 }
 
+func TestSimulateStartRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	if senderAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	primaryNode, err := localFixture.GetNodeController("Primary")
+	a.NoError(err)
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+
+	_, err = testClient.WaitForRound(cfg.MaxAcctLookback + 2)
+	a.NoError(err)
+
+	approvalSrc := `#pragma version 8
+global Round
+itob
+log
+int 1`
+	clearStateSrc := `#pragma version 8
+int 1`
+	ops, err := logic.AssembleString(approvalSrc)
+	a.NoError(err)
+	approval := ops.Program
+	ops, err = logic.AssembleString(clearStateSrc)
+	a.NoError(err)
+	clearState := ops.Program
+
+	txn, err := testClient.MakeUnsignedApplicationCallTx(
+		0, nil, nil, nil,
+		nil, nil, transactions.NoOpOC,
+		approval, clearState, basics.StateSchema{}, basics.StateSchema{}, 0,
+	)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 1, 1001, 0, txn)
+	a.NoError(err)
+	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
+	a.NoError(err)
+
+	latestRound, err := testClient.CurrentRound()
+	a.NoError(err)
+
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+	}
+	// Test default behavior (should use latest round)
+	result, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+	a.Len(result.TxnGroups, 1)
+	a.Empty(result.TxnGroups[0].FailureMessage)
+	a.Len(result.TxnGroups[0].Txns, 1)
+	a.NotNil(result.TxnGroups[0].Txns[0].Txn.Logs)
+	a.Len(*result.TxnGroups[0].Txns[0].Txn.Logs, 1)
+	a.LessOrEqual(latestRound+1, binary.BigEndian.Uint64((*result.TxnGroups[0].Txns[0].Txn.Logs)[0]))
+
+	// Test with previous rounds
+	for i := int(cfg.MaxAcctLookback); i >= 0; i-- {
+		simulateRequest.Round = basics.Round(latestRound - uint64(i))
+		result, err = testClient.SimulateTransactions(simulateRequest)
+		a.NoError(err)
+		a.Len(result.TxnGroups, 1)
+		a.Empty(result.TxnGroups[0].FailureMessage)
+		a.Len(result.TxnGroups[0].Txns, 1)
+		a.NotNil(result.TxnGroups[0].Txns[0].Txn.Logs)
+		a.Len(*result.TxnGroups[0].Txns[0].Txn.Logs, 1)
+		a.LessOrEqual(latestRound-uint64(i)+1, binary.BigEndian.Uint64((*result.TxnGroups[0].Txns[0].Txn.Logs)[0]))
+	}
+
+	// There should be a failure when the round is too far back
+	simulateRequest.Round = basics.Round(latestRound - cfg.MaxAcctLookback - 1)
+	result, err = testClient.SimulateTransactions(simulateRequest)
+	a.Error(err)
+	var httpErr client.HTTPError
+	a.ErrorAs(err, &httpErr)
+	a.Equal(http.StatusInternalServerError, httpErr.StatusCode)
+	a.Contains(httpErr.ErrorString, fmt.Sprintf("round %d before dbRound", simulateRequest.Round))
+}
+
 func TestSimulateWithOptionalSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
