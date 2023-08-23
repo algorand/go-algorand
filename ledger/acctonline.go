@@ -120,7 +120,7 @@ type onlineAccounts struct {
 	disableCache bool
 
 	// voteLastValidCache tracks which accounts
-	voteLastValidCache voteLastValidCache
+	voteLastValidCache roundCounterCache
 }
 
 // initialize initializes the accountUpdates structure
@@ -178,6 +178,7 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		}
 		ao.onlineAccountsCache.init(onlineAccounts, onlineAccountsCacheMaxSize)
 
+		ao.voteLastValidCache = newVoteLastValidCache()
 		ao.voteLastValidCache.init(onlineAccounts)
 
 		return nil

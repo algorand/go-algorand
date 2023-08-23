@@ -24,78 +24,106 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
-type voteLastValidCache struct {
-	trimBehind basics.Round                    // the round that we have trimmed the cache to
-	m          map[basics.Round]*atomic.Uint64 // count of addresses whos voting expires on this round
+// roundCounterCache is a cache that tracks counters by-round
+// it is abstracted to allow for different types of counters,
+// but currently only used for the number of addresses whos voting expires on a given round via newVoteLastValidCache
+type roundCounterCache struct {
+	trimBehind basics.Round                                            // the round that we have trimmed the cache to
+	m          map[basics.Round]*atomic.Uint64                         // count of addresses whos voting expires on this round
+	acctFn     func(trackerdb.PersistedOnlineAccountData) basics.Round // function that maps an account to the round information we are tracking (used in init)
+	deltaFn    func(accountDelta) (basics.Round, basics.Round)         // function that maps an account delta to the old and new round information we are tracking (used in updateFromAccountDeltas)
 }
 
-// init initializes the voteLastValidCache for use.
-// thread locking semantics : write lock
-func (v *voteLastValidCache) init(accts []trackerdb.PersistedOnlineAccountData) {
-	v.trimBehind = 0
+// newVoteLastValidCache is a factory function for the voteLastValidCache
+// which tracks the number of addresses whos voting expires on a given round
+func newVoteLastValidCache() roundCounterCache {
+	v := roundCounterCache{}
 	v.m = make(map[basics.Round]*atomic.Uint64)
+	v.trimBehind = 0
+	v.acctFn = func(acct trackerdb.PersistedOnlineAccountData) basics.Round {
+		return acct.AccountData.VoteLastValid
+	}
+	v.deltaFn = func(delta accountDelta) (basics.Round, basics.Round) {
+		return delta.oldAcct.AccountData.VoteLastValid, delta.newAcct.VoteLastValid
+	}
+}
 
+// init initializes the cache for use.
+// takes a list of persisted online accounts and a function that maps an account to the round we are tracking
+func (v *roundCounterCache) init(accts []trackerdb.PersistedOnlineAccountData) {
 	for _, acct := range accts {
-		v.inc(acct.AccountData.VoteLastValid)
+		v.inc(v.acctFn(acct))
 	}
 }
 
-func (v *voteLastValidCache) inc(vLast basics.Round) {
-	if _, ok := v.m[vLast]; !ok {
-		v.m[vLast] = &atomic.Uint64{}
-	}
-	v.m[vLast].Add(1)
-}
-
-// TODO: include thread locking semantic comments once known
-func (v *voteLastValidCache) update(vLastOld, vLastNew basics.Round) {
-	// no actual update
-	if vLastNew == vLastOld {
+func (v *roundCounterCache) inc(r basics.Round) {
+	// don't do anything if the round is behind the trimBehind
+	if r < v.trimBehind {
 		return
 	}
-	// if the old round is still in the cache, decrement the address from it
-	if vLastOld >= v.trimBehind {
-		v.m[vLastOld].Add(^uint64(0))
+	// if we have not seen this round before, initialize it
+	if _, ok := v.m[r]; !ok {
+		v.m[r] = &atomic.Uint64{}
 	}
-	v.inc(vLastNew)
+	v.m[r].Add(1)
+}
+
+func (v *roundCounterCache) dec(r basics.Round) {
+	// don't do anything if the round is behind the trimBehind
+	if r < v.trimBehind {
+		return
+	}
+	// if we have not seen this round before, nothing to decrement
+	if _, ok := v.m[r]; !ok {
+		return
+	}
+	v.m[r].Add(^uint64(0))
+}
+
+func (v *roundCounterCache) update(rOld, rNew basics.Round) {
+	// no actual update
+	if rNew == rOld {
+		return
+	}
+	v.dec(rOld)
+	v.inc(rNew)
 }
 
 // clear clears the cache to pre-init state
-func (v *voteLastValidCache) clear() {
+func (v *roundCounterCache) clear() {
 	v.m = nil
 	v.trimBehind = 0
 }
 
 // count returns the number of addresses whos voting expire on vLast
-func (v voteLastValidCache) count(vLast basics.Round) (*atomic.Uint64, bool) {
-	ret, ok := v.m[vLast]
+func (v roundCounterCache) count(r basics.Round) (*atomic.Uint64, bool) {
+	ret, ok := v.m[r]
 	return ret, ok
 }
 
-// updateFromAccountDeltas updates the cache from the account deltas
-func (v *voteLastValidCache) updateFromAccountDeltas(deltas compactAccountDeltas) {
+// updateFromAccountDeltas updates the cache from the account deltas, given a function mapping a delta to an old and new round
+func (v *roundCounterCache) updateFromAccountDeltas(deltas compactAccountDeltas) {
 	for _, delta := range deltas.deltas {
-		new := delta.newAcct.GetAccountData().VoteLastValid
-		old := delta.oldAcct.AccountData.VoteLastValid
+		old, new := v.deltaFn(delta)
 		v.update(old, new)
 	}
 }
 
 // trim removes all entries from the cache that are older than vLast
 // and advances the trimBehind to vLast
-func (v *voteLastValidCache) trim(vLast basics.Round) {
+func (v *roundCounterCache) trim(r basics.Round) {
 	// if we have already trimmed to this round, do nothing
-	if v.trimBehind >= vLast {
+	if v.trimBehind >= r {
 		return
 	}
 	// otherwise, remove all entries older than vLast
-	for i := v.trimBehind; i < vLast; i++ {
+	for i := v.trimBehind; i < r; i++ {
 		delete(v.m, i)
 	}
-	v.trimBehind = vLast
+	v.trimBehind = r
 }
 
 // implements fmt.Stringer
-func (v voteLastValidCache) String() string {
-	return fmt.Sprintf("voteLastValidCache: trimBehind: %d, m: %v", v.trimBehind, v.m)
+func (v roundCounterCache) String() string {
+	return fmt.Sprintf("roundCounterCache: trimBehind: %d, m: %v", v.trimBehind, v.m)
 }
