@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
-// roundCounterCache is a cache that tracks counters by-round
+// roundCounterCache is a cache that tracks atomic ints used for counting, by-round
 // it is abstracted to allow for different types of counters,
 // but currently only used for the number of addresses whos voting expires on a given round via newVoteLastValidCache
 type roundCounterCache struct {

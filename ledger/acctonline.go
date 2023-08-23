@@ -119,7 +119,7 @@ type onlineAccounts struct {
 	// disableCache (de)activates the LRU cache use in onlineAccounts
 	disableCache bool
 
-	// voteLastValidCache tracks which accounts
+	// voteLastValidCache tracks how many accounts are expiring per-round
 	voteLastValidCache roundCounterCache
 }
 
