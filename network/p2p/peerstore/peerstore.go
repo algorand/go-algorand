@@ -34,7 +34,6 @@ import (
 // PeerStore implements Peerstore and CertifiedAddrBook.
 type PeerStore struct {
 	peerStoreCAB
-	network.Phonebook
 }
 
 // addressData: holds the information associated with each phonebook address.
@@ -195,11 +194,14 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 	removeItems := make(map[peer.ID]bool, 0)
 	peerIDs := ps.Peers()
 	for _, pid := range peerIDs {
-		val, _ := ps.Get(pid, "addressData")
-		ad := val.(*addressData)
-		if ad.networkNames[networkName] && ad.role == role && !ad.persistent {
-			removeItems[pid] = true
+		data, _ := ps.Get(pid, "addressData")
+		if data != nil {
+			ad := data.(addressData)
+			if ad.networkNames[networkName] && ad.role == role && !ad.persistent {
+				removeItems[pid] = true
+			}
 		}
+
 	}
 	for _, addr := range addressesThey {
 		info, err := peer.AddrInfoFromString(addr)
@@ -207,10 +209,10 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 			return
 		}
 		data, _ := ps.Get(info.ID, "addressData")
-		if data == nil {
+		if data != nil {
 			// we already have this.
 			// Update the networkName
-			ad := data.(*addressData)
+			ad := data.(addressData)
 			ad.networkNames[networkName] = true
 
 			// do not remove this entry
@@ -218,7 +220,7 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 		} else {
 			// we don't have this item. add it.
 			entry := makePhonebookEntryData(networkName, role, false)
-			_ = ps.Put("peerID", "addressData", entry)
+			_ = ps.Put(info.ID, "addressData", entry)
 		}
 	}
 
@@ -237,7 +239,7 @@ func (ps *PeerStore) AddPersistentPeers(dnsAddresses []string, networkName strin
 		if err == nil {
 			// we already have this.
 			// Make sure the persistence field is set to true
-			data := val.(*addressData)
+			data := val.(addressData)
 			data.persistent = true
 			_ = ps.Put("peerID", "addressData", data)
 
@@ -272,7 +274,7 @@ func (ps *PeerStore) deletePhonebookEntry(peerID peer.ID, networkName string) {
 	if err != nil {
 		return
 	}
-	ad := data.(*addressData)
+	ad := data.(addressData)
 	delete(ad.networkNames, networkName)
 	if 0 == len(ad.networkNames) {
 		_ = ps.Put(peerID, "addressData", nil)
@@ -283,7 +285,7 @@ func (ps *PeerStore) deletePhonebookEntry(peerID peer.ID, networkName string) {
 // addressData of addr
 func (ps *PeerStore) appendTime(peerID peer.ID, t time.Time) {
 	data, _ := ps.Get(peerID, "addressData")
-	ad := data.(*addressData)
+	ad := data.(addressData)
 	ad.recentConnectionTimes = append(ad.recentConnectionTimes, t)
 	_ = ps.Put(peerID, "addressData", ad)
 }
@@ -293,7 +295,7 @@ func (ps *PeerStore) appendTime(peerID peer.ID, t time.Time) {
 // It is expected to be later than ConnectionsRateLimitingWindow
 func (ps *PeerStore) popNElements(n int, peerID peer.ID) {
 	data, _ := ps.Get(peerID, "addressData")
-	ad := data.(*addressData)
+	ad := data.(addressData)
 	ad.recentConnectionTimes = ad.recentConnectionTimes[n:]
 	_ = ps.Put(peerID, "addressData", ad)
 }
@@ -302,9 +304,11 @@ func (ps *PeerStore) filterRetryTime(t time.Time, role network.PhoneBookEntryRol
 	o := make([]string, 0, len(ps.Peers()))
 	for _, peerID := range ps.Peers() {
 		data, _ := ps.Get(peerID, "addressData")
-		ad := data.(*addressData)
-		if t.After(ad.retryAfter) && role == ad.role {
-			o = append(o, string(peerID))
+		if data != nil {
+			ad := data.(addressData)
+			if t.After(ad.retryAfter) && role == ad.role {
+				o = append(o, peerID.String())
+			}
 		}
 	}
 	return o

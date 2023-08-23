@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	libp2p_crypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -76,4 +77,144 @@ func TestPeerstore(t *testing.T) {
 	peers = ps.PeersWithAddrs()
 	require.Equal(t, 7, len(peers))
 
+}
+
+func testPhonebookAll(t *testing.T, set []string, ph network.Phonebook) {
+	actual := ph.GetAddresses(len(set), network.PhoneBookEntryRelayRole)
+	for _, got := range actual {
+		ok := false
+		for _, known := range set {
+			if got == known {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			t.Errorf("get returned junk %#v", got)
+		}
+	}
+	for _, known := range set {
+		ok := false
+		for _, got := range actual {
+			if got == known {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			t.Errorf("get missed %#v; actual=%#v; set=%#v", known, actual, set)
+		}
+	}
+}
+
+func testPhonebookUniform(t *testing.T, set []string, ph network.Phonebook, getsize int) {
+	uniformityTestLength := 250000 / len(set)
+	expected := (uniformityTestLength * getsize) / len(set)
+	counts := make([]int, len(set))
+	for i := 0; i < uniformityTestLength; i++ {
+		actual := ph.GetAddresses(getsize, network.PhoneBookEntryRelayRole)
+		for i, known := range set {
+			for _, xa := range actual {
+				if known == xa {
+					counts[i]++
+				}
+			}
+		}
+	}
+	min := counts[0]
+	max := counts[0]
+	for i := 1; i < len(counts); i++ {
+		if counts[i] > max {
+			max = counts[i]
+		}
+		if counts[i] < min {
+			min = counts[i]
+		}
+	}
+	// TODO: what's a good probability-theoretic threshold for good enough?
+	if max-min > (expected / 5) {
+		t.Errorf("counts %#v", counts)
+	}
+}
+
+func generateMultiAddrs(n int) ([]string, []string) {
+	var multiaddrs []string
+	var ids []string
+
+	for i := 0; i < n; i++ {
+		privKey, _, _ := libp2p_crypto.GenerateEd25519Key(rand.Reader)
+		peerID, _ := peer.IDFromPrivateKey(privKey)
+		ids = append(ids, peerID.String())
+		multiaddrs = append(multiaddrs, fmt.Sprintf("/ip4/198.51.100.0/tcp/4242/p2p/%s", peerID.String()))
+
+	}
+	return multiaddrs, ids
+}
+func TestArrayPhonebookAll(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	multiaddrs, ids := generateMultiAddrs(10)
+	addrs, _ := PeerInfoFromAddrs(multiaddrs)
+	ps, err := NewPeerStore(addrs)
+	require.NoError(t, err)
+	for _, id := range ids {
+		entry := makePhonebookEntryData("", network.PhoneBookEntryRelayRole, false)
+		peerid, err := peer.Decode(id)
+		require.NoError(t, err)
+		ps.Put(peerid, "addressData", entry)
+	}
+	testPhonebookAll(t, ids, ps)
+}
+
+func TestArrayPhonebookUniform1(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	multiaddrs, ids := generateMultiAddrs(10)
+	addrs, _ := PeerInfoFromAddrs(multiaddrs)
+	ps, _ := NewPeerStore(addrs)
+	for _, id := range ids {
+		entry := makePhonebookEntryData("", network.PhoneBookEntryRelayRole, false)
+		peerid, err := peer.Decode(id)
+		require.NoError(t, err)
+		ps.Put(peerid, "addressData", entry)
+	}
+	testPhonebookUniform(t, ids, ps, 1)
+}
+
+func TestArrayPhonebookUniform3(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	multiaddrs, ids := generateMultiAddrs(10)
+	addrs, _ := PeerInfoFromAddrs(multiaddrs)
+	ps, _ := NewPeerStore(addrs)
+	for _, id := range ids {
+		entry := makePhonebookEntryData("", network.PhoneBookEntryRelayRole, false)
+		peerid, err := peer.Decode(id)
+		require.NoError(t, err)
+		ps.Put(peerid, "addressData", entry)
+	}
+	testPhonebookUniform(t, ids, ps, 3)
+}
+
+func TestMultiPhonebook(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	multiaddrs, ids := generateMultiAddrs(10)
+	addrs, _ := PeerInfoFromAddrs(multiaddrs)
+	pha := make([]string, 0)
+	for _, e := range multiaddrs[:5] {
+		pha = append(pha, e)
+	}
+	phb := make([]string, 0)
+	for _, e := range multiaddrs[5:] {
+		phb = append(phb, e)
+	}
+
+	ps, _ := NewPeerStore(addrs)
+	ps.ReplacePeerList(pha, "pha", network.PhoneBookEntryRelayRole)
+	ps.ReplacePeerList(phb, "phb", network.PhoneBookEntryRelayRole)
+
+	testPhonebookAll(t, ids, ps)
+	testPhonebookUniform(t, ids, ps, 1)
+	testPhonebookUniform(t, ids, ps, 3)
 }
