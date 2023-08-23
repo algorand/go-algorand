@@ -29,9 +29,14 @@ type AppKVPairs map[string]basics.TealValue
 // - Application Global states
 // - Application Local states (which is tied to basics.Address)
 type SingleAppInitialStates struct {
-	AppBoxes   AppKVPairs
-	AppGlobals AppKVPairs
-	AppLocals  map[basics.Address]AppKVPairs
+	AppBoxes     AppKVPairs
+	CreatedBoxes map[string]struct{}
+
+	AppGlobals     AppKVPairs
+	CreatedGlobals map[string]struct{}
+
+	AppLocals     map[basics.Address]AppKVPairs
+	CreatedLocals map[basics.Address]map[string]struct{}
 }
 
 // AppsInitialStates maintains a map from basics.AppIndex to SingleAppInitialStates
@@ -55,7 +60,7 @@ func newResourcesInitialStates(request Request) *ResourcesInitialStates {
 	}
 }
 
-func (appIS SingleAppInitialStates) isRecorded(state logic.AppStateEnum, key string, addr basics.Address) (exists bool) {
+func (appIS *SingleAppInitialStates) isRecorded(state logic.AppStateEnum, key string, addr basics.Address) (exists bool) {
 	switch state {
 	case logic.BoxState:
 		_, exists = appIS.AppBoxes[key]
@@ -69,19 +74,55 @@ func (appIS SingleAppInitialStates) isRecorded(state logic.AppStateEnum, key str
 	return
 }
 
+func (appIS *SingleAppInitialStates) hasBeenCreated(state logic.AppStateEnum, key string, addr basics.Address) (created bool) {
+	switch state {
+	case logic.BoxState:
+		_, created = appIS.CreatedBoxes[key]
+	case logic.GlobalState:
+		_, created = appIS.CreatedGlobals[key]
+	case logic.LocalState:
+		if kvs, addrLocalExists := appIS.CreatedLocals[addr]; addrLocalExists {
+			_, created = kvs[key]
+		}
+	}
+	return
+}
+
+func (appIS *SingleAppInitialStates) noteCreation(state logic.AppStateEnum, key string, addr basics.Address) {
+	switch state {
+	case logic.BoxState:
+		appIS.CreatedBoxes[key] = struct{}{}
+	case logic.GlobalState:
+		appIS.CreatedGlobals[key] = struct{}{}
+	case logic.LocalState:
+		if _, addrLocalExists := appIS.CreatedLocals[addr]; !addrLocalExists {
+			appIS.CreatedLocals[addr] = make(map[string]struct{})
+		}
+		appIS.CreatedLocals[addr][key] = struct{}{}
+	}
+}
+
 func (appsIS AppsInitialStates) appendInitialStates(cx *logic.EvalContext) {
 	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
 	// No matter read or write, once this code-path is triggered, something must be recorded into initial state
 	if _, ok := appsIS[appID]; !ok {
 		appsIS[appID] = &SingleAppInitialStates{
-			AppLocals:  make(map[basics.Address]AppKVPairs),
-			AppGlobals: make(AppKVPairs),
-			AppBoxes:   make(AppKVPairs),
+			AppLocals:      make(map[basics.Address]AppKVPairs),
+			AppGlobals:     make(AppKVPairs),
+			AppBoxes:       make(AppKVPairs),
+			CreatedGlobals: make(map[string]struct{}),
+			CreatedBoxes:   make(map[string]struct{}),
+			CreatedLocals:  make(map[basics.Address]map[string]struct{}),
 		}
 	}
 
 	// if the state has been recorded, pass
 	if appsIS[appID].isRecorded(appState, stateKey, acctAddr) {
+		return
+	}
+
+	// if this state is created during simulation, pass
+	if appsIS[appID].hasBeenCreated(appState, stateKey, acctAddr) {
 		return
 	}
 
@@ -91,6 +132,7 @@ func (appsIS AppsInitialStates) appendInitialStates(cx *logic.EvalContext) {
 		// if the unrecorded value to write to is nil, pass
 		// this case means it is creating a state
 		if tv == (basics.TealValue{}) {
+			appsIS[appID].noteCreation(appState, stateKey, acctAddr)
 			return
 		}
 		fallthrough
