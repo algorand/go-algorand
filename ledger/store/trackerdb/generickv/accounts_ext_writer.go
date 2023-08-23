@@ -18,7 +18,6 @@ package generickv
 
 import (
 	"context"
-	"encoding/binary"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -51,16 +50,16 @@ func (w *accountsWriter) TxtailNewRound(ctx context.Context, baseRound basics.Ro
 	// insert the new txTail's
 	for i, data := range roundData {
 		rnd := basics.Round(int(baseRound) + i)
-		err := w.kvw.Set(txTailKey(rnd), data)
+		key := txTailKey(rnd)
+		err := w.kvw.Set(key[:], data)
 		if err != nil {
 			return err
 		}
 	}
 
 	// delete old ones
-	start := []byte(kvTxTail + "-")
-	end := txTailKey(forgetBeforeRound)
-	err := w.kvw.DeleteRange(start, end)
+	start, end := txTailRoundRangePrefix(forgetBeforeRound)
+	err := w.kvw.DeleteRange(start[:], end[:])
 	if err != nil {
 		return err
 	}
@@ -78,7 +77,8 @@ func (w *accountsWriter) UpdateAccountsRound(rnd basics.Round) (err error) {
 
 	// write round entry
 	raw := bigEndianUint64(uint64(rnd))
-	err = w.kvw.Set(roundKey(), raw)
+	key := roundKey()
+	err = w.kvw.Set(key[:], raw[:])
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,8 @@ func (w *accountsWriter) AccountsPutTotals(totals ledgercore.AccountTotals, catc
 
 	// write totals entry
 	raw := protocol.Encode(&totals)
-	err = w.kvw.Set(totalsKey(catchpointStaging), raw)
+	key := totalsKey(catchpointStaging)
+	err = w.kvw.Set(key[:], raw)
 	if err != nil {
 		return err
 	}
@@ -131,12 +132,12 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 	// - the `onlineAccountKey(address, round)` -> "-".join(kvPrefixOnlineAccount, addr, round)
 	// - and the `onlineAccountBalanceKey(round, normBalance, addr) -> "-".join(kvPrefixOnlineAccountBalance, round, normBalance, addr)
 
-	// 1. read from the `onlineAccountBalanceKey` range since we can the addr's that will need to be deleted
-	start := []byte(kvPrefixOnlineAccountBalance + "-")
-	end := []byte(kvPrefixOnlineAccountBalance + "-")
-	end = append(end, bigEndianUint64(uint64(forgetBefore))...)
-	iter := w.kvr.NewIter(start, end, true)
+	// 1. read from the `onlineAccountBalanceKey` range since we need the addresses that will need to be deleted
+	start, end := onlineAccountBalanceForRoundRangePrefix(forgetBefore)
+	iter := w.kvr.NewIter(start[:], end[:], true)
 	defer iter.Close()
+
+	seenAddrs := make(map[basics.Address]struct{})
 
 	toDeletePrimaryIndex := make([]struct {
 		basics.Address
@@ -145,33 +146,22 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 
 	toDeleteSecondaryIndex := make([][]byte, 0)
 
-	var prevAddr basics.Address
-
+	// loop through the rounds in reverse order (latest first)
 	for iter.Next() {
-		// read the key
-		// schema: <prefix>-<rnd>-<balance>-<addr>
 		key := iter.Key()
 
-		// extract the round from the key (offset: 1)
-		rndOffset := len(kvPrefixOnlineAccountBalance) + 1
-		u64Rnd := binary.BigEndian.Uint64(key[rndOffset : rndOffset+8])
-		round := basics.Round(u64Rnd)
+		// extract address & round from the key
+		addr := extractOnlineAccountBalanceAddress(key)
+		round := extractOnlineAccountBalanceRound(key)
 
-		// get the offset where the address starts
-		addrOffset := len(kvPrefixOnlineAccountBalance) + 1 + 8 + 1 + 8 + 1
-		var addr basics.Address
-		copy(addr[:], key[addrOffset:addrOffset+32])
-
-		if addr != prevAddr {
+		// check that we have NOT seen this address before
+		if _, ok := seenAddrs[addr]; !ok {
 			// new address
-			// if the first (latest) entry is
-			//  - offline then delete all
-			//  - online then safe to delete all previous except this first (latest)
+			// if the first time (latest in rnd, order reversed) we see it the entry is:
+			//  - offline -> then delete all
+			//  - online -> then safe to delete all previous except this first (latest)
 
-			// reset the state
-			prevAddr = addr
-
-			// delete on voting empty
+			// check if voting data is empty (it means the account is offline)
 			var oad trackerdb.BaseOnlineAccountData
 			var data []byte
 			data, err = iter.Value()
@@ -183,13 +173,16 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 				return err
 			}
 			if oad.IsVotingEmpty() {
-				// delete this and all subsequent
+				// delete this entry (all subsequent will be deleted too outside the if)
 				toDeletePrimaryIndex = append(toDeletePrimaryIndex, struct {
 					basics.Address
 					basics.Round
 				}{addr, round})
 				toDeleteSecondaryIndex = append(toDeleteSecondaryIndex, key)
 			}
+
+			// mark addr as seen
+			seenAddrs[addr] = struct{}{}
 
 			// restart the loop
 			// if there are some subsequent entries, they will deleted on the next iteration
@@ -208,7 +201,8 @@ func (w *accountsWriter) OnlineAccountsDelete(forgetBefore basics.Round) (err er
 	// 2. delete the individual addr+round entries
 	for _, item := range toDeletePrimaryIndex {
 		// TODO: [perf] we might be able to optimize this with a SingleDelete call
-		err = w.kvw.Delete(onlineAccountKey(item.Address, item.Round))
+		key := onlineAccountKey(item.Address, item.Round)
+		err = w.kvw.Delete(key[:])
 		if err != nil {
 			return
 		}
@@ -239,7 +233,8 @@ func (w *accountsWriter) AccountsPutOnlineRoundParams(onlineRoundParamsData []le
 	for i := range onlineRoundParamsData {
 		rnd := basics.Round(int(startRound) + i)
 		raw := protocol.Encode(&onlineRoundParamsData[i])
-		err := w.kvw.Set(onlineAccountRoundParamsKey(rnd), raw)
+		key := onlineAccountRoundParamsKey(rnd)
+		err := w.kvw.Set(key[:], raw)
 		if err != nil {
 			return err
 		}
@@ -254,9 +249,8 @@ func (w *accountsWriter) AccountsPruneOnlineRoundParams(deleteBeforeRound basics
 	// DELETE FROM onlineroundparamstail WHERE rnd<?
 
 	// delete old ones
-	start := []byte(kvOnlineAccountRoundParams + "-")
-	end := onlineAccountRoundParamsKey(deleteBeforeRound)
-	err := w.kvw.DeleteRange(start, end)
+	start, end := onlineAccountRoundParamsRoundRangePrefix(deleteBeforeRound)
+	err := w.kvw.DeleteRange(start[:], end[:])
 	if err != nil {
 		return err
 	}
