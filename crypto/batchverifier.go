@@ -147,16 +147,16 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 func batchVerificationImpl(messageHashReps []byte, messageLens []C.ulonglong, publicKeys []byte, signatures []byte) (allSigsValid bool, failed []bool) {
 	numberOfSignatures := len(messageLens)
 
-	valid := make([]C.size_t, numberOfSignatures)
+	valid := make([]C.int, numberOfSignatures)
 
 	// call the batch verifier
 	allValid := C.ed25519_batch_wrapper(
-		(*C.uchar)(unsafe.Pointer(&messageHashReps[0])),
-		(*C.ulonglong)(unsafe.Pointer(&messageLens[0])),
-		(*C.uchar)(unsafe.Pointer(&publicKeys[0])),
-		(*C.uchar)(unsafe.Pointer(&signatures[0])),
+		(*C.uchar)(&messageHashReps[0]),
+		(*C.ulonglong)(&messageLens[0]),
+		(*C.uchar)(&publicKeys[0]),
+		(*C.uchar)(&signatures[0]),
 		C.size_t(numberOfSignatures),
-		(*C.int)(unsafe.Pointer(&valid[0])))
+		(*C.int)(&valid[0]))
 
 	failed = make([]bool, numberOfSignatures)
 	for i := 0; i < numberOfSignatures; i++ {

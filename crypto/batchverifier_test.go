@@ -146,7 +146,7 @@ func BenchmarkBatchVerifierBig(b *testing.B) {
 }
 
 func (b *BatchVerifier) getSignature(i int) Signature {
-	if i > len(b.messages) {
+	if i > len(b.messageLens) {
 		panic("getSignature for i greater than length of messages")
 	}
 	sigbuf := b.signatures[i*ed25519SignatureSize : (i+1)*ed25519SignatureSize]
