@@ -159,6 +159,7 @@ func TestConcatenatedProofsMissingChild(t *testing.T) {
 
 	recomputedProof, err := ProofDataToSingleLeafProof(p.HashFactory.HashType.String(), concatenatedProof)
 	a.NoError(err)
+	a.Equal(recomputedProof.TreeDepth, p.TreeDepth)
 
 	// verify that we can reconstruct the original singleLeafProof from the concatenated proof
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{6: array[6]}, recomputedProof.ToProof())
@@ -191,6 +192,7 @@ func TestConcatenatedProofsFullTree(t *testing.T) {
 
 	recomputedProof, err := ProofDataToSingleLeafProof(p.HashFactory.HashType.String(), concatenatedProof)
 	a.NoError(err)
+	a.Equal(recomputedProof.TreeDepth, p.TreeDepth)
 
 	// verify that we can reconstruct the original singleLeafProof from the concatenated proof
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{6: array[6]}, recomputedProof.ToProof())
@@ -220,6 +222,7 @@ func TestConcatenatedProofsOneLeaf(t *testing.T) {
 
 	recomputedProof, err := ProofDataToSingleLeafProof(p.HashFactory.HashType.String(), concatenatedProof)
 	a.NoError(err)
+	a.Equal(recomputedProof.TreeDepth, p.TreeDepth)
 
 	// verify that we can reconstruct the original singleLeafProof from the concatenated proof
 	err = Verify(tree.Root(), map[uint64]crypto.Hashable{0: array[0]}, recomputedProof.ToProof())
