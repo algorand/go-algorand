@@ -392,8 +392,8 @@ func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
 			return
 		}
 	}
-	// returns was called on an OpSpec with no StackAny in its Returns
-	panic(fmt.Sprintf("%+v", spec))
+	panic(fmt.Sprintf("returns was called on OpSpec '%s' without StackAny %+v in spec.Return",
+		spec.Name, spec.Return))
 }
 
 // writeIntc writes opcodes for loading a uint64 constant onto the stack.
