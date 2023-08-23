@@ -77,6 +77,7 @@ func MakeGenerator(log logging.Logger, dbround uint64, bkGenesis bookkeeping.Gen
 		latestData:                make(map[TxTypeID]uint64),
 		roundOffset:               dbround,
 	}
+	gen.reportData.InitialRound = gen.roundOffset
 	gen.reportData.Transactions = make(map[TxTypeID]TxData)
 	gen.reportData.Counters = make(map[string]uint64)
 
