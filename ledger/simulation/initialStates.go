@@ -94,6 +94,8 @@ func (appsIS AppsInitialStates) appendInitialStates(cx *logic.EvalContext) {
 			return
 		}
 		fallthrough
+	case logic.AppStateDelete:
+		fallthrough
 	case logic.AppStateRead:
 		switch appState {
 		case logic.BoxState:
