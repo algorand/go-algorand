@@ -241,6 +241,9 @@ func (n *P2PNetwork) DisconnectPeers() {
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
 
+func (n *P2PNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+}
+
 // RequestConnectOutgoing asks the system to actually connect to peers.
 // `replace` optionally drops existing connections before making new ones.
 // `quit` chan allows cancellation.

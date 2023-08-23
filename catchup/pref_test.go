@@ -50,7 +50,7 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 	net := &httpTestPeerSource{}
 	ls := rpcs.MakeBlockService(logging.TestingLog(b), config.GetDefaultLocal(), remote, net, "test genesisID")
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
