@@ -37,8 +37,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-const peerStorePath = "peerstore.db"
-
 var outgoingMessagesBufferSize = int(
 	max(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers,
 		config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize,
