@@ -19,13 +19,20 @@ package p2p
 import (
 	"context"
 	"testing"
+	"time"
 
 	golog "github.com/ipfs/go-log"
+	"github.com/libp2p/go-libp2p"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/discovery"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	algodht "github.com/algorand/go-algorand/network/p2p/dht"
+	"github.com/algorand/go-algorand/network/p2p/peerstore"
 )
 
 func TestCapabilitiesDiscovery(t *testing.T) {
@@ -55,5 +62,75 @@ func TestCapabilitiesDiscovery(t *testing.T) {
 		require.NoError(t, err)
 		capD.dht.ForceRefresh()
 		require.Equal(t, peersAdded, capD.dht.RoutingTable().Size())
+	}
+}
+
+func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
+	var hosts []host.Host
+	var bootstrapPeers []*peer.AddrInfo
+	var dhts []*dht.IpfsDHT
+	for i := 0; i < numHosts; i++ {
+		tmpdir := t.TempDir()
+		pk, err := GetPrivKey(config.GetDefaultLocal(), tmpdir)
+		require.NoError(t, err)
+		ps, err := peerstore.NewPeerStore([]*peer.AddrInfo{})
+		require.NoError(t, err)
+		h, err := libp2p.New(
+			libp2p.ListenAddrStrings("/dns4/localhost/tcp/0"),
+			libp2p.Identity(pk),
+			libp2p.Peerstore(ps))
+		require.NoError(t, err)
+		hosts = append(hosts, h)
+		bootstrapPeers = append(bootstrapPeers, &peer.AddrInfo{ID: h.ID(), Addrs: h.Addrs()})
+	}
+	for _, h := range hosts {
+		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", bootstrapPeers)
+		require.NoError(t, err)
+		err = ht.Bootstrap(context.Background())
+		require.NoError(t, err)
+		dhts = append(dhts, ht)
+	}
+	return dhts
+}
+
+func TestDHTTwoPeers(t *testing.T) {
+	numAdvertisers := 2
+	dhts := setupDHTHosts(t, numAdvertisers)
+	topic := "foobar"
+	for i, ht := range dhts {
+		disc, err := algodht.MakeDiscovery(ht)
+		require.NoError(t, err)
+		refreshCtx, _ := context.WithTimeout(context.Background(), time.Second*5)
+	peersPopulated:
+		for {
+			select {
+			case <-refreshCtx.Done():
+				require.Fail(t, "failed to populate routing table before timeout")
+			default:
+				if ht.RoutingTable().Size() > 0 {
+					break peersPopulated
+				}
+			}
+		}
+		_, err = disc.Advertise(context.Background(), topic)
+		require.NoError(t, err)
+
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		var advertisers []peer.AddrInfo
+		peersChan, err := disc.FindPeers(ctx, topic, discovery.Limit(numAdvertisers))
+	pollingForPeers:
+		for {
+			select {
+			case p, open := <-peersChan:
+				if p.ID.Size() > 0 {
+					advertisers = append(advertisers, p)
+				}
+				if !open {
+					break pollingForPeers
+				}
+			}
+		}
+		// Returned peers will include the querying node's ID since it advertises for the topic as well
+		require.Equal(t, i+1, len(advertisers))
 	}
 }
