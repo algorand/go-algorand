@@ -65,31 +65,33 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.False(t, s.Filled)
 
 	// issue events in the following order: 2, 3, 1, (freeze), 0
-	s, err = s.accept(votes[2])
+	s, _, err = s.accept(votes[2])
 	assert.NoError(t, err)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
 
-	s, err = s.accept(votes[3])
+	s, _, err = s.accept(votes[3])
 	assert.Error(t, err)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
 
-	s, err = s.accept(votes[1])
+	s, _, err = s.accept(votes[1])
 	assert.NoError(t, err)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
 
+	lowestBeforeFreeze := s.Lowest
 	s = s.freeze()
 	assert.True(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
 
-	s, err = s.accept(votes[0])
+	s, _, err = s.accept(votes[0])
 	assert.Error(t, err)
+	assert.Equal(t, s.Lowest, lowestBeforeFreeze)
 	assert.True(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))

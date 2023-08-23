@@ -596,6 +596,8 @@ type filteredEvent struct {
 	// {proposal,vote,bundle}{Filtered,Malformed}
 	T eventType
 
+	StateUpdated bool
+
 	// Err is the reason cryptographic verification failed and is set for
 	// events {proposal,vote,bundle}Malformed.
 	Err *serializableError

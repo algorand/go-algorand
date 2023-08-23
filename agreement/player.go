@@ -608,16 +608,20 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}()
 
 		ef := r.dispatch(*p, delegatedE, proposalMachine, 0, 0, 0)
+		relayOnly := false
 		switch ef.t() {
 		case voteMalformed:
 			err := ef.(filteredEvent).Err
 			return append(actions, disconnectAction(e, err))
 		case voteFiltered:
-			err := ef.(filteredEvent).Err
-			return append(actions, ignoreAction(e, err))
+			relayOnly = true
+			if !ef.(filteredEvent).StateUpdated {
+				err := ef.(filteredEvent).Err
+				return append(actions, ignoreAction(e, err))
+			}
 		}
 
-		if e.t() == votePresent {
+		if e.t() == votePresent && !relayOnly {
 			doneProcessing = false
 			seq := p.Pending.push(e.Tail)
 			uv := e.Input.UnauthenticatedVote
@@ -700,6 +704,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 
 	case votePresent, voteVerified:
 		ef := r.dispatch(*p, delegatedE, voteMachine, 0, 0, 0)
+		relayOnly := false
 		switch ef.t() {
 		case voteMalformed:
 			// TODO Add Metrics here to capture telemetryspec.VoteRejectedEvent details
@@ -707,10 +712,13 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			err := makeSerErrf("rejected message since it was invalid: %v", ef.(filteredEvent).Err)
 			return append(actions, disconnectAction(e, err))
 		case voteFiltered:
-			err := ef.(filteredEvent).Err
-			return append(actions, ignoreAction(e, err))
+			relayOnly = true
+			if !ef.(filteredEvent).StateUpdated {
+				err := ef.(filteredEvent).Err
+				return append(actions, ignoreAction(e, err))
+			}
 		}
-		if e.t() == votePresent {
+		if e.t() == votePresent && !relayOnly {
 			uv := e.Input.UnauthenticatedVote
 			return append(actions, verifyVoteAction(e, uv.R.Round, uv.R.Period, 0))
 		} // else e.t() == voteVerified
