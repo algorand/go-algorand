@@ -30,6 +30,11 @@ func (s Set[T]) Add(elems ...T) Set[T] {
 	return s
 }
 
+// MakeSet constructs a set instance directly from elements.
+func MakeSet[T comparable](elems ...T) Set[T] {
+	return make(Set[T]).Add(elems...)
+}
+
 // IsElem checks the membership of an element in the set.
 func (s Set[T]) IsElem(elem T) (exists bool) {
 	_, exists = s[elem]

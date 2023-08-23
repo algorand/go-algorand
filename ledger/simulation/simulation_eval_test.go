@@ -2337,7 +2337,7 @@ byte "hello"; log; int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{},
-					CreatedApp:           make(simulation.Set[basics.AppIndex]).Add(basics.AppIndex(1002)),
+					CreatedApp:           simulation.MakeSet(basics.AppIndex(1002)),
 				},
 			},
 		}
@@ -3345,7 +3345,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp:           make(simulation.Set[basics.AppIndex]).Add(futureAppID),
+					CreatedApp:           simulation.MakeSet(futureAppID),
 				},
 			},
 		}
@@ -3920,10 +3920,10 @@ int 1`,
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppGlobals:     simulation.AppKVPairs{},
 							AppBoxes:       simulation.AppKVPairs{},
-							CreatedGlobals: make(simulation.Set[string]).Add("global-bytes-key", "global-int-key"),
+							CreatedGlobals: simulation.MakeSet("global-bytes-key", "global-int-key"),
 							CreatedBoxes:   make(simulation.Set[string]),
 							CreatedLocals: map[basics.Address]simulation.Set[string]{
-								sender.Addr: make(simulation.Set[string]).Add("local-bytes-key", "local-int-key"),
+								sender.Addr: simulation.MakeSet("local-bytes-key", "local-int-key"),
 							},
 						},
 					},
@@ -4165,7 +4165,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp:           make(simulation.Set[basics.AppIndex]).Add(futureAppID),
+					CreatedApp:           simulation.MakeSet(futureAppID),
 				},
 			},
 		}
@@ -4349,7 +4349,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp:           make(simulation.Set[basics.AppIndex]).Add(futureAppID),
+					CreatedApp:           simulation.MakeSet(futureAppID),
 				},
 			},
 		}
@@ -5385,6 +5385,7 @@ int 1`,
 		OnCompletion:  transactions.OptInOC,
 	}).SignedTxn())
 
+	// TODO ...
 }
 
 func TestLocalInitialStates(t *testing.T) {
