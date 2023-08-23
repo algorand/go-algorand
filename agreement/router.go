@@ -16,6 +16,8 @@
 
 package agreement
 
+import "github.com/algorand/go-algorand/config"
+
 // A stateMachineTag uniquely identifies the type of a state machine.
 //
 // Rounds, periods, and steps may be used to further identify different state machine instances of the same type.
@@ -119,6 +121,11 @@ func makeRootRouter(p player) (res rootRouter) {
 	return
 }
 
+// gcLag the maximal number of rounds that could pass before a credential from
+// an honest party for an old round may arrive. It uses the
+// dynamicFilterTimeoutLowerBound parameter as the minimal round time.
+var gcLag = config.Protocol.SmallLambda / dynamicFilterTimeoutLowerBound
+
 func (router *rootRouter) update(state player, r round, gc bool) {
 	if router.proposalRoot == nil {
 		router.proposalRoot = checkedListener{listener: &router.ProposalManager, listenerContract: proposalManagerContract{}}
@@ -136,7 +143,11 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 	if gc {
 		children := make(map[round]*roundRouter)
 		for r, c := range router.Children {
-			if r >= state.Round {
+			// We may still receive credential messages from old rounds. Keep
+			// old round routers around, for as long as those credentials may
+			// arrive to keep track of them.
+			rr := r + round(gcLag)
+			if rr >= state.Round {
 				children[r] = c
 			}
 		}
