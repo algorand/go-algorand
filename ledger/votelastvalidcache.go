@@ -46,6 +46,7 @@ func newVoteLastValidCache() roundCounterCache {
 	v.deltaFn = func(delta accountDelta) (basics.Round, basics.Round) {
 		return delta.oldAcct.AccountData.VoteLastValid, delta.newAcct.VoteLastValid
 	}
+	return v
 }
 
 // init initializes the cache for use.
