@@ -5299,8 +5299,15 @@ func TestAppInitialGlobalStates(t *testing.T) {
 	)
 }
 
+type LocalStateOperation struct {
+	address basics.Address
+	appArgs [][]byte
+}
+
 type LocalInitialStatesTestCase struct {
-	initialLocalStates map[basics.Address]simulation.AppKVPairs
+	prepareInstructions  []LocalStateOperation
+	simulateInstructions []LocalStateOperation
+	initialLocalStates   map[basics.Address]simulation.AppKVPairs
 }
 
 func testLocalInitialStatesHelper(t *testing.T, testcase LocalInitialStatesTestCase) {
@@ -5378,12 +5385,14 @@ int 1`,
 	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
 	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, appID.Address(), transferable)
 
-	myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
-		Sender:        appCreator.Addr,
-		Type:          protocol.ApplicationCallTx,
-		ApplicationID: appID,
-		OnCompletion:  transactions.OptInOC,
-	}).SignedTxn())
+	for _, acct := range myEnv.Accounts[2:] {
+		myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
+			Sender:        acct.Addr,
+			Type:          protocol.ApplicationCallTx,
+			ApplicationID: appID,
+			OnCompletion:  transactions.OptInOC,
+		}).SignedTxn())
+	}
 
 	// TODO ...
 }
