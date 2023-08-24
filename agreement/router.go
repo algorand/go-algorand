@@ -126,7 +126,7 @@ func makeRootRouter(p player) (res rootRouter) {
 // credentialRoundLag the maximal number of rounds that could pass before a credential from
 // an honest party for an old round may arrive. It uses the
 // dynamicFilterTimeoutLowerBound parameter as the minimal round time.
-var credentialRoundLag = config.Protocol.SmallLambda / dynamicFilterTimeoutLowerBound
+var credentialRoundLag = round(config.Protocol.SmallLambda / dynamicFilterTimeoutLowerBound)
 
 func (router *rootRouter) update(state player, r round, gc bool) {
 	if router.proposalRoot == nil {
@@ -148,7 +148,7 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 			// We may still receive credential messages from old rounds. Keep
 			// old round routers around, for as long as those credentials may
 			// arrive to keep track of them.
-			rr := r + round(credentialRoundLag) + 1
+			rr := r + credentialRoundLag + 1
 			if rr >= state.Round {
 				children[r] = c
 			}

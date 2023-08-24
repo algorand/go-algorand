@@ -596,6 +596,8 @@ type filteredEvent struct {
 	// {proposal,vote,bundle}{Filtered,Malformed}
 	T eventType
 
+	// StateUpdated indicates whether the filtered message caused any change in
+	// the state machine
 	StateUpdated bool
 
 	// Err is the reason cryptographic verification failed and is set for

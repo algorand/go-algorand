@@ -34,8 +34,8 @@ type proposalSeeker struct {
 	// Filled will no longer be modified.
 	Frozen bool
 
-	lowestEvenIfLate vote
-	hasLowest        bool
+	lowestEvenIfLate    vote
+	hasLowestEvenIfLate bool
 }
 
 // accept compares a given vote with the current lowest-credentialled vote and
@@ -44,9 +44,9 @@ func (s proposalSeeker) accept(v vote) (proposalSeeker, bool, error) {
 	if s.Frozen {
 		updated := false
 		// continue tracking and forwarding the lowest proposal even when frozen
-		if !s.hasLowest || v.Cred.Less(s.lowestEvenIfLate.Cred) {
+		if !s.hasLowestEvenIfLate || v.Cred.Less(s.lowestEvenIfLate.Cred) {
 			s.lowestEvenIfLate = v
-			s.hasLowest = true
+			s.hasLowestEvenIfLate = true
 			updated = true
 		}
 		return s, updated, errProposalSeekerFrozen{}
@@ -59,7 +59,7 @@ func (s proposalSeeker) accept(v vote) (proposalSeeker, bool, error) {
 	s.Lowest = v
 	s.Filled = true
 	s.lowestEvenIfLate = v
-	s.hasLowest = true
+	s.hasLowestEvenIfLate = true
 	return s, true, nil
 }
 
@@ -183,7 +183,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 	case readLowestVote:
 		e := e.(readLowestEvent)
 		e.Vote = t.Freezer.lowestEvenIfLate
-		e.Filled = t.Freezer.hasLowest
+		e.Filled = t.Freezer.hasLowestEvenIfLate
 		return e
 
 	case softThreshold, certThreshold:
