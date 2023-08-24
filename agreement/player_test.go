@@ -3293,7 +3293,7 @@ func TestPlayerRetainsLateReceivedValidatedAtOneSample(t *testing.T) {
 
 	// Old credential arrives
 	// send voteVerified message
-	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag+1, p, propose, *pV)
+	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag-1, p, propose, *pV)
 	inMsg = messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
 	inMsg = inMsg.AttachValidatedAt(501 * time.Millisecond)
 	err, panicErr = pM.transition(inMsg)
