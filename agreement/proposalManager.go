@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // A proposalManager is a proposalMachine which applies relay rules to incoming
@@ -232,6 +234,14 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 
 // voteFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
+	if freshData.PlayerRound <= vote.R.Round+basics.Round(credentialRoundLag)+1 && vote.R.Period == 0 {
+		if dynamicFilterCredentialArrivalHistory > 0 {
+			// continue processing old period 0 votes so we could track their
+			// arrival times and inform setting the filter timeout dynamically.
+			return nil
+		}
+	}
+
 	switch vote.R.Round {
 	case freshData.PlayerRound:
 		if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > vote.R.Period {

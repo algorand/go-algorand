@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -3261,6 +3262,71 @@ func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 	require.NoError(t, panicErr)
 
 	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, protocol.ConsensusFuture)
+}
+
+func TestPlayerRetainsLateReceivedValidatedAtOneSample(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = round(20239)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r-1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+
+	// Move to round r, no credentials arrived.
+	// send voteVerified message
+	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
+	inMsg = inMsg.AttachValidatedAt(501 * time.Millisecond)
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// send payloadPresent message
+	m := message{UnauthenticatedProposal: pP.u()}
+	inMsg = messageEvent{T: payloadPresent, Input: m}
+	inMsg = inMsg.AttachReceivedAt(time.Second)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, protocol.ConsensusFuture)
+	require.Len(t, pWhite.lowestCredentialArrivals, 0)
+
+	// Old credential arrives
+	// send voteVerified message
+	vVote = helper.MakeVerifiedVote(t, 0, r-basics.Round(credentialRoundLag+1), p, propose, *pV)
+	inMsg = messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
+	inMsg = inMsg.AttachValidatedAt(501 * time.Millisecond)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// send payloadPresent message
+	m = message{UnauthenticatedProposal: pP.u()}
+	inMsg = messageEvent{T: payloadPresent, Input: m}
+	inMsg = inMsg.AttachReceivedAt(time.Second)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// move to round r+1, triggering history update
+	vVote = helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	inMsg = messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
+	inMsg = inMsg.AttachValidatedAt(501 * time.Millisecond)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// send payloadPresent message
+	m = message{UnauthenticatedProposal: pP.u()}
+	inMsg = messageEvent{T: payloadPresent, Input: m}
+	inMsg = inMsg.AttachReceivedAt(time.Second)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	moveToRound(t, pWhite, pM, helper, r+1, p, pP, pV, m, protocol.ConsensusFuture)
+
+	require.Len(t, pWhite.lowestCredentialArrivals, 1)
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in proposalStore

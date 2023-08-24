@@ -16,7 +16,9 @@
 
 package agreement
 
-import "github.com/algorand/go-algorand/config"
+import (
+	"github.com/algorand/go-algorand/config"
+)
 
 // A stateMachineTag uniquely identifies the type of a state machine.
 //
@@ -212,7 +214,6 @@ func (router *roundRouter) update(state player, p period, gc bool) {
 				// TODO may want regression test for correct pipelining behavior
 				children[p] = c
 			}
-
 		}
 		router.Children = children
 	}
