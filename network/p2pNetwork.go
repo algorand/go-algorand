@@ -259,26 +259,13 @@ func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) 
 
 // GetPeers returns a list of Peers we could potentially send a direct message to.
 func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
+	// currently returns same list of peers for all PeerOption filters.
 	peers := make([]Peer, 0)
-	getOutgoing := false
-	for _, option := range options {
-		switch option {
-		case PeersConnectedOut:
-			getOutgoing = true
-			fallthrough
-		case PeersConnectedIn:
-			n.wsPeersLock.RLock()
-			for _, peer := range n.wsPeers {
-				if getOutgoing == peer.outgoing {
-					peers = append(peers, Peer(peer))
-				}
-			}
-			n.wsPeersLock.RUnlock()
-
-		case PeersPhonebookRelays, PeersPhonebookArchivalNodes, PeersPhonebookArchivers:
-			// ignore for now
-		}
+	n.wsPeersLock.RLock()
+	for _, peer := range n.wsPeers {
+		peers = append(peers, Peer(peer))
 	}
+	n.wsPeersLock.RUnlock()
 	return peers
 }
 
