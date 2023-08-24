@@ -258,7 +258,29 @@ func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) 
 }
 
 // GetPeers returns a list of Peers we could potentially send a direct message to.
-func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer { return nil }
+func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
+	peers := make([]Peer, 0)
+	getOutgoing := false
+	for _, option := range options {
+		switch option {
+		case PeersConnectedOut:
+			getOutgoing = true
+			fallthrough
+		case PeersConnectedIn:
+			n.wsPeersLock.RLock()
+			for _, peer := range n.wsPeers {
+				if getOutgoing == peer.outgoing {
+					peers = append(peers, Peer(peer))
+				}
+			}
+			n.wsPeersLock.RUnlock()
+
+		case PeersPhonebookRelays, PeersPhonebookArchivalNodes, PeersPhonebookArchivers:
+			// ignore for now
+		}
+	}
+	return peers
+}
 
 // RegisterHandlers adds to the set of given message handlers.
 func (n *P2PNetwork) RegisterHandlers(dispatch []TaggedMessageHandler) {
@@ -322,6 +344,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	wsp := &wsPeer{
 		wsPeerCore: makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(), addr),
 		conn:       &wsPeerConnP2PImpl{stream: stream},
+		outgoing:   !incoming,
 	}
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
