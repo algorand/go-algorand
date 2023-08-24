@@ -415,11 +415,10 @@ type readLowestEvent struct {
 	// T currently only supports readLowestVote
 	T eventType
 
-	// Round and Period are the round and period for which to query
-	// the lowest-credential vote, value or payload.  This type of event
-	// is only sent for pipelining, which only makes sense for period
-	// 0, but the Period is here anyway to route to the appropriate
-	// proposalMachinePeriod.
+	// Round and Period are the round and period for which to query the
+	// lowest-credential vote, value or payload.  This type of event is only
+	// sent for reading the lowest period 0 credential, but the Period is here
+	// anyway to route to the appropriate proposalMachinePeriod.
 	Round  round
 	Period period
 
