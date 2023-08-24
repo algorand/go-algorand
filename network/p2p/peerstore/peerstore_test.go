@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -153,68 +154,117 @@ func generateMultiAddrs(n int) ([]string, []string) {
 func TestArrayPhonebookAll(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	multiaddrs, ids := generateMultiAddrs(10)
-	addrs, _ := PeerInfoFromAddrs(multiaddrs)
-	ps, err := NewPeerStore(addrs)
+	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
+	var peerIDs []string
+	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
-	for _, id := range ids {
+	for _, addr := range set {
 		entry := makePhonebookEntryData("", network.PhoneBookEntryRelayRole, false)
-		peerid, err := peer.Decode(id)
-		require.NoError(t, err)
-		ps.Put(peerid, "addressData", entry)
+		info, _ := PeerInfoFromDomainPort(addr)
+		peerIDs = append(peerIDs, info.ID.String())
+		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
+		ph.Put(info.ID, "addressData", entry)
 	}
-	testPhonebookAll(t, ids, ps)
+	testPhonebookAll(t, peerIDs, ph)
 }
 
 func TestArrayPhonebookUniform1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	multiaddrs, ids := generateMultiAddrs(10)
-	addrs, _ := PeerInfoFromAddrs(multiaddrs)
-	ps, _ := NewPeerStore(addrs)
-	for _, id := range ids {
+	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
+	var peerIDs []string
+	ph, err := MakePhonebook(1, 1*time.Millisecond)
+	require.NoError(t, err)
+	for _, addr := range set {
 		entry := makePhonebookEntryData("", network.PhoneBookEntryRelayRole, false)
-		peerid, err := peer.Decode(id)
-		require.NoError(t, err)
-		ps.Put(peerid, "addressData", entry)
+		info, _ := PeerInfoFromDomainPort(addr)
+		peerIDs = append(peerIDs, info.ID.String())
+		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
+		ph.Put(info.ID, "addressData", entry)
 	}
-	testPhonebookUniform(t, ids, ps, 1)
+	testPhonebookUniform(t, peerIDs, ph, 1)
 }
 
 func TestArrayPhonebookUniform3(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	multiaddrs, ids := generateMultiAddrs(10)
-	addrs, _ := PeerInfoFromAddrs(multiaddrs)
-	ps, _ := NewPeerStore(addrs)
-	for _, id := range ids {
+	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
+	var peerIDs []string
+	ph, err := MakePhonebook(1, 1*time.Millisecond)
+	require.NoError(t, err)
+	for _, addr := range set {
 		entry := makePhonebookEntryData("", network.PhoneBookEntryRelayRole, false)
-		peerid, err := peer.Decode(id)
-		require.NoError(t, err)
-		ps.Put(peerid, "addressData", entry)
+		info, _ := PeerInfoFromDomainPort(addr)
+		peerIDs = append(peerIDs, info.ID.String())
+		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
+		ph.Put(info.ID, "addressData", entry)
 	}
-	testPhonebookUniform(t, ids, ps, 3)
+	testPhonebookUniform(t, peerIDs, ph, 3)
 }
 
 func TestMultiPhonebook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	multiaddrs, ids := generateMultiAddrs(10)
-	addrs, _ := PeerInfoFromAddrs(multiaddrs)
+	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
+	var peerIDs []string
 	pha := make([]string, 0)
-	for _, e := range multiaddrs[:5] {
+	for _, e := range set[:5] {
+		info, _ := PeerInfoFromDomainPort(e)
+		peerIDs = append(peerIDs, info.ID.String())
 		pha = append(pha, e)
 	}
 	phb := make([]string, 0)
-	for _, e := range multiaddrs[5:] {
+	for _, e := range set[5:] {
+		info, _ := PeerInfoFromDomainPort(e)
+		peerIDs = append(peerIDs, info.ID.String())
 		phb = append(phb, e)
 	}
 
-	ps, _ := NewPeerStore(addrs)
-	ps.ReplacePeerList(pha, "pha", network.PhoneBookEntryRelayRole)
-	ps.ReplacePeerList(phb, "phb", network.PhoneBookEntryRelayRole)
+	ph, err := MakePhonebook(1, 1*time.Millisecond)
+	require.NoError(t, err)
+	ph.ReplacePeerList(pha, "pha", network.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(phb, "phb", network.PhoneBookEntryRelayRole)
 
-	testPhonebookAll(t, ids, ps)
-	testPhonebookUniform(t, ids, ps, 1)
-	testPhonebookUniform(t, ids, ps, 3)
+	testPhonebookAll(t, peerIDs, ph)
+	testPhonebookUniform(t, peerIDs, ph, 1)
+	testPhonebookUniform(t, peerIDs, ph, 3)
+}
+
+// TestMultiPhonebookPersistentPeers validates that the peers added via Phonebook.AddPersistentPeers
+// are not replaced when Phonebook.ReplacePeerList is called
+func TestMultiPhonebookPersistentPeers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	persistentPeers := []string{"a:4041"}
+	var persistentPeerIDs []string
+	for _, pp := range persistentPeers {
+		info, _ := PeerInfoFromDomainPort(pp)
+		persistentPeerIDs = append(persistentPeerIDs, info.ID.String())
+	}
+	set := []string{"b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
+	var peerIDs []string
+	pha := make([]string, 0)
+	for _, e := range set[:5] {
+		info, _ := PeerInfoFromDomainPort(e)
+		peerIDs = append(peerIDs, info.ID.String())
+		pha = append(pha, e)
+	}
+	phb := make([]string, 0)
+	for _, e := range set[5:] {
+		info, _ := PeerInfoFromDomainPort(e)
+		peerIDs = append(peerIDs, info.ID.String())
+		phb = append(phb, e)
+	}
+	ph, err := MakePhonebook(1, 1*time.Millisecond)
+	require.NoError(t, err)
+	ph.AddPersistentPeers(persistentPeers, "pha", network.PhoneBookEntryRelayRole)
+	ph.AddPersistentPeers(persistentPeers, "phb", network.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(pha, "pha", network.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(phb, "phb", network.PhoneBookEntryRelayRole)
+
+	testPhonebookAll(t, append(peerIDs, persistentPeerIDs...), ph)
+	allAddresses := ph.GetAddresses(len(set)+len(persistentPeers), network.PhoneBookEntryRelayRole)
+	for _, pp := range persistentPeerIDs {
+		require.Contains(t, allAddresses, pp)
+	}
 }

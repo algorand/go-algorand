@@ -17,7 +17,6 @@
 package peerstore
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -25,7 +24,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2p "github.com/libp2p/go-libp2p/core/peerstore"
 	mempstore "github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
-	"github.com/multiformats/go-multiaddr"
 	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/network"
@@ -34,6 +32,8 @@ import (
 // PeerStore implements Peerstore and CertifiedAddrBook.
 type PeerStore struct {
 	peerStoreCAB
+	connectionsRateLimitingCount  uint
+	connectionsRateLimitingWindow time.Duration
 }
 
 // addressData: holds the information associated with each phonebook address.
@@ -77,6 +77,20 @@ func NewPeerStore(addrInfo []*peer.AddrInfo) (*PeerStore, error) {
 	return pstore, nil
 }
 
+// MakePhonebook creates a phonebook with the passed configuration values
+func MakePhonebook(connectionsRateLimitingCount uint,
+	connectionsRateLimitingWindow time.Duration) (*PeerStore, error) {
+	ps, err := mempstore.NewPeerstore()
+	if err != nil {
+		return &PeerStore{}, fmt.Errorf("cannot initialize a peerstore: %w", err)
+	}
+	pstore := &PeerStore{peerStoreCAB: ps,
+		connectionsRateLimitingCount:  connectionsRateLimitingCount,
+		connectionsRateLimitingWindow: connectionsRateLimitingWindow,
+	}
+	return pstore, nil
+}
+
 // GetAddresses returns up to N addresses, but may return fewer
 func (ps *PeerStore) GetAddresses(n int, role network.PhoneBookEntryRoles) []string {
 	return shuffleSelect(ps.filterRetryTime(time.Now(), role), n)
@@ -84,32 +98,28 @@ func (ps *PeerStore) GetAddresses(n int, role network.PhoneBookEntryRoles) []str
 
 // UpdateRetryAfter updates the retryAfter time for the given address.
 func (ps *PeerStore) UpdateRetryAfter(addr string, retryAfter time.Time) {
-	info, err := peer.AddrInfoFromString(addr)
+	info, err := PeerInfoFromDomainPort(addr)
 	if err != nil {
 		return
 	}
-	metadata, err := ps.Get(info.ID, "addressData")
-	if err != nil && errors.Is(err, libp2p.ErrNotFound) {
-		return
-	} else if err != nil {
-		panic(err)
+	metadata, _ := ps.Get(info.ID, "addressData")
+	if metadata != nil {
+		ad := metadata.(addressData)
+		ad.retryAfter = retryAfter
+		_ = ps.Put(info.ID, "addressData", ad)
 	}
-	ad := metadata.(addressData)
-	ad.retryAfter = retryAfter
-	_ = ps.Put(info.ID, "addressData", ad)
 
 }
 
-// GetConnectionWaitTime returns the connection wait time for the given address.
+// GetConnectionWaitTime will calculate and return the wait
+// time to prevent exceeding connectionsRateLimitingCount.
+// The connection should be established when the waitTime is 0.
+// It will register a provisional next connection time when the waitTime is 0.
+// The provisional time should be updated after the connection with UpdateConnectionTime
 func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, time.Time) {
 	curTime := time.Now()
-	info, err := peer.AddrInfoFromString(addr)
+	info, err := PeerInfoFromDomainPort(addr)
 	if err != nil {
-		return false, 0 /* not used */, curTime /* not used */
-	}
-	if info == nil {
-		// The addr is not in this phonebook.
-		// Will find the addr in a different phonebook.
 		return false, 0 /* not used */, curTime /* not used */
 	}
 	var timeSince time.Duration
@@ -120,13 +130,9 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 	}
 	ad := metadata.(addressData)
 	// Remove from recentConnectionTimes the times later than ConnectionsRateLimitingWindowSeconds
-	connectionsRateLimitingWindow, err := ps.Get("peerID", "connectionsRateLimitingWindow")
-	if err != nil {
-		return false, 0 /* not used */, curTime /* not used */
-	}
 	for numElmtsToRemove < len(ad.recentConnectionTimes) {
 		timeSince = curTime.Sub(ad.recentConnectionTimes[numElmtsToRemove])
-		if timeSince >= connectionsRateLimitingWindow.(time.Duration) {
+		if timeSince >= ps.connectionsRateLimitingWindow {
 			numElmtsToRemove++
 		} else {
 			break // break the loop. The rest are earlier than 1 second
@@ -143,7 +149,7 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 	numElts := len(ad.recentConnectionTimes)
 	if uint(numElts) >= connectionsRateLimitingCount.(uint) {
 		return true, /* true */
-			connectionsRateLimitingWindow.(time.Duration) - timeSince, curTime /* not used */
+			ps.connectionsRateLimitingWindow - timeSince, curTime /* not used */
 	}
 
 	// Else, there is space in connectionsRateLimitingCount. The
@@ -157,7 +163,7 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 
 // UpdateConnectionTime updates the connection time for the given address.
 func (ps *PeerStore) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
-	info, err := peer.AddrInfoFromString(addr)
+	info, err := PeerInfoFromDomainPort(addr)
 	if err != nil {
 		return false
 	}
@@ -204,7 +210,7 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 
 	}
 	for _, addr := range addressesThey {
-		info, err := peer.AddrInfoFromString(addr)
+		info, err := PeerInfoFromDomainPort(addr)
 		if err != nil {
 			return
 		}
@@ -219,6 +225,7 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 			delete(removeItems, info.ID)
 		} else {
 			// we don't have this item. add it.
+			ps.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 			entry := makePhonebookEntryData(networkName, role, false)
 			_ = ps.Put(info.ID, "addressData", entry)
 		}
@@ -235,19 +242,23 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 func (ps *PeerStore) AddPersistentPeers(dnsAddresses []string, networkName string, role network.PhoneBookEntryRoles) {
 
 	for _, addr := range dnsAddresses {
-		val, err := ps.Get("peerID", "addressData")
-		if err == nil {
+		info, err := PeerInfoFromDomainPort(addr)
+		if err != nil {
+			return
+		}
+		data, _ := ps.Get(info.ID, "addressData")
+		if data != nil {
 			// we already have this.
 			// Make sure the persistence field is set to true
-			data := val.(addressData)
-			data.persistent = true
+			ad := data.(addressData)
+			ad.persistent = true
 			_ = ps.Put("peerID", "addressData", data)
 
 		} else {
 			// we don't have this item. add it.
-			ps.AddAddr("peerID", multiaddr.Cast([]byte(addr)), libp2p.PermanentAddrTTL)
-			data := makePhonebookEntryData(networkName, role, true)
-			_ = ps.Put("peerID", "addressData", data)
+			ps.AddAddrs(info.ID, info.Addrs, libp2p.PermanentAddrTTL)
+			entry := makePhonebookEntryData(networkName, role, true)
+			_ = ps.Put(info.ID, "addressData", entry)
 		}
 	}
 }
@@ -277,6 +288,7 @@ func (ps *PeerStore) deletePhonebookEntry(peerID peer.ID, networkName string) {
 	ad := data.(addressData)
 	delete(ad.networkNames, networkName)
 	if 0 == len(ad.networkNames) {
+		ps.ClearAddrs(peerID)
 		_ = ps.Put(peerID, "addressData", nil)
 	}
 }
