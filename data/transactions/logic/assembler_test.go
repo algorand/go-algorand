@@ -2978,22 +2978,22 @@ func TestGetSpec(t *testing.T) {
 	require.Equal(t, "unknown opcode: nonsense", ops.Errors[1].Err.Error())
 }
 
-func TestAddPseudoDocTags(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies pseudoOps and opDocByName which are global maps
+func TestAddPseudoDocTags(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies pseudoOps and opDescByName which are global maps
 	partitiontest.PartitionTest(t)
 	defer func() {
 		delete(pseudoOps, "tests")
-		delete(opDocByName, "multiple")
-		delete(opDocByName, "single")
-		delete(opDocByName, "none")
-		delete(opDocByName, "any")
+		delete(opDescByName, "multiple")
+		delete(opDescByName, "single")
+		delete(opDescByName, "none")
+		delete(opDescByName, "any")
 	}()
 
 	pseudoOps["tests"] = map[int]OpSpec{2: {Name: "multiple"}, 1: {Name: "single"}, 0: {Name: "none"}, anyImmediates: {Name: "any"}}
 	addPseudoDocTags()
-	require.Equal(t, "`multiple` can be called using `tests` with 2 immediates.", opDocByName["multiple"])
-	require.Equal(t, "`single` can be called using `tests` with 1 immediate.", opDocByName["single"])
-	require.Equal(t, "`none` can be called using `tests` with no immediates.", opDocByName["none"])
-	require.Equal(t, "", opDocByName["any"])
+	require.Equal(t, "`multiple` can be called using `tests` with 2 immediates.", opDescByName["multiple"].Short)
+	require.Equal(t, "`single` can be called using `tests` with 1 immediate.", opDescByName["single"].Short)
+	require.Equal(t, "`none` can be called using `tests` with no immediates.", opDescByName["none"].Short)
+	require.Equal(t, "", opDescByName["any"].Short)
 }
 func TestReplacePseudo(t *testing.T) {
 	partitiontest.PartitionTest(t)

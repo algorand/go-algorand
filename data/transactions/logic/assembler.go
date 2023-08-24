@@ -1727,12 +1727,13 @@ func addPseudoDocTags() {
 				continue
 			}
 			msg := fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
-			desc, ok := opDocByName[spec.Name]
-			if ok {
-				opDocByName[spec.Name] = desc + "<br />" + msg
+			desc := opDescByName[spec.Name]
+			if desc.Short == "" {
+				desc.Short = msg
 			} else {
-				opDocByName[spec.Name] = msg
+				desc.Short = desc.Short + "<br />" + msg
 			}
+			opDescByName[spec.Name] = desc
 		}
 	}
 }
