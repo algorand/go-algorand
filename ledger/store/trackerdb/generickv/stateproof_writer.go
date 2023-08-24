@@ -47,7 +47,8 @@ func (w *stateproofWriter) StoreSPContexts(ctx context.Context, verificationCont
 		// write stateproof entry
 		vc := verificationContext[i]
 		raw := protocol.Encode(vc)
-		err := w.kvw.Set(stateproofKey(vc.LastAttestedRound), raw)
+		key := stateproofKey(vc.LastAttestedRound)
+		err := w.kvw.Set(key[:], raw)
 		if err != nil {
 			return err
 		}
@@ -63,10 +64,8 @@ func (w *stateproofWriter) DeleteOldSPContexts(ctx context.Context, earliestLast
 	// DELETE FROM stateproofverification
 	// WHERE lastattestedround < ?
 
-	start := []byte(kvPrefixStateproof + "-")
-	end := stateproofKey(earliestLastAttestedRound)
-
-	return w.kvw.DeleteRange(start, end)
+	start, end := stateproofRoundRangePrefix(earliestLastAttestedRound)
+	return w.kvw.DeleteRange(start[:], end[:])
 }
 
 // StoreSPContextsToCatchpointTbl implements trackerdb.SpVerificationCtxWriter

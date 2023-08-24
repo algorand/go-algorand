@@ -51,7 +51,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Bytecode: 0x05 {uint8}
 - Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**:  Secp256k1=1700 Secp256r1=2500
+- **Cost**:  Secp256k1=1700; Secp256r1=2500
 - Availability: v5
 
 ### ECDSA
@@ -72,7 +72,7 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 - Bytecode: 0x06 {uint8}
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
 - decompress pubkey A into components X, Y
-- **Cost**:  Secp256k1=650 Secp256r1=2400
+- **Cost**:  Secp256k1=650; Secp256r1=2400
 - Availability: v5
 
 The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.
@@ -886,7 +886,7 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 - Availability: v2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## app_opted_in
 
@@ -1097,7 +1097,7 @@ Fields
 - Availability: v3
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## pushbytes
 
@@ -1646,3 +1646,90 @@ Fields
 | 0 | BlkSeed | []byte |  |
 | 1 | BlkTimestamp | uint64 |  |
 
+
+## ec_add
+
+- Syntax: `ec_add G` ∋ G: [EC](#field-group-ec)
+- Bytecode: 0xe0 {uint8}
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- for curve points A and B, return the curve point A + B
+- **Cost**:  BN254g1=125; BN254g2=170; BLS12_381g1=205; BLS12_381g2=290
+- Availability: v10
+
+### EC
+
+Groups
+
+| Index | Name | Notes |
+| - | ------ | --------- |
+| 0 | BN254g1 | G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y |
+| 1 | BN254g2 | G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y |
+| 2 | BLS12_381g1 | G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y |
+| 3 | BLS12_381g2 | G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y |
+
+
+A and B are curve points in affine representation: field element X concatenated with field element Y. Field element `Z` is encoded as follows.
+For the base field elements (Fp), `Z` is encoded as a big-endian number and must be lower than the field modulus.
+For the quadratic field extension (Fp2), `Z` is encoded as the concatenation of the individual encoding of the coefficients. For an Fp2 element of the form `Z = Z0 + Z1 i`, where `i` is a formal quadratic non-residue, the encoding of Z is the concatenation of the encoding of `Z0` and `Z1` in this order. (`Z0` and `Z1` must be less than the field modulus).
+
+The point at infinity is encoded as `(X,Y) = (0,0)`.
+Groups G1 and G2 are denoted additively.
+
+Fails if A or B is not in G.
+A and/or B are allowed to be the point at infinity.
+Does _not_ check if A and B are in the main prime-order subgroup.
+
+## ec_scalar_mul
+
+- Syntax: `ec_scalar_mul G` ∋ G: [EC](#field-group-ec)
+- Bytecode: 0xe1 {uint8}
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.
+- **Cost**:  BN254g1=1810; BN254g2=3430; BLS12_381g1=2950; BLS12_381g2=6530
+- Availability: v10
+
+A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.
+
+## ec_pairing_check
+
+- Syntax: `ec_pairing_check G` ∋ G: [EC](#field-group-ec)
+- Bytecode: 0xe2 {uint8}
+- Stack: ..., A: []byte, B: []byte &rarr; ..., bool
+- 1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0
+- **Cost**:  BN254g1=8000 + 7400 per 64 bytes of B; BN254g2=8000 + 7400 per 128 bytes of B; BLS12_381g1=13000 + 10000 per 96 bytes of B; BLS12_381g2=13000 + 10000 per 192 bytes of B
+- Availability: v10
+
+A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to 4096 bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.
+
+## ec_multi_scalar_mul
+
+- Syntax: `ec_multi_scalar_mul G` ∋ G: [EC](#field-group-ec)
+- Bytecode: 0xe3 {uint8}
+- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn
+- **Cost**:  BN254g1=3600 + 90 per 32 bytes of B; BN254g2=7200 + 270 per 32 bytes of B; BLS12_381g1=6500 + 95 per 32 bytes of B; BLS12_381g2=14850 + 485 per 32 bytes of B
+- Availability: v10
+
+A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.
+The name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.
+
+## ec_subgroup_check
+
+- Syntax: `ec_subgroup_check G` ∋ G: [EC](#field-group-ec)
+- Bytecode: 0xe4 {uint8}
+- Stack: ..., A: []byte &rarr; ..., bool
+- 1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.
+- **Cost**:  BN254g1=20; BN254g2=3100; BLS12_381g1=1850; BLS12_381g2=2340
+- Availability: v10
+
+## ec_map_to
+
+- Syntax: `ec_map_to G` ∋ G: [EC](#field-group-ec)
+- Bytecode: 0xe5 {uint8}
+- Stack: ..., A: []byte &rarr; ..., []byte
+- maps field element A to group G
+- **Cost**:  BN254g1=630; BN254g2=3300; BLS12_381g1=1950; BLS12_381g2=8150
+- Availability: v10
+
+BN254 points are mapped by the SVDW map. BLS12-381 points are mapped by the SSWU map.
+G1 element inputs are base field elements and G2 element inputs are quadratic field elements, with nearly the same encoding rules (for field elements) as defined in `ec_add`. There is one difference of encoding rule: G1 element inputs do not need to be 0-padded if they fit in less than 32 bytes for BN254 and less than 48 bytes for BLS12-381. (As usual, the empty byte array represents 0.) G2 elements inputs need to be always have the required size.
