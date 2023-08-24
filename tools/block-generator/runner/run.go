@@ -65,6 +65,7 @@ type Args struct {
 	KeepDataDir              bool
 	GenesisFile              string
 	ResetDB                  bool
+	StartDelay               time.Duration
 	Times                    uint64
 }
 
@@ -125,6 +126,7 @@ func Run(args Args) error {
 }
 
 func (r *Args) run(reportDirectory string) error {
+
 	baseName := filepath.Base(r.Path)
 	baseNameNoExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
 	reportfile := path.Join(reportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
@@ -166,6 +168,12 @@ func (r *Args) run(reportDirectory string) error {
 		}
 		fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
 	}
+
+	if r.StartDelay > 0 {
+		fmt.Printf("%sSleeping for start delay: %s\n", pad, r.StartDelay)
+		time.Sleep(r.StartDelay)
+	}
+
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
@@ -390,6 +398,10 @@ func writeReport(w io.Writer, scenario string, start time.Time, runDuration time
 	}
 
 	if err := write("test_duration_actual_seconds:%f\n", time.Since(start).Seconds()); err != nil {
+		return err
+	}
+
+	if err := write("initial_round:%d\n", generatorReport.InitialRound); err != nil {
 		return err
 	}
 

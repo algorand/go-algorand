@@ -3366,7 +3366,7 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 	require.Len(t, pWhite.lowestCredentialArrivals, dynamicFilterCredentialArrivalHistory)
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// only the last historyLen samples are kept, so the first one is discarded
-		timestamp := 500 + i + 1
+		timestamp := 500 + i
 		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals[i])
 	}
 }
@@ -3456,7 +3456,7 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 	require.Len(t, pWhite.lowestCredentialArrivals, dynamicFilterCredentialArrivalHistory)
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// only the last historyLen samples are kept, so the first one is discarded
-		timestamp := 500 + i + 1
+		timestamp := 500 + i
 		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals[i])
 	}
 }
@@ -3558,7 +3558,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 	require.Len(t, pWhite.lowestCredentialArrivals, dynamicFilterCredentialArrivalHistory)
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// only the last historyLen samples are kept, so the first one is discarded
-		timestamp := 500 + i + 1
+		timestamp := 500 + i
 		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals[i])
 	}
 }

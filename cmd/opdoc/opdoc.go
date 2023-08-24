@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-var docVersion = 9
+var docVersion = 10
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
 func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails) string {

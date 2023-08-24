@@ -234,7 +234,7 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 
 // voteFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
-	if freshData.PlayerRound <= vote.R.Round+basics.Round(credentialRoundLag)+1 && vote.R.Period == 0 {
+	if vote.R.Round < freshData.PlayerRound && freshData.PlayerRound <= vote.R.Round+basics.Round(credentialRoundLag)+1 && vote.R.Period == 0 && vote.R.Step == 0 {
 		if dynamicFilterCredentialArrivalHistory > 0 {
 			// continue processing old period 0 votes so we could track their
 			// arrival times and inform setting the filter timeout dynamically.

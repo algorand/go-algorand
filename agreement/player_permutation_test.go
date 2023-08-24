@@ -339,6 +339,42 @@ func expectIgnore(t *testing.T, trace ioTrace, errMsg string, playerN int, event
 	}), errMsg, playerN, eventN)
 }
 
+func expectRelay(t *testing.T, trace ioTrace, errMsg string, playerN int, eventN int) {
+	require.Truef(t, trace.ContainsFn(func(b event) bool {
+		if b.t() != wrappedAction {
+			return false
+		}
+
+		wrapper := b.(wrappedActionEvent)
+		if wrapper.action.t() != relay {
+			return false
+		}
+		act := wrapper.action.(networkAction)
+		if act.T == relay && act.Err == nil {
+			return true
+		}
+		return false
+	}), errMsg, playerN, eventN)
+}
+
+func expectVerify(t *testing.T, trace ioTrace, errMsg string, playerN int, eventN int) {
+	require.Truef(t, trace.ContainsFn(func(b event) bool {
+		if b.t() != wrappedAction {
+			return false
+		}
+
+		wrapper := b.(wrappedActionEvent)
+		if wrapper.action.t() != verifyVote {
+			return false
+		}
+		act := wrapper.action.(cryptoAction)
+		if act.T == verifyVote {
+			return true
+		}
+		return false
+	}), errMsg, playerN, eventN)
+}
+
 func expectDisconnect(t *testing.T, trace ioTrace, errMsg string, playerN int, eventN int) {
 	require.Truef(t, trace.ContainsFn(func(b event) bool {
 		if b.t() != wrappedAction {
@@ -431,7 +467,21 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		}
 	case playerNextRound:
 		switch eventN {
-		case softVoteVerifiedEventSamePeriod, softVotePresentEventSamePeriod, proposeVoteVerifiedEventNextPeriod, proposeVoteVerifiedEventSamePeriod, proposeVotePresentEventSamePeriod, payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle, bundleVerifiedEventSamePeriod, bundlePresentEventSamePeriod:
+		case proposeVotePresentEventSamePeriod:
+			if p > 0 {
+				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
+			} else {
+				requireActionCount(t, trace, 1, playerN, eventN)
+				expectVerify(t, trace, "Player should verify period 0 msg from past rounds, player: %v, event: %v", playerN, eventN)
+			}
+		case proposeVoteVerifiedEventSamePeriod:
+			if p > 0 {
+				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
+			} else {
+				requireActionCount(t, trace, 1, playerN, eventN)
+				expectRelay(t, trace, "Player should relay period 0 msg from past rounds, player: %v, event: %v", playerN, eventN)
+			}
+		case softVoteVerifiedEventSamePeriod, softVotePresentEventSamePeriod, proposeVoteVerifiedEventNextPeriod, payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle, bundleVerifiedEventSamePeriod, bundlePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
 		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
