@@ -75,7 +75,12 @@ func init() {
 	networkCmd.AddCommand(networkGenesisCmd)
 	networkGenesisCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
 	networkGenesisCmd.Flags().StringVarP(&genesisDir, "genesisdir", "g", "", "Specify the path to the directory to export genesis.json, root and partkey files. This should only be used on private networks.")
-	networkStopCmd.MarkFlagRequired("genesisdir")
+	networkGenesisCmd.MarkFlagRequired("genesisdir")
+	// Hide rootdir flag as it is unused and will error if used with this command.
+	networkGenesisCmd.SetHelpFunc(func(command *cobra.Command, strings []string) {
+		_ = command.Flags().MarkHidden("rootdir")
+		command.Parent().HelpFunc()(command, strings)
+	})
 }
 
 var networkCmd = &cobra.Command{
@@ -281,7 +286,11 @@ var networkGenesisCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		var err error
-		networkRootDir, err = filepath.Abs(networkRootDir)
+		if networkRootDir != "" {
+			reportErrorf("This command does not take a network directory as an argument. Use --genesisdir flag instead.")
+		}
+
+		genesisDir, err = filepath.Abs(genesisDir)
 		if err != nil {
 			panic(err)
 		}
@@ -305,8 +314,8 @@ var networkGenesisCmd = &cobra.Command{
 		}
 
 		// Make sure target directory does not exist or is empty
-		if util.FileExists(networkRootDir) && !util.IsEmpty(networkRootDir) {
-			reportErrorf(infoNetworkAlreadyExists, networkRootDir)
+		if util.FileExists(genesisDir) && !util.IsEmpty(genesisDir) {
+			reportErrorf(infoNetworkAlreadyExists, genesisDir)
 		}
 
 		var template netdeploy.NetworkTemplate
@@ -325,7 +334,7 @@ var networkGenesisCmd = &cobra.Command{
 			reportErrorf("Error in template validation: %v\n", err)
 		}
 
-		err = gen.GenerateGenesisFiles(template.Genesis, consensus, networkRootDir, os.Stdout)
+		err = gen.GenerateGenesisFiles(template.Genesis, consensus, genesisDir, os.Stdout)
 		if err != nil {
 			reportErrorf("Cannot write genesis files: %s", err)
 		}
