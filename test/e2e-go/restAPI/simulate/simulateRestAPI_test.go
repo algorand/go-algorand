@@ -220,14 +220,23 @@ func TestSimulateTransaction(t *testing.T) {
 
 func TestSimulateStartRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	if testing.Short() {
+		t.Skip()
+	}
 	t.Parallel()
-
 	a := require.New(fixtures.SynchronizedTest(t))
-	var localFixture fixtures.RestClientFixture
-	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
-	defer localFixture.Shutdown()
 
-	testClient := localFixture.LibGoalClient
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesFollower100Second.json"))
+	defer fixture.Shutdown()
+
+	// Get controller for Primary node
+	nc, err := fixture.GetNodeController("Primary")
+	a.NoError(err)
+
+	testClient := fixture.LibGoalClient
 
 	wh, err := testClient.GetUnencryptedWalletHandle()
 	a.NoError(err)
@@ -237,14 +246,6 @@ func TestSimulateStartRound(t *testing.T) {
 	if senderAddress == "" {
 		t.Error("no addr with funds")
 	}
-	a.NoError(err)
-
-	primaryNode, err := localFixture.GetNodeController("Primary")
-	a.NoError(err)
-	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
-	a.NoError(err)
-
-	_, err = testClient.WaitForRound(cfg.MaxAcctLookback + 2)
 	a.NoError(err)
 
 	approvalSrc := `#pragma version 8
@@ -272,7 +273,26 @@ int 1`
 	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
 	a.NoError(err)
 
-	latestRound, err := testClient.CurrentRound()
+	// Get controller for follower node
+	followControl, err := fixture.GetNodeController("Follower")
+	a.NoError(err)
+	followClient := fixture.GetAlgodClientForController(followControl)
+
+	// Set sync round on follower
+	followerSyncRound := uint64(4)
+	err = followClient.SetSyncRound(followerSyncRound)
+	a.NoError(err)
+
+	cfg, err := config.LoadConfigFromDisk(followControl.GetDataDir())
+	a.NoError(err)
+
+	// Let the primary node make some progress
+	primaryClient := fixture.GetAlgodClientForController(nc)
+	err = fixture.ClientWaitForRoundWithTimeout(primaryClient, followerSyncRound+uint64(cfg.MaxAcctLookback))
+	a.NoError(err)
+
+	// Let follower node progress as far as it can
+	err = fixture.ClientWaitForRoundWithTimeout(followClient, followerSyncRound+uint64(cfg.MaxAcctLookback)-1)
 	a.NoError(err)
 
 	simulateRequest := v2.PreEncodedSimulateRequest{
@@ -282,32 +302,45 @@ int 1`
 			},
 		},
 	}
-	// Test default behavior (should use latest round)
-	result, err := testClient.SimulateTransactions(simulateRequest)
+
+	// Simulate transactions against the follower node
+	simulateTransactions := func(request v2.PreEncodedSimulateRequest) (result v2.PreEncodedSimulateResponse, err error) {
+		encodedRequest := protocol.EncodeReflect(&request)
+		var resp []byte
+		resp, err = followClient.RawSimulateRawTransaction(encodedRequest)
+		if err != nil {
+			return
+		}
+		err = protocol.DecodeReflect(resp, &result)
+		return
+	}
+
+	// Test default behavior (should use latest round available)
+	result, err := simulateTransactions(simulateRequest)
 	a.NoError(err)
 	a.Len(result.TxnGroups, 1)
 	a.Empty(result.TxnGroups[0].FailureMessage)
 	a.Len(result.TxnGroups[0].Txns, 1)
 	a.NotNil(result.TxnGroups[0].Txns[0].Txn.Logs)
 	a.Len(*result.TxnGroups[0].Txns[0].Txn.Logs, 1)
-	a.LessOrEqual(latestRound+1, binary.BigEndian.Uint64((*result.TxnGroups[0].Txns[0].Txn.Logs)[0]))
+	a.Equal(followerSyncRound+uint64(cfg.MaxAcctLookback), binary.BigEndian.Uint64((*result.TxnGroups[0].Txns[0].Txn.Logs)[0]))
 
 	// Test with previous rounds
-	for i := int(cfg.MaxAcctLookback); i >= 0; i-- {
-		simulateRequest.Round = basics.Round(latestRound - uint64(i))
-		result, err = testClient.SimulateTransactions(simulateRequest)
+	for i := uint64(0); i < cfg.MaxAcctLookback; i++ {
+		simulateRequest.Round = basics.Round(followerSyncRound + i)
+		result, err = simulateTransactions(simulateRequest)
 		a.NoError(err)
 		a.Len(result.TxnGroups, 1)
 		a.Empty(result.TxnGroups[0].FailureMessage)
 		a.Len(result.TxnGroups[0].Txns, 1)
 		a.NotNil(result.TxnGroups[0].Txns[0].Txn.Logs)
 		a.Len(*result.TxnGroups[0].Txns[0].Txn.Logs, 1)
-		a.LessOrEqual(latestRound-uint64(i)+1, binary.BigEndian.Uint64((*result.TxnGroups[0].Txns[0].Txn.Logs)[0]))
+		a.LessOrEqual(followerSyncRound+i+1, binary.BigEndian.Uint64((*result.TxnGroups[0].Txns[0].Txn.Logs)[0]))
 	}
 
 	// There should be a failure when the round is too far back
-	simulateRequest.Round = basics.Round(latestRound - cfg.MaxAcctLookback - 1)
-	result, err = testClient.SimulateTransactions(simulateRequest)
+	simulateRequest.Round = basics.Round(followerSyncRound - 3)
+	result, err = simulateTransactions(simulateRequest)
 	a.Error(err)
 	var httpErr client.HTTPError
 	a.ErrorAs(err, &httpErr)

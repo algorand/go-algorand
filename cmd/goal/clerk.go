@@ -69,6 +69,7 @@ var (
 	requestFilename    string
 	requestOutFilename string
 
+	simulateStartRound            uint64
 	simulateAllowEmptySignatures  bool
 	simulateAllowMoreLogging      bool
 	simulateAllowMoreOpcodeBudget bool
@@ -164,6 +165,7 @@ func init() {
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
 	simulateCmd.Flags().StringVar(&requestOutFilename, "request-only-out", "", "Filename for writing simulate request object. If provided, the command will only write the request object and exit. No simulation will happen")
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
+	simulateCmd.Flags().Uint64Var(&simulateStartRound, "round", 0, "Specify the round after which the simulation will take place. If not specified, the simulation will take place after the latest round.")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
@@ -1285,6 +1287,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
+				Round:                 basics.Round(simulateStartRound),
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
 				AllowUnnamedResources: simulateAllowUnnamedResources,
@@ -1310,6 +1313,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
+				Round:                 basics.Round(simulateStartRound),
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
 				AllowUnnamedResources: simulateAllowUnnamedResources,
