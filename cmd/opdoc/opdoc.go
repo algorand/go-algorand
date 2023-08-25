@@ -329,7 +329,7 @@ func (nt namedType) boundString() string {
 
 // LanguageSpec records the ops of the language at some version
 type LanguageSpec struct {
-	EvalMaxVersion  uint64
+	Version         uint64
 	LogicSigVersion uint64
 	NamedTypes      []namedType
 	Ops             []OpRecord
@@ -426,7 +426,7 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 	}
 
 	return &LanguageSpec{
-		EvalMaxVersion:  version,
+		Version:         version,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
 		NamedTypes:      namedTypes,
 		Ops:             records,
