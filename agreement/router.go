@@ -52,6 +52,19 @@ type routerHandle struct {
 	src stateMachineTag
 }
 
+// credentialRoundLag the maximal number of rounds that could pass before a credential from
+// an honest party for an old round may arrive. It uses the
+// dynamicFilterTimeoutLowerBound parameter as the minimal round time.
+var credentialRoundLag round
+
+func init() {
+	// credential arrival time should be at most 2*config.Protocol.SmallLambda after it was sent
+	credentialRoundLag = round(2 * config.Protocol.SmallLambda / dynamicFilterTimeoutLowerBound)
+	if credentialRoundLag*round(dynamicFilterTimeoutLowerBound) < round(2*config.Protocol.SmallLambda) {
+		credentialRoundLag++
+	}
+}
+
 // dispatch sends an event to the given state machine listener with the given stateMachineTag.
 //
 // If there are many state machines of this type (for instance, there is one voteMachineStep for each step)
@@ -122,11 +135,6 @@ func makeRootRouter(p player) (res rootRouter) {
 	res.root = checkedActor{actor: &p, actorContract: playerContract{}}
 	return
 }
-
-// credentialRoundLag the maximal number of rounds that could pass before a credential from
-// an honest party for an old round may arrive. It uses the
-// dynamicFilterTimeoutLowerBound parameter as the minimal round time.
-var credentialRoundLag = round(config.Protocol.SmallLambda / dynamicFilterTimeoutLowerBound)
 
 func (router *rootRouter) update(state player, r round, gc bool) {
 	if router.proposalRoot == nil {

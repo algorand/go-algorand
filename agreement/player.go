@@ -286,6 +286,12 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 	if p.Period != 0 {
 		return 0
 	}
+
+	if p.Round <= credentialRoundLag {
+		// not sufficiently many rounds had passed to collect any measurement
+		return 0
+	}
+
 	// look up the validatedAt time of the winning proposal-vote from credentialRoundLag ago,
 	// by now we must have seen the lowest credential for that round.
 	credHistoryRound := p.Round.SubSaturate(credentialRoundLag + 1)
