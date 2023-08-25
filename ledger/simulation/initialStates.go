@@ -60,20 +60,22 @@ func newResourcesInitialStates(request Request) *ResourcesInitialStates {
 	}
 }
 
-func (appIS *SingleAppInitialStates) isRecorded(state logic.AppStateEnum, key string, addr basics.Address) (exists bool) {
+// hasBeenRecorded checks if an application state kv-pair has been recorded in SingleAppInitialStates.
+func (appIS *SingleAppInitialStates) hasBeenRecorded(state logic.AppStateEnum, key string, addr basics.Address) (recorded bool) {
 	switch state {
 	case logic.BoxState:
-		_, exists = appIS.AppBoxes[key]
+		_, recorded = appIS.AppBoxes[key]
 	case logic.GlobalState:
-		_, exists = appIS.AppGlobals[key]
+		_, recorded = appIS.AppGlobals[key]
 	case logic.LocalState:
 		if kvs, addrLocalExists := appIS.AppLocals[addr]; addrLocalExists {
-			_, exists = kvs[key]
+			_, recorded = kvs[key]
 		}
 	}
 	return
 }
 
+// hasBeenCreated checks if an application state kv-pair has been created during simulation.
 func (appIS *SingleAppInitialStates) hasBeenCreated(state logic.AppStateEnum, key string, addr basics.Address) (created bool) {
 	switch state {
 	case logic.BoxState:
@@ -88,7 +90,8 @@ func (appIS *SingleAppInitialStates) hasBeenCreated(state logic.AppStateEnum, ke
 	return
 }
 
-func (appIS *SingleAppInitialStates) noteCreation(state logic.AppStateEnum, key string, addr basics.Address) {
+// recordCreation records a newly created application state kv-pair in SingleAppInitialStates during simulation.
+func (appIS *SingleAppInitialStates) recordCreation(state logic.AppStateEnum, key string, addr basics.Address) {
 	switch state {
 	case logic.BoxState:
 		appIS.CreatedBoxes.Add(key)
@@ -102,7 +105,7 @@ func (appIS *SingleAppInitialStates) noteCreation(state logic.AppStateEnum, key 
 	}
 }
 
-func (appsIS AppsInitialStates) appendInitialStates(cx *logic.EvalContext) {
+func (appsIS AppsInitialStates) increment(cx *logic.EvalContext) {
 	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
 	// No matter read or write, once this code-path is triggered, something must be recorded into initial state
 	if _, ok := appsIS[appID]; !ok {
@@ -119,7 +122,7 @@ func (appsIS AppsInitialStates) appendInitialStates(cx *logic.EvalContext) {
 	}
 
 	// if the state has been recorded, pass
-	if appsIS[appID].isRecorded(appState, stateKey, acctAddr) {
+	if appsIS[appID].hasBeenRecorded(appState, stateKey, acctAddr) {
 		return
 	}
 
@@ -134,7 +137,7 @@ func (appsIS AppsInitialStates) appendInitialStates(cx *logic.EvalContext) {
 		// if the unrecorded value to write to is nil, pass
 		// this case means it is creating a state
 		if tv == (basics.TealValue{}) {
-			appsIS[appID].noteCreation(appState, stateKey, acctAddr)
+			appsIS[appID].recordCreation(appState, stateKey, acctAddr)
 			return
 		}
 		fallthrough
@@ -155,7 +158,11 @@ func (appsIS AppsInitialStates) appendInitialStates(cx *logic.EvalContext) {
 	}
 }
 
-func (is *ResourcesInitialStates) appendInitialStates(cx *logic.EvalContext) {
+// increment is the entry point of (potentially) adding new initial states to ResourcesInitialStates during simulation.
+// This method is the top entry point of simulate-initial-state, for ResourcesInitialStates captures all initial states.
+// By checking if current opcode has related `Explain` function, this method dispatch incrementing initial states by:
+// +- AppStateExplain exists, then dispatch to AppsInitialStates.increment.
+func (is *ResourcesInitialStates) increment(cx *logic.EvalContext) {
 	// This method only applies on logic.ModeApp
 	if cx.RunMode() == logic.ModeSig {
 		return
@@ -165,7 +172,7 @@ func (is *ResourcesInitialStates) appendInitialStates(cx *logic.EvalContext) {
 		if is.CreatedApp.IsElem(cx.AppID()) {
 			return
 		}
-		is.AllAppsInitialStates.appendInitialStates(cx)
+		is.AllAppsInitialStates.increment(cx)
 	}
 	// TODO asset?
 }

@@ -309,7 +309,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		}
 		if tracer.result.ReturnStateChange() {
 			latestOpcodeTraceUnit.appendStateOperations(cx)
-			tracer.result.InitialStates.appendInitialStates(cx)
+			tracer.result.InitialStates.increment(cx)
 		}
 	}
 }
