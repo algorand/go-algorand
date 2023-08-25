@@ -51,12 +51,12 @@ type simulatorLedger struct {
 
 // Latest is part of the ledger.Ledger interface.
 // We override this to use the set latest to prevent racing with the network
-func (l *simulatorLedger) Latest() basics.Round {
+func (l simulatorLedger) Latest() basics.Round {
 	return l.start
 }
 
 // LatestTotals is part of the ledger.Ledger interface.
-func (l *simulatorLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+func (l simulatorLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
 	totals, err := l.Totals(l.start)
 	return l.start, totals, err
 }
@@ -65,7 +65,7 @@ func (l *simulatorLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals
 // Ledger, it would give wrong results if that ledger has moved forward. But it
 // should never be called, as the REST API is the only code using this function,
 // and the REST API should never have access to a simulatorLedger.
-func (l *simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
+func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
 	err := errors.New("unexpected call to LookupLatest")
 	return basics.AccountData{}, 0, basics.MicroAlgos{}, err
 }
@@ -73,11 +73,11 @@ func (l *simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData,
 // StartEvaluator is part of the ledger.Ledger interface. We override this so that
 // the eval.LedgerForEvaluator value passed into eval.StartEvaluator is a simulatorLedger,
 // not a data.Ledger. This ensures our overridden LookupLatest method will be used.
-func (l *simulatorLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
+func (l simulatorLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
 	if tracer == nil {
 		return nil, errors.New("tracer is nil")
 	}
-	return eval.StartEvaluator(l, hdr,
+	return eval.StartEvaluator(&l, hdr,
 		eval.EvaluatorOptions{
 			PaysetHint:          paysetHint,
 			Generate:            true,
