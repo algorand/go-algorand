@@ -1456,6 +1456,11 @@ int 1`,
 			require.Equal(t, uint64(latestRound-basics.Round(i)+1), bytesToUint64([]byte(result.TxnGroups[0].Txns[0].Txn.ApplyData.EvalDelta.Logs[0])))
 		})
 	}
+
+	t.Run("1 round in the future", func(t *testing.T) {
+		_, err := s.Simulate(simulation.Request{Round: latestRound + 1, TxnGroups: [][]transactions.SignedTxn{{stxn}}})
+		require.ErrorContains(t, err, fmt.Sprintf("ledger does not have entry %d", latestRound+1))
+	})
 }
 
 // TestDefaultSignatureCheck tests signature checking when SignaturesOption is NOT enabled.
