@@ -26,8 +26,6 @@ pg-up:
 pg-enter:
 	docker exec -it $(PGCONT) psql -U $(PGUSER) -d $(PGDB)
 
-QUERY := -c "SELECT * FROM pg_stat_statements LIMIT 0;"
-
 QUERY := -c "select count(*) from txn;"
 pg-query:
 	psql $(PGCONN) $(QUERY)
