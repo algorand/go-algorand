@@ -18,12 +18,12 @@ package logic
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -84,6 +84,19 @@ type linearCost struct {
 	chunkCost int
 	chunkSize int
 	depth     int
+}
+
+func (lc linearCost) check() linearCost {
+	if lc.baseCost < 1 || lc.chunkCost < 0 || lc.chunkSize < 0 || lc.chunkSize > maxStringSize || lc.depth < 0 {
+		panic(fmt.Sprintf("bad cost configuration %+v", lc))
+	}
+	if lc.chunkCost > 0 && lc.chunkSize == 0 {
+		panic(fmt.Sprintf("chunk cost when chunk size is zero %+v", lc))
+	}
+	if lc.chunkCost == 0 && lc.chunkSize > 0 {
+		panic(fmt.Sprintf("no chunk cost with positive chunk size %+v", lc))
+	}
+	return lc
 }
 
 func (lc *linearCost) compute(stack []stackValue) int {
@@ -147,8 +160,9 @@ func (d *OpDetails) docCost(argLen int) string {
 				if !ok {
 					continue
 				}
-				cost += fmt.Sprintf(" %s=%d", name, imm.fieldCosts[fs.Field()])
+				cost += fmt.Sprintf(" %s=%s;", name, imm.fieldCosts[fs.Field()].docCost(argLen))
 			}
+			cost = strings.TrimSuffix(cost, ";")
 		}
 	}
 	return cost
@@ -166,7 +180,8 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	}
 	for i := range d.Immediates {
 		if d.Immediates[i].fieldCosts != nil {
-			cost += d.Immediates[i].fieldCosts[program[pc+1+i]]
+			lc := d.Immediates[i].fieldCosts[program[pc+1+i]]
+			cost += lc.compute(stack)
 		}
 	}
 	return cost
@@ -210,13 +225,11 @@ func (d OpDetails) assembler(asm asmFunc) OpDetails {
 }
 
 func costly(cost int) OpDetails {
-	d := detDefault()
-	d.FullCost.baseCost = cost
-	return d
+	return detDefault().costs(cost)
 }
 
 func (d OpDetails) costs(cost int) OpDetails {
-	d.FullCost = linearCost{baseCost: cost}
+	d.FullCost = linearCost{baseCost: cost}.check()
 	return d
 }
 
@@ -285,20 +298,36 @@ func (d OpDetails) field(name string, group *FieldGroup) OpDetails {
 }
 
 func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
-	opd := immediates(immediate).costs(0)
+	if len(costs) != len(group.Names) {
+		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs != %d names",
+			immediate, group.Name, len(costs), len(group.Names)))
+	}
+	fieldCosts := make([]linearCost, len(costs))
+	for i, cost := range costs {
+		fieldCosts[i] = linearCost{baseCost: cost}
+	}
+	return costByFieldAndLength(immediate, group, fieldCosts)
+}
+
+func costByFieldAndLength(immediate string, group *FieldGroup, costs []linearCost) OpDetails {
+	if len(costs) != len(group.Names) {
+		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs != %d names",
+			immediate, group.Name, len(costs), len(group.Names)))
+	}
+	opd := immediates(immediate)
+	opd.FullCost = linearCost{} // zero FullCost is what causes eval to look deeper
 	opd.Immediates[0].Group = group
-	fieldCosts := make([]int, 256)
-	copy(fieldCosts, costs)
-	opd.Immediates[0].fieldCosts = fieldCosts
+	full := make([]linearCost, 256) // ensure we have 256 entries for easy lookup
+	for i := range costs {
+		full[i] = costs[i].check()
+	}
+	opd.Immediates[0].fieldCosts = full
 	return opd
 }
 
 func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
-	if initial < 1 || perChunk <= 0 || chunkSize < 1 || chunkSize > maxStringSize {
-		panic("bad cost configuration")
-	}
 	d := detDefault()
-	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}
+	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}.check()
 	return d
 }
 
@@ -344,7 +373,7 @@ type immediate struct {
 	Group *FieldGroup
 
 	// If non-nil, always 256 long, so cost can be checked before eval
-	fieldCosts []int
+	fieldCosts []linearCost
 }
 
 func imm(name string, kind immKind) immediate {
@@ -356,11 +385,6 @@ type typedList struct {
 	Effects string
 }
 
-// debugStackExplain explains the effect of an opcode over the stack
-// with 2 integers: deletions and additions, representing pops and inserts.
-// An opcode may delete a few variables from stack, then add a few to stack.
-type debugStackExplain func(*EvalContext) (int, int)
-
 // Proto describes the "stack behavior" of an opcode, what it pops as arguments
 // and pushes onto the stack as return values.
 type Proto struct {
@@ -371,10 +395,20 @@ type Proto struct {
 	// - on default construction, Explain relies on Arg and Return count.
 	// - otherwise, we need to explicitly infer from EvalContext, by registering through explain function
 	Explain debugStackExplain
+
+	// StateExplain is the pointer to the function used for debugging in simulation:
+	// - for an opcode not touching app's local/global/box state, this pointer is nil.
+	// - otherwise, we call this method and check the operation of an opcode on app's state.
+	StateExplain stateChangeExplain
 }
 
 func (p Proto) stackExplain(e debugStackExplain) Proto {
 	p.Explain = e
+	return p
+}
+
+func (p Proto) stateExplain(s stateChangeExplain) Proto {
+	p.StateExplain = s
 	return p
 }
 
@@ -384,117 +418,6 @@ func defaultDebugExplain(argCount, retCount int) debugStackExplain {
 		additions = retCount
 		return
 	}
-}
-
-func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
-	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
-	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
-	intc, _, _ := parseIntImmArgs(cx.program, cx.pc+1)
-
-	additions = len(intc)
-	return
-}
-
-func opPushBytessStackChange(cx *EvalContext) (deletions, additions int) {
-	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
-	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
-	cbytess, _, _ := parseByteImmArgs(cx.program, cx.pc+1)
-
-	additions = len(cbytess)
-	return
-}
-
-func opReturnStackChange(cx *EvalContext) (deletions, additions int) {
-	deletions = len(cx.Stack)
-	additions = 1
-	return
-}
-
-func opBuryStackChange(cx *EvalContext) (deletions, additions int) {
-	depth := int(cx.program[cx.pc+1])
-
-	deletions = depth + 1
-	additions = depth
-	return
-}
-
-func opPopNStackChange(cx *EvalContext) (deletions, additions int) {
-	n := int(cx.program[cx.pc+1])
-
-	deletions = n
-	return
-}
-
-func opDupNStackChange(cx *EvalContext) (deletions, additions int) {
-	n := int(cx.program[cx.pc+1])
-
-	deletions = 1
-	additions = n + 1
-	return
-}
-
-func opDigStackChange(cx *EvalContext) (deletions, additions int) {
-	additions = 1
-	return
-}
-
-func opFrameDigStackChange(cx *EvalContext) (deletions, additions int) {
-	additions = 1
-	return
-}
-
-func opCoverStackChange(cx *EvalContext) (deletions, additions int) {
-	depth := int(cx.program[cx.pc+1])
-
-	deletions = depth + 1
-	additions = depth + 1
-	return
-}
-
-func opUncoverStackChange(cx *EvalContext) (deletions, additions int) {
-	depth := int(cx.program[cx.pc+1])
-
-	deletions = depth + 1
-	additions = depth + 1
-	return
-}
-
-func opRetSubStackChange(cx *EvalContext) (deletions, additions int) {
-	topFrame := cx.callstack[len(cx.callstack)-1]
-	// fast path, no proto case
-	if !topFrame.clear {
-		return
-	}
-
-	argStart := topFrame.height - topFrame.args
-	topStackIdx := len(cx.Stack) - 1
-
-	diff := topStackIdx - argStart + 1
-
-	deletions = diff
-	additions = topFrame.returns
-	return
-}
-
-func opFrameBuryStackChange(cx *EvalContext) (deletions, additions int) {
-	topFrame := cx.callstack[len(cx.callstack)-1]
-
-	immIndex := int8(cx.program[cx.pc+1])
-	idx := topFrame.height + int(immIndex)
-	topStackIdx := len(cx.Stack) - 1
-
-	diff := topStackIdx - idx + 1
-
-	deletions = diff
-	additions = diff - 1
-	return
-}
-
-func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
-	labelNum := int(cx.program[cx.pc+1])
-
-	deletions = labelNum + 1
-	return
 }
 
 func proto(signature string, effects ...string) Proto {
@@ -695,12 +618,12 @@ var OpSpecs = []OpSpec{
 	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:aT"), directRefEnabledVersion, only(ModeApp)},
 	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(ModeApp)},
 	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:aT"), 2, only(ModeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("iba:"), 2, only(ModeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("aba:"), directRefEnabledVersion, only(ModeApp)},
-	{0x67, "app_global_put", opAppGlobalPut, proto("ba:"), 2, only(ModeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ib:"), 2, only(ModeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ab:"), directRefEnabledVersion, only(ModeApp)},
-	{0x69, "app_global_del", opAppGlobalDel, proto("b:"), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("iba:").stateExplain(opAppLocalPutStateChange), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("aba:").stateExplain(opAppLocalPutStateChange), directRefEnabledVersion, only(ModeApp)},
+	{0x67, "app_global_put", opAppGlobalPut, proto("ba:").stateExplain(opAppGlobalPutStateChange), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ib:").stateExplain(opAppLocalDelStateChange), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ab:").stateExplain(opAppLocalDelStateChange), directRefEnabledVersion, only(ModeApp)},
+	{0x69, "app_global_del", opAppGlobalDel, proto("b:").stateExplain(opAppGlobalDelStateChange), 2, only(ModeApp)},
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:aT"), 2, field("f", &AssetHoldingFields).only(ModeApp)},
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:aT"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(ModeApp)},
 	{0x71, "asset_params_get", opAssetParamsGet, proto("i:aT"), 2, field("f", &AssetParamsFields).only(ModeApp)},
@@ -742,10 +665,6 @@ var OpSpecs = []OpSpec{
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
 	*/
 
-	{0x99, "bn256_add", opBn256Add, proto("bb:b"), pairingVersion, costly(70)},
-	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, proto("bb:b"), pairingVersion, costly(970)},
-	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
-
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
 	{0xa1, "b-", opBytesMinus, proto("II:I"), 4, costly(10)},
@@ -776,13 +695,13 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("Ni:T"), boxVersion, only(ModeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("Ni:T").stateExplain(opBoxCreateStateChange), boxVersion, only(ModeApp)},
 	{0xba, "box_extract", opBoxExtract, proto("Nii:b"), boxVersion, only(ModeApp)},
-	{0xbb, "box_replace", opBoxReplace, proto("Nib:"), boxVersion, only(ModeApp)},
-	{0xbc, "box_del", opBoxDel, proto("N:T"), boxVersion, only(ModeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("Nib:").stateExplain(opBoxReplaceStateChange), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("N:T").stateExplain(opBoxDelStateChange), boxVersion, only(ModeApp)},
 	{0xbd, "box_len", opBoxLen, proto("N:iT"), boxVersion, only(ModeApp)},
 	{0xbe, "box_get", opBoxGet, proto("N:bT"), boxVersion, only(ModeApp)},
-	{0xbf, "box_put", opBoxPut, proto("Nb:"), boxVersion, only(ModeApp)},
+	{0xbf, "box_put", opBoxPut, proto("Nb:").stateExplain(opBoxPutStateChange), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},
@@ -796,13 +715,72 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bT"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
+
+	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 125, BN254g2: 170,
+			BLS12_381g1: 205, BLS12_381g2: 290})},
+
+	{0xe1, "ec_scalar_mul", opEcScalarMul, proto("bb:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 1810, BN254g2: 3430,
+			BLS12_381g1: 2950, BLS12_381g2: 6530})},
+
+	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:T"), pairingVersion,
+		costByFieldAndLength("g", &EcGroups, []linearCost{
+			BN254g1: {
+				baseCost:  8000,
+				chunkCost: 7_400,
+				chunkSize: bn254g1Size,
+			},
+			BN254g2: {
+				baseCost:  8000,
+				chunkCost: 7_400,
+				chunkSize: bn254g2Size,
+			},
+			BLS12_381g1: {
+				baseCost:  13_000,
+				chunkCost: 10_000,
+				chunkSize: bls12381g1Size,
+			},
+			BLS12_381g2: {
+				baseCost:  13_000,
+				chunkCost: 10_000,
+				chunkSize: bls12381g2Size,
+			}})},
+
+	{0xe3, "ec_multi_scalar_mul", opEcMultiScalarMul, proto("bb:b"), pairingVersion,
+		costByFieldAndLength("g", &EcGroups, []linearCost{
+			BN254g1: {
+				baseCost:  3_600,
+				chunkCost: 90,
+				chunkSize: scalarSize,
+			},
+			BN254g2: {
+				baseCost:  7_200,
+				chunkCost: 270,
+				chunkSize: scalarSize,
+			},
+			BLS12_381g1: {
+				baseCost:  6_500,
+				chunkCost: 95,
+				chunkSize: scalarSize,
+			},
+			BLS12_381g2: {
+				baseCost:  14_850,
+				chunkCost: 485,
+				chunkSize: scalarSize,
+			}})},
+
+	{0xe4, "ec_subgroup_check", opEcSubgroupCheck, proto("b:T"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 20, BN254g2: 3_100, // g1 subgroup is nearly a no-op
+			BLS12_381g1: 1_850, BLS12_381g2: 2_340})},
+	{0xe5, "ec_map_to", opEcMapTo, proto("b:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 630, BN254g2: 3_300,
+			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
 }
-
-type sortByOpcode []OpSpec
-
-func (a sortByOpcode) Len() int           { return len(a) }
-func (a sortByOpcode) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortByOpcode) Less(i, j int) bool { return a[i].Opcode < a[j].Opcode }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
 // by copying v1 opcodes to v2, and then on to v3 to create a full list
@@ -843,7 +821,9 @@ func OpcodesByVersion(version uint64) []OpSpec {
 		}
 	}
 	result := maps.Values(subv)
-	sort.Sort(sortByOpcode(result))
+	slices.SortFunc(result, func(a, b OpSpec) bool {
+		return a.Opcode < b.Opcode
+	})
 	return result
 }
 

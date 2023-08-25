@@ -335,104 +335,114 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 	aw, err := t.db.MakeAccountsWriter()
 	require.NoError(t, err)
 
-	// set round to 3
+	// generate some test data
+
+	// timeline
+	// round 0: A touched [0], B touched [0]
+	// round 1: A touched [1,0]
+	// round 2: A touched [2,1,0] + B offline [0] + C touched [2]
+
+	// set round
 	// Note: this will be used to check that we read the round
 	expectedRound := basics.Round(3)
 	err = aw.UpdateAccountsRound(expectedRound)
 	require.NoError(t, err)
 
-	// generate some test data
+	// rnd 0
+
 	addrA := RandomAddress()
-	dataA1 := trackerdb.BaseOnlineAccountData{
+	dataA0 := trackerdb.BaseOnlineAccountData{
 		// some value so its NOT empty
 		BaseVotingData: trackerdb.BaseVotingData{VoteKeyDilution: 1},
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(20)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto)
+	normalizedBalA0 := dataA0.NormalizedOnlineBalance(t.proto)
 
-	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA1, dataA1, uint64(0), uint64(2))
+	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA0, dataA0, uint64(0), uint64(21))
 	require.NoError(t, err)
 
-	// generate some test data
-	dataA2 := trackerdb.BaseOnlineAccountData{
+	addrB := RandomAddress()
+	dataB0 := trackerdb.BaseOnlineAccountData{
+		// some value so its NOT empty
+		BaseVotingData: trackerdb.BaseVotingData{VoteKeyDilution: 1, VoteLastValid: basics.Round(2)},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(75)},
+		RewardsBase:    uint64(200),
+	}
+	normalizedBalB2 := dataB0.NormalizedOnlineBalance(t.proto)
+
+	_, err = oaw.InsertOnlineAccount(addrB, normalizedBalB2, dataB0, uint64(0), uint64(2))
+	require.NoError(t, err)
+
+	// rnd 1
+
+	dataA1 := trackerdb.BaseOnlineAccountData{
 		// some value so its NOT empty
 		BaseVotingData: trackerdb.BaseVotingData{VoteKeyDilution: 1},
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalA2 := dataA2.NormalizedOnlineBalance(t.proto)
+	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto)
 
-	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA2, dataA2, uint64(1), uint64(3))
+	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA1, dataA1, uint64(1), uint64(21))
 	require.NoError(t, err)
 
-	// generate some test data
-	addrB := RandomAddress()
-	dataB1 := trackerdb.BaseOnlineAccountData{
+	// rnd 2
+
+	dataA2 := trackerdb.BaseOnlineAccountData{
 		// some value so its NOT empty
 		BaseVotingData: trackerdb.BaseVotingData{VoteKeyDilution: 1},
-		MicroAlgos:     basics.MicroAlgos{Raw: uint64(75)},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(187)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalB1 := dataB1.NormalizedOnlineBalance(t.proto)
+	normalizedBalA2 := dataA1.NormalizedOnlineBalance(t.proto)
 
-	_, err = oaw.InsertOnlineAccount(addrB, normalizedBalB1, dataB1, uint64(2), uint64(3))
+	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA2, dataA2, uint64(2), uint64(21))
 	require.NoError(t, err)
 
-	// timeline
-	// round 0: A touched [0]
-	// round 1: A touched [1,0]
-	// round 2: B touched [2] + A remains [1,0]
+	addrC := RandomAddress()
+	dataC2 := trackerdb.BaseOnlineAccountData{
+		// some value so its NOT empty
+		BaseVotingData: trackerdb.BaseVotingData{VoteKeyDilution: 1},
+		MicroAlgos:     basics.MicroAlgos{Raw: uint64(721)},
+		RewardsBase:    uint64(200),
+	}
+	normalizedBalC2 := dataC2.NormalizedOnlineBalance(t.proto)
+
+	_, err = oaw.InsertOnlineAccount(addrC, normalizedBalC2, dataC2, uint64(2), uint64(21))
+	require.NoError(t, err)
 
 	//
 	// the test
 	//
 
-	// delete before 0 (no changes)
-	err = aw.OnlineAccountsDelete(basics.Round(0))
+	// delete before round 3
+	err = aw.OnlineAccountsDelete(basics.Round(4))
 	require.NoError(t, err)
 
-	// check they are all there
-	oas, err := ar.AccountsOnlineTop(basics.Round(0), 0, 10, t.proto)
+	// check accounts
+	// expected: A touched [2], C touched [2]
+	oas, err := ar.AccountsOnlineTop(basics.Round(4), 0, 99, t.proto)
 	require.NoError(t, err)
-	require.Len(t, oas, 1)
-	require.Equal(t, oas[addrA].MicroAlgos, basics.MicroAlgos{Raw: uint64(20)}) // check item
-	// read the accounts directly
-	poaA, err := oar.LookupOnline(addrA, basics.Round(0))
+	require.Len(t, oas, 3)
+	require.Equal(t, oas[addrA].MicroAlgos, dataA2.MicroAlgos) // check item
+	require.Equal(t, oas[addrB].MicroAlgos, dataB0.MicroAlgos) // check item
+	require.Equal(t, oas[addrC].MicroAlgos, dataC2.MicroAlgos) // check item
+	// make sure A[0] was deleted
+	poa, err := oar.LookupOnline(addrA, basics.Round(0))
 	require.NoError(t, err)
-	require.NotNil(t, poaA.Ref) // A was found
-
-	// delete before round 1
-	err = aw.OnlineAccountsDelete(basics.Round(1))
+	require.Nil(t, poa.Ref) // means "not found"
+	// make sure A[1] was deleted
+	poa, err = oar.LookupOnline(addrA, basics.Round(1))
 	require.NoError(t, err)
-
-	// check they are all there
-	oas, err = ar.AccountsOnlineTop(basics.Round(1), 0, 10, t.proto)
+	require.Nil(t, poa.Ref) // means "not found"
+	// make sure B[0] was deleted
+	// Note: we actually dont check if it deleted, becase it is not
+	// 		 the legacy code on SQL checks if VoteInfo is empty, not that the last valid has expired.
+	//       therefore, this is not really deleted.
+	poa, err = oar.LookupOnline(addrB, basics.Round(0))
 	require.NoError(t, err)
-	require.Len(t, oas, 1)
-	require.Equal(t, oas[addrA].MicroAlgos, basics.MicroAlgos{Raw: uint64(100)}) // check item
-	// read the accounts directly
-	poaA, err = oar.LookupOnline(addrA, basics.Round(1))
-	require.NoError(t, err)
-	require.NotNil(t, poaA.Ref) // A was found
-
-	// delete before round 2
-	err = aw.OnlineAccountsDelete(basics.Round(2))
-	require.NoError(t, err)
-
-	// check they are all there
-	oas, err = ar.AccountsOnlineTop(basics.Round(2), 0, 10, t.proto)
-	require.NoError(t, err)
-	require.Len(t, oas, 2)
-	require.Equal(t, oas[addrB].MicroAlgos, basics.MicroAlgos{Raw: uint64(75)}) // check item
-	// read the accounts directly
-	poaA, err = oar.LookupOnline(addrA, basics.Round(2))
-	require.NoError(t, err)
-	require.NotNil(t, poaA.Ref)                      // A is still found, the latest record is kept
-	require.Equal(t, basics.Round(1), poaA.UpdRound) // the latest we find is at 1
-	poaB, err := oar.LookupOnline(addrB, basics.Round(2))
-	require.NoError(t, err)
-	require.NotNil(t, poaB.Ref) // B was found
+	require.NotNil(t, poa.Ref) // means we still have it
 }
 
 func CustomTestAccountsOnlineExpired(t *customT) {

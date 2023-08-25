@@ -29,21 +29,13 @@ func isDnsaddr(maddr multiaddr.Multiaddr) bool {
 	return first.Protocol().Code == multiaddr.P_DNSADDR
 }
 
-// MultiaddrsFromResolver attempts to recurse through dnsaddrs starting at domain.
-// Any further dnsaddrs will be looked up until all TXT records have been fetched,
-// and the full list of resulting Multiaddrs is returned.
-// It uses the MultiaddrDNSResolveController to cycle through DNS resolvers on failure.
-func MultiaddrsFromResolver(domain string, controller *MultiaddrDNSResolveController) ([]multiaddr.Multiaddr, error) {
+// Iterate runs through the resolvable dnsaddrs in the tree using the resolveController and invokes f for each dnsaddr node lookup
+func Iterate(initial multiaddr.Multiaddr, controller *MultiaddrDNSResolveController, f func(dnsaddr multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error) error {
 	resolver := controller.Resolver()
 	if resolver == nil {
-		return nil, errors.New("passed controller has no resolvers MultiaddrsFromResolver")
+		return errors.New("passed controller has no resolvers Iterate")
 	}
-	dnsaddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dnsaddr/%s", domain))
-	if err != nil {
-		return nil, fmt.Errorf("unable to construct multiaddr for %s : %v", domain, err)
-	}
-	var resolved []multiaddr.Multiaddr
-	var toResolve = []multiaddr.Multiaddr{dnsaddr}
+	var toResolve = []multiaddr.Multiaddr{initial}
 	for resolver != nil && len(toResolve) > 0 {
 		curr := toResolve[0]
 		maddrs, resolveErr := resolver.Resolve(context.Background(), curr)
@@ -51,18 +43,40 @@ func MultiaddrsFromResolver(domain string, controller *MultiaddrDNSResolveContro
 			resolver = controller.NextResolver()
 			// If we errored, and have exhausted all resolvers, just return
 			if resolver == nil {
-				return resolved, resolveErr
+				return resolveErr
 			}
 			continue
 		}
 		for _, maddr := range maddrs {
 			if isDnsaddr(maddr) {
 				toResolve = append(toResolve, maddr)
-			} else {
-				resolved = append(resolved, maddr)
 			}
+		}
+		if err := f(curr, maddrs); err != nil {
+			return err
 		}
 		toResolve = toResolve[1:]
 	}
-	return resolved, nil
+	return nil
+}
+
+// MultiaddrsFromResolver attempts to recurse through dnsaddrs starting at domain.
+// Any further dnsaddrs will be looked up until all TXT records have been fetched,
+// and the full list of resulting Multiaddrs is returned.
+// It uses the MultiaddrDNSResolveController to cycle through DNS resolvers on failure.
+func MultiaddrsFromResolver(domain string, controller *MultiaddrDNSResolveController) ([]multiaddr.Multiaddr, error) {
+	dnsaddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dnsaddr/%s", domain))
+	if err != nil {
+		return nil, fmt.Errorf("unable to construct multiaddr for %s : %v", domain, err)
+	}
+	var resolved []multiaddr.Multiaddr
+	err = Iterate(dnsaddr, controller, func(_ multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error {
+		for _, maddr := range entries {
+			if !isDnsaddr(maddr) {
+				resolved = append(resolved, maddr)
+			}
+		}
+		return nil
+	})
+	return resolved, err
 }

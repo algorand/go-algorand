@@ -325,6 +325,24 @@ type ApplicationParams struct {
 	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
 }
 
+// ApplicationStateOperation An operation against an application's global/local/box state.
+type ApplicationStateOperation struct {
+	// Account For local state changes, the address of the account associated with the local state.
+	Account *string `json:"account,omitempty"`
+
+	// AppStateType Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.
+	AppStateType string `json:"app-state-type"`
+
+	// Key The key (name) of the global/local/box state.
+	Key []byte `json:"key"`
+
+	// NewValue Represents an AVM value.
+	NewValue *AvmValue `json:"new-value,omitempty"`
+
+	// Operation Operation type. Value `w` is **write**, `d` is **delete**.
+	Operation string `json:"operation"`
+}
+
 // ApplicationStateSchema Specifies maximums on the number of each type that may be stored.
 type ApplicationStateSchema struct {
 	// NumByteSlice \[nbs\] num of byte slices.
@@ -715,6 +733,9 @@ type SimulateTraceConfig struct {
 
 	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
 	StackChange *bool `json:"stack-change,omitempty"`
+
+	// StateChange A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.
+	StateChange *bool `json:"state-change,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -814,18 +835,30 @@ type SimulationOpcodeTraceUnit struct {
 
 	// StackPopCount The number of deleted stack values by this opcode.
 	StackPopCount *uint64 `json:"stack-pop-count,omitempty"`
+
+	// StateChanges The operations against the current application's states.
+	StateChanges *[]ApplicationStateOperation `json:"state-changes,omitempty"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 type SimulationTransactionExecTrace struct {
+	// ApprovalProgramHash SHA512_256 hash digest of the approval program executed in transaction.
+	ApprovalProgramHash *[]byte `json:"approval-program-hash,omitempty"`
+
 	// ApprovalProgramTrace Program trace that contains a trace of opcode effects in an approval program.
 	ApprovalProgramTrace *[]SimulationOpcodeTraceUnit `json:"approval-program-trace,omitempty"`
+
+	// ClearStateProgramHash SHA512_256 hash digest of the clear state program executed in transaction.
+	ClearStateProgramHash *[]byte `json:"clear-state-program-hash,omitempty"`
 
 	// ClearStateProgramTrace Program trace that contains a trace of opcode effects in a clear state program.
 	ClearStateProgramTrace *[]SimulationOpcodeTraceUnit `json:"clear-state-program-trace,omitempty"`
 
 	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
 	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
+
+	// LogicSigHash SHA512_256 hash digest of the logic sig executed in transaction.
+	LogicSigHash *[]byte `json:"logic-sig-hash,omitempty"`
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
