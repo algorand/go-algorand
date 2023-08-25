@@ -57,8 +57,8 @@ exporter:
     # FilenamePattern is the format used to write block files. It uses go
     # string formatting and should accept one number for the round.
     # If the file has a '.gz' extension, blocks will be gzipped.
-    # Default: "%[1]d_block.json"
-    filename-pattern: "%[1]d_block.json"
+    # Default: "%[1]d_block.msgp.gz"
+    filename-pattern: "%[1]d_block.msgp.gz"
 
     # DropCertificate is used to remove the vote certificate from the block data before writing files.
     drop-certificate: false

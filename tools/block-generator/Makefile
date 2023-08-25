@@ -1,4 +1,4 @@
-SCENARIO = scenarios/config.allmixed.small.yml # scenarios/benchmarks/stress.50000.yml
+SCENARIO = scenarios/benchmarks/stress.50000.yml
 PG_UP = --start-postgres
 RESETDB = --reset-db
 TIMES = 1
@@ -25,6 +25,10 @@ pg-up:
 
 pg-enter:
 	docker exec -it $(PGCONT) psql -U $(PGUSER) -d $(PGDB)
+
+QUERY := -c "select count(*) from txn;"
+pg-query:
+	psql $(PGCONN) $(QUERY)
 
 pg-down:
 	docker rm -f $(PGCONT)
