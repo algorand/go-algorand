@@ -667,7 +667,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - Availability: v2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## app_opted_in
 
@@ -820,7 +820,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 - Availability: v3
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## pushbytes
 

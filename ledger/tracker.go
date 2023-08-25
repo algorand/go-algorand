@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -118,11 +119,16 @@ type ledgerTracker interface {
 	// An optional context is provided for long-running operations.
 	postCommitUnlocked(context.Context, *deferredCommitContext)
 
-	// handleUnorderedCommitOrError is a special method for handling deferred commits that are out of order
-	// or to handle errors reported by other trackers while committing a batch.
-	// Tracker might update own state in this case. For example, account updates tracker cancels
+	// handleUnorderedCommit is a control method for handling deferred commits that are out of order
+	// Tracker might update its own state in this case. For example, account updates tracker cancels
 	// scheduled catchpoint writing flag for this batch.
-	handleUnorderedCommitOrError(*deferredCommitContext)
+	handleUnorderedCommit(*deferredCommitContext)
+	// handlePrepareCommitError is a control method for handling self-cleanup or update if any trackers report
+	// error during the prepare commit phase of commitRound
+	handlePrepareCommitError(*deferredCommitContext)
+	// handleCommitError is a control method for handling self-cleanup or update if any trackers report
+	// error during the commit phase of commitRound
+	handleCommitError(*deferredCommitContext)
 
 	// close terminates the tracker, reclaiming any resources
 	// like open database connections or goroutines.  close may
@@ -511,7 +517,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
 		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
 		for _, lt := range tr.trackers {
-			lt.handleUnorderedCommitOrError(dcc)
+			lt.handleUnorderedCommit(dcc)
 		}
 		tr.mu.RUnlock()
 		return nil
@@ -545,7 +551,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	}
 	if err != nil {
 		for _, lt := range tr.trackers {
-			lt.handleUnorderedCommitOrError(dcc)
+			lt.handlePrepareCommitError(dcc)
 		}
 		tr.mu.RUnlock()
 		return err
@@ -573,10 +579,18 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
 	if err != nil {
+
 		for _, lt := range tr.trackers {
-			lt.handleUnorderedCommitOrError(dcc)
+			lt.handleCommitError(dcc)
 		}
 		tr.log.Warnf("unable to advance tracker db snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
+
+		// if the error is an IO error, shut down the node.
+		var trackerIOErr *trackerdb.ErrIoErr
+		if errors.As(err, &trackerIOErr) {
+			tr.log.Fatalf("Fatal IO error during CommitRound, exiting: %v", err)
+		}
+
 		return err
 	}
 
@@ -778,4 +792,98 @@ func (tr *trackerRegistry) getDbRound() basics.Round {
 	dbRound := tr.dbRound
 	tr.mu.RUnlock()
 	return dbRound
+}
+
+// accountUpdatesLedgerEvaluator is a "ledger emulator" which is used *only* by initializeCaches, as a way to shortcut
+// the locks taken by the real ledger object when making requests that are being served by the accountUpdates.
+// Using this struct allow us to take the tracker lock *before* calling the loadFromDisk, and having the operation complete
+// without taking any locks. Note that it's not only the locks performance that is gained : by having the loadFrom disk
+// not requiring any external locks, we can safely take a trackers lock on the ledger during reloadLedger, which ensures
+// that even during catchpoint catchup mode switch, we're still correctly protected by a mutex.
+type accountUpdatesLedgerEvaluator struct {
+	// au is the associated accountUpdates structure which invoking the trackerEvalVerified function, passing this structure as input.
+	// the accountUpdatesLedgerEvaluator would access the underlying accountUpdates function directly, bypassing the balances mutex lock.
+	au *accountUpdates
+	// ao is onlineAccounts for voters access
+	ao *onlineAccounts
+	// txtail allows BlockHdr to serve blockHdr without going to disk
+	tail *txTail
+	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
+	// building the ledgercore.StateDelta, which requires a peek on the "previous" header information.
+	prevHeader bookkeeping.BlockHeader
+}
+
+func (aul *accountUpdatesLedgerEvaluator) FlushCaches() {}
+
+// GenesisHash returns the genesis hash
+func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
+	return aul.au.ledger.GenesisHash()
+}
+
+// GenesisProto returns the genesis consensus params
+func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams {
+	return aul.au.ledger.GenesisProto()
+}
+
+// VotersForStateProof returns the top online accounts at round rnd.
+func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
+	return aul.ao.voters.VotersForStateProof(rnd)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	// Since state proof transaction is not being verified (we only apply the change) during replay, we don't need to implement this function at the moment.
+	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: GetStateProofVerificationContext, needed for state proof verification, is not implemented in accountUpdatesLedgerEvaluator")
+}
+
+// BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
+// are providing here. Any attempt to access a different header would get denied.
+func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	if r == aul.prevHeader.Round {
+		return aul.prevHeader, nil
+	}
+	hdr, ok := aul.tail.blockHeader(r)
+	if ok {
+		return hdr, nil
+	}
+	return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{}
+}
+
+// LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
+func (aul *accountUpdatesLedgerEvaluator) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	return aul.au.latestTotalsImpl()
+}
+
+// CheckDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
+func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
+	// this is a non-issue since this call will never be made on non-validating evaluation
+	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
+}
+
+// LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
+func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	data, validThrough, _, _, err := aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
+	if err != nil {
+		return ledgercore.AccountData{}, 0, err
+	}
+
+	return data, validThrough, err
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, _, err := aul.au.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable, false /* don't sync */)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	r, _, err := aul.au.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable, false /* don't sync */)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	return aul.au.lookupKv(rnd, key, false /* don't sync */)
+}
+
+// GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
+func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 }

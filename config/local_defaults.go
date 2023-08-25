@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    29,
+	Version:                                    30,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -50,6 +50,7 @@ var defaultLocal = Local{
 	DNSSecurityFlags:                           1,
 	DeadlockDetection:                          0,
 	DeadlockDetectionThreshold:                 30,
+	DisableAPIAuth:                             false,
 	DisableLedgerLRUCache:                      false,
 	DisableLocalhostConnectionRateLimit:        true,
 	DisableNetworking:                          false,
@@ -75,7 +76,7 @@ var defaultLocal = Local{
 	EnableRequestLogger:                        false,
 	EnableRuntimeMetrics:                       false,
 	EnableTopAccountsReporting:                 false,
-	EnableTxBacklogRateLimiting:                false,
+	EnableTxBacklogRateLimiting:                true,
 	EnableTxnEvalTracer:                        false,
 	EnableUsageLog:                             false,
 	EnableVerbosedTransactionSyncLogging:       false,

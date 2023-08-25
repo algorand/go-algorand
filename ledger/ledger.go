@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -83,7 +84,8 @@ type Ledger struct {
 	acctsOnline    onlineAccounts
 	catchpoint     catchpointTracker
 	txTail         txTail
-	bulletin       bulletin
+	bulletinDisk   bulletin
+	bulletinMem    bulletinMem
 	notifier       blockNotifier
 	metrics        metricsTracker
 	spVerification spVerificationTracker
@@ -211,7 +213,8 @@ func (l *Ledger) reloadLedger() error {
 		&l.catchpoint,     // catchpoints tracker : update catchpoint labels, create catchpoint files
 		&l.acctsOnline,    // update online account balances history
 		&l.txTail,         // update the transaction tail, tracking the recent 1000 txn
-		&l.bulletin,       // provide closed channel signaling support for completed rounds
+		&l.bulletinDisk,   // provide closed channel signaling support for completed rounds on disk
+		&l.bulletinMem,    // provide closed channel signaling support for completed rounds in memory
 		&l.notifier,       // send OnNewBlocks to subscribers
 		&l.metrics,        // provides metrics reporting support
 		&l.spVerification, // provides state proof verification support
@@ -296,9 +299,12 @@ func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging
 	go func() {
 		var lerr error
 		switch cfg.StorageEngine {
+		case "pebbledb":
+			dir := dbPathPrefix + "/tracker.pebble"
+			trackerDBs, lerr = pebbledbdriver.Open(dir, dbMem, config.Consensus[protocol.ConsensusCurrentVersion], log)
+		// anything else will initialize a sqlite engine.
 		case "sqlite":
 			fallthrough
-		// anything else will initialize a sqlite engine.
 		default:
 			file := dbPathPrefix + ".tracker.sqlite"
 			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
@@ -432,8 +438,13 @@ func (l *Ledger) UnregisterVotersCommitListener() {
 // written to disk.  Returns the minimum block number that must be kept
 // in the database.
 func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 	minToSave := l.trackers.committedUpTo(r)
 
 	if l.archival {
@@ -704,8 +715,13 @@ func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) err
 // behaves like AddBlock.
 func (l *Ledger) AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error {
 	// Grab the tracker lock first, to ensure newBlock() is notified before committedUpTo().
+	t0 := time.Now()
 	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
+	ledgerTrackerMuLockCount.Inc(nil)
+	defer func() {
+		l.trackerMu.Unlock()
+		ledgerTrackerMuLockMicros.AddMicrosecondsSince(t0, nil)
+	}()
 
 	blk := vb.Block()
 	err := l.blockQ.putBlock(blk, cert)
@@ -731,7 +747,16 @@ func (l *Ledger) WaitForCommit(r basics.Round) {
 func (l *Ledger) Wait(r basics.Round) chan struct{} {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.bulletin.Wait(r)
+	return l.bulletinDisk.Wait(r)
+}
+
+// WaitMem returns a channel that closes once a given round is
+// available in memory in the ledger, but might not be stored
+// durably on disk yet.
+func (l *Ledger) WaitMem(r basics.Round) chan struct{} {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.bulletinMem.Wait(r)
 }
 
 // GenesisHash returns the genesis hash for this ledger.
@@ -866,3 +891,5 @@ var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "c
 var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")
 var ledgerVerifygenhashCount = metrics.NewCounter("ledger_verifygenhash_count", "calls")
 var ledgerVerifygenhashMicros = metrics.NewCounter("ledger_verifygenhash_micros", "µs spent")
+var ledgerTrackerMuLockCount = metrics.NewCounter("ledger_lock_trackermu_count", "calls")
+var ledgerTrackerMuLockMicros = metrics.NewCounter("ledger_lock_trackermu_micros", "µs spent")

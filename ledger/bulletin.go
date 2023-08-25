@@ -47,11 +47,17 @@ func (notifier *notifier) notify() {
 }
 
 // bulletin provides an easy way to wait on a round to be written to the ledger.
-// To use it, call <-Wait(round)
+// To use it, call <-Wait(round).
 type bulletin struct {
 	mu                          deadlock.Mutex
 	pendingNotificationRequests map[basics.Round]notifier
 	latestRound                 basics.Round
+}
+
+// bulletinMem is a variant of bulletin that notifies when blocks
+// are available in-memory (but might not be stored durably on disk).
+type bulletinMem struct {
+	bulletin
 }
 
 func makeBulletin() *bulletin {
@@ -89,10 +95,7 @@ func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 func (b *bulletin) close() {
 }
 
-func (b *bulletin) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-}
-
-func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+func (b *bulletin) notifyRound(rnd basics.Round) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -106,6 +109,19 @@ func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Ro
 	}
 
 	b.latestRound = rnd
+}
+
+func (b *bulletin) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+}
+
+func (b *bulletinMem) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+	b.notifyRound(blk.Round())
+}
+
+func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+	// We notify for rnd for both bulletinMem and bulletinDisk, for simplicity.
+	// It's always safe to notify when block hits disk.
+	b.notifyRound(rnd)
 	return rnd, basics.Round(0)
 }
 
@@ -123,7 +139,11 @@ func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 func (b *bulletin) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-func (b *bulletin) handleUnorderedCommitOrError(*deferredCommitContext) {
+func (b *bulletin) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (b *bulletin) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (b *bulletin) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (b *bulletin) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

@@ -45,7 +45,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Bytecode: 0x05 {uint8}
 - Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**: Secp256k1=1700 Secp256r1=2500
+- **Cost**: Secp256k1=1700; Secp256r1=2500
 - Availability: v5
 
 ### ECDSA
@@ -66,7 +66,7 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 - Bytecode: 0x06 {uint8}
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
 - decompress pubkey A into components X, Y
-- **Cost**: Secp256k1=650 Secp256r1=2400
+- **Cost**: Secp256k1=650; Secp256r1=2400
 - Availability: v5
 
 The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.
@@ -878,7 +878,7 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 - Availability: v2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## app_opted_in
 
@@ -1089,7 +1089,7 @@ Fields
 - Availability: v3
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## pushbytes
 
