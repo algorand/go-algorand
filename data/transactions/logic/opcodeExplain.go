@@ -176,12 +176,6 @@ func opBoxExtractStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, bas
 	return BoxState, AppStateRead, cx.appID, basics.Address{}, string(cx.Stack[pprev].Bytes)
 }
 
-func opBoxLenStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
-	last := len(cx.Stack) - 1 // name
-
-	return BoxState, AppStateRead, cx.appID, basics.Address{}, string(cx.Stack[last].Bytes)
-}
-
 func opBoxGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
 	last := len(cx.Stack) - 1 // name
 
@@ -228,29 +222,9 @@ func opAppLocalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, ba
 	return LocalState, AppStateRead, cx.appID, addr, string(cx.Stack[last].Bytes)
 }
 
-func opAppLocalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
-	last := len(cx.Stack) - 1 // state key
-	prev := last - 1          // app id
-	pprev := prev - 1         // account
-
-	// NOTE: we swallow the error of finding account ref, for eventually it would error in execution time,
-	// and we don't have to complain here.
-	var addr basics.Address
-	addr, _, _, _ = cx.localsReference(cx.Stack[pprev], cx.Stack[prev].Uint)
-
-	return LocalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), addr, string(cx.Stack[last].Bytes)
-}
-
 func opAppGlobalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
 	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // app id
-
-	return GlobalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), basics.Address{}, string(cx.Stack[last].Bytes)
-}
-
-func opAppGlobalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
-	last := len(cx.Stack) - 1 // state key
-	prev := last - 1          // app
 
 	return GlobalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), basics.Address{}, string(cx.Stack[last].Bytes)
 }
