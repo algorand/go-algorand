@@ -696,6 +696,24 @@ type ScratchChange struct {
 	Slot uint64 `json:"slot"`
 }
 
+// SimulatePackedUnnamedResources todo
+type SimulatePackedUnnamedResources struct {
+	// Accounts Account references. The order of this array is arbitrary.
+	Accounts *[]string `json:"accounts,omitempty"`
+
+	// Apps Application references. The order of this array is arbitrary.
+	Apps *[]uint64 `json:"apps,omitempty"`
+
+	// Assets Asset references. The order of this array is arbitrary.
+	Assets *[]uint64 `json:"assets,omitempty"`
+
+	// Boxes Box references. The order of this array is arbitrary.
+	Boxes *[]BoxReference `json:"boxes,omitempty"`
+
+	// ExtraBoxRefs Extra box references
+	ExtraBoxRefs *uint64 `json:"extra-box-refs,omitempty"`
+}
+
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
 	// AllowEmptySignatures Allows transactions without signatures to be simulated as if they had correct signatures.
@@ -740,6 +758,9 @@ type SimulateTraceConfig struct {
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
 type SimulateTransactionGroupResult struct {
+	// AdditionalTxnPackedUnnamedResources todo
+	AdditionalTxnPackedUnnamedResources *[]SimulatePackedUnnamedResources `json:"additional-txn-packed-unnamed-resources,omitempty"`
+
 	// AppBudgetAdded Total budget added during execution of app calls in the transaction group.
 	AppBudgetAdded *uint64 `json:"app-budget-added,omitempty"`
 
@@ -761,7 +782,7 @@ type SimulateTransactionGroupResult struct {
 
 // SimulateTransactionResult Simulation result for an individual transaction
 type SimulateTransactionResult struct {
-	// AppBudgetConsumed Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.
+	// AppBudgetConsumed Budget used during execution of an app call transaction. This value includes budget used by inner app calls spawned by this transaction.
 	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
 
 	// ExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
@@ -769,6 +790,9 @@ type SimulateTransactionResult struct {
 
 	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
 	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
+
+	// PackedUnnamedResources todo
+	PackedUnnamedResources *SimulatePackedUnnamedResources `json:"packed-unnamed-resources,omitempty"`
 
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`

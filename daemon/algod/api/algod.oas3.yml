@@ -2066,6 +2066,47 @@
         ],
         "type": "object"
       },
+      "SimulatePackedUnnamedResources": {
+        "description": "todo",
+        "properties": {
+          "accounts": {
+            "description": "Account references. The order of this array is arbitrary.",
+            "items": {
+              "type": "string",
+              "x-algorand-format": "Address"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "description": "Application references. The order of this array is arbitrary.",
+            "items": {
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "type": "array"
+          },
+          "assets": {
+            "description": "Asset references. The order of this array is arbitrary.",
+            "items": {
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "type": "array"
+          },
+          "boxes": {
+            "description": "Box references. The order of this array is arbitrary.",
+            "items": {
+              "$ref": "#/components/schemas/BoxReference"
+            },
+            "type": "array"
+          },
+          "extra-box-refs": {
+            "description": "Extra box references",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
@@ -2145,6 +2186,13 @@
       "SimulateTransactionGroupResult": {
         "description": "Simulation result for an atomic transaction group",
         "properties": {
+          "additional-txn-packed-unnamed-resources": {
+            "description": "todo",
+            "items": {
+              "$ref": "#/components/schemas/SimulatePackedUnnamedResources"
+            },
+            "type": "array"
+          },
           "app-budget-added": {
             "description": "Total budget added during execution of app calls in the transaction group.",
             "type": "integer"
@@ -2184,7 +2232,7 @@
         "description": "Simulation result for an individual transaction",
         "properties": {
           "app-budget-consumed": {
-            "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
+            "description": "Budget used during execution of an app call transaction. This value includes budget used by inner app calls spawned by this transaction.",
             "type": "integer"
           },
           "exec-trace": {
@@ -2193,6 +2241,9 @@
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
+          },
+          "packed-unnamed-resources": {
+            "$ref": "#/components/schemas/SimulatePackedUnnamedResources"
           },
           "txn-result": {
             "$ref": "#/components/schemas/PendingTransactionResponse"
