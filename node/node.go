@@ -184,21 +184,12 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.devMode = genesis.DevMode
 	node.config = cfg
 
-	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
-	if err != nil {
-		log.Errorf("could not create websocket node: %v", err)
-		return nil, err
-	}
-	p2pNode.SetPrioScheme(node)
-	node.net = p2pNode
-
 	// load stored data
 	genesisDir := filepath.Join(rootDir, genesis.ID())
 	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
 
 	// create initial ledger, if it doesn't exist
-	err = os.Mkdir(genesisDir, 0700)
+	err := os.Mkdir(genesisDir, 0700)
 	if err != nil && !os.IsExist(err) {
 		log.Errorf("Unable to create genesis directory: %v", err)
 		return nil, err
@@ -208,6 +199,26 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("Cannot load genesis allocation: %v", err)
 		return nil, err
 	}
+
+	// tie network, block fetcher, and agreement services together
+	var p2pNode network.GossipNode
+	if cfg.EnableP2P {
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, genesisDir, phonebookAddresses, genesis.ID(), genesis.Network)
+		if err != nil {
+			log.Errorf("could not create p2p node: %v", err)
+			return nil, err
+		}
+	} else {
+		var wsNode *network.WebsocketNetwork
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		if err != nil {
+			log.Errorf("could not create websocket node: %v", err)
+			return nil, err
+		}
+		wsNode.SetPrioScheme(node)
+		p2pNode = wsNode
+	}
+	node.net = p2pNode
 
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
@@ -418,7 +429,6 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
-	node.ledger.Close()
 }
 
 // note: unlike the other two functions, this accepts a whole filename
