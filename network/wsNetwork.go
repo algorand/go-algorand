@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
-	"path"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -147,175 +146,6 @@ const peerDisconnectionAckDuration = 5 * time.Second
 
 // peerShutdownDisconnectionAckDuration defines the time we would wait for the peer disconnection to complete during shutdown.
 const peerShutdownDisconnectionAckDuration = 50 * time.Millisecond
-
-// Peer opaque interface for referring to a neighbor in the network
-type Peer interface{}
-
-// PeerOption allows users to specify a subset of peers to query
-//
-//msgp:ignore PeerOption
-type PeerOption int
-
-const (
-	// PeersConnectedOut specifies all peers with outgoing connections
-	PeersConnectedOut PeerOption = iota
-	// PeersConnectedIn specifies all peers with inbound connections
-	PeersConnectedIn PeerOption = iota
-	// PeersPhonebookRelays specifies all relays in the phonebook
-	PeersPhonebookRelays PeerOption = iota
-	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
-	PeersPhonebookArchivalNodes PeerOption = iota
-	// PeersPhonebookArchivers specifies all archivers in the phonebook
-	PeersPhonebookArchivers PeerOption = iota
-)
-
-// GossipNode represents a node in the gossip network
-type GossipNode interface {
-	Address() (string, bool)
-	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	Disconnect(badnode Peer)
-	DisconnectPeers() // only used by testing
-
-	// RegisterHTTPHandler path accepts gorilla/mux path annotations
-	RegisterHTTPHandler(path string, handler http.Handler)
-
-	// RequestConnectOutgoing asks the system to actually connect to peers.
-	// `replace` optionally drops existing connections before making new ones.
-	// `quit` chan allows cancellation. TODO: use `context`
-	RequestConnectOutgoing(replace bool, quit <-chan struct{})
-
-	// Get a list of Peers we could potentially send a direct message to.
-	GetPeers(options ...PeerOption) []Peer
-
-	// Start threads, listen on sockets.
-	Start()
-
-	// Close sockets. Stop threads.
-	Stop()
-
-	// RegisterHandlers adds to the set of given message handlers.
-	RegisterHandlers(dispatch []TaggedMessageHandler)
-
-	// ClearHandlers deregisters all the existing message handlers.
-	ClearHandlers()
-
-	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-	GetRoundTripper() http.RoundTripper
-
-	// OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
-	// this is the only indication that we have that we haven't formed a clique, where all incoming messages
-	// arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
-	// characteristics as with a watchdog timer.
-	OnNetworkAdvance()
-
-	// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
-	// request that was provided to the http handler ( or provide a fallback Context() to that )
-	GetHTTPRequestConnection(request *http.Request) (conn net.Conn)
-
-	// RegisterMessageInterest notifies the network library that this node
-	// wants to receive messages with the specified tag.  This will cause
-	// this node to send corresponding MsgOfInterest notifications to any
-	// newly connecting peers.  This should be called before the network
-	// is started.
-	RegisterMessageInterest(protocol.Tag)
-
-	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
-	SubstituteGenesisID(rawURL string) string
-
-	// called from wsPeer to report that it has closed
-	peerRemoteClose(peer *wsPeer, reason disconnectReason)
-}
-
-// IncomingMessage represents a message arriving from some peer in our p2p network
-type IncomingMessage struct {
-	Sender Peer
-	Tag    Tag
-	Data   []byte
-	Err    error
-	Net    GossipNode
-
-	// Received is time.Time.UnixNano()
-	Received int64
-
-	// processing is a channel that is used by messageHandlerThread
-	// to indicate that it has started processing this message.  It
-	// is used to ensure fairness across peers in terms of processing
-	// messages.
-	processing chan struct{}
-}
-
-// Tag is a short string (2 bytes) marking a type of message
-type Tag = protocol.Tag
-
-func highPriorityTag(tags []protocol.Tag) bool {
-	for _, tag := range tags {
-		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
-			return true
-		}
-	}
-	return false
-}
-
-// OutgoingMessage represents a message we want to send.
-type OutgoingMessage struct {
-	Action  ForwardingPolicy
-	Tag     Tag
-	Payload []byte
-	Topics  Topics
-	reason  disconnectReason // used when Action == Disconnect
-
-	// OnRelease is a function called when outgoing message, resulting from this incoming message, is released
-	// either by being sent or discarded.
-	OnRelease func()
-}
-
-// ForwardingPolicy is an enum indicating to whom we should send a message
-//
-//msgp:ignore ForwardingPolicy
-type ForwardingPolicy int
-
-const (
-	// Ignore - discard (don't forward)
-	Ignore ForwardingPolicy = iota
-
-	// Disconnect - disconnect from the peer that sent this message
-	Disconnect
-
-	// Broadcast - forward to everyone (except the sender)
-	Broadcast
-
-	// Respond - reply to the sender
-	Respond
-)
-
-// MessageHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
-// to send to the network in response.
-// The ForwardingPolicy field of the returned OutgoingMessage indicates whether to reply directly to the sender
-// (unicast), propagate to everyone except the sender (broadcast), or do nothing (ignore).
-type MessageHandler interface {
-	Handle(message IncomingMessage) OutgoingMessage
-}
-
-// HandlerFunc represents an implemenation of the MessageHandler interface
-type HandlerFunc func(message IncomingMessage) OutgoingMessage
-
-// Handle implements MessageHandler.Handle, calling the handler with the IncomingKessage and returning the OutgoingMessage
-func (f HandlerFunc) Handle(message IncomingMessage) OutgoingMessage {
-	return f(message)
-}
-
-// TaggedMessageHandler receives one type of broadcast messages
-type TaggedMessageHandler struct {
-	Tag
-	MessageHandler
-}
-
-// Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
-// "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"
-func Propagate(msg IncomingMessage) OutgoingMessage {
-	return OutgoingMessage{Action: Broadcast, Tag: msg.Tag, Payload: msg.Data, Topics: nil}
-}
 
 // GossipNetworkPath is the URL path to connect to the websocket gossip node at.
 // Contains {genesisID} param to be handled by gorilla/mux
@@ -744,17 +574,6 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 	return outPeers
 }
 
-// find the max value across the given uint64 numbers.
-func max(numbers ...uint64) (maxNum uint64) {
-	maxNum = 0 // this is the lowest uint64 value.
-	for _, num := range numbers {
-		if num > maxNum {
-			maxNum = num
-		}
-	}
-	return
-}
-
 func (wn *WebsocketNetwork) setup() {
 	var preferredResolver dnssec.ResolverIf
 	if wn.config.DNSSecurityRelayAddrEnforced() {
@@ -792,16 +611,7 @@ func (wn *WebsocketNetwork) setup() {
 	// roughly estimate the number of messages that could be seen at any given moment.
 	// For the late/redo/down committee, which happen in parallel, we need to allocate
 	// extra space there.
-	wn.outgoingMessagesBufferSize = int(
-		max(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers,
-			config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize,
-			config.Consensus[protocol.ConsensusCurrentVersion].CertCommitteeSize,
-			config.Consensus[protocol.ConsensusCurrentVersion].NextCommitteeSize) +
-			max(config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize,
-				config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize,
-				config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize),
-	)
-
+	wn.outgoingMessagesBufferSize = outgoingMessagesBufferSize
 	wn.wsMaxHeaderBytes = wsMaxHeaderBytes
 
 	wn.identityTracker = NewIdentityTracker()
@@ -859,7 +669,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.messagesOfInterestRefresh = make(chan struct{}, 2)
 	wn.messagesOfInterestGeneration = 1 // something nonzero so that any new wsPeer needs updating
 	if wn.relayMessages {
-		wn.RegisterMessageInterest(protocol.StateProofSigTag)
+		wn.registerMessageInterest(protocol.StateProofSigTag)
 	}
 }
 
@@ -2157,59 +1967,6 @@ var errBcastInvalidArray = errors.New("invalid broadcast array")
 
 var errBcastQFull = errors.New("broadcast queue full")
 
-var errURLNoHost = errors.New("could not parse a host from url")
-
-var errURLColonHost = errors.New("host name starts with a colon")
-
-// HostColonPortPattern matches "^[-a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
-var HostColonPortPattern = regexp.MustCompile("^[-a-zA-Z0-9.]+:\\d+$")
-
-// ParseHostOrURL handles "host:port" or a full URL.
-// Standard library net/url.Parse chokes on "host:port".
-func ParseHostOrURL(addr string) (*url.URL, error) {
-	// If the entire addr is "host:port" grab that right away.
-	// Don't try url.Parse() because that will grab "host:" as if it were "scheme:"
-	if HostColonPortPattern.MatchString(addr) {
-		return &url.URL{Scheme: "http", Host: addr}, nil
-	}
-	parsed, err := url.Parse(addr)
-	if err == nil {
-		if parsed.Host == "" {
-			return nil, errURLNoHost
-		}
-		return parsed, nil
-	}
-	if strings.HasPrefix(addr, "http:") || strings.HasPrefix(addr, "https:") || strings.HasPrefix(addr, "ws:") || strings.HasPrefix(addr, "wss:") || strings.HasPrefix(addr, "://") || strings.HasPrefix(addr, "//") {
-		return parsed, err
-	}
-	// This turns "[::]:4601" into "http://[::]:4601" which url.Parse can do
-	parsed, e2 := url.Parse("http://" + addr)
-	if e2 == nil {
-		// https://datatracker.ietf.org/doc/html/rfc1123#section-2
-		// first character is relaxed to allow either a letter or a digit
-		if parsed.Host[0] == ':' && (len(parsed.Host) < 2 || parsed.Host[1] != ':') {
-			return nil, errURLColonHost
-		}
-		return parsed, nil
-	}
-	return parsed, err /* return original err, not our prefix altered try */
-}
-
-// addrToGossipAddr parses host:port or a URL and returns the URL to the websocket interface at that address.
-func (wn *WebsocketNetwork) addrToGossipAddr(addr string) (string, error) {
-	parsedURL, err := ParseHostOrURL(addr)
-	if err != nil {
-		wn.log.Warnf("could not parse addr %#v: %s", addr, err)
-		return "", errBadAddr
-	}
-	parsedURL.Scheme = websocketsScheme[parsedURL.Scheme]
-	if parsedURL.Scheme == "" {
-		parsedURL.Scheme = "ws"
-	}
-	parsedURL.Path = strings.Replace(path.Join(parsedURL.Path, GossipNetworkPath), "{genesisID}", wn.GenesisID, -1)
-	return parsedURL.String(), nil
-}
-
 // tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may proceed)
 func (wn *WebsocketNetwork) tryConnectReserveAddr(addr string) (gossipAddr string, ok bool) {
 	wn.tryConnectLock.Lock()
@@ -2655,12 +2412,12 @@ func SetUserAgentHeader(header http.Header) {
 	header.Set(UserAgentHeader, ua)
 }
 
-// RegisterMessageInterest notifies the network library that this node
+// registerMessageInterest notifies the network library that this node
 // wants to receive messages with the specified tag.  This will cause
 // this node to send corresponding MsgOfInterest notifications to any
 // newly connecting peers.  This should be called before the network
 // is started.
-func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) {
+func (wn *WebsocketNetwork) registerMessageInterest(t protocol.Tag) {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 
@@ -2711,7 +2468,7 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 		wantTXGossip := wn.nodeInfo.IsParticipating()
 		if wantTXGossip && (wn.wantTXGossip != wantTXGossipYes) {
 			wn.log.Infof("postMessagesOfInterestThread: enabling TX gossip")
-			wn.RegisterMessageInterest(protocol.TxnTag)
+			wn.registerMessageInterest(protocol.TxnTag)
 			atomic.StoreUint32(&wn.wantTXGossip, wantTXGossipYes)
 		} else if !wantTXGossip && (wn.wantTXGossip != wantTXGossipNo) {
 			wn.log.Infof("postMessagesOfInterestThread: disabling TX gossip")
