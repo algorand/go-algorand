@@ -334,7 +334,7 @@ var networkGenesisCmd = &cobra.Command{
 			reportErrorf("Error in template validation: %v\n", err)
 		}
 
-		err = gen.GenerateGenesisFiles(template.Genesis, consensus, genesisDir, os.Stdout)
+		err = gen.GenerateGenesisFiles(template.Genesis, config.Consensus.Merge(consensus), genesisDir, os.Stdout)
 		if err != nil {
 			reportErrorf("Cannot write genesis files: %s", err)
 		}
