@@ -37,16 +37,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-var outgoingMessagesBufferSize = int(
-	max(config.Consensus[protocol.ConsensusCurrentVersion].NumProposers,
-		config.Consensus[protocol.ConsensusCurrentVersion].SoftCommitteeSize,
-		config.Consensus[protocol.ConsensusCurrentVersion].CertCommitteeSize,
-		config.Consensus[protocol.ConsensusCurrentVersion].NextCommitteeSize) +
-		max(config.Consensus[protocol.ConsensusCurrentVersion].LateCommitteeSize,
-			config.Consensus[protocol.ConsensusCurrentVersion].RedoCommitteeSize,
-			config.Consensus[protocol.ConsensusCurrentVersion].DownCommitteeSize),
-)
-
 // P2PNetwork implements the GossipNode interface
 type P2PNetwork struct {
 	service     p2p.Service
