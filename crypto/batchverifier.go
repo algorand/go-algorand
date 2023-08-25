@@ -43,6 +43,7 @@ package crypto
 import "C"
 import (
 	"errors"
+	"runtime"
 	"unsafe"
 )
 
@@ -163,6 +164,12 @@ func batchVerificationImpl(messages []byte, msgLengths []int, publicKeys []Signa
 		(*C.uchar)(&(signatures[0][0])),
 		C.size_t(numberOfSignatures),
 		(*C.int)(&valid[0]))
+
+	// These calls will be replaced with Pin in the next Go version upgrade
+	runtime.KeepAlive(messages)
+	runtime.KeepAlive(messageLens)
+	runtime.KeepAlive(publicKeys)
+	runtime.KeepAlive(signatures)
 
 	failed = make([]bool, numberOfSignatures)
 	for i := 0; i < numberOfSignatures; i++ {
