@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
+
+set -euf -o pipefail
+
 echo "######################################################################"
 echo "  test_private_network"
 echo "######################################################################"
 
-set -e
-set -o pipefail
-set -o nounset
+if [ "$#" -eq 0 ]; then
+  echo "Usage: test_private_network.sh <go-algorand SRCPATH>"
+  exit 1
+fi
 
 # Suppress telemetry reporting for tests
 export ALGOTEST=1
 
 export GOPATH=$(go env GOPATH)
-SRCPATH=$(pwd)
+SRCPATH="$1"
 
 NETROOTPATH=${SRCPATH}/tmp/test_private_network
 GENFILESPATH=${SRCPATH}/tmp/test_private_network_genesis_files
@@ -21,7 +25,7 @@ ${GOPATH}/bin/goal network delete -r ${NETROOTPATH} || true
 rm -rf ${NETROOTPATH}
 rm -rf ${GENFILESPATH}
 
-${GOPATH}/bin/goal network create -r ${NETROOTPATH} -n net1 -t ./test/testdata/nettemplates/TwoNodes50Each.json
+${GOPATH}/bin/goal network create -r ${NETROOTPATH} -n net1 -t ${SRCPATH}/test/testdata/nettemplates/TwoNodes50Each.json
 
 ${GOPATH}/bin/goal network start -r ${NETROOTPATH}
 
@@ -42,9 +46,9 @@ ${GOPATH}/bin/goal network stop -r ${NETROOTPATH}
 ${GOPATH}/bin/goal network delete -r ${NETROOTPATH}
 
 # Test that genesis generation works correctly
-${GOPATH}/bin/goal network genesis -g ${GENFILESPATH} -t ./test/testdata/nettemplates/TwoNodes50Each.json
+${GOPATH}/bin/goal network genesis -g ${GENFILESPATH} -t ${SRCPATH}/test/testdata/nettemplates/TwoNodes50Each.json
 # Try importing genesis files from same template -- should reuse the root and partkey files
-${GOPATH}/bin/goal network create -r ${NETROOTPATH} -n net1 -t ./test/testdata/nettemplates/TwoNodes50Each.json --genesisdir ${GENFILESPATH}
+${GOPATH}/bin/goal network create -r ${NETROOTPATH} -n net1 -t ${SRCPATH}/test/testdata/nettemplates/TwoNodes50Each.json --genesisdir ${GENFILESPATH}
 
 ${GOPATH}/bin/goal network start -r ${NETROOTPATH}
 
