@@ -119,8 +119,8 @@ type onlineAccounts struct {
 	// disableCache (de)activates the LRU cache use in onlineAccounts
 	disableCache bool
 
-	// voteLastValidCache tracks how many accounts are expiring per-round
-	voteLastValidCache roundCounterCache
+	// expiringStakeCache tracks the amount of stake expiring per round
+	expiringStakeCache onlineAccountAttributeCache[basics.Round, basics.MicroAlgos]
 }
 
 // initialize initializes the accountUpdates structure
@@ -178,8 +178,8 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 		}
 		ao.onlineAccountsCache.init(onlineAccounts, onlineAccountsCacheMaxSize)
 
-		ao.voteLastValidCache = newVoteLastValidCache()
-		ao.voteLastValidCache.init(onlineAccounts)
+		ao.expiringStakeCache = newExpiringStakeCache()
+		ao.expiringStakeCache.init(onlineAccounts)
 
 		return nil
 	})
@@ -502,11 +502,13 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 			})
 	}
 
-	ao.voteLastValidCache.updateFromAccountDeltas(dcc.compactAccountDeltas)
+	for _, acctUpdate := range dcc.compactOnlineAccountDeltas.deltas {
+		ao.expiringStakeCache.update(acctUpdate)
+	}
 	// drop entries behind our current round, as we don't need to know who has expired in the past
 	// TODO: I think this is trimming on the committed-to-disk round, not sure if that's the right one to trim on.
 	// since this is just for memory bounding, it should be ok to trim on the committed-to-disk round.
-	ao.voteLastValidCache.trim(newBase)
+	ao.expiringStakeCache.trim(newBase)
 
 	// clear the backing array to let GC collect data
 	// see the comment in acctupdates.go
@@ -830,9 +832,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 func (ao *onlineAccounts) VoteLastValidCount(r basics.Round) uint64 {
 	ao.accountsMu.RLock()
 	defer ao.accountsMu.RUnlock()
-	if count, ok := ao.voteLastValidCache.count(r); ok {
-		return count.Load()
-	}
+	//TODO: I destroyed this function
 	// if not found, return 0
 	return 0
 }

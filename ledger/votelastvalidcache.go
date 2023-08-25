@@ -18,113 +18,95 @@ package ledger
 
 import (
 	"fmt"
-	"sync/atomic"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
-// roundCounterCache is a cache that tracks atomic ints used for counting, by-round
-// it is abstracted to allow for different types of counters,
-// but currently only used for the number of addresses whos voting expires on a given round via newVoteLastValidCache
-type roundCounterCache struct {
-	trimBehind basics.Round                                            // the round that we have trimmed the cache to
-	m          map[basics.Round]*atomic.Uint64                         // count of addresses whos voting expires on this round
-	acctFn     func(trackerdb.PersistedOnlineAccountData) basics.Round // function that maps an account to the round information we are tracking (used in init)
-	deltaFn    func(accountDelta) (basics.Round, basics.Round)         // function that maps an account delta to the old and new round information we are tracking (used in updateFromAccountDeltas)
+// onlineAccountAttributeCache is an interface for a cache that keeps some basic record, given onlineAccounts
+type onlineAccountAttributeCache[K, V any] interface {
+	init([]trackerdb.PersistedOnlineAccountData)
+	clear()
+	update(onlineAccountDelta)
+	get(K) (V, bool)
+	trim(K)
 }
 
-// newVoteLastValidCache is a factory function for the voteLastValidCache
-// which tracks the number of addresses whos voting expires on a given round
-func newVoteLastValidCache() roundCounterCache {
-	v := roundCounterCache{}
-	v.m = make(map[basics.Round]*atomic.Uint64)
-	v.trimBehind = 0
-	v.acctFn = func(acct trackerdb.PersistedOnlineAccountData) basics.Round {
-		return acct.AccountData.VoteLastValid
-	}
-	v.deltaFn = func(delta accountDelta) (basics.Round, basics.Round) {
-		return delta.oldAcct.AccountData.VoteLastValid, delta.newAcct.VoteLastValid
-	}
-	return v
+type expiringStakeCache struct {
+	trimBehind basics.Round                       // the round that we have trimmed the cache to
+	m          map[basics.Round]basics.MicroAlgos // count of addresses whos voting expires on this round
 }
 
-// init initializes the cache for use.
-// takes a list of persisted online accounts and a function that maps an account to the round we are tracking
-func (v *roundCounterCache) init(accts []trackerdb.PersistedOnlineAccountData) {
+// newExpiringStakeCache is a factory function for the expiringStakeCache
+func newExpiringStakeCache() expiringStakeCache {
+	e := expiringStakeCache{}
+	e.m = make(map[basics.Round]basics.MicroAlgos)
+	e.trimBehind = 0
+	return e
+}
+
+func (e expiringStakeCache) init(accts []trackerdb.PersistedOnlineAccountData) {
 	for _, acct := range accts {
-		v.inc(v.acctFn(acct))
+		e.add(acct.AccountData.VoteLastValid, acct.AccountData.MicroAlgos)
 	}
 }
 
-func (v *roundCounterCache) inc(r basics.Round) {
+func (e expiringStakeCache) add(r basics.Round, stake basics.MicroAlgos) {
 	// don't do anything if the round is behind the trimBehind
-	if r < v.trimBehind {
+	if r < e.trimBehind {
 		return
 	}
 	// if we have not seen this round before, initialize it
-	if _, ok := v.m[r]; !ok {
-		v.m[r] = &atomic.Uint64{}
+	if _, ok := e.m[r]; !ok {
+		e.m[r] = stake
+	} else {
+		e.m[r] = basics.MicroAlgos{Raw: e.m[r].ToUint64() + stake.ToUint64()}
 	}
-	v.m[r].Add(1)
 }
 
-func (v *roundCounterCache) dec(r basics.Round) {
+// sub subtracts the given stake from the given round
+// the caller is expected to have already checked that the update is valid (so underflow is not checked here)
+func (e expiringStakeCache) sub(r basics.Round, stake basics.MicroAlgos) {
 	// don't do anything if the round is behind the trimBehind
-	if r < v.trimBehind {
+	if r < e.trimBehind {
 		return
 	}
-	// if we have not seen this round before, nothing to decrement
-	if _, ok := v.m[r]; !ok {
+	// if we have not seen this round before, nothing to subtract from. Should not happen if the caller is managing updates correctly
+	if _, ok := e.m[r]; !ok {
 		return
+	} else {
+		e.m[r] = basics.MicroAlgos{Raw: e.m[r].ToUint64() - stake.ToUint64()}
 	}
-	v.m[r].Add(^uint64(0))
 }
 
-func (v *roundCounterCache) update(rOld, rNew basics.Round) {
-	// no actual update
-	if rNew == rOld {
-		return
-	}
-	v.dec(rOld)
-	v.inc(rNew)
+func (e expiringStakeCache) update(ad onlineAccountDelta) {
+	old, new := ad.oldAcct.AccountData.VoteLastValid, ad.newAcct[0].VoteLastValid
+	e.sub(old, ad.oldAcct.AccountData.MicroAlgos)
+	e.add(new, ad.newAcct[0].MicroAlgos)
 }
 
-// clear clears the cache to pre-init state
-func (v *roundCounterCache) clear() {
-	v.m = nil
-	v.trimBehind = 0
+func (e expiringStakeCache) clear() {
+	e.m = nil
+	e.trimBehind = 0
 }
 
-// count returns the number of addresses whos voting expire on vLast
-func (v roundCounterCache) count(r basics.Round) (*atomic.Uint64, bool) {
-	ret, ok := v.m[r]
+func (e expiringStakeCache) get(r basics.Round) (basics.MicroAlgos, bool) {
+	ret, ok := e.m[r]
 	return ret, ok
 }
 
-// updateFromAccountDeltas updates the cache from the account deltas, given a function mapping a delta to an old and new round
-func (v *roundCounterCache) updateFromAccountDeltas(deltas compactAccountDeltas) {
-	for _, delta := range deltas.deltas {
-		old, new := v.deltaFn(delta)
-		v.update(old, new)
-	}
-}
-
-// trim removes all entries from the cache that are older than vLast
-// and advances the trimBehind to vLast
-func (v *roundCounterCache) trim(r basics.Round) {
+func (e expiringStakeCache) trim(r basics.Round) {
 	// if we have already trimmed to this round, do nothing
-	if v.trimBehind >= r {
+	if e.trimBehind >= r {
 		return
 	}
 	// otherwise, remove all entries older than vLast
-	for i := v.trimBehind; i < r; i++ {
-		delete(v.m, i)
+	for i := e.trimBehind; i < r; i++ {
+		delete(e.m, i)
 	}
-	v.trimBehind = r
+	e.trimBehind = r
 }
 
-// implements fmt.Stringer
-func (v roundCounterCache) String() string {
-	return fmt.Sprintf("roundCounterCache: trimBehind: %d, m: %v", v.trimBehind, v.m)
+func (e expiringStakeCache) String() string {
+	return fmt.Sprintf("expiringStakeCache: trimBehind: %d, m: %v", e.trimBehind, e.m)
 }
