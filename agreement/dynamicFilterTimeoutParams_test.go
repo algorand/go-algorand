@@ -8,7 +8,11 @@ import (
 )
 
 func TestSampleIndexIsValid(t *testing.T) {
-	require.Less(t, dynamicFilterTimeoutCredentialArrivalHistoryIdx, dynamicFilterCredentialArrivalHistory)
+	require.GreaterOrEqual(t, dynamicFilterCredentialArrivalHistory, 0)
+	require.GreaterOrEqual(t, dynamicFilterTimeoutCredentialArrivalHistoryIdx, 0)
+	if dynamicFilterCredentialArrivalHistory > 0 {
+		require.Less(t, dynamicFilterTimeoutCredentialArrivalHistoryIdx, dynamicFilterCredentialArrivalHistory)
+	}
 }
 
 func TestLowerBound(t *testing.T) {
