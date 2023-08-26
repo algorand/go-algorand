@@ -33,9 +33,10 @@ const dynamicFilterCredentialArrivalHistory int = 40
 // filter timeout must meet.
 const dynamicFilterTimeoutLowerBound time.Duration = 600 * time.Millisecond
 
-// DynamicFilterTimeoutCredentialArrivalHistoryIdx specified which sample to
-// use out of a sorted DynamicFilterCredentialArrivalHistory-sized array of
-// time samples.
+// DynamicFilterTimeoutCredentialArrivalHistoryIdx specified which sample to use
+// out of a sorted DynamicFilterCredentialArrivalHistory-sized array of time
+// samples. The 95th percentile of dynamicFilterCredentialArrivalHistory = 40
+// sorted samples, is at index 37.
 const dynamicFilterTimeoutCredentialArrivalHistoryIdx int = 37
 
 // DynamicFilterTimeoutGraceInterval is additional extension to the dynamic

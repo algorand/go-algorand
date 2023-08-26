@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/netdeploy/remote"
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -70,7 +71,7 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 
 	relaysCount := countRelayNodes(t.Nodes)
 
-	for _, cfg := range t.Nodes {
+	for i, cfg := range t.Nodes {
 		nodeDir := filepath.Join(targetFolder, cfg.Name)
 		err = os.Mkdir(nodeDir, os.ModePerm)
 		if err != nil {
@@ -149,9 +150,23 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 
 		// Create any necessary config.json file for this node
 		nodeCfg := filepath.Join(nodeDir, config.ConfigFilename)
-		err = createConfigFile(cfg, nodeCfg, len(t.Nodes)-1, relaysCount) // minus 1 to avoid counting self
+		var mergedCfg config.Local
+		mergedCfg, err = createConfigFile(cfg, nodeCfg, len(t.Nodes)-1, relaysCount) // minus 1 to avoid counting self
 		if err != nil {
 			return
+		}
+
+		if mergedCfg.EnableP2P {
+			// generate peer ID file for this node
+			sk, pkErr := p2p.GetPrivKey(config.Local{P2PPersistPeerID: true}, genesisDir)
+			if pkErr != nil {
+				return nil, nil, pkErr
+			}
+			pid, pErr := p2p.PeerIDFromPublicKey(sk.GetPublic())
+			if pErr != nil {
+				return nil, nil, pErr
+			}
+			t.Nodes[i].P2PPeerID = string(pid)
 		}
 	}
 	return
@@ -289,7 +304,7 @@ func decodeJSONOverride(override string, cfg *config.Local) error {
 	return nil
 }
 
-func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int, relaysCount int) error {
+func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int, relaysCount int) (config.Local, error) {
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = numNodes
 	// Override default :8080 REST endpoint, and disable SRV lookup
@@ -316,8 +331,8 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 
 	err := decodeJSONOverride(node.ConfigJSONOverride, &cfg)
 	if err != nil {
-		return err
+		return config.Local{}, err
 	}
 
-	return cfg.SaveToFile(configFile)
+	return cfg, cfg.SaveToFile(configFile)
 }

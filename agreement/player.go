@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"sort"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -62,7 +61,7 @@ type player struct {
 
 	// the history of arrival times of the lowest credential from previous
 	// ronuds, used for calculating the filter timeout dynamically.
-	lowestCredentialArrivals []time.Duration
+	lowestCredentialArrivals *credentialArrivalHistory
 
 	// The period 0 dynamic filter timeout calculated for this round, if set,
 	// even if dynamic filter timeouts are not enabled. It is used for reporting
@@ -301,12 +300,10 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 		return 0
 	}
 
-	p.lowestCredentialArrivals = append(p.lowestCredentialArrivals, re.Vote.validatedAt)
-
-	// trim history to the last dynamicFilterCredentialArrivalHistory samples.
-	if len(p.lowestCredentialArrivals) > dynamicFilterCredentialArrivalHistory {
-		p.lowestCredentialArrivals = p.lowestCredentialArrivals[len(p.lowestCredentialArrivals)-dynamicFilterCredentialArrivalHistory:]
+	if p.lowestCredentialArrivals == nil {
+		p.lowestCredentialArrivals = newCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
 	}
+	p.lowestCredentialArrivals.store(re.Vote.validatedAt)
 	return re.Vote.validatedAt
 }
 
@@ -319,15 +316,12 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 		return FilterTimeout(p.Period, ver)
 	}
 	defaultTimeout := FilterTimeout(0, ver)
-	if dynamicFilterCredentialArrivalHistory > len(p.lowestCredentialArrivals) {
+	if !p.lowestCredentialArrivals.isFull() {
 		// not enough samples, use the default
 		return defaultTimeout
 	}
 
-	sortedArrivals := make([]time.Duration, len(p.lowestCredentialArrivals))
-	copy(sortedArrivals[:], p.lowestCredentialArrivals[:])
-	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
-	dynamicTimeout := sortedArrivals[dynamicFilterTimeoutCredentialArrivalHistoryIdx] + dynamicFilterTimeoutGraceInterval
+	dynamicTimeout := p.lowestCredentialArrivals.orderStatistics(dynamicFilterTimeoutCredentialArrivalHistoryIdx) + dynamicFilterTimeoutGraceInterval
 
 	// Make sure the dynamic filter timeout is not too small nor too large
 	clampedTimeout := dynamicTimeout

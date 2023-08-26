@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    30,
+	Version:                                    31,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -70,6 +70,7 @@ var defaultLocal = Local{
 	EnableLedgerService:                        false,
 	EnableMetricReporting:                      false,
 	EnableOutgoingNetworkMessageFiltering:      true,
+	EnableP2P:                                  false,
 	EnablePingHandler:                          true,
 	EnableProcessBlockStats:                    false,
 	EnableProfiler:                             false,
@@ -107,8 +108,7 @@ var defaultLocal = Local{
 	OptimizeAccountsDatabaseOnStartup:          false,
 	OutgoingMessageFilterBucketCount:           3,
 	OutgoingMessageFilterBucketSize:            128,
-	P2PEnable:                                  false,
-	P2PPersistPeerID:                           true,
+	P2PPersistPeerID:                           false,
 	P2PPrivateKeyLocation:                      "",
 	ParticipationKeysRefreshInterval:           60000000000,
 	PeerConnectionsUpdateInterval:              3600,
