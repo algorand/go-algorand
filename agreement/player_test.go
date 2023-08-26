@@ -3263,9 +3263,10 @@ func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, protocol.ConsensusFuture)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
-	require.Len(t, pWhite.lowestCredentialArrivals, 1)
-	require.Equal(t, 501*time.Millisecond, pWhite.lowestCredentialArrivals[0])
+	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
+	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
+	require.False(t, pWhite.lowestCredentialArrivals.isFull())
+	require.Equal(t, 501*time.Millisecond, pWhite.lowestCredentialArrivals.history[0])
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in proposalStore
@@ -3278,9 +3279,9 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 
-	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
+	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
 
-	for i := 0; i < dynamicFilterCredentialArrivalHistory+1; i++ {
+	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// send voteVerified message
 		pP, pV := helper.MakeRandomProposalPayload(t, r+round(i)-1)
 		vVote := helper.MakeVerifiedVote(t, 0, r+round(i)-1, p, propose, *pV)
@@ -3302,11 +3303,11 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 	}
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	require.Len(t, pWhite.lowestCredentialArrivals, dynamicFilterCredentialArrivalHistory)
+	require.True(t, pWhite.lowestCredentialArrivals.isFull())
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// only the last historyLen samples are kept, so the first one is discarded
-		timestamp := 500 + i + 1
-		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals[i])
+		timestamp := 500 + i
+		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals.history[i])
 	}
 }
 
@@ -3348,9 +3349,10 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
-	require.Len(t, pWhite.lowestCredentialArrivals, 1)
-	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals[0])
+	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
+	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
+	require.False(t, pWhite.lowestCredentialArrivals.isFull())
+	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals.history[0])
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in
@@ -3366,9 +3368,9 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
 
-	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
+	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
 
-	for i := 0; i < dynamicFilterCredentialArrivalHistory+1; i++ {
+	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// create a PP message for an arbitrary proposal/payload similar to setupCompoundMessage
 		vVote := helper.MakeVerifiedVote(t, 0, r+round(i)-1, p, propose, *pV)
 		unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
@@ -3397,11 +3399,11 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 	}
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	require.Len(t, pWhite.lowestCredentialArrivals, dynamicFilterCredentialArrivalHistory)
+	require.True(t, pWhite.lowestCredentialArrivals.isFull())
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// only the last historyLen samples are kept, so the first one is discarded
-		timestamp := 500 + i + 1
-		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals[i])
+		timestamp := 500 + i
+		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals.history[i])
 	}
 }
 
@@ -3454,9 +3456,10 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
-	require.Len(t, pWhite.lowestCredentialArrivals, 1)
-	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals[0])
+	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
+	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
+	require.False(t, pWhite.lowestCredentialArrivals.isFull())
+	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals.history[0])
 }
 
 func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
@@ -3465,9 +3468,9 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 
-	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
+	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
 
-	for i := 0; i < dynamicFilterCredentialArrivalHistory+1; i++ {
+	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		pP, pV := helper.MakeRandomProposalPayload(t, r+round(i)-1)
 
 		// send votePresent message (mimicking the first AV message validating)
@@ -3504,11 +3507,11 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 	}
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	require.Len(t, pWhite.lowestCredentialArrivals, dynamicFilterCredentialArrivalHistory)
+	require.True(t, pWhite.lowestCredentialArrivals.isFull())
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// only the last historyLen samples are kept, so the first one is discarded
-		timestamp := 500 + i + 1
-		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals[i])
+		timestamp := 500 + i
+		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals.history[i])
 	}
 }
 
