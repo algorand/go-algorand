@@ -2978,26 +2978,13 @@ func TestGetSpec(t *testing.T) {
 	require.Equal(t, "unknown opcode: nonsense", ops.Errors[1].Err.Error())
 }
 
-func TestAddPseudoDocTags(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies pseudoOps and opDocByName which are global maps
-	partitiontest.PartitionTest(t)
-	defer func() {
-		delete(pseudoOps, "tests")
-		delete(opDocByName, "multiple")
-		delete(opDocByName, "single")
-		delete(opDocByName, "none")
-		delete(opDocByName, "any")
-	}()
-
-	pseudoOps["tests"] = map[int]OpSpec{2: {Name: "multiple"}, 1: {Name: "single"}, 0: {Name: "none"}, anyImmediates: {Name: "any"}}
-	addPseudoDocTags()
-	require.Equal(t, "`multiple` can be called using `tests` with 2 immediates.", opDocByName["multiple"])
-	require.Equal(t, "`single` can be called using `tests` with 1 immediate.", opDocByName["single"])
-	require.Equal(t, "`none` can be called using `tests` with no immediates.", opDocByName["none"])
-	require.Equal(t, "", opDocByName["any"])
-}
 func TestReplacePseudo(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
+	require.Contains(t, opDescByName["replace3"].Short, "`replace3` can be called using `replace` with no immediates.")
+	require.Contains(t, opDescByName["replace2"].Short, "`replace2` can be called using `replace` with 1 immediate.")
+
 	replaceVersion := 7
 	for v := uint64(replaceVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "byte 0x0000; byte 0x1234; replace 0", v)
