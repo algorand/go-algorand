@@ -55,6 +55,7 @@ crypto/libs
 
 # doc intermediates
 data/transactions/logic/*.md
+!data/transactions/logic/TEAL_opcodes*.md
 
 *.pem
 
