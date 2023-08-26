@@ -126,6 +126,7 @@ type BlockEvaluator interface {
 	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
 	GenerateBlock() (*ledgercore.ValidatedBlock, error)
 	ResetTxnBytes()
+	AccumulatedFullBlockBytes() bool
 }
 
 // MakeTransactionPool makes a transaction pool.
@@ -579,10 +580,10 @@ func (pool *TransactionPool) OnNewSpeculativeBlock(ctx context.Context, vb *ledg
 	}
 
 	// only do speculative assembly if we have enough txns to fill a block
-	//	if pool.numPendingWholeBlocks == 0 {
-	//		pool.mu.Unlock()
-	//		return
-	//	}
+	if !pool.pendingBlockEvaluator.AccumulatedFullBlockBytes() {
+		pool.mu.Unlock()
+		return
+	}
 
 	// move remembered txns to pending
 	pool.rememberCommit(false)
