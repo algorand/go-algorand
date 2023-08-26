@@ -9,6 +9,7 @@ Several scenarios were designed to mimic different block traffic patterns. Scena
 ### Organic Traffic
 
 Simulate the current mainnet traffic pattern. Approximately:
+
 * 15% payment transactions
 * 10% application transactions
 * 75% asset transactions
@@ -33,7 +34,7 @@ Block generator uses a YAML config file to describe the composition of each rand
 
 The block generator supports **payment**, **asset**, and **application** transactions. The settings are hopefully, more or less, obvious. Distributions are specified as fractions of 1.0, and the sum of all options must add up to ~1.0.
 
-Here is an example which uses all of the current options. Notice that the synthetic blocks are not required to follow algod limits, in this case the block size is specified as 99,999:
+Here is an example which uses all of the current options. Notice that the synthetic blocks are not required to follow algod limits, and that in this case the block size is specified as 99,999:
 
 ```yml
 name: "Mixed (99,999)"
@@ -171,20 +172,18 @@ Flags:
   -t, --times uint                          The number of times to run the scenario(s). (default 1)
       --validate                            If set the validator will run after test-duration has elapsed to verify data is correct. An extra line in each report indicates validator success or failure.
   -v, --verbose                             If set the runner will print debugging information from the generator and ledger.
-  ```
+```
 
-## Example Run using Conduit and Postgres
+## Example Runs using Conduit
 
 A typical **runner** scenario involves:
 
-* a [scenario configuration](#scenario-configuration) file, e.g. [test_config.yml](./test_config.yml)
-* access to a `conduit` binary to query the block generator's mock Algod endpoint and ingest the synthetic blocks
+* a [scenario configuration](#scenario-configuration) file, e.g. [config.asset.xfer.yml](./scenarios/config.asset.xfer.yml) or for the example below [test_scenario.yml](./generator/test_scenario.yml)
+* access to a `conduit` binary to query the block generator's mock Algod endpoint and ingest the synthetic blocks (below it's assumed to be set in the `CONDUIT_BINARY` environment variable)
 * a datastore -such as a postgres database- to collect `conduit`'s output
 * a `conduit` config file to define its import/export behavior
 
-The `block-generator runner` subcommand has a number of options to configure behavion.
-
-### Sample Run
+### Sample Run with Postgres
 
 First you'll need to get a `conduit` binary. For example you can follow the [developer portal's instructions](https://developer.algorand.org/docs/get-details/conduit/GettingStarted/#installation) or run `go build .` inside of the directory `cmd/conduit` after downloading the `conduit` repo.
 
@@ -207,13 +206,49 @@ block-generator runner \
 
 ### Scenario Report
 
-If all goes well, the run will generate a directory named reports.
+If all goes well, the run will generate a directory named `reports`
+in the same directory in which the command was run.
 In that directory you can see the statistics of the run in the file ending with `.report`.
+
+The `block-generator runner` subcommand has a number of options to configure behavior.
+
+## Sample Run with the File Exporter
+
+It's possible to save the generated blocks to the file system.
+This enables running benchmarks and stress tests at a later time and without
+needing a live block generator. The setup is very similar to the previous Postgres example. The main change compared to the previous is to _**specify a different conduit configuration**_ template.
+
+The `block-generator runner` command in this case would look like:
+
+```sh
+block-generator runner \
+  --conduit-binary "$CONDUIT_BINARY" \
+  --report-directory reports \
+  --test-duration 30s \
+  --conduit-log-level trace \
+  --template file-exporter \
+  --keep-data-dir \
+  --scenario generator/test_scenario.yml
+```
+
+### Generated Blocks
+
+If all goes well, the run will generate a directory named `reports`
+in the same directory in which the command was run.
+In addtion to the statistical report and run logs,
+there will be a directory ending with `_data` - this is conduit's
+data directory (which is saved thanks to the `--keep-data-dir` flag).
+In that directory under `exporter_file_writer/`,
+the generated blocks and a genesis file will be saved.
 
 ## Scenario Distribution - Configuration vs. Reality
 
+This section follows up on the [Scenario Configuration](#scenario-configuration) section to detail how each kind of transaction is actually chosen.
 Note that -especially for early rounds- there is no guarantee that the
-percentages of transaction types will follow the distribution which was configured. For example consider the [Organic 25,000](scenarios/benchmarks/organic.25000.yml) scenario:
+percentages of transaction types will follow the distribution which
+was configured.
+
+For example consider the [Organic 25,000](scenarios/benchmarks/organic.25000.yml) scenario:
 
 ```yml
 name: "Organic (25000)"
@@ -274,6 +309,7 @@ The block generator randomly chooses
 As each of the steps above is itself random, we only expect _approximate matching_ to the configured distribution.
 
 Furthermore, for certain asset and app transactions there may be a substitution that occurs based on the type. In particular:
+
 * for **assets**:
   * when a requested asset txn is **create**, it is never substituted
   * when there are no assets, an **asset create** is always substituted
@@ -291,8 +327,8 @@ Furthermore, for certain asset and app transactions there may be a substitution 
 Over time, we expect the state of the generator to stabilize so that very few substitutions occur. However, especially for the first few rounds, there may be drastic differences between the config distribution and observed percentages.
 
 In particular:
+
 * for Round 1, all app transactions are replaced by **app create**
 * for Round 2, all **app call** transactions are replaced by **app opt in**
 
-Therefore, for scenarios involving a variety of app transactions, only for Round 3 and higher do we expect to see distributions comparable to 
-those configured.
+Therefore, for scenarios involving a variety of app transactions, only for Round 3 and higher do we expect to see distributions comparable to those configured.

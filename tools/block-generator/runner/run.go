@@ -316,14 +316,14 @@ func recordDataToWriter(start time.Time, entry Entry, prefix string, out io.Writ
 	tps := totalTxn / importTimeS
 	key := "overall_transactions_per_second"
 	msg := fmt.Sprintf("%s_%s:%.2f\n", prefix, key, tps)
-	if _, err := fmt.Fprintf(out, msg); err != nil {
+	if _, err := fmt.Fprint(out, msg); err != nil {
 		return fmt.Errorf("unable to write metric '%s': %w", key, err)
 	}
 
 	// Uptime
 	key = "uptime_seconds"
 	msg = fmt.Sprintf("%s_%s:%.2f\n", prefix, key, time.Since(start).Seconds())
-	if _, err := fmt.Fprintf(out, msg); err != nil {
+	if _, err := fmt.Fprint(out, msg); err != nil {
 		return fmt.Errorf("unable to write metric '%s': %w", key, err)
 	}
 
@@ -343,7 +343,7 @@ func recordMetricToWriter(entry Entry, outputKey, metricSuffix string, t metricT
 		msg = fmt.Sprintf("%s:%.2f\n", outputKey, value)
 	}
 
-	if _, err := fmt.Fprintf(out, msg); err != nil {
+	if _, err := fmt.Fprint(out, msg); err != nil {
 		return fmt.Errorf("unable to write metric '%s': %w", outputKey, err)
 	}
 
@@ -403,7 +403,7 @@ func getMetric(entry Entry, suffix string, rateMetric bool) (float64, error) {
 func writeReport(w io.Writer, scenario string, start time.Time, runDuration time.Duration, generatorReport generator.Report, collector *MetricsCollector) error {
 	write := func(pattern string, parts ...any) error {
 		str := fmt.Sprintf(pattern, parts...)
-		if _, err := fmt.Fprintf(w, str); err != nil {
+		if _, err := fmt.Fprint(w, str); err != nil {
 			return fmt.Errorf("unable to write '%s': %w", str, err)
 		}
 		return nil
@@ -446,12 +446,12 @@ func writeReport(w io.Writer, scenario string, start time.Time, runDuration time
 		txCount := effects[metric]
 		allTxns += txCount
 		str := fmt.Sprintf("transaction_%s_total:%d\n", metric, txCount)
-		if _, err := fmt.Fprintf(w, str); err != nil {
+		if _, err := fmt.Fprint(w, str); err != nil {
 			return fmt.Errorf("unable to write '%s' metric: %w", str, err)
 		}
 	}
 	str := fmt.Sprintf("transaction_%s_total:%d\n", "ALL", allTxns)
-	if _, err := fmt.Fprintf(w, str); err != nil {
+	if _, err := fmt.Fprint(w, str); err != nil {
 		return fmt.Errorf("unable to write '%s' metric: %w", str, err)
 	}
 
@@ -548,6 +548,8 @@ func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFil
 func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
 	fmt.Printf("%sConduit starting with data directory: %s\n", pad, dataDir)
 	ctx, cf := context.WithCancel(context.Background())
+	defer cf()
+
 	cmd := exec.CommandContext(
 		ctx,
 		conduitBinary,
