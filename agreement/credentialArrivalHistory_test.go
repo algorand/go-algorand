@@ -67,8 +67,9 @@ func TestOrderStatistics(t *testing.T) {
 	for i := 0; i < size; i++ {
 		buffer.store(time.Duration(size - i))
 	}
+	require.True(t, buffer.isFull())
 
 	for i := 0; i < size; i++ {
-		require.Equal(t, time.Duration(i), buffer.orderStatistics(i))
+		require.Equal(t, time.Duration(i+1), buffer.orderStatistics(i))
 	}
 }
