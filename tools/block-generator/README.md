@@ -105,6 +105,7 @@ Flags:
   -c, --config string   Specify the block configuration yaml file.
   -h, --help            help for daemon
   -p, --port uint       Port to start the server at. (default 4010)
+  -v, --verbose         If set the daemon will print debugging information from the generator and ledger.
 ```
 
 ### runner
