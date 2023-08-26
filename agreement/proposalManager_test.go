@@ -325,7 +325,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// vote in credentialRoundLag period 0 should be fine
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag-1, 0, 0, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag, 0, 0, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{

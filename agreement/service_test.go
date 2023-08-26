@@ -1043,14 +1043,14 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 
 	filterTimeouts := simulateAgreementWithConsensusVersion(t, 5, rounds, disabled, consensusVersion)
 	require.Len(t, filterTimeouts, rounds-1)
-	for i := 1; i < baseHistoryRounds; i++ {
+	for i := 1; i < baseHistoryRounds-1; i++ {
 		require.Equal(t, filterTimeouts[i-1], filterTimeouts[i])
 	}
 
 	// dynamic filter timeout kicks in when history window is full
-	require.Less(t, filterTimeouts[baseHistoryRounds], filterTimeouts[baseHistoryRounds-1])
+	require.Less(t, filterTimeouts[baseHistoryRounds-1], filterTimeouts[baseHistoryRounds-2])
 
-	for i := baseHistoryRounds + 1; i < len(filterTimeouts); i++ {
+	for i := baseHistoryRounds; i < len(filterTimeouts); i++ {
 		require.Equal(t, filterTimeouts[i-1], filterTimeouts[i])
 	}
 }
@@ -1107,10 +1107,10 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 
 	for i := range clocks {
 		require.Len(t, filterTimeouts[i], baseHistoryRounds+1)
-		for j := 1; j < baseHistoryRounds-1; j++ {
+		for j := 1; j < baseHistoryRounds-2; j++ {
 			require.Equal(t, filterTimeouts[i][j-1], filterTimeouts[i][j])
 		}
-		require.Less(t, filterTimeouts[i][baseHistoryRounds], filterTimeouts[i][baseHistoryRounds-1])
+		require.Less(t, filterTimeouts[i][baseHistoryRounds-1], filterTimeouts[i][baseHistoryRounds-2])
 	}
 
 	// force fast partition recovery into bottom
@@ -1155,7 +1155,7 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 		require.Len(t, filterTimeoutsPostRecovery[i], baseHistoryRounds)
 		// check that history was discarded, so filter time increased back to its original default
 		require.Less(t, filterTimeouts[i][baseHistoryRounds], filterTimeoutsPostRecovery[i][0])
-		require.Equal(t, filterTimeouts[i][baseHistoryRounds-1], filterTimeoutsPostRecovery[i][0])
+		require.Equal(t, filterTimeouts[i][baseHistoryRounds-2], filterTimeoutsPostRecovery[i][0])
 
 		// check that filter timeout was updated to at the end of the history window
 		for j := 1; j < dynamicFilterCredentialArrivalHistory-1; j++ {

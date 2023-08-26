@@ -3295,7 +3295,7 @@ func TestPlayerRetainsLateReceivedValidatedAtOneSample(t *testing.T) {
 
 	// Old credential arrives
 	// send voteVerified message
-	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag-1, p, propose, *pV)
+	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, p, propose, *pV)
 	inMsg = messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
 	inMsg = inMsg.AttachValidatedAt(501 * time.Millisecond)
 	err, panicErr = pM.transition(inMsg)
@@ -3346,7 +3346,7 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 
 	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
 
-	for i := 0; i < dynamicFilterCredentialArrivalHistory+int(credentialRoundLag)+1; i++ {
+	for i := 0; i < dynamicFilterCredentialArrivalHistory+int(credentialRoundLag); i++ {
 		// send voteVerified message
 		pP, pV := helper.MakeRandomProposalPayload(t, r+round(i)-1)
 		vVote := helper.MakeVerifiedVote(t, 0, r+round(i)-1, p, propose, *pV)
@@ -3410,7 +3410,7 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
 	// create a PP message for the round we're going to take the sample from when round r-1 ends
-	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag-1, p, propose, *pV)
+	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, p, propose, *pV)
 	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
 	proposalMsg := message{UnauthenticatedProposal: pP.u()}
 	compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
@@ -3474,7 +3474,7 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 
 	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
 
-	for i := 0; i < dynamicFilterCredentialArrivalHistory+int(credentialRoundLag)+1; i++ {
+	for i := 0; i < dynamicFilterCredentialArrivalHistory+int(credentialRoundLag); i++ {
 		// create a PP message for an arbitrary proposal/payload similar to setupCompoundMessage
 		vVote := helper.MakeVerifiedVote(t, 0, r+round(i)-1, p, propose, *pV)
 		unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
@@ -3546,7 +3546,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
 	// send votePresent message (mimicking the first AV message validating)
-	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag-1, p, propose, *pV)
+	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, p, propose, *pV)
 	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
 	inMsg = messageEvent{T: votePresent, Input: unverifiedVoteMsg}
 	err, panicErr = pM.transition(inMsg)
@@ -3606,7 +3606,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 
 	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
 
-	for i := 0; i < dynamicFilterCredentialArrivalHistory+int(credentialRoundLag)+1; i++ {
+	for i := 0; i < dynamicFilterCredentialArrivalHistory+int(credentialRoundLag); i++ {
 		pP, pV := helper.MakeRandomProposalPayload(t, r+round(i)-1)
 
 		// send votePresent message (mimicking the first AV message validating)

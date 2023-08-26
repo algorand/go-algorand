@@ -293,7 +293,7 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 
 	// look up the validatedAt time of the winning proposal-vote from credentialRoundLag ago,
 	// by now we must have seen the lowest credential for that round.
-	credHistoryRound := p.Round.SubSaturate(credentialRoundLag + 1)
+	credHistoryRound := p.Round.SubSaturate(credentialRoundLag)
 	re := readLowestEvent{T: readLowestVote, Round: credHistoryRound, Period: p.Period}
 	re = r.dispatch(*p, re, proposalMachineRound, credHistoryRound, p.Period, 0).(readLowestEvent)
 	if !re.Filled {
