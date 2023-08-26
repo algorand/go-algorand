@@ -3522,19 +3522,39 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
-	pP, pV := helper.MakeRandomProposalPayload(t, r-credentialRoundLag-1)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
 
-	// send votePresent message (mimicking the first AV message validating)
-	vVote := helper.MakeVerifiedVote(t, 0, r-credentialRoundLag-1, p, propose, *pV)
-	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
-	inMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg}
+	// Move to round r, no credentials arrived.
+	// send voteVerified message
+	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
+	inMsg = inMsg.AttachValidatedAt(501 * time.Millisecond)
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
+	// send payloadPresent message
+	m := message{UnauthenticatedProposal: pP.u()}
+	inMsg = messageEvent{T: payloadPresent, Input: m}
+	inMsg = inMsg.AttachReceivedAt(time.Second)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, protocol.ConsensusFuture)
+	require.False(t, pWhite.lowestCredentialArrivals.isFull())
+	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
+
+	// send votePresent message (mimicking the first AV message validating)
+	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag-1, p, propose, *pV)
+	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
+	inMsg = messageEvent{T: votePresent, Input: unverifiedVoteMsg}
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
 	// make sure vote verify requests
-	fmt.Println("targeting", r-credentialRoundLag-1)
-	verifyEvent := ev(cryptoAction{T: verifyVote, M: unverifiedVoteMsg, Round: r - credentialRoundLag - 1, Period: p, Step: propose, TaskIndex: 1})
+	verifyEvent := ev(cryptoAction{T: verifyVote, M: unverifiedVoteMsg, Round: r - 1, Period: p, Step: propose, TaskIndex: 1})
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
 	// send voteVerified
@@ -3554,11 +3574,22 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	// make sure no second request to verify this vote
-	verifyEvent = ev(cryptoAction{T: verifyVote, M: unverifiedVoteMsg, Round: r - 1, Period: p, Step: propose, TaskIndex: 1})
-	require.Equal(t, 1, pM.getTrace().CountEvent(verifyEvent), "Player should not verify second vote")
+	// move to round r+1, triggering history update
+	vVote = helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
+	inMsg = messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
+	inMsg = inMsg.AttachValidatedAt(time.Second)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
 
-	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
+	// send payloadPresent message
+	m = message{UnauthenticatedProposal: pP.u()}
+	inMsg = messageEvent{T: payloadPresent, Input: m}
+	inMsg = inMsg.AttachReceivedAt(time.Second)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	moveToRound(t, pWhite, pM, helper, r+1, p, pP, pV, m, protocol.ConsensusFuture)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
 	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
