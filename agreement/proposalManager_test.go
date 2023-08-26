@@ -323,7 +323,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
-	// vote in credentialRoundLag period 0 should be fine
+	// vote from credentialRoundLag rounds ago and period 0 should be fine
 	pV = helper.MakeRandomProposalValue()
 	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag, 0, 0, *pV)
 	inMsg = filterableMessageEvent{
@@ -337,9 +337,9 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 	}
 	b.AddInOutPair(inMsg, emptyEvent{})
 
-	// vote in credentialRoundLag period > 0 should be filtered
+	// vote from credentialRoundLag ago and period > 0 should be filtered
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag-1, 1, 0, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag, 1, 0, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
@@ -353,7 +353,21 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 
 	// vote older than credentialRoundLag should be rejected even if period 0
 	pV = helper.MakeRandomProposalValue()
-	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag-2, 0, 0, *pV)
+	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag-1, 0, 0, *pV)
+	inMsg = filterableMessageEvent{
+		FreshnessData: currentPlayerState,
+		messageEvent: messageEvent{
+			T: votePresent,
+			Input: message{
+				UnauthenticatedVote: uv,
+			},
+		},
+	}
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+
+	// vote older than credentialRoundLag should be rejected on any period
+	pV = helper.MakeRandomProposalValue()
+	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag-1, 1, 0, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{
