@@ -286,12 +286,12 @@ func run() int {
 
 		// make sure that the format of each entry is valid:
 		for idx, peer := range peerOverrideArray {
-			url, err := network.ParseHostOrURL(peer)
-			if err != nil {
+			addr, addrErr := network.ParseHostOrURLOrMultiaddr(peer)
+			if addrErr != nil {
 				fmt.Fprintf(os.Stderr, "Provided command line parameter '%s' is not a valid host:port pair\n", peer)
 				return 1
 			}
-			peerOverrideArray[idx] = url.Host
+			peerOverrideArray[idx] = addr
 		}
 	}
 
