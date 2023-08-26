@@ -222,11 +222,33 @@ func opAppLocalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, ba
 	return LocalState, AppStateRead, cx.appID, addr, string(cx.Stack[last].Bytes)
 }
 
+func opAppLocalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // state key
+	prev := last - 1          // app id
+	pprev := prev - 1         // account
+
+	// NOTE: we swallow the error of finding account ref, for eventually it would error in execution time,
+	// and we don't have to complain here.
+	addr, appID, _, _ := cx.localsReference(cx.Stack[pprev], cx.Stack[prev].Uint)
+
+	return LocalState, AppStateRead, appID, addr, string(cx.Stack[last].Bytes)
+}
+
 func opAppGlobalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // state key
+
+	return GlobalState, AppStateRead, cx.appID, basics.Address{}, string(cx.Stack[last].Bytes)
+}
+
+func opAppGlobalGetExStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
 	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // app id
 
-	return GlobalState, AppStateRead, basics.AppIndex(cx.Stack[prev].Uint), basics.Address{}, string(cx.Stack[last].Bytes)
+	// NOTE: we swallow the error of finding application ID, for eventually it would error in execution time,
+	// and we don't have to complain here.
+	appID, _ := cx.appReference(cx.Stack[prev].Uint, true)
+
+	return GlobalState, AppStateRead, appID, basics.Address{}, string(cx.Stack[last].Bytes)
 }
 
 func opAppLocalPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
@@ -299,7 +321,7 @@ func AppStateQuerying(
 			err    error
 		)
 		switch stateOp {
-		case AppStateWrite:
+		case AppStateWrite, AppStateDelete:
 			addr, acctID, err = cx.mutableAccountReference(stackValue{Bytes: account[:]})
 		default:
 			addr, _, acctID, err = cx.localsReference(stackValue{Bytes: account[:]}, uint64(appID))
