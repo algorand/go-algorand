@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"sort"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -314,10 +313,7 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 		return defaultTimeout
 	}
 
-	sortedArrivals := make([]time.Duration, len(p.lowestCredentialArrivals.history))
-	copy(sortedArrivals[:], p.lowestCredentialArrivals.history[:])
-	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
-	dynamicTimeout := sortedArrivals[dynamicFilterTimeoutCredentialArrivalHistoryIdx] + dynamicFilterTimeoutGraceInterval
+	dynamicTimeout := p.lowestCredentialArrivals.orderStatistics(dynamicFilterTimeoutCredentialArrivalHistoryIdx) + dynamicFilterTimeoutGraceInterval
 
 	// Make sure the dynamic filter timeout is not too small nor too large
 	clampedTimeout := dynamicTimeout

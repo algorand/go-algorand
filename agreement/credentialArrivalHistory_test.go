@@ -9,7 +9,7 @@ import (
 
 func TestCredentialHistoryStore(t *testing.T) {
 	size := 5
-	buffer := newCredentialArrivalHistory(5)
+	buffer := newCredentialArrivalHistory(size)
 	// last store call overwrites the first one
 	for i := 0; i < size+1; i++ {
 		buffer.store(time.Duration(i))
@@ -24,7 +24,7 @@ func TestCredentialHistoryStore(t *testing.T) {
 
 func TestCredentialHistoryReset(t *testing.T) {
 	size := 5
-	buffer := newCredentialArrivalHistory(5)
+	buffer := newCredentialArrivalHistory(size)
 	// last store call overwrites the first one
 	for i := 0; i < size+1; i++ {
 		buffer.store(time.Duration(i))
@@ -56,5 +56,19 @@ func TestCredentialHistoryIsFull(t *testing.T) {
 		} else {
 			require.True(t, buffer.isFull())
 		}
+	}
+}
+
+func TestOrderStatistics(t *testing.T) {
+	size := 5
+	buffer := newCredentialArrivalHistory(size)
+	require.False(t, buffer.isFull())
+
+	for i := 0; i < size; i++ {
+		buffer.store(time.Duration(size - i))
+	}
+
+	for i := 0; i < size; i++ {
+		require.Equal(t, time.Duration(i), buffer.orderStatistics(i))
 	}
 }

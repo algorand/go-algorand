@@ -1,6 +1,9 @@
 package agreement
 
-import "time"
+import (
+	"sort"
+	"time"
+)
 
 type credentialArrivalHistory struct {
 	history  []time.Duration
@@ -33,4 +36,11 @@ func (history *credentialArrivalHistory) isFull() bool {
 		return false
 	}
 	return history.full
+}
+
+func (history *credentialArrivalHistory) orderStatistics(idx int) time.Duration {
+	sortedArrivals := make([]time.Duration, len(history.history))
+	copy(sortedArrivals[:], history.history[:])
+	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
+	return sortedArrivals[idx]
 }
