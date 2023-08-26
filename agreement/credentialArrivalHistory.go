@@ -39,6 +39,8 @@ func (history *credentialArrivalHistory) isFull() bool {
 }
 
 func (history *credentialArrivalHistory) orderStatistics(idx int) time.Duration {
+	// if history.history is long, then we could optimize this function to use
+	// the linear time order statistics algorithm.
 	sortedArrivals := make([]time.Duration, len(history.history))
 	copy(sortedArrivals[:], history.history[:])
 	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
