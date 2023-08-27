@@ -142,7 +142,7 @@ type OpDetails struct {
 	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
 }
 
-func (d *OpDetails) docCost(argLen int) string {
+func (d *OpDetails) docCost(argLen int, version uint64) string {
 	cost := d.FullCost.docCost(argLen)
 	if cost != "" {
 		return cost
@@ -155,14 +155,15 @@ func (d *OpDetails) docCost(argLen int) string {
 			}
 			found = true
 			group := imm.Group
+			var fieldCostStrings []string
 			for _, name := range group.Names {
 				fs, ok := group.SpecByName(name)
-				if !ok {
+				if !ok || fs.Version() > version {
 					continue
 				}
-				cost += fmt.Sprintf(" %s=%s;", name, imm.fieldCosts[fs.Field()].docCost(argLen))
+				fieldCostStrings = append(fieldCostStrings, fmt.Sprintf("%s=%s", name, imm.fieldCosts[fs.Field()].docCost(argLen)))
 			}
-			cost = strings.TrimSuffix(cost, ";")
+			cost = strings.Join(fieldCostStrings, "; ")
 		}
 	}
 	return cost
@@ -460,6 +461,11 @@ type OpSpec struct {
 // AlwaysExits is true iff the opcode always ends the program.
 func (spec *OpSpec) AlwaysExits() bool {
 	return len(spec.Return.Types) == 1 && spec.Return.Types[0].AVMType == avmNone
+}
+
+// DocCost returns the cost of the opcode in human-readable form.
+func (spec *OpSpec) DocCost(version uint64) string {
+	return spec.OpDetails.docCost(len(spec.Arg.Types), version)
 }
 
 func (spec *OpSpec) deadens() bool {
