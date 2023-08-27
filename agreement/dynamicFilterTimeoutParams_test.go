@@ -24,6 +24,7 @@ import (
 )
 
 func TestSampleIndexIsValid(t *testing.T) {
+	// partitiontest.PartitionTest(t)
 	require.GreaterOrEqual(t, dynamicFilterCredentialArrivalHistory, 0)
 	require.GreaterOrEqual(t, dynamicFilterTimeoutCredentialArrivalHistoryIdx, 0)
 	if dynamicFilterCredentialArrivalHistory > 0 {
@@ -32,5 +33,6 @@ func TestSampleIndexIsValid(t *testing.T) {
 }
 
 func TestLowerBound(t *testing.T) {
+	// partitiontest.PartitionTest(t)
 	require.Less(t, 20*time.Millisecond, dynamicFilterTimeoutLowerBound)
 }

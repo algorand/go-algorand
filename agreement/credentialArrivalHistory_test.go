@@ -24,6 +24,7 @@ import (
 )
 
 func TestCredentialHistoryStore(t *testing.T) {
+	// partitiontest.PartitionTest(t)
 	size := 5
 	buffer := newCredentialArrivalHistory(size)
 	// last store call overwrites the first one
@@ -39,6 +40,7 @@ func TestCredentialHistoryStore(t *testing.T) {
 }
 
 func TestCredentialHistoryReset(t *testing.T) {
+	// partitiontest.PartitionTest(t)
 	size := 5
 	buffer := newCredentialArrivalHistory(size)
 	// last store call overwrites the first one
@@ -58,6 +60,7 @@ func TestCredentialHistoryReset(t *testing.T) {
 }
 
 func TestCredentialHistoryIsFull(t *testing.T) {
+	// partitiontest.PartitionTest(t)
 	var buffer *credentialArrivalHistory
 	require.False(t, buffer.isFull())
 
@@ -76,6 +79,7 @@ func TestCredentialHistoryIsFull(t *testing.T) {
 }
 
 func TestOrderStatistics(t *testing.T) {
+	// partitiontest.PartitionTest(t)
 	size := 5
 	buffer := newCredentialArrivalHistory(size)
 	require.False(t, buffer.isFull())
