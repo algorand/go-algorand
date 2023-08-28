@@ -5692,7 +5692,7 @@ func TestLocalInitialStates(t *testing.T) {
 	})
 }
 
-func TestInitialStateGlobalGetEx(t *testing.T) {
+func TestInitialStatesGetEx(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -5706,16 +5706,29 @@ func TestInitialStateGlobalGetEx(t *testing.T) {
 txn ApplicationID
 bz end // Do nothing during create
 
+txn OnCompletion
+int OptIn
+==
+bnz end // Always allow optin
+
 byte "put"
+byte "local_put"
 byte "del"
 txn ApplicationArgs 0
-match put del
+match put local_put del
 err // Unknown command
 
 put:
   txn ApplicationArgs 1
   txn ApplicationArgs 2
   app_global_put
+  b end
+
+local_put:
+  txn Sender
+  txn ApplicationArgs 1
+  txn ApplicationArgs 2
+  app_local_put
   b end
 
 del:
@@ -5727,29 +5740,38 @@ end:
   int 1
 `
 
-	appIDWithGlobals := myEnv.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+	appIDWithStates := myEnv.CreateApp(appCreator.Addr, simulationtesting.AppParams{
 		GlobalStateSchema: basics.StateSchema{NumByteSlice: 8},
+		LocalStateSchema:  basics.StateSchema{NumByteSlice: 8},
 		ApprovalProgram:   approvalProgramSrc,
 		ClearStateProgram: `#pragma version 8
 int 1`,
 	})
 
 	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
-	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, appIDWithGlobals.Address(), transferable)
+	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, appIDWithStates.Address(), transferable)
+
+	myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
+		Sender:        appCreator.Addr,
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: appIDWithStates,
+		OnCompletion:  transactions.OptInOC,
+	}).SignedTxn())
 
 	prepareSteps := [][][]byte{
 		{
-			[]byte("A"), []byte("initial content A"),
+			[]byte("put"), []byte("A"), []byte("initial content A"),
+		},
+		{
+			[]byte("local_put"), []byte("B"), []byte("initial content B"),
 		},
 	}
 
-	for _, instruction := range prepareSteps {
-		txnArgs := [][]byte{[]byte("put")}
-		txnArgs = append(txnArgs, instruction...)
+	for _, txnArgs := range prepareSteps {
 		myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
 			Sender:          appCreator.Addr,
 			Type:            protocol.ApplicationCallTx,
-			ApplicationID:   appIDWithGlobals,
+			ApplicationID:   appIDWithStates,
 			ApplicationArgs: txnArgs,
 		}).SignedTxn())
 	}
@@ -5759,62 +5781,122 @@ int 1`,
 txn ApplicationID
 bz end // Do nothing during create
 
-txn ApplicationArgs 0 // AppID
-btoi
-txn ApplicationArgs 1 // GlobalKey
-app_global_get_ex
-assert
-pop
+byte "read_global"
+byte "read_local"
+txn ApplicationArgs 0
+match read_global read_local
+err // Unknown command
+
+read_global:
+  txn ApplicationArgs 1 // AppID
+  btoi
+  txn ApplicationArgs 2 // GlobalKey
+  app_global_get_ex
+  assert
+  pop
+  b end
+
+read_local:
+  txn Sender
+  txn ApplicationArgs 1 // AppID
+  btoi
+  txn ApplicationArgs 2 // LocalKey
+  app_local_get_ex
+  assert
+  pop
+  b end
 
 end:
 int 1
 `
-	appIDReadingGlobals := myEnv.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+	appIDReadingStates := myEnv.CreateApp(appCreator.Addr, simulationtesting.AppParams{
 		ApprovalProgram: approvalProgramSrc,
 		ClearStateProgram: `#pragma version 8
 int 1`,
 	})
 
 	transferable = myEnv.Accounts[2].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
-	myEnv.TransferAlgos(myEnv.Accounts[2].Addr, appIDReadingGlobals.Address(), transferable)
+	myEnv.TransferAlgos(myEnv.Accounts[2].Addr, appIDReadingStates.Address(), transferable)
 
 	op, err := logic.AssembleString(approvalProgramSrc)
 	require.NoError(t, err)
 	progHash := crypto.Hash(op.Program)
 
-	txns := make([]*txntest.Txn, 1)
-	tmpTxn := myEnv.TxnInfo.NewTxn(txntest.Txn{
+	txns := make([]*txntest.Txn, 2)
+	tmpTxn0 := myEnv.TxnInfo.NewTxn(txntest.Txn{
 		Type:          protocol.ApplicationCallTx,
 		Sender:        appCreator.Addr,
-		ApplicationID: appIDReadingGlobals,
+		ApplicationID: appIDReadingStates,
 		ApplicationArgs: [][]byte{
-			uint64ToBytes(uint64(appIDWithGlobals)),
+			[]byte("read_global"),
+			uint64ToBytes(uint64(appIDWithStates)),
 			[]byte("A"),
 		},
-		ForeignApps: []basics.AppIndex{appIDWithGlobals},
+		ForeignApps: []basics.AppIndex{appIDWithStates},
 	})
-	txns[0] = &tmpTxn
+	txns[0] = &tmpTxn0
+	tmpTxn1 := myEnv.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        appCreator.Addr,
+		ApplicationID: appIDReadingStates,
+		ApplicationArgs: [][]byte{
+			[]byte("read_local"),
+			uint64ToBytes(uint64(appIDWithStates)),
+			[]byte("B"),
+		},
+		ForeignApps: []basics.AppIndex{appIDWithStates},
+		Note:        []byte("bla"),
+	})
+	txns[1] = &tmpTxn1
 	txntest.Group(txns...)
 	signedTxns := make([]transactions.SignedTxn, len(txns))
 	for i, txn := range txns {
 		signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
 	}
 
-	// now construct app calls for global get ex
+	// now construct app calls for global local get ex
 	txnResults := []simulation.TxnResult{
 		{
-			AppBudgetConsumed: 9,
+			AppBudgetConsumed: 14,
 			Trace: &simulation.TransactionTrace{
 				ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
 					{PC: 1},
 					{PC: 3},
 					{PC: 6},
-					{PC: 9},
-					{PC: 10},
-					{PC: 13},
-					{PC: 14},
-					{PC: 15},
-					{PC: 16},
+					{PC: 19},
+					{PC: 31},
+					{PC: 34},
+					{PC: 41},
+					{PC: 44},
+					{PC: 45},
+					{PC: 48},
+					{PC: 49},
+					{PC: 50},
+					{PC: 51},
+					{PC: 69},
+				},
+				ApprovalProgramHash: progHash,
+			},
+		},
+		{
+			AppBudgetConsumed: 15,
+			Trace: &simulation.TransactionTrace{
+				ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+					{PC: 1},
+					{PC: 3},
+					{PC: 6},
+					{PC: 19},
+					{PC: 31},
+					{PC: 34},
+					{PC: 54},
+					{PC: 56},
+					{PC: 59},
+					{PC: 60},
+					{PC: 63},
+					{PC: 64},
+					{PC: 65},
+					{PC: 66},
+					{PC: 69},
 				},
 				ApprovalProgramHash: progHash,
 			},
@@ -5854,14 +5936,21 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{
-						appIDWithGlobals: &simulation.SingleAppInitialStates{
+						appIDWithStates: &simulation.SingleAppInitialStates{
 							AppGlobals: simulation.AppKVPairs{
 								"A": basics.TealValue{
 									Type:  basics.TealBytesType,
 									Bytes: "initial content A",
 								},
 							},
-							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
+							AppLocals: map[basics.Address]simulation.AppKVPairs{
+								appCreator.Addr: {
+									"B": basics.TealValue{
+										Type:  basics.TealBytesType,
+										Bytes: "initial content B",
+									},
+								},
+							},
 							AppBoxes:       make(simulation.AppKVPairs),
 							CreatedGlobals: make(simulation.Set[string]),
 							CreatedBoxes:   make(simulation.Set[string]),
