@@ -63,7 +63,9 @@ func TestP2PSubmitTX(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) == 2 && len(netB.service.ListPeersForTopic(p2p.TXTopicName)) == 1 && len(netC.service.ListPeersForTopic(p2p.TXTopicName)) == 1
+			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) == 2 &&
+				len(netB.service.ListPeersForTopic(p2p.TXTopicName)) == 1 &&
+				len(netC.service.ListPeersForTopic(p2p.TXTopicName)) == 1
 		},
 		2*time.Second,
 		50*time.Millisecond,
