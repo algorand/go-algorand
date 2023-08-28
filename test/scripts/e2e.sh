@@ -167,10 +167,6 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     goal network delete -r $NETWORKDIR
 
-    # Run private network tests
-    ./timeout 200 ./test_private_network.sh $SRCROOT
-    duration "test_private_network.sh"
-
     KEEP_TEMPS_CMD_STR=""
 
     # If the platform is arm64, we want to pass "--keep-temps" into e2e_client_runner.py

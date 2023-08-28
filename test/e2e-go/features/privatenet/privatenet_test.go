@@ -36,7 +36,7 @@ func TestPrivateNetworkImportKeys(t *testing.T) {
 		t.Skip()
 	}
 
-	// First test that keys can be exported by using `goal network genesis ...`
+	// First test that keys can be exported by using `goal network pregen ...`
 	// Don't start up network, just create genesis files.
 	var goalFixture fixtures.GoalFixture
 	tmpGenDir := "tmpGen"
@@ -45,11 +45,11 @@ func TestPrivateNetworkImportKeys(t *testing.T) {
 	os.RemoveAll(tmpGenDir) // clean up any tmp directories
 	os.RemoveAll(tmpNetDir) // clean up any tmp directories
 
-	_, err := goalFixture.NetworkGenesis(defaultTemplate, tmpGenDir)
+	_, err := goalFixture.NetworkPregen(defaultTemplate, tmpGenDir)
 	require.NoError(t, err)
 
 	// Check that if there is an existing directory with same name, test fails.
-	errStr, err := goalFixture.NetworkGenesis(defaultTemplate, tmpGenDir)
+	errStr, err := goalFixture.NetworkPregen(defaultTemplate, tmpGenDir)
 	require.Error(t, err)
 	require.Contains(t, errStr, "already exists and is not empty")
 

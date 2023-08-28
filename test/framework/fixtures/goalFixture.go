@@ -60,7 +60,7 @@ const (
 	stopCmd  = "stop"
 
 	networkCmd = "network"
-	genesisCmd = "genesis"
+	pregenCmd  = "pregen"
 	createCmd  = "create"
 )
 
@@ -241,11 +241,11 @@ func (f *GoalFixture) AccountImportRootKey(wallet string, createDefaultUnencrypt
 	return
 }
 
-// NetworkGenesis exposes the `goal network genesis` command
-func (f *GoalFixture) NetworkGenesis(template, genesisdir string) (stdErr string, err error) {
+// NetworkPregen exposes the `goal network pregen` command
+func (f *GoalFixture) NetworkPregen(template, genesisdir string) (stdErr string, err error) {
 	args := []string{
 		networkCmd,
-		genesisCmd,
+		pregenCmd,
 		"-g",
 		genesisdir,
 	}

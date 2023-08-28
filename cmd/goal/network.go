@@ -72,12 +72,12 @@ func init() {
 	networkCmd.AddCommand(networkDeleteCmd)
 	networkDeleteCmd.MarkFlagRequired("rootdir")
 
-	networkCmd.AddCommand(networkGenesisCmd)
-	networkGenesisCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
-	networkGenesisCmd.Flags().StringVarP(&genesisDir, "genesisdir", "g", "", "Specify the path to the directory to export genesis.json, root and partkey files. This should only be used on private networks.")
-	networkGenesisCmd.MarkFlagRequired("genesisdir")
+	networkCmd.AddCommand(networkPregenCmd)
+	networkPregenCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
+	networkPregenCmd.Flags().StringVarP(&genesisDir, "genesisdir", "g", "", "Specify the path to the directory to export genesis.json, root and partkey files. This should only be used on private networks.")
+	networkPregenCmd.MarkFlagRequired("genesisdir")
 	// Hide rootdir flag as it is unused and will error if used with this command.
-	networkGenesisCmd.SetHelpFunc(func(command *cobra.Command, strings []string) {
+	networkPregenCmd.SetHelpFunc(func(command *cobra.Command, strings []string) {
 		_ = command.Flags().MarkHidden("rootdir")
 		command.Parent().HelpFunc()(command, strings)
 	})
@@ -280,8 +280,8 @@ var networkDeleteCmd = &cobra.Command{
 	},
 }
 
-var networkGenesisCmd = &cobra.Command{
-	Use:   "genesis",
+var networkPregenCmd = &cobra.Command{
+	Use:   "pregen",
 	Short: "Creates the genesis.json, root and participation keys for a wallet",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
