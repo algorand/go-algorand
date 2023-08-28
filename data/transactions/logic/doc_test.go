@@ -113,21 +113,6 @@ func TestOpDocExtra(t *testing.T) {
 	require.Empty(t, xd)
 }
 
-func TestOpAllCosts(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	a := OpAllCosts("+")
-	require.Len(t, a, 1)
-	require.Equal(t, "1", a[0].Cost)
-
-	a = OpAllCosts("sha256")
-	require.Len(t, a, 2)
-	for _, cost := range a {
-		require.True(t, cost.Cost != "0")
-	}
-}
-
 func TestOnCompletionDescription(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
