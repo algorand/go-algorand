@@ -68,9 +68,22 @@ func TestCredentialHistoryIsFull(t *testing.T) {
 	buffer = makeCredentialArrivalHistory(size)
 	require.False(t, buffer.isFull())
 
-	for i := 0; i < size+10; i++ {
+	for i := 1; i < size+10; i++ {
 		buffer.store(time.Duration(i))
-		if i < size-1 {
+		if i < size {
+			require.False(t, buffer.isFull())
+		} else {
+			require.True(t, buffer.isFull())
+		}
+	}
+
+	// reset the buffer and then fill it again
+	buffer.reset()
+	require.False(t, buffer.isFull())
+
+	for i := 1; i < size+10; i++ {
+		buffer.store(time.Duration(i))
+		if i < size {
 			require.False(t, buffer.isFull())
 		} else {
 			require.True(t, buffer.isFull())
