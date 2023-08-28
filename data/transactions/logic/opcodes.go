@@ -356,11 +356,6 @@ type typedList struct {
 	Effects string
 }
 
-// debugStackExplain explains the effect of an opcode over the stack
-// with 2 integers: deletions and additions, representing pops and inserts.
-// An opcode may delete a few variables from stack, then add a few to stack.
-type debugStackExplain func(*EvalContext) (int, int)
-
 // Proto describes the "stack behavior" of an opcode, what it pops as arguments
 // and pushes onto the stack as return values.
 type Proto struct {
@@ -371,10 +366,20 @@ type Proto struct {
 	// - on default construction, Explain relies on Arg and Return count.
 	// - otherwise, we need to explicitly infer from EvalContext, by registering through explain function
 	Explain debugStackExplain
+
+	// StateExplain is the pointer to the function used for debugging in simulation:
+	// - for an opcode not touching app's local/global/box state, this pointer is nil.
+	// - otherwise, we call this method and check the operation of an opcode on app's state.
+	StateExplain stateChangeExplain
 }
 
 func (p Proto) stackExplain(e debugStackExplain) Proto {
 	p.Explain = e
+	return p
+}
+
+func (p Proto) stateExplain(s stateChangeExplain) Proto {
+	p.StateExplain = s
 	return p
 }
 
@@ -384,117 +389,6 @@ func defaultDebugExplain(argCount, retCount int) debugStackExplain {
 		additions = retCount
 		return
 	}
-}
-
-func opPushIntsStackChange(cx *EvalContext) (deletions, additions int) {
-	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
-	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
-	intc, _, _ := parseIntImmArgs(cx.program, cx.pc+1)
-
-	additions = len(intc)
-	return
-}
-
-func opPushBytessStackChange(cx *EvalContext) (deletions, additions int) {
-	// NOTE: WE ARE SWALLOWING THE ERROR HERE!
-	// FOR EVENTUALLY IT WOULD ERROR IN ASSEMBLY
-	cbytess, _, _ := parseByteImmArgs(cx.program, cx.pc+1)
-
-	additions = len(cbytess)
-	return
-}
-
-func opReturnStackChange(cx *EvalContext) (deletions, additions int) {
-	deletions = len(cx.Stack)
-	additions = 1
-	return
-}
-
-func opBuryStackChange(cx *EvalContext) (deletions, additions int) {
-	depth := int(cx.program[cx.pc+1])
-
-	deletions = depth + 1
-	additions = depth
-	return
-}
-
-func opPopNStackChange(cx *EvalContext) (deletions, additions int) {
-	n := int(cx.program[cx.pc+1])
-
-	deletions = n
-	return
-}
-
-func opDupNStackChange(cx *EvalContext) (deletions, additions int) {
-	n := int(cx.program[cx.pc+1])
-
-	deletions = 1
-	additions = n + 1
-	return
-}
-
-func opDigStackChange(cx *EvalContext) (deletions, additions int) {
-	additions = 1
-	return
-}
-
-func opFrameDigStackChange(cx *EvalContext) (deletions, additions int) {
-	additions = 1
-	return
-}
-
-func opCoverStackChange(cx *EvalContext) (deletions, additions int) {
-	depth := int(cx.program[cx.pc+1])
-
-	deletions = depth + 1
-	additions = depth + 1
-	return
-}
-
-func opUncoverStackChange(cx *EvalContext) (deletions, additions int) {
-	depth := int(cx.program[cx.pc+1])
-
-	deletions = depth + 1
-	additions = depth + 1
-	return
-}
-
-func opRetSubStackChange(cx *EvalContext) (deletions, additions int) {
-	topFrame := cx.callstack[len(cx.callstack)-1]
-	// fast path, no proto case
-	if !topFrame.clear {
-		return
-	}
-
-	argStart := topFrame.height - topFrame.args
-	topStackIdx := len(cx.Stack) - 1
-
-	diff := topStackIdx - argStart + 1
-
-	deletions = diff
-	additions = topFrame.returns
-	return
-}
-
-func opFrameBuryStackChange(cx *EvalContext) (deletions, additions int) {
-	topFrame := cx.callstack[len(cx.callstack)-1]
-
-	immIndex := int8(cx.program[cx.pc+1])
-	idx := topFrame.height + int(immIndex)
-	topStackIdx := len(cx.Stack) - 1
-
-	diff := topStackIdx - idx + 1
-
-	deletions = diff
-	additions = diff - 1
-	return
-}
-
-func opMatchStackChange(cx *EvalContext) (deletions, additions int) {
-	labelNum := int(cx.program[cx.pc+1])
-
-	deletions = labelNum + 1
-	return
 }
 
 func proto(signature string, effects ...string) Proto {
@@ -695,12 +589,12 @@ var OpSpecs = []OpSpec{
 	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:aT"), directRefEnabledVersion, only(ModeApp)},
 	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(ModeApp)},
 	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:aT"), 2, only(ModeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("iba:"), 2, only(ModeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("aba:"), directRefEnabledVersion, only(ModeApp)},
-	{0x67, "app_global_put", opAppGlobalPut, proto("ba:"), 2, only(ModeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ib:"), 2, only(ModeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ab:"), directRefEnabledVersion, only(ModeApp)},
-	{0x69, "app_global_del", opAppGlobalDel, proto("b:"), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("iba:").stateExplain(opAppLocalPutStateChange), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("aba:").stateExplain(opAppLocalPutStateChange), directRefEnabledVersion, only(ModeApp)},
+	{0x67, "app_global_put", opAppGlobalPut, proto("ba:").stateExplain(opAppGlobalPutStateChange), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ib:").stateExplain(opAppLocalDelStateChange), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ab:").stateExplain(opAppLocalDelStateChange), directRefEnabledVersion, only(ModeApp)},
+	{0x69, "app_global_del", opAppGlobalDel, proto("b:").stateExplain(opAppGlobalDelStateChange), 2, only(ModeApp)},
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:aT"), 2, field("f", &AssetHoldingFields).only(ModeApp)},
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:aT"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(ModeApp)},
 	{0x71, "asset_params_get", opAssetParamsGet, proto("i:aT"), 2, field("f", &AssetParamsFields).only(ModeApp)},
@@ -776,13 +670,13 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("Ni:T"), boxVersion, only(ModeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("Ni:T").stateExplain(opBoxCreateStateChange), boxVersion, only(ModeApp)},
 	{0xba, "box_extract", opBoxExtract, proto("Nii:b"), boxVersion, only(ModeApp)},
-	{0xbb, "box_replace", opBoxReplace, proto("Nib:"), boxVersion, only(ModeApp)},
-	{0xbc, "box_del", opBoxDel, proto("N:T"), boxVersion, only(ModeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("Nib:").stateExplain(opBoxReplaceStateChange), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("N:T").stateExplain(opBoxDelStateChange), boxVersion, only(ModeApp)},
 	{0xbd, "box_len", opBoxLen, proto("N:iT"), boxVersion, only(ModeApp)},
 	{0xbe, "box_get", opBoxGet, proto("N:bT"), boxVersion, only(ModeApp)},
-	{0xbf, "box_put", opBoxPut, proto("Nb:"), boxVersion, only(ModeApp)},
+	{0xbf, "box_put", opBoxPut, proto("Nb:").stateExplain(opBoxPutStateChange), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},

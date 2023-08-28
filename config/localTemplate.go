@@ -222,7 +222,7 @@ type Local struct {
 
 	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager shouild be attached to the tx backlog enqueue process
 	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
-	EnableTxBacklogRateLimiting bool `version[27]:"false"`
+	EnableTxBacklogRateLimiting bool `version[27]:"false" version[30]:"true"`
 
 	// TxBacklogSize is the queue size used for receiving transactions. default of 26000 to approximate 1 block of transactions
 	// if EnableTxBacklogRateLimiting enabled, the over-all size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
