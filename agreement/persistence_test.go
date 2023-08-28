@@ -38,7 +38,7 @@ func TestAgreementSerialization(t *testing.T) {
 
 	// todo : we need to deserialize some more meaningful state.
 	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
-	status := player{Round: 350, Step: soft, Deadline: Deadline{Duration: time.Duration(23) * time.Second, Type: TimeoutDeadline}}
+	status := player{Round: 350, Step: soft, Deadline: Deadline{Duration: time.Duration(23) * time.Second, Type: TimeoutDeadline}, lowestCredentialArrivals: makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)}
 	router := makeRootRouter(status)
 	a := []action{checkpointAction{}, disconnectAction(messageEvent{}, nil)}
 
