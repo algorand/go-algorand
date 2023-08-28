@@ -63,7 +63,7 @@ func TestCredentialHistoryReset(t *testing.T) {
 }
 
 func TestCredentialHistoryIsFull(t *testing.T) {
-	// partitiontest.PartitionTest(t)
+	partitiontest.PartitionTest(t)
 	var buffer credentialArrivalHistory
 	require.False(t, buffer.isFull())
 
