@@ -445,7 +445,8 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	localCfg.Archival = true
 	localCfg.CatchpointTracking = -1
 	localCfg.LedgerSynchronousMode = 0
-	l, err := ledger.OpenLedger(log, filepath.Join(genesisFolder, "bootstrapped"), false, initState, localCfg)
+	prefix := filepath.Join(genesisFolder, "bootstrapped")
+	l, err := ledger.OpenLedger(log, prefix, false, initState, localCfg)
 	if err != nil {
 		return err
 	}
@@ -479,7 +480,8 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	l.Close()
 
 	localCfg.CatchpointTracking = 0
-	l, err = ledger.OpenLedger(log, genesisFolder+"/bootstrapped", false, initState, localCfg)
+	prefix2 := genesisFolder + "/bootstrapped"
+	l, err = ledger.OpenLedger(log, prefix2, false, initState, localCfg)
 	if err != nil {
 		return err
 	}
