@@ -73,7 +73,8 @@ func (c *CapabilitiesDiscovery) AddPeer(p peer.AddrInfo) (bool, error) {
 
 func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability) {
 	go func() {
-		ticker := time.NewTicker(advertisementInterval)
+		// Run the initial Advertisement immediately
+		ticker := time.NewTicker(time.Second / 10000)
 		defer ticker.Stop()
 		for {
 			select {
