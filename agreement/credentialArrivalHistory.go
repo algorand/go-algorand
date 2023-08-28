@@ -33,6 +33,8 @@ func newCredentialArrivalHistory(size int) *credentialArrivalHistory {
 	return &history
 }
 
+// store saves a new sample into the circular buffer.
+// If the buffer is full, it overwrites the oldest sample.
 func (history *credentialArrivalHistory) store(sample time.Duration) {
 	history.history[history.writePtr] = sample
 	history.writePtr++
