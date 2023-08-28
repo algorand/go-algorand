@@ -288,18 +288,21 @@ func (d *MsgpDecoderBytes) Remaining() int {
 // encodingPool holds temporary byte slice buffers used for encoding messages.
 var encodingPool = sync.Pool{
 	New: func() interface{} {
-		return &EncodingBuf{b: make([]byte, 0, 1024)}
+		return &EncodingBuf{b: make([]byte, 0)}
 	},
 }
 
+// EncodingBuf is a wrapper for a byte slice that can be used for encoding
 type EncodingBuf struct {
 	b []byte
 }
 
+// Bytes returns the underlying byte slice
 func (eb *EncodingBuf) Bytes() []byte {
 	return eb.b
 }
 
+// Update updates the underlying byte slice to the given one if its capacity exceeds the current one.
 func (eb *EncodingBuf) Update(v []byte) *EncodingBuf {
 	if cap(eb.b) < cap(v) {
 		eb.b = v

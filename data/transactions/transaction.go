@@ -196,8 +196,8 @@ var txEncodingPool = sync.Pool{
 }
 
 // getTxEncodingBuf returns a wrapped byte slice that can be used for encoding a
-// temporary message.  The byte slice has zero length but potentially
-// non-zero capacity.  The caller gets full ownership of the byte slice,
+// temporary message.  The byte slice length of encoded Transaction{} object.
+// The caller gets full ownership of the byte slice,
 // but is encouraged to return it using putEncodingBuf().
 func getTxEncodingBuf() *txEncodingBuf {
 	buf := txEncodingPool.Get().(*txEncodingBuf)
@@ -221,7 +221,7 @@ func (tx Transaction) ID() Txid {
 	buf := getTxEncodingBuf()
 	enc := tx.MarshalMsg(buf.b)
 	if cap(enc) > cap(buf.b) {
-		// use a bigger buffer is New's estimate was too small
+		// use a bigger buffer as New's estimate was too small
 		buf.b = enc
 	}
 	defer putTxEncodingBuf(buf)
