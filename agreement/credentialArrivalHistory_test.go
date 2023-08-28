@@ -78,6 +78,22 @@ func TestCredentialHistoryIsFull(t *testing.T) {
 	}
 }
 
+func TestCredentialHisotyZeroSize(t *testing.T) {
+	// partitiontest.PartitionTest(t)
+	var buffer *credentialArrivalHistory
+	require.False(t, buffer.isFull())
+
+	size := 0
+	buffer = newCredentialArrivalHistory(size)
+	require.False(t, buffer.isFull())
+
+	// trying to store new samples won't panic but the history is never full
+	for i := 0; i < size+10; i++ {
+		buffer.store(time.Duration(i))
+		require.False(t, buffer.isFull())
+	}
+}
+
 func TestOrderStatistics(t *testing.T) {
 	// partitiontest.PartitionTest(t)
 	size := 5
