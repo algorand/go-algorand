@@ -18,17 +18,20 @@ package dht
 
 import (
 	"context"
+	"testing"
+
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
-	"testing"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestDHTBasic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	h, err := libp2p.New()
 	require.NoError(t, err)
 	dht, err := MakeDHT(context.Background(), h, "devtestnet", config.GetDefaultLocal(), []*peer.AddrInfo{})
@@ -40,6 +43,8 @@ func TestDHTBasic(t *testing.T) {
 }
 
 func TestDHTBasicAlgodev(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	logging.SetDebugLogging()
 	h, err := libp2p.New()
 	require.NoError(t, err)

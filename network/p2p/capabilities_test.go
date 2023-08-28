@@ -33,9 +33,12 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	algodht "github.com/algorand/go-algorand/network/p2p/dht"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestCapabilitiesDiscovery(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	golog.SetDebugLogging()
 	var caps []*CapabilitiesDiscovery
 	var addrs []peer.AddrInfo
@@ -95,6 +98,8 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 }
 
 func TestDHTTwoPeers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	numAdvertisers := 2
 	dhts := setupDHTHosts(t, numAdvertisers)
 	topic := "foobar"
