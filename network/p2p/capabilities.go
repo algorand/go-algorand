@@ -33,11 +33,11 @@ import (
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 )
 
-type capability string
+type Capability string
 
 const (
-	archival    capability = "archival"
-	catchpoints            = "catchpointStoring"
+	Archival    Capability = "archival"
+	Catchpoints            = "catchpointStoring"
 )
 
 const operationTimeout = time.Second * 5
@@ -71,7 +71,7 @@ func (c *CapabilitiesDiscovery) AddPeer(p peer.AddrInfo) (bool, error) {
 	return c.dht.RoutingTable().TryAddPeer(p.ID, true, true)
 }
 
-func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...capability) {
+func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability) {
 	go func() {
 		ticker := time.NewTicker(advertisementInterval)
 		defer ticker.Stop()
