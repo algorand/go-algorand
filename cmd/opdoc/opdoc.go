@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -28,8 +29,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
-
-var docVersion = 9
 
 // OpImmediateNote returns a short string about immediate data which follows the op byte
 func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails) string {
@@ -63,11 +62,11 @@ func opImmediateNoteEncoding(opcode byte, oids []logic.OpImmediateDetails) strin
 	return fmt.Sprintf("0x%02x {%s}", opcode, strings.Join(notes, "}, {"))
 }
 
-func opGroupMarkdownTable(names []string, out io.Writer) {
+func opGroupMarkdownTable(names []string, out io.Writer, version uint64) {
 	fmt.Fprint(out, `| Opcode | Description |
 | - | -- |
 `)
-	opSpecs := logic.OpsByName[docVersion]
+	opSpecs := logic.OpsByName[version]
 	for _, opname := range names {
 		spec, ok := opSpecs[opname]
 		if !ok {
@@ -113,20 +112,20 @@ func integerConstantsTableMarkdown(out io.Writer) {
 	out.Write([]byte("\n"))
 }
 
-func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup) {
+func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup, version uint64) {
 	showTypes := false
 	showVers := false
-	opVer := uint64(0)
+	opVer := uint64(math.MaxUint64)
 	for _, name := range group.Names {
 		spec, ok := group.SpecByName(name)
 		// reminder: group.Names can be "sparse" See: logic.TxnaFields
-		if !ok {
+		if !ok || spec.Version() > version {
 			continue
 		}
 		if spec.Type().Typed() {
 			showTypes = true
 		}
-		if opVer == uint64(0) {
+		if opVer == math.MaxUint64 {
 			opVer = spec.Version()
 		} else if opVer != spec.Version() {
 			showVers = true
@@ -147,7 +146,7 @@ func fieldGroupMarkdown(out io.Writer, group *logic.FieldGroup) {
 	fmt.Fprint(out, headers, widths)
 	for i, name := range group.Names {
 		spec, ok := group.SpecByName(name)
-		if !ok {
+		if !ok || spec.Version() > version {
 			continue
 		}
 		str := fmt.Sprintf("| %d | %s", i, markdownTableEscape(name))
@@ -212,7 +211,7 @@ func stackMarkdown(op *logic.OpSpec) string {
 	return out + "\n"
 }
 
-func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bool) (err error) {
+func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bool, version uint64) (err error) {
 
 	deets := logic.OpImmediateDetailsFromSpec(*op)
 
@@ -230,26 +229,9 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 	fmt.Fprintf(out, "\n## %s\n\n%s%s\n%s", op.Name, syntax, encoding, stackEffects)
 
 	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
-	// if cost changed with versions print all of them
-	costs := logic.OpAllCosts(op.Name)
-	if len(costs) > 1 {
-		fmt.Fprintf(out, "- **Cost**:\n")
-		for _, cost := range costs {
-			if cost.From == cost.To {
-				fmt.Fprintf(out, "    - %s (v%d)\n", cost.Cost, cost.To)
-			} else {
-				if cost.To < docVersion {
-					fmt.Fprintf(out, "    - %s (v%d - v%d)\n", cost.Cost, cost.From, cost.To)
-				} else {
-					fmt.Fprintf(out, "    - %s (since v%d)\n", cost.Cost, cost.From)
-				}
-			}
-		}
-	} else {
-		cost := costs[0].Cost
-		if cost != "1" {
-			fmt.Fprintf(out, "- **Cost**: %s\n", cost)
-		}
+	cost := op.DocCost(version)
+	if cost != "1" {
+		fmt.Fprintf(out, "- **Cost**: %s\n", cost)
 	}
 	if op.Version > 1 {
 		fmt.Fprintf(out, "- Availability: v%d\n", op.Version)
@@ -262,7 +244,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 		group := op.OpDetails.Immediates[i].Group
 		if group != nil && group.Doc != "" && !groupDocWritten[group.Name] {
 			fmt.Fprintf(out, "\n### %s\n\n%s\n\n", group.Name, group.Doc)
-			fieldGroupMarkdown(out, group)
+			fieldGroupMarkdown(out, group, version)
 			groupDocWritten[group.Name] = true
 		}
 	}
@@ -273,17 +255,20 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 	return nil
 }
 
-func opsToMarkdown(out io.Writer) (err error) {
-	out.Write([]byte("# Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n"))
-	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
+func opsToMarkdown(out io.Writer, version uint64) error {
+	_, err := out.Write([]byte(fmt.Sprintf("# v%d Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n", version)))
+	if err != nil {
+		return err
+	}
+	opSpecs := logic.OpcodesByVersion(version)
 	written := make(map[string]bool)
 	for i := range opSpecs {
-		err = opToMarkdown(out, &opSpecs[i], written)
+		err := opToMarkdown(out, &opSpecs[i], written, version)
 		if err != nil {
-			return
+			return err
 		}
 	}
-	return
+	return nil
 }
 
 // OpRecord is a consolidated record of things about an Op
@@ -296,6 +281,8 @@ type OpRecord struct {
 
 	ArgEnum      []string `json:",omitempty"`
 	ArgEnumTypes []string `json:",omitempty"`
+
+	DocCost string
 
 	Doc               string
 	DocExtra          string                     `json:",omitempty"`
@@ -342,7 +329,7 @@ func (nt namedType) boundString() string {
 
 // LanguageSpec records the ops of the language at some version
 type LanguageSpec struct {
-	EvalMaxVersion  int
+	Version         uint64
 	LogicSigVersion uint64
 	NamedTypes      []namedType
 	Ops             []OpRecord
@@ -369,12 +356,12 @@ func typeStrings(types logic.StackTypes) []string {
 	return out
 }
 
-func fieldsAndTypes(group logic.FieldGroup) ([]string, []string) {
+func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string) {
 	// reminder: group.Names can be "sparse" See: logic.TxnaFields
 	fields := make([]string, 0, len(group.Names))
 	types := make([]logic.StackType, 0, len(group.Names))
 	for _, name := range group.Names {
-		if spec, ok := group.SpecByName(name); ok {
+		if spec, ok := group.SpecByName(name); ok && spec.Version() <= version {
 			fields = append(fields, name)
 			types = append(types, spec.Type())
 		}
@@ -382,46 +369,46 @@ func fieldsAndTypes(group logic.FieldGroup) ([]string, []string) {
 	return fields, typeStrings(types)
 }
 
-func argEnums(name string) ([]string, []string) {
+func argEnums(name string, version uint64) ([]string, []string) {
 	// reminder: this needs to be manually updated every time
 	// a new opcode is added with an associated FieldGroup
 	// it'd be nice to have this auto-update
 	switch name {
 	case "txn", "gtxn", "gtxns", "itxn", "gitxn":
-		return fieldsAndTypes(logic.TxnFields)
+		return fieldsAndTypes(logic.TxnFields, version)
 	case "itxn_field":
 		// itxn_field does not *return* a type depending on its immediate. It *takes* it.
 		// but until a consumer cares, ArgEnumTypes will be overloaded for that meaning.
-		return fieldsAndTypes(logic.ItxnSettableFields)
+		return fieldsAndTypes(logic.ItxnSettableFields, version)
 	case "global":
-		return fieldsAndTypes(logic.GlobalFields)
+		return fieldsAndTypes(logic.GlobalFields, version)
 	case "txna", "gtxna", "gtxnsa", "txnas", "gtxnas", "gtxnsas", "itxna", "gitxna":
-		return fieldsAndTypes(logic.TxnArrayFields)
+		return fieldsAndTypes(logic.TxnArrayFields, version)
 	case "asset_holding_get":
-		return fieldsAndTypes(logic.AssetHoldingFields)
+		return fieldsAndTypes(logic.AssetHoldingFields, version)
 	case "asset_params_get":
-		return fieldsAndTypes(logic.AssetParamsFields)
+		return fieldsAndTypes(logic.AssetParamsFields, version)
 	case "app_params_get":
-		return fieldsAndTypes(logic.AppParamsFields)
+		return fieldsAndTypes(logic.AppParamsFields, version)
 	case "acct_params_get":
-		return fieldsAndTypes(logic.AcctParamsFields)
+		return fieldsAndTypes(logic.AcctParamsFields, version)
 	case "block":
-		return fieldsAndTypes(logic.BlockFields)
+		return fieldsAndTypes(logic.BlockFields, version)
 	case "json_ref":
-		return fieldsAndTypes(logic.JSONRefTypes)
+		return fieldsAndTypes(logic.JSONRefTypes, version)
 	case "base64_decode":
-		return fieldsAndTypes(logic.Base64Encodings)
+		return fieldsAndTypes(logic.Base64Encodings, version)
 	case "vrf_verify":
-		return fieldsAndTypes(logic.VrfStandards)
+		return fieldsAndTypes(logic.VrfStandards, version)
 	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
-		return fieldsAndTypes(logic.EcdsaCurves)
+		return fieldsAndTypes(logic.EcdsaCurves, version)
 	default:
 		return nil, nil
 	}
 }
 
-func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType) *LanguageSpec {
-	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
+func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, version uint64) *LanguageSpec {
+	opSpecs := logic.OpcodesByVersion(version)
 	records := make([]OpRecord, len(opSpecs))
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
@@ -429,7 +416,8 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType) *La
 		records[i].Args = typeStrings(spec.Arg.Types)
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
-		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name)
+		records[i].DocCost = spec.DocCost(version)
+		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name, version)
 		records[i].Doc = strings.ReplaceAll(logic.OpDoc(spec.Name), "<br />", "\n")
 		records[i].DocExtra = logic.OpDocExtra(spec.Name)
 		records[i].ImmediateNote = logic.OpImmediateDetailsFromSpec(spec)
@@ -438,7 +426,7 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType) *La
 	}
 
 	return &LanguageSpec{
-		EvalMaxVersion:  docVersion,
+		Version:         version,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
 		NamedTypes:      namedTypes,
 		Ops:             records,
@@ -448,30 +436,26 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType) *La
 func create(file string) *os.File {
 	f, err := os.Create(file)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to create '%s': %v", file, err)
+		fmt.Fprintf(os.Stderr, "Unable to create '%s': %v\n", file, err)
 		os.Exit(1)
 	}
 	return f
 }
 
 func main() {
-	opcodesMd := create("TEAL_opcodes.md")
-	opsToMarkdown(opcodesMd)
-	opcodesMd.Close()
+	const docVersion = uint64(10)
+
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for grp, names := range logic.OpGroups {
 		fname := fmt.Sprintf("%s.md", grp)
 		fname = strings.ReplaceAll(fname, " ", "_")
 		fout := create(fname)
-		opGroupMarkdownTable(names, fout)
+		opGroupMarkdownTable(names, fout, docVersion)
 		fout.Close()
 		for _, opname := range names {
 			opGroups[opname] = append(opGroups[opname], grp)
 		}
 	}
-	constants := create("named_integer_constants.md")
-	integerConstantsTableMarkdown(constants)
-	constants.Close()
 
 	named := make([]namedType, 0, len(logic.AllStackTypes))
 	for abbr, t := range logic.AllStackTypes {
@@ -484,6 +468,10 @@ func main() {
 	}
 	sort.Slice(named, func(i, j int) bool { return named[i].Name > named[j].Name })
 
+	constants := create("named_integer_constants.md")
+	integerConstantsTableMarkdown(constants)
+	constants.Close()
+
 	namedStackTypes := create("named_stack_types.md")
 	namedStackTypesMarkdown(namedStackTypes, named)
 	namedStackTypes.Close()
@@ -494,25 +482,37 @@ func main() {
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !written[imm.Group.Name] {
 				out := create(strings.ToLower(imm.Group.Name) + "_fields.md")
-				fieldGroupMarkdown(out, imm.Group)
+				fieldGroupMarkdown(out, imm.Group, docVersion)
 				out.Close()
 				written[imm.Group.Name] = true
 			}
 		}
 	}
 
-	langspecjs := create("langspec.json")
-	enc := json.NewEncoder(langspecjs)
-	enc.SetIndent("", "  ")
-	err := enc.Encode(buildLanguageSpec(opGroups, named))
-	if err != nil {
-		panic(err.Error())
-	}
-	langspecjs.Close()
-
 	tealtm := create("teal.tmLanguage.json")
-	enc = json.NewEncoder(tealtm)
+	enc := json.NewEncoder(tealtm)
 	enc.SetIndent("", "  ")
-	enc.Encode(buildSyntaxHighlight())
+	if err := enc.Encode(buildSyntaxHighlight(docVersion)); err != nil {
+		fmt.Fprintf(os.Stderr, "error encoding teal.tmLanguage.json: % v\n", err)
+		os.Exit(1)
+	}
 	tealtm.Close()
+
+	for v := uint64(1); v <= docVersion; v++ {
+		langspecjs := create(fmt.Sprintf("langspec_v%d.json", v))
+		enc := json.NewEncoder(langspecjs)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(buildLanguageSpec(opGroups, named, v)); err != nil {
+			fmt.Fprintf(os.Stderr, "error encoding langspec JSON for version %d: %v\n", v, err)
+			os.Exit(1)
+		}
+		langspecjs.Close()
+
+		opcodesMd := create(fmt.Sprintf("TEAL_opcodes_v%d.md", v))
+		if err := opsToMarkdown(opcodesMd, v); err != nil {
+			fmt.Fprintf(os.Stderr, "error creating markdown for version %d: %v\n", v, err)
+			os.Exit(1)
+		}
+		opcodesMd.Close()
+	}
 }

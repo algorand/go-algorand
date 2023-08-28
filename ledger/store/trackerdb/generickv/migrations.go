@@ -29,7 +29,8 @@ import (
 
 func getSchemaVersion(ctx context.Context, kvr KvRead) (int32, error) {
 	// read version entry
-	value, closer, err := kvr.Get(schemaVersionKey())
+	key := schemaVersionKey()
+	value, closer, err := kvr.Get(key[:])
 	if err == trackerdb.ErrNotFound {
 		// ignore the error, return version 0
 		return 0, nil
@@ -47,7 +48,8 @@ func getSchemaVersion(ctx context.Context, kvr KvRead) (int32, error) {
 func setSchemaVersion(ctx context.Context, kvw KvWrite, version int32) error {
 	// write version entry
 	raw := bigEndianUint32(uint32(version))
-	err := kvw.Set(schemaVersionKey(), raw)
+	key := schemaVersionKey()
+	err := kvw.Set(key[:], raw[:])
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-# Opcodes
+# v5 Opcodes
 
 Ops have a 'cost' of 1 unless otherwise specified.
 
@@ -14,27 +14,21 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Bytecode: 0x01
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA256 hash of value A, yields [32]byte
-- **Cost**:
-    - 7 (v1)
-    - 35 (since v2)
+- **Cost**: 35
 
 ## keccak256
 
 - Bytecode: 0x02
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - Keccak256 hash of value A, yields [32]byte
-- **Cost**:
-    - 26 (v1)
-    - 130 (since v2)
+- **Cost**: 130
 
 ## sha512_256
 
 - Bytecode: 0x03
 - Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA512_256 hash of value A, yields [32]byte
-- **Cost**:
-    - 9 (v1)
-    - 45 (since v2)
+- **Cost**: 45
 
 ## ed25519verify
 
@@ -51,17 +45,16 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Bytecode: 0x05 {uint8}
 - Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**:  Secp256k1=1700 Secp256r1=2500
+- **Cost**: Secp256k1=1700
 - Availability: v5
 
 ### ECDSA
 
 Curves
 
-| Index | Name | In | Notes |
-| - | ------ | - | --------- |
-| 0 | Secp256k1 |      | secp256k1 curve, used in Bitcoin |
-| 1 | Secp256r1 | v7  | secp256r1 curve, NIST standard |
+| Index | Name | Notes |
+| - | ------ | --------- |
+| 0 | Secp256k1 | secp256k1 curve, used in Bitcoin |
 
 
 The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.
@@ -72,7 +65,7 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 - Bytecode: 0x06 {uint8}
 - Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
 - decompress pubkey A into components X, Y
-- **Cost**:  Secp256k1=650 Secp256r1=2400
+- **Cost**: Secp256k1=650
 - Availability: v5
 
 The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.
@@ -377,7 +370,6 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 0 | Sender | address |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
-| 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
 | 6 | Lease | [32]byte |      | 32 byte lease value |
@@ -431,10 +423,6 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
-| 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
-| 63 | StateProofPK | []byte | v6  | 64 byte state proof public key |
-| 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
-| 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
 
 ## global
@@ -462,11 +450,6 @@ Fields
 | 9 | CreatorAddress | address | v3  | Address of the creator of the current application. Application mode only. |
 | 10 | CurrentApplicationAddress | address | v5  | Address that the current application controls. Application mode only. |
 | 11 | GroupID | [32]byte | v5  | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. |
-| 12 | OpcodeBudget | uint64 | v6  | The remaining cost that can be spent by opcodes in this program. |
-| 13 | CallerApplicationID | uint64 | v6  | The application ID of the application that called this application. 0 if this application is at the top-level. Application mode only. |
-| 14 | CallerApplicationAddress | address | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
-| 15 | AssetCreateMinBalance | uint64 | v10  | The additional minimum balance required to create (and opt-in to) an asset. |
-| 16 | AssetOptInMinBalance | uint64 | v10  | The additional minimum balance required to opt-in to an asset. |
 
 
 ## gtxn
@@ -511,8 +494,6 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
 | 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
 | 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
-| 64 | ApprovalProgramPages | []byte | v7  | Approval Program as an array of pages |
-| 66 | ClearStateProgramPages | []byte | v7  | ClearState Program as an array of pages |
 
 
 ## gtxna
@@ -642,30 +623,6 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Stack: ..., A: uint64 &rarr; ...
 - immediately fail unless A is a non-zero number
 - Availability: v3
-
-## bury
-
-- Syntax: `bury N` ∋ N: depth
-- Bytecode: 0x45 {uint8}
-- Stack: ..., A &rarr; ...
-- replace the Nth value from the top of the stack with A. bury 0 fails.
-- Availability: v8
-
-## popn
-
-- Syntax: `popn N` ∋ N: stack depth
-- Bytecode: 0x46 {uint8}
-- Stack: ..., [N items] &rarr; ...
-- remove N values from the top of the stack
-- Availability: v8
-
-## dupn
-
-- Syntax: `dupn N` ∋ N: copy count
-- Bytecode: 0x47 {uint8}
-- Stack: ..., A &rarr; ..., A, [N copies of A]
-- duplicate A, N times
-- Availability: v8
 
 ## pop
 
@@ -816,68 +773,6 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 - A uint64 formed from a range of big-endian bytes from A starting at B up to but not including B+8. If B+8 is larger than the array length, the program fails
 - Availability: v5
 
-## replace2
-
-- Syntax: `replace2 S` ∋ S: start position
-- Bytecode: 0x5c {uint8}
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
-- Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)<br />`replace2` can be called using `replace` with 1 immediate.
-- Availability: v7
-
-## replace3
-
-- Bytecode: 0x5d
-- Stack: ..., A: []byte, B: uint64, C: []byte &rarr; ..., []byte
-- Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)<br />`replace3` can be called using `replace` with no immediates.
-- Availability: v7
-
-## base64_decode
-
-- Syntax: `base64_decode E` ∋ E: [base64](#field-group-base64)
-- Bytecode: 0x5e {uint8}
-- Stack: ..., A: []byte &rarr; ..., []byte
-- decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
-- **Cost**: 1 + 1 per 16 bytes of A
-- Availability: v7
-
-### base64
-
-Encodings
-
-| Index | Name | Notes |
-| - | ------ | --------- |
-| 0 | URLEncoding |  |
-| 1 | StdEncoding |  |
-
-
-*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.
-
- Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\n` and `\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\r`, or `\n`.
-
-## json_ref
-
-- Syntax: `json_ref R` ∋ R: [json_ref](#field-group-json_ref)
-- Bytecode: 0x5f {uint8}
-- Stack: ..., A: []byte, B: []byte &rarr; ..., any
-- key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
-- **Cost**: 25 + 2 per 7 bytes of A
-- Availability: v7
-
-### json_ref
-
-Types
-
-| Index | Name | Type | Notes |
-| - | ------ | -- | --------- |
-| 0 | JSONString | []byte |  |
-| 1 | JSONUint64 | uint64 |  |
-| 2 | JSONObject | []byte |  |
-
-
-*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.
-
-Almost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.
-
 ## balance
 
 - Bytecode: 0x60
@@ -886,7 +781,7 @@ Almost all smart contracts should use simpler and smaller methods (such as the [
 - Availability: v2
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## app_opted_in
 
@@ -1060,35 +955,6 @@ Fields
 
 params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.
 
-## acct_params_get
-
-- Syntax: `acct_params_get F` ∋ F: [acct_params](#field-group-acct_params)
-- Bytecode: 0x73 {uint8}
-- Stack: ..., A &rarr; ..., X: any, Y: bool
-- X is field F from account A. Y is 1 if A owns positive algos, else 0
-- Availability: v6
-- Mode: Application
-
-### acct_params
-
-Fields
-
-| Index | Name | Type | In | Notes |
-| - | ------ | -- | - | --------- |
-| 0 | AcctBalance | uint64 |      | Account balance in microalgos |
-| 1 | AcctMinBalance | uint64 |      | Minimum required balance for account, in microalgos |
-| 2 | AcctAuthAddr | address |      | Address the account is rekeyed to. |
-| 3 | AcctTotalNumUint | uint64 | v8  | The total number of uint64 values allocated by this account in Global and Local States. |
-| 4 | AcctTotalNumByteSlice | uint64 | v8  | The total number of byte array values allocated by this account in Global and Local States. |
-| 5 | AcctTotalExtraAppPages | uint64 | v8  | The number of extra app code pages used by this account. |
-| 6 | AcctTotalAppsCreated | uint64 | v8  | The number of existing apps created by this account. |
-| 7 | AcctTotalAppsOptedIn | uint64 | v8  | The number of apps this account is opted into. |
-| 8 | AcctTotalAssetsCreated | uint64 | v8  | The number of existing ASAs created by this account. |
-| 9 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account (including ASAs this account created). |
-| 10 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
-| 11 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes used by this account's app's box keys and values. |
-
-
 ## min_balance
 
 - Bytecode: 0x78
@@ -1097,7 +963,7 @@ Fields
 - Availability: v3
 - Mode: Application
 
-params: Txn.Accounts offset (or, since v4, an _available_ account address). Return: value.
+params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.
 
 ## pushbytes
 
@@ -1119,34 +985,6 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 pushint args are not added to the intcblock during assembly processes
 
-## pushbytess
-
-- Syntax: `pushbytess BYTES ...` ∋ BYTES ...: a list of byte constants
-- Bytecode: 0x82 {varuint count, [varuint length, bytes ...]}
-- Stack: ... &rarr; ..., [N items]
-- push sequences of immediate byte arrays to stack (first byte array being deepest)
-- Availability: v8
-
-pushbytess args are not added to the bytecblock during assembly processes
-
-## pushints
-
-- Syntax: `pushints UINT ...` ∋ UINT ...: a list of int constants
-- Bytecode: 0x83 {varuint count, [varuint ...]}
-- Stack: ... &rarr; ..., [N items]
-- push sequence of immediate uints to stack in the order they appear (first uint being deepest)
-- Availability: v8
-
-pushints args are not added to the intcblock during assembly processes
-
-## ed25519verify_bare
-
-- Bytecode: 0x84
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., bool
-- for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
-- **Cost**: 1900
-- Availability: v7
-
 ## callsub
 
 - Syntax: `callsub TARGET` ∋ TARGET: branch offset
@@ -1165,50 +1003,6 @@ The call stack is separate from the data stack. Only `callsub`, `retsub`, and `p
 - Availability: v4
 
 If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.
-
-## proto
-
-- Syntax: `proto A R` ∋ A: number of arguments, R: number of return values
-- Bytecode: 0x8a {uint8}, {uint8}
-- Stack: ... &rarr; ...
-- Prepare top call frame for a retsub that will assume A args and R return values.
-- Availability: v8
-
-Fails unless the last instruction executed was a `callsub`.
-
-## frame_dig
-
-- Syntax: `frame_dig I` ∋ I: frame slot
-- Bytecode: 0x8b {int8}
-- Stack: ... &rarr; ..., any
-- Nth (signed) value from the frame pointer.
-- Availability: v8
-
-## frame_bury
-
-- Syntax: `frame_bury I` ∋ I: frame slot
-- Bytecode: 0x8c {int8}
-- Stack: ..., A &rarr; ...
-- replace the Nth (signed) value from the frame pointer in the stack with A
-- Availability: v8
-
-## switch
-
-- Syntax: `switch TARGET ...` ∋ TARGET ...: list of labels
-- Bytecode: 0x8d {varuint count, [int16 (big-endian) ...]}
-- Stack: ..., A: uint64 &rarr; ...
-- branch to the Ath label. Continue at following instruction if index A exceeds the number of labels.
-- Availability: v8
-
-## match
-
-- Syntax: `match TARGET ...` ∋ TARGET ...: list of labels
-- Bytecode: 0x8e {varuint count, [int16 (big-endian) ...]}
-- Stack: ..., [A1, A2, ..., AN], B &rarr; ...
-- given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.
-- Availability: v8
-
-`match` consumes N+1 values from the stack. Let the top stack value be B. The following N values represent an ordered list of match cases/constants (A), where the first value (A[0]) is the deepest in the stack. The immediate arguments are an ordered list of N labels (T). `match` will branch to target T[I], where A[I] = B. If there are no matches then execution continues on to the next instruction.
 
 ## shl
 
@@ -1255,31 +1049,6 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 - A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1
 - **Cost**: 10
 - Availability: v4
-
-## bsqrt
-
-- Bytecode: 0x96
-- Stack: ..., A: []byte &rarr; ..., []byte
-- The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers
-- **Cost**: 40
-- Availability: v6
-
-## divw
-
-- Bytecode: 0x97
-- Stack: ..., A: uint64, B: uint64, C: uint64 &rarr; ..., uint64
-- A,B / C. Fail if C == 0 or if result overflows.
-- Availability: v6
-
-The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.
-
-## sha3_256
-
-- Bytecode: 0x98
-- Stack: ..., A: []byte &rarr; ..., []byte
-- SHA3_256 hash of value A, yields [32]byte
-- **Cost**: 130
-- Availability: v7
 
 ## b+
 
@@ -1461,96 +1230,6 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 - Availability: v5
 - Mode: Application
 
-## itxn_next
-
-- Bytecode: 0xb6
-- Stack: ... &rarr; ...
-- begin preparation of a new inner transaction in the same transaction group
-- Availability: v6
-- Mode: Application
-
-`itxn_next` initializes the transaction exactly as `itxn_begin` does
-
-## gitxn
-
-- Syntax: `gitxn T F` ∋ T: transaction group index, F: [txn](#field-group-txn)
-- Bytecode: 0xb7 {uint8}, {uint8}
-- Stack: ... &rarr; ..., any
-- field F of the Tth transaction in the last inner group submitted
-- Availability: v6
-- Mode: Application
-
-## gitxna
-
-- Syntax: `gitxna T F I` ∋ T: transaction group index, F: [txna](#field-group-txna), I: transaction field array index
-- Bytecode: 0xb8 {uint8}, {uint8}, {uint8}
-- Stack: ... &rarr; ..., any
-- Ith value of the array field F from the Tth transaction in the last inner group submitted
-- Availability: v6
-- Mode: Application
-
-## box_create
-
-- Bytecode: 0xb9
-- Stack: ..., A: boxName, B: uint64 &rarr; ..., bool
-- create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
-- Availability: v8
-- Mode: Application
-
-Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.
-
-## box_extract
-
-- Bytecode: 0xba
-- Stack: ..., A: boxName, B: uint64, C: uint64 &rarr; ..., []byte
-- read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
-- Availability: v8
-- Mode: Application
-
-## box_replace
-
-- Bytecode: 0xbb
-- Stack: ..., A: boxName, B: uint64, C: []byte &rarr; ...
-- write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.
-- Availability: v8
-- Mode: Application
-
-## box_del
-
-- Bytecode: 0xbc
-- Stack: ..., A: boxName &rarr; ..., bool
-- delete box named A if it exists. Return 1 if A existed, 0 otherwise
-- Availability: v8
-- Mode: Application
-
-## box_len
-
-- Bytecode: 0xbd
-- Stack: ..., A: boxName &rarr; ..., X: uint64, Y: bool
-- X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.
-- Availability: v8
-- Mode: Application
-
-## box_get
-
-- Bytecode: 0xbe
-- Stack: ..., A: boxName &rarr; ..., X: []byte, Y: bool
-- X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.
-- Availability: v8
-- Mode: Application
-
-For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
-
-## box_put
-
-- Bytecode: 0xbf
-- Stack: ..., A: boxName, B: []byte &rarr; ...
-- replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist
-- Availability: v8
-- Mode: Application
-
-For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`
-
 ## txnas
 
 - Syntax: `txnas F` ∋ F: [txna](#field-group-txna)
@@ -1582,67 +1261,3 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 - Ath LogicSig argument
 - Availability: v5
 - Mode: Signature
-
-## gloadss
-
-- Bytecode: 0xc4
-- Stack: ..., A: uint64, B: uint64 &rarr; ..., any
-- Bth scratch space value of the Ath transaction in the current group
-- Availability: v6
-- Mode: Application
-
-## itxnas
-
-- Syntax: `itxnas F` ∋ F: [txna](#field-group-txna)
-- Bytecode: 0xc5 {uint8}
-- Stack: ..., A: uint64 &rarr; ..., any
-- Ath value of the array field F of the last inner transaction
-- Availability: v6
-- Mode: Application
-
-## gitxnas
-
-- Syntax: `gitxnas T F` ∋ T: transaction group index, F: [txna](#field-group-txna)
-- Bytecode: 0xc6 {uint8}, {uint8}
-- Stack: ..., A: uint64 &rarr; ..., any
-- Ath value of the array field F from the Tth transaction in the last inner group submitted
-- Availability: v6
-- Mode: Application
-
-## vrf_verify
-
-- Syntax: `vrf_verify S` ∋ S: [vrf_verify](#field-group-vrf_verify)
-- Bytecode: 0xd0 {uint8}
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., X: []byte, Y: bool
-- Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
-- **Cost**: 5700
-- Availability: v7
-
-### vrf_verify
-
-Standards
-
-| Index | Name | Notes |
-| - | ------ | --------- |
-| 0 | VrfAlgorand |  |
-
-
-`VrfAlgorand` is the VRF used in Algorand. It is ECVRF-ED25519-SHA512-Elligator2, specified in the IETF internet draft [draft-irtf-cfrg-vrf-03](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vrf/03/).
-
-## block
-
-- Syntax: `block F` ∋ F: [block](#field-group-block)
-- Bytecode: 0xd1 {uint8}
-- Stack: ..., A: uint64 &rarr; ..., any
-- field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)
-- Availability: v7
-
-### block
-
-Fields
-
-| Index | Name | Type | Notes |
-| - | ------ | -- | --------- |
-| 0 | BlkSeed | []byte |  |
-| 1 | BlkTimestamp | uint64 |  |
-
