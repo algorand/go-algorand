@@ -691,7 +691,7 @@ func (cfg Local) IsGossipServer() bool {
 	return cfg.NetAddress != ""
 }
 
-// ensureAbsGenesisDir will convert a path to absolute, and if make is set, will attempt to make a directory there
+// ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there
 func ensureAbsGenesisDir(path string, genesisID string) (string, error) {
 	pathAbs, err := filepath.Abs(path)
 	if err != nil {
