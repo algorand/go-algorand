@@ -18,22 +18,67 @@ package dht
 
 import (
 	"context"
-	"testing"
-
+	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
+	"testing"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestDHTBasic(t *testing.T) {
 	h, err := libp2p.New()
 	require.NoError(t, err)
-	dht, err := MakeDHT(context.Background(), h, "devtestnet", []*peer.AddrInfo{})
+	dht, err := MakeDHT(context.Background(), h, "devtestnet", config.GetDefaultLocal(), []*peer.AddrInfo{})
 	require.NoError(t, err)
 	_, err = MakeDiscovery(dht)
 	require.NoError(t, err)
 	err = dht.Bootstrap(context.Background())
 	require.NoError(t, err)
+}
+
+func TestDHTBasicAlgodev(t *testing.T) {
+	logging.SetDebugLogging()
+	h, err := libp2p.New()
+	require.NoError(t, err)
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "<network>.algodev.network"
+	dht, err := MakeDHT(context.Background(), h, "betanet", cfg, []*peer.AddrInfo{})
+	require.NoError(t, err)
+	_, err = MakeDiscovery(dht)
+	require.NoError(t, err)
+	err = dht.Bootstrap(context.Background())
+	require.NoError(t, err)
+}
+
+func TestGetBootstrapPeers(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "<network>.algodev.network"
+	cfg.DNSSecurityFlags = 0
+
+	addrs := getBootstrapPeersFunc(cfg, "test")()
+
+	require.GreaterOrEqual(t, len(addrs), 1)
+	addr := addrs[0]
+	require.Equal(t, len(addr.Addrs), 1)
+	require.GreaterOrEqual(t, len(addr.Addrs), 1)
+}
+
+func TestGetBootstrapPeersFailure(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "non-existent.algodev.network"
+
+	addrs := getBootstrapPeersFunc(cfg, "test")()
+
+	require.Equal(t, 0, len(addrs))
 }
 
 func TestTopicCid(t *testing.T) {

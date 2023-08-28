@@ -30,24 +30,52 @@ import (
 	crouting "github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
+	algoproto "github.com/algorand/go-algorand/protocol"
 )
 
 const minBackoff = time.Second * 5
 const maxBackoff = time.Second * 20
 const baseBackoff = float64(1)
 
+// getBootstrapPeersFunc looks up a list of Multiaddrs strings from the dnsaddr records at the primary
+// SRV record domain.
+func getBootstrapPeersFunc(cfg config.Local, network string) func() []peer.AddrInfo {
+	return func() []peer.AddrInfo {
+		var addrs []peer.AddrInfo
+		bootstraps := cfg.DNSBootstrapArray(algoproto.NetworkID(network))
+		for _, dnsBootstrap := range bootstraps {
+			controller := dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), "")
+			resolvedAddrs, err := dnsaddr.MultiaddrsFromResolver(dnsBootstrap.PrimarySRVBootstrap, controller)
+			if err != nil {
+				continue
+			}
+			for _, resolvedAddr := range resolvedAddrs {
+				info, err0 := peer.AddrInfoFromP2pAddr(resolvedAddr)
+				if err0 != nil {
+					continue
+				}
+				addrs = append(addrs, *info)
+			}
+		}
+		return addrs
+	}
+}
+
 func dhtProtocolPrefix(network string) protocol.ID {
 	return protocol.ID(fmt.Sprintf("/algorand/kad/%s", network))
 }
 
-func MakeDHT(ctx context.Context, h host.Host, network string, bootstrapPeers []*peer.AddrInfo) (*dht.IpfsDHT, error) {
+func MakeDHT(ctx context.Context, h host.Host, network string, cfg config.Local, bootstrapPeers []*peer.AddrInfo) (*dht.IpfsDHT, error) {
 	var peers []peer.AddrInfo
 	for _, peer := range bootstrapPeers {
 		if peer != nil {
 			peers = append(peers, *peer)
 		}
 	}
-	cfg := []dht.Option{
+	dhtCfg := []dht.Option{
 		// Automatically determine server or client mode
 		dht.Mode(dht.ModeAutoServer),
 		// We don't need the value store right now
@@ -55,7 +83,10 @@ func MakeDHT(ctx context.Context, h host.Host, network string, bootstrapPeers []
 		dht.ProtocolPrefix(dhtProtocolPrefix(network)),
 		dht.BootstrapPeers(peers...),
 	}
-	return dht.New(ctx, h, cfg...)
+	if len(bootstrapPeers) == 0 {
+		dhtCfg = append(dhtCfg, dht.BootstrapPeersFunc(getBootstrapPeersFunc(cfg, network)))
+	}
+	return dht.New(ctx, h, dhtCfg...)
 }
 
 func backoffFactory() backoff.BackoffFactory {

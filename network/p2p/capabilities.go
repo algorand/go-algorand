@@ -109,7 +109,7 @@ func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, datadir st
 		return nil, err
 	}
 	h, err := makeHost(cfg, datadir, pstore)
-	discDht, err := algoDht.MakeDHT(ctx, h, network, bootstrapPeers)
+	discDht, err := algoDht.MakeDHT(ctx, h, network, cfg, bootstrapPeers)
 	if err != nil {
 		return nil, err
 	}

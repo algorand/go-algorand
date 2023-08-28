@@ -69,9 +69,10 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 	var hosts []host.Host
 	var bootstrapPeers []*peer.AddrInfo
 	var dhts []*dht.IpfsDHT
+	cfg := config.GetDefaultLocal()
 	for i := 0; i < numHosts; i++ {
 		tmpdir := t.TempDir()
-		pk, err := GetPrivKey(config.GetDefaultLocal(), tmpdir)
+		pk, err := GetPrivKey(cfg, tmpdir)
 		require.NoError(t, err)
 		ps, err := peerstore.NewPeerStore([]*peer.AddrInfo{})
 		require.NoError(t, err)
@@ -84,7 +85,7 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 		bootstrapPeers = append(bootstrapPeers, &peer.AddrInfo{ID: h.ID(), Addrs: h.Addrs()})
 	}
 	for _, h := range hosts {
-		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", bootstrapPeers)
+		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, bootstrapPeers)
 		require.NoError(t, err)
 		err = ht.Bootstrap(context.Background())
 		require.NoError(t, err)
