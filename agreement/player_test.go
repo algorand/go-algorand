@@ -416,7 +416,8 @@ func testPlayerSetup() (player, rootRouter, testAccountData, testBlockFactory, L
 	accs := testAccountData{addresses: addresses, vrfs: vrfSecrets, ots: otSecrets}
 	round := ledger.NextRound()
 	period := period(0)
-	player := player{Round: round, Period: period, Step: soft}
+	historyBuffer := makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
+	player := player{Round: round, Period: period, Step: soft, lowestCredentialArrivals: historyBuffer}
 
 	var p actor = ioLoggedActor{checkedActor{actor: &player, actorContract: playerContract{}}, playerTracer}
 	router := routerFixture
@@ -500,7 +501,8 @@ func TestPlayerLateBlockProposalPeriod0(t *testing.T) {
 
 func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
 	// Set up a composed test machine starting at specified rps
-	rRouter := makeRootRouter(player{Round: r, Period: p, Step: s, Deadline: Deadline{Duration: FilterTimeout(p, protocol.ConsensusCurrentVersion), Type: TimeoutFilter}})
+	history := makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
+	rRouter := makeRootRouter(player{Round: r, Period: p, Step: s, Deadline: Deadline{Duration: FilterTimeout(p, protocol.ConsensusCurrentVersion), Type: TimeoutFilter}, lowestCredentialArrivals: history})
 	concreteMachine := ioAutomataConcretePlayer{rootRouter: &rRouter}
 	plyr = concreteMachine.underlying()
 	pMachine = &concreteMachine
