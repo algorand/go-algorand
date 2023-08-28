@@ -106,14 +106,16 @@ func TestDHTTwoPeers(t *testing.T) {
 	for i, ht := range dhts {
 		disc, err := algodht.MakeDiscovery(ht)
 		require.NoError(t, err)
-		refreshCtx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		refreshCtx, refCancel := context.WithTimeout(context.Background(), time.Second*5)
 	peersPopulated:
 		for {
 			select {
 			case <-refreshCtx.Done():
+				refCancel()
 				require.Fail(t, "failed to populate routing table before timeout")
 			default:
 				if ht.RoutingTable().Size() > 0 {
+					refCancel()
 					break peersPopulated
 				}
 			}
@@ -121,7 +123,7 @@ func TestDHTTwoPeers(t *testing.T) {
 		_, err = disc.Advertise(context.Background(), topic)
 		require.NoError(t, err)
 
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		var advertisers []peer.AddrInfo
 		peersChan, err := disc.FindPeers(ctx, topic, discovery.Limit(numAdvertisers))
 	pollingForPeers:
@@ -136,6 +138,7 @@ func TestDHTTwoPeers(t *testing.T) {
 				}
 			}
 		}
+		cancel()
 		// Returned peers will include the querying node's ID since it advertises for the topic as well
 		require.Equal(t, i+1, len(advertisers))
 	}

@@ -68,6 +68,7 @@ func dhtProtocolPrefix(network string) protocol.ID {
 	return protocol.ID(fmt.Sprintf("/algorand/kad/%s", network))
 }
 
+// MakeDHT creates the dht.IpfsDHT object
 func MakeDHT(ctx context.Context, h host.Host, network string, cfg config.Local, bootstrapPeers []*peer.AddrInfo) (*dht.IpfsDHT, error) {
 	var peers []peer.AddrInfo
 	for _, peer := range bootstrapPeers {
@@ -93,6 +94,7 @@ func backoffFactory() backoff.BackoffFactory {
 	return backoff.NewExponentialDecorrelatedJitter(minBackoff, maxBackoff, baseBackoff, rand.New(rand.NewSource(rand.Int63())))
 }
 
+// MakeDiscovery creates a discovery.Discovery object using backoff and cacching
 func MakeDiscovery(r crouting.ContentRouting) (discovery.Discovery, error) {
 	return backoff.NewBackoffDiscovery(routing.NewRoutingDiscovery(r), backoffFactory(), backoff.WithBackoffDiscoveryReturnedChannelSize(0), backoff.WithBackoffDiscoverySimultaneousQueryBufferSize(0))
 }

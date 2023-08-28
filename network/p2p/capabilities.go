@@ -33,11 +33,14 @@ import (
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 )
 
+// Capability represents functions that some nodes may provide and other nodes would want to know about
 type Capability string
 
 const (
-	Archival    Capability = "archival"
-	Catchpoints            = "catchpointStoring"
+	// Archival nodes
+	Archival Capability = "archival"
+	// Catchpoints storing nodes
+	Catchpoints = "catchpointStoring"
 )
 
 const operationTimeout = time.Second * 5
@@ -89,16 +92,12 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 	if err != nil {
 		return nil, err
 	}
-pollingForPeers:
-	for {
-		select {
-		case p, open := <-peersChan:
-			if p.ID.Size() > 0 {
-				peers = append(peers, p)
-			}
-			if !open || len(peers) >= n {
-				break pollingForPeers
-			}
+	for p := range peersChan {
+		if p.ID.Size() > 0 {
+			peers = append(peers, p)
+		}
+		if len(peers) >= n {
+			break
 		}
 	}
 	return peers, nil
@@ -152,6 +151,9 @@ func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, datadir st
 		return nil, err
 	}
 	h, err := makeHost(cfg, datadir, pstore)
+	if err != nil {
+		return nil, err
+	}
 	discDht, err := algoDht.MakeDHT(ctx, h, network, cfg, bootstrapPeers)
 	if err != nil {
 		return nil, err

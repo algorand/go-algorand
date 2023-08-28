@@ -216,8 +216,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	if cfg.EnableDHTProviders {
-		caps, err := p2p.MakeCapabilitiesDiscovery(node.ctx, node.config, node.rootDir, string(genesis.Network), node.log, []*peer.AddrInfo{})
-		if err != nil {
+		caps, err0 := p2p.MakeCapabilitiesDiscovery(node.ctx, node.config, node.rootDir, string(genesis.Network), node.log, []*peer.AddrInfo{})
+		if err0 != nil {
 			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
 			return nil, err
 		}

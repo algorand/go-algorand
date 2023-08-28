@@ -21,13 +21,13 @@ package p2p
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/algorand/go-algorand/util"
 	"os"
 	"path"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/util"
 )
 
 // DefaultPrivKeyPath is the default path inside the node's root directory at which the private key
