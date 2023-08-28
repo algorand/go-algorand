@@ -324,9 +324,9 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 		clampedTimeout = defaultTimeout
 	}
 	tracer.log.Debugf("round %d, period %d: dynamicTimeout = %d, clamped timeout = %d", p.Round, p.Period, dynamicTimeout, clampedTimeout)
-	dynamicTimeout = clampedTimeout
 	// store dynamicFilterTimeout on the player for debugging & reporting
 	p.dynamicFilterTimeout = dynamicTimeout
+	dynamicTimeout = clampedTimeout
 
 	if !proto.DynamicFilterTimeout {
 		// If the dynamic filter timeout is disabled, return the default filter
