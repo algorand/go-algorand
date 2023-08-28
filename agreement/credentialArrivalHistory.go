@@ -21,6 +21,7 @@ import (
 	"time"
 )
 
+// credentialArrivalHistory maintains a circular buffer of time.Duration samples.
 type credentialArrivalHistory struct {
 	history  []time.Duration
 	writePtr int
