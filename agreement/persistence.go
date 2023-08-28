@@ -271,6 +271,8 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect
 		a2 = append(a2, act)
 	}
 
+	p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
+
 	t = t2
 	rr = rr2
 	p = p2
