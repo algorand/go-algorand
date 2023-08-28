@@ -20,11 +20,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCredentialHistoryStore(t *testing.T) {
-	// partitiontest.PartitionTest(t)
+	partitiontest.PartitionTest(t)
+
 	size := 5
 	buffer := makeCredentialArrivalHistory(size)
 	// last store call overwrites the first one
@@ -40,7 +42,8 @@ func TestCredentialHistoryStore(t *testing.T) {
 }
 
 func TestCredentialHistoryReset(t *testing.T) {
-	// partitiontest.PartitionTest(t)
+	partitiontest.PartitionTest(t)
+
 	size := 5
 	buffer := makeCredentialArrivalHistory(size)
 	// last store call overwrites the first one
@@ -92,7 +95,8 @@ func TestCredentialHistoryIsFull(t *testing.T) {
 }
 
 func TestCredentialHisotyZeroSize(t *testing.T) {
-	// partitiontest.PartitionTest(t)
+	partitiontest.PartitionTest(t)
+
 	var buffer credentialArrivalHistory
 	require.False(t, buffer.isFull())
 
@@ -108,7 +112,8 @@ func TestCredentialHisotyZeroSize(t *testing.T) {
 }
 
 func TestOrderStatistics(t *testing.T) {
-	// partitiontest.PartitionTest(t)
+	partitiontest.PartitionTest(t)
+
 	size := 5
 	buffer := makeCredentialArrivalHistory(size)
 	require.False(t, buffer.isFull())
