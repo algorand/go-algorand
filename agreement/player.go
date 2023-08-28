@@ -61,7 +61,7 @@ type player struct {
 
 	// the history of arrival times of the lowest credential from previous
 	// ronuds, used for calculating the filter timeout dynamically.
-	lowestCredentialArrivals *credentialArrivalHistory
+	lowestCredentialArrivals credentialArrivalHistory
 
 	// The period 0 dynamic filter timeout calculated for this round, if set,
 	// even if dynamic filter timeouts are not enabled. It is used for reporting
@@ -300,9 +300,6 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 		return 0
 	}
 
-	if p.lowestCredentialArrivals == nil {
-		p.lowestCredentialArrivals = newCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
-	}
 	p.lowestCredentialArrivals.store(re.Vote.validatedAt)
 	return re.Vote.validatedAt
 }
@@ -418,7 +415,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	if target != 0 {
 		// We entered a non-0 period, we should reset the filter timeout
 		// calculation mechanism.
-		p.lowestCredentialArrivals = nil
+		p.lowestCredentialArrivals.reset()
 	}
 	p.Deadline = Deadline{Duration: p.calculateFilterTimeout(source.Proto, r.t), Type: TimeoutFilter}
 

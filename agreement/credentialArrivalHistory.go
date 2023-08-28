@@ -28,13 +28,13 @@ type credentialArrivalHistory struct {
 	full     bool
 }
 
-func newCredentialArrivalHistory(size int) *credentialArrivalHistory {
+func makeCredentialArrivalHistory(size int) credentialArrivalHistory {
 	if size < 0 {
 		panic("can't create CredentialArrivalHistory with negative size")
 	}
 	history := credentialArrivalHistory{history: make([]time.Duration, size)}
 	history.reset()
-	return &history
+	return history
 }
 
 // store saves a new sample into the circular buffer.
@@ -60,10 +60,6 @@ func (history *credentialArrivalHistory) reset() {
 
 // isFull checks if the circular buffer has been fully populated at least once.
 func (history *credentialArrivalHistory) isFull() bool {
-	// if the history struct wasn't allocated, then it can't be full
-	if history == nil {
-		return false
-	}
 	return history.full
 }
 
