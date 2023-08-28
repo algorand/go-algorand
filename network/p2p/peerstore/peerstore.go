@@ -142,12 +142,8 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 	// Remove the expired elements from e.data[addr].recentConnectionTimes
 	ps.popNElements(numElmtsToRemove, peer.ID(addr))
 	// If there are max number of connections within the time window, wait
-	connectionsRateLimitingCount, err := ps.Get("peerID", "connectionsRateLimitingCount")
-	if err != nil {
-		return false, 0 /* not used */, curTime /* not used */
-	}
 	numElts := len(ad.recentConnectionTimes)
-	if uint(numElts) >= connectionsRateLimitingCount.(uint) {
+	if uint(numElts) >= ps.connectionsRateLimitingCount {
 		return true, /* true */
 			ps.connectionsRateLimitingWindow - timeSince, curTime /* not used */
 	}
@@ -172,13 +168,13 @@ func (ps *PeerStore) UpdateConnectionTime(addr string, provisionalTime time.Time
 		return false
 	}
 	ad := metadata.(addressData)
-	entry := ad.recentConnectionTimes
 	defer func() {
-		_ = ps.Put(info.ID, "addressData", entry)
+		_ = ps.Put(info.ID, "addressData", ad)
 
 	}()
 
 	// Find the provisionalTime and update it
+	entry := ad.recentConnectionTimes
 	for indx, val := range entry {
 		if provisionalTime == val {
 			entry[indx] = time.Now()
@@ -190,6 +186,7 @@ func (ps *PeerStore) UpdateConnectionTime(addr string, provisionalTime time.Time
 	// This may happen when the time expires before the connection was established with the server.
 	// The time should be added again.
 	entry = append(entry, time.Now())
+	ad.recentConnectionTimes = entry
 
 	return true
 }
@@ -265,7 +262,7 @@ func (ps *PeerStore) AddPersistentPeers(dnsAddresses []string, networkName strin
 
 // Length returns the number of addrs in peerstore
 func (ps *PeerStore) Length() int {
-	return len(ps.PeersWithKeys())
+	return len(ps.Peers())
 }
 
 // makePhonebookEntryData creates a new address entry for provided network name and role.
@@ -319,7 +316,7 @@ func (ps *PeerStore) filterRetryTime(t time.Time, role network.PhoneBookEntryRol
 		if data != nil {
 			ad := data.(addressData)
 			if t.After(ad.retryAfter) && role == ad.role {
-				o = append(o, peerID.String())
+				o = append(o, string(peerID))
 			}
 		}
 	}

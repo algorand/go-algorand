@@ -138,85 +138,61 @@ func testPhonebookUniform(t *testing.T, set []string, ph network.Phonebook, gets
 	}
 }
 
-func generateMultiAddrs(n int) ([]string, []string) {
-	var multiaddrs []string
-	var ids []string
-
-	for i := 0; i < n; i++ {
-		privKey, _, _ := libp2p_crypto.GenerateEd25519Key(rand.Reader)
-		peerID, _ := peer.IDFromPrivateKey(privKey)
-		ids = append(ids, peerID.String())
-		multiaddrs = append(multiaddrs, fmt.Sprintf("/ip4/198.51.100.0/tcp/4242/p2p/%s", peerID.String()))
-
-	}
-	return multiaddrs, ids
-}
 func TestArrayPhonebookAll(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
-	var peerIDs []string
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
 		entry := makePhonebookEntryData("", network.PhoneBookEntryRelayRole, false)
 		info, _ := PeerInfoFromDomainPort(addr)
-		peerIDs = append(peerIDs, info.ID.String())
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, "addressData", entry)
 	}
-	testPhonebookAll(t, peerIDs, ph)
+	testPhonebookAll(t, set, ph)
 }
 
 func TestArrayPhonebookUniform1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
-	var peerIDs []string
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
 		entry := makePhonebookEntryData("", network.PhoneBookEntryRelayRole, false)
 		info, _ := PeerInfoFromDomainPort(addr)
-		peerIDs = append(peerIDs, info.ID.String())
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, "addressData", entry)
 	}
-	testPhonebookUniform(t, peerIDs, ph, 1)
+	testPhonebookUniform(t, set, ph, 1)
 }
 
 func TestArrayPhonebookUniform3(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
-	var peerIDs []string
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
 		entry := makePhonebookEntryData("", network.PhoneBookEntryRelayRole, false)
 		info, _ := PeerInfoFromDomainPort(addr)
-		peerIDs = append(peerIDs, info.ID.String())
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, "addressData", entry)
 	}
-	testPhonebookUniform(t, peerIDs, ph, 3)
+	testPhonebookUniform(t, set, ph, 3)
 }
 
 func TestMultiPhonebook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
-	var peerIDs []string
 	pha := make([]string, 0)
 	for _, e := range set[:5] {
-		info, _ := PeerInfoFromDomainPort(e)
-		peerIDs = append(peerIDs, info.ID.String())
 		pha = append(pha, e)
 	}
 	phb := make([]string, 0)
 	for _, e := range set[5:] {
-		info, _ := PeerInfoFromDomainPort(e)
-		peerIDs = append(peerIDs, info.ID.String())
 		phb = append(phb, e)
 	}
 
@@ -225,9 +201,9 @@ func TestMultiPhonebook(t *testing.T) {
 	ph.ReplacePeerList(pha, "pha", network.PhoneBookEntryRelayRole)
 	ph.ReplacePeerList(phb, "phb", network.PhoneBookEntryRelayRole)
 
-	testPhonebookAll(t, peerIDs, ph)
-	testPhonebookUniform(t, peerIDs, ph, 1)
-	testPhonebookUniform(t, peerIDs, ph, 3)
+	testPhonebookAll(t, set, ph)
+	testPhonebookUniform(t, set, ph, 1)
+	testPhonebookUniform(t, set, ph, 3)
 }
 
 // TestMultiPhonebookPersistentPeers validates that the peers added via Phonebook.AddPersistentPeers
@@ -236,23 +212,13 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	persistentPeers := []string{"a:4041"}
-	var persistentPeerIDs []string
-	for _, pp := range persistentPeers {
-		info, _ := PeerInfoFromDomainPort(pp)
-		persistentPeerIDs = append(persistentPeerIDs, info.ID.String())
-	}
 	set := []string{"b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
-	var peerIDs []string
 	pha := make([]string, 0)
 	for _, e := range set[:5] {
-		info, _ := PeerInfoFromDomainPort(e)
-		peerIDs = append(peerIDs, info.ID.String())
 		pha = append(pha, e)
 	}
 	phb := make([]string, 0)
 	for _, e := range set[5:] {
-		info, _ := PeerInfoFromDomainPort(e)
-		peerIDs = append(peerIDs, info.ID.String())
 		phb = append(phb, e)
 	}
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
@@ -262,9 +228,194 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	ph.ReplacePeerList(pha, "pha", network.PhoneBookEntryRelayRole)
 	ph.ReplacePeerList(phb, "phb", network.PhoneBookEntryRelayRole)
 
-	testPhonebookAll(t, append(peerIDs, persistentPeerIDs...), ph)
+	testPhonebookAll(t, append(set, persistentPeers...), ph)
 	allAddresses := ph.GetAddresses(len(set)+len(persistentPeers), network.PhoneBookEntryRelayRole)
-	for _, pp := range persistentPeerIDs {
+	for _, pp := range persistentPeers {
 		require.Contains(t, allAddresses, pp)
+	}
+}
+
+func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	set := []string{"b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
+	pha := make([]string, 0)
+	for _, e := range set[:7] {
+		pha = append(pha, e)
+	}
+	phb := make([]string, 0)
+	for _, e := range set[3:] {
+		phb = append(phb, e)
+	}
+	ph, err := MakePhonebook(1, 1*time.Millisecond)
+	require.NoError(t, err)
+	ph.ReplacePeerList(pha, "pha", network.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(phb, "phb", network.PhoneBookEntryRelayRole)
+
+	testPhonebookAll(t, set, ph)
+	testPhonebookUniform(t, set, ph, 1)
+	testPhonebookUniform(t, set, ph, 3)
+}
+
+func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// make the connectionsRateLimitingWindow long enough to avoid triggering it when the
+	// test is running in a slow environment
+	// The test will artificially simulate time passing
+	timeUnit := 2000 * time.Second
+	connectionsRateLimitingWindow := 2 * timeUnit
+	entries, err := MakePhonebook(3, connectionsRateLimitingWindow)
+	require.NoError(t, err)
+	addr1 := "addrABC:4040"
+	addr2 := "addrXYZ:4041"
+	info1, _ := PeerInfoFromDomainPort(addr1)
+	info2, _ := PeerInfoFromDomainPort(addr2)
+
+	// Address not in. Should return false
+	addrInPhonebook, _, provisionalTime := entries.GetConnectionWaitTime(addr1)
+	require.Equal(t, false, addrInPhonebook)
+	require.Equal(t, false, entries.UpdateConnectionTime(addr1, provisionalTime))
+
+	// Test the addresses are populated in the phonebook and a
+	// time can be added to one of them
+	entries.ReplacePeerList([]string{addr1, addr2}, "default", network.PhoneBookEntryRelayRole)
+	addrInPhonebook, waitTime, provisionalTime := entries.GetConnectionWaitTime(addr1)
+	require.Equal(t, true, addrInPhonebook)
+	require.Equal(t, time.Duration(0), waitTime)
+	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
+	data, _ := entries.Get(info1.ID, "addressData")
+	require.NotNil(t, data)
+	ad := data.(addressData)
+	phBookData := ad.recentConnectionTimes
+	require.Equal(t, 1, len(phBookData))
+
+	// simulate passing a unit of time
+	for rct := range phBookData {
+		phBookData[rct] = phBookData[rct].Add(-1 * timeUnit)
+	}
+
+	// add another value to addr
+	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
+	require.Equal(t, time.Duration(0), waitTime)
+	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
+	data, _ = entries.Get(info1.ID, "addressData")
+	ad = data.(addressData)
+	phBookData = ad.recentConnectionTimes
+	require.Equal(t, 2, len(phBookData))
+
+	// simulate passing a unit of time
+	for rct := range phBookData {
+		phBookData[rct] = phBookData[rct].Add(-1 * timeUnit)
+	}
+
+	// the first time should be removed and a new one added
+	// there should not be any wait
+	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
+	require.Equal(t, time.Duration(0), waitTime)
+	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
+	data, _ = entries.Get(info1.ID, "addressData")
+	ad = data.(addressData)
+	phBookData2 := ad.recentConnectionTimes
+	require.Equal(t, 2, len(phBookData2))
+
+	// make sure the right time was removed
+	require.Equal(t, phBookData[1], phBookData2[0])
+	require.Equal(t, true, phBookData2[0].Before(phBookData2[1]))
+
+	// try requesting from another address, make sure
+	// a separate array is used for these new requests
+
+	// add 3 values to another address. should not wait
+	// value 1
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	require.Equal(t, time.Duration(0), waitTime)
+	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
+
+	// introduce a gap between the two requests so that only the first will be removed later when waited
+	// simulate passing a unit of time
+	data2, _ := entries.Get(info2.ID, "addressData")
+	require.NotNil(t, data2)
+	ad2 := data2.(addressData)
+	for rct := range ad2.recentConnectionTimes {
+		ad2.recentConnectionTimes[rct] = ad2.recentConnectionTimes[rct].Add(-1 * timeUnit)
+	}
+
+	// value 2
+	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	require.Equal(t, time.Duration(0), waitTime)
+	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
+	// value 3
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	require.Equal(t, time.Duration(0), waitTime)
+	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
+
+	data2, _ = entries.Get(info2.ID, "addressData")
+	ad2 = data2.(addressData)
+	phBookData = ad2.recentConnectionTimes
+	// all three times should be queued
+	require.Equal(t, 3, len(phBookData))
+
+	// add another element to trigger wait
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	require.Greater(t, int64(waitTime), int64(0))
+	// no element should be removed
+	data2, _ = entries.Get(info2.ID, "addressData")
+	ad2 = data2.(addressData)
+	phBookData2 = ad2.recentConnectionTimes
+	require.Equal(t, phBookData[0], phBookData2[0])
+	require.Equal(t, phBookData[1], phBookData2[1])
+	require.Equal(t, phBookData[2], phBookData2[2])
+
+	// simulate passing of the waitTime duration
+	for rct := range ad2.recentConnectionTimes {
+		ad2.recentConnectionTimes[rct] = ad2.recentConnectionTimes[rct].Add(-1 * waitTime)
+	}
+
+	// The wait should be sufficient
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	require.Equal(t, time.Duration(0), waitTime)
+	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
+	// only one element should be removed, and one added
+	data2, _ = entries.Get(info2.ID, "addressData")
+	ad2 = data2.(addressData)
+	phBookData2 = ad2.recentConnectionTimes
+	require.Equal(t, 3, len(phBookData2))
+
+	// make sure the right time was removed
+	require.Equal(t, phBookData[1], phBookData2[0])
+	require.Equal(t, phBookData[2], phBookData2[1])
+}
+
+// TestPhonebookRoles tests that the filtering by roles for different
+// phonebooks entries works as expected.
+func TestPhonebookRoles(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	relaysSet := []string{"relay1:4040", "relay2:4041", "relay3:4042"}
+	archiverSet := []string{"archiver1:1111", "archiver2:1112", "archiver3:1113"}
+
+	ph, err := MakePhonebook(1, 1)
+	require.NoError(t, err)
+	ph.ReplacePeerList(relaysSet, "default", network.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(archiverSet, "default", network.PhoneBookEntryArchiverRole)
+	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.Peers()))
+	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
+
+	for _, role := range []network.PhoneBookEntryRoles{network.PhoneBookEntryRelayRole, network.PhoneBookEntryArchiverRole} {
+		for k := 0; k < 100; k++ {
+			for l := 0; l < 3; l++ {
+				entries := ph.GetAddresses(l, role)
+				if role == network.PhoneBookEntryRelayRole {
+					for _, entry := range entries {
+						require.Contains(t, entry, "relay")
+					}
+				} else if role == network.PhoneBookEntryArchiverRole {
+					for _, entry := range entries {
+						require.Contains(t, entry, "archiver")
+					}
+				}
+			}
+		}
 	}
 }
