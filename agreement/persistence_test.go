@@ -218,6 +218,27 @@ func TestRandomizedEncodingFullDiskState(t *testing.T) {
 
 }
 
+func TestCredentialHistoryAllocated(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	router, player := randomizeDiskState()
+	a := []action{}
+	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	log := makeServiceLogger(logging.Base())
+	e1 := encode(clock, router, player, a, true)
+	e2 := encode(clock, router, player, a, false)
+	require.Equalf(t, e1, e2, "msgp and go-codec encodings differ: len(msgp)=%v, len(reflect)=%v", len(e1), len(e2))
+	_, _, p1, _, err1 := decode(e1, clock, log, true)
+	_, _, p2, _, err2 := decode(e1, clock, log, false)
+	require.NoErrorf(t, err1, "reflect decoding failed")
+	require.NoErrorf(t, err2, "msgp decoding failed")
+
+	require.Len(t, p1.lowestCredentialArrivals.history, dynamicFilterCredentialArrivalHistory)
+	require.Len(t, p2.lowestCredentialArrivals.history, dynamicFilterCredentialArrivalHistory)
+	emptyHistory := makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
+	require.Equalf(t, p1.lowestCredentialArrivals, emptyHistory, "credential arrival history isn't empty")
+	require.Equalf(t, p2.lowestCredentialArrivals, emptyHistory, "credential arrival history isn't empty")
+}
+
 func BenchmarkRandomizedEncode(b *testing.B) {
 	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	router, player := randomizeDiskState()
