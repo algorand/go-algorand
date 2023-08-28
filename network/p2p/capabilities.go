@@ -18,7 +18,7 @@ package p2p
 
 import (
 	"context"
-	"io"
+	"sync"
 	"time"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -43,42 +43,84 @@ const (
 const operationTimeout = time.Second * 5
 const advertisementInterval = time.Hour * 22
 
+// CapabilitiesDiscovery exposes Discovery interfaces and wraps underlying DHT methods to provide capabilities advertisement for the node
 type CapabilitiesDiscovery struct {
-	io.Closer
 	disc discovery.Discovery
 	dht  *dht.IpfsDHT
 	log  logging.Logger
+	wg   sync.WaitGroup
 }
 
+// Advertise implements the discovery.Discovery/discovery.Advertiser interface
 func (c *CapabilitiesDiscovery) Advertise(ctx context.Context, ns string, opts ...discovery.Option) (time.Duration, error) {
 	return c.disc.Advertise(ctx, ns, opts...)
 }
 
+// FindPeers implements the discovery.Discovery/discovery.Discoverer interface
 func (c *CapabilitiesDiscovery) FindPeers(ctx context.Context, ns string, opts ...discovery.Option) (<-chan peer.AddrInfo, error) {
 	return c.disc.FindPeers(ctx, ns, opts...)
 }
 
-func (c *CapabilitiesDiscovery) Close() error {
-	return c.dht.Close()
+// Close should be called when fully shutting down the node
+func (c *CapabilitiesDiscovery) Close() {
+	_ = c.dht.Close()
+	c.wg.Wait()
 }
 
+// Host exposes the underlying libp2p host.Host object
 func (c *CapabilitiesDiscovery) Host() host.Host {
 	return c.dht.Host()
 }
 
+// AddPeer adds a given peer.AddrInfo to the Host's Peerstore, and the DHT's routing table
 func (c *CapabilitiesDiscovery) AddPeer(p peer.AddrInfo) (bool, error) {
 	c.Host().Peerstore().AddAddrs(p.ID, p.Addrs, libpeerstore.TempAddrTTL)
 	return c.dht.RoutingTable().TryAddPeer(p.ID, true, true)
 }
 
+// PeersForCapability returns a slice of peer.AddrInfo for a Capability
+// Since CapabilitiesDiscovery uses a backoffcache, it will attempt to hit cache, then disk, then network
+// in order to fetch n peers which are advertising the required capability.
+func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int) ([]peer.AddrInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
+	defer cancel()
+	var peers []peer.AddrInfo
+	peersChan, err := c.FindPeers(ctx, string(capability), discovery.Limit(n))
+	if err != nil {
+		return nil, err
+	}
+pollingForPeers:
+	for {
+		select {
+		case p, open := <-peersChan:
+			if p.ID.Size() > 0 {
+				peers = append(peers, p)
+			}
+			if !open || len(peers) >= n {
+				break pollingForPeers
+			}
+		}
+	}
+	return peers, nil
+}
+
+// AdvertiseCapabilities periodically runs the Advertiser interface on the DHT
+// If a capability fails to advertise we will retry every 10 seconds until full success
+// This gets rerun every advertisementInterval.
 func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability) {
+	c.wg.Add(1)
 	go func() {
 		// Run the initial Advertisement immediately
 		ticker := time.NewTicker(time.Second / 10000)
-		defer ticker.Stop()
+		defer func() {
+			ticker.Stop()
+			c.wg.Done()
+		}()
+
 		for {
 			select {
 			case <-c.dht.Context().Done():
+				c.wg.Done()
 				return
 			case <-ticker.C:
 				var err error
@@ -101,9 +143,9 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 			}
 		}
 	}()
-
 }
 
+// MakeCapabilitiesDiscovery creates a new CapabilitiesDiscovery object which exposes peer discovery and capabilities advertisement
 func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, datadir string, network string, log logging.Logger, bootstrapPeers []*peer.AddrInfo) (*CapabilitiesDiscovery, error) {
 	pstore, err := peerstore.NewPeerStore(bootstrapPeers)
 	if err != nil {

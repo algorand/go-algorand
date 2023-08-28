@@ -469,7 +469,7 @@ func (node *AlgorandFullNode) Stop() {
 	node.cancelCtx()
 	node.ledger.Close()
 	if node.capabilitiesDiscovery != nil {
-		_ = node.capabilitiesDiscovery.Close()
+		node.capabilitiesDiscovery.Close()
 	}
 }
 
