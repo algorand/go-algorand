@@ -833,13 +833,6 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 	eval.blockTxBytes = 0
 }
 
-// AccumulatedFullBlockBytes checks whether current number of bytes tracked
-// by BlockEvaluator is exceeding MaxTxnBytesPerBlock, which is the maximum
-// number of bytes that transactions can take up in a block.
-func (eval *BlockEvaluator) AccumulatedFullBlockBytes() bool {
-	return eval.blockTxBytes >= eval.maxTxnBytesPerBlock
-}
-
 // TestTransactionGroup performs basic duplicate detection and well-formedness checks
 // on a transaction group, but does not actually add the transactions to the block
 // evaluator, or modify the block evaluator state in any other visible way.
