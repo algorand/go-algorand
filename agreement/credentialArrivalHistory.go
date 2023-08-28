@@ -50,6 +50,7 @@ func (history *credentialArrivalHistory) reset() {
 	history.full = len(history.history) == 0
 }
 
+// isFull checks if the circular buffer has been fully populated at least once.
 func (history *credentialArrivalHistory) isFull() bool {
 	if history == nil {
 		return false
