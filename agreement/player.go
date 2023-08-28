@@ -281,11 +281,6 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 // It returns the time of the lowest credential's arrival, if one was
 // collected and added to lowestCredentialArrivals, or zero otherwise.
 func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.ConsensusVersion) time.Duration {
-	// only append to lowestCredentialArrivals if this was a successful round completing in period 0.
-	if p.Period != 0 {
-		return 0
-	}
-
 	if p.Round < credentialRoundLag {
 		// not sufficiently many rounds had passed to collect any measurement
 		return 0
@@ -294,8 +289,8 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 	// look up the validatedAt time of the winning proposal-vote from credentialRoundLag ago,
 	// by now we should have seen the lowest credential for that round.
 	credHistoryRound := p.Round - credentialRoundLag
-	re := readLowestEvent{T: readLowestVote, Round: credHistoryRound, Period: p.Period}
-	re = r.dispatch(*p, re, proposalMachineRound, credHistoryRound, p.Period, 0).(readLowestEvent)
+	re := readLowestEvent{T: readLowestVote, Round: credHistoryRound, Period: 0}
+	re = r.dispatch(*p, re, proposalMachineRound, credHistoryRound, 0, 0).(readLowestEvent)
 	if !re.Filled {
 		return 0
 	}

@@ -1158,10 +1158,10 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 		require.Equal(t, filterTimeouts[i][baseHistoryRounds-2], filterTimeoutsPostRecovery[i][0])
 
 		// check that filter timeout was updated to at the end of the history window
-		for j := 1; j < dynamicFilterCredentialArrivalHistory-1; j++ {
+		for j := 1; j < dynamicFilterCredentialArrivalHistory-2; j++ {
 			require.Equal(t, filterTimeoutsPostRecovery[i][j-1], filterTimeoutsPostRecovery[i][j])
 		}
-		require.Less(t, filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-1], filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-2])
+		require.Less(t, filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-2], filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-3])
 	}
 
 	sanityCheck(startRound, 2*round(baseHistoryRounds+2), ledgers)

@@ -505,7 +505,7 @@ func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine ioA
 	rRouter := makeRootRouter(player{Round: r, Period: p, Step: s, Deadline: Deadline{Duration: FilterTimeout(p, protocol.ConsensusCurrentVersion), Type: TimeoutFilter}, lowestCredentialArrivals: history})
 	concreteMachine := ioAutomataConcretePlayer{rootRouter: &rRouter}
 	plyr = concreteMachine.underlying()
-	plyr.lowestCredentialArrivals = newCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
+	plyr.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
 	pMachine = &concreteMachine
 	helper = &voteMakerHelper{}
 	helper.Setup()
