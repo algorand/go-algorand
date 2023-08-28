@@ -5692,6 +5692,189 @@ func TestLocalInitialStates(t *testing.T) {
 	})
 }
 
+func TestInitialStateGlobalGetEx(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	myEnv := simulationtesting.PrepareSimulatorTest(t)
+	defer myEnv.Close()
+
+	proto := myEnv.TxnInfo.CurrentProtocolParams()
+	appCreator := myEnv.Accounts[0]
+
+	approvalProgramSrc := `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "put"
+byte "del"
+txn ApplicationArgs 0
+match put del
+err // Unknown command
+
+put:
+  txn ApplicationArgs 1
+  txn ApplicationArgs 2
+  app_global_put
+  b end
+
+del:
+  txn ApplicationArgs 1
+  app_global_del
+  b end
+
+end:
+  int 1
+`
+
+	appIDWithGlobals := myEnv.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 8},
+		ApprovalProgram:   approvalProgramSrc,
+		ClearStateProgram: `#pragma version 8
+int 1`,
+	})
+
+	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
+	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, appIDWithGlobals.Address(), transferable)
+
+	prepareSteps := [][][]byte{
+		{
+			[]byte("A"), []byte("initial content A"),
+		},
+	}
+
+	for _, instruction := range prepareSteps {
+		txnArgs := [][]byte{[]byte("put")}
+		txnArgs = append(txnArgs, instruction...)
+		myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
+			Sender:          appCreator.Addr,
+			Type:            protocol.ApplicationCallTx,
+			ApplicationID:   appIDWithGlobals,
+			ApplicationArgs: txnArgs,
+		}).SignedTxn())
+	}
+
+	// The application to read another app
+	approvalProgramSrc = `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+txn ApplicationArgs 0 // AppID
+btoi
+txn ApplicationArgs 1 // GlobalKey
+app_global_get_ex
+assert
+pop
+
+end:
+int 1
+`
+	appIDReadingGlobals := myEnv.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+		ApprovalProgram: approvalProgramSrc,
+		ClearStateProgram: `#pragma version 8
+int 1`,
+	})
+
+	transferable = myEnv.Accounts[2].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
+	myEnv.TransferAlgos(myEnv.Accounts[2].Addr, appIDReadingGlobals.Address(), transferable)
+
+	op, err := logic.AssembleString(approvalProgramSrc)
+	require.NoError(t, err)
+	progHash := crypto.Hash(op.Program)
+
+	txns := make([]*txntest.Txn, 1)
+	tmpTxn := myEnv.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        appCreator.Addr,
+		ApplicationID: appIDReadingGlobals,
+		ApplicationArgs: [][]byte{
+			uint64ToBytes(uint64(appIDWithGlobals)),
+			[]byte("A"),
+		},
+		ForeignApps: []basics.AppIndex{appIDWithGlobals},
+	})
+	txns[0] = &tmpTxn
+	txntest.Group(txns...)
+	signedTxns := make([]transactions.SignedTxn, len(txns))
+	for i, txn := range txns {
+		signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
+	}
+
+	// now construct app calls for global get ex
+	txnResults := []simulation.TxnResult{
+		{
+			AppBudgetConsumed: 9,
+			Trace: &simulation.TransactionTrace{
+				ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+					{PC: 1},
+					{PC: 3},
+					{PC: 6},
+					{PC: 9},
+					{PC: 10},
+					{PC: 13},
+					{PC: 14},
+					{PC: 15},
+					{PC: 16},
+				},
+				ApprovalProgramHash: progHash,
+			},
+		},
+	}
+
+	totalConsumed := uint64(0)
+	for _, txnResult := range txnResults {
+		totalConsumed += txnResult.AppBudgetConsumed
+	}
+
+	simulationTestWithEnv(t, myEnv, func(env simulationtesting.Environment) simulationTestCase {
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					signedTxns,
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns:              txnResults,
+						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetConsumed: totalConsumed,
+					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{
+						appIDWithGlobals: &simulation.SingleAppInitialStates{
+							AppGlobals: simulation.AppKVPairs{
+								"A": basics.TealValue{
+									Type:  basics.TealBytesType,
+									Bytes: "initial content A",
+								},
+							},
+							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
+							AppBoxes:       make(simulation.AppKVPairs),
+							CreatedGlobals: make(simulation.Set[string]),
+							CreatedBoxes:   make(simulation.Set[string]),
+							CreatedLocals:  map[basics.Address]simulation.Set[string]{},
+						},
+					},
+					CreatedApp: make(simulation.Set[basics.AppIndex]),
+				},
+			},
+		}
+	})
+}
+
 // TestBalanceChangesWithApp sends a payment transaction to a new account and confirms its balance
 // within a subsequent app call
 func TestBalanceChangesWithApp(t *testing.T) {
