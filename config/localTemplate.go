@@ -742,7 +742,7 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 		liveLog = filepath.Join(cfg.HotDataDir, "node.log")
 	}
 	// if cold data dir is set, use it for the base of archives
-	if cfg.HotDataDir != "" {
+	if cfg.ColdDataDir != "" {
 		archive = filepath.Join(cfg.ColdDataDir, cfg.LogArchiveName)
 	}
 	// if LogFileDir is set, use it instead
