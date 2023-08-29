@@ -78,7 +78,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			xPkg:    "github.com/algorand/go-algorand/config",
 			xType:   "ConsensusParams",
 			yPkg:    "github.com/algorand/go-algorand-sdk/v2/protocol/config",
-			yBranch: "develop",
+			yBranch: "b5f90353ea841fc2e3af9f77d42205c337c93dd2",
 			yType:   "ConsensusParams",
 		},
 		{

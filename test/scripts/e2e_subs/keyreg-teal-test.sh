@@ -16,7 +16,7 @@ ACCOUNTA=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
 
-DUR=12
+DUR=8
 PERIOD=8
 EXPIRE=10000
 FEE=100000

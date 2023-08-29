@@ -1369,7 +1369,9 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
 
-	vFuture.DynamicFilterTimeout = true
+	// Setting DynamicFilterTimeout in vFuture will impact e2e test performance
+	// by reducing round time. Hence, it is commented out for now.
+	// vFuture.DynamicFilterTimeout = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

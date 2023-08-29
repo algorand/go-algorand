@@ -1021,6 +1021,23 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 	simulateAgreement(t, 5, 50, disabled)
 }
 
+func createDynamicFilterConfig() (version protocol.ConsensusVersion, consensusVersion func(r basics.Round) (protocol.ConsensusVersion, error), configCleanup func()) {
+	version = protocol.ConsensusVersion("test-protocol-filtertimeout")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.DynamicFilterTimeout = true
+	config.Consensus[version] = protoParams
+
+	consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
+		return version, nil
+	}
+
+	configCleanup = func() {
+		delete(config.Consensus, version)
+	}
+
+	return
+}
+
 func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1028,12 +1045,9 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
-		return protocol.ConsensusFuture, nil
-	}
+	_, consensusVersion, configCleanup := createDynamicFilterConfig()
+	defer configCleanup()
 
-	cfg := config.Consensus[protocol.ConsensusFuture]
-	require.True(t, cfg.DynamicFilterTimeout)
 	if dynamicFilterCredentialArrivalHistory <= 0 {
 		return
 	}
@@ -1062,19 +1076,15 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	version := protocol.ConsensusFuture
+	version, consensusVersion, configCleanup := createDynamicFilterConfig()
+	defer configCleanup()
 
 	if dynamicFilterCredentialArrivalHistory <= 0 {
 		return
 	}
-	cfg := config.Consensus[protocol.ConsensusFuture]
-	require.True(t, cfg.DynamicFilterTimeout)
 
 	numNodes := 5
 
-	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
-		return protocol.ConsensusFuture, nil
-	}
 	ledgerFactory := func(data map[basics.Address]basics.AccountData) Ledger {
 		return makeTestLedgerWithConsensusVersion(data, consensusVersion)
 	}
