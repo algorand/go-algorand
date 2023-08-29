@@ -17,6 +17,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,7 +77,52 @@ type Local struct {
 	BaseLoggerDebugLevel uint32 `version[0]:"1" version[1]:"4"`
 	// if this is 0, do not produce agreement.cadaver
 	CadaverSizeTarget uint64 `version[0]:"1073741824" version[24]:"0"`
-	CadaverDirectory  string `version[27]:""`
+	// if this is not set, MakeService will attempt to use ColdDataDir instead
+	CadaverDirectory string `version[27]:""`
+
+	// HotDataDir is an optional directory to store data that is frequently accessed by the node.
+	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
+	// If not specified, the node will use the runtime supplied datadir to store this data.
+	// Individual resources may have their own override specified, which would override this setting for that resource.
+	// Setting HotDataDir to a dedicated high performance disk allows for basic disc tuning.
+	HotDataDir string `version[31]:""`
+
+	// ColdDataDir is an optional directory to store data that is infrequently accessed by the node.
+	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
+	// If not specified, the node will use the runtime supplied datadir.
+	// Individual resources may have their own override specified, which would override this setting for that resource.
+	// Setting ColdDataDir to a less critical or cheaper disk allows for basic disc tuning.
+	ColdDataDir string `version[31]:""`
+
+	// TrackerDbDir is an optional directory to store the tracker database.
+	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
+	// If not specified, the node will use the HotDataDir.
+	TrackerDBDir string `version[31]:""`
+	// BlockDBDir is an optional directory to store the block database.
+	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
+	// If not specified, the node will use the ColdDataDir.
+	BlockDBDir string `version[31]:""`
+	// CatchpointDir is an optional directory to store catchpoint files,
+	// except for the in-progress temp file, which will use the HotDataDir and is not separately configurable.
+	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
+	// If not specified, the node will use the ColdDataDir.
+	CatchpointDir string `version[31]:""`
+	// StateproofDir is an optional directory to store stateproof data.
+	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
+	// If not specified, the node will use the ColdDataDir.
+	StateproofDir string `version[31]:""`
+	// CrashDBDir is an optional directory to store the crash database.
+	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
+	// If not specified, the node will use the ColdDataDir.
+	CrashDBDir string `version[31]:""`
+
+	// LogFileDir is an optional directory to store the log, node.log
+	// If not specified, the node will use the HotDataDir.
+	// The -o command line option can be used to override this output location.
+	LogFileDir string `version[31]:""`
+	// LogArchiveDir is an optional directory to store the log archive.
+	// If not specified, the node will use the ColdDataDir.
+	LogArchiveDir string `version[31]:""`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections. 0 means no connections allowed. Must be non-negative.
@@ -643,6 +689,150 @@ func (cfg Local) TxFilterCanonicalEnabled() bool {
 // to start websocket server
 func (cfg Local) IsGossipServer() bool {
 	return cfg.NetAddress != ""
+}
+
+// ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there
+func ensureAbsGenesisDir(path string, genesisID string) (string, error) {
+	pathAbs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	genesisDir := filepath.Join(pathAbs, genesisID)
+	err = os.MkdirAll(genesisDir, 0700)
+	if err != nil && !os.IsExist(err) {
+		return "", err
+	}
+	return genesisDir, nil
+}
+
+// ResolvedGenesisDirs is a collection of directories including Genesis ID
+// Subdirectories for execution of a node
+type ResolvedGenesisDirs struct {
+	RootGenesisDir       string
+	HotGenesisDir        string
+	ColdGenesisDir       string
+	TrackerGenesisDir    string
+	BlockGenesisDir      string
+	CatchpointGenesisDir string
+	StateproofGenesisDir string
+	CrashGenesisDir      string
+}
+
+// String returns the Genesis Directory values as a string
+func (rgd ResolvedGenesisDirs) String() string {
+	ret := ""
+	ret += fmt.Sprintf("RootGenesisDir: %s\n", rgd.RootGenesisDir)
+	ret += fmt.Sprintf("HotGenesisDir: %s\n", rgd.HotGenesisDir)
+	ret += fmt.Sprintf("ColdGenesisDir: %s\n", rgd.ColdGenesisDir)
+	ret += fmt.Sprintf("TrackerGenesisDir: %s\n", rgd.TrackerGenesisDir)
+	ret += fmt.Sprintf("BlockGenesisDir: %s\n", rgd.BlockGenesisDir)
+	ret += fmt.Sprintf("CatchpointGenesisDir: %s\n", rgd.CatchpointGenesisDir)
+	ret += fmt.Sprintf("StateproofGenesisDir: %s\n", rgd.StateproofGenesisDir)
+	ret += fmt.Sprintf("CrashGenesisDir: %s\n", rgd.CrashGenesisDir)
+	return ret
+}
+
+// ResolveLogPaths will return the most appropriate location for liveLog and archive, given user config
+func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
+	// the default locations of log and archive are root
+	liveLog = filepath.Join(rootDir, "node.log")
+	archive = filepath.Join(rootDir, cfg.LogArchiveName)
+	// if hot data dir is set, use it for the base of logs
+	if cfg.HotDataDir != "" {
+		liveLog = filepath.Join(cfg.HotDataDir, "node.log")
+	}
+	// if cold data dir is set, use it for the base of archives
+	if cfg.ColdDataDir != "" {
+		archive = filepath.Join(cfg.ColdDataDir, cfg.LogArchiveName)
+	}
+	// if LogFileDir is set, use it instead
+	if cfg.LogFileDir != "" {
+		liveLog = filepath.Join(cfg.LogFileDir, "node.log")
+	}
+	// if LogArchivePath is set, use it instead
+	if cfg.LogArchiveDir != "" {
+		archive = filepath.Join(cfg.LogArchiveDir, cfg.LogArchiveName)
+	}
+	return liveLog, archive
+}
+
+// EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each
+// returns a ResolvedGenesisDirs struct with the resolved paths for use during runtime
+func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (ResolvedGenesisDirs, error) {
+	var resolved ResolvedGenesisDirs
+	var err error
+	if rootDir != "" {
+		resolved.RootGenesisDir, err = ensureAbsGenesisDir(rootDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
+	} else {
+		return ResolvedGenesisDirs{}, fmt.Errorf("rootDir is required")
+	}
+	// if HotDataDir is not set, use RootDataDir
+	if cfg.HotDataDir != "" {
+		resolved.HotGenesisDir, err = ensureAbsGenesisDir(cfg.HotDataDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
+	} else {
+		resolved.HotGenesisDir = resolved.RootGenesisDir
+	}
+	// if ColdDataDir is not set, use RootDataDir
+	if cfg.ColdDataDir != "" {
+		resolved.ColdGenesisDir, err = ensureAbsGenesisDir(cfg.ColdDataDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
+	} else {
+		resolved.ColdGenesisDir = resolved.RootGenesisDir
+	}
+	// if TrackerDBDir is not set, use HotDataDir
+	if cfg.TrackerDBDir != "" {
+		resolved.TrackerGenesisDir, err = ensureAbsGenesisDir(cfg.TrackerDBDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
+	} else {
+		resolved.TrackerGenesisDir = resolved.HotGenesisDir
+	}
+	// if BlockDBDir is not set, use ColdDataDir
+	if cfg.BlockDBDir != "" {
+		resolved.BlockGenesisDir, err = ensureAbsGenesisDir(cfg.BlockDBDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
+	} else {
+		resolved.BlockGenesisDir = resolved.ColdGenesisDir
+	}
+	// if CatchpointDir is not set, use ColdDataDir
+	if cfg.CatchpointDir != "" {
+		resolved.CatchpointGenesisDir, err = ensureAbsGenesisDir(cfg.CatchpointDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
+	} else {
+		resolved.CatchpointGenesisDir = resolved.ColdGenesisDir
+	}
+	// if StateproofDir is not set, use ColdDataDir
+	if cfg.StateproofDir != "" {
+		resolved.StateproofGenesisDir, err = ensureAbsGenesisDir(cfg.StateproofDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
+	} else {
+		resolved.StateproofGenesisDir = resolved.ColdGenesisDir
+	}
+	// if CrashDBDir is not set, use ColdDataDir
+	if cfg.CrashDBDir != "" {
+		resolved.CrashGenesisDir, err = ensureAbsGenesisDir(cfg.CrashDBDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
+	} else {
+		resolved.CrashGenesisDir = resolved.ColdGenesisDir
+	}
+	return resolved, nil
 }
 
 // AdjustConnectionLimits updates RestConnectionsSoftLimit, RestConnectionsHardLimit, IncomingConnectionsLimit
