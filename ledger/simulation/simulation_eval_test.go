@@ -38,6 +38,7 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -2330,7 +2331,7 @@ byte "hello"; log; int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{},
-					CreatedApp:           simulation.MakeSet(basics.AppIndex(1002)),
+					CreatedApp:           util.MakeSet(basics.AppIndex(1002)),
 				},
 			},
 		}
@@ -3338,7 +3339,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp:           simulation.MakeSet(futureAppID),
+					CreatedApp:           util.MakeSet(futureAppID),
 				},
 			},
 		}
@@ -3913,14 +3914,14 @@ int 1`,
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppGlobals:     simulation.AppKVPairs{},
 							AppBoxes:       simulation.AppKVPairs{},
-							CreatedGlobals: simulation.MakeSet("global-bytes-key", "global-int-key"),
-							CreatedBoxes:   make(simulation.Set[string]),
-							CreatedLocals: map[basics.Address]simulation.Set[string]{
-								sender.Addr: simulation.MakeSet("local-bytes-key", "local-int-key"),
+							CreatedGlobals: util.MakeSet("global-bytes-key", "global-int-key"),
+							CreatedBoxes:   make(util.Set[string]),
+							CreatedLocals: map[basics.Address]util.Set[string]{
+								sender.Addr: util.MakeSet("local-bytes-key", "local-int-key"),
 							},
 						},
 					},
-					CreatedApp: simulation.Set[basics.AppIndex]{},
+					CreatedApp: util.Set[basics.AppIndex]{},
 				},
 			},
 		}
@@ -4158,7 +4159,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp:           simulation.MakeSet(futureAppID),
+					CreatedApp:           util.MakeSet(futureAppID),
 				},
 			},
 		}
@@ -4342,7 +4343,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp:           simulation.MakeSet(futureAppID),
+					CreatedApp:           util.MakeSet(futureAppID),
 				},
 			},
 		}
@@ -4549,14 +4550,14 @@ int 1`,
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
 
-		prepareKeys := make(simulation.Set[string])
+		prepareKeys := make(util.Set[string])
 		for _, instruction := range testcase.boxOpsForPrepare {
 			if instruction.op != logic.BoxWriteOperation {
 				continue
 			}
 			prepareKeys.Add(instruction.name)
 		}
-		newlyCreatedGlobalKeySet := make(simulation.Set[string])
+		newlyCreatedGlobalKeySet := make(util.Set[string])
 		for _, instruction := range testcase.boxOpsForSimulate {
 			if instruction.op != logic.BoxWriteOperation {
 				continue
@@ -4598,12 +4599,12 @@ int 1`,
 							AppGlobals:     make(simulation.AppKVPairs),
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppBoxes:       testcase.initialBoxStates,
-							CreatedGlobals: make(simulation.Set[string]),
+							CreatedGlobals: make(util.Set[string]),
 							CreatedBoxes:   newlyCreatedGlobalKeySet,
-							CreatedLocals:  map[basics.Address]simulation.Set[string]{},
+							CreatedLocals:  map[basics.Address]util.Set[string]{},
 						},
 					},
-					CreatedApp: simulation.Set[basics.AppIndex]{},
+					CreatedApp: util.Set[basics.AppIndex]{},
 				},
 			},
 		}
@@ -4896,14 +4897,14 @@ int 1
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
 
-		prepareKeys := make(simulation.Set[string])
+		prepareKeys := make(util.Set[string])
 		for _, instruction := range testcase.boxOpsForPrepare {
 			if instruction.op != logic.BoxWriteOperation {
 				continue
 			}
 			prepareKeys.Add(instruction.name)
 		}
-		newlyCreatedGlobalKeySet := make(simulation.Set[string])
+		newlyCreatedGlobalKeySet := make(util.Set[string])
 		for _, instruction := range testcase.boxOpsForSimulate {
 			if instruction.op != logic.BoxWriteOperation {
 				continue
@@ -4945,12 +4946,12 @@ int 1
 							AppGlobals:     make(simulation.AppKVPairs),
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppBoxes:       testcase.initialBoxStates,
-							CreatedGlobals: make(simulation.Set[string]),
+							CreatedGlobals: make(util.Set[string]),
 							CreatedBoxes:   newlyCreatedGlobalKeySet,
-							CreatedLocals:  map[basics.Address]simulation.Set[string]{},
+							CreatedLocals:  map[basics.Address]util.Set[string]{},
 						},
 					},
-					CreatedApp: simulation.Set[basics.AppIndex]{},
+					CreatedApp: util.Set[basics.AppIndex]{},
 				},
 			},
 		}
@@ -5174,11 +5175,11 @@ int 1`,
 			txnResults[i] = txnArgsToResult(txnArgs)
 		}
 
-		prepareKeys := make(simulation.Set[string])
+		prepareKeys := make(util.Set[string])
 		for _, instruction := range testcase.prepareInstruction {
 			prepareKeys.Add(string(instruction[0]))
 		}
-		newlyCreatedGlobalKeySet := make(simulation.Set[string])
+		newlyCreatedGlobalKeySet := make(util.Set[string])
 		for _, txnArgs := range testcase.txnsArgs {
 			if string(txnArgs[0]) != "put" {
 				continue
@@ -5226,11 +5227,11 @@ int 1`,
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppBoxes:       make(simulation.AppKVPairs),
 							CreatedGlobals: newlyCreatedGlobalKeySet,
-							CreatedBoxes:   make(simulation.Set[string]),
-							CreatedLocals:  map[basics.Address]simulation.Set[string]{},
+							CreatedBoxes:   make(util.Set[string]),
+							CreatedLocals:  map[basics.Address]util.Set[string]{},
 						},
 					},
-					CreatedApp: make(simulation.Set[basics.AppIndex]),
+					CreatedApp: make(util.Set[basics.AppIndex]),
 				},
 			},
 		}
@@ -5533,15 +5534,15 @@ int 1`,
 			txnResults[i] = txnArgsToResult(txnArgs)
 		}
 
-		prepareInitialStates := make(map[basics.Address]simulation.Set[string])
+		prepareInitialStates := make(map[basics.Address]util.Set[string])
 		for _, instruction := range testcase.prepareInstructions {
 			if prepareInitialStates[env.Accounts[instruction.addressIndex].Addr] == nil {
-				prepareInitialStates[env.Accounts[instruction.addressIndex].Addr] = make(simulation.Set[string])
+				prepareInitialStates[env.Accounts[instruction.addressIndex].Addr] = make(util.Set[string])
 			}
 			prepareInitialStates[env.Accounts[instruction.addressIndex].Addr].Add(string(instruction.appArgs[1]))
 		}
 
-		newlyCreatedLocalStates := make(map[basics.Address]simulation.Set[string])
+		newlyCreatedLocalStates := make(map[basics.Address]util.Set[string])
 		for _, instruction := range testcase.simulateInstructions {
 			if string(instruction.appArgs[0]) != "put" {
 				continue
@@ -5551,7 +5552,7 @@ int 1`,
 				continue
 			}
 			if newlyCreatedLocalStates[acctAddress] == nil {
-				newlyCreatedLocalStates[acctAddress] = make(simulation.Set[string])
+				newlyCreatedLocalStates[acctAddress] = make(util.Set[string])
 			}
 			newlyCreatedLocalStates[acctAddress].Add(string(instruction.appArgs[1]))
 		}
@@ -5597,12 +5598,12 @@ int 1`,
 							AppGlobals:     make(simulation.AppKVPairs),
 							AppLocals:      expectedInitialLocalStates,
 							AppBoxes:       make(simulation.AppKVPairs),
-							CreatedGlobals: make(simulation.Set[string]),
+							CreatedGlobals: make(util.Set[string]),
 							CreatedLocals:  newlyCreatedLocalStates,
-							CreatedBoxes:   make(simulation.Set[string]),
+							CreatedBoxes:   make(util.Set[string]),
 						},
 					},
-					CreatedApp: make(simulation.Set[basics.AppIndex]),
+					CreatedApp: make(util.Set[basics.AppIndex]),
 				},
 			},
 		}
@@ -5916,12 +5917,12 @@ int 1`,
 								},
 							},
 							AppBoxes:       make(simulation.AppKVPairs),
-							CreatedGlobals: make(simulation.Set[string]),
-							CreatedBoxes:   make(simulation.Set[string]),
-							CreatedLocals:  map[basics.Address]simulation.Set[string]{},
+							CreatedGlobals: make(util.Set[string]),
+							CreatedBoxes:   make(util.Set[string]),
+							CreatedLocals:  map[basics.Address]util.Set[string]{},
 						},
 					},
-					CreatedApp: make(simulation.Set[basics.AppIndex]),
+					CreatedApp: make(util.Set[basics.AppIndex]),
 				},
 			},
 		}

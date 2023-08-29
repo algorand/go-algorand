@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package simulation
+package util
 
 // Set is a type alias for map with empty struct{}, where keys are comparable
 // We don't attempt to move even forward for the generics,

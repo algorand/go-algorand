@@ -19,6 +19,7 @@ package simulation
 import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/util"
 )
 
 // AppKVPairs constructs a KV pair between state key and state value
@@ -30,13 +31,13 @@ type AppKVPairs map[string]basics.TealValue
 // - Application Local states (which is tied to basics.Address)
 type SingleAppInitialStates struct {
 	AppBoxes     AppKVPairs
-	CreatedBoxes Set[string]
+	CreatedBoxes util.Set[string]
 
 	AppGlobals     AppKVPairs
-	CreatedGlobals Set[string]
+	CreatedGlobals util.Set[string]
 
 	AppLocals     map[basics.Address]AppKVPairs
-	CreatedLocals map[basics.Address]Set[string]
+	CreatedLocals map[basics.Address]util.Set[string]
 }
 
 // AppsInitialStates maintains a map from basics.AppIndex to SingleAppInitialStates
@@ -47,7 +48,7 @@ type ResourcesInitialStates struct {
 	// AllAppsInitialStates gathers all initial states of apps that were touched (but not created) during simulation
 	AllAppsInitialStates AppsInitialStates
 	// CreatedApp gathers all created applications by appID, blocking initial app states in these apps being recorded
-	CreatedApp Set[basics.AppIndex]
+	CreatedApp util.Set[basics.AppIndex]
 }
 
 func newResourcesInitialStates(request Request) *ResourcesInitialStates {
@@ -56,7 +57,7 @@ func newResourcesInitialStates(request Request) *ResourcesInitialStates {
 	}
 	return &ResourcesInitialStates{
 		AllAppsInitialStates: make(AppsInitialStates),
-		CreatedApp:           make(Set[basics.AppIndex]),
+		CreatedApp:           make(util.Set[basics.AppIndex]),
 	}
 }
 
@@ -99,7 +100,7 @@ func (appIS SingleAppInitialStates) recordCreation(state logic.AppStateEnum, key
 		appIS.CreatedGlobals.Add(key)
 	case logic.LocalState:
 		if _, addrLocalExists := appIS.CreatedLocals[addr]; !addrLocalExists {
-			appIS.CreatedLocals[addr] = make(Set[string])
+			appIS.CreatedLocals[addr] = make(util.Set[string])
 		}
 		appIS.CreatedLocals[addr].Add(key)
 	}
@@ -111,13 +112,13 @@ func (appsIS AppsInitialStates) increment(cx *logic.EvalContext) {
 	if _, ok := appsIS[appID]; !ok {
 		appsIS[appID] = SingleAppInitialStates{
 			AppGlobals:     make(AppKVPairs),
-			CreatedGlobals: make(Set[string]),
+			CreatedGlobals: make(util.Set[string]),
 
 			AppBoxes:     make(AppKVPairs),
-			CreatedBoxes: make(Set[string]),
+			CreatedBoxes: make(util.Set[string]),
 
 			AppLocals:     make(map[basics.Address]AppKVPairs),
-			CreatedLocals: make(map[basics.Address]Set[string]),
+			CreatedLocals: make(map[basics.Address]util.Set[string]),
 		}
 	}
 
