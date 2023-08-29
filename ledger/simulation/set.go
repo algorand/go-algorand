@@ -35,8 +35,8 @@ func MakeSet[T comparable](elems ...T) Set[T] {
 	return make(Set[T]).Add(elems...)
 }
 
-// IsElem checks the membership of an element in the set.
-func (s Set[T]) IsElem(elem T) (exists bool) {
+// Contains checks the membership of an element in the set.
+func (s Set[T]) Contains(elem T) (exists bool) {
 	_, exists = s[elem]
 	return
 }

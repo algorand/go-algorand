@@ -4571,7 +4571,7 @@ int 1`,
 			if instruction.op != logic.BoxWriteOperation {
 				continue
 			}
-			if prepareKeys.IsElem(instruction.name) {
+			if prepareKeys.Contains(instruction.name) {
 				continue
 			}
 			newlyCreatedGlobalKeySet.Add(instruction.name)
@@ -4921,7 +4921,7 @@ int 1
 			if instruction.op != logic.BoxWriteOperation {
 				continue
 			}
-			if prepareKeys.IsElem(instruction.name) {
+			if prepareKeys.Contains(instruction.name) {
 				continue
 			}
 			newlyCreatedGlobalKeySet.Add(instruction.name)
@@ -5201,7 +5201,7 @@ int 1`,
 		if string(txnArgs[0]) != "put" {
 			continue
 		}
-		if prepareKeys.IsElem(string(txnArgs[1])) {
+		if prepareKeys.Contains(string(txnArgs[1])) {
 			continue
 		}
 		newlyCreatedGlobalKeySet.Add(string(txnArgs[1]))
@@ -5572,7 +5572,7 @@ int 1`,
 			continue
 		}
 		acctAddress := myEnv.Accounts[instruction.addressIndex].Addr
-		if prepareInitialStates[acctAddress] != nil && prepareInitialStates[acctAddress].IsElem(string(instruction.appArgs[1])) {
+		if prepareInitialStates[acctAddress] != nil && prepareInitialStates[acctAddress].Contains(string(instruction.appArgs[1])) {
 			continue
 		}
 		if newlyCreatedLocalStates[acctAddress] == nil {

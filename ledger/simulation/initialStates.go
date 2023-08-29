@@ -79,12 +79,12 @@ func (appIS *SingleAppInitialStates) hasBeenRecorded(state logic.AppStateEnum, k
 func (appIS *SingleAppInitialStates) hasBeenCreated(state logic.AppStateEnum, key string, addr basics.Address) (created bool) {
 	switch state {
 	case logic.BoxState:
-		created = appIS.CreatedBoxes.IsElem(key)
+		created = appIS.CreatedBoxes.Contains(key)
 	case logic.GlobalState:
-		created = appIS.CreatedGlobals.IsElem(key)
+		created = appIS.CreatedGlobals.Contains(key)
 	case logic.LocalState:
 		if kvs, addrLocalExists := appIS.CreatedLocals[addr]; addrLocalExists {
-			created = kvs.IsElem(key)
+			created = kvs.Contains(key)
 		}
 	}
 	return
@@ -169,7 +169,7 @@ func (is *ResourcesInitialStates) increment(cx *logic.EvalContext) {
 	}
 	// If this method triggers application state changes
 	if cx.GetOpSpec().AppStateExplain != nil {
-		if is.CreatedApp.IsElem(cx.AppID()) {
+		if is.CreatedApp.Contains(cx.AppID()) {
 			return
 		}
 		is.AllAppsInitialStates.increment(cx)
