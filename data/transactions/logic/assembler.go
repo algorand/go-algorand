@@ -392,8 +392,8 @@ func (ops *OpStream) returns(spec *OpSpec, replacement StackType) {
 			return
 		}
 	}
-	// returns was called on an OpSpec with no StackAny in its Returns
-	panic(fmt.Sprintf("%+v", spec))
+	panic(fmt.Sprintf("returns was called on OpSpec '%s' without StackAny %+v in spec.Return",
+		spec.Name, spec.Return))
 }
 
 // writeIntc writes opcodes for loading a uint64 constant onto the stack.
@@ -1727,12 +1727,12 @@ func addPseudoDocTags() {
 				continue
 			}
 			msg := fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
-			desc, ok := opDocByName[spec.Name]
-			if ok {
-				opDocByName[spec.Name] = desc + "<br />" + msg
-			} else {
-				opDocByName[spec.Name] = msg
+			desc := opDescByName[spec.Name]
+			if desc.Short == "" {
+				panic(spec.Name)
 			}
+			desc.Short = desc.Short + "<br />" + msg
+			opDescByName[spec.Name] = desc
 		}
 	}
 }

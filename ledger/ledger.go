@@ -20,7 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -98,17 +98,23 @@ type Ledger struct {
 
 	cfg config.Local
 
-	dbPathPrefix string
+	dirsAndPrefix DirsAndPrefix
 
 	tracer logic.EvalTracer
+}
+
+// DirsAndPrefix is a struct that holds the genesis directories and the database file prefix, so ledger can construct full paths to database files
+type DirsAndPrefix struct {
+	config.ResolvedGenesisDirs
+	DBFilePrefix string // the prefix of the database files, appended to genesis directories
 }
 
 // OpenLedger creates a Ledger object, using SQLite database filenames
 // based on dbPathPrefix (in-memory if dbMem is true). genesisInitState.Blocks and
 // genesisInitState.Accounts specify the initial blocks and accounts to use if the
-// database wasn't initialized before.
-func OpenLedger(
-	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
+func OpenLedger[T string | DirsAndPrefix](
+	// database wasn't initialized before.
+	log logging.Logger, dbPathPrefix T, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
 	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
@@ -119,6 +125,20 @@ func OpenLedger(
 	var tracer logic.EvalTracer
 	if cfg.EnableTxnEvalTracer {
 		tracer = eval.MakeTxnGroupDeltaTracer(cfg.MaxAcctLookback)
+	}
+
+	var dirs DirsAndPrefix
+	// if only a string path has been supplied for the ledger, use it for all resources
+	// don't set the prefix, only tests provide a string for the path, and they manage paths explicitly
+	if s, ok := any(dbPathPrefix).(string); ok {
+		dirs.HotGenesisDir = s
+		dirs.TrackerGenesisDir = s
+		dirs.ColdGenesisDir = s
+		dirs.BlockGenesisDir = s
+		dirs.CatchpointGenesisDir = s
+	} else if ds, ok := any(dbPathPrefix).(DirsAndPrefix); ok {
+		// if a DirsAndPrefix has been supplied, use it.
+		dirs = ds
 	}
 
 	l := &Ledger{
@@ -132,7 +152,7 @@ func OpenLedger(
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 		cfg:                            cfg,
-		dbPathPrefix:                   dbPathPrefix,
+		dirsAndPrefix:                  dirs,
 		tracer:                         tracer,
 	}
 
@@ -142,7 +162,7 @@ func OpenLedger(
 		}
 	}()
 
-	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem, cfg, log)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dirs, dbMem, cfg, log)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
@@ -222,7 +242,8 @@ func (l *Ledger) reloadLedger() error {
 
 	l.accts.initialize(l.cfg)
 	l.acctsOnline.initialize(l.cfg)
-	l.catchpoint.initialize(l.cfg, l.dbPathPrefix)
+
+	l.catchpoint.initialize(l.cfg, l.dirsAndPrefix)
 
 	err = l.trackers.initialize(l, trackers, l.cfg)
 	if err != nil {
@@ -280,43 +301,29 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
-	// Backwards compatibility: we used to store both blocks and tracker
-	// state in a single SQLite db file.
-	if !dbMem {
-		commonDBFilename := dbPathPrefix + ".sqlite"
-		_, err = os.Stat(commonDBFilename)
-		if !os.IsNotExist(err) {
-			// before launch, we used to have both blocks and tracker
-			// state in a single SQLite db file. We don't have that anymore,
-			// and we want to fail when that's the case.
-			err = fmt.Errorf("a single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
-			return
-		}
-	}
-
+func openLedgerDB(dbPrefixes DirsAndPrefix, dbMem bool, cfg config.Local, log logging.Logger) (trackerDBs trackerdb.Store, blockDBs db.Pair, err error) {
 	outErr := make(chan error, 2)
 	go func() {
+		trackerDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.TrackerGenesisDir, dbPrefixes.DBFilePrefix)
 		var lerr error
 		switch cfg.StorageEngine {
 		case "pebbledb":
-			dir := dbPathPrefix + "/tracker.pebble"
+			dir := trackerDBPrefix + "/tracker.pebble"
 			trackerDBs, lerr = pebbledbdriver.Open(dir, dbMem, config.Consensus[protocol.ConsensusCurrentVersion], log)
 		// anything else will initialize a sqlite engine.
 		case "sqlite":
 			fallthrough
 		default:
-			file := dbPathPrefix + ".tracker.sqlite"
-			trackerDBs, lerr = sqlitedriver.Open(file, dbMem, log)
+			trackerDBs, lerr = sqlitedriver.Open(trackerDBPrefix+".tracker.sqlite", dbMem, log)
 		}
 
 		outErr <- lerr
 	}()
 
 	go func() {
+		blockDBPrefix := filepath.Join(dbPrefixes.ResolvedGenesisDirs.BlockGenesisDir, dbPrefixes.DBFilePrefix)
 		var lerr error
-		blockDBFilename := dbPathPrefix + ".block.sqlite"
-		blockDBs, lerr = db.OpenPair(blockDBFilename, dbMem)
+		blockDBs, lerr = db.OpenPair(blockDBPrefix+".block.sqlite", dbMem)
 		if lerr != nil {
 			outErr <- lerr
 			return
@@ -623,6 +630,13 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.LatestTotals()
+}
+
+// Totals returns the totals of all accounts for the given round.
+func (l *Ledger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.Totals(rnd)
 }
 
 // OnlineCirculation returns the online totals of all accounts at the end of round rnd.

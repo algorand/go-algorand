@@ -94,10 +94,15 @@ func MakeService(p Parameters) (*Service, error) {
 
 	s.log = makeServiceLogger(p.Logger)
 
+	// If cadaver directory is not set, use cold data directory (which may also not be set)
+	cadaverDir := p.CadaverDirectory
+	if cadaverDir == "" {
+		cadaverDir = p.ColdDataDir
+	}
 	// GOAL2-541: tracer is not concurrency safe. It should only ever be
 	// accessed by main state machine loop.
 	var err error
-	s.tracer, err = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget, p.CadaverDirectory,
+	s.tracer, err = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget, cadaverDir,
 		s.Local.EnableAgreementReporting, s.Local.EnableAgreementTimeMetrics)
 	if err != nil {
 		return nil, err

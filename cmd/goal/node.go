@@ -741,7 +741,7 @@ func verifyPeerDialArg() bool {
 
 	// make sure that the format of each entry is valid:
 	for _, peer := range strings.Split(peerDial, ";") {
-		_, err := network.ParseHostOrURL(peer)
+		_, err := network.ParseHostOrURLOrMultiaddr(peer)
 		if err != nil {
 			reportErrorf("Provided peer '%s' is not a valid peer address : %v", peer, err)
 			return false
