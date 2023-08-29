@@ -40,7 +40,7 @@ type SingleAppInitialStates struct {
 }
 
 // AppsInitialStates maintains a map from basics.AppIndex to SingleAppInitialStates
-type AppsInitialStates map[basics.AppIndex]*SingleAppInitialStates
+type AppsInitialStates map[basics.AppIndex]SingleAppInitialStates
 
 // ResourcesInitialStates gathers all initial states of resources that were accessed during simulation
 type ResourcesInitialStates struct {
@@ -61,7 +61,7 @@ func newResourcesInitialStates(request Request) *ResourcesInitialStates {
 }
 
 // hasBeenRecorded checks if an application state kv-pair has been recorded in SingleAppInitialStates.
-func (appIS *SingleAppInitialStates) hasBeenRecorded(state logic.AppStateEnum, key string, addr basics.Address) (recorded bool) {
+func (appIS SingleAppInitialStates) hasBeenRecorded(state logic.AppStateEnum, key string, addr basics.Address) (recorded bool) {
 	switch state {
 	case logic.BoxState:
 		_, recorded = appIS.AppBoxes[key]
@@ -76,7 +76,7 @@ func (appIS *SingleAppInitialStates) hasBeenRecorded(state logic.AppStateEnum, k
 }
 
 // hasBeenCreated checks if an application state kv-pair has been created during simulation.
-func (appIS *SingleAppInitialStates) hasBeenCreated(state logic.AppStateEnum, key string, addr basics.Address) (created bool) {
+func (appIS SingleAppInitialStates) hasBeenCreated(state logic.AppStateEnum, key string, addr basics.Address) (created bool) {
 	switch state {
 	case logic.BoxState:
 		created = appIS.CreatedBoxes.Contains(key)
@@ -91,7 +91,7 @@ func (appIS *SingleAppInitialStates) hasBeenCreated(state logic.AppStateEnum, ke
 }
 
 // recordCreation records a newly created application state kv-pair in SingleAppInitialStates during simulation.
-func (appIS *SingleAppInitialStates) recordCreation(state logic.AppStateEnum, key string, addr basics.Address) {
+func (appIS SingleAppInitialStates) recordCreation(state logic.AppStateEnum, key string, addr basics.Address) {
 	switch state {
 	case logic.BoxState:
 		appIS.CreatedBoxes.Add(key)
@@ -109,7 +109,7 @@ func (appsIS AppsInitialStates) increment(cx *logic.EvalContext) {
 	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
 	// No matter read or write, once this code-path is triggered, something must be recorded into initial state
 	if _, ok := appsIS[appID]; !ok {
-		appsIS[appID] = &SingleAppInitialStates{
+		appsIS[appID] = SingleAppInitialStates{
 			AppGlobals:     make(AppKVPairs),
 			CreatedGlobals: make(Set[string]),
 

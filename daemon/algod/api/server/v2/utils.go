@@ -531,7 +531,7 @@ func convertAppKVStoreInstance(address basics.Address, appKVPairs simulation.App
 	}
 }
 
-func convertApplicationInitialStates(appID basics.AppIndex, states *simulation.SingleAppInitialStates) model.ApplicationInitialStates {
+func convertApplicationInitialStates(appID basics.AppIndex, states simulation.SingleAppInitialStates) model.ApplicationInitialStates {
 	return model.ApplicationInitialStates{
 		Id:         uint64(appID),
 		AppBoxes:   convertAppKVStorePtr(basics.Address{}, states.AppBoxes),

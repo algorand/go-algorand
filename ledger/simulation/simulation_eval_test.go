@@ -3909,7 +3909,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{
-						createdAppID: &simulation.SingleAppInitialStates{
+						createdAppID: simulation.SingleAppInitialStates{
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppGlobals:     simulation.AppKVPairs{},
 							AppBoxes:       simulation.AppKVPairs{},
@@ -4594,7 +4594,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{
-						boxAppID: &simulation.SingleAppInitialStates{
+						boxAppID: simulation.SingleAppInitialStates{
 							AppGlobals:     make(simulation.AppKVPairs),
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppBoxes:       testcase.initialBoxStates,
@@ -4941,7 +4941,7 @@ int 1
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{
-						boxAppID: &simulation.SingleAppInitialStates{
+						boxAppID: simulation.SingleAppInitialStates{
 							AppGlobals:     make(simulation.AppKVPairs),
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppBoxes:       testcase.initialBoxStates,
@@ -5221,7 +5221,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{
-						appID: &simulation.SingleAppInitialStates{
+						appID: simulation.SingleAppInitialStates{
 							AppGlobals:     testcase.initialGlobalStates,
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppBoxes:       make(simulation.AppKVPairs),
@@ -5593,7 +5593,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{
-						appID: &simulation.SingleAppInitialStates{
+						appID: simulation.SingleAppInitialStates{
 							AppGlobals:     make(simulation.AppKVPairs),
 							AppLocals:      expectedInitialLocalStates,
 							AppBoxes:       make(simulation.AppKVPairs),
@@ -5900,7 +5900,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{
-						appIDWithStates: &simulation.SingleAppInitialStates{
+						appIDWithStates: simulation.SingleAppInitialStates{
 							AppGlobals: simulation.AppKVPairs{
 								"A": basics.TealValue{
 									Type:  basics.TealBytesType,
