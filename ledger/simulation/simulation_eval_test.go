@@ -49,6 +49,10 @@ func uint64ToBytes(num uint64) []byte {
 	return ibytes
 }
 
+func bytesToUint64(b []byte) uint64 {
+	return binary.BigEndian.Uint64(b)
+}
+
 type simulationTestCase struct {
 	input         simulation.Request
 	developerAPI  bool
@@ -1396,6 +1400,66 @@ int 1`,
 				},
 			},
 		}
+	})
+}
+
+func TestStartRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+	s := simulation.MakeSimulator(env.Ledger, false)
+	sender := env.Accounts[0]
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:   protocol.ApplicationCallTx,
+		Sender: sender.Addr,
+		ApprovalProgram: `#pragma version 8
+global Round
+itob
+log
+int 1`,
+		ClearStateProgram: `#pragma version 8
+int 1`,
+	})
+	txn.FirstValid = 0
+	txn.LastValid = 1000
+	stxn := txn.Txn().Sign(sender.Sk)
+
+	for i := uint64(0); i <= env.Config.MaxAcctLookback; i++ {
+		// Each of these transactions happens in a separate block
+		env.TransferAlgos(sender.Addr, sender.Addr, 0)
+	}
+
+	latestRound := env.TxnInfo.LatestHeader.Round
+
+	t.Run("default", func(t *testing.T) {
+		// By default, should use latest round
+		result, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
+		require.NoError(t, err)
+		require.Len(t, result.TxnGroups, 1)
+		require.Empty(t, result.TxnGroups[0].FailureMessage)
+		require.Len(t, result.TxnGroups[0].Txns, 1)
+		require.Len(t, result.TxnGroups[0].Txns[0].Txn.ApplyData.EvalDelta.Logs, 1)
+		require.Equal(t, uint64(latestRound+1), bytesToUint64([]byte(result.TxnGroups[0].Txns[0].Txn.ApplyData.EvalDelta.Logs[0])))
+	})
+
+	for i := uint64(0); i <= env.Config.MaxAcctLookback; i++ {
+		t.Run(fmt.Sprintf("%d rounds before latest", i), func(t *testing.T) {
+			result, err := s.Simulate(simulation.Request{Round: latestRound - basics.Round(i), TxnGroups: [][]transactions.SignedTxn{{stxn}}})
+			require.NoError(t, err)
+			require.Len(t, result.TxnGroups, 1)
+			require.Empty(t, result.TxnGroups[0].FailureMessage)
+			require.Len(t, result.TxnGroups[0].Txns, 1)
+			require.Len(t, result.TxnGroups[0].Txns[0].Txn.ApplyData.EvalDelta.Logs, 1)
+			require.Equal(t, uint64(latestRound-basics.Round(i)+1), bytesToUint64([]byte(result.TxnGroups[0].Txns[0].Txn.ApplyData.EvalDelta.Logs[0])))
+		})
+	}
+
+	t.Run("1 round in the future", func(t *testing.T) {
+		_, err := s.Simulate(simulation.Request{Round: latestRound + 1, TxnGroups: [][]transactions.SignedTxn{{stxn}}})
+		require.ErrorContains(t, err, fmt.Sprintf("ledger does not have entry %d", latestRound+1))
 	})
 }
 
