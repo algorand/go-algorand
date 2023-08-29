@@ -342,7 +342,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	}
 
 	// value 2
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
 	// value 3

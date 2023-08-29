@@ -142,6 +142,8 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 	// Remove the expired elements from e.data[addr].recentConnectionTimes
 	ps.popNElements(numElmtsToRemove, peer.ID(addr))
 	// If there are max number of connections within the time window, wait
+	metadata, _ = ps.Get(info.ID, "addressData")
+	ad = metadata.(addressData)
 	numElts := len(ad.recentConnectionTimes)
 	if uint(numElts) >= ps.connectionsRateLimitingCount {
 		return true, /* true */
