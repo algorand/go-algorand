@@ -62,6 +62,7 @@ func (tbh *testToBeHashed) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 func TestHashRepToBuff(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	values := []int{32, 64, 512, 1024}
 	buffer := make([]byte, 0, 128)
 	for _, val := range values {
