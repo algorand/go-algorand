@@ -18,12 +18,12 @@ package logic
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -86,6 +86,19 @@ type linearCost struct {
 	depth     int
 }
 
+func (lc linearCost) check() linearCost {
+	if lc.baseCost < 1 || lc.chunkCost < 0 || lc.chunkSize < 0 || lc.chunkSize > maxStringSize || lc.depth < 0 {
+		panic(fmt.Sprintf("bad cost configuration %+v", lc))
+	}
+	if lc.chunkCost > 0 && lc.chunkSize == 0 {
+		panic(fmt.Sprintf("chunk cost when chunk size is zero %+v", lc))
+	}
+	if lc.chunkCost == 0 && lc.chunkSize > 0 {
+		panic(fmt.Sprintf("no chunk cost with positive chunk size %+v", lc))
+	}
+	return lc
+}
+
 func (lc *linearCost) compute(stack []stackValue) int {
 	cost := lc.baseCost
 	if lc.chunkCost != 0 && lc.chunkSize != 0 {
@@ -129,7 +142,7 @@ type OpDetails struct {
 	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
 }
 
-func (d *OpDetails) docCost(argLen int) string {
+func (d *OpDetails) docCost(argLen int, version uint64) string {
 	cost := d.FullCost.docCost(argLen)
 	if cost != "" {
 		return cost
@@ -142,13 +155,15 @@ func (d *OpDetails) docCost(argLen int) string {
 			}
 			found = true
 			group := imm.Group
+			var fieldCostStrings []string
 			for _, name := range group.Names {
 				fs, ok := group.SpecByName(name)
-				if !ok {
+				if !ok || fs.Version() > version {
 					continue
 				}
-				cost += fmt.Sprintf(" %s=%d", name, imm.fieldCosts[fs.Field()])
+				fieldCostStrings = append(fieldCostStrings, fmt.Sprintf("%s=%s", name, imm.fieldCosts[fs.Field()].docCost(argLen)))
 			}
+			cost = strings.Join(fieldCostStrings, "; ")
 		}
 	}
 	return cost
@@ -166,7 +181,8 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 	}
 	for i := range d.Immediates {
 		if d.Immediates[i].fieldCosts != nil {
-			cost += d.Immediates[i].fieldCosts[program[pc+1+i]]
+			lc := d.Immediates[i].fieldCosts[program[pc+1+i]]
+			cost += lc.compute(stack)
 		}
 	}
 	return cost
@@ -210,13 +226,11 @@ func (d OpDetails) assembler(asm asmFunc) OpDetails {
 }
 
 func costly(cost int) OpDetails {
-	d := detDefault()
-	d.FullCost.baseCost = cost
-	return d
+	return detDefault().costs(cost)
 }
 
 func (d OpDetails) costs(cost int) OpDetails {
-	d.FullCost = linearCost{baseCost: cost}
+	d.FullCost = linearCost{baseCost: cost}.check()
 	return d
 }
 
@@ -285,20 +299,36 @@ func (d OpDetails) field(name string, group *FieldGroup) OpDetails {
 }
 
 func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
-	opd := immediates(immediate).costs(0)
+	if len(costs) != len(group.Names) {
+		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs != %d names",
+			immediate, group.Name, len(costs), len(group.Names)))
+	}
+	fieldCosts := make([]linearCost, len(costs))
+	for i, cost := range costs {
+		fieldCosts[i] = linearCost{baseCost: cost}
+	}
+	return costByFieldAndLength(immediate, group, fieldCosts)
+}
+
+func costByFieldAndLength(immediate string, group *FieldGroup, costs []linearCost) OpDetails {
+	if len(costs) != len(group.Names) {
+		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs != %d names",
+			immediate, group.Name, len(costs), len(group.Names)))
+	}
+	opd := immediates(immediate)
+	opd.FullCost = linearCost{} // zero FullCost is what causes eval to look deeper
 	opd.Immediates[0].Group = group
-	fieldCosts := make([]int, 256)
-	copy(fieldCosts, costs)
-	opd.Immediates[0].fieldCosts = fieldCosts
+	full := make([]linearCost, 256) // ensure we have 256 entries for easy lookup
+	for i := range costs {
+		full[i] = costs[i].check()
+	}
+	opd.Immediates[0].fieldCosts = full
 	return opd
 }
 
 func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
-	if initial < 1 || perChunk <= 0 || chunkSize < 1 || chunkSize > maxStringSize {
-		panic("bad cost configuration")
-	}
 	d := detDefault()
-	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}
+	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}.check()
 	return d
 }
 
@@ -344,7 +374,7 @@ type immediate struct {
 	Group *FieldGroup
 
 	// If non-nil, always 256 long, so cost can be checked before eval
-	fieldCosts []int
+	fieldCosts []linearCost
 }
 
 func imm(name string, kind immKind) immediate {
@@ -431,6 +461,11 @@ type OpSpec struct {
 // AlwaysExits is true iff the opcode always ends the program.
 func (spec *OpSpec) AlwaysExits() bool {
 	return len(spec.Return.Types) == 1 && spec.Return.Types[0].AVMType == avmNone
+}
+
+// DocCost returns the cost of the opcode in human-readable form.
+func (spec *OpSpec) DocCost(version uint64) string {
+	return spec.OpDetails.docCost(len(spec.Arg.Types), version)
 }
 
 func (spec *OpSpec) deadens() bool {
@@ -636,10 +671,6 @@ var OpSpecs = []OpSpec{
 	{0x98, "sha3_256", opSHA3_256, proto("b:b"), unlimitedStorage, costByLength(58, 4, 8)},},
 	*/
 
-	{0x99, "bn256_add", opBn256Add, proto("bb:b"), pairingVersion, costly(70)},
-	{0x9a, "bn256_scalar_mul", opBn256ScalarMul, proto("bb:b"), pairingVersion, costly(970)},
-	{0x9b, "bn256_pairing", opBn256Pairing, proto("bb:i"), pairingVersion, costly(8700)},
-
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
 	{0xa1, "b-", opBytesMinus, proto("II:I"), 4, costly(10)},
@@ -690,13 +721,72 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bT"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
+
+	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 125, BN254g2: 170,
+			BLS12_381g1: 205, BLS12_381g2: 290})},
+
+	{0xe1, "ec_scalar_mul", opEcScalarMul, proto("bb:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 1810, BN254g2: 3430,
+			BLS12_381g1: 2950, BLS12_381g2: 6530})},
+
+	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:T"), pairingVersion,
+		costByFieldAndLength("g", &EcGroups, []linearCost{
+			BN254g1: {
+				baseCost:  8000,
+				chunkCost: 7_400,
+				chunkSize: bn254g1Size,
+			},
+			BN254g2: {
+				baseCost:  8000,
+				chunkCost: 7_400,
+				chunkSize: bn254g2Size,
+			},
+			BLS12_381g1: {
+				baseCost:  13_000,
+				chunkCost: 10_000,
+				chunkSize: bls12381g1Size,
+			},
+			BLS12_381g2: {
+				baseCost:  13_000,
+				chunkCost: 10_000,
+				chunkSize: bls12381g2Size,
+			}})},
+
+	{0xe3, "ec_multi_scalar_mul", opEcMultiScalarMul, proto("bb:b"), pairingVersion,
+		costByFieldAndLength("g", &EcGroups, []linearCost{
+			BN254g1: {
+				baseCost:  3_600,
+				chunkCost: 90,
+				chunkSize: scalarSize,
+			},
+			BN254g2: {
+				baseCost:  7_200,
+				chunkCost: 270,
+				chunkSize: scalarSize,
+			},
+			BLS12_381g1: {
+				baseCost:  6_500,
+				chunkCost: 95,
+				chunkSize: scalarSize,
+			},
+			BLS12_381g2: {
+				baseCost:  14_850,
+				chunkCost: 485,
+				chunkSize: scalarSize,
+			}})},
+
+	{0xe4, "ec_subgroup_check", opEcSubgroupCheck, proto("b:T"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 20, BN254g2: 3_100, // g1 subgroup is nearly a no-op
+			BLS12_381g1: 1_850, BLS12_381g2: 2_340})},
+	{0xe5, "ec_map_to", opEcMapTo, proto("b:b"), pairingVersion,
+		costByField("g", &EcGroups, []int{
+			BN254g1: 630, BN254g2: 3_300,
+			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
 }
-
-type sortByOpcode []OpSpec
-
-func (a sortByOpcode) Len() int           { return len(a) }
-func (a sortByOpcode) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortByOpcode) Less(i, j int) bool { return a[i].Opcode < a[j].Opcode }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
 // by copying v1 opcodes to v2, and then on to v3 to create a full list
@@ -737,7 +827,9 @@ func OpcodesByVersion(version uint64) []OpSpec {
 		}
 	}
 	result := maps.Values(subv)
-	sort.Sort(sortByOpcode(result))
+	slices.SortFunc(result, func(a, b OpSpec) bool {
+		return a.Opcode < b.Opcode
+	})
 	return result
 }
 

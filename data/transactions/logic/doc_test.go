@@ -33,34 +33,18 @@ func TestOpDocs(t *testing.T) {
 	for _, op := range OpSpecs {
 		opsSeen[op.Name] = false
 	}
-	for name := range opDocByName {
+	for name := range opDescByName {
 		if _, ok := opsSeen[name]; !ok { // avoid assert.Contains: printing opsSeen is waste
-			assert.Fail(t, "opDocByName contains strange opcode", "%#v", name)
+			assert.Fail(t, "opDescByName contains strange opcode", "%#v", name)
 		}
 		opsSeen[name] = true
 	}
 	for op, seen := range opsSeen {
-		assert.True(t, seen, "opDocByName is missing doc for %#v", op)
+		assert.True(t, seen, "opDescByName is missing description for %#v", op)
 	}
 
 	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
-}
-
-// TestDocStragglers confirms that we don't have any docs laying
-// around for non-existent opcodes, most likely from a rename.
-func TestDocStragglers(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	for op := range opDocExtras {
-		_, ok := opDocByName[op]
-		assert.True(t, ok, "%s is in opDocExtra, but not opDocByName", op)
-	}
-	for op := range opcodeImmediateNotes {
-		_, ok := opDocByName[op]
-		assert.True(t, ok, "%s is in opcodeImmediateNotes, but not opDocByName", op)
-	}
 }
 
 func TestOpGroupCoverage(t *testing.T) {
@@ -127,21 +111,6 @@ func TestOpDocExtra(t *testing.T) {
 	require.NotEmpty(t, xd)
 	xd = OpDocExtra("-")
 	require.Empty(t, xd)
-}
-
-func TestOpAllCosts(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	a := OpAllCosts("+")
-	require.Len(t, a, 1)
-	require.Equal(t, "1", a[0].Cost)
-
-	a = OpAllCosts("sha256")
-	require.Len(t, a, 2)
-	for _, cost := range a {
-		require.True(t, cost.Cost != "0")
-	}
 }
 
 func TestOnCompletionDescription(t *testing.T) {

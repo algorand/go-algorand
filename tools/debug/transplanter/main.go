@@ -381,7 +381,6 @@ func main() {
 		l.Close()
 
 		fmt.Printf("Catching up from %d to %d\n", latest, *roundStart)
-
 		followerNode, err = node.MakeFollower(log, rootPath, cfg, []string{}, genesis)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot init follower node: %v", err)

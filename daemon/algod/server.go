@@ -81,8 +81,8 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	lib.GenesisJSONText = genesisText
 
-	liveLog := filepath.Join(s.RootPath, "node.log")
-	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
+	liveLog, archive := cfg.ResolveLogPaths(s.RootPath)
+
 	var maxLogAge time.Duration
 	var err error
 	if cfg.LogArchiveMaxAge != "" {

@@ -516,6 +516,165 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 	require.NoError(t, os.RemoveAll(testDirectroy))
 }
 
+// TestDefaultResourcePaths confirms that when no extra configuration is provided, all resources are created in the dataDir
+func TestDefaultResourcePaths(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "gen",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	cfg := config.GetDefaultLocal()
+
+	// the logger is set up by the server, so we don't test this here
+	log := logging.Base()
+
+	n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+
+	n.Start()
+	defer n.Stop()
+
+	require.NoError(t, err)
+
+	// confirm genesis dir exists in the data dir, and that resources exist in the expected locations
+	require.DirExists(t, filepath.Join(testDirectory, genesis.ID()))
+
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "ledger.tracker.sqlite"))
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "stateproof.sqlite"))
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "ledger.block.sqlite"))
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "partregistry.sqlite"))
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(testDirectory, genesis.ID(), "crash.sqlite"))
+	require.NoError(t, err)
+}
+
+// TestConfiguredDataDirs tests to see that when HotDataDir and ColdDataDir are set, underlying resources are created in the correct locations
+// Not all resources are tested here, because not all resources use the paths provided to them immediately. For example, catchpoint only creates
+// a directory when writing a catchpoint file, which is not being done here with this simple node
+func TestConfiguredDataDirs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+	testDirHot := t.TempDir()
+	testDirCold := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	cfg := config.GetDefaultLocal()
+
+	cfg.HotDataDir = testDirHot
+	cfg.ColdDataDir = testDirCold
+	cfg.CatchpointTracking = 2
+	cfg.CatchpointInterval = 1
+
+	// the logger is set up by the server, so we don't test this here
+	log := logging.Base()
+
+	n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
+
+	n.Start()
+	defer n.Stop()
+
+	// confirm hot data dir exists and contains a genesis dir
+	require.DirExists(t, filepath.Join(testDirHot, genesis.ID()))
+
+	// confirm the tracker is in the genesis dir of hot data dir
+	require.FileExists(t, filepath.Join(testDirHot, genesis.ID(), "ledger.tracker.sqlite"))
+
+	// confirm the stateproof db in the genesis dir of hot data dir
+	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "stateproof.sqlite"))
+
+	// confirm cold data dir exists and contains a genesis dir
+	require.DirExists(t, filepath.Join(testDirCold, genesis.ID()))
+
+	// confirm the blockdb is in the genesis dir of cold data dir
+	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "ledger.block.sqlite"))
+
+	// confirm the partregistry is in the genesis dir of cold data dir
+	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "partregistry.sqlite"))
+
+	// confirm the partregistry is in the genesis dir of cold data dir
+	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "crash.sqlite"))
+}
+
+// TestConfiguredResourcePaths tests to see that when TrackerDbFilePath, BlockDbFilePath, StateproofDir, and CrashFilePath are set, underlying resources are created in the correct locations
+func TestConfiguredResourcePaths(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+	testDirHot := t.TempDir()
+	testDirCold := t.TempDir()
+
+	// add a path for each resource now
+	trackerPath := filepath.Join(testDirectory, "custom_tracker")
+	blockPath := filepath.Join(testDirectory, "custom_block")
+	stateproofDir := filepath.Join(testDirectory, "custom_stateproof")
+	crashPath := filepath.Join(testDirectory, "custom_crash")
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	cfg := config.GetDefaultLocal()
+
+	cfg.HotDataDir = testDirHot
+	cfg.ColdDataDir = testDirCold
+	cfg.TrackerDBDir = trackerPath
+	cfg.BlockDBDir = blockPath
+	cfg.StateproofDir = stateproofDir
+	cfg.CrashDBDir = crashPath
+
+	// the logger is set up by the server, so we don't test this here
+	log := logging.Base()
+
+	n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
+
+	n.Start()
+	defer n.Stop()
+
+	// confirm hot data dir exists and contains a genesis dir
+	require.DirExists(t, filepath.Join(testDirHot, genesis.ID()))
+
+	// the tracker shouldn't be in the hot data dir, but rather the custom path's genesis dir
+	require.NoFileExists(t, filepath.Join(testDirHot, genesis.ID(), "ledger.tracker.sqlite"))
+	require.FileExists(t, filepath.Join(cfg.TrackerDBDir, genesis.ID(), "ledger.tracker.sqlite"))
+
+	// same with stateproofs
+	require.NoFileExists(t, filepath.Join(testDirHot, genesis.ID(), "stateproof.sqlite"))
+	require.FileExists(t, filepath.Join(cfg.StateproofDir, genesis.ID(), "stateproof.sqlite"))
+
+	// confirm cold data dir exists and contains a genesis dir
+	require.DirExists(t, filepath.Join(testDirCold, genesis.ID()))
+
+	// block db shouldn't be in the cold data dir, but rather the custom path's genesis dir
+	require.NoFileExists(t, filepath.Join(testDirCold, genesis.ID(), "ledger.block.sqlite"))
+	require.FileExists(t, filepath.Join(cfg.BlockDBDir, genesis.ID(), "ledger.block.sqlite"))
+
+	require.NoFileExists(t, filepath.Join(testDirCold, genesis.ID(), "crash.sqlite"))
+	require.FileExists(t, filepath.Join(cfg.CrashDBDir, genesis.ID(), "crash.sqlite"))
+}
+
 // TestOfflineOnlineClosedBitStatus a test that validates that the correct bits are being set
 func TestOfflineOnlineClosedBitStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
