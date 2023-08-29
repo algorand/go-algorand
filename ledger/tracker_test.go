@@ -69,7 +69,13 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	ct := &catchpointTracker{}
 	ao := &onlineAccounts{}
 	au.initialize(conf)
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
 	ao.initialize(conf)
 
 	_, err := trackerDBInitialize(ml, false, ".")

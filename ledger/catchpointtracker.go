@@ -90,7 +90,9 @@ func catchpointStage1Decoder(r io.Reader) (io.ReadCloser, error) {
 }
 
 type catchpointTracker struct {
-	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directory for the catchup files to be generated
+	// tmpDir is the path to the currently building catchpoint file
+	tmpDir string
+	// dbDirectory is the path to the finished/cold data of catchpoint
 	dbDirectory string
 
 	// catchpointInterval is the configured interval at which the catchpointTracker would generate catchpoint labels and catchpoint files.
@@ -155,8 +157,11 @@ type catchpointTracker struct {
 }
 
 // initialize initializes the catchpointTracker structure
-func (ct *catchpointTracker) initialize(cfg config.Local, dbPathPrefix string) {
-	ct.dbDirectory = filepath.Dir(dbPathPrefix)
+func (ct *catchpointTracker) initialize(cfg config.Local, paths DirsAndPrefix) {
+	// catchpoint uses the cold data directories, except for the temp file
+	ct.dbDirectory = paths.CatchpointGenesisDir
+	// the temp file uses the hot data directories
+	ct.tmpDir = paths.HotGenesisDir
 
 	switch cfg.CatchpointTracking {
 	case -1:
@@ -281,10 +286,8 @@ func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round) er
 	}
 
 	// First, delete the unfinished data file.
-	relCatchpointDataFilePath := filepath.Join(
-		trackerdb.CatchpointDirName,
-		makeCatchpointDataFilePath(dbRound))
-	err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
+	relCatchpointDataFilePath := filepath.Join(trackerdb.CatchpointDirName, makeCatchpointDataFilePath(dbRound))
+	err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.tmpDir, relCatchpointDataFilePath)
 	if err != nil {
 		return err
 	}
@@ -300,9 +303,7 @@ func (ct *catchpointTracker) finishCatchpointsAfterCrash(catchpointLookback uint
 
 	for _, record := range records {
 		// First, delete the unfinished catchpoint file.
-		relCatchpointFilePath := filepath.Join(
-			trackerdb.CatchpointDirName,
-			trackerdb.MakeCatchpointFilePath(basics.Round(record.Round)))
+		relCatchpointFilePath := filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(basics.Round(record.Round)))
 		err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointFilePath)
 		if err != nil {
 			return err
@@ -776,7 +777,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		return nil
 	}
 
-	catchpointDataFilePath := filepath.Join(ct.dbDirectory, trackerdb.CatchpointDirName)
+	catchpointDataFilePath := filepath.Join(ct.tmpDir, trackerdb.CatchpointDirName)
 	catchpointDataFilePath =
 		filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(accountsRound))
 
@@ -802,8 +803,8 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		BlockHeaderDigest: blockHash,
 	}
 
-	relCatchpointFilePath :=
-		filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(round))
+	relCatchpointFilePath := filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(round))
+
 	absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
 
 	err = os.MkdirAll(filepath.Dir(absCatchpointFilePath), 0700)
@@ -842,6 +843,7 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		With("accountsCount", dataInfo.TotalAccounts).
 		With("kvsCount", dataInfo.TotalKVs).
 		With("fileSize", fileInfo.Size()).
+		With("filepath", relCatchpointFilePath).
 		With("catchpointLabel", label).
 		Infof("Catchpoint file was created")
 
@@ -1149,9 +1151,8 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 
 	startTime := time.Now()
 
-	catchpointDataFilePath := filepath.Join(ct.dbDirectory, trackerdb.CatchpointDirName)
-	catchpointDataFilePath =
-		filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(accountsRound))
+	catchpointDataFilePath := filepath.Join(ct.tmpDir, trackerdb.CatchpointDirName)
+	catchpointDataFilePath = filepath.Join(catchpointDataFilePath, makeCatchpointDataFilePath(accountsRound))
 
 	more := true
 	const shortChunkExecutionDuration = 50 * time.Millisecond
@@ -1399,8 +1400,7 @@ func (ct *catchpointTracker) GetCatchpointStream(round basics.Round) (ReadCloseS
 	}
 
 	// if the database doesn't know about that round, see if we have that file anyway:
-	relCatchpointFilePath :=
-		filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(round))
+	relCatchpointFilePath := filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(round))
 	absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
 	file, err := os.OpenFile(absCatchpointFilePath, os.O_RDONLY, 0666)
 	if err == nil && file != nil {
