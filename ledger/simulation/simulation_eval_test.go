@@ -3398,7 +3398,7 @@ end:
 
 		sender := env.Accounts[0]
 
-		futureAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+		createdAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
 			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
 			LocalStateSchema:  basics.StateSchema{NumUint: 1, NumByteSlice: 1},
 			ApprovalProgram:   approvalProgramSrc,
@@ -3414,20 +3414,20 @@ int 1`,
 			Type:          protocol.ApplicationCallTx,
 			OnCompletion:  transactions.OptInOC,
 			Sender:        sender.Addr,
-			ApplicationID: futureAppID,
+			ApplicationID: createdAppID,
 		})
 
 		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
-			ApplicationID:   futureAppID,
+			ApplicationID:   createdAppID,
 			ApplicationArgs: [][]byte{[]byte("global")},
 		})
 
 		localStateCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
-			ApplicationID:   futureAppID,
+			ApplicationID:   createdAppID,
 			ApplicationArgs: [][]byte{[]byte("local")},
 		})
 
@@ -3475,7 +3475,7 @@ int 1`,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
-													Uint: uint64(futureAppID),
+													Uint: uint64(createdAppID),
 												},
 											},
 										},
@@ -3557,7 +3557,7 @@ int 1`,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
-													Uint: uint64(futureAppID),
+													Uint: uint64(createdAppID),
 												},
 											},
 										},
@@ -3650,7 +3650,7 @@ int 1`,
 												{
 													AppStateOp: logic.AppStateWrite,
 													AppState:   logic.GlobalState,
-													AppID:      futureAppID,
+													AppID:      createdAppID,
 													Key:        "global-int-key",
 													NewValue: basics.TealValue{
 														Type: basics.TealUintType,
@@ -3685,7 +3685,7 @@ int 1`,
 												{
 													AppStateOp: logic.AppStateWrite,
 													AppState:   logic.GlobalState,
-													AppID:      futureAppID,
+													AppID:      createdAppID,
 													Key:        "global-bytes-key",
 													NewValue: basics.TealValue{
 														Type:  basics.TealBytesType,
@@ -3739,7 +3739,7 @@ int 1`,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
-													Uint: uint64(futureAppID),
+													Uint: uint64(createdAppID),
 												},
 											},
 										},
@@ -3841,7 +3841,7 @@ int 1`,
 												{
 													AppStateOp: logic.AppStateWrite,
 													AppState:   logic.LocalState,
-													AppID:      futureAppID,
+													AppID:      createdAppID,
 													Key:        "local-int-key",
 													NewValue: basics.TealValue{
 														Type: basics.TealUintType,
@@ -3885,7 +3885,7 @@ int 1`,
 												{
 													AppStateOp: logic.AppStateWrite,
 													AppState:   logic.LocalState,
-													AppID:      futureAppID,
+													AppID:      createdAppID,
 													Key:        "local-bytes-key",
 													NewValue: basics.TealValue{
 														Type:  basics.TealBytesType,
@@ -3916,7 +3916,7 @@ int 1`,
 				},
 				InitialStates: &simulation.ResourcesInitialStates{
 					AllAppsInitialStates: simulation.AppsInitialStates{
-						futureAppID: &simulation.SingleAppInitialStates{
+						createdAppID: &simulation.SingleAppInitialStates{
 							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
 							AppGlobals:     simulation.AppKVPairs{},
 							AppBoxes:       simulation.AppKVPairs{},
