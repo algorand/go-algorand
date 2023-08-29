@@ -325,12 +325,12 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 	messageBuffer := make([]byte, 0, estimatedSize)
 
 	messageBuffer = HashRepToBuff(batchID, messageBuffer)
-	batchIDLen := len(messageBuffer)
+	batchIDLen := uint64(len(messageBuffer))
 	messageBuffer = HashRepToBuff(offsetID, messageBuffer)
-	offsetIDLen := len(messageBuffer) - batchIDLen
+	offsetIDLen := uint64(len(messageBuffer)) - batchIDLen
 	messageBuffer = HashRepToBuff(message, messageBuffer)
-	messageLen := len(messageBuffer) - offsetIDLen - batchIDLen
-	msgLengths := []int{batchIDLen, offsetIDLen, messageLen}
+	messageLen := uint64(len(messageBuffer)) - offsetIDLen - batchIDLen
+	msgLengths := []uint64{batchIDLen, offsetIDLen, messageLen}
 	allValid, _ := batchVerificationImpl(
 		messageBuffer,
 		msgLengths,

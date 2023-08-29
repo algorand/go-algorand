@@ -128,13 +128,15 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 	if b.GetNumberOfEnqueuedSignatures() == 0 {
 		return nil, nil
 	}
-	msgLengths := make([]int, 0, len(b.messages))
-	var messages = make([]byte, 0, b.GetNumberOfEnqueuedSignatures()*64)
+
+	const estimatedMessageSize = 64
+	msgLengths := make([]uint64, 0, len(b.messages))
+	var messages = make([]byte, 0, b.GetNumberOfEnqueuedSignatures()*estimatedMessageSize)
 
 	lenWas := 0
 	for i := range b.messages {
 		messages = HashRepToBuff(b.messages[i], messages)
-		msgLengths = append(msgLengths, len(messages)-lenWas)
+		msgLengths = append(msgLengths, uint64(len(messages)-lenWas))
 		lenWas = len(messages)
 	}
 	allValid, failed := batchVerificationImpl(messages, msgLengths, b.publicKeys, b.signatures)
@@ -147,19 +149,15 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
 // otherwise, returns false, and sets the indexes of the failed sigs in failed
-func batchVerificationImpl(messages []byte, msgLengths []int, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
+func batchVerificationImpl(messages []byte, msgLengths []uint64, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
 
 	numberOfSignatures := len(msgLengths)
-	messageLens := make([]C.ulonglong, len(msgLengths))
-	for i, l := range msgLengths {
-		messageLens[i] = C.ulonglong(l)
-	}
 	valid := make([]C.int, numberOfSignatures)
 
 	// call the batch verifier
 	allValid := C.ed25519_batch_wrapper(
 		(*C.uchar)(&messages[0]),
-		(*C.ulonglong)(&messageLens[0]),
+		(*C.ulonglong)(&msgLengths[0]),
 		(*C.uchar)(&(publicKeys[0][0])),
 		(*C.uchar)(&(signatures[0][0])),
 		C.size_t(numberOfSignatures),
@@ -167,7 +165,7 @@ func batchVerificationImpl(messages []byte, msgLengths []int, publicKeys []Signa
 
 	// These calls will be replaced with Pin in the next Go version upgrade
 	runtime.KeepAlive(messages)
-	runtime.KeepAlive(messageLens)
+	runtime.KeepAlive(msgLengths)
 	runtime.KeepAlive(publicKeys)
 	runtime.KeepAlive(signatures)
 
