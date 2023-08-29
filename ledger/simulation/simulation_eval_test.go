@@ -4531,52 +4531,52 @@ int 1`,
 		return res
 	}
 
+	txnPtrs := make([]*txntest.Txn, len(testcase.boxOpsForSimulate))
+	for i, boxOp := range testcase.boxOpsForSimulate {
+		tempTxn := myEnv.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          appCreator.Addr,
+			ApplicationID:   boxAppID,
+			ApplicationArgs: boxOp.appArgs(),
+			Boxes:           boxOp.boxRefs(),
+		})
+		txnPtrs[i] = &tempTxn
+	}
+
+	txntest.Group(txnPtrs...)
+	signedTxns := make([]transactions.SignedTxn, len(testcase.boxOpsForSimulate))
+	for i, txn := range txnPtrs {
+		signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
+	}
+
+	txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
+	for i, boxOp := range testcase.boxOpsForSimulate {
+		txnResults[i] = boxOpToSimResult(boxOp)
+	}
+	totalConsumed := uint64(0)
+	for _, txnResult := range txnResults {
+		totalConsumed += txnResult.AppBudgetConsumed
+	}
+
+	prepareKeys := make(simulation.Set[string])
+	for _, instruction := range testcase.boxOpsForPrepare {
+		if instruction.op != logic.BoxWriteOperation {
+			continue
+		}
+		prepareKeys.Add(instruction.name)
+	}
+	newlyCreatedGlobalKeySet := make(simulation.Set[string])
+	for _, instruction := range testcase.boxOpsForSimulate {
+		if instruction.op != logic.BoxWriteOperation {
+			continue
+		}
+		if prepareKeys.Contains(instruction.name) {
+			continue
+		}
+		newlyCreatedGlobalKeySet.Add(instruction.name)
+	}
+
 	simulationTestWithEnv(t, myEnv, func(env simulationtesting.Environment) simulationTestCase {
-		txnPtrs := make([]*txntest.Txn, len(testcase.boxOpsForSimulate))
-		for i, boxOp := range testcase.boxOpsForSimulate {
-			tempTxn := env.TxnInfo.NewTxn(txntest.Txn{
-				Type:            protocol.ApplicationCallTx,
-				Sender:          appCreator.Addr,
-				ApplicationID:   boxAppID,
-				ApplicationArgs: boxOp.appArgs(),
-				Boxes:           boxOp.boxRefs(),
-			})
-			txnPtrs[i] = &tempTxn
-		}
-
-		txntest.Group(txnPtrs...)
-		signedTxns := make([]transactions.SignedTxn, len(testcase.boxOpsForSimulate))
-		for i, txn := range txnPtrs {
-			signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
-		}
-
-		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
-		for i, boxOp := range testcase.boxOpsForSimulate {
-			txnResults[i] = boxOpToSimResult(boxOp)
-		}
-		totalConsumed := uint64(0)
-		for _, txnResult := range txnResults {
-			totalConsumed += txnResult.AppBudgetConsumed
-		}
-
-		prepareKeys := make(simulation.Set[string])
-		for _, instruction := range testcase.boxOpsForPrepare {
-			if instruction.op != logic.BoxWriteOperation {
-				continue
-			}
-			prepareKeys.Add(instruction.name)
-		}
-		newlyCreatedGlobalKeySet := make(simulation.Set[string])
-		for _, instruction := range testcase.boxOpsForSimulate {
-			if instruction.op != logic.BoxWriteOperation {
-				continue
-			}
-			if prepareKeys.Contains(instruction.name) {
-				continue
-			}
-			newlyCreatedGlobalKeySet.Add(instruction.name)
-		}
-
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
@@ -4881,51 +4881,52 @@ int 1
 		return res
 	}
 
+	txnPtrs := make([]*txntest.Txn, len(testcase.boxOpsForSimulate))
+	for i, boxOp := range testcase.boxOpsForSimulate {
+		tempTxn := myEnv.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          appCreator.Addr,
+			ApplicationID:   boxAppID,
+			ApplicationArgs: boxOp.appArgs(),
+			Boxes:           boxOp.boxRefs(),
+		})
+		txnPtrs[i] = &tempTxn
+	}
+
+	txntest.Group(txnPtrs...)
+	signedTxns := make([]transactions.SignedTxn, len(testcase.boxOpsForSimulate))
+	for i, txn := range txnPtrs {
+		signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
+	}
+
+	txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
+	for i, boxOp := range testcase.boxOpsForSimulate {
+		txnResults[i] = boxOpToSimResult(boxOp)
+	}
+	totalConsumed := uint64(0)
+	for _, txnResult := range txnResults {
+		totalConsumed += txnResult.AppBudgetConsumed
+	}
+
+	prepareKeys := make(simulation.Set[string])
+	for _, instruction := range testcase.boxOpsForPrepare {
+		if instruction.op != logic.BoxWriteOperation {
+			continue
+		}
+		prepareKeys.Add(instruction.name)
+	}
+	newlyCreatedGlobalKeySet := make(simulation.Set[string])
+	for _, instruction := range testcase.boxOpsForSimulate {
+		if instruction.op != logic.BoxWriteOperation {
+			continue
+		}
+		if prepareKeys.Contains(instruction.name) {
+			continue
+		}
+		newlyCreatedGlobalKeySet.Add(instruction.name)
+	}
+
 	simulationTestWithEnv(t, myEnv, func(env simulationtesting.Environment) simulationTestCase {
-		txnPtrs := make([]*txntest.Txn, len(testcase.boxOpsForSimulate))
-		for i, boxOp := range testcase.boxOpsForSimulate {
-			tempTxn := env.TxnInfo.NewTxn(txntest.Txn{
-				Type:            protocol.ApplicationCallTx,
-				Sender:          appCreator.Addr,
-				ApplicationID:   boxAppID,
-				ApplicationArgs: boxOp.appArgs(),
-				Boxes:           boxOp.boxRefs(),
-			})
-			txnPtrs[i] = &tempTxn
-		}
-
-		txntest.Group(txnPtrs...)
-		signedTxns := make([]transactions.SignedTxn, len(testcase.boxOpsForSimulate))
-		for i, txn := range txnPtrs {
-			signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
-		}
-
-		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
-		for i, boxOp := range testcase.boxOpsForSimulate {
-			txnResults[i] = boxOpToSimResult(boxOp)
-		}
-		totalConsumed := uint64(0)
-		for _, txnResult := range txnResults {
-			totalConsumed += txnResult.AppBudgetConsumed
-		}
-
-		prepareKeys := make(simulation.Set[string])
-		for _, instruction := range testcase.boxOpsForPrepare {
-			if instruction.op != logic.BoxWriteOperation {
-				continue
-			}
-			prepareKeys.Add(instruction.name)
-		}
-		newlyCreatedGlobalKeySet := make(simulation.Set[string])
-		for _, instruction := range testcase.boxOpsForSimulate {
-			if instruction.op != logic.BoxWriteOperation {
-				continue
-			}
-			if prepareKeys.Contains(instruction.name) {
-				continue
-			}
-			newlyCreatedGlobalKeySet.Add(instruction.name)
-		}
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
