@@ -5039,7 +5039,6 @@ func testGlobalInitialStatesHelper(t *testing.T, testcase GlobalInitialStatesTes
 	myEnv := simulationtesting.PrepareSimulatorTest(t)
 	defer myEnv.Close()
 
-	proto := myEnv.TxnInfo.CurrentProtocolParams()
 	appCreator := myEnv.Accounts[0]
 
 	approvalProgramSrc := `#pragma version 8
@@ -5077,9 +5076,6 @@ int 1`,
 	op, err := logic.AssembleString(approvalProgramSrc)
 	require.NoError(t, err)
 	progHash := crypto.Hash(op.Program)
-
-	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
-	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, appID.Address(), transferable)
 
 	for _, instruction := range testcase.prepareInstruction {
 		txnArgs := [][]byte{[]byte("put")}
@@ -5335,7 +5331,6 @@ func testLocalInitialStatesHelper(t *testing.T, testcase LocalInitialStatesTestC
 	myEnv := simulationtesting.PrepareSimulatorTest(t)
 	defer myEnv.Close()
 
-	proto := myEnv.TxnInfo.CurrentProtocolParams()
 	appCreator := myEnv.Accounts[0]
 
 	approvalProgramSrc := `#pragma version 8
@@ -5389,9 +5384,6 @@ int 1`,
 	op, err := logic.AssembleString(approvalProgramSrc)
 	require.NoError(t, err)
 	progHash := crypto.Hash(op.Program)
-
-	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
-	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, appID.Address(), transferable)
 
 	for _, acct := range myEnv.Accounts[2:] {
 		myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
@@ -5699,7 +5691,6 @@ func TestInitialStatesGetEx(t *testing.T) {
 	myEnv := simulationtesting.PrepareSimulatorTest(t)
 	defer myEnv.Close()
 
-	proto := myEnv.TxnInfo.CurrentProtocolParams()
 	appCreator := myEnv.Accounts[0]
 
 	approvalProgramSrc := `#pragma version 8
@@ -5747,9 +5738,6 @@ end:
 		ClearStateProgram: `#pragma version 8
 int 1`,
 	})
-
-	transferable := myEnv.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
-	myEnv.TransferAlgos(myEnv.Accounts[1].Addr, appIDWithStates.Address(), transferable)
 
 	myEnv.Txn(myEnv.TxnInfo.NewTxn(txntest.Txn{
 		Sender:        appCreator.Addr,
@@ -5814,9 +5802,6 @@ int 1
 		ClearStateProgram: `#pragma version 8
 int 1`,
 	})
-
-	transferable = myEnv.Accounts[2].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
-	myEnv.TransferAlgos(myEnv.Accounts[2].Addr, appIDReadingStates.Address(), transferable)
 
 	op, err := logic.AssembleString(approvalProgramSrc)
 	require.NoError(t, err)
