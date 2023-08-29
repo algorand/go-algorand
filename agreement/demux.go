@@ -199,13 +199,13 @@ func (d *demux) next(s *Service, deadline Deadline, fastDeadline Deadline, curre
 
 		switch e.t() {
 		case payloadVerified:
-			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
+			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since(), currentRound)
 		case payloadPresent, votePresent:
 			e = e.(messageEvent).AttachReceivedAt(s.Clock.Since())
 		case voteVerified:
 			// if this is a proposal vote (step 0), record the validatedAt time on the vote
 			if e.(messageEvent).Input.UnauthenticatedVote.R.Step == 0 {
-				e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
+				e = e.(messageEvent).AttachValidatedAt(s.Clock.Since(), currentRound)
 			}
 		}
 	}()

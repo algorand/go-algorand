@@ -975,12 +975,16 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
-func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
+func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round) messageEvent {
 	switch e.T {
 	case payloadVerified:
 		e.Input.Proposal.validatedAt = d
 	case voteVerified:
-		e.Input.Vote.validatedAt = d
+		if e.Input.UnauthenticatedVote.R.Round == currentRound+1 {
+			e.Input.Vote.validatedAt = 1
+		} else {
+			e.Input.Vote.validatedAt = d
+		}
 	}
 	return e
 }

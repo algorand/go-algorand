@@ -3249,7 +3249,7 @@ func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 	// send voteVerified message
 	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
 	inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
-	inMsg = inMsg.AttachValidatedAt(501 * time.Millisecond)
+	inMsg = inMsg.AttachValidatedAt(501*time.Millisecond, r-1)
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3289,7 +3289,7 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 		vVote := helper.MakeVerifiedVote(t, 0, r+round(i)-1, p, propose, *pV)
 		inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
 		timestamp := 500 + i
-		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp) * time.Millisecond)
+		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r+round(i)-1)
 		err, panicErr := pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3343,7 +3343,7 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	// send voteVerified
 	verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
 	inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
-	inMsg = inMsg.AttachValidatedAt(502 * time.Millisecond)
+	inMsg = inMsg.AttachValidatedAt(502*time.Millisecond, r-1)
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3393,7 +3393,7 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 		verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
 		inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
 		timestamp := 500 + i
-		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp) * time.Millisecond)
+		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r+round(i)-1)
 		err, panicErr = pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3437,7 +3437,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	// send voteVerified
 	verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
 	inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
-	inMsg = inMsg.AttachValidatedAt(502 * time.Millisecond)
+	inMsg = inMsg.AttachValidatedAt(502*time.Millisecond, r-1)
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3491,7 +3491,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 		verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
 		inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
 		timestamp := 500 + i
-		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp) * time.Millisecond)
+		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r+round(i)-1)
 		err, panicErr = pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3526,7 +3526,7 @@ func moveToRound(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerH
 
 	// payloadVerified
 	inMsg := messageEvent{T: payloadVerified, Input: message{Proposal: *pP}, Proto: ConsensusVersionView{Version: ver}}
-	inMsg = inMsg.AttachValidatedAt(2 * time.Second) // call AttachValidatedAt like demux would
+	inMsg = inMsg.AttachValidatedAt(2*time.Second, r-1) // call AttachValidatedAt like demux would
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
