@@ -48,7 +48,8 @@ func init() {
 
 	RunnerCmd.Flags().StringVarP(&runnerArgs.Path, "scenario", "s", "", "Directory containing scenarios, or specific scenario file.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.ConduitBinary, "conduit-binary", "i", "", "Path to conduit binary.")
-	RunnerCmd.Flags().Uint64VarP(&runnerArgs.MetricsPort, "metrics-port", "p", 9999, "Port to start the metrics server at.")
+	RunnerCmd.Flags().Uint16VarP(&runnerArgs.HealthPort, "health-port", "", 8981, "Port to start the conduit's health endpoint at.")
+	RunnerCmd.Flags().Uint16VarP(&runnerArgs.MetricsPort, "metrics-port", "p", 9999, "Port to start the metrics server at.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.Template, "template", "", "postgres-exporter", "Specify the conduit template to use. Choices are: file-exporter or postgres-exporter.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.PostgresConnectionString, "postgres-connection-string", "c", "", "Postgres connection string.")
 	RunnerCmd.Flags().DurationVarP(&runnerArgs.RunDuration, "test-duration", "d", 5*time.Minute, "Duration to use for each scenario.")

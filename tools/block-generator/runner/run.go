@@ -56,7 +56,8 @@ type Args struct {
 	// Path is a directory when passed to RunBatch, otherwise a file path.
 	Path                     string
 	ConduitBinary            string
-	MetricsPort              uint64
+	HealthPort               uint16
+	MetricsPort              uint16
 	Template                 string
 	PostgresConnectionString string
 	CPUProfilePath           string
@@ -76,6 +77,7 @@ type Args struct {
 type config struct {
 	LogLevel                 string
 	LogFile                  string
+	HealthPort			     string
 	MetricsPort              string
 	AlgodNet                 string
 	PostgresConnectionString string
@@ -188,6 +190,7 @@ func (r *Args) run(reportDirectory string) error {
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
+	healthNet := "" // fmt.Sprintf("localhost:%d", r.HealthPort)
 	generatorShutdownFunc, _ := startGenerator(ledgerlogfile, r.Path, nextRound, r.GenesisFile, r.RunnerVerbose, algodNet, blockMiddleware)
 	defer func() {
 		// Shutdown generator.
@@ -221,6 +224,7 @@ func (r *Args) run(reportDirectory string) error {
 	conduitConfig := config{
 		LogLevel:                 r.ConduitLogLevel,
 		LogFile:                  conduitlogfile,
+		HealthPort:               "", // fmt.Sprintf(":%d", r.HealthPort),
 		MetricsPort:              fmt.Sprintf(":%d", r.MetricsPort),
 		AlgodNet:                 algodNet,
 		PostgresConnectionString: r.PostgresConnectionString,
@@ -231,7 +235,7 @@ func (r *Args) run(reportDirectory string) error {
 	}
 
 	// Start conduit
-	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary, nextRound)
+	conduitShutdownFunc, err := startConduit(dataDir, r.ConduitBinary, nextRound, healthNet)
 	if err != nil {
 		return fmt.Errorf("failed to start Conduit: %w", err)
 	}
@@ -545,8 +549,8 @@ func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFil
 }
 
 // startConduit starts the conduit binary.
-func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
-	fmt.Printf("%sConduit starting with data directory: %s\n", pad, dataDir)
+func startConduit(dataDir string, conduitBinary string, round uint64, healthNet string) (func() error, error) {
+	fmt.Printf("%sConduit @%s starting with data directory: %s\n", pad, conduitBinary, dataDir)
 	ctx, cf := context.WithCancel(context.Background())
 	defer cf()
 
@@ -565,7 +569,29 @@ func startConduit(dataDir string, conduitBinary string, round uint64) (func() er
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failure calling Start(): %w", err)
 	}
-	// conduit doesn't have health check endpoint. so, no health check for now
+
+	// pause a bit for the block generator server to start
+	time.Sleep(1500 * time.Millisecond)
+
+	// check /health endpoint is available before exiting
+	// NOTE: test may have already began
+	// success := false
+	// retries := 10
+	// for retry := 0; retry < retries; retry++ {
+	// 	resp, err := http.Get(fmt.Sprintf("http://%s/health", healthNet))
+	// 	if err == nil {
+	// 		resp.Body.Close()
+	// 		success = true
+	// 		break
+	// 	}
+	// 	fmt.Printf("%sConduit health endpoint not available after retry (%d/%d): %v\n", pad, retry+1, retries, err)
+	// 	time.Sleep(1500 * time.Millisecond)
+	// }
+	// if success {
+	// 	fmt.Printf("%sConduit health endpoint available\n", pad)
+	// } else {
+	// 	return nil, fmt.Errorf("querying health endpoint failed after %d retries", retries)
+	// }
 
 	return func() error {
 		cf()

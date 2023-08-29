@@ -16,6 +16,10 @@ retry-delay: "1s"
 # Whether or not to print the conduit banner on startup.
 hide-banner: false
 
+# When the address is not empty information is available on '/health'
+api:
+  addr: "{{.HealthPort}}"
+
 # When enabled prometheus metrics are available on '/metrics'
 metrics:
   mode: ON

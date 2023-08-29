@@ -49,6 +49,10 @@ run-runner: block-generator
 run-file-exporter:
 	make run-runner TEMPLATE="--template file-exporter" TIMES=1 RESETDB=
 
+BENCHMARK = "organic.25000"
+benchmark-blocks-export: block-generator
+	make run-file-exporter DURATION=60s SCENARIO=scenarios/benchmarks/$(BENCHMARK).yml REPORTS=$(BENCHMARK)
+
 clean-reports:
 	rm -rf $(REPORTS)
 
