@@ -319,15 +319,18 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
-	msgLengths := make([]int, 0, 3)
-	estimatedSize := 256
+	// serialize encoded batchID, offsetID, message into a continuous memory buffer with the layout
+	// hashRep(batchID)... hashRep(offsetID)... hashRep(message)...
+	const estimatedSize = 256
 	messageBuffer := make([]byte, 0, estimatedSize)
+
 	messageBuffer = HashRepToBuff(batchID, messageBuffer)
-	msgLengths = append(msgLengths, len(messageBuffer))
+	batchIDLen = len(messageBuffer)
 	messageBuffer = HashRepToBuff(offsetID, messageBuffer)
-	msgLengths = append(msgLengths, len(messageBuffer)-msgLengths[0])
+	offsetIDLen = len(messageBuffer) - batchIDLen
 	messageBuffer = HashRepToBuff(message, messageBuffer)
-	msgLengths = append(msgLengths, len(messageBuffer)-msgLengths[1]-msgLengths[0])
+	messageLen = len(messageBuffer) - offsetIDLen - batchIDLen
+	msgLengths := []int{batchIDLen, offsetIDLen, messageLen}
 	allValid, _ := batchVerificationImpl(
 		messageBuffer,
 		msgLengths,
