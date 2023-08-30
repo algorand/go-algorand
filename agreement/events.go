@@ -18,10 +18,10 @@ package agreement
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/timers"
 )
 
 // An event represents the communication of an event to a state machine.
@@ -979,12 +979,16 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
-func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
+func (e messageEvent) AttachValidatedAt(clocks map[round]timers.Clock[TimeoutType]) messageEvent {
 	switch e.T {
 	case payloadVerified:
-		e.Input.Proposal.validatedAt = d
+		if clock, ok := clocks[e.Input.Proposal.Round()]; ok {
+			e.Input.Proposal.validatedAt = clock.Since()
+		}
 	case voteVerified:
-		e.Input.Vote.validatedAt = d
+		if clock, ok := clocks[e.Input.Vote.R.Round]; ok {
+			e.Input.Vote.validatedAt = clock.Since()
+		}
 	}
 	return e
 }
@@ -992,9 +996,11 @@ func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
 // AttachReceivedAt looks for an unauthenticatedProposal inside a
 // payloadPresent or votePresent messageEvent, and attaches the given
 // time to the proposal's receivedAt field.
-func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
+func (e messageEvent) AttachReceivedAt(clocks map[round]timers.Clock[TimeoutType]) messageEvent {
 	if e.T == payloadPresent {
-		e.Input.UnauthenticatedProposal.receivedAt = d
+		if clock, ok := clocks[e.Input.UnauthenticatedProposal.Round()]; ok {
+			e.Input.UnauthenticatedProposal.receivedAt = clock.Since()
+		}
 	} else if e.T == votePresent {
 		// Check for non-nil Tail, indicating this votePresent event
 		// contains a synthetic payloadPresent event that was attached
@@ -1003,7 +1009,9 @@ func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
 			// The tail event is payloadPresent, serialized together
 			// with the proposal vote as a single CompoundMessage
 			// using a protocol.ProposalPayloadTag network message.
-			e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+			if clock, ok := clocks[e.Tail.Input.UnauthenticatedProposal.Round()]; ok {
+				e.Tail.Input.UnauthenticatedProposal.receivedAt = clock.Since()
+			}
 		}
 	}
 	return e

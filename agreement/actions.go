@@ -316,6 +316,21 @@ func (a rezeroAction) String() string {
 
 func (a rezeroAction) do(ctx context.Context, s *Service) {
 	s.Clock = s.Clock.Zero()
+	if _, ok := s.historicalClocks[a.Round]; !ok {
+		s.historicalClocks[a.Round] = s.Clock
+	}
+
+	removeList := make([]round, 0)
+
+	for r, _ := range s.historicalClocks {
+		if a.Round < r+credentialRoundLag {
+			removeList = append(removeList, r)
+		}
+	}
+
+	for _, r := range removeList {
+		delete(s.historicalClocks, r)
+	}
 }
 
 type pseudonodeAction struct {

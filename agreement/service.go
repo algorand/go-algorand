@@ -56,6 +56,8 @@ type Service struct {
 	persistRouter  rootRouter
 	persistStatus  player
 	persistActions []action
+
+	historicalClocks map[round]timers.Clock[TimeoutType]
 }
 
 // Parameters holds the parameters necessary to run the agreement protocol.
@@ -104,6 +106,8 @@ func MakeService(p Parameters) (*Service, error) {
 	}
 
 	s.persistenceLoop = makeAsyncPersistenceLoop(s.log, s.Accessor, s.Ledger)
+
+	s.historicalClocks = make(map[round]timers.Clock[TimeoutType])
 
 	return s, nil
 }

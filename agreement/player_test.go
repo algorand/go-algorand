@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/timers"
 )
 
 var playerTracer tracer
@@ -3234,6 +3235,30 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 
 	rePayloadEvent := ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payload.u()}})
 	require.Truef(t, trace.Contains(rePayloadEvent), "Player should relay payload even if not staged in previous period")
+}
+
+type fixedTestingClock struct {
+	time.Duration
+}
+
+func (c *fixedTestingClock) Zero() timers.Clock[TimeoutType] {
+	return c
+}
+
+func (c *fixedTestingClock) Since() time.Duration {
+	return c.Duration
+}
+
+func (c *fixedTestingClock) TimeoutAt(d time.Duration, timeoutType TimeoutType) <-chan time.Time {
+	return nil
+}
+
+func (c *fixedTestingClock) Encode() []byte {
+	return nil
+}
+
+func (c *fixedTestingClock) Decode([]byte) (timers.Clock[TimeoutType], error) {
+	return &fixedTestingClock{}, nil // TODO
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in proposalStore
