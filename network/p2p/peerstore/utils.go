@@ -56,7 +56,7 @@ func PeerInfoFromAddr(addr string) (*peer.AddrInfo, error) {
 // PeerInfoFromDomainPort converts a string of the form domain:port to AddrInfo
 func PeerInfoFromDomainPort(domainPort string) (*peer.AddrInfo, error) {
 	parts := strings.Split(domainPort, ":")
-	if len(parts) != 2 {
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return nil, fmt.Errorf("invalid domain port string %s, found %d colon-separated parts", domainPort, len(parts))
 	}
 	maddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dns4/%s/tcp/%s", parts[0], parts[1]))

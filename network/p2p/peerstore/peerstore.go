@@ -151,7 +151,10 @@ func (ps *PeerStore) UpdateRetryAfter(addr string, retryAfter time.Time) {
 	}
 	metadata, _ := ps.Get(info.ID, "addressData")
 	if metadata != nil {
-		ad := metadata.(addressData)
+		ad, ok := metadata.(addressData)
+		if !ok {
+			return
+		}
 		ad.retryAfter = retryAfter
 		_ = ps.Put(info.ID, "addressData", ad)
 	}
@@ -175,7 +178,10 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 	if err != nil {
 		return false, 0 /* not used */, curTime /* not used */
 	}
-	ad := metadata.(addressData)
+	ad, ok := metadata.(addressData)
+	if !ok {
+		return false, 0 /* not used */, curTime /* not used */
+	}
 	// Remove from recentConnectionTimes the times later than ConnectionsRateLimitingWindowSeconds
 	for numElmtsToRemove < len(ad.recentConnectionTimes) {
 		timeSince = curTime.Sub(ad.recentConnectionTimes[numElmtsToRemove])
@@ -190,7 +196,10 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 	ps.popNElements(numElmtsToRemove, peer.ID(addr))
 	// If there are max number of connections within the time window, wait
 	metadata, _ = ps.Get(info.ID, "addressData")
-	ad = metadata.(addressData)
+	ad, ok = metadata.(addressData)
+	if !ok {
+		return false, 0 /* not used */, curTime /* not used */
+	}
 	numElts := len(ad.recentConnectionTimes)
 	if uint(numElts) >= ps.connectionsRateLimitingCount {
 		return true, /* true */
@@ -216,7 +225,10 @@ func (ps *PeerStore) UpdateConnectionTime(addr string, provisionalTime time.Time
 	if err != nil {
 		return false
 	}
-	ad := metadata.(addressData)
+	ad, ok := metadata.(addressData)
+	if !ok {
+		return false
+	}
 	defer func() {
 		_ = ps.Put(info.ID, "addressData", ad)
 
@@ -397,5 +409,5 @@ func shuffleSelect(set []string, n int) []string {
 }
 
 func shuffleStrings(set []string) {
-	rand.Shuffle(len(set), func(i, j int) { t := set[i]; set[i] = set[j]; set[j] = t })
+	rand.Shuffle(len(set), func(i, j int) { set[i], set[j] = set[j], set[i] })
 }
