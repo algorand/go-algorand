@@ -127,7 +127,7 @@ type AlgorandFullNode struct {
 	ledgerService            *rpcs.LedgerService
 	txPoolSyncerService      *rpcs.TxSyncer
 
-	rootDir         string
+	genesisDirs     config.ResolvedGenesisDirs
 	genesisID       string
 	genesisHash     crypto.Digest
 	devMode         bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
@@ -177,23 +177,17 @@ type TxnWithStatus struct {
 // (i.e., it returns a node that participates in consensus)
 func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 	node := new(AlgorandFullNode)
-	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
 	node.config = cfg
-
-	// load stored data
-	genesisDir := filepath.Join(rootDir, genesis.ID())
-	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
-
-	// create initial ledger, if it doesn't exist
-	err := os.Mkdir(genesisDir, 0700)
-	if err != nil && !os.IsExist(err) {
-		log.Errorf("Unable to create genesis directory: %v", err)
+	var err error
+	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
+	if err != nil {
 		return nil, err
 	}
+
 	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
@@ -203,7 +197,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
 	if cfg.EnableP2P {
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, genesisDir, phonebookAddresses, genesis.ID(), genesis.Network)
+		// TODO: pass more appropriate genesisDir (hot/cold). Presently this is just used to store a peerID key.
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, node.genesisDirs.RootGenesisDir, phonebookAddresses, genesis.ID(), genesis.Network)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
@@ -223,9 +218,13 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	ledgerPaths := ledger.DirsAndPrefix{
+		DBFilePrefix:        config.LedgerFilenamePrefix,
+		ResolvedGenesisDirs: node.genesisDirs,
+	}
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
-		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
+		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
 	}
 
@@ -256,7 +255,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
-	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
+	// crash data is stored in the cold data directory unless otherwise specified
+	crashPathname := filepath.Join(node.genesisDirs.CrashGenesisDir, config.CrashFilename)
 	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
 	if err != nil {
 		log.Errorf("Cannot load crash data: %v", err)
@@ -271,6 +271,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	} else {
 		agreementClock = timers.MakeMonotonicClock[agreement.TimeoutType](time.Now())
 	}
+
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
 		Accessor:       crashAccess,
@@ -294,7 +295,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
-	registry, err := ensureParticipationDB(genesisDir, node.log)
+	registry, err := ensureParticipationDB(node.genesisDirs.ColdGenesisDir, node.log)
 	if err != nil {
 		log.Errorf("unable to initialize the participation registry database: %v", err)
 		return nil, err
@@ -327,7 +328,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
-	node.stateProofWorker = stateproof.NewWorker(genesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	node.stateProofWorker = stateproof.NewWorker(node.genesisDirs.StateproofGenesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }
@@ -433,7 +434,7 @@ func (node *AlgorandFullNode) Stop() {
 
 // note: unlike the other two functions, this accepts a whole filename
 func (node *AlgorandFullNode) getExistingPartHandle(filename string) (db.Accessor, error) {
-	filename = filepath.Join(node.rootDir, node.genesisID, filename)
+	filename = filepath.Join(node.genesisDirs.RootGenesisDir, filename)
 
 	_, err := os.Stat(filename)
 	if err == nil {
@@ -837,9 +838,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.Participa
 		return account.ErrParticipationIDNotFound
 	}
 
-	genID := node.GenesisID()
-
-	outDir := filepath.Join(node.rootDir, genID)
+	outDir := node.genesisDirs.RootGenesisDir
 
 	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
 	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
@@ -901,9 +900,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (strin
 
 // InstallParticipationKey Given a participation key binary stream install the participation key.
 func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
-	genID := node.GenesisID()
-
-	outDir := filepath.Join(node.rootDir, genID)
+	outDir := node.genesisDirs.RootGenesisDir
 
 	fullyQualifiedTempFile, err := createTemporaryParticipationKey(outDir, partKeyBinary)
 	// We need to make sure no tempfile is created/remains if there is an error
@@ -958,7 +955,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 
 func (node *AlgorandFullNode) loadParticipationKeys() error {
 	// Generate a list of all potential participation key files
-	genesisDir := filepath.Join(node.rootDir, node.genesisID)
+	genesisDir := node.genesisDirs.RootGenesisDir
 	files, err := os.ReadDir(genesisDir)
 	if err != nil {
 		return fmt.Errorf("AlgorandFullNode.loadPartitipationKeys: could not read directory %v: %v", genesisDir, err)
