@@ -236,18 +236,17 @@ block-generator runner \
 
 If all goes well, the run will generate a directory named `reports`
 in the same directory in which the command was run.
-In addtion to the statistical report and run logs,
+In addition to the statistical report and run logs,
 there will be a directory ending with `_data` - this is conduit's
 data directory (which is saved thanks to the `--keep-data-dir` flag).
-In that directory under `exporter_file_writer/`,
+In that directory under `exporter_file_writer/`
 the generated blocks and a genesis file will be saved.
 
 ## Scenario Distribution - Configuration vs. Reality
 
 This section follows up on the [Scenario Configuration](#scenario-configuration) section to detail how each kind of transaction is actually chosen.
 Note that -especially for early rounds- there is no guarantee that the
-percentages of transaction types will follow the distribution which
-was configured.
+percentages of transaction types will resemble the configured distribution.
 
 For example consider the [Organic 25,000](scenarios/benchmarks/organic.25000.yml) scenario:
 
@@ -333,3 +332,8 @@ In particular:
 * for Round 2, all **app call** transactions are replaced by **app opt in**
 
 Therefore, for scenarios involving a variety of app transactions, only for Round 3 and higher do we expect to see distributions comparable to those configured.
+
+> NOTE: Even in the steady state, we still expect fundamental deviations 
+> from the configured distributions in the cases of apps. This is because
+> an app call may have associated group and inner transactions. For example,
+> if an app call requires 1 sibling asset call in it's group and has 2 inner payments, this single app call will generate 1 additional asset txn and 2 payment txns.
