@@ -241,7 +241,7 @@ func (f *GoalFixture) NetworkPregen(template, pregendir string) (stdErr string, 
 	args := []string{
 		networkCmd,
 		pregenCmd,
-		"-g",
+		"-p",
 		pregendir,
 	}
 	if template != "" {
@@ -266,7 +266,7 @@ func (f *GoalFixture) NetworkCreate(networkdir, networkName, template, pregendir
 		args = append(args, "-t", template)
 	}
 	if pregendir != "" {
-		args = append(args, "-g", pregendir)
+		args = append(args, "-p", pregendir)
 	}
 	_, _, err = f.executeRawCommand(args...)
 	return
