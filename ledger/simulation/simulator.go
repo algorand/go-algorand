@@ -27,18 +27,14 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// simulatorLedger patches the ledger interface to use a constant latest round.
-type simulatorLedger struct {
-	*data.Ledger
-	start basics.Round
-}
-
 // Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
 type Request struct {
+	Round                 basics.Round
 	TxnGroups             [][]transactions.SignedTxn
 	AllowEmptySignatures  bool
 	AllowMoreLogging      bool
@@ -47,10 +43,22 @@ type Request struct {
 	TraceConfig           ExecTraceConfig
 }
 
-// Latest is part of the LedgerForSimulator interface.
+// simulatorLedger patches the ledger interface to use a constant latest round.
+type simulatorLedger struct {
+	*data.Ledger
+	start basics.Round
+}
+
+// Latest is part of the ledger.Ledger interface.
 // We override this to use the set latest to prevent racing with the network
 func (l simulatorLedger) Latest() basics.Round {
 	return l.start
+}
+
+// LatestTotals is part of the ledger.Ledger interface.
+func (l simulatorLedger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	totals, err := l.Totals(l.start)
+	return l.start, totals, err
 }
 
 // LookupLatest would implicitly use the latest round in the _underlying_
@@ -60,6 +68,23 @@ func (l simulatorLedger) Latest() basics.Round {
 func (l simulatorLedger) LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
 	err := errors.New("unexpected call to LookupLatest")
 	return basics.AccountData{}, 0, basics.MicroAlgos{}, err
+}
+
+// StartEvaluator is part of the ledger.Ledger interface. We override this so that
+// the eval.LedgerForEvaluator value passed into eval.StartEvaluator is a simulatorLedger,
+// not a data.Ledger. This ensures our overridden LookupLatest method will be used.
+func (l simulatorLedger) StartEvaluator(hdr bookkeeping.BlockHeader, paysetHint, maxTxnBytesPerBlock int, tracer logic.EvalTracer) (*eval.BlockEvaluator, error) {
+	if tracer == nil {
+		return nil, errors.New("tracer is nil")
+	}
+	return eval.StartEvaluator(&l, hdr,
+		eval.EvaluatorOptions{
+			PaysetHint:          paysetHint,
+			Generate:            true,
+			Validate:            true,
+			MaxTxnBytesPerBlock: maxTxnBytesPerBlock,
+			Tracer:              tracer,
+		})
 }
 
 // SimulatorError is the base error type for all simulator errors.
@@ -94,7 +119,7 @@ type Simulator struct {
 // MakeSimulator creates a new simulator from a ledger.
 func MakeSimulator(ledger *data.Ledger, developerAPI bool) *Simulator {
 	return &Simulator{
-		ledger:       simulatorLedger{ledger, ledger.Latest()},
+		ledger:       simulatorLedger{ledger, 0}, // start round to be specified in Simulate method
 		developerAPI: developerAPI,
 	}
 }
@@ -211,6 +236,13 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer l
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
 func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
+	if simulateRequest.Round != 0 {
+		s.ledger.start = simulateRequest.Round
+	} else {
+		// Access underlying data.Ledger to get the real latest round
+		s.ledger.start = s.ledger.Ledger.Latest()
+	}
+
 	simulatorTracer, err := makeEvalTracer(s.ledger.start, simulateRequest, s.developerAPI)
 	if err != nil {
 		return Result{}, err

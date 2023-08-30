@@ -550,6 +550,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 	}
 	return simulation.Request{
 		TxnGroups:             txnGroups,
+		Round:                 request.Round,
 		AllowEmptySignatures:  request.AllowEmptySignatures,
 		AllowMoreLogging:      request.AllowMoreLogging,
 		AllowUnnamedResources: request.AllowUnnamedResources,
