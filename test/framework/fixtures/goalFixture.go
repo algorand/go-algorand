@@ -242,12 +242,12 @@ func (f *GoalFixture) AccountImportRootKey(wallet string, createDefaultUnencrypt
 }
 
 // NetworkPregen exposes the `goal network pregen` command
-func (f *GoalFixture) NetworkPregen(template, genesisdir string) (stdErr string, err error) {
+func (f *GoalFixture) NetworkPregen(template, pregendir string) (stdErr string, err error) {
 	args := []string{
 		networkCmd,
 		pregenCmd,
 		"-g",
-		genesisdir,
+		pregendir,
 	}
 	if template != "" {
 		args = append(args, "-t", template)
@@ -257,7 +257,7 @@ func (f *GoalFixture) NetworkPregen(template, genesisdir string) (stdErr string,
 }
 
 // NetworkCreate exposes the `goal network create` command
-func (f *GoalFixture) NetworkCreate(networkdir, networkName, template, genesisdir string) (err error) {
+func (f *GoalFixture) NetworkCreate(networkdir, networkName, template, pregendir string) (err error) {
 	args := []string{
 		networkCmd,
 		createCmd,
@@ -270,8 +270,8 @@ func (f *GoalFixture) NetworkCreate(networkdir, networkName, template, genesisdi
 	if template != "" {
 		args = append(args, "-t", template)
 	}
-	if genesisdir != "" {
-		args = append(args, "-g", genesisdir)
+	if pregendir != "" {
+		args = append(args, "-g", pregendir)
 	}
 	_, _, err = f.executeRawCommand(args...)
 	return

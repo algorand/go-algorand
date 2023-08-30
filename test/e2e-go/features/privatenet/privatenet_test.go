@@ -32,9 +32,9 @@ func TestPrivateNetworkImportKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// This test takes 5~10 seconds.
-	if testing.Short() {
-		t.Skip()
-	}
+	// if testing.Short() {
+	// 	t.Skip()
+	// }
 
 	// First test that keys can be exported by using `goal network pregen ...`
 	// Don't start up network, just create genesis files.

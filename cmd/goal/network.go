@@ -41,7 +41,7 @@ var noImportKeys bool
 var noClean bool
 var devModeOverride bool
 var startOnCreation bool
-var genesisDir string
+var pregenDir string
 
 func init() {
 	networkCmd.AddCommand(networkCreateCmd)
@@ -53,7 +53,7 @@ func init() {
 	networkCreateCmd.Flags().BoolVar(&noClean, "noclean", false, "Prevents auto-cleanup on error - for diagnosing problems")
 	networkCreateCmd.Flags().BoolVar(&devModeOverride, "devMode", false, "Forces the configuration to enable DevMode, returns an error if the template is not compatible with DevMode.")
 	networkCreateCmd.Flags().BoolVarP(&startOnCreation, "start", "s", false, "Automatically start the network after creating it.")
-	networkCreateCmd.Flags().StringVarP(&genesisDir, "genesisdir", "g", "", "Specify the path to the directory with existing genesis.json, root and partkeys to import into the network directory. By default, the genesis.json and keys will be generated on start. This should only be used on private networks.")
+	networkCreateCmd.Flags().StringVarP(&pregenDir, "pregendir", "p", "", "Specify the path to the directory with pregenerated genesis.json, root and partkeys to import into the network directory. By default, the genesis.json and keys will be generated on start. This should only be used on private networks.")
 	networkCreateCmd.MarkFlagRequired("rootdir")
 
 	networkCmd.AddCommand(networkStartCmd)
@@ -74,8 +74,8 @@ func init() {
 
 	networkCmd.AddCommand(networkPregenCmd)
 	networkPregenCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
-	networkPregenCmd.Flags().StringVarP(&genesisDir, "genesisdir", "g", "", "Specify the path to the directory to export genesis.json, root and partkey files. This should only be used on private networks.")
-	networkPregenCmd.MarkFlagRequired("genesisdir")
+	networkPregenCmd.Flags().StringVarP(&pregenDir, "pregendir", "p", "", "Specify the path to the directory to export genesis.json, root and partkey files. This should only be used on private networks.")
+	networkPregenCmd.MarkFlagRequired("pregendir")
 	// Hide rootdir flag as it is unused and will error if used with this command.
 	networkPregenCmd.SetHelpFunc(func(command *cobra.Command, strings []string) {
 		_ = command.Flags().MarkHidden("rootdir")
@@ -133,13 +133,13 @@ var networkCreateCmd = &cobra.Command{
 			reportErrorf(infoNetworkAlreadyExists, networkRootDir)
 		}
 
-		// If genesisDir is specified, copy files over
-		if genesisDir != "" {
-			genesisDir, err = filepath.Abs(genesisDir)
+		// If pregendir is specified, copy files over
+		if pregenDir != "" {
+			pregenDir, err = filepath.Abs(pregenDir)
 			if err != nil {
 				panic(err)
 			}
-			err = util.CopyFolder(genesisDir, networkRootDir)
+			err = util.CopyFolder(pregenDir, networkRootDir)
 			if err != nil {
 				panic(err)
 			}
@@ -282,15 +282,15 @@ var networkDeleteCmd = &cobra.Command{
 
 var networkPregenCmd = &cobra.Command{
 	Use:   "pregen",
-	Short: "Creates the genesis.json, root and participation keys for a wallet",
+	Short: "Pregenerates the genesis.json, root and participation keys for a wallet",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		var err error
 		if networkRootDir != "" {
-			reportErrorf("This command does not take a network directory as an argument. Use --genesisdir flag instead.")
+			reportErrorf("This command does not take a network directory as an argument. Use --pregendir flag instead.")
 		}
 
-		genesisDir, err = filepath.Abs(genesisDir)
+		pregenDir, err = filepath.Abs(pregenDir)
 		if err != nil {
 			panic(err)
 		}
@@ -314,8 +314,8 @@ var networkPregenCmd = &cobra.Command{
 		}
 
 		// Make sure target directory does not exist or is empty
-		if util.FileExists(genesisDir) && !util.IsEmpty(genesisDir) {
-			reportErrorf(infoNetworkAlreadyExists, genesisDir)
+		if util.FileExists(pregenDir) && !util.IsEmpty(pregenDir) {
+			reportErrorf(infoNetworkAlreadyExists, pregenDir)
 		}
 
 		var template netdeploy.NetworkTemplate
@@ -334,7 +334,7 @@ var networkPregenCmd = &cobra.Command{
 			reportErrorf("Error in template validation: %v\n", err)
 		}
 
-		err = gen.GenerateGenesisFiles(template.Genesis, config.Consensus.Merge(consensus), genesisDir, os.Stdout)
+		err = gen.GenerateGenesisFiles(template.Genesis, config.Consensus.Merge(consensus), pregenDir, os.Stdout)
 		if err != nil {
 			reportErrorf("Cannot write genesis files: %s", err)
 		}
