@@ -975,6 +975,9 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
+// AttachValidatedAt looks for a validated proposal or vote inside a
+// payloadVerified or voteVerified messageEvent, and attaches the given time to
+// the proposal's validatedAt field.
 func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round) messageEvent {
 	switch e.T {
 	case payloadVerified:
