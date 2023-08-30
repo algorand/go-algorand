@@ -984,7 +984,7 @@ func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round) mes
 			e.Input.Proposal.validatedAt = d
 		}
 	case voteVerified:
-		if e.Input.UnauthenticatedVote.R.Round > currentRound {
+		if e.Input.Vote.R.Round > currentRound {
 			e.Input.Vote.validatedAt = 1
 		} else {
 			e.Input.Vote.validatedAt = d
