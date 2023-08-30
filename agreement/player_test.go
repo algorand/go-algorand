@@ -3257,7 +3257,7 @@ func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 	// send payloadPresent message
 	m := message{UnauthenticatedProposal: pP.u()}
 	inMsg = messageEvent{T: payloadPresent, Input: m}
-	inMsg = inMsg.AttachReceivedAt(time.Second)
+	inMsg = inMsg.AttachReceivedAt(time.Second, r-1)
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3297,7 +3297,7 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 		// send payloadPresent message
 		m := message{UnauthenticatedProposal: pP.u()}
 		inMsg = messageEvent{T: payloadPresent, Input: m}
-		inMsg = inMsg.AttachReceivedAt(time.Second)
+		inMsg = inMsg.AttachReceivedAt(time.Second, r+round(i)-1)
 		err, panicErr = pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3331,7 +3331,7 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	proposalMsg := message{UnauthenticatedProposal: pP.u()}
 	compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
 		Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
-	inMsg := compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
+	inMsg := compoundMsg.AttachReceivedAt(time.Second, r-1) // call AttachReceivedAt like demux would
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3380,7 +3380,7 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 		compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
 			Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
 
-		inMsg := compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
+		inMsg := compoundMsg.AttachReceivedAt(time.Second, r+round(i)-1) // call AttachReceivedAt like demux would
 		err, panicErr := pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3446,7 +3446,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	proposalMsg := message{UnauthenticatedProposal: pP.u()}
 	compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
 		Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
-	inMsg = compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
+	inMsg = compoundMsg.AttachReceivedAt(time.Second, r-1) // call AttachReceivedAt like demux would
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3500,7 +3500,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 		proposalMsg := message{UnauthenticatedProposal: pP.u()}
 		compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
 			Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
-		inMsg = compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
+		inMsg = compoundMsg.AttachReceivedAt(time.Second, r+round(i)-1) // call AttachReceivedAt like demux would
 		err, panicErr = pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)

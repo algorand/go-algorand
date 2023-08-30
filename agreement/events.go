@@ -975,15 +975,26 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
+// AttachValidatedAt looks for an unauthenticatedProposal or unauthenticatedVote
+// inside a payloadVerified or voteVerified messageEvent, and attaches the given
+// time to the proposal's receivedAt field, if the message's round matches the
+// current round. If the message will be pipelined (it is for currentRound+1) then
+// a duration of 1ns will be used.
 func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round) messageEvent {
 	switch e.T {
 	case payloadVerified:
-		e.Input.Proposal.validatedAt = d
+		switch e.Input.Proposal.Round() {
+		case currentRound:
+			e.Input.Proposal.validatedAt = d
+		case currentRound + 1:
+			e.Input.Proposal.validatedAt = 1
+		}
 	case voteVerified:
-		if e.Input.UnauthenticatedVote.R.Round == currentRound+1 {
-			e.Input.Vote.validatedAt = 1
-		} else {
+		switch e.Input.Vote.R.Round {
+		case currentRound:
 			e.Input.Vote.validatedAt = d
+		case currentRound + 1:
+			e.Input.Vote.validatedAt = 1
 		}
 	}
 	return e
@@ -991,10 +1002,17 @@ func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round) mes
 
 // AttachReceivedAt looks for an unauthenticatedProposal inside a
 // payloadPresent or votePresent messageEvent, and attaches the given
-// time to the proposal's receivedAt field.
-func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
+// time to the proposal's receivedAt field, if the message's round matches the
+// current round. If the message will be pipelined (it is for currentRound+1) then
+// a duration of 1ns will be used.
+func (e messageEvent) AttachReceivedAt(d time.Duration, currentRound round) messageEvent {
 	if e.T == payloadPresent {
-		e.Input.UnauthenticatedProposal.receivedAt = d
+		switch e.Input.UnauthenticatedProposal.Round() {
+		case currentRound:
+			e.Input.UnauthenticatedProposal.receivedAt = d
+		case currentRound + 1:
+			e.Input.UnauthenticatedProposal.receivedAt = 1
+		}
 	} else if e.T == votePresent {
 		// Check for non-nil Tail, indicating this votePresent event
 		// contains a synthetic payloadPresent event that was attached
@@ -1003,7 +1021,12 @@ func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
 			// The tail event is payloadPresent, serialized together
 			// with the proposal vote as a single CompoundMessage
 			// using a protocol.ProposalPayloadTag network message.
-			e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+			switch e.Tail.Input.UnauthenticatedProposal.Round() {
+			case currentRound:
+				e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+			case currentRound + 1:
+				e.Tail.Input.UnauthenticatedProposal.receivedAt = 1
+			}
 		}
 	}
 	return e
