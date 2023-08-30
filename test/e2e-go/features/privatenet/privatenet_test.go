@@ -18,7 +18,6 @@
 package privatenet
 
 import (
-	"os"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -39,11 +38,9 @@ func TestPrivateNetworkImportKeys(t *testing.T) {
 	// First test that keys can be exported by using `goal network pregen ...`
 	// Don't start up network, just create genesis files.
 	var goalFixture fixtures.GoalFixture
-	tmpGenDir := "tmpGen"
-	tmpNetDir := "tmpNet"
-	defaultTemplate := ""
-	os.RemoveAll(tmpGenDir) // clean up any tmp directories
-	os.RemoveAll(tmpNetDir) // clean up any tmp directories
+	tmpGenDir := t.TempDir()
+	tmpNetDir := t.TempDir()
+	defaultTemplate := "" // Use the default template by omitting the filepath.
 
 	_, err := goalFixture.NetworkPregen(defaultTemplate, tmpGenDir)
 	require.NoError(t, err)
@@ -62,8 +59,4 @@ func TestPrivateNetworkImportKeys(t *testing.T) {
 
 	err = goalFixture.NetworkStop(tmpNetDir)
 	require.NoError(t, err)
-
-	// Clean up
-	os.RemoveAll(tmpGenDir)
-	os.RemoveAll(tmpNetDir)
 }

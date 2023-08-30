@@ -64,24 +64,19 @@ const (
 	createCmd  = "create"
 )
 
-func (f *GoalFixture) executeCommand(args ...string) (retStdout string, retStderr string, err error) {
+func (f *GoalFixture) executeRawCommand(args ...string) (retStdout string, retStderr string, err error) {
+	// Executes a command without a specified data directory
 	cmd := filepath.Join(f.binDir, goalCmd)
-	// We always execute goal against the PrimaryDataDir() instance
-	args = append(args, "-d", f.PrimaryDataDir())
 	retStdout, retStderr, err = util.ExecAndCaptureOutput(cmd, args...)
 	retStdout = strings.TrimRight(retStdout, "\n")
 	retStderr = strings.TrimRight(retStderr, "\n")
-	//fmt.Printf("command: %v %v\nret: %v\n", cmd, args, ret)
 	return
 }
 
-func (f *GoalFixture) executeRawCommand(args ...string) (retStdout string, retStderr string, err error) {
-	cmd := filepath.Join(f.binDir, goalCmd)
-	retStdout, retStderr, err = util.ExecAndCaptureOutput(cmd, args...)
-	retStdout = strings.TrimRight(retStdout, "\n")
-	retStderr = strings.TrimRight(retStderr, "\n")
-	//fmt.Printf("command: %v %v\nret: %v\n", cmd, args, ret)
-	return
+func (f *GoalFixture) executeCommand(args ...string) (retStdout string, retStderr string, err error) {
+	// We always execute goal against the PrimaryDataDir() instance
+	args = append(args, "-d", f.PrimaryDataDir())
+	return f.executeRawCommand(args...)
 }
 
 // combine the error and the output so that we could return it as a single error object.
