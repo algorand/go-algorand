@@ -386,28 +386,8 @@ func (node *AlgorandFullNode) capabilities() []p2p.Capability {
 	if node.IsArchival() {
 		caps = append(caps, p2p.Archival)
 	}
-	switch node.config.CatchpointTracking {
-	case -1:
-		// No catchpoints.
-	default:
-		// Give a warning, then fall through to case 0.
-		logging.Base().Warnf("node: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", node.config.CatchpointTracking)
-		fallthrough
-	case 0:
-		if node.config.Archival && (node.config.CatchpointInterval > 0) {
-			caps = append(caps, p2p.Catchpoints)
-			break
-		}
-	case 1:
-		if node.config.CatchpointInterval > 0 && node.config.Archival {
-			caps = append(caps, p2p.Catchpoints)
-			break
-		}
-	case 2:
-		if node.config.CatchpointInterval > 0 {
-			caps = append(caps, p2p.Catchpoints)
-			break
-		}
+	if node.config.StoresCatchpoints() {
+		caps = append(caps, p2p.Catchpoints)
 	}
 	return caps
 }
