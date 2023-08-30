@@ -21,13 +21,11 @@ import (
 	"errors"
 )
 
-// nibble utilities
-// Nibbles are 4-bit values stored in 8-bit byte arrays
+// Nibbles are 4-bit values stored in an 8-bit byte arrays
 type Nibbles []byte
 
 // MakeNibbles returns a nibble array from the byte array.  If half is true, the
-// last 4 bits of the last byte of the array are ignored.  The data for the nibble
-// is copied into a new memory allocation
+// last 4 bits of the last byte of the array are ignored.
 func MakeNibbles(data []byte, half bool) Nibbles {
 	return unpack(data, half)
 }
@@ -147,22 +145,16 @@ func (ns Nibbles) serialize() (data []byte) {
 
 // deserializeNibbles returns a nibble array from the byte array.
 func deserializeNibbles(encoding []byte) (Nibbles, error) {
+	var ns Nibbles
 	if len(encoding) == 0 {
 		return nil, errors.New("invalid encoding")
 	}
-	length := len(encoding)
-	if encoding[length-1] == 1 {
-		// Half width
-		if length >= 2 {
-			if encoding[length-2]&0x0f != 0 {
-				return nil, errors.New("invalid encoding")
-			}
-		}
-		return unpack(encoding[:length-1], true), nil
-	} else if encoding[length-1] == 3 {
-		// Full width
-		return unpack(encoding[:length-1], false), nil
+	if encoding[len(encoding)-1] == 1 {
+		ns = unpack(encoding[:len(encoding)-1], true)
+	} else if encoding[len(encoding)-1] == 3 {
+		ns = unpack(encoding[:len(encoding)-1], false)
 	} else {
 		return nil, errors.New("invalid encoding")
 	}
+	return ns, nil
 }
