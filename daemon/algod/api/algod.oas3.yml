@@ -1221,7 +1221,7 @@
         "type": "object"
       },
       "ApplicationInitialStates": {
-        "description": "An application's initial global/local/box state before simulation.",
+        "description": "An application's initial global/local/box states that were accessed during simulation.",
         "properties": {
           "app-boxes": {
             "$ref": "#/components/schemas/ApplicationKVStorage"

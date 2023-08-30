@@ -280,7 +280,7 @@ type Application struct {
 	Params ApplicationParams `json:"params"`
 }
 
-// ApplicationInitialStates An application's initial global/local/box state before simulation.
+// ApplicationInitialStates An application's initial global/local/box states that were accessed during simulation.
 type ApplicationInitialStates struct {
 	// AppBoxes An application's global/local/box state.
 	AppBoxes *ApplicationKVStorage `json:"app-boxes,omitempty"`
