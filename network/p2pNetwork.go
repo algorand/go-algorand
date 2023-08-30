@@ -35,6 +35,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 // P2PNetwork implements the GossipNode interface
@@ -182,19 +183,29 @@ func (n *P2PNetwork) GetGenesisID() string {
 // Address returns a string and whether that is a 'final' address or guessed.
 func (n *P2PNetwork) Address() (string, bool) {
 	addrInfo := n.service.AddrInfo()
+	if len(addrInfo.Addrs) == 0 {
+		return "", false
+	}
 	addrs, err := peer.AddrInfoToP2pAddrs(&addrInfo)
 	if err != nil {
 		n.log.Warnf("Failed to generate valid multiaddr: %v", err)
 		return "", false
 	}
-	if len(addrs) == 0 {
-		return "", false
-	}
-	if len(addrs) > 1 {
-		n.log.Infof("Multiple addresses found, using first one from %v", addrs)
-	}
+	// loop through and see if we have a non loopback address available
+	for _, addr := range addrs {
+		if !manet.IsIPLoopback(addr) && !manet.IsIPUnspecified(addr) {
+			return addr.String(), true
 
-	return addrs[0].String(), true
+		}
+	}
+	// We don't have a non loopback address, so just return the first one if it contains an ip4 address or port
+	addr := addrs[0].String()
+	if strings.Contains(addr, "/ip4/") && strings.Contains(addr, "/tcp/") {
+		return addr, true
+
+	}
+	return "", false
+
 }
 
 // Broadcast sends a message.
