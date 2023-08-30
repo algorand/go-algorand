@@ -35,11 +35,14 @@ func init() {
 		Use:   "runner",
 		Short: "Run test suite and collect results.",
 		Long:  "Run an automated test suite using the block-generator daemon and a provided conduit binary. Results are captured to a specified output directory.",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error{
 			fmt.Printf("starting block-generator runner with args: %+v\n", runnerArgs)
-			if err := Run(runnerArgs); err != nil {
-				fmt.Println(err)
+
+			if runnerArgs.Template == "postgres-exporter" && runnerArgs.PostgresConnectionString == "" {
+				return fmt.Errorf("exporting to postgres requires that postgres-connection-string to be set")
 			}
+
+			return Run(runnerArgs)
 		},
 	}
 
@@ -63,6 +66,5 @@ func init() {
 
 	RunnerCmd.MarkFlagRequired("scenario")
 	RunnerCmd.MarkFlagRequired("conduit-binary")
-	RunnerCmd.MarkFlagRequired("postgres-connection-string")
 	RunnerCmd.MarkFlagRequired("report-directory")
 }

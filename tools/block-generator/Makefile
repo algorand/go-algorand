@@ -11,6 +11,7 @@ PGUSER = algorand
 PGDB = generator_db
 PGCONT = "generator-test-container"
 PGCONN = "host=localhost user=$(PGUSER) password=algorand dbname=$(PGDB) port=15432 sslmode=disable"
+PGRUNNER = --postgres-connection-string $(PGCONN)
 
 block-generator: clean-generator
 	go build
@@ -39,7 +40,7 @@ run-runner: block-generator
 	--test-duration $(DURATION) \
 	--conduit-log-level trace \
 	$(TEMPLATE) \
-	--postgres-connection-string $(PGCONN) \
+	$(PGRUNNER) \
 	--scenario $(SCENARIO) \
 	$(RESETDB) \
 	$(VERBOSE) \
@@ -47,7 +48,7 @@ run-runner: block-generator
 	--times $(TIMES)
 
 run-file-exporter:
-	make run-runner TEMPLATE="--template file-exporter" TIMES=1 RESETDB=
+	make run-runner TEMPLATE="--template file-exporter" TIMES=1 RESETDB= PGRUNNER=
 
 BENCHMARK = "organic.25000"
 benchmark-blocks-export: block-generator
