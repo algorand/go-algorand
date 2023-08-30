@@ -75,7 +75,7 @@ func (c *wsPeerConnP2PImpl) SetReadLimit(int64) {}
 
 func (c *wsPeerConnP2PImpl) CloseWithoutFlush() error {
 	err := c.stream.Close()
-	if err != nil && err != yamux.ErrStreamClosed && err != yamux.ErrSessionShutdown {
+	if err != nil && err != yamux.ErrStreamClosed && err != yamux.ErrSessionShutdown && err != yamux.ErrStreamReset {
 		return err
 	}
 	return nil

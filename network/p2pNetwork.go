@@ -155,16 +155,16 @@ func (n *P2PNetwork) Stop() {
 		n.wsPeersConnectivityCheckTicker.Stop()
 		n.wsPeersConnectivityCheckTicker = nil
 	}
-	n.ctxCancel()
 	n.innerStop()
+	n.ctxCancel()
 	n.service.Close()
 	n.wg.Wait()
 }
 
 // innerStop context for shutting down peers
 func (n *P2PNetwork) innerStop() {
-	n.wsPeersLock.RLock()
-	defer n.wsPeersLock.RUnlock()
+	n.wsPeersLock.Lock()
+	defer n.wsPeersLock.Unlock()
 	closeGroup := sync.WaitGroup{}
 	closeGroup.Add(len(n.wsPeers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
