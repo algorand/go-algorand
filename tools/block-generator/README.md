@@ -336,4 +336,4 @@ Therefore, for scenarios involving a variety of app transactions, only for Round
 > NOTE: Even in the steady state, we still expect fundamental deviations 
 > from the configured distributions in the cases of apps. This is because
 > an app call may have associated group and inner transactions. For example,
-> if an app call requires 1 sibling asset call in it's group and has 2 inner payments, this single app call will generate 1 additional asset txn and 2 payment txns.
+> if an app call requires 1 sibling asset call in its group and has 2 inner payments, this single app call will generate 1 additional asset txn and 2 payment txns.
