@@ -935,6 +935,16 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 		services[i].Shutdown()
 	}
 
+	// check that historical clocks map didn't get too large
+	for i := 0; i < numNodes; i++ {
+		require.LessOrEqual(t, len(services[i].historicalClocks), int(credentialRoundLag)+1, "too many historical clocks kept")
+	}
+	if numRounds >= int(credentialRoundLag) {
+		for i := 0; i < numNodes; i++ {
+			require.Equal(t, len(services[i].historicalClocks), int(credentialRoundLag)+1, "not enough historical clocks kept")
+		}
+	}
+
 	sanityCheck(startRound, round(numRounds), ledgers)
 
 	if len(clocks) == 0 {
@@ -1019,6 +1029,16 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 	}
 
 	simulateAgreement(t, 5, 50, disabled)
+}
+
+func TestAgreementHistoricalClocksCleanup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+
+	simulateAgreement(t, 5, int(credentialRoundLag)+10, disabled)
 }
 
 func createDynamicFilterConfig() (version protocol.ConsensusVersion, consensusVersion func(r basics.Round) (protocol.ConsensusVersion, error), configCleanup func()) {
