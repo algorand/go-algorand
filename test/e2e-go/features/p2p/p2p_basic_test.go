@@ -48,7 +48,7 @@ func testP2PWithConfig(t *testing.T, cfgname string) {
 	_, err := fixture.NC.AlgodClient()
 	r.NoError(err)
 
-	err = fixture.WaitForRound(10, 40*time.Second)
+	err = fixture.WaitForRound(10, 30*time.Second)
 	r.NoError(err)
 }
 
