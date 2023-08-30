@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/timers"
 )
 
 // An event represents the communication of an event to a state machine.
@@ -980,7 +979,7 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
-func getTimestampForEvent(eventRound round, d time.Duration, currentRound round, historicalClocks map[round]timers.Clock[TimeoutType]) time.Duration {
+func getTimestampForEvent(eventRound round, d time.Duration, currentRound round, historicalClocks map[round]historicalClock) time.Duration {
 	if eventRound > currentRound {
 		return time.Duration(1)
 	} else if eventRound == currentRound {
@@ -994,7 +993,7 @@ func getTimestampForEvent(eventRound round, d time.Duration, currentRound round,
 // AttachValidatedAt looks for a validated proposal or vote inside a
 // payloadVerified or voteVerified messageEvent, and attaches the given time to
 // the proposal's validatedAt field.
-func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round, historicalClocks map[round]timers.Clock[TimeoutType]) messageEvent {
+func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round, historicalClocks map[round]historicalClock) messageEvent {
 	switch e.T {
 	case payloadVerified:
 		e.Input.Proposal.validatedAt = getTimestampForEvent(e.Input.Proposal.Round(), d, currentRound, historicalClocks)
@@ -1007,7 +1006,7 @@ func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round, his
 // AttachReceivedAt looks for an unauthenticatedProposal inside a
 // payloadPresent or votePresent messageEvent, and attaches the given
 // time to the proposal's receivedAt field.
-func (e messageEvent) AttachReceivedAt(d time.Duration, currentRound round, historicalClocks map[round]timers.Clock[TimeoutType]) messageEvent {
+func (e messageEvent) AttachReceivedAt(d time.Duration, currentRound round, historicalClocks map[round]historicalClock) messageEvent {
 	if e.T == payloadPresent {
 		e.Input.UnauthenticatedProposal.receivedAt = getTimestampForEvent(e.Input.UnauthenticatedProposal.Round(), d, currentRound, historicalClocks)
 	} else if e.T == votePresent {

@@ -322,14 +322,14 @@ func (a rezeroAction) do(ctx context.Context, s *Service) {
 
 	removeList := make([]round, 0)
 
-	for r, _ := range s.historicalClocks {
-		if a.Round < r+credentialRoundLag {
-			removeList = append(removeList, r)
+	for round := range s.historicalClocks {
+		if a.Round < round+credentialRoundLag {
+			removeList = append(removeList, round)
 		}
 	}
 
-	for _, r := range removeList {
-		delete(s.historicalClocks, r)
+	for _, round := range removeList {
+		delete(s.historicalClocks, round)
 	}
 }
 
