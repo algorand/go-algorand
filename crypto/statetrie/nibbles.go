@@ -147,7 +147,6 @@ func (ns Nibbles) serialize() (data []byte) {
 
 // deserializeNibbles returns a nibble array from the byte array.
 func deserializeNibbles(encoding []byte) (Nibbles, error) {
-	var ns Nibbles
 	if len(encoding) == 0 {
 		return nil, errors.New("invalid encoding")
 	}
@@ -159,12 +158,11 @@ func deserializeNibbles(encoding []byte) (Nibbles, error) {
 				return nil, errors.New("invalid encoding")
 			}
 		}
-		ns = unpack(encoding[:length-1], true)
+		return unpack(encoding[:length-1], true), nil
 	} else if encoding[length-1] == 3 {
 		// Full width
-		ns = unpack(encoding[:length-1], false)
+		return unpack(encoding[:length-1], false), nil
 	} else {
 		return nil, errors.New("invalid encoding")
 	}
-	return ns, nil
 }
