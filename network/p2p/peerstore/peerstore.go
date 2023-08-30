@@ -28,9 +28,9 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// GetAllAddresses when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
+// when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
-const GetAllAddresses = math.MaxInt32
+const getAllAddresses = math.MaxInt32
 
 // PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
 // currently, we have two roles : relay role and archiver role, which are mutually exclusive.
@@ -387,7 +387,7 @@ func (ps *PeerStore) filterRetryTime(t time.Time, role PhoneBookEntryRoles) []st
 }
 
 func shuffleSelect(set []string, n int) []string {
-	if n >= len(set) || n == GetAllAddresses {
+	if n >= len(set) || n == getAllAddresses {
 		// return shuffled copy of everything
 		out := slices.Clone(set)
 		shuffleStrings(out)
