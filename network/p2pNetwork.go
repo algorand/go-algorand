@@ -235,10 +235,6 @@ func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, w
 func (n *P2PNetwork) Disconnect(badnode Peer) {
 	switch node := badnode.(type) {
 	case peer.ID:
-		err := n.service.ClosePeer(node)
-		if err != nil {
-			n.log.Warnf("Error disconnecting from peer %s: %v", node, err)
-		}
 		n.wsPeersLock.Lock()
 		defer n.wsPeersLock.Unlock()
 		if wsPeer, ok := n.wsPeers[node]; ok {
@@ -246,6 +242,10 @@ func (n *P2PNetwork) Disconnect(badnode Peer) {
 			delete(n.wsPeers, node)
 		} else {
 			n.log.Warnf("Could not find wsPeer reference for peer %s", node)
+		}
+		err := n.service.ClosePeer(node)
+		if err != nil {
+			n.log.Warnf("Error disconnecting from peer %s: %v", node, err)
 		}
 
 	default:
