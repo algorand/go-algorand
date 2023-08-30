@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -979,16 +980,26 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
-func (e messageEvent) AttachValidatedAt(clocks map[round]timers.Clock[TimeoutType]) messageEvent {
+func getTimestampForEvent(eventRound round, d time.Duration, currentRound round, historicalClocks map[round]timers.Clock[TimeoutType]) time.Duration {
+	if eventRound > currentRound {
+		return time.Duration(1)
+	} else if eventRound == currentRound {
+		return d
+	} else if clock, ok := historicalClocks[eventRound]; ok {
+		return clock.Since()
+	}
+	return time.Duration(0)
+}
+
+// AttachValidatedAt looks for a validated proposal or vote inside a
+// payloadVerified or voteVerified messageEvent, and attaches the given time to
+// the proposal's validatedAt field.
+func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round, historicalClocks map[round]timers.Clock[TimeoutType]) messageEvent {
 	switch e.T {
 	case payloadVerified:
-		if clock, ok := clocks[e.Input.Proposal.Round()]; ok {
-			e.Input.Proposal.validatedAt = clock.Since()
-		}
+		e.Input.Proposal.validatedAt = getTimestampForEvent(e.Input.Proposal.Round(), d, currentRound, historicalClocks)
 	case voteVerified:
-		if clock, ok := clocks[e.Input.Vote.R.Round]; ok {
-			e.Input.Vote.validatedAt = clock.Since()
-		}
+		e.Input.Vote.validatedAt = getTimestampForEvent(e.Input.Vote.R.Round, d, currentRound, historicalClocks)
 	}
 	return e
 }
@@ -996,11 +1007,9 @@ func (e messageEvent) AttachValidatedAt(clocks map[round]timers.Clock[TimeoutTyp
 // AttachReceivedAt looks for an unauthenticatedProposal inside a
 // payloadPresent or votePresent messageEvent, and attaches the given
 // time to the proposal's receivedAt field.
-func (e messageEvent) AttachReceivedAt(clocks map[round]timers.Clock[TimeoutType]) messageEvent {
+func (e messageEvent) AttachReceivedAt(d time.Duration, currentRound round, historicalClocks map[round]timers.Clock[TimeoutType]) messageEvent {
 	if e.T == payloadPresent {
-		if clock, ok := clocks[e.Input.UnauthenticatedProposal.Round()]; ok {
-			e.Input.UnauthenticatedProposal.receivedAt = clock.Since()
-		}
+		e.Input.UnauthenticatedProposal.receivedAt = getTimestampForEvent(e.Input.UnauthenticatedProposal.Round(), d, currentRound, historicalClocks)
 	} else if e.T == votePresent {
 		// Check for non-nil Tail, indicating this votePresent event
 		// contains a synthetic payloadPresent event that was attached
@@ -1009,9 +1018,7 @@ func (e messageEvent) AttachReceivedAt(clocks map[round]timers.Clock[TimeoutType
 			// The tail event is payloadPresent, serialized together
 			// with the proposal vote as a single CompoundMessage
 			// using a protocol.ProposalPayloadTag network message.
-			if clock, ok := clocks[e.Tail.Input.UnauthenticatedProposal.Round()]; ok {
-				e.Tail.Input.UnauthenticatedProposal.receivedAt = clock.Since()
-			}
+			e.Tail.Input.UnauthenticatedProposal.receivedAt = getTimestampForEvent(e.Tail.Input.UnauthenticatedProposal.Round(), d, currentRound, historicalClocks)
 		}
 	}
 	return e
