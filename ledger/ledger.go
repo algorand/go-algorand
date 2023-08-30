@@ -632,6 +632,13 @@ func (l *Ledger) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) 
 	return l.accts.LatestTotals()
 }
 
+// Totals returns the totals of all accounts for the given round.
+func (l *Ledger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.Totals(rnd)
+}
+
 // OnlineCirculation returns the online totals of all accounts at the end of round rnd.
 // It implements agreement's calls for Circulation(rnd)
 func (l *Ledger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
