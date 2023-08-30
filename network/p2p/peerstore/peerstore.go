@@ -41,8 +41,8 @@ type addressData struct {
 	// retryAfter is the time to wait before retrying to connect to the address.
 	retryAfter time.Time
 
-	// recentConnectionTimes: is the log of connection times used to observe the maximum
-	//                        connections to the address in a given time window.
+	// recentConnectionTimes is the log of connection times used to observe the maximum
+	// connections to the address in a given time window.
 	recentConnectionTimes []time.Time
 
 	// networkNames: lists the networks to which the given address belongs.
