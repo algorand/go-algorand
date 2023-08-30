@@ -3249,7 +3249,7 @@ func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 	// send voteVerified message
 	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
 	inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
-	inMsg = inMsg.AttachValidatedAt(501 * time.Millisecond)
+	inMsg = inMsg.AttachValidatedAt(501*time.Millisecond, r-1)
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3257,18 +3257,63 @@ func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 	// send payloadPresent message
 	m := message{UnauthenticatedProposal: pP.u()}
 	inMsg = messageEvent{T: payloadPresent, Input: m}
-	inMsg = inMsg.AttachReceivedAt(time.Second)
+	inMsg = inMsg.AttachReceivedAt(time.Second, r-1)
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, protocol.ConsensusFuture)
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, protocol.ConsensusFuture, time.Second)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
 	require.False(t, pWhite.lowestCredentialArrivals.isFull())
 	require.Equal(t, 501*time.Millisecond, pWhite.lowestCredentialArrivals.history[0])
+}
+
+// test that ReceivedAt and ValidateAt timing information are retained in
+// proposalStore when the payloadPresent, payloadVerified, and voteVerified
+// events are processed in the *preceding round*, and that all timings are
+// available when the ensureAction is called for the block.
+func TestPlayerRetainsEarlyReceivedValidatedAtOneSample(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	const r = round(20239)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r-1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
+	// move two rounds, so the measurement from round r gets inserted to the
+	// history window
+
+	// create a PP message for an arbitrary proposal/payload similar to setupCompoundMessage
+	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
+	proposalMsg := message{UnauthenticatedProposal: pP.u()}
+	compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
+		Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
+
+	inMsg := compoundMsg.AttachReceivedAt(time.Second, r-2) // call AttachReceivedAt like demux would
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// make sure vote verify requests
+	verifyEvent := ev(cryptoAction{T: verifyVote, M: unverifiedVoteMsg, Round: r - 1, Period: p, Step: propose, TaskIndex: 1})
+	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
+
+	// send voteVerified
+	verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
+	inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
+	timestamp := 500
+	inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r-2)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+	moveToRound(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
+
+	// receive credential for the next round, check that it gets a timestamp of 1
+	require.Equal(t, time.Duration(1), pWhite.lowestCredentialArrivals.history[0])
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in proposalStore
@@ -3281,7 +3326,7 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 
-	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
 
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// send voteVerified message
@@ -3289,7 +3334,7 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 		vVote := helper.MakeVerifiedVote(t, 0, r+round(i)-1, p, propose, *pV)
 		inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
 		timestamp := 500 + i
-		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp) * time.Millisecond)
+		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r+round(i)-1)
 		err, panicErr := pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3297,7 +3342,7 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 		// send payloadPresent message
 		m := message{UnauthenticatedProposal: pP.u()}
 		inMsg = messageEvent{T: payloadPresent, Input: m}
-		inMsg = inMsg.AttachReceivedAt(time.Second)
+		inMsg = inMsg.AttachReceivedAt(time.Second, r+round(i)-1)
 		err, panicErr = pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3331,7 +3376,7 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	proposalMsg := message{UnauthenticatedProposal: pP.u()}
 	compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
 		Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
-	inMsg := compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
+	inMsg := compoundMsg.AttachReceivedAt(time.Second, r-1) // call AttachReceivedAt like demux would
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3343,18 +3388,63 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	// send voteVerified
 	verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
 	inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
-	inMsg = inMsg.AttachValidatedAt(502 * time.Millisecond)
+	inMsg = inMsg.AttachValidatedAt(502*time.Millisecond, r-1)
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture, time.Second)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
 	require.False(t, pWhite.lowestCredentialArrivals.isFull())
 	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals.history[0])
+}
+
+// test that ReceivedAt and ValidateAt timing information are retained in
+// proposalStore when the payloadPresent (as part of the CompoundMessage
+// encoding used by PP messages), payloadVerified, and voteVerified events are
+// processed one round early, and that all timings are available when the
+// ensureAction is called for the block.
+func TestPlayerRetainsEarlyReceivedValidatedAtPPOneSample(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = round(20239)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r-1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+
+	// create a PP message for an arbitrary proposal/payload similar to setupCompoundMessage
+	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
+	proposalMsg := message{UnauthenticatedProposal: pP.u()}
+	compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
+		Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
+	inMsg := compoundMsg.AttachReceivedAt(time.Second, r-2) // call AttachReceivedAt like demux would
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// make sure vote verify requests
+	verifyEvent := ev(cryptoAction{T: verifyVote, M: unverifiedVoteMsg, Round: r - 1, Period: p, Step: propose, TaskIndex: 1})
+	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
+
+	// send voteVerified
+	verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
+	inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
+	inMsg = inMsg.AttachValidatedAt(502*time.Millisecond, r-2)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture, time.Duration(1))
+
+	// assert lowest vote validateAt time was recorded into payloadArrivals
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
+	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
+	require.False(t, pWhite.lowestCredentialArrivals.isFull())
+	require.Equal(t, time.Duration(1), pWhite.lowestCredentialArrivals.history[0])
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in
@@ -3370,7 +3460,7 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
 
-	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
 
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// create a PP message for an arbitrary proposal/payload similar to setupCompoundMessage
@@ -3380,7 +3470,7 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 		compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
 			Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
 
-		inMsg := compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
+		inMsg := compoundMsg.AttachReceivedAt(time.Second, r+round(i)-1) // call AttachReceivedAt like demux would
 		err, panicErr := pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3393,7 +3483,7 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 		verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
 		inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
 		timestamp := 500 + i
-		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp) * time.Millisecond)
+		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r+round(i)-1)
 		err, panicErr = pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3437,7 +3527,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	// send voteVerified
 	verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
 	inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
-	inMsg = inMsg.AttachValidatedAt(502 * time.Millisecond)
+	inMsg = inMsg.AttachValidatedAt(502*time.Millisecond, r-1)
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3446,7 +3536,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	proposalMsg := message{UnauthenticatedProposal: pP.u()}
 	compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
 		Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
-	inMsg = compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
+	inMsg = compoundMsg.AttachReceivedAt(time.Second, r-1) // call AttachReceivedAt like demux would
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3455,13 +3545,69 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	verifyEvent = ev(cryptoAction{T: verifyVote, M: unverifiedVoteMsg, Round: r - 1, Period: p, Step: propose, TaskIndex: 1})
 	require.Equal(t, 1, pM.getTrace().CountEvent(verifyEvent), "Player should not verify second vote")
 
-	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture, time.Second)
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
-	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
 	require.False(t, pWhite.lowestCredentialArrivals.isFull())
 	require.Equal(t, 502*time.Millisecond, pWhite.lowestCredentialArrivals.history[0])
+}
+
+// test that ReceivedAt and ValidateAt timing information are retained in
+// proposalStore when the voteVerified event comes in first (as part of the AV
+// message before PP), then the payloadPresent (as part of the CompoundMessage
+// encoding used by PP messages) and payloadVerified events are processed one
+// round early, and that all timings are available when the ensureAction is
+// called for the block.
+func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = round(20239)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r-1, p, soft)
+	pP, pV := helper.MakeRandomProposalPayload(t, r-1)
+
+	// send votePresent message (mimicking the first AV message validating)
+	vVote := helper.MakeVerifiedVote(t, 0, r-1, p, propose, *pV)
+	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
+	inMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg}
+	err, panicErr := pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// make sure vote verify requests
+	verifyEvent := ev(cryptoAction{T: verifyVote, M: unverifiedVoteMsg, Round: r - 1, Period: p, Step: propose, TaskIndex: 1})
+	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
+
+	// send voteVerified
+	verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
+	inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
+	inMsg = inMsg.AttachValidatedAt(502*time.Millisecond, r-2)
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// create a PP message for an arbitrary proposal/payload similar to setupCompoundMessage
+	proposalMsg := message{UnauthenticatedProposal: pP.u()}
+	compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
+		Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
+	inMsg = compoundMsg.AttachReceivedAt(time.Second, r-2) // call AttachReceivedAt like demux would
+	err, panicErr = pM.transition(inMsg)
+	require.NoError(t, err)
+	require.NoError(t, panicErr)
+
+	// make sure no second request to verify this vote
+	verifyEvent = ev(cryptoAction{T: verifyVote, M: unverifiedVoteMsg, Round: r - 1, Period: p, Step: propose, TaskIndex: 1})
+	require.Equal(t, 1, pM.getTrace().CountEvent(verifyEvent), "Player should not verify second vote")
+
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture, time.Duration(1))
+
+	// assert lowest vote validateAt time was recorded into payloadArrivals
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
+	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
+	require.False(t, pWhite.lowestCredentialArrivals.isFull())
+	require.Equal(t, time.Duration(1), pWhite.lowestCredentialArrivals.history[0])
 }
 
 func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
@@ -3470,7 +3616,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 
-	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
 
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		pP, pV := helper.MakeRandomProposalPayload(t, r+round(i)-1)
@@ -3491,7 +3637,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 		verifiedVoteMsg := message{Vote: vVote, UnauthenticatedVote: vVote.u()}
 		inMsg = messageEvent{T: voteVerified, Input: verifiedVoteMsg, TaskIndex: 1}
 		timestamp := 500 + i
-		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp) * time.Millisecond)
+		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r+round(i)-1)
 		err, panicErr = pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3500,7 +3646,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 		proposalMsg := message{UnauthenticatedProposal: pP.u()}
 		compoundMsg := messageEvent{T: votePresent, Input: unverifiedVoteMsg,
 			Tail: &messageEvent{T: payloadPresent, Input: proposalMsg}}
-		inMsg = compoundMsg.AttachReceivedAt(time.Second) // call AttachReceivedAt like demux would
+		inMsg = compoundMsg.AttachReceivedAt(time.Second, r+round(i)-1) // call AttachReceivedAt like demux would
 		err, panicErr = pM.transition(inMsg)
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
@@ -3526,7 +3672,7 @@ func moveToRound(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerH
 
 	// payloadVerified
 	inMsg := messageEvent{T: payloadVerified, Input: message{Proposal: *pP}, Proto: ConsensusVersionView{Version: ver}}
-	inMsg = inMsg.AttachValidatedAt(2 * time.Second) // call AttachValidatedAt like demux would
+	inMsg = inMsg.AttachValidatedAt(2*time.Second, r-1) // call AttachValidatedAt like demux would
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3563,7 +3709,7 @@ func moveToRound(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerH
 }
 
 func assertCorrectReceivedAtSet(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerHelper,
-	r round, p period, pP *proposal, pV *proposalValue, m message, ver protocol.ConsensusVersion) {
+	r round, p period, pP *proposal, pV *proposalValue, m message, ver protocol.ConsensusVersion, validationTimestamp time.Duration) {
 
 	moveToRound(t, pWhite, pM, helper, r, p, pP, pV, m, ver)
 
@@ -3581,7 +3727,7 @@ func assertCorrectReceivedAtSet(t *testing.T, pWhite *player, pM ioAutomata, hel
 	}
 	require.True(t, foundEA)
 	require.Equal(t, 2*time.Second, ea.Payload.validatedAt)
-	require.Equal(t, time.Second, ea.Payload.receivedAt)
+	require.Equal(t, validationTimestamp, ea.Payload.receivedAt)
 }
 
 // todo: test pipelined rounds, and round interruption

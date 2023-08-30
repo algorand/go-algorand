@@ -975,12 +975,20 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
-func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
+func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round) messageEvent {
 	switch e.T {
 	case payloadVerified:
-		e.Input.Proposal.validatedAt = d
+		if e.Input.Proposal.Round() > currentRound {
+			e.Input.Proposal.validatedAt = 1
+		} else {
+			e.Input.Proposal.validatedAt = d
+		}
 	case voteVerified:
-		e.Input.Vote.validatedAt = d
+		if e.Input.UnauthenticatedVote.R.Round > currentRound {
+			e.Input.Vote.validatedAt = 1
+		} else {
+			e.Input.Vote.validatedAt = d
+		}
 	}
 	return e
 }
@@ -988,9 +996,13 @@ func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
 // AttachReceivedAt looks for an unauthenticatedProposal inside a
 // payloadPresent or votePresent messageEvent, and attaches the given
 // time to the proposal's receivedAt field.
-func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
+func (e messageEvent) AttachReceivedAt(d time.Duration, currentRound round) messageEvent {
 	if e.T == payloadPresent {
-		e.Input.UnauthenticatedProposal.receivedAt = d
+		if e.Input.UnauthenticatedProposal.Round() > currentRound {
+			e.Input.UnauthenticatedProposal.receivedAt = 1
+		} else {
+			e.Input.UnauthenticatedProposal.receivedAt = d
+		}
 	} else if e.T == votePresent {
 		// Check for non-nil Tail, indicating this votePresent event
 		// contains a synthetic payloadPresent event that was attached
@@ -999,7 +1011,11 @@ func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
 			// The tail event is payloadPresent, serialized together
 			// with the proposal vote as a single CompoundMessage
 			// using a protocol.ProposalPayloadTag network message.
-			e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+			if e.Tail.Input.UnauthenticatedProposal.Round() > currentRound {
+				e.Tail.Input.UnauthenticatedProposal.receivedAt = 1
+			} else {
+				e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+			}
 		}
 	}
 	return e
