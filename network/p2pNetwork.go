@@ -168,6 +168,7 @@ func (n *P2PNetwork) innerStop() {
 	closeGroup := sync.WaitGroup{}
 	closeGroup.Add(len(n.wsPeers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
+	c := len(n.wsPeers)
 	for peerID, peer := range n.wsPeers {
 		// we need to both close the wsPeer and close the p2p connection
 		go closeWaiter(&closeGroup, peer, deadline)
@@ -176,7 +177,9 @@ func (n *P2PNetwork) innerStop() {
 			n.log.Warnf("Error closing peer %s: %v", peerID, err)
 		}
 	}
+	n.log.Infof("Waiting for %d peers to close", c)
 	closeGroup.Wait()
+	n.log.Infof("%d peers closed", c)
 }
 
 func (n *P2PNetwork) meshThread() {
@@ -360,8 +363,8 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 
 // peerRemoteClose called from wsPeer to report that it has closed
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
-	n.wsPeersLock.Lock()
 	remotePeerID := peer.conn.(*wsPeerConnP2PImpl).stream.Conn().RemotePeer()
+	n.wsPeersLock.Lock()
 	delete(n.wsPeers, remotePeerID)
 	n.wsPeersLock.Unlock()
 	atomic.AddInt32(&n.wsPeersChangeCounter, 1)
