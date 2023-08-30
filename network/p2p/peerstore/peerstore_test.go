@@ -19,6 +19,7 @@ package peerstore
 import (
 	"crypto/rand"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -110,25 +111,25 @@ func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
 func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int) {
 	uniformityTestLength := 250000 / len(set)
 	expected := (uniformityTestLength * getsize) / len(set)
-	counts := make([]int, len(set))
+	counts := make(map[string]int)
+	for i := 0; i < len(set); i++ {
+		counts[set[i]] = 0
+	}
 	for i := 0; i < uniformityTestLength; i++ {
 		actual := ph.GetAddresses(getsize, PhoneBookEntryRelayRole)
-		for i, known := range set {
-			for _, xa := range actual {
-				if known == xa {
-					counts[i]++
-				}
+		for _, xa := range actual {
+			if _, ok := counts[xa]; ok {
+				counts[xa]++
 			}
 		}
 	}
-	min := counts[0]
-	max := counts[0]
-	for i := 1; i < len(counts); i++ {
-		if counts[i] > max {
-			max = counts[i]
+	min, max := math.MaxInt, 0
+	for _, count := range counts {
+		if count > max {
+			max = count
 		}
-		if counts[i] < min {
-			min = counts[i]
+		if count < min {
+			min = count
 		}
 	}
 	// TODO: what's a good probability-theoretic threshold for good enough?
