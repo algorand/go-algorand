@@ -168,7 +168,6 @@ func (n *P2PNetwork) innerStop() {
 	n.wsPeersLock.Lock()
 	closeGroup.Add(len(n.wsPeers))
 	deadline := time.Now().Add(peerDisconnectionAckDuration)
-	c := len(n.wsPeers)
 	for peerID, peer := range n.wsPeers {
 		// we need to both close the wsPeer and close the p2p connection
 		go closeWaiter(&closeGroup, peer, deadline)
