@@ -228,7 +228,7 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect
 		if err != nil {
 			return
 		}
-
+		p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
 		rr2 = makeRootRouter(p2)
 		err = protocol.DecodeReflect(s.Router, &rr2)
 		if err != nil {
@@ -244,6 +244,7 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect
 				return
 			}
 		}
+		p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
 		if p2.OldDeadline != 0 {
 			p2.Deadline = Deadline{Duration: p2.OldDeadline, Type: TimeoutDeadline}
 			p2.OldDeadline = 0 // clear old value

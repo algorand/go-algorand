@@ -88,7 +88,7 @@ func (t *proposalTracker) underlying() listener {
 	return t
 }
 
-// A proposalTracker handles five types of events.
+// A proposalTracker handles six types of events.
 //
 //   - voteFilterRequest returns a voteFiltered event if a given proposal-vote
 //     from a given sender has already been seen.  Otherwise it returns an empty
@@ -118,6 +118,9 @@ func (t *proposalTracker) underlying() listener {
 //   - readStaging returns the a stagingValueEvent with the proposal-value
 //     believed to be the staging value (i.e., sigma(S, r, p)) by the
 //     proposalTracker in period p.
+//
+//   - readLowestVote returns the vote with the lowest credential that was received so far.
+
 func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 	switch e.t() {
 	case voteFilterRequest:
@@ -163,6 +166,12 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		e := e.(proposalFrozenEvent)
 		e.Proposal = t.Freezer.Lowest.R.Proposal
 		t.Freezer = t.Freezer.freeze()
+		return e
+
+	case readLowestVote:
+		e := e.(readLowestEvent)
+		e.Vote = t.Freezer.Lowest
+		e.Filled = t.Freezer.Filled
 		return e
 
 	case softThreshold, certThreshold:

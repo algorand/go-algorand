@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -51,6 +52,10 @@ type (
 		R       rawVote                 `codec:"r"`
 		Cred    committee.Credential    `codec:"cred"`
 		Sig     crypto.OneTimeSignature `codec:"sig,omitempty,omitemptycheckstruct"`
+
+		// validatedAt indicates the time at which this vote was verified (as a voteVerified messageEvent),
+		// relative to the zero of that round. It is only set for step 0.
+		validatedAt time.Duration
 	}
 
 	// unauthenticatedEquivocationVote is a pair of votes which has not
