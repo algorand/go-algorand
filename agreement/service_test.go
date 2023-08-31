@@ -935,9 +935,18 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 		services[i].Shutdown()
 	}
 
+	firstHistoricalClocksRound := startRound
+	if basics.Round(numRounds) > credentialRoundLag {
+		firstHistoricalClocksRound = startRound + basics.Round(numRounds) - credentialRoundLag
+	}
+
 	// check that historical clocks map didn't get too large
 	for i := 0; i < numNodes; i++ {
 		require.LessOrEqual(t, len(services[i].historicalClocks), int(credentialRoundLag)+1, "too many historical clocks kept")
+		for round := firstHistoricalClocksRound + 1; round <= startRound+basics.Round(numRounds); round++ {
+			_, has := services[i].historicalClocks[round]
+			require.True(t, has)
+		}
 	}
 	if numRounds >= int(credentialRoundLag) {
 		for i := 0; i < numNodes; i++ {
