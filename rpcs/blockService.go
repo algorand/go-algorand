@@ -156,7 +156,7 @@ type HTTPRegistrar interface {
 	RegisterHTTPHandlerFunc(path string, handler func(response http.ResponseWriter, request *http.Request))
 }
 
-// RegisterHTTP registers the request handlers for BlockService's paths with the registrar.
+// RegisterHandlers registers the request handlers for BlockService's paths with the registrar.
 func (bs *BlockService) RegisterHandlers(registrar HTTPRegistrar) {
 	registrar.RegisterHTTPHandlerFunc(BlockServiceBlockPath, bs.ServeBlockPath)
 }
