@@ -281,7 +281,12 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 // It returns the time of the lowest credential's arrival, if one was
 // collected and added to lowestCredentialArrivals, or zero otherwise.
 func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.ConsensusVersion) time.Duration {
-	if p.Round < credentialRoundLag {
+	if p.Period != 0 {
+		// only append to lowestCredentialArrivals if this was a successful round completing in period 0.
+		return 0
+	}
+
+	if p.Round <= credentialRoundLag {
 		// not sufficiently many rounds had passed to collect any measurement
 		return 0
 	}

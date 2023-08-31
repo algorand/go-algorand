@@ -982,9 +982,11 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 func getTimestampForEvent(eventRound round, d time.Duration, currentRound round, historicalClocks map[round]historicalClock) time.Duration {
 	if eventRound > currentRound {
 		return time.Duration(1)
-	} else if eventRound == currentRound {
+	}
+	if eventRound == currentRound {
 		return d
-	} else if clock, ok := historicalClocks[eventRound]; ok {
+	}
+	if clock, ok := historicalClocks[eventRound]; ok {
 		return clock.Since()
 	}
 	return time.Duration(0)
