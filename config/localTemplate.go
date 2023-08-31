@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -683,8 +682,6 @@ func (cfg *Local) StoresCatchpoints() bool {
 	case -1:
 		// No catchpoints.
 	default:
-		// Give a warning, then fall through to case 0.
-		logging.Base().Warnf("the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
 		fallthrough
 	case 0:
 		if cfg.Archival && (cfg.CatchpointInterval > 0) {
