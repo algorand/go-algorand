@@ -3514,7 +3514,6 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 // ensureAction is called for the block.
 func TestPlayerRetainsEarlyReceivedValidatedAtPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
