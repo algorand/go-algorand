@@ -155,9 +155,29 @@ func (n *P2PNetwork) Stop() {
 		n.wsPeersConnectivityCheckTicker.Stop()
 		n.wsPeersConnectivityCheckTicker = nil
 	}
+	n.innerStop()
 	n.ctxCancel()
 	n.service.Close()
 	n.wg.Wait()
+}
+
+// innerStop context for shutting down peers
+func (n *P2PNetwork) innerStop() {
+	closeGroup := sync.WaitGroup{}
+	n.wsPeersLock.Lock()
+	closeGroup.Add(len(n.wsPeers))
+	deadline := time.Now().Add(peerDisconnectionAckDuration)
+	for peerID, peer := range n.wsPeers {
+		// we need to both close the wsPeer and close the p2p connection
+		go closeWaiter(&closeGroup, peer, deadline)
+		err := n.service.ClosePeer(peerID)
+		if err != nil {
+			n.log.Warnf("Error closing peer %s: %v", peerID, err)
+		}
+		delete(n.wsPeers, peerID)
+	}
+	n.wsPeersLock.Unlock()
+	closeGroup.Wait()
 }
 
 func (n *P2PNetwork) meshThread() {
@@ -214,14 +234,22 @@ func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, w
 
 // Disconnect from a peer, probably due to protocol errors.
 func (n *P2PNetwork) Disconnect(badnode Peer) {
-	switch node := badnode.(type) {
-	case peer.ID:
-		err := n.service.ClosePeer(node)
-		if err != nil {
-			n.log.Warnf("Error disconnecting from peer %s: %v", node, err)
-		}
-	default:
+	node, ok := badnode.(peer.ID)
+	if !ok {
 		n.log.Warnf("Unknown peer type %T", badnode)
+		return
+	}
+	n.wsPeersLock.Lock()
+	defer n.wsPeersLock.Unlock()
+	if wsPeer, ok := n.wsPeers[node]; ok {
+		wsPeer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
+		delete(n.wsPeers, node)
+	} else {
+		n.log.Warnf("Could not find wsPeer reference for peer %s", node)
+	}
+	err := n.service.ClosePeer(node)
+	if err != nil {
+		n.log.Warnf("Error disconnecting from peer %s: %v", node, err)
 	}
 }
 
@@ -332,8 +360,8 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 
 // peerRemoteClose called from wsPeer to report that it has closed
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
-	n.wsPeersLock.Lock()
 	remotePeerID := peer.conn.(*wsPeerConnP2PImpl).stream.Conn().RemotePeer()
+	n.wsPeersLock.Lock()
 	delete(n.wsPeers, remotePeerID)
 	n.wsPeersLock.Unlock()
 	atomic.AddInt32(&n.wsPeersChangeCounter, 1)
@@ -382,7 +410,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	for {
 		msg, err := sub.Next(n.ctx)
 		if err != nil {
-			if err != pubsub.ErrSubscriptionCancelled {
+			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
 				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
 			}
 			sub.Cancel()
