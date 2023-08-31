@@ -37,8 +37,10 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	cryptostateproof "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -55,6 +57,7 @@ const blockResponseMissingBlockCacheControl = "public, max-age=1, must-revalidat
 const blockResponseRetryAfter = "3"                                                // retry after 3 seconds
 const blockServerMaxBodyLength = 512                                               // we don't really pass meaningful content here, so 512 bytes should be a safe limit
 const blockServerCatchupRequestBufferSize = 10
+const stateProofMaxCount = 128
 
 // StateProofResponseContentType is the HTTP Content-Type header for a raw state proof transaction
 const StateProofResponseContentType = "application/x-algorand-stateproof-v1"
@@ -203,7 +206,24 @@ func (bs *BlockService) Stop() {
 	bs.closeWaitGroup.Wait()
 }
 
-// ServeStateProofPath returns state proofs.
+// OneStateProof is used to encode one state proof in the response
+// to a state proof fetch request.
+type OneStateProof struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	StateProof cryptostateproof.StateProof `codec:"sp"`
+	Message    stateproofmsg.Message `codec:"spmsg"`
+}
+
+// StateProofResponse is used to encode the response to a state proof
+// fetch request, consisting of one or more state proofs.
+type StateProofResponse struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Proofs []OneStateProof `codec:"p,allocbound=stateProofMaxCount"`
+}
+
+// ServeStateProofPath returns state proofs, starting with the specified round.
 // It expects to be invoked via:
 //
 //	/v{version}/{genesisID}/stateproof/type{type}/{round}
@@ -236,6 +256,8 @@ func (bs *BlockService) ServeStateProofPath(response http.ResponseWriter, reques
 	}
 	round := basics.Round(uround)
 
+	var res StateProofResponse
+
 	latestRound := bs.ledger.Latest()
 	ctx := request.Context()
 	hdr, err := bs.ledger.BlockHdr(round)
@@ -243,7 +265,8 @@ func (bs *BlockService) ServeStateProofPath(response http.ResponseWriter, reques
 		bs.log.Debug("http stateproof cannot get blockhdr", round, err)
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
-			goto notfound
+			// Send a 404 response, since res.Proofs is empty.
+			goto done
 		default:
 			response.WriteHeader(http.StatusInternalServerError)
 			return
@@ -261,7 +284,8 @@ func (bs *BlockService) ServeStateProofPath(response http.ResponseWriter, reques
 	// are looking for a state proof for a round that's within
 	// StateProofInterval of latest.
 	if round+basics.Round(config.Consensus[hdr.CurrentProtocol].StateProofInterval) >= latestRound {
-		goto notfound
+		// Send a 404 response, since res.Proofs is empty.
+		goto done
 	}
 
 	for i := round + 1; i <= latestRound; i++ {
@@ -269,6 +293,10 @@ func (bs *BlockService) ServeStateProofPath(response http.ResponseWriter, reques
 		case <-ctx.Done():
 			return
 		default:
+		}
+
+		if len(res.Proofs) >= stateProofMaxCount {
+			break
 		}
 
 		txns, err := bs.ledger.AddressTxns(transactions.StateProofSender, i)
@@ -283,25 +311,35 @@ func (bs *BlockService) ServeStateProofPath(response http.ResponseWriter, reques
 			}
 
 			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= round && round <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
-				encodedStateProof := protocol.Encode(&txn.Txn)
-				response.Header().Set("Content-Type", StateProofResponseContentType)
-				response.Header().Set("Content-Length", strconv.Itoa(len(encodedStateProof)))
-				response.Header().Set("Cache-Control", blockResponseHasBlockCacheControl)
-				response.WriteHeader(http.StatusOK)
-				_, err = response.Write(encodedStateProof)
-				if err != nil {
-					bs.log.Warn("http stateproof write failed ", err)
-				}
-				return
+				res.Proofs = append(res.Proofs, OneStateProof{
+					StateProof: txn.Txn.StateProofTxnFields.StateProof,
+					Message: txn.Txn.StateProofTxnFields.Message,
+				})
+
+				// Keep looking for more state proofs, since the caller will
+				// likely want a sequence of them until the latest round.
+				round = round + basics.Round(config.Consensus[hdr.CurrentProtocol].StateProofInterval)
 			}
 		}
 	}
 
-notfound:
-	ok := bs.redirectRequest(response, request, bs.formatStateProofQuery(uint64(round)))
-	if !ok {
-		response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
-		response.WriteHeader(http.StatusNotFound)
+done:
+	if len(res.Proofs) == 0 {
+		ok := bs.redirectRequest(response, request, bs.formatStateProofQuery(uint64(round)))
+		if !ok {
+			response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
+			response.WriteHeader(http.StatusNotFound)
+		}
+	} else {
+		encodedResponse := protocol.Encode(&res)
+		response.Header().Set("Content-Type", StateProofResponseContentType)
+		response.Header().Set("Content-Length", strconv.Itoa(len(encodedResponse)))
+		response.Header().Set("Cache-Control", blockResponseHasBlockCacheControl)
+		response.WriteHeader(http.StatusOK)
+		_, err = response.Write(encodedResponse)
+		if err != nil {
+			bs.log.Warn("http stateproof write failed ", err)
+		}
 	}
 }
 

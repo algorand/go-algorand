@@ -397,6 +397,7 @@ func (s *Service) stateProofFetcher(ctx context.Context) {
 	s.cleanupStateProofs(latest)
 
 	peerSelector := createPeerSelector(s.net, s.cfg, true)
+	retry := 0
 
 	for {
 		vc := s.nextStateProofVerifier()
@@ -405,45 +406,60 @@ func (s *Service) stateProofFetcher(ctx context.Context) {
 			return
 		}
 
-		retry := 0
-		for {
-			if retry >= catchupRetryLimit {
-				s.log.Debugf("catchup.stateProofFetcher: cannot fetch %d, giving up", vc.LastRound)
-				return
-			}
-			retry++
+		if retry >= catchupRetryLimit {
+			s.log.Debugf("catchup.stateProofFetcher: cannot fetch %d, giving up", vc.LastRound)
+			return
+		}
+		retry++
 
-			select {
-			case <-ctx.Done():
-				s.log.Debugf("catchup.stateProofFetcher: aborted")
-				return
-			default:
-			}
+		select {
+		case <-ctx.Done():
+			s.log.Debugf("catchup.stateProofFetcher: aborted")
+			return
+		default:
+		}
 
-			psp, err := peerSelector.getNextPeer()
-			if err != nil {
-				s.log.Warnf("catchup.stateProofFetcher: unable to getNextPeer: %v", err)
-				return
-			}
+		psp, err := peerSelector.getNextPeer()
+		if err != nil {
+			s.log.Warnf("catchup.stateProofFetcher: unable to getNextPeer: %v", err)
+			return
+		}
 
-			fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
-			pf, msg, _, err := fetcher.fetchStateProof(ctx, protocol.StateProofBasic, vc.LastRound, psp.Peer)
-			if err != nil {
-				s.log.Warnf("catchup.fetchStateProof(%d): attempt %d: %v", vc.LastRound, retry, err)
-				peerSelector.rankPeer(psp, peerRankDownloadFailed)
-				continue
+		fetcher := makeUniversalBlockFetcher(s.log, s.net, s.cfg)
+		proofs, _, err := fetcher.fetchStateProof(ctx, protocol.StateProofBasic, vc.LastRound, psp.Peer)
+		if err != nil {
+			s.log.Warnf("catchup.fetchStateProof(%d): attempt %d: %v", vc.LastRound, retry, err)
+			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			continue
+		}
+
+		if len(proofs.Proofs) == 0 {
+			s.log.Warnf("catchup.fetchStateProof(%d): attempt %d: no proofs returned", vc.LastRound, retry)
+			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			continue
+		}
+
+		for idx, pf := range proofs.Proofs {
+			if idx > 0 {
+				// This is an extra state proof returned optimistically by the server.
+				// We need to get the corresponding verification context.
+				vc = s.nextStateProofVerifier()
+				if vc == nil {
+					break
+				}
 			}
 
 			verifier := stateproof.MkVerifierWithLnProvenWeight(vc.VotersCommitment, vc.LnProvenWeight, config.Consensus[vc.Proto].StateProofStrengthTarget)
-			err = verifier.Verify(uint64(vc.LastRound), msg.Hash(), &pf)
+			err = verifier.Verify(uint64(vc.LastRound), pf.Message.Hash(), &pf.StateProof)
 			if err != nil {
 				s.log.Warnf("catchup.stateProofFetcher: cannot verify round %d: %v", vc.LastRound, err)
 				peerSelector.rankPeer(psp, peerRankInvalidDownload)
-				continue
+				break
 			}
 
-			s.addStateProof(msg, vc.Proto)
-			break
+			s.log.Debugf("catchup.stateProofFetcher: validated proof for %d", vc.LastRound)
+			s.addStateProof(pf.Message, vc.Proto)
+			retry = 0
 		}
 	}
 }

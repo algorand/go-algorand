@@ -28,11 +28,8 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/stateproofmsg"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -120,7 +117,7 @@ func processBlockBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (blk 
 // attested to by the state proof) for round.
 //
 // proofType specifies the expected state proof type.
-func (uf *universalBlockFetcher) fetchStateProof(ctx context.Context, proofType protocol.StateProofType, round basics.Round, peer network.Peer) (pf stateproof.StateProof, msg stateproofmsg.Message, downloadDuration time.Duration, err error) {
+func (uf *universalBlockFetcher) fetchStateProof(ctx context.Context, proofType protocol.StateProofType, round basics.Round, peer network.Peer) (proofs rpcs.StateProofResponse, downloadDuration time.Duration, err error) {
 	var fetchedBuf []byte
 	var address string
 	downloadStartTime := time.Now()
@@ -135,30 +132,30 @@ func (uf *universalBlockFetcher) fetchStateProof(ctx context.Context, proofType 
 		}
 		fetchedBuf, err = fetcherClient.getStateProofBytes(ctx, proofType, round)
 		if err != nil {
-			return pf, msg, 0, err
+			return proofs, 0, err
 		}
 		address = fetcherClient.address()
 	} else {
-		return pf, msg, 0, fmt.Errorf("fetchStateProof: UniversalFetcher only supports HTTPPeer")
+		return proofs, 0, fmt.Errorf("fetchStateProof: UniversalFetcher only supports HTTPPeer")
 	}
 	downloadDuration = time.Since(downloadStartTime)
-	pf, msg, err = processStateProofBytes(fetchedBuf, round, address)
+	proofs, err = processStateProofBytes(fetchedBuf, round, address)
 	if err != nil {
-		return pf, msg, 0, err
+		return proofs, 0, err
 	}
 	uf.log.Debugf("fetchStateProof: downloaded proof for %d in %d from %s", uint64(round), downloadDuration, address)
-	return pf, msg, downloadDuration, err
+	return proofs, downloadDuration, err
 }
 
-func processStateProofBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (pf stateproof.StateProof, msg stateproofmsg.Message, err error) {
-	var decodedEntry transactions.Transaction
+func processStateProofBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (proofs rpcs.StateProofResponse, err error) {
+	var decodedEntry rpcs.StateProofResponse
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
 		err = fmt.Errorf("Cannot decode state proof for %d from %s: %v", r, peerAddr, err)
 		return
 	}
 
-	return decodedEntry.StateProofTxnFields.StateProof, decodedEntry.StateProofTxnFields.Message, nil
+	return decodedEntry, nil
 }
 
 // a stub fetcherClient to satisfy the NetworkFetcher interface
