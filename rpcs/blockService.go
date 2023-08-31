@@ -260,7 +260,7 @@ func (bs *BlockService) ServeStateProofPath(response http.ResponseWriter, reques
 	// proofs that don't exist yet, don't bother searching if we
 	// are looking for a state proof for a round that's within
 	// StateProofInterval of latest.
-	if round + basics.Round(config.Consensus[hdr.CurrentProtocol].StateProofInterval) >= latestRound {
+	if round+basics.Round(config.Consensus[hdr.CurrentProtocol].StateProofInterval) >= latestRound {
 		goto notfound
 	}
 
