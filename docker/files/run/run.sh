@@ -190,7 +190,16 @@ function start_new_private_network() {
       fi
   fi
   sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "/node/run/$TEMPLATE"
-  goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE"
+
+  # Check if keys are mounted, and if so, copy them over
+  # Use pregen keys in network create command
+  if [ -d "/etc/algorand/keys" ]; then
+      cp -r /etc/algorand/keys /node/run/keys
+      goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE" -p "/node/run/keys"
+  else
+      goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE"
+  fi
+  
   configure_data_dir
   start_private_network
 }
