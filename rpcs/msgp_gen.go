@@ -6,7 +6,9 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/agreement"
+	cryptostateproof "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 )
 
 // The following msgp objects are implemented in this file:
@@ -19,17 +21,62 @@ import (
 //         |-----> (*) MsgIsZero
 //         |-----> EncodedBlockCertMaxSize()
 //
+// OneStateProof
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//       |-----> OneStateProofMaxSize()
+//
+// StateProofResponse
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> StateProofResponseMaxSize()
+//
 
 // MarshalMsg implements msgp.Marshaler
 func (z *EncodedBlockCert) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "block"
-	o = append(o, 0x82, 0xa5, 0x62, 0x6c, 0x6f, 0x63, 0x6b)
-	o = (*z).Block.MarshalMsg(o)
-	// string "cert"
-	o = append(o, 0xa4, 0x63, 0x65, 0x72, 0x74)
-	o = (*z).Certificate.MarshalMsg(o)
+	// omitempty: check for empty values
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 4 bits */
+	if (*z).Block.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Certificate.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if len((*z).LightBlockHeaderProof) == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "block"
+			o = append(o, 0xa5, 0x62, 0x6c, 0x6f, 0x63, 0x6b)
+			o = (*z).Block.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "cert"
+			o = append(o, 0xa4, 0x63, 0x65, 0x72, 0x74)
+			o = (*z).Certificate.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "proof"
+			o = append(o, 0xa5, 0x70, 0x72, 0x6f, 0x6f, 0x66)
+			o = msgp.AppendBytes(o, (*z).LightBlockHeaderProof)
+		}
+	}
 	return
 }
 
@@ -68,6 +115,14 @@ func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
+			zb0001--
+			(*z).LightBlockHeaderProof, bts, err = msgp.ReadBytesBytes(bts, (*z).LightBlockHeaderProof)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LightBlockHeaderProof")
+				return
+			}
+		}
+		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -102,6 +157,12 @@ func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Certificate")
 					return
 				}
+			case "proof":
+				(*z).LightBlockHeaderProof, bts, err = msgp.ReadBytesBytes(bts, (*z).LightBlockHeaderProof)
+				if err != nil {
+					err = msgp.WrapError(err, "LightBlockHeaderProof")
+					return
+				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -122,17 +183,469 @@ func (_ *EncodedBlockCert) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *EncodedBlockCert) Msgsize() (s int) {
-	s = 1 + 6 + (*z).Block.Msgsize() + 5 + (*z).Certificate.Msgsize()
+	s = 1 + 6 + (*z).Block.Msgsize() + 5 + (*z).Certificate.Msgsize() + 6 + msgp.BytesPrefixSize + len((*z).LightBlockHeaderProof)
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *EncodedBlockCert) MsgIsZero() bool {
-	return ((*z).Block.MsgIsZero()) && ((*z).Certificate.MsgIsZero())
+	return ((*z).Block.MsgIsZero()) && ((*z).Certificate.MsgIsZero()) && (len((*z).LightBlockHeaderProof) == 0)
 }
 
 // MaxSize returns a maximum valid message size for this message type
 func EncodedBlockCertMaxSize() (s int) {
-	s = 1 + 6 + bookkeeping.BlockMaxSize() + 5 + agreement.CertificateMaxSize()
+	s = 1 + 6 + bookkeeping.BlockMaxSize() + 5 + agreement.CertificateMaxSize() + 6
+	panic("Unable to determine max size: Byteslice type z.LightBlockHeaderProof is unbounded")
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *OneStateProof) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).StateProof.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Message.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "sp"
+			o = append(o, 0xa2, 0x73, 0x70)
+			o = (*z).StateProof.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "spmsg"
+			o = append(o, 0xa5, 0x73, 0x70, 0x6d, 0x73, 0x67)
+			o = (*z).Message.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *OneStateProof) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OneStateProof)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *OneStateProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).StateProof.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "StateProof")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Message.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Message")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = OneStateProof{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "sp":
+				bts, err = (*z).StateProof.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "StateProof")
+					return
+				}
+			case "spmsg":
+				bts, err = (*z).Message.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Message")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *OneStateProof) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OneStateProof)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *OneStateProof) Msgsize() (s int) {
+	s = 1 + 3 + (*z).StateProof.Msgsize() + 6 + (*z).Message.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *OneStateProof) MsgIsZero() bool {
+	return ((*z).StateProof.MsgIsZero()) && ((*z).Message.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func OneStateProofMaxSize() (s int) {
+	s = 1 + 3 + cryptostateproof.StateProofMaxSize() + 6 + stateproofmsg.MessageMaxSize()
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *StateProofResponse) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0002Len := uint32(1)
+	var zb0002Mask uint8 /* 2 bits */
+	if len((*z).Proofs) == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x2
+	}
+	// variable map header, size zb0002Len
+	o = append(o, 0x80|uint8(zb0002Len))
+	if zb0002Len != 0 {
+		if (zb0002Mask & 0x2) == 0 { // if not empty
+			// string "p"
+			o = append(o, 0xa1, 0x70)
+			if (*z).Proofs == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).Proofs)))
+			}
+			for zb0001 := range (*z).Proofs {
+				// omitempty: check for empty values
+				zb0003Len := uint32(2)
+				var zb0003Mask uint8 /* 3 bits */
+				if (*z).Proofs[zb0001].StateProof.MsgIsZero() {
+					zb0003Len--
+					zb0003Mask |= 0x2
+				}
+				if (*z).Proofs[zb0001].Message.MsgIsZero() {
+					zb0003Len--
+					zb0003Mask |= 0x4
+				}
+				// variable map header, size zb0003Len
+				o = append(o, 0x80|uint8(zb0003Len))
+				if (zb0003Mask & 0x2) == 0 { // if not empty
+					// string "sp"
+					o = append(o, 0xa2, 0x73, 0x70)
+					o = (*z).Proofs[zb0001].StateProof.MarshalMsg(o)
+				}
+				if (zb0003Mask & 0x4) == 0 { // if not empty
+					// string "spmsg"
+					o = append(o, 0xa5, 0x73, 0x70, 0x6d, 0x73, 0x67)
+					o = (*z).Proofs[zb0001].Message.MarshalMsg(o)
+				}
+			}
+		}
+	}
+	return
+}
+
+func (_ *StateProofResponse) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofResponse)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *StateProofResponse) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0002 int
+	var zb0003 bool
+	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 0 {
+			zb0002--
+			var zb0004 int
+			var zb0005 bool
+			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Proofs")
+				return
+			}
+			if zb0004 > stateProofMaxCount {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(stateProofMaxCount))
+				err = msgp.WrapError(err, "struct-from-array", "Proofs")
+				return
+			}
+			if zb0005 {
+				(*z).Proofs = nil
+			} else if (*z).Proofs != nil && cap((*z).Proofs) >= zb0004 {
+				(*z).Proofs = ((*z).Proofs)[:zb0004]
+			} else {
+				(*z).Proofs = make([]OneStateProof, zb0004)
+			}
+			for zb0001 := range (*z).Proofs {
+				var zb0006 int
+				var zb0007 bool
+				zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if _, ok := err.(msgp.TypeError); ok {
+					zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Proofs", zb0001)
+						return
+					}
+					if zb0006 > 0 {
+						zb0006--
+						bts, err = (*z).Proofs[zb0001].StateProof.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Proofs", zb0001, "struct-from-array", "StateProof")
+							return
+						}
+					}
+					if zb0006 > 0 {
+						zb0006--
+						bts, err = (*z).Proofs[zb0001].Message.UnmarshalMsg(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Proofs", zb0001, "struct-from-array", "Message")
+							return
+						}
+					}
+					if zb0006 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0006)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Proofs", zb0001, "struct-from-array")
+							return
+						}
+					}
+				} else {
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Proofs", zb0001)
+						return
+					}
+					if zb0007 {
+						(*z).Proofs[zb0001] = OneStateProof{}
+					}
+					for zb0006 > 0 {
+						zb0006--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Proofs", zb0001)
+							return
+						}
+						switch string(field) {
+						case "sp":
+							bts, err = (*z).Proofs[zb0001].StateProof.UnmarshalMsg(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "Proofs", zb0001, "StateProof")
+								return
+							}
+						case "spmsg":
+							bts, err = (*z).Proofs[zb0001].Message.UnmarshalMsg(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "Proofs", zb0001, "Message")
+								return
+							}
+						default:
+							err = msgp.ErrNoField(string(field))
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "Proofs", zb0001)
+								return
+							}
+						}
+					}
+				}
+			}
+		}
+		if zb0002 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0002)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0003 {
+			(*z) = StateProofResponse{}
+		}
+		for zb0002 > 0 {
+			zb0002--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "p":
+				var zb0008 int
+				var zb0009 bool
+				zb0008, zb0009, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Proofs")
+					return
+				}
+				if zb0008 > stateProofMaxCount {
+					err = msgp.ErrOverflow(uint64(zb0008), uint64(stateProofMaxCount))
+					err = msgp.WrapError(err, "Proofs")
+					return
+				}
+				if zb0009 {
+					(*z).Proofs = nil
+				} else if (*z).Proofs != nil && cap((*z).Proofs) >= zb0008 {
+					(*z).Proofs = ((*z).Proofs)[:zb0008]
+				} else {
+					(*z).Proofs = make([]OneStateProof, zb0008)
+				}
+				for zb0001 := range (*z).Proofs {
+					var zb0010 int
+					var zb0011 bool
+					zb0010, zb0011, bts, err = msgp.ReadMapHeaderBytes(bts)
+					if _, ok := err.(msgp.TypeError); ok {
+						zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Proofs", zb0001)
+							return
+						}
+						if zb0010 > 0 {
+							zb0010--
+							bts, err = (*z).Proofs[zb0001].StateProof.UnmarshalMsg(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Proofs", zb0001, "struct-from-array", "StateProof")
+								return
+							}
+						}
+						if zb0010 > 0 {
+							zb0010--
+							bts, err = (*z).Proofs[zb0001].Message.UnmarshalMsg(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Proofs", zb0001, "struct-from-array", "Message")
+								return
+							}
+						}
+						if zb0010 > 0 {
+							err = msgp.ErrTooManyArrayFields(zb0010)
+							if err != nil {
+								err = msgp.WrapError(err, "Proofs", zb0001, "struct-from-array")
+								return
+							}
+						}
+					} else {
+						if err != nil {
+							err = msgp.WrapError(err, "Proofs", zb0001)
+							return
+						}
+						if zb0011 {
+							(*z).Proofs[zb0001] = OneStateProof{}
+						}
+						for zb0010 > 0 {
+							zb0010--
+							field, bts, err = msgp.ReadMapKeyZC(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Proofs", zb0001)
+								return
+							}
+							switch string(field) {
+							case "sp":
+								bts, err = (*z).Proofs[zb0001].StateProof.UnmarshalMsg(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "Proofs", zb0001, "StateProof")
+									return
+								}
+							case "spmsg":
+								bts, err = (*z).Proofs[zb0001].Message.UnmarshalMsg(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "Proofs", zb0001, "Message")
+									return
+								}
+							default:
+								err = msgp.ErrNoField(string(field))
+								if err != nil {
+									err = msgp.WrapError(err, "Proofs", zb0001)
+									return
+								}
+							}
+						}
+					}
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *StateProofResponse) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*StateProofResponse)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *StateProofResponse) Msgsize() (s int) {
+	s = 1 + 2 + msgp.ArrayHeaderSize
+	for zb0001 := range (*z).Proofs {
+		s += 1 + 3 + (*z).Proofs[zb0001].StateProof.Msgsize() + 6 + (*z).Proofs[zb0001].Message.Msgsize()
+	}
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *StateProofResponse) MsgIsZero() bool {
+	return (len((*z).Proofs) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func StateProofResponseMaxSize() (s int) {
+	s = 1 + 2
+	// Calculating size of slice: z.Proofs
+	s += msgp.ArrayHeaderSize + ((stateProofMaxCount) * (OneStateProofMaxSize()))
 	return
 }

@@ -31,6 +31,9 @@ import (
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	cryptostateproof "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -38,18 +41,60 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/stateproof"
 )
 
-func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, next basics.Round, b bookkeeping.Block, err error) {
+const (
+	testLedgerKeyValidRounds = 10000
+)
+
+type testLedgerStateProofData struct {
+	Params        config.ConsensusParams
+	User          basics.Address
+	Secrets       *merklesignature.Secrets
+	TotalWeight   basics.MicroAlgos
+	Participants  basics.ParticipantsArray
+	Tree          *merklearray.Tree
+	TemplateBlock bookkeeping.Block
+}
+
+func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, next basics.Round, b bookkeeping.Block, stateProofData *testLedgerStateProofData, err error) {
 	var user basics.Address
 	user[0] = 123
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	genesis := make(map[basics.Address]basics.AccountData)
-	genesis[user] = basics.AccountData{
+	ver := blk.CurrentProtocol
+	if ver == "" {
+		ver = protocol.ConsensusCurrentVersion
+	}
+
+	proto := config.Consensus[ver]
+
+	userData := basics.AccountData{
 		Status:     basics.Offline,
 		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
+
+	if proto.StateProofInterval > 0 {
+		stateProofData = &testLedgerStateProofData{
+			Params: proto,
+			User:   user,
+		}
+
+		stateProofData.Secrets, err = merklesignature.New(0, testLedgerKeyValidRounds, proto.StateProofInterval)
+		if err != nil {
+			t.Fatal("couldn't generate state proof keys", err)
+			return
+		}
+
+		userData.StateProofID = stateProofData.Secrets.GetVerifier().Commitment
+		userData.VoteFirstValid = 0
+		userData.VoteLastValid = testLedgerKeyValidRounds
+		userData.VoteKeyDilution = 1
+		userData.Status = basics.Online
+	}
+
+	genesis := make(map[basics.Address]basics.AccountData)
+	genesis[user] = userData
 	genesis[sinkAddr] = basics.AccountData{
 		Status:     basics.Offline,
 		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
@@ -66,7 +111,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	ledger, err = data.LoadLedger(
-		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
+		log, t.Name(), inMem, ver, genBal, "", genHash,
 		nil, cfg,
 	)
 	if err != nil {
@@ -99,7 +144,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	b.RewardsLevel = prev.RewardsLevel
 	b.BlockHeader.Round = next
 	b.BlockHeader.GenesisHash = genHash
-	b.CurrentProtocol = protocol.ConsensusCurrentVersion
+	b.CurrentProtocol = ver
 	txib, err := b.EncodeSignedTxn(signedtx, transactions.ApplyData{})
 	require.NoError(t, err)
 	b.Payset = []transactions.SignedTxnInBlock{
@@ -107,15 +152,97 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	}
 	b.TxnCommitments, err = b.PaysetCommit()
 	require.NoError(t, err)
+
+	if proto.StateProofInterval > 0 {
+		var p basics.Participant
+		p.Weight = userData.MicroAlgos.ToUint64()
+		p.PK.KeyLifetime = merklesignature.KeyLifetimeDefault
+		p.PK.Commitment = userData.StateProofID
+
+		stateProofData.Participants = append(stateProofData.Participants, p)
+		stateProofData.TotalWeight = userData.MicroAlgos
+		stateProofData.Tree, err = merklearray.BuildVectorCommitmentTree(stateProofData.Participants, crypto.HashFactory{HashType: cryptostateproof.HashType})
+		if err != nil {
+			t.Fatal("couldn't build state proof voters tree", err)
+			return
+		}
+
+		b.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+			protocol.StateProofBasic: {
+				StateProofVotersCommitment:  stateProofData.Tree.Root(),
+				StateProofOnlineTotalWeight: stateProofData.TotalWeight,
+				StateProofNextRound:         basics.Round(proto.StateProofInterval),
+			},
+		}
+	}
+
 	require.NoError(t, ledger.AddBlock(b, agreement.Certificate{Round: next}))
 	return
 }
 
-func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks int) {
+func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, stateProofData *testLedgerStateProofData, numBlocks int) {
 	var err error
+	origPayset := blk.Payset
+	nextStateProofTracking := blk.StateProofTracking
+
 	for i := 0; i < numBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.Payset = origPayset
+		blk.StateProofTracking = nextStateProofTracking
+
+		if stateProofData != nil &&
+			(blk.BlockHeader.Round%basics.Round(stateProofData.Params.StateProofInterval)) == 0 &&
+			blk.BlockHeader.Round > basics.Round(stateProofData.Params.StateProofInterval) {
+			proofrnd := blk.BlockHeader.Round.SubSaturate(basics.Round(stateProofData.Params.StateProofInterval))
+			msg, err := stateproof.GenerateStateProofMessage(ledger, proofrnd)
+			require.NoError(t, err)
+
+			provenWeight, overflowed := basics.Muldiv(stateProofData.TotalWeight.ToUint64(), uint64(stateProofData.Params.StateProofWeightThreshold), 1<<32)
+			require.False(t, overflowed)
+
+			msgHash := msg.Hash()
+			prover, err := cryptostateproof.MakeProver(msgHash,
+				uint64(proofrnd),
+				provenWeight,
+				stateProofData.Participants,
+				stateProofData.Tree,
+				stateProofData.Params.StateProofStrengthTarget)
+			require.NoError(t, err)
+
+			sig, err := stateProofData.Secrets.GetSigner(uint64(proofrnd)).SignBytes(msgHash[:])
+			require.NoError(t, err)
+
+			err = prover.Add(0, sig)
+			require.NoError(t, err)
+
+			require.True(t, prover.Ready())
+			sp, err := prover.CreateProof()
+			require.NoError(t, err)
+
+			var stxn transactions.SignedTxn
+			stxn.Txn.Type = protocol.StateProofTx
+			stxn.Txn.Sender = transactions.StateProofSender
+			stxn.Txn.FirstValid = blk.BlockHeader.Round
+			stxn.Txn.LastValid = blk.BlockHeader.Round
+			stxn.Txn.GenesisHash = blk.BlockHeader.GenesisHash
+			stxn.Txn.StateProofTxnFields.StateProofType = protocol.StateProofBasic
+			stxn.Txn.StateProofTxnFields.StateProof = *sp
+			stxn.Txn.StateProofTxnFields.Message = msg
+
+			txib, err := blk.EncodeSignedTxn(stxn, transactions.ApplyData{})
+			require.NoError(t, err)
+			blk.Payset = make([]transactions.SignedTxnInBlock, len(origPayset)+1)
+			copy(blk.Payset[:], origPayset[:])
+			blk.Payset[len(origPayset)] = txib
+
+			sptracking := blk.StateProofTracking[protocol.StateProofBasic]
+			sptracking.StateProofNextRound = blk.BlockHeader.Round
+			nextStateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+				protocol.StateProofBasic: sptracking,
+			}
+		}
+
 		blk.TxnCommitments, err = blk.PaysetCommit()
 		require.NoError(t, err)
 
@@ -126,6 +253,10 @@ func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBloc
 		require.NoError(t, err)
 		require.Equal(t, blk.BlockHeader, hdr)
 	}
+
+	blk.Payset = origPayset
+	blk.StateProofTracking = nextStateProofTracking
+	stateProofData.TemplateBlock = blk
 }
 
 type basicRPCNode struct {
@@ -141,6 +272,13 @@ func (b *basicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
 		b.rmux = mux.NewRouter()
 	}
 	b.rmux.Handle(path, handler)
+}
+
+func (b *basicRPCNode) RegisterHTTPHandlerFunc(path string, handler func(response http.ResponseWriter, request *http.Request)) {
+	if b.rmux == nil {
+		b.rmux = mux.NewRouter()
+	}
+	b.rmux.HandleFunc(path, handler)
 }
 
 func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {

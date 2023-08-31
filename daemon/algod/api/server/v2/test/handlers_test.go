@@ -1872,8 +1872,8 @@ func addStateProof(blk bookkeeping.Block) bookkeeping.Block {
 				StateProofType: 0,
 				Message: stateproofmsg.Message{
 					BlockHeadersCommitment: []byte{0x0, 0x1, 0x2},
-					FirstAttestedRound:     stateProofRound + 1,
-					LastAttestedRound:      stateProofRound + stateProofInterval,
+					FirstAttestedRound:     basics.Round(stateProofRound + 1),
+					LastAttestedRound:      basics.Round(stateProofRound + stateProofInterval),
 				},
 			},
 		},

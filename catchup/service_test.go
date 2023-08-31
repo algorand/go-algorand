@@ -137,12 +137,12 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	remote, _, blk, spdata, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, 10)
+	addBlocks(t, remote, blk, spdata, 10)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -157,7 +157,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
+	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil, nil)
 
 	syncer.testStart()
 	syncer.sync()
@@ -188,12 +188,12 @@ func TestSyncRound(t *testing.T) {
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	remote, _, blk, spdata, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, 10)
+	addBlocks(t, remote, blk, spdata, 10)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -213,7 +213,7 @@ func TestSyncRound(t *testing.T) {
 
 	// Make Service
 	localCfg := config.GetDefaultLocal()
-	s := MakeService(logging.Base(), localCfg, net, local, auth, nil, nil)
+	s := MakeService(logging.Base(), localCfg, net, local, auth, nil, nil, nil)
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
 	s.deadlineTimeout = 2 * time.Second
 
@@ -278,12 +278,12 @@ func TestPeriodicSync(t *testing.T) {
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	remote, _, blk, spdata, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, 10)
+	addBlocks(t, remote, blk, spdata, 10)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -302,7 +302,7 @@ func TestPeriodicSync(t *testing.T) {
 	require.True(t, 0 == initialLocalRound)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil, nil)
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
 	s.deadlineTimeout = 2 * time.Second
 
@@ -344,12 +344,12 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 	lastRoundAtStart := local.LastRound()
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	remote, _, blk, spdata, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, numBlocks-1)
+	addBlocks(t, remote, blk, spdata, numBlocks-1)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -364,7 +364,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil, nil)
 
 	// Get last round
 
@@ -378,9 +378,9 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	require.Equal(t, lastRoundAtStart+basics.Round(numBlocks), local.LastRound())
 
 	// Get the same block we wrote
-	block, _, _, err := makeUniversalBlockFetcher(logging.Base(),
+	block, _, _, _, err := makeUniversalBlockFetcher(logging.Base(),
 		net,
-		defaultConfig).fetchBlock(context.Background(), lastRoundAtStart+1, net.peers[0])
+		defaultConfig).fetchBlock(context.Background(), lastRoundAtStart+1, net.peers[0], false)
 
 	require.NoError(t, err)
 
@@ -408,12 +408,12 @@ func TestAbruptWrites(t *testing.T) {
 
 	lastRound := local.LastRound()
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	remote, _, blk, spdata, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, numberOfBlocks-1)
+	addBlocks(t, remote, blk, spdata, numberOfBlocks-1)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -428,7 +428,7 @@ func TestAbruptWrites(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil, nil)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -466,12 +466,12 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 
 	lastRoundAtStart := local.LastRound()
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	remote, _, blk, spdata, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, int(numberOfBlocks)-1)
+	addBlocks(t, remote, blk, spdata, int(numberOfBlocks)-1)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -486,7 +486,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
+	syncer := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil, nil)
 	fetcher := makeUniversalBlockFetcher(logging.Base(), net, defaultConfig)
 
 	// Start the service ( dummy )
@@ -500,7 +500,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 
 	for i := basics.Round(1); i <= numberOfBlocks; i++ {
 		// Get the same block we wrote
-		blk, _, _, err2 := fetcher.fetchBlock(context.Background(), i, net.GetPeers()[0])
+		blk, _, _, _, err2 := fetcher.fetchBlock(context.Background(), i, net.GetPeers()[0], false)
 		require.NoError(t, err2)
 
 		// Check we wrote the correct block
@@ -521,12 +521,12 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 
 	lastRoundAtStart := local.LastRound()
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	remote, _, blk, spdata, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, numBlocks-1)
+	addBlocks(t, remote, blk, spdata, numBlocks-1)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -541,7 +541,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil, nil, nil)
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
 
 	// Start the service ( dummy )
@@ -670,7 +670,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 	config.CatchupParallelBlocks = 2
 
 	block1 := mRemote.blocks[1]
-	remote, _, blk, err := buildTestLedger(t, block1)
+	remote, _, blk, spdata, err := buildTestLedger(t, block1)
 	if err != nil {
 		t.Fatal(err)
 		return local, remote
@@ -679,7 +679,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 		blk.NextProtocolSwitchOn = mRemote.blocks[i+1].NextProtocolSwitchOn
 		blk.NextProtocol = mRemote.blocks[i+1].NextProtocol
 		// Adds blk.BlockHeader.Round + 1
-		addBlocks(t, remote, blk, 1)
+		addBlocks(t, remote, blk, spdata, 1)
 		blk.BlockHeader.Round++
 	}
 
@@ -695,7 +695,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), config, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
+	s := MakeService(logging.Base(), config, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil, nil)
 	s.deadlineTimeout = 2 * time.Second
 	s.Start()
 	defer s.Stop()
@@ -710,6 +710,7 @@ type mockedLedger struct {
 	mu     deadlock.Mutex
 	blocks []bookkeeping.Block
 	chans  map[basics.Round]chan struct{}
+	certs  map[basics.Round]agreement.Certificate
 }
 
 func (m *mockedLedger) NextRound() basics.Round {
@@ -746,6 +747,12 @@ func (m *mockedLedger) AddBlock(blk bookkeeping.Block, cert agreement.Certificat
 			delete(m.chans, r)
 		}
 	}
+
+	if m.certs == nil {
+		m.certs = make(map[basics.Round]agreement.Certificate)
+	}
+	m.certs[blk.Round()] = cert
+
 	return nil
 }
 
@@ -797,6 +804,15 @@ func (m *mockedLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	return m.blocks[r], nil
 }
 
+func (m *mockedLedger) BlockCert(r basics.Round) (bookkeeping.Block, agreement.Certificate, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r > m.lastRound() {
+		return bookkeeping.Block{}, agreement.Certificate{}, errors.New("mockedLedger.Block: round too high")
+	}
+	return m.blocks[r], m.certs[r], nil
+}
+
 func (m *mockedLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	blk, err := m.Block(r)
 	return blk.BlockHeader, err
@@ -828,6 +844,34 @@ func (m *mockedLedger) LookupAgreement(basics.Round, basics.Address) (basics.Onl
 
 func (m *mockedLedger) IsWritingCatchpointDataFile() bool {
 	return false
+}
+
+func (m *mockedLedger) GetStateProofVerificationContext(r basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	latest := m.LastRound()
+	latestHdr, err := m.BlockHdr(latest)
+	if err != nil {
+		return nil, err
+	}
+
+	interval := basics.Round(config.Consensus[latestHdr.CurrentProtocol].StateProofInterval)
+	if interval == 0 {
+		return nil, errors.New("state proofs not supported")
+	}
+
+	lastAttested := r.RoundUpToMultipleOf(interval)
+	votersRnd := lastAttested - interval
+	votersHdr, err := m.BlockHdr(votersRnd)
+	if err != nil {
+		return nil, err
+	}
+
+	vc := &ledgercore.StateProofVerificationContext{
+		LastAttestedRound: lastAttested,
+		VotersCommitment:  votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight: votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		Version:           votersHdr.CurrentProtocol,
+	}
+	return vc, nil
 }
 
 func testingenvWithUpgrade(
@@ -885,13 +929,13 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 	lastRoundAtStart := local.LastRound()
 
-	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	remote, _, blk, spdata, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
 	}
 	defer remote.Close()
-	addBlocks(t, remote, blk, numBlocks-1)
+	addBlocks(t, remote, blk, spdata, numBlocks-1)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -906,7 +950,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	net.addPeer(rootURL)
 
 	// Make Service
-	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil, nil)
+	s := MakeService(logging.Base(), defaultConfig, net, local, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil, nil, nil)
 	s.testStart()
 	for roundNumber := 2; roundNumber < 10; roundNumber += 3 {
 		pc := &PendingUnmatchedCertificate{
@@ -931,7 +975,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	cfg.EnableCatchupFromArchiveServers = true
 
 	cfg.NetAddress = "someAddress"
-	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 	ps := createPeerSelector(s.net, s.cfg, true)
 	require.Equal(t, 5, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -949,7 +993,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	// cfg.EnableCatchupFromArchiveServers = true; cfg.NetAddress == ""; pipelineFetch = true;
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = ""
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, true)
 	require.Equal(t, 4, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -965,7 +1009,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	// cfg.EnableCatchupFromArchiveServers = true;  cfg.NetAddress != ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = "someAddress"
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 5, len(ps.peerClasses))
@@ -984,7 +1028,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	// cfg.EnableCatchupFromArchiveServers = true; cfg.NetAddress == ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = true
 	cfg.NetAddress = ""
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 4, len(ps.peerClasses))
@@ -1001,7 +1045,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress != ""; pipelineFetch = true
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = "someAddress"
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, true)
 
 	require.Equal(t, 4, len(ps.peerClasses))
@@ -1018,7 +1062,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = true
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = ""
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, true)
 
 	require.Equal(t, 3, len(ps.peerClasses))
@@ -1033,7 +1077,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress != ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = "someAddress"
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 4, len(ps.peerClasses))
@@ -1050,7 +1094,7 @@ func TestCreatePeerSelector(t *testing.T) {
 	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = false
 	cfg.EnableCatchupFromArchiveServers = false
 	cfg.NetAddress = ""
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, false)
 
 	require.Equal(t, 3, len(ps.peerClasses))
@@ -1069,7 +1113,7 @@ func TestServiceStartStop(t *testing.T) {
 	cfg := defaultConfig
 	ledger := new(mockedLedger)
 	ledger.blocks = append(ledger.blocks, bookkeeping.Block{})
-	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 	s.Start()
 	s.Stop()
 
@@ -1082,7 +1126,7 @@ func TestSynchronizingTime(t *testing.T) {
 	cfg := defaultConfig
 	ledger := new(mockedLedger)
 	ledger.blocks = append(ledger.blocks, bookkeeping.Block{})
-	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil, nil)
 
 	require.Equal(t, time.Duration(0), s.SynchronizingTime())
 	atomic.StoreInt64(&s.syncStartNS, 1000000)

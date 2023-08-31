@@ -42,7 +42,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitely, otherwise, only the most recent blocks
@@ -111,6 +111,10 @@ type Local struct {
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
 	StateproofDir string `version[31]:""`
+	// StateproofCatchupDir is an optional directory to store stateproof catchup data.
+	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
+	// If not specified, the node will use the ColdDataDir.
+	StateproofCatchupDir string `version[31]:""`
 	// CrashDBDir is an optional directory to store the crash database.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
@@ -581,6 +585,25 @@ type Local struct {
 
 	// DisableAPIAuth turns off authentication for public (non-admin) API endpoints.
 	DisableAPIAuth bool `version[30]:"false"`
+
+	// RenaissanceCatchup* fields specify how to bootstrap authentication of
+	// state proofs without validating every block starting from genesis.
+	//
+	// RenaissanceCatchupRound is the next expected LastAttestedRound in the
+	// state proof we expect to verify using these renaissance parameters.
+	// If 0 (default), renaissance catchup parameters are disabled.
+	RenaissanceCatchupRound uint64 `version[32]:"0"`
+
+	// RenaissanceCatchupLnProvenWeight is the corresponding field from the
+	// previous state proof message.
+	RenaissanceCatchupLnProvenWeight uint64 `version[32]:"0"`
+
+	// RenaissanceCatchupVotersCommitment is the base64-encoded corresponding
+	// field from the previous state proof message.
+	RenaissanceCatchupVotersCommitment string `version[32]:""`
+
+	// RenaissanceCatchupProto is the protocol of RenaissanceCatchupRound.
+	RenaissanceCatchupProto string `version[32]:""`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -708,14 +731,15 @@ func ensureAbsGenesisDir(path string, genesisID string) (string, error) {
 // ResolvedGenesisDirs is a collection of directories including Genesis ID
 // Subdirectories for execution of a node
 type ResolvedGenesisDirs struct {
-	RootGenesisDir       string
-	HotGenesisDir        string
-	ColdGenesisDir       string
-	TrackerGenesisDir    string
-	BlockGenesisDir      string
-	CatchpointGenesisDir string
-	StateproofGenesisDir string
-	CrashGenesisDir      string
+	RootGenesisDir              string
+	HotGenesisDir               string
+	ColdGenesisDir              string
+	TrackerGenesisDir           string
+	BlockGenesisDir             string
+	CatchpointGenesisDir        string
+	StateproofGenesisDir        string
+	StateproofCatchupGenesisDir string
+	CrashGenesisDir             string
 }
 
 // String returns the Genesis Directory values as a string
@@ -728,6 +752,7 @@ func (rgd ResolvedGenesisDirs) String() string {
 	ret += fmt.Sprintf("BlockGenesisDir: %s\n", rgd.BlockGenesisDir)
 	ret += fmt.Sprintf("CatchpointGenesisDir: %s\n", rgd.CatchpointGenesisDir)
 	ret += fmt.Sprintf("StateproofGenesisDir: %s\n", rgd.StateproofGenesisDir)
+	ret += fmt.Sprintf("StateproofCatchupGenesisDir: %s\n", rgd.StateproofCatchupGenesisDir)
 	ret += fmt.Sprintf("CrashGenesisDir: %s\n", rgd.CrashGenesisDir)
 	return ret
 }
@@ -822,6 +847,15 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (Resolv
 		}
 	} else {
 		resolved.StateproofGenesisDir = resolved.ColdGenesisDir
+	}
+	// if StateproofCatchupDir is not set, use ColdDataDir
+	if cfg.StateproofCatchupDir != "" {
+		resolved.StateproofCatchupGenesisDir, err = ensureAbsGenesisDir(cfg.StateproofCatchupDir, genesisID)
+		if err != nil {
+			return ResolvedGenesisDirs{}, err
+		}
+	} else {
+		resolved.StateproofCatchupGenesisDir = resolved.ColdGenesisDir
 	}
 	// if CrashDBDir is not set, use ColdDataDir
 	if cfg.CrashDBDir != "" {

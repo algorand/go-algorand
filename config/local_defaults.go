@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    31,
+	Version:                                    32,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -124,12 +124,17 @@ var defaultLocal = Local{
 	ProposalAssemblyTime:                       500000000,
 	PublicAddress:                              "",
 	ReconnectTime:                              60000000000,
+	RenaissanceCatchupLnProvenWeight:           0,
+	RenaissanceCatchupProto:                    "",
+	RenaissanceCatchupRound:                    0,
+	RenaissanceCatchupVotersCommitment:         "",
 	ReservedFDs:                                256,
 	RestConnectionsHardLimit:                   2048,
 	RestConnectionsSoftLimit:                   1024,
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
+	StateproofCatchupDir:                       "",
 	StateproofDir:                              "",
 	StorageEngine:                              "sqlite",
 	SuggestedFeeBlockHistory:                   3,

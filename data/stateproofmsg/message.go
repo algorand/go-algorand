@@ -19,6 +19,7 @@ package stateproofmsg
 import (
 	"github.com/algorand/go-algorand/crypto"
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -29,11 +30,11 @@ import (
 type Message struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	// BlockHeadersCommitment contains a commitment on all light block headers within a state proof interval.
-	BlockHeadersCommitment []byte `codec:"b,allocbound=crypto.Sha256Size"`
-	VotersCommitment       []byte `codec:"v,allocbound=crypto.SumhashDigestSize"`
-	LnProvenWeight         uint64 `codec:"P"`
-	FirstAttestedRound     uint64 `codec:"f"`
-	LastAttestedRound      uint64 `codec:"l"`
+	BlockHeadersCommitment []byte       `codec:"b,allocbound=crypto.Sha256Size"`
+	VotersCommitment       []byte       `codec:"v,allocbound=crypto.SumhashDigestSize"`
+	LnProvenWeight         uint64       `codec:"P"`
+	FirstAttestedRound     basics.Round `codec:"f"`
+	LastAttestedRound      basics.Round `codec:"l"`
 }
 
 // ToBeHashed returns the bytes of the message.

@@ -291,8 +291,16 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
+	spCatchupFilename := filepath.Join(node.genesisDirs.StateproofCatchupGenesisDir, config.StateProofCatchupFilename)
+	spCatchupDB, err := db.MakeAccessor(spCatchupFilename, false, false)
+	if err != nil {
+		log.Errorf("Cannot create state-proof catchup DB (%s): %v", spCatchupFilename, err)
+		return nil, err
+	}
+
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
-	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
+	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool, &spCatchupDB)
+	node.catchupService.SetRenaissanceFromConfig(cfg)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	registry, err := ensureParticipationDB(node.genesisDirs.ColdGenesisDir, node.log)

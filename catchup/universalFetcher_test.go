@@ -44,7 +44,7 @@ func TestUGetBlockWs(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 
-	ledger, next, b, err := buildTestLedger(t, bookkeeping.Block{})
+	ledger, next, b, _, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -65,13 +65,13 @@ func TestUGetBlockWs(t *testing.T) {
 	var cert *agreement.Certificate
 	var duration time.Duration
 
-	block, cert, _, err = fetcher.fetchBlock(context.Background(), next, up)
+	block, cert, _, _, err = fetcher.fetchBlock(context.Background(), next, up, false)
 
 	require.NoError(t, err)
 	require.Equal(t, &b, block)
 	require.GreaterOrEqual(t, int64(duration), int64(0))
 
-	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, up)
+	block, cert, _, duration, err = fetcher.fetchBlock(context.Background(), next+1, up, false)
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "requested block is not available")
@@ -86,7 +86,7 @@ func TestUGetBlockHTTP(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 
-	ledger, next, b, err := buildTestLedger(t, bookkeeping.Block{})
+	ledger, next, b, _, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -111,13 +111,13 @@ func TestUGetBlockHTTP(t *testing.T) {
 	var block *bookkeeping.Block
 	var cert *agreement.Certificate
 	var duration time.Duration
-	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next, net.GetPeers()[0])
+	block, cert, _, duration, err = fetcher.fetchBlock(context.Background(), next, net.GetPeers()[0], false)
 
 	require.NoError(t, err)
 	require.Equal(t, &b, block)
 	require.GreaterOrEqual(t, int64(duration), int64(0))
 
-	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, net.GetPeers()[0])
+	block, cert, _, duration, err = fetcher.fetchBlock(context.Background(), next+1, net.GetPeers()[0], false)
 
 	require.Error(t, errNoBlockForRound, err)
 	require.Contains(t, err.Error(), "No block available for given round")
@@ -132,7 +132,7 @@ func TestUGetBlockUnsupported(t *testing.T) {
 
 	fetcher := universalBlockFetcher{}
 	peer := ""
-	block, cert, duration, err := fetcher.fetchBlock(context.Background(), 1, peer)
+	block, cert, _, duration, err := fetcher.fetchBlock(context.Background(), 1, peer, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	require.Nil(t, block)
@@ -156,18 +156,18 @@ func TestProcessBlockBytesErrors(t *testing.T) {
 	})
 
 	// Check for cert error
-	_, _, err := processBlockBytes(bc, 22, "test")
+	_, _, _, err := processBlockBytes(bc, 22, "test")
 	var wcfpe errWrongCertFromPeer
 	require.True(t, errors.As(err, &wcfpe))
 
 	// Check for round error
-	_, _, err = processBlockBytes(bc, 20, "test")
+	_, _, _, err = processBlockBytes(bc, 20, "test")
 	var wbfpe errWrongBlockFromPeer
 	require.True(t, errors.As(err, &wbfpe))
 
 	// Check for undecodable
 	bc[11] = 0
-	_, _, err = processBlockBytes(bc, 22, "test")
+	_, _, _, err = processBlockBytes(bc, 22, "test")
 	var cdbe errCannotDecodeBlock
 	require.True(t, errors.As(err, &cdbe))
 }
@@ -178,7 +178,7 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 
-	ledger, next, _, err := buildTestLedger(t, bookkeeping.Block{})
+	ledger, next, _, _, err := buildTestLedger(t, bookkeeping.Block{})
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -199,7 +199,7 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
+	_, _, _, _, err = fetcher.fetchBlock(ctx, next, up, false)
 	var wrfe errWsFetcherRequestFailed
 	require.True(t, errors.As(err, &wrfe), "unexpected err: %w", wrfe)
 	require.Equal(t, "context canceled", err.(errWsFetcherRequestFailed).cause)
@@ -209,14 +209,14 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	responseOverride := network.Response{Topics: network.Topics{network.MakeTopic(rpcs.BlockDataKey, make([]byte, 0))}}
 	up = makeTestUnicastPeerWithResponseOverride(net, t, &responseOverride)
 
-	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
+	_, _, _, _, err = fetcher.fetchBlock(ctx, next, up, false)
 	require.True(t, errors.As(err, &wrfe))
 	require.Equal(t, "Cert data not found", err.(errWsFetcherRequestFailed).cause)
 
 	responseOverride = network.Response{Topics: network.Topics{network.MakeTopic(rpcs.CertDataKey, make([]byte, 0))}}
 	up = makeTestUnicastPeerWithResponseOverride(net, t, &responseOverride)
 
-	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
+	_, _, _, _, err = fetcher.fetchBlock(ctx, next, up, false)
 	require.True(t, errors.As(err, &wrfe))
 	require.Equal(t, "Block data not found", err.(errWsFetcherRequestFailed).cause)
 }
@@ -259,26 +259,26 @@ func TestGetBlockBytesHTTPErrors(t *testing.T) {
 	fetcher := makeUniversalBlockFetcher(logging.TestingLog(t), net, cfg)
 
 	ls.status = http.StatusBadRequest
-	_, _, _, err := fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
+	_, _, _, _, err := fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0], false)
 	var hre errHTTPResponse
 	require.True(t, errors.As(err, &hre))
 	require.Equal(t, "Response body '\x00'", err.(errHTTPResponse).cause)
 
 	ls.exceedLimit = true
-	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
+	_, _, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0], false)
 	require.True(t, errors.As(err, &hre))
 	require.Equal(t, "read limit exceeded", err.(errHTTPResponse).cause)
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined")
-	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
+	_, _, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0], false)
 	var cte errHTTPResponseContentType
 	require.True(t, errors.As(err, &cte))
 	require.Equal(t, "undefined", err.(errHTTPResponseContentType).contentType)
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined2")
-	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
+	_, _, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0], false)
 	require.True(t, errors.As(err, &cte))
 	require.Equal(t, 2, err.(errHTTPResponseContentType).contentTypeCount)
 }

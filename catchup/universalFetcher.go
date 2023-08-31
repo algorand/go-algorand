@@ -52,8 +52,8 @@ func makeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, confi
 }
 
 // fetchBlock returns a block from the peer. The peer can be either an http or ws peer.
-func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Round, peer network.Peer) (blk *bookkeeping.Block,
-	cert *agreement.Certificate, downloadDuration time.Duration, err error) {
+func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Round, peer network.Peer, proofOK bool) (blk *bookkeeping.Block,
+	cert *agreement.Certificate, proof []byte, downloadDuration time.Duration, err error) {
 
 	var fetchedBuf []byte
 	var address string
@@ -65,7 +65,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 		}
 		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)
 		if err != nil {
-			return nil, nil, time.Duration(0), err
+			return nil, nil, nil, time.Duration(0), err
 		}
 		address = fetcherClient.address()
 	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
@@ -76,24 +76,24 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 			client:  httpPeer.GetHTTPClient(),
 			log:     uf.log,
 			config:  &uf.config}
-		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)
+		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round, proofOK)
 		if err != nil {
-			return nil, nil, time.Duration(0), err
+			return nil, nil, nil, time.Duration(0), err
 		}
 		address = fetcherClient.address()
 	} else {
-		return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
+		return nil, nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
-	downloadDuration = time.Now().Sub(blockDownloadStartTime)
-	block, cert, err := processBlockBytes(fetchedBuf, round, address)
+	downloadDuration = time.Since(blockDownloadStartTime)
+	block, cert, proof, err := processBlockBytes(fetchedBuf, round, address)
 	if err != nil {
-		return nil, nil, time.Duration(0), err
+		return nil, nil, nil, time.Duration(0), err
 	}
 	uf.log.Debugf("fetchBlock: downloaded block %d in %d from %s", uint64(round), downloadDuration, address)
-	return block, cert, downloadDuration, err
+	return block, cert, proof, downloadDuration, err
 }
 
-func processBlockBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (blk *bookkeeping.Block, cert *agreement.Certificate, err error) {
+func processBlockBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (blk *bookkeeping.Block, cert *agreement.Certificate, proof []byte, err error) {
 	var decodedEntry rpcs.EncodedBlockCert
 	err = protocol.Decode(fetchedBuf, &decodedEntry)
 	if err != nil {
@@ -106,11 +106,56 @@ func processBlockBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (blk 
 		return
 	}
 
-	if decodedEntry.Certificate.Round != r {
+	if (decodedEntry.LightBlockHeaderProof == nil || decodedEntry.Certificate.Round != 0) && decodedEntry.Certificate.Round != r {
 		err = makeErrWrongCertFromPeer(r, decodedEntry.Certificate.Round, peerAddr)
 		return
 	}
-	return &decodedEntry.Block, &decodedEntry.Certificate, nil
+	return &decodedEntry.Block, &decodedEntry.Certificate, decodedEntry.LightBlockHeaderProof, nil
+}
+
+// fetchStateProof retrieves a state proof (and the corresponding message
+// attested to by the state proof) for round.
+//
+// proofType specifies the expected state proof type.
+func (uf *universalBlockFetcher) fetchStateProof(ctx context.Context, proofType protocol.StateProofType, round basics.Round, peer network.Peer) (proofs rpcs.StateProofResponse, downloadDuration time.Duration, err error) {
+	var fetchedBuf []byte
+	var address string
+	downloadStartTime := time.Now()
+	if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
+		fetcherClient := &HTTPFetcher{
+			peer:    httpPeer,
+			rootURL: httpPeer.GetAddress(),
+			net:     uf.net,
+			client:  httpPeer.GetHTTPClient(),
+			log:     uf.log,
+			config:  &uf.config,
+		}
+		fetchedBuf, err = fetcherClient.getStateProofBytes(ctx, proofType, round)
+		if err != nil {
+			return proofs, 0, err
+		}
+		address = fetcherClient.address()
+	} else {
+		return proofs, 0, fmt.Errorf("fetchStateProof: UniversalFetcher only supports HTTPPeer")
+	}
+	downloadDuration = time.Since(downloadStartTime)
+	proofs, err = processStateProofBytes(fetchedBuf, round, address)
+	if err != nil {
+		return proofs, 0, err
+	}
+	uf.log.Debugf("fetchStateProof: downloaded proof for %d in %d from %s", uint64(round), downloadDuration, address)
+	return proofs, downloadDuration, err
+}
+
+func processStateProofBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (proofs rpcs.StateProofResponse, err error) {
+	var decodedEntry rpcs.StateProofResponse
+	err = protocol.Decode(fetchedBuf, &decodedEntry)
+	if err != nil {
+		err = fmt.Errorf("Cannot decode state proof for %d from %s: %v", r, peerAddr, err)
+		return
+	}
+
+	return decodedEntry, nil
 }
 
 // a stub fetcherClient to satisfy the NetworkFetcher interface
@@ -209,18 +254,10 @@ type HTTPFetcher struct {
 	config *config.Local
 }
 
-// getBlockBytes gets a block.
-// Core piece of FetcherClient interface
-func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
-	parsedURL, err := network.ParseHostOrURL(hf.rootURL)
-	if err != nil {
-		return nil, err
-	}
-
-	parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
-	blockURL := parsedURL.String()
-	hf.log.Debugf("block GET %#v peer %#v %T", blockURL, hf.peer, hf.peer)
-	request, err := http.NewRequest("GET", blockURL, nil)
+// getBytes requests a particular URL, expecting specific content types
+func (hf *HTTPFetcher) getBytes(ctx context.Context, url string, expectedContentTypes map[string]struct{}) (data []byte, err error) {
+	hf.log.Debugf("block GET %#v peer %#v %T", url, hf.peer, hf.peer)
+	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +267,7 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 	network.SetUserAgentHeader(request.Header)
 	response, err := hf.client.Do(request)
 	if err != nil {
-		hf.log.Debugf("GET %#v : %s", blockURL, err)
+		hf.log.Debugf("GET %#v : %s", url, err)
 		return nil, err
 	}
 
@@ -242,11 +279,11 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 		return nil, errNoBlockForRound
 	default:
 		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
-		hf.log.Warnf("HTTPFetcher.getBlockBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, blockURL, string(bodyBytes))
+		hf.log.Warnf("HTTPFetcher.getBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, url, string(bodyBytes))
 		if err == nil {
-			err = makeErrHTTPResponse(response.StatusCode, blockURL, fmt.Sprintf("Response body '%s'", string(bodyBytes)))
+			err = makeErrHTTPResponse(response.StatusCode, url, fmt.Sprintf("Response body '%s'", string(bodyBytes)))
 		} else {
-			err = makeErrHTTPResponse(response.StatusCode, blockURL, err.Error())
+			err = makeErrHTTPResponse(response.StatusCode, url, err.Error())
 		}
 		return nil, err
 	}
@@ -261,16 +298,56 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 		return nil, err
 	}
 
-	// TODO: Temporarily allow old and new content types so we have time for lazy upgrades
-	// Remove this 'old' string after next release.
-	const blockResponseContentTypeOld = "application/algorand-block-v1"
-	if contentTypes[0] != rpcs.BlockResponseContentType && contentTypes[0] != blockResponseContentTypeOld {
-		hf.log.Warnf("http block fetcher response has an invalid content type : %s", contentTypes[0])
+	_, contentTypeOK := expectedContentTypes[contentTypes[0]]
+	if !contentTypeOK {
+		hf.log.Warnf("http fetcher response has an invalid content type : %s", contentTypes[0])
 		response.Body.Close()
 		return nil, errHTTPResponseContentType{contentTypeCount: 1, contentType: contentTypes[0]}
 	}
 
 	return rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
+}
+
+// getBlockBytes gets a block.
+// Core piece of FetcherClient interface
+func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round, proofOK bool) (data []byte, err error) {
+	parsedURL, err := network.ParseHostOrURL(hf.rootURL)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
+	if proofOK {
+		parsedURL.RawQuery = "stateproof=0"
+	}
+	blockURL := parsedURL.String()
+
+	// TODO: Temporarily allow old and new content types so we have time for lazy upgrades
+	// Remove this 'old' string after next release.
+	const blockResponseContentTypeOld = "application/algorand-block-v1"
+	expectedContentTypes := map[string]struct{}{
+		rpcs.BlockResponseContentType: {},
+		blockResponseContentTypeOld:   {},
+	}
+
+	return hf.getBytes(ctx, blockURL, expectedContentTypes)
+}
+
+// getStateProofBytes gets a state proof.
+func (hf *HTTPFetcher) getStateProofBytes(ctx context.Context, proofType protocol.StateProofType, r basics.Round) (data []byte, err error) {
+	parsedURL, err := network.ParseHostOrURL(hf.rootURL)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedURL.Path = rpcs.FormatStateProofQuery(uint64(r), proofType, parsedURL.Path, hf.net)
+	proofURL := parsedURL.String()
+
+	expectedContentTypes := map[string]struct{}{
+		rpcs.StateProofResponseContentType: {},
+	}
+
+	return hf.getBytes(ctx, proofURL, expectedContentTypes)
 }
 
 // Address is part of FetcherClient interface.

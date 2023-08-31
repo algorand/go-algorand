@@ -72,6 +72,11 @@ const StateProofFileName = "stateproof.sqlite"
 // It is used for tracking participation key metadata.
 const ParticipationRegistryFilename = "partregistry.sqlite"
 
+// StateProofCatchupFilename is the name of the database file that is used
+// during catchup to temporarily store validated state proofs for blocks
+// ahead of the ledger.
+const StateProofCatchupFilename = "stateproofcatchup.sqlite"
+
 // ConfigurableConsensusProtocolsFilename defines a set of consensus protocols that
 // are to be loaded from the data directory ( if present ), to override the
 // built-in supported consensus protocols.

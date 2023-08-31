@@ -25,16 +25,20 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -66,6 +70,7 @@ type Ledger interface {
 	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
 	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
 	WaitMem(r basics.Round) chan struct{}
+	GetStateProofVerificationContext(basics.Round) (*ledgercore.StateProofVerificationContext, error)
 }
 
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
@@ -105,6 +110,54 @@ type Service struct {
 	// unsupportedRoundMonitor goroutine, after detecting
 	// an unsupported block.
 	onceUnsupportedRound sync.Once
+
+	// stateproofs contains validated state proof messages for
+	// future rounds.  The round is the LastAttestedRound of
+	// the state proof message.
+	//
+	// To help with garbage-collecting state proofs for rounds
+	// that are already in the ledger, stateproofmin tracks the
+	// lowest-numbered round in stateproofs.  stateproofmin=0
+	// indicates that no state proofs have been fetched.
+	// Similarly, stateproofmax tracks the most recent available
+	// state proof.
+	//
+	// stateproofdb stores these state proofs to ensure progress
+	// if algod gets restarted halfway through a long catchup.
+	//
+	// stateproofproto is the protocol version that corresponds
+	// to the consensus parameters for state proofs, either from
+	// a ledger round where we saw state proofs enabled, or from
+	// a special renaissance block configuration setting (below).
+	//
+	// stateproofproto is set if stateproofmin>0.
+	//
+	// stateproofmu protects the stateproof state from concurrent
+	// access.
+	//
+	// stateproofwait tracks channels for waiting on state proofs
+	// to be fetched.  If stateproofwait is nil, there is no active
+	// stateProofFetcher that can be waited for.
+	stateproofs     map[basics.Round]stateProofInfo
+	stateproofmin   basics.Round
+	stateproofmax   basics.Round
+	stateproofdb    *db.Accessor
+	stateproofproto protocol.ConsensusVersion
+	stateproofmu    deadlock.Mutex
+	stateproofwait  map[basics.Round]chan struct{}
+
+	// renaissance specifies the parameters for a renaissance
+	// block from which we can start validating state proofs,
+	// in lieu of validating the entire sequence of blocks
+	// starting from the genesis block.
+	renaissance *StateProofVerificationContext
+}
+
+// stateProofInfo is a validated state proof message for some round,
+// along with the consensus protocol for that round.
+type stateProofInfo struct {
+	message stateproofmsg.Message
+	proto   protocol.ConsensusVersion
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -120,7 +173,7 @@ type BlockAuthenticator interface {
 }
 
 // MakeService creates a catchup service instance from its constituent components
-func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, auth BlockAuthenticator, unmatchedPendingCertificates <-chan PendingUnmatchedCertificate, blockValidationPool execpool.BacklogPool) (s *Service) {
+func MakeService(log logging.Logger, config config.Local, net network.GossipNode, ledger Ledger, auth BlockAuthenticator, unmatchedPendingCertificates <-chan PendingUnmatchedCertificate, blockValidationPool execpool.BacklogPool, spCatchupDB *db.Accessor) (s *Service) {
 	s = &Service{}
 
 	s.cfg = config
@@ -133,6 +186,16 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.deadlineTimeout = agreement.DeadlineTimeout()
 	s.blockValidationPool = blockValidationPool
 	s.syncNow = make(chan struct{}, 1)
+	s.stateproofs = make(map[basics.Round]stateProofInfo)
+
+	if spCatchupDB != nil {
+		s.stateproofdb = spCatchupDB
+
+		err := s.initStateProofs()
+		if err != nil {
+			s.log.Warnf("catchup.initStateProofs(): %v", err)
+		}
+	}
 
 	return s
 }
@@ -209,13 +272,15 @@ func (s *Service) SynchronizingTime() time.Duration {
 // errLedgerAlreadyHasBlock is returned by innerFetch in case the local ledger already has the requested block.
 var errLedgerAlreadyHasBlock = errors.New("ledger already has block")
 
-// function scope to make a bunch of defer statements better
-func (s *Service) innerFetch(ctx context.Context, r basics.Round, peer network.Peer) (blk *bookkeeping.Block, cert *agreement.Certificate, ddur time.Duration, err error) {
+// innerFetch retrieves a block with a certificate or state-proof-based
+// light block header proof for round r from peer.  proofOK specifies
+// whether it's acceptable to fetch a proof instead of a certificate.
+func (s *Service) innerFetch(ctx context.Context, r basics.Round, peer network.Peer, proofOK bool) (blk *bookkeeping.Block, cert *agreement.Certificate, proof []byte, ddur time.Duration, err error) {
 	ledgerWaitCh := s.ledger.WaitMem(r)
 	select {
 	case <-ledgerWaitCh:
 		// if our ledger already have this block, no need to attempt to fetch it.
-		return nil, nil, time.Duration(0), errLedgerAlreadyHasBlock
+		return nil, nil, nil, time.Duration(0), errLedgerAlreadyHasBlock
 	default:
 	}
 
@@ -229,7 +294,7 @@ func (s *Service) innerFetch(ctx context.Context, r basics.Round, peer network.P
 			cf()
 		}
 	}()
-	blk, cert, ddur, err = fetcher.fetchBlock(ctx, r, peer)
+	blk, cert, proof, ddur, err = fetcher.fetchBlock(ctx, r, peer, proofOK)
 	// check to see if we aborted due to ledger.
 	if err != nil {
 		select {
@@ -291,8 +356,23 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		}
 		peer := psp.Peer
 
+		// Wait for a state proof to become available for this block.
+		// If no state proofs are available, this will return right away.
+		select {
+		case <-ctx.Done():
+			s.log.Debugf("fetchAndWrite(%v): Aborted", r)
+			return false
+		case <-s.stateProofWait(r):
+		}
+
+		spinfo := s.getStateProof(r)
+
 		// Try to fetch, timing out after retryInterval
-		block, cert, blockDownloadDuration, err := s.innerFetch(ctx, r, peer)
+		proofOK := true
+		if spinfo == nil || !config.Consensus[spinfo.proto].StateProofBlockHashInLightHeader {
+			proofOK = false
+		}
+		block, cert, proof, blockDownloadDuration, err := s.innerFetch(ctx, r, peer, proofOK)
 
 		if err != nil {
 			if err == errLedgerAlreadyHasBlock {
@@ -314,11 +394,11 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			case <-lookbackComplete:
 			}
 			continue // retry the fetch
-		} else if block == nil || cert == nil {
+		} else if block == nil {
 			// someone already wrote the block to the ledger, we should stop syncing
 			return false
 		}
-		s.log.Debugf("fetchAndWrite(%v): Got block and cert contents: %v %v", r, block, cert)
+		s.log.Debugf("fetchAndWrite(%v): Got block and cert/proof contents: %v %v %v", r, block, cert, proof)
 
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
 		if s.cfg.CatchupVerifyPaysetHash() {
@@ -335,20 +415,29 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			}
 		}
 
-		// make sure that we have the lookBack block that's required for authenticating this block
-		select {
-		case <-ctx.Done():
-			s.log.Debugf("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger", r)
-			return false
-		case <-lookbackComplete:
-		}
-
-		if s.cfg.CatchupVerifyCertificate() {
-			err = s.auth.Authenticate(block, cert)
+		if spinfo != nil && len(proof) > 0 {
+			err = verifyBlockStateProof(r, &spinfo.message, block, proof)
 			if err != nil {
-				s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
+				s.log.Warnf("fetchAndWrite(%v): proof did not authenticate block (attempt %d): %v", r, i, err)
 				peerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue // retry the fetch
+			}
+		} else {
+			// make sure that we have the lookBack block that's required for authenticating this block
+			select {
+			case <-ctx.Done():
+				s.log.Debugf("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger", r)
+				return false
+			case <-lookbackComplete:
+			}
+
+			if s.cfg.CatchupVerifyCertificate() {
+				err = s.auth.Authenticate(block, cert)
+				if err != nil {
+					s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
+					peerSelector.rankPeer(psp, peerRankInvalidDownload)
+					continue // retry the fetch
+				}
 			}
 		}
 
@@ -452,6 +541,10 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	// fetch fails along the way.
 	ctx, cancelCtx := context.WithCancel(s.ctx)
 	defer cancelCtx()
+
+	// Start the state proof fetcher, which will enable us to validate
+	// blocks using state proofs if available.
+	s.startStateProofFetcher(ctx)
 
 	// firstRound is the first round we're waiting to fetch.
 	firstRound := s.ledger.NextRound()
@@ -680,7 +773,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		peer := psp.Peer
 
 		// Ask the fetcher to get the block somehow
-		block, fetchedCert, _, err := s.innerFetch(s.ctx, cert.Round, peer)
+		block, fetchedCert, _, _, err := s.innerFetch(s.ctx, cert.Round, peer, false)
 
 		if err != nil {
 			select {

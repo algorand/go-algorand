@@ -687,6 +687,7 @@ func TestEnsureAndResolveGenesisDirs(t *testing.T) {
 	cfg.BlockDBDir = filepath.Join(testDirectory, "/BAD/BAD/../../custom_block")
 	cfg.CrashDBDir = filepath.Join(testDirectory, "custom_crash")
 	cfg.StateproofDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
+	cfg.StateproofCatchupDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof_catchup")
 	cfg.CatchpointDir = filepath.Join(testDirectory, "custom_catchpoint")
 
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
@@ -701,6 +702,8 @@ func TestEnsureAndResolveGenesisDirs(t *testing.T) {
 	require.DirExists(t, paths.CrashGenesisDir)
 	require.Equal(t, testDirectory+"/custom_stateproof/myGenesisID", paths.StateproofGenesisDir)
 	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, testDirectory+"/custom_stateproof_catchup/myGenesisID", paths.StateproofCatchupGenesisDir)
+	require.DirExists(t, paths.StateproofCatchupGenesisDir)
 	require.Equal(t, testDirectory+"/custom_catchpoint/myGenesisID", paths.CatchpointGenesisDir)
 	require.DirExists(t, paths.CatchpointGenesisDir)
 }
@@ -722,6 +725,8 @@ func TestEnsureAndResolveGenesisDirs_hierarchy(t *testing.T) {
 	require.DirExists(t, paths.CrashGenesisDir)
 	require.Equal(t, testDirectory+"/myGenesisID", paths.StateproofGenesisDir)
 	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.StateproofCatchupGenesisDir)
+	require.DirExists(t, paths.StateproofCatchupGenesisDir)
 	require.Equal(t, testDirectory+"/myGenesisID", paths.CatchpointGenesisDir)
 	require.DirExists(t, paths.CatchpointGenesisDir)
 
@@ -742,6 +747,8 @@ func TestEnsureAndResolveGenesisDirs_hierarchy(t *testing.T) {
 	require.DirExists(t, paths.CrashGenesisDir)
 	require.Equal(t, cold+"/myGenesisID", paths.StateproofGenesisDir)
 	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.StateproofCatchupGenesisDir)
+	require.DirExists(t, paths.StateproofCatchupGenesisDir)
 	require.Equal(t, cold+"/myGenesisID", paths.CatchpointGenesisDir)
 	require.DirExists(t, paths.CatchpointGenesisDir)
 }
@@ -758,6 +765,7 @@ func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
 	cfg.BlockDBDir = filepath.Join(testDirectory, "/BAD/BAD/../../custom_block")
 	cfg.CrashDBDir = filepath.Join(testDirectory, "custom_crash")
 	cfg.StateproofDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
+	cfg.StateproofCatchupDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof_catchup")
 	cfg.CatchpointDir = filepath.Join(testDirectory, "custom_catchpoint")
 
 	// first try an error with an empty root dir
