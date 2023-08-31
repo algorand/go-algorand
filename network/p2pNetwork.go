@@ -163,7 +163,6 @@ func (n *P2PNetwork) Stop() {
 
 // innerStop context for shutting down peers
 func (n *P2PNetwork) innerStop() {
-	n.log.Warn("Entering innerStop()")
 	closeGroup := sync.WaitGroup{}
 	n.wsPeersLock.Lock()
 	closeGroup.Add(len(n.wsPeers))
@@ -235,23 +234,22 @@ func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, w
 
 // Disconnect from a peer, probably due to protocol errors.
 func (n *P2PNetwork) Disconnect(badnode Peer) {
-	switch node := badnode.(type) {
-	case peer.ID:
-		n.wsPeersLock.Lock()
-		defer n.wsPeersLock.Unlock()
-		if wsPeer, ok := n.wsPeers[node]; ok {
-			wsPeer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
-			delete(n.wsPeers, node)
-		} else {
-			n.log.Warnf("Could not find wsPeer reference for peer %s", node)
-		}
-		err := n.service.ClosePeer(node)
-		if err != nil {
-			n.log.Warnf("Error disconnecting from peer %s: %v", node, err)
-		}
-
-	default:
+	node, ok := badnode.(peer.ID)
+	if !ok {
 		n.log.Warnf("Unknown peer type %T", badnode)
+		return
+	}
+	n.wsPeersLock.Lock()
+	defer n.wsPeersLock.Unlock()
+	if wsPeer, ok := n.wsPeers[node]; ok {
+		wsPeer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
+		delete(n.wsPeers, node)
+	} else {
+		n.log.Warnf("Could not find wsPeer reference for peer %s", node)
+	}
+	err := n.service.ClosePeer(node)
+	if err != nil {
+		n.log.Warnf("Error disconnecting from peer %s: %v", node, err)
 	}
 }
 
