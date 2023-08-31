@@ -30,9 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
-// currently, we have two roles : relay role and archiver role, which are mutually exclusive.
-
 // PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
 // or via a configuration file.
 const PhoneBookEntryRelayRole = 1
