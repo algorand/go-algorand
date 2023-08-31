@@ -178,9 +178,7 @@ func (n *P2PNetwork) innerStop() {
 		}
 	}
 	n.wsPeersLock.Unlock()
-	n.log.Warnf("Waiting for %d peers to close", c)
 	closeGroup.Wait()
-	n.log.Warnf("%d peers closed", c)
 }
 
 func (n *P2PNetwork) meshThread() {
@@ -364,14 +362,10 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 
 // peerRemoteClose called from wsPeer to report that it has closed
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
-	n.log.Warnf("Entered peerRemoteClose for %s", peer.conn.RemoteAddrString())
 	remotePeerID := peer.conn.(*wsPeerConnP2PImpl).stream.Conn().RemotePeer()
-	n.log.Warnf("Have remotePeerID :%s", remotePeerID)
 	n.wsPeersLock.Lock()
-	n.log.Warnf("Grabbed wsPeerLock for %s", peer.conn.RemoteAddrString())
 	delete(n.wsPeers, remotePeerID)
 	n.wsPeersLock.Unlock()
-	n.log.Warnf("Released wsPeerLock for %s", peer.conn.RemoteAddrString())
 	atomic.AddInt32(&n.wsPeersChangeCounter, 1)
 }
 
