@@ -87,7 +87,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 	} else {
 		return nil, nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
-	downloadDuration = time.Now().Sub(blockDownloadStartTime)
+	downloadDuration = time.Since(blockDownloadStartTime)
 	block, cert, proof, err := processBlockBytes(fetchedBuf, round, address)
 	if err != nil {
 		return nil, nil, nil, time.Duration(0), err
@@ -141,7 +141,7 @@ func (uf *universalBlockFetcher) fetchStateProof(ctx context.Context, proofType 
 	} else {
 		return pf, msg, 0, fmt.Errorf("fetchStateProof: UniversalFetcher only supports HTTPPeer")
 	}
-	downloadDuration = time.Now().Sub(downloadStartTime)
+	downloadDuration = time.Since(downloadStartTime)
 	pf, msg, err = processStateProofBytes(fetchedBuf, round, address)
 	if err != nil {
 		return pf, msg, 0, err
@@ -329,8 +329,8 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round, proofO
 	// Remove this 'old' string after next release.
 	const blockResponseContentTypeOld = "application/algorand-block-v1"
 	expectedContentTypes := map[string]struct{}{
-		rpcs.BlockResponseContentType: struct{}{},
-		blockResponseContentTypeOld:   struct{}{},
+		rpcs.BlockResponseContentType: {},
+		blockResponseContentTypeOld:   {},
 	}
 
 	return hf.getBytes(ctx, blockURL, expectedContentTypes)
@@ -347,7 +347,7 @@ func (hf *HTTPFetcher) getStateProofBytes(ctx context.Context, proofType protoco
 	proofURL := parsedURL.String()
 
 	expectedContentTypes := map[string]struct{}{
-		rpcs.StateProofResponseContentType: struct{}{},
+		rpcs.StateProofResponseContentType: {},
 	}
 
 	return hf.getBytes(ctx, proofURL, expectedContentTypes)

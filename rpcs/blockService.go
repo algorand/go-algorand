@@ -224,7 +224,7 @@ func (bs *BlockService) ServeStateProofPath(response http.ResponseWriter, reques
 		return
 	}
 	if typeStr != "0" { // StateProofBasic
-		bs.log.Debugf("http stateproof bad type", typeStr)
+		bs.log.Debugf("http stateproof bad type %s", typeStr)
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -383,7 +383,7 @@ func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *ht
 	stateProof, hasStateProof := request.Form["stateproof"]
 	if hasStateProof {
 		if len(stateProof) != 1 || stateProof[0] != "0" {
-			bs.log.Debug("http block stateproof version %v unsupported", stateProof)
+			bs.log.Debugf("http block stateproof version %v unsupported", stateProof)
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}

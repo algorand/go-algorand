@@ -91,33 +91,33 @@ func (s *Service) initStateProofs() error {
 		rows, err := tx.Query("SELECT proto, msg FROM proofs ORDER BY lastrnd")
 		if err != nil {
 			return err
-		} else {
-			defer rows.Close()
-			for rows.Next() {
-				var proto protocol.ConsensusVersion
-				var msgbuf []byte
-				err := rows.Scan(&proto, &msgbuf)
-				if err != nil {
-					s.log.Warnf("initStateProofs: cannot scan proof from db: %v", err)
-					continue
-				}
+		}
 
-				var msg stateproofmsg.Message
-				err = protocol.Decode(msgbuf, &msg)
-				if err != nil {
-					s.log.Warnf("initStateProofs: cannot decode proof from db: %v", err)
-					continue
-				}
+		defer rows.Close()
+		for rows.Next() {
+			var proto protocol.ConsensusVersion
+			var msgbuf []byte
+			err := rows.Scan(&proto, &msgbuf)
+			if err != nil {
+				s.log.Warnf("initStateProofs: cannot scan proof from db: %v", err)
+				continue
+			}
 
-				stateproofs[msg.LastAttestedRound] = stateProofInfo{
-					message: msg,
-					proto:   proto,
-				}
-				stateproofmax = msg.LastAttestedRound
-				if stateproofmin == 0 {
-					stateproofmin = msg.LastAttestedRound
-					stateproofproto = proto
-				}
+			var msg stateproofmsg.Message
+			err = protocol.Decode(msgbuf, &msg)
+			if err != nil {
+				s.log.Warnf("initStateProofs: cannot decode proof from db: %v", err)
+				continue
+			}
+
+			stateproofs[msg.LastAttestedRound] = stateProofInfo{
+				message: msg,
+				proto:   proto,
+			}
+			stateproofmax = msg.LastAttestedRound
+			if stateproofmin == 0 {
+				stateproofmin = msg.LastAttestedRound
+				stateproofproto = proto
 			}
 		}
 		return nil
@@ -279,10 +279,13 @@ func (s *Service) nextStateProofVerifier() *StateProofVerificationContext {
 	}
 }
 
+// SetRenaissance sets the "renaissance" parameters for validating state proofs.
 func (s *Service) SetRenaissance(r StateProofVerificationContext) {
 	s.renaissance = &r
 }
 
+// SetRenaissanceFromConfig sets the "renaissance" parameters for validating state
+// proofs based on the settings in the specified cfg.
 func (s *Service) SetRenaissanceFromConfig(cfg config.Local) {
 	if cfg.RenaissanceCatchupRound == 0 {
 		return

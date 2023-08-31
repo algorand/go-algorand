@@ -168,7 +168,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 		}
 
 		b.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
-			protocol.StateProofBasic: bookkeeping.StateProofTrackingData{
+			protocol.StateProofBasic: {
 				StateProofVotersCommitment:  stateProofData.Tree.Root(),
 				StateProofOnlineTotalWeight: stateProofData.TotalWeight,
 				StateProofNextRound:         basics.Round(proto.StateProofInterval),
