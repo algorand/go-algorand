@@ -108,7 +108,7 @@ func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
 	}
 }
 
-func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int) {
+func testPhonebookUniform(t *testing.T, set []string, ph *PeerStore, getsize int) {
 	uniformityTestLength := 250000 / len(set)
 	expected := (uniformityTestLength * getsize) / len(set)
 	counts := make(map[string]int)
