@@ -742,7 +742,7 @@ func TestWorkerRestart(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceRoundsWithoutStateProof(t, 1)
-	lastRound := uint64(0)
+	lastRound := basics.Round(0)
 	for i := 0; i < expectedStateProofs; i++ {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2-1)
 		w.Stop()
@@ -763,10 +763,10 @@ func TestWorkerRestart(t *testing.T) {
 
 		// since a state proof txn was created, we update the header with the next state proof round
 		// i.e network has accepted the state proof.
-		s.addBlock(basics.Round(tx.Txn.Message.LastAttestedRound + proto.StateProofInterval))
+		s.addBlock(tx.Txn.Message.LastAttestedRound + basics.Round(proto.StateProofInterval))
 		lastRound = tx.Txn.Message.LastAttestedRound
 	}
-	a.Equal(uint64(expectedStateProofs+1), lastRound/proto.StateProofInterval)
+	a.Equal(uint64(expectedStateProofs+1), uint64(lastRound)/proto.StateProofInterval)
 }
 
 func TestWorkerHandleSig(t *testing.T) {

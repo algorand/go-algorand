@@ -358,10 +358,10 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 	t.Logf("found first stateproof, attesting to rounds %d - %d. Verifying.\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
 
 	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
-		proofResp, singleLeafProof, err := fixture.LightBlockHeaderProof(rnd)
+		proofResp, singleLeafProof, err := fixture.LightBlockHeaderProof(uint64(rnd))
 		r.NoError(err)
 
-		blk, err := libgoalClient.BookkeepingBlock(rnd)
+		blk, err := libgoalClient.BookkeepingBlock(uint64(rnd))
 		r.NoError(err)
 
 		lightBlockHeader := blk.ToLightBlockHeader()
@@ -410,8 +410,8 @@ func getStateProofByLastRound(r *require.Assertions, fixture *fixtures.RestClien
 		BlockHeadersCommitment: res.Message.BlockHeadersCommitment,
 		VotersCommitment:       res.Message.VotersCommitment,
 		LnProvenWeight:         res.Message.LnProvenWeight,
-		FirstAttestedRound:     res.Message.FirstAttestedRound,
-		LastAttestedRound:      res.Message.LastAttestedRound,
+		FirstAttestedRound:     basics.Round(res.Message.FirstAttestedRound),
+		LastAttestedRound:      basics.Round(res.Message.LastAttestedRound),
 	}
 	return stateProof, msg
 }
@@ -1284,7 +1284,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 
 			stateProof, stateProofMsg := getStateProofByLastRound(r, &fixture, nextStateProofRound)
 
-			accountSnapshot := accountSnapshotAtRound[stateProofMsg.LastAttestedRound-consensusParams.StateProofInterval-consensusParams.StateProofVotersLookback]
+			accountSnapshot := accountSnapshotAtRound[uint64(stateProofMsg.LastAttestedRound)-consensusParams.StateProofInterval-consensusParams.StateProofVotersLookback]
 
 			// once the state proof is accepted we want to make sure that the weight
 			for _, v := range stateProof.Reveals {

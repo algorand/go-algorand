@@ -76,20 +76,20 @@ func TestStateProofMessage(t *testing.T) {
 		if !lastMessage.MsgIsZero() {
 			verifier := stateproof.MkVerifierWithLnProvenWeight(lastMessage.VotersCommitment, lastMessage.LnProvenWeight, proto.StateProofStrengthTarget)
 
-			err := verifier.Verify(tx.Txn.Message.LastAttestedRound, tx.Txn.Message.Hash(), &tx.Txn.StateProof)
+			err := verifier.Verify(uint64(tx.Txn.Message.LastAttestedRound), tx.Txn.Message.Hash(), &tx.Txn.StateProof)
 			a.NoError(err)
 		}
 		// since a state proof txn was created, we update the header with the next state proof round
 		// i.e network has accepted the state proof.
-		s.addBlock(basics.Round(tx.Txn.Message.LastAttestedRound + proto.StateProofInterval))
+		s.addBlock(tx.Txn.Message.LastAttestedRound + basics.Round(proto.StateProofInterval))
 		lastMessage = tx.Txn.Message
 	}
 }
 
 func verifySha256BlockHeadersCommitments(a *require.Assertions, message stateproofmsg.Message, blocks map[basics.Round]bookkeeping.BlockHeader) {
 	blkHdrArr := make(lightBlockHeaders, message.LastAttestedRound-message.FirstAttestedRound+1)
-	for i := uint64(0); i < message.LastAttestedRound-message.FirstAttestedRound+1; i++ {
-		hdr := blocks[basics.Round(message.FirstAttestedRound+i)]
+	for i := uint64(0); i < uint64(message.LastAttestedRound-message.FirstAttestedRound+1); i++ {
+		hdr := blocks[message.FirstAttestedRound+basics.Round(i)]
 		blkHdrArr[i] = hdr.ToLightBlockHeader()
 	}
 
@@ -217,7 +217,7 @@ func TestGenerateBlockProof(t *testing.T) {
 
 		verifyLightBlockHeaderProof(&tx, &proto, headers, a)
 
-		s.addBlock(basics.Round(tx.Txn.Message.LastAttestedRound + proto.StateProofInterval))
+		s.addBlock(tx.Txn.Message.LastAttestedRound + basics.Round(proto.StateProofInterval))
 		lastAttestedRound = basics.Round(tx.Txn.Message.LastAttestedRound)
 	}
 }
@@ -225,7 +225,7 @@ func TestGenerateBlockProof(t *testing.T) {
 func verifyLightBlockHeaderProof(tx *transactions.SignedTxn, proto *config.ConsensusParams, headers []bookkeeping.LightBlockHeader, a *require.Assertions) {
 	// attempting to get block proof for every block in the interval
 	for j := tx.Txn.Message.FirstAttestedRound; j < tx.Txn.Message.LastAttestedRound; j++ {
-		headerIndex := j - tx.Txn.Message.FirstAttestedRound
+		headerIndex := uint64(j - tx.Txn.Message.FirstAttestedRound)
 		proof, err := GenerateProofOfLightBlockHeaders(proto.StateProofInterval, headers, headerIndex)
 		a.NoError(err)
 		a.NotNil(proof)
