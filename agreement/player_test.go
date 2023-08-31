@@ -3514,7 +3514,6 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 // ensureAction is called for the block.
 func TestPlayerRetainsEarlyReceivedValidatedAtPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3567,6 +3566,34 @@ func TestPlayerRetainsEarlyReceivedValidatedAtPPOneSample(t *testing.T) {
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
+	moveToRound(t, pWhite, pM, helper, r, p, pP, pV, proposalMsg, protocol.ConsensusFuture)
+
+	// receive credential for the next round, check that it gets a timestamp of 1
+	require.Equal(t, time.Duration(1), pWhite.lowestCredentialArrivals.history[0])
+}
+
+// test that ReceivedAt and ValidateAt timing information are retained in proposalStore
+// when the payloadPresent, payloadVerified, and voteVerified events are processed, and that all timings
+// are available when the ensureAction is called for the block. The history should be kept for the last
+// DynamicFilterCredentialArrivalHistory rounds.
+func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	const r = round(20239)
+	const p = period(0)
+	pWhite, pM, helper := setupP(t, r-1, p, soft)
+
+	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
+
+	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
+		// send voteVerified message
+		pP, pV := helper.MakeRandomProposalPayload(t, r+round(i)-1)
+		vVote := helper.MakeVerifiedVote(t, 0, r+round(i)-1, p, propose, *pV)
+		inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
+		timestamp := 500 + i
+		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r+round(i)-1)
+		err, panicErr := pM.transition(inMsg)
+		require.NoError(t, err)
+		require.NoError(t, panicErr)
 
 	// move to round r+1, triggering history update
 	vVote = helper.MakeVerifiedVote(t, 0, r, p, propose, *pV)
