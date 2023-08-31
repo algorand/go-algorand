@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -141,7 +143,7 @@ type Service struct {
 	stateproofmax   basics.Round
 	stateproofdb    *db.Accessor
 	stateproofproto protocol.ConsensusVersion
-	stateproofmu    sync.Mutex
+	stateproofmu    deadlock.Mutex
 	stateproofwait  map[basics.Round]chan struct{}
 
 	// renaissance specifies the parameters for a renaissance
