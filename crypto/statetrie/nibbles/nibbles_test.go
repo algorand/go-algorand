@@ -145,4 +145,10 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 		require.Equal(t, Equal(n[1], n[0]), false)
 		require.Equal(t, Equal(n[1], us), false)
 	}
+
+	_, e := DeserializeNibbles([]byte{})
+	require.Error(t, e)
+	_, e = DeserializeNibbles([]byte{0x02})
+	require.Error(t, e)
+
 }
