@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package statetrie
+package nibbles
 
 import (
 	"bytes"
@@ -63,22 +63,25 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 	}
 
 	for i, n := range sampleNibbles {
-		b, half := n.pack()
-		if half {
-			// require that half packs returns a byte slice with the last nibble set to 0x0
-			require.True(t, b[len(b)-1]&0x0f == 0x00)
+		b, oddLength := Pack(n)
+		if oddLength {
+			// require that oddLength packs returns a byte slice with the last nibble set to 0x0
+			require.Equal(t, b[len(b)-1]&0x0f == 0x00, true)
 		}
 
-		require.True(t, half == (len(n)%2 == 1))
-		require.True(t, bytes.Equal(b, sampleNibblesPacked[i]))
+		require.Equal(t, oddLength == (len(n)%2 == 1), true)
+		require.Equal(t, bytes.Equal(b, sampleNibblesPacked[i]), true)
 
-		unp := unpack(b, half)
-		require.True(t, bytes.Equal(unp, n))
+		unp := Unpack(b, oddLength)
+		require.Equal(t, bytes.Equal(unp, n), true)
 
 	}
 	for i, n := range sampleNibbles {
-		require.True(t, bytes.Equal(shiftNibbles(n, 1), sampleNibblesShifted1[i]))
-		require.True(t, bytes.Equal(shiftNibbles(n, 2), sampleNibblesShifted2[i]))
+		require.Equal(t, bytes.Equal(ShiftLeft(n, -2), sampleNibbles[i]), true)
+		require.Equal(t, bytes.Equal(ShiftLeft(n, -1), sampleNibbles[i]), true)
+		require.Equal(t, bytes.Equal(ShiftLeft(n, 0), sampleNibbles[i]), true)
+		require.Equal(t, bytes.Equal(ShiftLeft(n, 1), sampleNibblesShifted1[i]), true)
+		require.Equal(t, bytes.Equal(ShiftLeft(n, 2), sampleNibblesShifted2[i]), true)
 	}
 
 	sampleSharedNibbles := [][]Nibbles{
@@ -89,14 +92,11 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 		{{}, {}},
 	}
 	for i, n := range sampleSharedNibbles {
-		shared := sharedNibbles(n[0], sampleNibbles[i])
-		require.True(t, bytes.Equal(shared, n[1]))
-		shared = sharedNibbles(sampleNibbles[i], n[0])
-		require.True(t, bytes.Equal(shared, n[1]))
+		shared := SharedPrefix(n[0], sampleNibbles[i])
+		require.Equal(t, bytes.Equal(shared, n[1]), true)
+		shared = SharedPrefix(sampleNibbles[i], n[0])
+		require.Equal(t, bytes.Equal(shared, n[1]), true)
 	}
-	require.True(t, bytes.Equal(shiftNibbles(sampleNibbles[0], -2), sampleNibbles[0]))
-	require.True(t, bytes.Equal(shiftNibbles(sampleNibbles[0], -1), sampleNibbles[0]))
-	require.True(t, bytes.Equal(shiftNibbles(sampleNibbles[0], 0), sampleNibbles[0]))
 
 	sampleSerialization := []Nibbles{
 		{0x0, 0x1, 0x2, 0x9, 0x2},
@@ -110,27 +110,20 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 	}
 
 	for _, n := range sampleSerialization {
-		nbytes := n.serialize()
-		n2, err := deserializeNibbles(nbytes)
+		nbytes := Serialize(n)
+		n2, err := DeserializeNibbles(nbytes)
 		require.NoError(t, err)
-		require.True(t, bytes.Equal(n, n2))
+		require.Equal(t, bytes.Equal(n, n2), true)
 	}
 
 	makeNibblesTestExpected := Nibbles{0x0, 0x1, 0x2, 0x9, 0x2}
 	makeNibblesTestData := []byte{0x01, 0x29, 0x20}
 	mntr := MakeNibbles(makeNibblesTestData, true)
-	require.True(t, bytes.Equal(mntr, makeNibblesTestExpected))
+	require.Equal(t, bytes.Equal(mntr, makeNibblesTestExpected), true)
 	makeNibblesTestExpectedFW := Nibbles{0x0, 0x1, 0x2, 0x9, 0x2, 0x0}
 	mntr2 := MakeNibbles(makeNibblesTestData, false)
-	require.True(t, bytes.Equal(mntr2, makeNibblesTestExpectedFW))
+	require.Equal(t, bytes.Equal(mntr2, makeNibblesTestExpectedFW), true)
 
-	sampleEqualTrue := [][]Nibbles{
-		{{0x0, 0x1, 0x2, 0x9, 0x2}, {0x0, 0x1, 0x2, 0x9, 0x2}},
-		{{0x0}, {0x0}},
-		{{0x1}, {0x1}},
-		{{0xf, 0xe}, {0xf, 0xe}},
-		{{}, {}},
-	}
 	sampleEqualFalse := [][]Nibbles{
 		{{0x0, 0x1, 0x2, 0x9, 0x2}, {0x0, 0x1, 0x2, 0x9}},
 		{{0x0, 0x1, 0x2, 0x9}, {0x0, 0x1, 0x2, 0x9, 0x2}},
@@ -140,10 +133,16 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 		{{}, {0x0}},
 		{{}, {0x1}},
 	}
-	for _, n := range sampleEqualTrue {
-		require.True(t, equalNibbles(n[0], n[1]))
-	}
 	for _, n := range sampleEqualFalse {
-		require.False(t, equalNibbles(n[0], n[1]))
+		ds := Serialize(n[0])
+		us, e := DeserializeNibbles(ds)
+		require.NoError(t, e)
+		require.Equal(t, Equal(n[0], us), true)
+		require.Equal(t, Equal(n[0], n[0]), true)
+		require.Equal(t, Equal(us, n[0]), true)
+		require.Equal(t, Equal(n[0], n[1]), false)
+		require.Equal(t, Equal(us, n[1]), false)
+		require.Equal(t, Equal(n[1], n[0]), false)
+		require.Equal(t, Equal(n[1], us), false)
 	}
 }

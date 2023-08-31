@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package statetrie
+package nibbles
 
 import (
 	"bytes"
@@ -24,13 +24,13 @@ import (
 // Nibbles are 4-bit values stored in an 8-bit byte arrays
 type Nibbles []byte
 
-// MakeNibbles returns a nibble array from the byte array.  If half is true, the
+// MakeNibbles returns a nibble array from the byte array.  If oddLength is true, the
 // last 4 bits of the last byte of the array are ignored.
-func MakeNibbles(data []byte, half bool) Nibbles {
-	return unpack(data, half)
+func MakeNibbles(data []byte, oddLength bool) Nibbles {
+	return Unpack(data, oddLength)
 }
 
-// Unpack the byte array into a nibble array.  If half is true, the last 4
+// Unpack the byte array into a nibble array.  If oddLength is true, the last 4
 // bits of the last byte of the array are ignored.  Allocates a new byte
 // slice.
 //
@@ -39,65 +39,63 @@ func MakeNibbles(data []byte, half bool) Nibbles {
 // [0x12, 0x34], true -> [0x1, 0x2, 0x3]  <-- last byte last 4 bits ignored
 // [], false -> []
 // never to be called with [], true
-func unpack(data []byte, half bool) Nibbles {
+func Unpack(data []byte, oddLength bool) Nibbles {
 	length := len(data) * 2
-	if half {
+	if oddLength {
 		length = length - 1
 	}
 	ns := make([]byte, length)
 
-	halfWidth := false
 	j := 0
 	for i := 0; i < length; i++ {
-		halfWidth = !halfWidth
-		if halfWidth {
+		if i%2 == 0 {
 			ns[i] = data[j] >> 4
 		} else {
-			ns[i] = data[j] & 15
+			ns[i] = data[j] & 0x0f
 			j++
 		}
 	}
 	return ns
 }
 
-// pack the nibble array into a byte array.
+// Pack the nibble array into a byte array.
 // Return the byte array and a bool indicating if the last byte is a full byte or
 // only the high 4 bits are part of the encoding
-// the last four bits of a half byte encoding will always be zero.
+// the last four bits of a oddLength byte encoding will always be zero.
 // Allocates a new byte slice.
 //
 // [0x1, 0x2, 0x3] -> [0x12, 0x30], true
 // [0x1, 0x2, 0x3, 0x4] -> [0x12, 0x34], false
 // [0x1] -> [0x10], true
 // [] -> [], false
-func (ns *Nibbles) pack() ([]byte, bool) {
-	length := len(*ns)
+func Pack(nyb Nibbles) ([]byte, bool) {
+	length := len(nyb)
 	data := make([]byte, length/2+length%2)
 	for i := 0; i < length; i++ {
 		if i%2 == 0 {
-			data[i/2] = (*ns)[i] << 4
+			data[i/2] = nyb[i] << 4
 		} else {
-			data[i/2] = data[i/2] | (*ns)[i]
+			data[i/2] = data[i/2] | nyb[i]
 		}
 	}
 
 	return data, length%2 != 0
 }
 
-// equalNibbles returns true if the two nibble arrays are equal
+// equal returns true if the two nibble arrays are equal
 // [0x1, 0x2, 0x3], [0x1, 0x2, 0x3] -> true
 // [0x1, 0x2, 0x3], [0x1, 0x2, 0x4] -> false
 // [0x1, 0x2, 0x3], [0x1] -> false
 // [0x1, 0x2, 0x3], [0x1, 0x2, 0x3, 0x4] -> false
 // [], [] -> true
 // [], [0x1] -> false
-func equalNibbles(nyb1 Nibbles, nyb2 Nibbles) bool {
+func Equal(nyb1 Nibbles, nyb2 Nibbles) bool {
 	return bytes.Equal(nyb1, nyb2)
 }
 
-// shiftNibbles returns a slice of nyb1 that contains the Nibbles after the first
+// shiftLeft returns a slice of nyb1 that contains the Nibbles after the first
 // numNibbles
-func shiftNibbles(nyb1 Nibbles, numNibbles int) Nibbles {
+func ShiftLeft(nyb1 Nibbles, numNibbles int) Nibbles {
 	if numNibbles <= 0 {
 		return nyb1
 	}
@@ -108,9 +106,9 @@ func shiftNibbles(nyb1 Nibbles, numNibbles int) Nibbles {
 	return nyb1[numNibbles:]
 }
 
-// sharedNibbles returns a slice from nyb1 that contains the shared Nibbles
+// sharedPrefix returns a slice from nyb1 that contains the shared prefix
 // between nyb1 and nyb2
-func sharedNibbles(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
+func SharedPrefix(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
 	minLength := len(nyb1)
 	if len(nyb2) < minLength {
 		minLength = len(nyb2)
@@ -130,31 +128,31 @@ func sharedNibbles(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
 // [0x1, 0x2, 0x3] -> [0x12, 0x30, 0x01]
 // [0x1, 0x2, 0x3, 0x4] -> [0x12, 0x34, 0x03]
 // [] -> [0x03]
-func (ns Nibbles) serialize() (data []byte) {
-	var buf bytes.Buffer
-	p, h := ns.pack()
-	buf.Write(p)
+func Serialize(nyb Nibbles) (data []byte) {
+	p, h := Pack(nyb)
+	output := make([]byte, len(p)+1)
+	copy(output, p)
 	if h {
-		// 0x1 is the arbitrary half width indicator
-		buf.WriteByte(1)
+		// 0x1 is the arbitrary odd length indicator
+		output[len(p)] = 0x1
 	} else {
-		// 0x3 is the arbitrary full width indicator
-		buf.WriteByte(3)
+		// 0x3 is the arbitrary even length indicator
+		output[len(p)] = 0x3
 	}
 
-	return buf.Bytes()
+	return output
 }
 
 // deserializeNibbles returns a nibble array from the byte array.
-func deserializeNibbles(encoding []byte) (Nibbles, error) {
+func DeserializeNibbles(encoding []byte) (Nibbles, error) {
 	var ns Nibbles
 	if len(encoding) == 0 {
 		return nil, errors.New("invalid encoding")
 	}
 	if encoding[len(encoding)-1] == 1 {
-		ns = unpack(encoding[:len(encoding)-1], true)
+		ns = Unpack(encoding[:len(encoding)-1], true)
 	} else if encoding[len(encoding)-1] == 3 {
-		ns = unpack(encoding[:len(encoding)-1], false)
+		ns = Unpack(encoding[:len(encoding)-1], false)
 	} else {
 		return nil, errors.New("invalid encoding")
 	}
