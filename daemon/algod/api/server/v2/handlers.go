@@ -1013,6 +1013,7 @@ type PreEncodedSimulateRequestTransactionGroup struct {
 // PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
 	TxnGroups             []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	Round                 basics.Round                                `codec:"round,omitempty"`
 	AllowEmptySignatures  bool                                        `codec:"allow-empty-signatures,omitempty"`
 	AllowMoreLogging      bool                                        `codec:"allow-more-logging,omitempty"`
 	AllowUnnamedResources bool                                        `codec:"allow-unnamed-resources,omitempty"`

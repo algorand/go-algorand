@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -68,7 +69,13 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	ct := &catchpointTracker{}
 	ao := &onlineAccounts{}
 	au.initialize(conf)
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
 	ao.initialize(conf)
 
 	_, err := trackerDBInitialize(ml, false, ".")
@@ -376,9 +383,9 @@ func TestCommitRoundIOError(t *testing.T) {
 
 	// flip the flag when the exit handler is called,
 	// which happens when Fatal logging is called
-	flag := false
+	var flag atomic.Bool
 	logging.RegisterExitHandler(func() {
-		flag = true
+		flag.Store(true)
 	})
 
 	io := &ioErrorTracker{}
@@ -404,7 +411,7 @@ func TestCommitRoundIOError(t *testing.T) {
 
 	// confirm that after 100 blocks, the scheduled commit generated an error
 	// which triggered Fatal logging (and would therefore call any registered exit handlers)
-	a.True(flag)
+	a.True(flag.Load())
 }
 
 func TestAccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {

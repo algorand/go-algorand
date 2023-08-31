@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -209,6 +210,11 @@ type ensureAction struct {
 	Payload proposal
 	// the certificate proving commitment
 	Certificate Certificate
+
+	// The time that the winning proposal-vote was validated, relative to the beginning of the round
+	voteValidatedAt time.Duration
+	// The dynamic filter timeout calculated for this round, even if not enabled, for reporting to telemetry.
+	dynamicFilterTimeout time.Duration
 }
 
 func (a ensureAction) t() actionType {
@@ -231,14 +237,16 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		logEvent.Type = logspec.RoundConcluded
 		s.log.with(logEvent).Infof("committed round %d with pre-validated block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-			Address:      a.Certificate.Proposal.OriginalProposer.String(),
-			Hash:         a.Certificate.Proposal.BlockDigest.String(),
-			Round:        uint64(a.Certificate.Round),
-			ValidatedAt:  a.Payload.validatedAt,
-			ReceivedAt:   a.Payload.receivedAt,
-			PreValidated: true,
-			PropBufLen:   uint64(len(s.demux.rawProposals)),
-			VoteBufLen:   uint64(len(s.demux.rawVotes)),
+			Address:              a.Certificate.Proposal.OriginalProposer.String(),
+			Hash:                 a.Certificate.Proposal.BlockDigest.String(),
+			Round:                uint64(a.Certificate.Round),
+			ValidatedAt:          a.Payload.validatedAt,
+			ReceivedAt:           a.Payload.receivedAt,
+			VoteValidatedAt:      a.voteValidatedAt,
+			DynamicFilterTimeout: a.dynamicFilterTimeout,
+			PreValidated:         true,
+			PropBufLen:           uint64(len(s.demux.rawProposals)),
+			VoteBufLen:           uint64(len(s.demux.rawVotes)),
 		})
 		s.Ledger.EnsureValidatedBlock(a.Payload.ve, a.Certificate)
 	} else {
@@ -246,14 +254,16 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		logEvent.Type = logspec.RoundConcluded
 		s.log.with(logEvent).Infof("committed round %d with block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-			Address:      a.Certificate.Proposal.OriginalProposer.String(),
-			Hash:         a.Certificate.Proposal.BlockDigest.String(),
-			Round:        uint64(a.Certificate.Round),
-			ValidatedAt:  a.Payload.validatedAt,
-			ReceivedAt:   a.Payload.receivedAt,
-			PreValidated: false,
-			PropBufLen:   uint64(len(s.demux.rawProposals)),
-			VoteBufLen:   uint64(len(s.demux.rawVotes)),
+			Address:              a.Certificate.Proposal.OriginalProposer.String(),
+			Hash:                 a.Certificate.Proposal.BlockDigest.String(),
+			Round:                uint64(a.Certificate.Round),
+			ValidatedAt:          a.Payload.validatedAt,
+			ReceivedAt:           a.Payload.receivedAt,
+			VoteValidatedAt:      a.voteValidatedAt,
+			DynamicFilterTimeout: a.dynamicFilterTimeout,
+			PreValidated:         false,
+			PropBufLen:           uint64(len(s.demux.rawProposals)),
+			VoteBufLen:           uint64(len(s.demux.rawVotes)),
 		})
 		s.Ledger.EnsureBlock(block, a.Certificate)
 	}

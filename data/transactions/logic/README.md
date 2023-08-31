@@ -373,6 +373,12 @@ return stack matches the name of the input value.
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
 | `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
+| `ec_add g` | for curve points A and B, return the curve point A + B |
+| `ec_scalar_mul g` | for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B. |
+| `ec_pairing_check g` | 1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0 |
+| `ec_multi_scalar_mul g` | for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn |
+| `ec_subgroup_check g` | 1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all. |
+| `ec_map_to g` | maps field element A to group G |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
@@ -618,6 +624,8 @@ Global fields are fields that are common to all the transactions in the group. I
 | 12 | OpcodeBudget | uint64 | v6  | The remaining cost that can be spent by opcodes in this program. |
 | 13 | CallerApplicationID | uint64 | v6  | The application ID of the application that called this application. 0 if this application is at the top-level. Application mode only. |
 | 14 | CallerApplicationAddress | address | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
+| 15 | AssetCreateMinBalance | uint64 | v10  | The additional minimum balance required to create (and opt-in to) an asset. |
+| 16 | AssetOptInMinBalance | uint64 | v10  | The additional minimum balance required to opt-in to an asset. |
 
 
 **Asset Fields**

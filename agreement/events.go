@@ -197,6 +197,10 @@ const (
 	// readPinned is sent to the proposalStore to read the pinned value, if it exists.
 	readPinned
 
+	// readLowestVote is sent to the proposalPeriodMachine to read the
+	// proposal-vote with the lowest credential.
+	readLowestVote
+
 	/*
 	 * The following are event types that replace queries, and may warrant
 	 * a revision to make them more state-machine-esque.
@@ -404,6 +408,36 @@ func (e newRoundEvent) String() string {
 }
 
 func (e newRoundEvent) ComparableStr() string {
+	return e.String()
+}
+
+type readLowestEvent struct {
+	// T currently only supports readLowestVote
+	T eventType
+
+	// Round and Period are the round and period for which to query the
+	// lowest-credential vote, value or payload.  This type of event is only
+	// sent for reading the lowest period 0 credential, but the Period is here
+	// anyway to route to the appropriate proposalMachinePeriod.
+	Round  round
+	Period period
+
+	// Vote holds the lowest-credential vote.
+	Vote vote
+
+	// Filled indicates whether the Vote field is filled
+	Filled bool
+}
+
+func (e readLowestEvent) t() eventType {
+	return e.T
+}
+
+func (e readLowestEvent) String() string {
+	return fmt.Sprintf("%s: %d %d", e.t().String(), e.Round, e.Period)
+}
+
+func (e readLowestEvent) ComparableStr() string {
 	return e.String()
 }
 
@@ -941,17 +975,37 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
-func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
-	e.Input.Proposal.validatedAt = d
+// AttachValidatedAt looks for a validated proposal or vote inside a
+// payloadVerified or voteVerified messageEvent, and attaches the given time to
+// the proposal's validatedAt field.
+func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round) messageEvent {
+	switch e.T {
+	case payloadVerified:
+		if e.Input.Proposal.Round() > currentRound {
+			e.Input.Proposal.validatedAt = 1
+		} else {
+			e.Input.Proposal.validatedAt = d
+		}
+	case voteVerified:
+		if e.Input.Vote.R.Round > currentRound {
+			e.Input.Vote.validatedAt = 1
+		} else {
+			e.Input.Vote.validatedAt = d
+		}
+	}
 	return e
 }
 
 // AttachReceivedAt looks for an unauthenticatedProposal inside a
 // payloadPresent or votePresent messageEvent, and attaches the given
 // time to the proposal's receivedAt field.
-func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
+func (e messageEvent) AttachReceivedAt(d time.Duration, currentRound round) messageEvent {
 	if e.T == payloadPresent {
-		e.Input.UnauthenticatedProposal.receivedAt = d
+		if e.Input.UnauthenticatedProposal.Round() > currentRound {
+			e.Input.UnauthenticatedProposal.receivedAt = 1
+		} else {
+			e.Input.UnauthenticatedProposal.receivedAt = d
+		}
 	} else if e.T == votePresent {
 		// Check for non-nil Tail, indicating this votePresent event
 		// contains a synthetic payloadPresent event that was attached
@@ -960,7 +1014,11 @@ func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
 			// The tail event is payloadPresent, serialized together
 			// with the proposal vote as a single CompoundMessage
 			// using a protocol.ProposalPayloadTag network message.
-			e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+			if e.Tail.Input.UnauthenticatedProposal.Round() > currentRound {
+				e.Tail.Input.UnauthenticatedProposal.receivedAt = 1
+			} else {
+				e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+			}
 		}
 	}
 	return e

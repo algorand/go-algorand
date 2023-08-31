@@ -140,6 +140,15 @@ func (t ioTrace) Contains(e event) bool {
 	})
 }
 
+func (t ioTrace) CountEvent(b event) (count int) {
+	for _, e := range t.events {
+		if e.ComparableStr() == b.ComparableStr() {
+			count++
+		}
+	}
+	return
+}
+
 // for each event, passes it into the given fn; if returns true, returns true.
 func (t ioTrace) ContainsFn(compareFn func(b event) bool) bool {
 	for _, ev := range t.events {

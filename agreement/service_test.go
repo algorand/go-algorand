@@ -44,54 +44,71 @@ import (
 	"github.com/algorand/go-algorand/util/timers"
 )
 
+type testingTimeout struct {
+	delta time.Duration
+	ch    chan time.Time
+}
+
 type testingClock struct {
 	mu deadlock.Mutex
 
 	zeroes uint
 
-	TA map[time.Duration]chan time.Time // TimeoutAt
+	TA map[TimeoutType]testingTimeout // TimeoutAt
 
 	monitor *coserviceMonitor
 }
 
 func makeTestingClock(m *coserviceMonitor) *testingClock {
 	c := new(testingClock)
-	c.TA = make(map[time.Duration]chan time.Time)
+	c.TA = make(map[TimeoutType]testingTimeout)
 	c.monitor = m
 	return c
 }
 
-func (c *testingClock) Zero() timers.Clock {
+func (c *testingClock) Zero() timers.Clock[TimeoutType] {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.zeroes++
-	c.TA = make(map[time.Duration]chan time.Time)
+	c.TA = make(map[TimeoutType]testingTimeout)
 	c.monitor.clearClock()
 	return c
 }
 
 func (c *testingClock) Since() time.Duration {
-	return 0
+	return 1
 }
 
-func (c *testingClock) TimeoutAt(d time.Duration) <-chan time.Time {
+func (c *testingClock) TimeoutAt(d time.Duration, timeoutType TimeoutType) <-chan time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	ta := c.TA[d]
-	if ta == nil {
-		c.TA[d] = make(chan time.Time)
-		ta = c.TA[d]
+	ta, ok := c.TA[timeoutType]
+	if !ok || ta.delta != d {
+		c.TA[timeoutType] = testingTimeout{delta: d, ch: make(chan time.Time)}
+		ta = c.TA[timeoutType]
 	}
-	return ta
+
+	return ta.ch
+}
+
+func (c *testingClock) when(timeoutType TimeoutType) (time.Duration, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	ta, ok := c.TA[timeoutType]
+	if !ok {
+		return time.Duration(0), fmt.Errorf("no timeout of type, %v", timeoutType)
+	}
+	return ta.delta, nil
 }
 
 func (c *testingClock) Encode() []byte {
 	return nil
 }
 
-func (c *testingClock) Decode([]byte) (timers.Clock, error) {
+func (c *testingClock) Decode([]byte) (timers.Clock[TimeoutType], error) {
 	return makeTestingClock(nil), nil // TODO
 }
 
@@ -99,14 +116,14 @@ func (c *testingClock) prepareToFire() {
 	c.monitor.inc(clockCoserviceType)
 }
 
-func (c *testingClock) fire(d time.Duration) {
+func (c *testingClock) fire(timeoutType TimeoutType) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.TA[d] == nil {
-		c.TA[d] = make(chan time.Time)
+	if _, ok := c.TA[timeoutType]; !ok {
+		panic(fmt.Errorf("no timeout of type %v", timeoutType))
 	}
-	close(c.TA[d])
+	close(c.TA[timeoutType].ch)
 }
 
 type testingNetwork struct {
@@ -696,12 +713,12 @@ func (testingRand) Uint64() uint64 {
 	return maxuint64 / 2
 }
 
-func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
+func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock[TimeoutType], []Ledger, *activityMonitor) {
 	var validator testBlockValidator
 	return setupAgreementWithValidator(t, numNodes, traceLevel, validator, ledgerFactory)
 }
 
-func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
+func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock[TimeoutType], []Ledger, *activityMonitor) {
 	bufCap := 1000 // max number of buffered messages
 
 	// system state setup: keygen, stake initialization
@@ -716,7 +733,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 	log.SetLevel(logging.Debug)
 
 	// node setup
-	clocks := make([]timers.Clock, numNodes)
+	clocks := make([]timers.Clock[TimeoutType], numNodes)
 	ledgers := make([]Ledger, numNodes)
 	dbAccessors := make([]db.Accessor, numNodes)
 	services := make([]*Service, numNodes)
@@ -809,7 +826,7 @@ func (m *coserviceMonitor) clearClock() {
 	}
 }
 
-func expectNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
+func expectNewPeriod(clocks []timers.Clock[TimeoutType], zeroes uint) (newzeroes uint) {
 	zeroes++
 	for i := range clocks {
 		if clocks[i].(*testingClock).zeroes != zeroes {
@@ -820,7 +837,7 @@ func expectNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
 	return zeroes
 }
 
-func expectNoNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
+func expectNoNewPeriod(clocks []timers.Clock[TimeoutType], zeroes uint) (newzeroes uint) {
 	for i := range clocks {
 		if clocks[i].(*testingClock).zeroes != zeroes {
 			errstr := fmt.Sprintf("unexpected number of zeroes: %v != %v", clocks[i].(*testingClock).zeroes, zeroes)
@@ -830,19 +847,34 @@ func expectNoNewPeriod(clocks []timers.Clock, zeroes uint) (newzeroes uint) {
 	return zeroes
 }
 
-func triggerGlobalTimeout(d time.Duration, clocks []timers.Clock, activityMonitor *activityMonitor) {
+func triggerGlobalTimeout(d time.Duration, timeoutType TimeoutType, clocks []timers.Clock[TimeoutType], activityMonitor *activityMonitor) {
 	for i := range clocks {
 		clocks[i].(*testingClock).prepareToFire()
 	}
 	for i := range clocks {
-		clocks[i].(*testingClock).fire(d)
+		clocks[i].(*testingClock).fire(timeoutType)
 	}
 	activityMonitor.waitForActivity()
 	activityMonitor.waitForQuiet()
 }
 
-func runRound(clocks []timers.Clock, activityMonitor *activityMonitor, zeroes uint, filterTimeout time.Duration) (newzeroes uint) {
-	triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+func triggerGlobalTimeoutType(timeoutType TimeoutType, clocks []timers.Clock[TimeoutType], activityMonitor *activityMonitor) {
+	for i := range clocks {
+		clocks[i].(*testingClock).prepareToFire()
+	}
+	for i := range clocks {
+		clocks[i].(*testingClock).fire(timeoutType)
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+}
+
+func runRound(clocks []timers.Clock[TimeoutType], activityMonitor *activityMonitor, zeroes uint, filterTimeout time.Duration) (newzeroes uint) {
+	triggerGlobalTimeout(filterTimeout, TimeoutFilter, clocks, activityMonitor)
+	return expectNewPeriod(clocks, zeroes)
+}
+func runRoundTriggerFilter(clocks []timers.Clock[TimeoutType], activityMonitor *activityMonitor, zeroes uint) (newzeroes uint) {
+	triggerGlobalTimeoutType(TimeoutFilter, clocks, activityMonitor)
 	return expectNewPeriod(clocks, zeroes)
 }
 
@@ -863,18 +895,18 @@ func sanityCheck(startRound round, numRounds round, ledgers []Ledger) {
 	}
 }
 
-func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel) {
-	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger)
+func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel) (filterTimeouts []time.Duration) {
+	return simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger)
 }
 
-func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) {
+func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) (filterTimeouts []time.Duration) {
 	ledgerFactory := func(data map[basics.Address]basics.AccountData) Ledger {
 		return makeTestLedgerWithConsensusVersion(data, consensusVersion)
 	}
-	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
+	return simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
 }
 
-func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) {
+func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) []time.Duration {
 	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, traceLevel, ledgerFactory)
 	startRound := baseLedger.NextRound()
 	defer cleanupFn()
@@ -886,12 +918,17 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	activityMonitor.waitForQuiet()
 	zeroes := expectNewPeriod(clocks, 0)
 
+	filterTimeouts := make([][]time.Duration, numNodes, numNodes)
+
 	// run round with round-specific consensus version first (since fix in #1896)
-	version, _ := baseLedger.ConsensusVersion(ParamsRound(startRound))
-	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+	zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
 	for j := 1; j < numRounds; j++ {
-		version, _ := baseLedger.ConsensusVersion(ParamsRound(baseLedger.NextRound() + basics.Round(j-1)))
-		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+		for srvIdx, clock := range clocks {
+			delta, err := clock.(*testingClock).when(TimeoutFilter)
+			require.NoError(t, err)
+			filterTimeouts[srvIdx] = append(filterTimeouts[srvIdx], delta)
+		}
+		zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
 	}
 
 	for i := 0; i < numNodes; i++ {
@@ -899,6 +936,19 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	}
 
 	sanityCheck(startRound, round(numRounds), ledgers)
+
+	if len(clocks) == 0 {
+		return nil
+	}
+
+	for rnd := 0; rnd < numRounds-1; rnd++ {
+		delta := filterTimeouts[0][rnd]
+		for srvIdx := range clocks {
+			require.Equal(t, delta, filterTimeouts[srvIdx][rnd])
+		}
+	}
+
+	return filterTimeouts[0]
 }
 
 func TestAgreementSynchronous1(t *testing.T) {
@@ -971,6 +1021,159 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 	simulateAgreement(t, 5, 50, disabled)
 }
 
+func createDynamicFilterConfig() (version protocol.ConsensusVersion, consensusVersion func(r basics.Round) (protocol.ConsensusVersion, error), configCleanup func()) {
+	version = protocol.ConsensusVersion("test-protocol-filtertimeout")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.DynamicFilterTimeout = true
+	config.Consensus[version] = protoParams
+
+	consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
+		return version, nil
+	}
+
+	configCleanup = func() {
+		delete(config.Consensus, version)
+	}
+
+	return
+}
+
+func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+
+	_, consensusVersion, configCleanup := createDynamicFilterConfig()
+	defer configCleanup()
+
+	if dynamicFilterCredentialArrivalHistory <= 0 {
+		return
+	}
+
+	rounds := dynamicFilterCredentialArrivalHistory + 20
+
+	filterTimeouts := simulateAgreementWithConsensusVersion(t, 5, rounds, disabled, consensusVersion)
+	require.Len(t, filterTimeouts, rounds-1)
+	for i := 1; i < dynamicFilterCredentialArrivalHistory-1; i++ {
+		require.Equal(t, filterTimeouts[i-1], filterTimeouts[i])
+	}
+
+	// dynamic filter timeout kicks in when history window is full
+	require.Less(t, filterTimeouts[dynamicFilterCredentialArrivalHistory-1], filterTimeouts[dynamicFilterCredentialArrivalHistory-2])
+
+	for i := dynamicFilterCredentialArrivalHistory; i < len(filterTimeouts); i++ {
+		require.Equal(t, filterTimeouts[i-1], filterTimeouts[i])
+	}
+}
+
+func TestDynamicFilterTimeoutResets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+
+	version, consensusVersion, configCleanup := createDynamicFilterConfig()
+	defer configCleanup()
+
+	if dynamicFilterCredentialArrivalHistory <= 0 {
+		return
+	}
+
+	numNodes := 5
+
+	ledgerFactory := func(data map[basics.Address]basics.AccountData) Ledger {
+		return makeTestLedgerWithConsensusVersion(data, consensusVersion)
+	}
+
+	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, ledgerFactory)
+	startRound := baseLedger.NextRound()
+	defer cleanupFn()
+
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(clocks, 0)
+
+	filterTimeouts := make([][]time.Duration, numNodes, numNodes)
+
+	// run round with round-specific consensus version first (since fix in #1896)
+	zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
+	for j := 1; j < dynamicFilterCredentialArrivalHistory+1; j++ {
+		for srvIdx, clock := range clocks {
+			delta, err := clock.(*testingClock).when(TimeoutFilter)
+			require.NoError(t, err)
+			filterTimeouts[srvIdx] = append(filterTimeouts[srvIdx], delta)
+		}
+		zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
+	}
+
+	for i := range clocks {
+		require.Len(t, filterTimeouts[i], dynamicFilterCredentialArrivalHistory)
+		for j := 1; j < dynamicFilterCredentialArrivalHistory-1; j++ {
+			require.Equal(t, filterTimeouts[i][j-1], filterTimeouts[i][j])
+		}
+		require.Less(t, filterTimeouts[i][dynamicFilterCredentialArrivalHistory-1], filterTimeouts[i][dynamicFilterCredentialArrivalHistory-2])
+	}
+
+	// force fast partition recovery into bottom
+	{
+		baseNetwork.dropAllSoftVotes()
+		baseNetwork.dropAllSlowNextVotes()
+
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
+		zeroes = expectNoNewPeriod(clocks, zeroes)
+
+		triggerGlobalTimeoutType(TimeoutDeadline, clocks, activityMonitor)
+		zeroes = expectNoNewPeriod(clocks, zeroes)
+
+		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
+		zeroes = expectNoNewPeriod(clocks, zeroes)
+
+		triggerGlobalTimeout(firstFPR, TimeoutFastRecovery, clocks, activityMonitor)
+		zeroes = expectNewPeriod(clocks, zeroes)
+	}
+
+	// terminate on period 1
+	{
+		baseNetwork.repairAll()
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
+		zeroes = expectNewPeriod(clocks, zeroes)
+	}
+
+	filterTimeoutsPostRecovery := make([][]time.Duration, numNodes, numNodes)
+
+	// run round with round-specific consensus version first (since fix in #1896)
+	zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
+	for j := 1; j < dynamicFilterCredentialArrivalHistory+1; j++ {
+		for srvIdx, clock := range clocks {
+			delta, err := clock.(*testingClock).when(TimeoutFilter)
+			require.NoError(t, err)
+			filterTimeoutsPostRecovery[srvIdx] = append(filterTimeoutsPostRecovery[srvIdx], delta)
+		}
+		zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
+	}
+
+	for i := range clocks {
+		require.Len(t, filterTimeoutsPostRecovery[i], dynamicFilterCredentialArrivalHistory)
+		// check that history was discarded, so filter time increased back to its original default
+		require.Less(t, filterTimeouts[i][dynamicFilterCredentialArrivalHistory-1], filterTimeoutsPostRecovery[i][0])
+		require.Equal(t, filterTimeouts[i][dynamicFilterCredentialArrivalHistory-2], filterTimeoutsPostRecovery[i][0])
+
+		// check that filter timeout was updated to at the end of the history window
+		for j := 1; j < dynamicFilterCredentialArrivalHistory-1; j++ {
+			require.Equal(t, filterTimeoutsPostRecovery[i][j-1], filterTimeoutsPostRecovery[i][j])
+		}
+		require.Less(t, filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-1], filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-2])
+	}
+
+	sanityCheck(startRound, 2*round(dynamicFilterCredentialArrivalHistory+1)+1, ledgers)
+}
+
 func TestAgreementSynchronousFuture1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1039,23 +1242,23 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 		baseNetwork.dropAllSoftVotes()
 		baseNetwork.dropAllSlowNextVotes()
 
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeoutType(TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(firstFPR, clocks, activityMonitor)
+		triggerGlobalTimeout(firstFPR, TimeoutFastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// terminate on period 1
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1096,13 +1299,13 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 	{
 		// fail all steps
 		baseNetwork.dropAllVotes()
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		firstClocks := clocks[:4]
@@ -1112,7 +1315,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR)
+			firstClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1123,20 +1326,20 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR)
+			restClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(secondFPR, clocks, activityMonitor)
+		triggerGlobalTimeout(secondFPR, TimeoutFastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// terminate on period 1
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1179,7 +1382,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
 		baseNetwork.dropAllSlowNextVotes()
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1200,10 +1403,10 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		baseNetwork.dropAllVotes()
 
@@ -1214,7 +1417,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR)
+			firstClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1225,20 +1428,20 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR)
+			restClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(secondFPR, clocks, activityMonitor)
+		triggerGlobalTimeout(secondFPR, TimeoutFastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// terminate on period 1
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1292,7 +1495,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
 		baseNetwork.dropAllSlowNextVotes()
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1313,10 +1516,10 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		baseNetwork.dropAllVotes()
 
@@ -1327,7 +1530,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR)
+			firstClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1338,26 +1541,26 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR)
+			restClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(secondFPR, clocks, activityMonitor)
+		triggerGlobalTimeout(secondFPR, TimeoutFastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// fail period 1 with value again
 	{
 		baseNetwork.dropAllVotes()
-		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(0, clocks, activityMonitor) // activates fast partition recovery timer
+		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		baseNetwork.dropAllVotes()
 
@@ -1368,7 +1571,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			firstClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range firstClocks {
-			firstClocks[i].(*testingClock).fire(firstFPR)
+			firstClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
@@ -1379,20 +1582,20 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			restClocks[i].(*testingClock).prepareToFire()
 		}
 		for i := range restClocks {
-			restClocks[i].(*testingClock).fire(firstFPR)
+			restClocks[i].(*testingClock).fire(TimeoutFastRecovery)
 		}
 		activityMonitor.waitForActivity()
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(secondFPR, clocks, activityMonitor)
+		triggerGlobalTimeout(secondFPR, TimeoutFastRecovery, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// terminate on period 2
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1443,26 +1646,26 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 	// fail period 0
 	{
 		baseNetwork.dropAllSoftVotes()
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// fail period 1 on bottom with block
 	{
-		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// terminate on period 2
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1503,12 +1706,12 @@ func TestAgreementLateCertBug(t *testing.T) {
 	pocket := make(chan multicastParams, 100)
 	{
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 		baseNetwork.repairAll()
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1563,7 +1766,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
 
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1584,7 +1787,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 4, int(zeroes))
 	}
@@ -1594,7 +1797,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
 
-		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1611,7 +1814,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 5, int(zeroes))
 	}
@@ -1620,7 +1823,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 	// todo: make more transparent, I want to kow what v we agreed on
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 6, int(zeroes))
 	}
@@ -1662,7 +1865,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 	{
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1689,7 +1892,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 			}
 			return params
 		})
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 4, int(zeroes))
 	}
@@ -1699,7 +1902,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 		baseNetwork.repairAll()
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
-		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1715,7 +1918,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 				panic(errstr)
 			}
 		}
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 
 	}
@@ -1723,7 +1926,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 	// Finish in period 2
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 6, int(zeroes))
 	}
@@ -1765,7 +1968,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 	{
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllSoftVotes(pocket)
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 		pocketedSoft := make([]multicastParams, len(pocket))
@@ -1790,7 +1993,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 		}
 		// generate a bottom quorum; let only one node see it.
 		baseNetwork.crown(0)
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		if clocks[0].(*testingClock).zeroes != zeroes+1 {
 			errstr := fmt.Sprintf("node 0 did not enter new period from bot quorum")
 			panic(errstr)
@@ -1809,12 +2012,12 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 
 		// actually create the value quorum
 		_, upper := (next).nextVoteRanges()
-		triggerGlobalTimeout(upper, clocks[1:], activityMonitor) // activates next timers
+		triggerGlobalTimeout(upper, TimeoutDeadline, clocks[1:], activityMonitor) // activates next timers
 		zeroes = expectNoNewPeriod(clocks[1:], zeroes)
 
 		lower, upper := (next + 1).nextVoteRanges()
 		delta := time.Duration(testingRand{}.Uint64() % uint64(upper-lower))
-		triggerGlobalTimeout(lower+delta, clocks[1:], activityMonitor)
+		triggerGlobalTimeout(lower+delta, TimeoutDeadline, clocks[1:], activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 4, int(zeroes))
 	}
@@ -1824,7 +2027,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 		baseNetwork.repairAll()
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
-		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1841,14 +2044,14 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// Finish in period 2
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 6, int(zeroes))
 	}
@@ -1889,13 +2092,13 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 	pocket := make(chan multicastParams, 100)
 	closeFn := baseNetwork.pocketAllCompound(pocket) // (takes effect next round)
 	{
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// run round with late payload
 	{
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		// release payloads; expect new round
@@ -1947,15 +2150,15 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 	pocket := make(chan multicastParams, 100)
 	closeFn := baseNetwork.pocketAllCompound(pocket) // (takes effect next round)
 	{
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// force network into period 1 by delaying proposals
 	{
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
-		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1972,7 +2175,7 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -2012,11 +2215,11 @@ func TestAgreementLargePeriods(t *testing.T) {
 	for p := 0; p < 60; p++ {
 		{
 			baseNetwork.partition(0, 1, 2)
-			triggerGlobalTimeout(FilterTimeout(period(p), version), clocks, activityMonitor)
+			triggerGlobalTimeout(FilterTimeout(period(p), version), TimeoutFilter, clocks, activityMonitor)
 			zeroes = expectNoNewPeriod(clocks, zeroes)
 
 			baseNetwork.repairAll()
-			triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+			triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 			zeroes = expectNewPeriod(clocks, zeroes)
 			require.Equal(t, 4+p, int(zeroes))
 		}
@@ -2024,7 +2227,7 @@ func TestAgreementLargePeriods(t *testing.T) {
 
 	// terminate
 	{
-		triggerGlobalTimeout(FilterTimeout(60, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(60, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -2111,13 +2314,13 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	ch := validator.suspend()
 	closeFn := baseNetwork.pocketAllCompound(pocket0) // (takes effect next round)
 	{
-		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// force network into period 1 by failing period 0, entering with bottom and no soft threshold (to prevent proposal value pinning)
 	baseNetwork.dropAllSoftVotes()
-	triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+	triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 	zeroes = expectNoNewPeriod(clocks, zeroes)
 
 	// resume delivery of payloads in following period
@@ -2128,7 +2331,7 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	// release proposed blocks in a controlled manner to prevent oversubscription of verification
 	pocket1 := make(chan multicastParams, 100)
 	closeFn = baseNetwork.pocketAllCompound(pocket1)
-	triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
+	triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
 	baseNetwork.repairAll()
 	close(pocket1)
 	{
@@ -2312,7 +2515,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 		return params
 	})
 	// And with some hypothetical second relay the network achieves consensus on a certificate and block.
-	triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+	triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 	zeroes = expectNewPeriod(clocks[1:], zeroes)
 	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
 	close(pocketCert)
@@ -2331,7 +2534,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	activityMonitor.waitForQuiet()
 	// this relay must still relay initial messages. Note that payloads were already relayed with
 	// the previous global timeout.
-	triggerGlobalTimeout(FilterTimeout(0, version), clocks[1:], activityMonitor)
+	triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks[1:], activityMonitor)
 	zeroes = expectNewPeriod(clocks[1:], zeroes)
 	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
 
@@ -2401,6 +2604,6 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 	default:
 		require.Fail(t, "ready channel was empty while it should have contained a single entry")
 	}
-	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.Deadline)
+	require.Equal(t, testConsensusParams.AgreementFilterTimeoutPeriod0, demuxSignal.Deadline.Duration)
 	require.Equal(t, baseLedger.NextRound(), demuxSignal.CurrentRound)
 }
