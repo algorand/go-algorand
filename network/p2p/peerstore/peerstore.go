@@ -32,49 +32,8 @@ import (
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
 const getAllAddresses = math.MaxInt32
 
-// PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
-// currently, we have two roles : relay role and archiver role, which are mutually exclusive.
-//
 //msgp:ignore PhoneBookEntryRoles
 type PhoneBookEntryRoles int
-
-// PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
-// or via a configuration file.
-const PhoneBookEntryRelayRole = 1
-
-// PhoneBookEntryArchiverRole used for all the archivers that are provided via the archive SRV record.
-const PhoneBookEntryArchiverRole = 2
-
-// Phonebook stores or looks up addresses of nodes we might contact
-type Phonebook interface {
-	// GetAddresses(N) returns up to N addresses, but may return fewer
-	GetAddresses(n int, role PhoneBookEntryRoles) []string
-
-	// UpdateRetryAfter updates the retry-after field for the entries matching the given address
-	UpdateRetryAfter(addr string, retryAfter time.Time)
-
-	// GetConnectionWaitTime will calculate and return the wait
-	// time to prevent exceeding connectionsRateLimitingCount.
-	// The connection should be established when the waitTime is 0.
-	// It will register a provisional next connection time when the waitTime is 0.
-	// The provisional time should be updated after the connection with UpdateConnectionTime
-	GetConnectionWaitTime(addr string) (addrInPhonebook bool,
-		waitTime time.Duration, provisionalTime time.Time)
-
-	// UpdateConnectionTime will update the provisional connection time.
-	// Returns true of the addr was in the phonebook
-	UpdateConnectionTime(addr string, provisionalTime time.Time) bool
-
-	// ReplacePeerList merges a set of addresses with that passed in for networkName
-	// new entries in dnsAddresses are being added
-	// existing items that aren't included in dnsAddresses are being removed
-	// matching entries don't change
-	ReplacePeerList(dnsAddresses []string, networkName string, role PhoneBookEntryRoles)
-
-	// AddPersistentPeers stores addresses of peers which are persistent.
-	// i.e. they won't be replaced by ReplacePeerList calls
-	AddPersistentPeers(dnsAddresses []string, networkName string, role PhoneBookEntryRoles)
-}
 
 const addressDataKey string = "addressData"
 

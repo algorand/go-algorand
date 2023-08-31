@@ -30,6 +30,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
+// currently, we have two roles : relay role and archiver role, which are mutually exclusive.
+
+// PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
+// or via a configuration file.
+const PhoneBookEntryRelayRole = 1
+
+// PhoneBookEntryArchiverRole used for all the archivers that are provided via the archive SRV record.
+const PhoneBookEntryArchiverRole = 2
+
 func TestPeerstore(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -366,7 +376,6 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, phBookData[0], phBookData2[0])
 	require.Equal(t, phBookData[1], phBookData2[1])
 	require.Equal(t, phBookData[2], phBookData2[2])
-
 	// simulate passing of the waitTime duration
 	for rct := range ad2.recentConnectionTimes {
 		ad2.recentConnectionTimes[rct] = ad2.recentConnectionTimes[rct].Add(-1 * waitTime)
