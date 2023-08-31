@@ -130,14 +130,15 @@ func SharedPrefix(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
 // [] -> [0x03]
 func Serialize(nyb Nibbles) (data []byte) {
 	p, h := Pack(nyb)
-	output := make([]byte, len(p)+1)
+	length := len(p)
+	output := make([]byte, length+1)
 	copy(output, p)
 	if h {
 		// 0x1 is the arbitrary odd length indicator
-		output[len(p)] = 0x1
+		output[length] = 0x1
 	} else {
 		// 0x3 is the arbitrary even length indicator
-		output[len(p)] = 0x3
+		output[length] = 0x3
 	}
 
 	return output
@@ -146,13 +147,14 @@ func Serialize(nyb Nibbles) (data []byte) {
 // DeserializeNibbles returns a nibble array from the byte array.
 func DeserializeNibbles(encoding []byte) (Nibbles, error) {
 	var ns Nibbles
-	if len(encoding) == 0 {
+	length := len(encoding)
+	if length == 0 {
 		return nil, errors.New("invalid encoding")
 	}
-	if encoding[len(encoding)-1] == 1 {
-		ns = Unpack(encoding[:len(encoding)-1], true)
-	} else if encoding[len(encoding)-1] == 3 {
-		ns = Unpack(encoding[:len(encoding)-1], false)
+	if encoding[length-1] == 1 {
+		ns = Unpack(encoding[:length-1], true)
+	} else if encoding[length-1] == 3 {
+		ns = Unpack(encoding[:length-1], false)
 	} else {
 		return nil, errors.New("invalid encoding")
 	}
