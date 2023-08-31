@@ -31,9 +31,10 @@ func MakeNibbles(data []byte, half bool) Nibbles {
 }
 
 // Unpack the byte array into a nibble array.  If half is true, the last 4
-// bits of the last byte of the array are ignored.
+// bits of the last byte of the array are ignored.  Allocates a new byte
+// slice.
 //
-// [0x11, 0x30], true -> [0x1, 0x2, 0x3]
+// [0x12, 0x30], true -> [0x1, 0x2, 0x3]
 // [0x12, 0x34], false -> [0x1, 0x2, 0x3, 0x4]
 // [0x12, 0x34], true -> [0x1, 0x2, 0x3]  <-- last byte last 4 bits ignored
 // [], false -> []
@@ -62,7 +63,8 @@ func unpack(data []byte, half bool) Nibbles {
 // pack the nibble array into a byte array.
 // Return the byte array and a bool indicating if the last byte is a full byte or
 // only the high 4 bits are part of the encoding
-// the last four bits of a half byte encoding will always be zero
+// the last four bits of a half byte encoding will always be zero.
+// Allocates a new byte slice.
 //
 // [0x1, 0x2, 0x3] -> [0x12, 0x30], true
 // [0x1, 0x2, 0x3, 0x4] -> [0x12, 0x34], false
