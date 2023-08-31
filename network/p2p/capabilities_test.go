@@ -97,6 +97,40 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 	return dhts
 }
 
+func setupCapDiscovery(t *testing.T, numHosts int) []*CapabilitiesDiscovery {
+	var hosts []host.Host
+	var bootstrapPeers []*peer.AddrInfo
+	var capsDisc []*CapabilitiesDiscovery
+	cfg := config.GetDefaultLocal()
+	for i := 0; i < numHosts; i++ {
+		tmpdir := t.TempDir()
+		pk, err := GetPrivKey(cfg, tmpdir)
+		require.NoError(t, err)
+		ps, err := peerstore.NewPeerStore([]*peer.AddrInfo{})
+		require.NoError(t, err)
+		h, err := libp2p.New(
+			libp2p.ListenAddrStrings("/dns4/localhost/tcp/0"),
+			libp2p.Identity(pk),
+			libp2p.Peerstore(ps))
+		require.NoError(t, err)
+		hosts = append(hosts, h)
+		bootstrapPeers = append(bootstrapPeers, &peer.AddrInfo{ID: h.ID(), Addrs: h.Addrs()})
+	}
+	for _, h := range hosts {
+		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, bootstrapPeers)
+		require.NoError(t, err)
+		disc, err := algodht.MakeDiscovery(ht)
+		require.NoError(t, err)
+		cd := &CapabilitiesDiscovery{
+			disc: disc,
+			dht:  ht,
+			log:  logging.Base(),
+		}
+		capsDisc = append(capsDisc, cd)
+	}
+	return capsDisc
+}
+
 func TestDHTTwoPeers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -141,5 +175,82 @@ func TestDHTTwoPeers(t *testing.T) {
 		cancel()
 		// Returned peers will include the querying node's ID since it advertises for the topic as well
 		require.Equal(t, i+1, len(advertisers))
+	}
+}
+
+func TestVaryingCapabilities(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numAdvertisers := 10
+	capsDisc := setupCapDiscovery(t, numAdvertisers)
+	noCap := capsDisc[:3]
+	archOnly := capsDisc[3:5]
+	catchOnly := capsDisc[5:7]
+	archCatch := capsDisc[7:]
+
+	waitForRouting := func(disc *CapabilitiesDiscovery) {
+		refreshCtx, refCancel := context.WithTimeout(context.Background(), time.Second*5)
+	peersPopulated:
+		for {
+			select {
+			case <-refreshCtx.Done():
+				refCancel()
+				require.Fail(t, "failed to populate routing table before timeout")
+			default:
+				if disc.dht.RoutingTable().Size() > 0 {
+					refCancel()
+					break peersPopulated
+				}
+			}
+		}
+	}
+
+	for _, disc := range archOnly {
+		waitForRouting(disc)
+		disc.AdvertiseCapabilities(Archival)
+	}
+	for _, disc := range catchOnly {
+		waitForRouting(disc)
+		disc.AdvertiseCapabilities(Catchpoints)
+	}
+	for _, disc := range archCatch {
+		waitForRouting(disc)
+		disc.AdvertiseCapabilities(Archival, Catchpoints)
+	}
+
+	for _, disc := range noCap {
+		require.Eventuallyf(t,
+			func() bool {
+				numArchPeers := len(archOnly) + len(archCatch)
+				peers, err := disc.PeersForCapability(Archival, numArchPeers)
+				if err == nil && len(peers) == numArchPeers {
+					return true
+				}
+				return false
+			},
+			time.Minute,
+			time.Second,
+			"Not all expected archival peers were found",
+		)
+
+		require.Eventuallyf(t,
+			func() bool {
+				numCatchPeers := len(catchOnly) + len(archCatch)
+				peers, err := disc.PeersForCapability(Catchpoints, numCatchPeers)
+				if err == nil && len(peers) == numCatchPeers {
+					return true
+				}
+				return false
+			},
+			time.Minute,
+			time.Second,
+			"Not all expected catchpoint peers were found",
+		)
+	}
+
+	for _, disc := range capsDisc[3:] {
+		disc.Close()
+		// Make sure it actually closes
+		disc.wg.Wait()
 	}
 }

@@ -44,7 +44,7 @@ const (
 )
 
 const operationTimeout = time.Second * 5
-const advertisementInterval = time.Hour * 22
+const maxAdvertisementInterval = time.Hour * 22
 
 // CapabilitiesDiscovery exposes Discovery interfaces and wraps underlying DHT methods to provide capabilities advertisement for the node
 type CapabilitiesDiscovery struct {
@@ -105,39 +105,41 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 
 // AdvertiseCapabilities periodically runs the Advertiser interface on the DHT
 // If a capability fails to advertise we will retry every 10 seconds until full success
-// This gets rerun every advertisementInterval.
+// This gets rerun every at the minimum ttl or the maxAdvertisementInterval.
 func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability) {
 	c.wg.Add(1)
 	go func() {
 		// Run the initial Advertisement immediately
-		ticker := time.NewTicker(time.Second / 10000)
+		nextExecution := time.After(time.Second / 10000)
 		defer func() {
-			ticker.Stop()
 			c.wg.Done()
 		}()
 
 		for {
 			select {
 			case <-c.dht.Context().Done():
-				c.wg.Done()
 				return
-			case <-ticker.C:
+			case <-nextExecution:
 				var err error
+				advertisementInterval := maxAdvertisementInterval
 				for _, capa := range capabilities {
-					_, err0 := c.Advertise(c.dht.Context(), string(capa))
+					ttl, err0 := c.Advertise(c.dht.Context(), string(capa))
 					if err0 != nil {
 						err = err0
-						c.log.Errorf("failed to advertise for capability %s: %v", capa, err)
+						c.log.Errorf("failed to advertise for capability %s: %v", capa, err0)
 						break
+					}
+					if ttl < advertisementInterval {
+						advertisementInterval = ttl
 					}
 					c.log.Infof("advertised capability %s", capa)
 				}
 				// If we failed to advertise, retry every 10 seconds until successful
 				if err != nil {
-					ticker.Reset(time.Second * 10)
+					nextExecution = time.After(time.Second * 10)
 				} else {
 					// Otherwise, ensure we're at the correct interval
-					ticker.Reset(advertisementInterval)
+					nextExecution = time.After(advertisementInterval)
 				}
 			}
 		}
