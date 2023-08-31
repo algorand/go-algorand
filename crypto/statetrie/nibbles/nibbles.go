@@ -82,7 +82,7 @@ func Pack(nyb Nibbles) ([]byte, bool) {
 	return data, length%2 != 0
 }
 
-// equal returns true if the two nibble arrays are equal
+// Equal returns true if the two nibble arrays are equal
 // [0x1, 0x2, 0x3], [0x1, 0x2, 0x3] -> true
 // [0x1, 0x2, 0x3], [0x1, 0x2, 0x4] -> false
 // [0x1, 0x2, 0x3], [0x1] -> false
@@ -93,7 +93,7 @@ func Equal(nyb1 Nibbles, nyb2 Nibbles) bool {
 	return bytes.Equal(nyb1, nyb2)
 }
 
-// shiftLeft returns a slice of nyb1 that contains the Nibbles after the first
+// ShiftLeft returns a slice of nyb1 that contains the Nibbles after the first
 // numNibbles
 func ShiftLeft(nyb1 Nibbles, numNibbles int) Nibbles {
 	if numNibbles <= 0 {
@@ -106,7 +106,7 @@ func ShiftLeft(nyb1 Nibbles, numNibbles int) Nibbles {
 	return nyb1[numNibbles:]
 }
 
-// sharedPrefix returns a slice from nyb1 that contains the shared prefix
+// SharedPrefix returns a slice from nyb1 that contains the shared prefix
 // between nyb1 and nyb2
 func SharedPrefix(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
 	minLength := len(nyb1)
@@ -121,7 +121,7 @@ func SharedPrefix(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
 	return nyb1[:minLength]
 }
 
-// serialize returns a byte array that represents the Nibbles
+// Serialize returns a byte array that represents the Nibbles
 // an empty nibble array is serialized as a single byte with value 0x3
 // as the empty nibble is considered to be full width
 //
@@ -143,7 +143,7 @@ func Serialize(nyb Nibbles) (data []byte) {
 	return output
 }
 
-// deserializeNibbles returns a nibble array from the byte array.
+// DeserializeNibbles returns a nibble array from the byte array.
 func DeserializeNibbles(encoding []byte) (Nibbles, error) {
 	var ns Nibbles
 	if len(encoding) == 0 {
