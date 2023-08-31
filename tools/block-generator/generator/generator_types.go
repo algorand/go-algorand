@@ -149,7 +149,11 @@ type assetHolding struct {
 }
 
 // Report is the generation report.
-type Report map[TxTypeID]TxData
+type Report struct {
+	InitialRound uint64              `json:"initial_round"`
+	Counters     map[string]uint64   `json:"counters"`
+	Transactions map[TxTypeID]TxData `json:"transactions"`
+}
 
 // EffectsReport collates transaction counts caused by a root transaction.
 type EffectsReport map[string]uint64

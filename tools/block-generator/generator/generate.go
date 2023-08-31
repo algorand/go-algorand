@@ -17,7 +17,6 @@
 package generator
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,19 +37,13 @@ import (
 	"github.com/algorand/go-algorand/rpcs"
 )
 
-// ---- templates ----
-
-//go:embed teal/poap_boxes.teal
-var approvalBoxes string
-
-//go:embed teal/poap_clear.teal
-var clearBoxes string
-
-//go:embed teal/swap_amm.teal
-var approvalSwap string
-
-//go:embed teal/swap_clear.teal
-var clearSwap string
+const (
+	BlockTotalSizeBytes    = "blocks_total_size_bytes"
+	CommitWaitTimeMS       = "commit_wait_time_ms"
+	BlockgenGenerateTimeMS = "blockgen_generate_time_ms"
+	LedgerEvalTimeMS       = "ledger_eval_time_ms"
+	LedgerValidateTimeMS   = "ledger_validate_time_ms"
+)
 
 // ---- constructors ----
 
@@ -81,10 +74,12 @@ func MakeGenerator(log logging.Logger, dbround uint64, bkGenesis bookkeeping.Gen
 		rewardsResidue:            0,
 		rewardsRate:               0,
 		rewardsRecalculationRound: 0,
-		reportData:                make(map[TxTypeID]TxData),
 		latestData:                make(map[TxTypeID]uint64),
 		roundOffset:               dbround,
 	}
+	gen.reportData.InitialRound = gen.roundOffset
+	gen.reportData.Transactions = make(map[TxTypeID]TxData)
+	gen.reportData.Counters = make(map[string]uint64)
 
 	gen.feeSink[31] = 1
 	gen.rewardsPool[31] = 2
@@ -305,8 +300,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		}
 		return nil
 	}
-	// round == nextRound case
 
+	// round == nextRound case
 	err := g.startRound()
 	if err != nil {
 		return err
@@ -321,10 +316,19 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 		// we'll write genesis block / offset round for non-empty database
 		cert.Block, _, _ = g.ledger.BlockCert(basics.Round(round - g.roundOffset))
 	} else {
+		start := time.Now()
+		var generated, evaluated, validated time.Time
+		if g.verbose {
+			defer func() {
+				fmt.Printf("block generation stats txn generation (%s), ledger eval (%s), ledger add block (%s)\n",
+					generated.Sub(start), evaluated.Sub(generated), validated.Sub(evaluated))
+			}()
+		}
+
 		g.setBlockHeader(&cert)
 
 		intra := uint64(0)
-		txGroupsAD := [][]txn.SignedTxnWithAD{}
+		var txGroupsAD [][]txn.SignedTxnWithAD
 		for intra < minTxnsForBlock {
 			txGroupAD, numTxns, err := g.generateTxGroup(g.round, intra)
 			if err != nil {
@@ -337,19 +341,26 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 			intra += numTxns
 		}
+		generated = time.Now()
+		g.reportData.Counters[BlockgenGenerateTimeMS] += uint64(generated.Sub(start).Milliseconds())
 
-		vBlock, ledgerTxnCount, err := g.evaluateBlock(cert.Block.BlockHeader, txGroupsAD, int(intra))
+		vBlock, ledgerTxnCount, commitWaitTime, err := g.evaluateBlock(cert.Block.BlockHeader, txGroupsAD, int(intra))
 		if err != nil {
 			return fmt.Errorf("failed to evaluate block: %w", err)
 		}
 		if ledgerTxnCount != g.txnCounter+intra {
 			return fmt.Errorf("evaluateBlock() txn count mismatches theoretical intra: %d != %d", ledgerTxnCount, g.txnCounter+intra)
 		}
+		evaluated = time.Now()
+		g.reportData.Counters[LedgerEvalTimeMS] += uint64(evaluated.Sub(generated).Milliseconds())
 
 		err = g.ledger.AddValidatedBlock(*vBlock, cert.Certificate)
 		if err != nil {
 			return fmt.Errorf("failed to add validated block: %w", err)
 		}
+		validated = time.Now()
+		g.reportData.Counters[CommitWaitTimeMS] += uint64(commitWaitTime.Milliseconds())
+		g.reportData.Counters[LedgerValidateTimeMS] += uint64((validated.Sub(evaluated) - commitWaitTime).Milliseconds())
 
 		cert.Block.Payset = vBlock.Block().Payset
 
@@ -364,6 +375,8 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 
 	// write the msgpack bytes for a block
 	g.latestBlockMsgp = protocol.EncodeMsgp(&cert)
+	g.reportData.Counters[BlockTotalSizeBytes] += uint64(len(g.latestBlockMsgp))
+
 	_, err = output.Write(g.latestBlockMsgp)
 	if err != nil {
 		return err
@@ -776,7 +789,7 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 	}
 
 	if g.balances[senderIndex] < txn.Fee.ToUint64() {
-		fmt.Printf("\n\nthe sender account does not have enough algos for the transfer. idx %d, asset transaction type %v, num %d\n\n", senderIndex, actual, g.reportData[actual].GenerationCount)
+		fmt.Printf("\n\nthe sender account does not have enough algos for the transfer. idx %d, asset transaction type %v, num %d\n\n", senderIndex, actual, g.reportData.Transactions[actual].GenerationCount)
 		os.Exit(1)
 	}
 
@@ -799,10 +812,10 @@ func track(id TxTypeID) (TxTypeID, time.Time) {
 
 func (g *generator) recordData(id TxTypeID, start time.Time) {
 	g.latestData[id]++
-	data := g.reportData[id]
+	data := g.reportData.Transactions[id]
 	data.GenerationCount += 1
 	data.GenerationTime += time.Since(start)
-	g.reportData[id] = data
+	g.reportData.Transactions[id] = data
 }
 
 // ---- sign transactions ----

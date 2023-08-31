@@ -543,8 +543,9 @@ func makeLedger(t *testing.T, namePostfix string) *data.Ledger {
 	cfg := config.GetDefaultLocal()
 	const inMem = true
 
+	prefix := t.Name() + namePostfix
 	ledger, err := data.LoadLedger(
-		log, t.Name()+namePostfix, inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
+		log, prefix, inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
 		nil, cfg,
 	)
 	require.NoError(t, err)

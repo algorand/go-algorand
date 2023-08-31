@@ -280,6 +280,15 @@ type Application struct {
 	Params ApplicationParams `json:"params"`
 }
 
+// ApplicationLocalReference References an account's local state for an application.
+type ApplicationLocalReference struct {
+	// Account Address of the account with the local state.
+	Account string `json:"account"`
+
+	// App Application ID of the local state application.
+	App uint64 `json:"app"`
+}
+
 // ApplicationLocalState Stores local state associated with an application.
 type ApplicationLocalState struct {
 	// Id The application which this local state is for.
@@ -314,6 +323,24 @@ type ApplicationParams struct {
 
 	// LocalStateSchema Specifies maximums on the number of each type that may be stored.
 	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
+}
+
+// ApplicationStateOperation An operation against an application's global/local/box state.
+type ApplicationStateOperation struct {
+	// Account For local state changes, the address of the account associated with the local state.
+	Account *string `json:"account,omitempty"`
+
+	// AppStateType Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.
+	AppStateType string `json:"app-state-type"`
+
+	// Key The key (name) of the global/local/box state.
+	Key []byte `json:"key"`
+
+	// NewValue Represents an AVM value.
+	NewValue *AvmValue `json:"new-value,omitempty"`
+
+	// Operation Operation type. Value `w` is **write**, `d` is **delete**.
+	Operation string `json:"operation"`
 }
 
 // ApplicationStateSchema Specifies maximums on the number of each type that may be stored.
@@ -352,6 +379,15 @@ type AssetHolding struct {
 
 	// IsFrozen \[f\] whether or not the holding is frozen.
 	IsFrozen bool `json:"is-frozen"`
+}
+
+// AssetHoldingReference References an asset held by an account.
+type AssetHoldingReference struct {
+	// Account Address of the account holding the asset.
+	Account string `json:"account"`
+
+	// Asset Asset ID of the holding.
+	Asset uint64 `json:"asset"`
 }
 
 // AssetParams AssetParams specifies the parameters for an asset.
@@ -433,6 +469,15 @@ type Box struct {
 
 // BoxDescriptor Box descriptor describes a Box.
 type BoxDescriptor struct {
+	// Name Base64 encoded box name
+	Name []byte `json:"name"`
+}
+
+// BoxReference References a box of an application.
+type BoxReference struct {
+	// App Application ID which this box belongs to
+	App uint64 `json:"app"`
+
 	// Name Base64 encoded box name
 	Name []byte `json:"name"`
 }
@@ -653,17 +698,23 @@ type ScratchChange struct {
 
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
-	// AllowEmptySignatures Allow transactions without signatures to be simulated as if they had correct signatures.
+	// AllowEmptySignatures Allows transactions without signatures to be simulated as if they had correct signatures.
 	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
 
 	// AllowMoreLogging Lifts limits on log opcode usage during simulation.
 	AllowMoreLogging *bool `json:"allow-more-logging,omitempty"`
+
+	// AllowUnnamedResources Allows access to unnamed resources during simulation.
+	AllowUnnamedResources *bool `json:"allow-unnamed-resources,omitempty"`
 
 	// ExecTraceConfig An object that configures simulation execution trace.
 	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
 
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
+
+	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
+	Round *uint64 `json:"round,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
@@ -685,6 +736,9 @@ type SimulateTraceConfig struct {
 
 	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
 	StackChange *bool `json:"stack-change,omitempty"`
+
+	// StateChange A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.
+	StateChange *bool `json:"state-change,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -703,6 +757,9 @@ type SimulateTransactionGroupResult struct {
 
 	// TxnResults Simulation result for individual transactions
 	TxnResults []SimulateTransactionResult `json:"txn-results"`
+
+	// UnnamedResourcesAccessed These are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, the unnamed resources it contains may or may not qualify for group resource sharing. If this is a field in SimulateTransactionGroupResult, the resources do qualify, but if this is a field in SimulateTransactionResult, they do not qualify. In order to make this group valid for actual submission, resources that qualify for group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.
+	UnnamedResourcesAccessed *SimulateUnnamedResourcesAccessed `json:"unnamed-resources-accessed,omitempty"`
 }
 
 // SimulateTransactionResult Simulation result for an individual transaction
@@ -718,12 +775,42 @@ type SimulateTransactionResult struct {
 
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`
+
+	// UnnamedResourcesAccessed These are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, the unnamed resources it contains may or may not qualify for group resource sharing. If this is a field in SimulateTransactionGroupResult, the resources do qualify, but if this is a field in SimulateTransactionResult, they do not qualify. In order to make this group valid for actual submission, resources that qualify for group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.
+	UnnamedResourcesAccessed *SimulateUnnamedResourcesAccessed `json:"unnamed-resources-accessed,omitempty"`
+}
+
+// SimulateUnnamedResourcesAccessed These are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, the unnamed resources it contains may or may not qualify for group resource sharing. If this is a field in SimulateTransactionGroupResult, the resources do qualify, but if this is a field in SimulateTransactionResult, they do not qualify. In order to make this group valid for actual submission, resources that qualify for group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.
+type SimulateUnnamedResourcesAccessed struct {
+	// Accounts The unnamed accounts that were referenced. The order of this array is arbitrary.
+	Accounts *[]string `json:"accounts,omitempty"`
+
+	// AppLocals The unnamed application local states that were referenced. The order of this array is arbitrary.
+	AppLocals *[]ApplicationLocalReference `json:"app-locals,omitempty"`
+
+	// Apps The unnamed applications that were referenced. The order of this array is arbitrary.
+	Apps *[]uint64 `json:"apps,omitempty"`
+
+	// AssetHoldings The unnamed asset holdings that were referenced. The order of this array is arbitrary.
+	AssetHoldings *[]AssetHoldingReference `json:"asset-holdings,omitempty"`
+
+	// Assets The unnamed assets that were referenced. The order of this array is arbitrary.
+	Assets *[]uint64 `json:"assets,omitempty"`
+
+	// Boxes The unnamed boxes that were referenced. The order of this array is arbitrary.
+	Boxes *[]BoxReference `json:"boxes,omitempty"`
+
+	// ExtraBoxRefs The number of extra box references used to increase the IO budget. This is in addition to the references defined in the input transaction group and any referenced to unnamed boxes.
+	ExtraBoxRefs *uint64 `json:"extra-box-refs,omitempty"`
 }
 
 // SimulationEvalOverrides The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.
 type SimulationEvalOverrides struct {
 	// AllowEmptySignatures If true, transactions without signatures are allowed and simulated as if they were properly signed.
 	AllowEmptySignatures *bool `json:"allow-empty-signatures,omitempty"`
+
+	// AllowUnnamedResources If true, allows access to unnamed resources during simulation.
+	AllowUnnamedResources *bool `json:"allow-unnamed-resources,omitempty"`
 
 	// ExtraOpcodeBudget The extra opcode budget added to each transaction group during simulation
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
@@ -751,18 +838,30 @@ type SimulationOpcodeTraceUnit struct {
 
 	// StackPopCount The number of deleted stack values by this opcode.
 	StackPopCount *uint64 `json:"stack-pop-count,omitempty"`
+
+	// StateChanges The operations against the current application's states.
+	StateChanges *[]ApplicationStateOperation `json:"state-changes,omitempty"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 type SimulationTransactionExecTrace struct {
+	// ApprovalProgramHash SHA512_256 hash digest of the approval program executed in transaction.
+	ApprovalProgramHash *[]byte `json:"approval-program-hash,omitempty"`
+
 	// ApprovalProgramTrace Program trace that contains a trace of opcode effects in an approval program.
 	ApprovalProgramTrace *[]SimulationOpcodeTraceUnit `json:"approval-program-trace,omitempty"`
+
+	// ClearStateProgramHash SHA512_256 hash digest of the clear state program executed in transaction.
+	ClearStateProgramHash *[]byte `json:"clear-state-program-hash,omitempty"`
 
 	// ClearStateProgramTrace Program trace that contains a trace of opcode effects in a clear state program.
 	ClearStateProgramTrace *[]SimulationOpcodeTraceUnit `json:"clear-state-program-trace,omitempty"`
 
 	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
 	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
+
+	// LogicSigHash SHA512_256 hash digest of the logic sig executed in transaction.
+	LogicSigHash *[]byte `json:"logic-sig-hash,omitempty"`
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`

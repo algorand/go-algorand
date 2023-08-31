@@ -67,7 +67,13 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	ct := &catchpointTracker{}
 	ao := &onlineAccounts{}
 	au.initialize(conf)
-	ct.initialize(conf, dbPathPrefix)
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: dbPathPrefix,
+			HotGenesisDir:        dbPathPrefix,
+		},
+	}
+	ct.initialize(conf, paths)
 	ao.initialize(conf)
 	_, err := trackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
@@ -100,6 +106,7 @@ func TestCatchpointGetCatchpointStream(t *testing.T) {
 	require.NoError(t, err)
 
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	// Create the catchpoint files with dummy data
 	for i := 0; i < filesToCreate; i++ {
@@ -169,6 +176,7 @@ func TestCatchpointsDeleteStored(t *testing.T) {
 	ct := newCatchpointTracker(t, ml, conf, ".")
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	dummyCatchpointFilesToCreate := 42
 
@@ -245,9 +253,16 @@ func TestCatchpointsDeleteStoredOnSchemaUpdate(t *testing.T) {
 	ct := &catchpointTracker{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectroy
+	ct.tmpDir = temporaryDirectroy
 
 	_, err = trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -301,9 +316,16 @@ func TestRecordCatchpointFile(t *testing.T) {
 
 	conf.CatchpointFileHistoryLength = 3
 	conf.Archival = true
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -342,6 +364,96 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 	require.NoError(t, err)
 }
 
+// TestCatchpointCommitErrorHandling exists to confirm that when an error occurs during catchpoint generation,
+// the catchpoint tracker will clear the appropriate state - specifically, the balancesTrie will be cleared,
+// and the balancesTrie will remain functional if loaded from disk, or if lazily loaded during commitRound
+func TestCatchpointCommitErrorHandling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	temporaryDirectory := t.TempDir()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := &catchpointTracker{}
+	conf := config.GetDefaultLocal()
+
+	conf.Archival = true
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
+
+	defer ct.close()
+	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
+
+	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
+	require.NoError(t, err)
+
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+
+	txn, err := ml.dbs.BeginTransaction(context.Background())
+	require.NoError(t, err)
+	dcc := deferredCommitContext{
+		compactKvDeltas: map[string]modifiedKvValue{"key": {data: []byte("value")}},
+	}
+
+	// before commitRound is called, record the trie RootHash
+	require.NotNil(t, ct.balancesTrie)
+	root1, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+
+	ct.commitRound(context.Background(), txn, &dcc)
+
+	txn.Commit()
+
+	// after commitRound is called, confirm the RootHash has changed
+	root2, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.NotEqual(t, root1, root2)
+
+	// demonstrate that handleUnordered does not restore the trie
+	ct.handleUnorderedCommit(&dcc)
+	root2a, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root2a)
+
+	// demonstrate that handlePrepareCommitError does not restore the trie
+	ct.handlePrepareCommitError(&dcc)
+	root2b, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root2b)
+
+	// now have the ct handle a commit error
+	ct.handleCommitError(&dcc)
+	// after error handling, the trie should be nil
+	require.Nil(t, ct.balancesTrie)
+
+	// after reloading from disk, the trie should be equal to root1
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+	root3, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root1, root3)
+
+	// also demonstrate that lazy initialization allows a nil trie to go back to root2 immediately after error if the same delta is applied
+	txn, err = ml.dbs.BeginTransaction(context.Background())
+	require.NoError(t, err)
+	ct.handleCommitError(&dcc) // clear trie
+	require.Nil(t, ct.balancesTrie)
+	ct.commitRound(context.Background(), txn, &dcc)
+	txn.Commit()
+	root4, err := ct.balancesTrie.RootHash()
+	require.NoError(t, err)
+	require.Equal(t, root2, root4)
+}
+
 // TestCatchpointFileWithLargeSpVerification makes sure that CatchpointFirstStageInfo.BiggestChunkLen is calculated based on state proof verification contexts
 // as well as other chunks in the catchpoint files.
 func TestCatchpointFileWithLargeSpVerification(t *testing.T) {
@@ -357,9 +469,17 @@ func TestCatchpointFileWithLargeSpVerification(t *testing.T) {
 	conf := config.GetDefaultLocal()
 
 	conf.Archival = true
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
+
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -421,7 +541,13 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	ct := catchpointTracker{}
-	ct.initialize(cfg, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(cfg, paths)
 
 	temporaryDirectroy := b.TempDir()
 	catchpointsDirectory := filepath.Join(temporaryDirectroy, trackerdb.CatchpointDirName)
@@ -429,6 +555,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	require.NoError(b, err)
 
 	ct.dbDirectory = temporaryDirectroy
+	ct.tmpDir = temporaryDirectroy
 
 	err = ct.loadFromDisk(ml, 0)
 	require.NoError(b, err)
@@ -702,8 +829,12 @@ func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferred
 	}
 }
 
-// handleUnorderedCommitOrError is not used by the blockingTracker
-func (bt *blockingTracker) handleUnorderedCommitOrError(*deferredCommitContext) {
+// control functions are not used by the blockingTracker
+func (bt *blockingTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (bt *blockingTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (bt *blockingTracker) handleCommitError(dcc *deferredCommitContext) {
 }
 
 // close is not used by the blockingTracker
@@ -1062,6 +1193,7 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 	require.NoError(t, err)
 
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	expectedNumEntries := protoParams.CatchpointLookback / cfg.CatchpointInterval
 
@@ -1161,8 +1293,7 @@ func TestCatchpointFirstStagePersistence(t *testing.T) {
 	cfg.CatchpointInterval = 4
 	cfg.CatchpointTracking = 2
 	cfg.MaxAcctLookback = 0
-	ct := newCatchpointTracker(
-		t, ml, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct := newCatchpointTracker(t, ml, cfg, tempDirectory)
 	defer ct.close()
 
 	// Add blocks until the first catchpoint first stage round.
@@ -1213,8 +1344,7 @@ func TestCatchpointFirstStagePersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's first stage.
-	ct2 := newCatchpointTracker(
-		t, ml2, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct2 := newCatchpointTracker(t, ml2, cfg, tempDirectory)
 	defer ct2.close()
 
 	// Check that the catchpoint data file was rewritten.
@@ -1262,8 +1392,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 	cfg.CatchpointInterval = 4
 	cfg.CatchpointTracking = 2
 	cfg.MaxAcctLookback = 0
-	ct := newCatchpointTracker(
-		t, ml, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct := newCatchpointTracker(t, ml, cfg, tempDirectory)
 	defer ct.close()
 
 	isCatchpointRound := func(rnd basics.Round) bool {
@@ -1357,8 +1486,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's second stage.
-	ct2 := newCatchpointTracker(
-		t, ml2, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct2 := newCatchpointTracker(t, ml2, cfg, tempDirectory)
 	defer ct2.close()
 
 	// Check that the catchpoint data file was rewritten.
@@ -1407,8 +1535,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	cfg.CatchpointInterval = 4
 	cfg.CatchpointTracking = 0
 	cfg.MaxAcctLookback = 0
-	ct := newCatchpointTracker(
-		t, ml, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct := newCatchpointTracker(t, ml, cfg, tempDirectory)
 	defer ct.close()
 
 	secondStageRound := basics.Round(36)
@@ -1440,8 +1567,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 
 	// Configure a new catchpoint tracker with catchpoints enabled.
 	cfg.CatchpointTracking = 2
-	ct2 := newCatchpointTracker(
-		t, ml2, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct2 := newCatchpointTracker(t, ml2, cfg, tempDirectory)
 	defer ct2.close()
 
 	// Add the last block.
@@ -1880,4 +2006,37 @@ func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
 
 	// Garbage collection helps prevent trashing for next tests
 	runtime.GC()
+}
+
+func TestMakeCatchpointFilePath(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testCase struct {
+		round                      int
+		expectedDataFilePath       string
+		expectedCatchpointFilePath string
+	}
+
+	tcs := []testCase{
+		{10, "10.data", "10.catchpoint"},
+		{100, "100.data", "100.catchpoint"},
+		// MakeCatchpointFilePath divides the round by 256 to create subdirecories
+		{257, "257.data", "01/257.catchpoint"},
+		{511, "511.data", "01/511.catchpoint"},
+		{512, "512.data", "02/512.catchpoint"},
+		// 256 * 256 = 65536
+		{65536, "65536.data", "00/01/65536.catchpoint"},
+		{65537, "65537.data", "00/01/65537.catchpoint"},
+		// 645536 * 3 = 193609728
+		{193609727, "193609727.data", "3f/8a/0b/193609727.catchpoint"},
+		{193609728, "193609728.data", "40/8a/0b/193609728.catchpoint"},
+		// 256 * 256 * 256 = 16777216
+		{16777216, "16777216.data", "00/00/01/16777216.catchpoint"},
+	}
+
+	for _, tc := range tcs {
+		require.Equal(t, tc.expectedCatchpointFilePath, trackerdb.MakeCatchpointFilePath(basics.Round(tc.round)))
+		require.Equal(t, tc.expectedDataFilePath, makeCatchpointDataFilePath(basics.Round(tc.round)))
+	}
+
 }

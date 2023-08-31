@@ -31,6 +31,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/timers"
@@ -48,7 +49,7 @@ type NetworkFacadeMessage struct {
 type NetworkFacade struct {
 	network.GossipNode
 	NetworkFilter
-	timers.Clock
+	timers.Clock[agreement.TimeoutType]
 	nodeID                         int
 	mux                            *network.Multiplexer
 	fuzzer                         *Fuzzer
@@ -345,7 +346,7 @@ func (n *NetworkFacade) Disconnect(sender network.Peer) {
 	n.fuzzer.Disconnect(n.nodeID, sourceNode)
 }
 
-func (n *NetworkFacade) Zero() timers.Clock {
+func (n *NetworkFacade) Zero() timers.Clock[agreement.TimeoutType] {
 	n.clockSync.Lock()
 	defer n.clockSync.Unlock()
 
@@ -375,7 +376,7 @@ func (n *NetworkFacade) Rezero() {
 // Since implements the Clock interface.
 func (n *NetworkFacade) Since() time.Duration { return 0 }
 
-func (n *NetworkFacade) TimeoutAt(d time.Duration) <-chan time.Time {
+func (n *NetworkFacade) TimeoutAt(d time.Duration, timeoutType agreement.TimeoutType) <-chan time.Time {
 	defer n.timeoutAtInitOnce.Do(func() {
 		n.timeoutAtInitWait.Done()
 	})
@@ -414,7 +415,7 @@ func (n *NetworkFacade) Encode() []byte {
 	return buf.Bytes()
 }
 
-func (n *NetworkFacade) Decode(in []byte) (timers.Clock, error) {
+func (n *NetworkFacade) Decode(in []byte) (timers.Clock[agreement.TimeoutType], error) {
 	n.clockSync.Lock()
 	defer n.clockSync.Unlock()
 

@@ -20,8 +20,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -59,7 +57,7 @@ type AlgorandFollowerNode struct {
 	catchpointCatchupService *catchup.CatchpointCatchupService
 	blockService             *rpcs.BlockService
 
-	rootDir     string
+	genesisDirs config.ResolvedGenesisDirs
 	genesisID   string
 	genesisHash crypto.Digest
 	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
@@ -80,11 +78,15 @@ type AlgorandFollowerNode struct {
 // MakeFollower sets up an Algorand data node
 func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFollowerNode, error) {
 	node := new(AlgorandFollowerNode)
-	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
+	var err error
+	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
+	if err != nil {
+		return nil, err
+	}
 
 	if node.devMode {
 		log.Warn("Follower running on a devMode network. Must submit txns to a different node.")
@@ -102,16 +104,6 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	p2pNode.DeregisterMessageInterest(protocol.VoteBundleTag)
 	node.net = p2pNode
 
-	// load stored data
-	genesisDir := filepath.Join(rootDir, genesis.ID())
-	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
-
-	// create initial ledger, if it doesn't exist
-	err = os.Mkdir(genesisDir, 0700)
-	if err != nil && !os.IsExist(err) {
-		log.Errorf("Unable to create genesis directory: %v", err)
-		return nil, err
-	}
 	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
@@ -120,9 +112,13 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	ledgerPaths := ledger.DirsAndPrefix{
+		DBFilePrefix:        config.LedgerFilenamePrefix,
+		ResolvedGenesisDirs: node.genesisDirs,
+	}
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
 	if err != nil {
-		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
+		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
 	}
 
@@ -245,9 +241,9 @@ func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transaction
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFollowerNode) Simulate(_ simulation.Request) (result simulation.Result, err error) {
-	err = fmt.Errorf("cannot simulate in data mode")
-	return
+func (node *AlgorandFollowerNode) Simulate(request simulation.Request) (result simulation.Result, err error) {
+	simulator := simulation.MakeSimulator(node.ledger, node.config.EnableDeveloperAPI)
+	return simulator.Simulate(request)
 }
 
 // GetPendingTransaction no-ops in follower mode

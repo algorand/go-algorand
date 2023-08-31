@@ -177,6 +177,9 @@ func CustomTestOnlineAccountParams(t *customT) {
 	ar, err := t.db.MakeAccountsReader()
 	require.NoError(t, err)
 
+	aor, err := t.db.MakeOnlineAccountsOptimizedReader()
+	require.NoError(t, err)
+
 	// generate some test data
 	startRound := basics.Round(0)
 	roundParams := []ledgercore.OnlineRoundParamsData{
@@ -194,7 +197,17 @@ func CustomTestOnlineAccountParams(t *customT) {
 	err = aw.AccountsPutOnlineRoundParams(roundParams, startRound)
 	require.NoError(t, err)
 
-	// read round params
+	// lookup single round params
+	read1, err := aor.LookupOnlineRoundParams(basics.Round(1))
+	require.NoError(t, err)
+	require.Equal(t, roundParams[1], read1)
+
+	// lookup single round params (not found)
+	_, err = aor.LookupOnlineRoundParams(basics.Round(9000))
+	require.Error(t, err)
+	require.Equal(t, trackerdb.ErrNotFound, err)
+
+	// read all round params
 	readParams, endRound, err := ar.AccountsOnlineRoundParams()
 	require.NoError(t, err)
 	require.Len(t, readParams, 3)                   // assert boundries

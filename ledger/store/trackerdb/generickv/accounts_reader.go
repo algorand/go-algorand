@@ -17,7 +17,6 @@
 package generickv
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 
@@ -81,7 +80,8 @@ func (r *accountsReader) LookupAccount(addr basics.Address) (data trackerdb.Pers
 		return
 	}
 
-	value, closer, err := r.kvr.Get(accountKey(addr))
+	key := accountKey(addr)
+	value, closer, err := r.kvr.Get(key[:])
 	if err == trackerdb.ErrNotFound {
 		// Note: the SQL implementation returns a data value and no error even when the account does not exist.
 		return data, nil
@@ -109,7 +109,8 @@ func (r *accountsReader) LookupResources(addr basics.Address, aidx basics.Creata
 		return
 	}
 
-	value, closer, err := r.kvr.Get(resourceKey(addr, aidx))
+	key := resourceKey(addr, aidx)
+	value, closer, err := r.kvr.Get(key[:])
 	if err == trackerdb.ErrNotFound {
 		// Note: the SQL implementation returns a data value and no error even when the account does not exist.
 		data.Data = trackerdb.MakeResourcesData(0)
@@ -139,15 +140,12 @@ func (r *accountsReader) LookupResources(addr basics.Address, aidx basics.Creata
 }
 
 func (r *accountsReader) LookupAllResources(addr basics.Address) (data []trackerdb.PersistedResourcesData, rnd basics.Round, err error) {
-	low := resourceAddrOnlyPartialKey(addr)
-	high := resourceAddrOnlyPartialKey(addr)
-	high[len(high)-1]++
+	low, high := resourceAddrOnlyRangePrefix(addr)
 
-	iter := r.kvr.NewIter(low, high, false)
+	iter := r.kvr.NewIter(low[:], high[:], false)
 	defer iter.Close()
 
 	var value []byte
-	var aidx uint64
 
 	// read the current db round
 	rnd, err = r.AccountsRound()
@@ -158,13 +156,10 @@ func (r *accountsReader) LookupAllResources(addr basics.Address) (data []tracker
 	for iter.Next() {
 		pitem := trackerdb.PersistedResourcesData{AcctRef: accountRef{addr}, Round: rnd}
 
-		// read the key to parse the aidx
-		// key is <prefix>-<addr>-<aidx> = <content>
 		key := iter.Key()
 
-		aidxOffset := len(kvPrefixResource) + 1 + 32 + 1
-		aidx = binary.BigEndian.Uint64(key[aidxOffset : aidxOffset+8])
-		pitem.Aidx = basics.CreatableIndex(aidx)
+		// extract aidx from key
+		pitem.Aidx = extractResourceAidx(key)
 
 		// get value for current item in the iterator
 		value, err = iter.Value()
@@ -268,88 +263,6 @@ func (r *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, res
 	return
 }
 
-func (r *accountsReader) ListCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
-	// The old SQL impl:
-	//
-	// SELECT
-	// 		acctrounds.rnd,
-	// 		assetcreators.asset,
-	// 		assetcreators.creator
-	// FROM acctrounds
-	// 		LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ?
-	// WHERE acctrounds.id='acctbase'
-	// ORDER BY assetcreators.asset desc
-	// LIMIT ?
-
-	// read the current db round
-	dbRound, err = r.AccountsRound()
-	if err != nil {
-		return
-	}
-
-	start := []byte(fmt.Sprintf("%s-", kvPrefixCreatorIndex))
-	end := creatableKey(basics.CreatableIndex(uint64(maxIdx) + 1))
-
-	// assets are returned in descending order of cidx
-	iter := r.kvr.NewIter(start, end, true)
-	defer iter.Close()
-
-	var value []byte
-	var resultCount uint64
-	var cidx uint64
-
-	for iter.Next() {
-		// end iteration if we reached max results
-		if resultCount == maxResults {
-			return
-		}
-
-		// read the key
-		// schema: <prefix>-<cidx>
-		key := iter.Key()
-
-		// extract cidx
-		cidxOffset := len(kvPrefixCreatorIndex) + 1
-		cidx = binary.BigEndian.Uint64(key[cidxOffset : cidxOffset+8])
-
-		// get value for current item in the iterator
-		value, err = iter.Value()
-		if err != nil {
-			return
-		}
-
-		// decode the raw value
-		var entry creatableEntry
-		err = protocol.Decode(value, &entry)
-		if err != nil {
-			return
-		}
-
-		// TODO: the ctype as part of key makes this filterable during the iter
-		if entry.Ctype != ctype {
-			continue
-		}
-
-		// create the "creatable" struct
-		cl := basics.CreatableLocator{Type: ctype, Index: basics.CreatableIndex(cidx)}
-		copy(cl.Creator[:], entry.CreatorAddr)
-
-		// add it to the the results
-		results = append(results, cl)
-
-		// inc results in range
-		resultCount++
-	}
-
-	// read the current db round
-	dbRound, err = r.AccountsRound()
-	if err != nil {
-		return
-	}
-
-	return
-}
-
 func (r *accountsReader) LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
 	// The old SQL impl:
 	//
@@ -366,7 +279,8 @@ func (r *accountsReader) LookupCreator(cidx basics.CreatableIndex, ctype basics.
 		return
 	}
 
-	value, closer, err := r.kvr.Get(creatableKey(cidx))
+	key := creatableKey(cidx)
+	value, closer, err := r.kvr.Get(key[:])
 	if err == trackerdb.ErrNotFound {
 		// the record does not exist
 		// clean up the error and just return ok=false

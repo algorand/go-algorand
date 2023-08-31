@@ -19,11 +19,12 @@ package runner
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"sort"
 
 	// embed conduit template config file
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -64,6 +65,7 @@ type Args struct {
 	KeepDataDir              bool
 	GenesisFile              string
 	ResetDB                  bool
+	StartDelay               time.Duration
 	Times                    uint64
 }
 
@@ -124,6 +126,7 @@ func Run(args Args) error {
 }
 
 func (r *Args) run(reportDirectory string) error {
+
 	baseName := filepath.Base(r.Path)
 	baseNameNoExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
 	reportfile := path.Join(reportDirectory, fmt.Sprintf("%s.report", baseNameNoExt))
@@ -165,6 +168,12 @@ func (r *Args) run(reportDirectory string) error {
 		}
 		fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
 	}
+
+	if r.StartDelay > 0 {
+		fmt.Printf("%sSleeping for start delay: %s\n", pad, r.StartDelay)
+		time.Sleep(r.StartDelay)
+	}
+
 	// Start services
 	algodNet := fmt.Sprintf("localhost:%d", 11112)
 	metricsNet := fmt.Sprintf("localhost:%d", r.MetricsPort)
@@ -253,12 +262,12 @@ const (
 )
 
 // Helper to record metrics. Supports rates (sum/count) and counters.
-func recordDataToFile(start time.Time, entry Entry, prefix string, out *os.File) error {
+func recordDataToWriter(start time.Time, entry Entry, prefix string, out io.Writer) error {
 	var writeErrors []string
 	var writeErr error
 	record := func(prefix2, name string, t metricType) {
 		key := fmt.Sprintf("%s%s_%s", prefix, prefix2, name)
-		if err := recordMetricToFile(entry, key, name, t, out); err != nil {
+		if err := recordMetricToWriter(entry, key, name, t, out); err != nil {
 			writeErr = err
 			writeErrors = append(writeErrors, name)
 		}
@@ -287,21 +296,21 @@ func recordDataToFile(start time.Time, entry Entry, prefix string, out *os.File)
 	tps := totalTxn / importTimeS
 	key := "overall_transactions_per_second"
 	msg := fmt.Sprintf("%s_%s:%.2f\n", prefix, key, tps)
-	if _, err := out.WriteString(msg); err != nil {
+	if _, err := fmt.Fprintf(out, msg); err != nil {
 		return fmt.Errorf("unable to write metric '%s': %w", key, err)
 	}
 
 	// Uptime
 	key = "uptime_seconds"
 	msg = fmt.Sprintf("%s_%s:%.2f\n", prefix, key, time.Since(start).Seconds())
-	if _, err := out.WriteString(msg); err != nil {
+	if _, err := fmt.Fprintf(out, msg); err != nil {
 		return fmt.Errorf("unable to write metric '%s': %w", key, err)
 	}
 
 	return nil
 }
 
-func recordMetricToFile(entry Entry, outputKey, metricSuffix string, t metricType, out *os.File) error {
+func recordMetricToWriter(entry Entry, outputKey, metricSuffix string, t metricType, out io.Writer) error {
 	value, err := getMetric(entry, metricSuffix, t == rate)
 	if err != nil {
 		return err
@@ -314,7 +323,7 @@ func recordMetricToFile(entry Entry, outputKey, metricSuffix string, t metricTyp
 		msg = fmt.Sprintf("%s:%.2f\n", outputKey, value)
 	}
 
-	if _, err := out.WriteString(msg); err != nil {
+	if _, err := fmt.Fprintf(out, msg); err != nil {
 		return fmt.Errorf("unable to write metric '%s': %w", outputKey, err)
 	}
 
@@ -371,8 +380,78 @@ func getMetric(entry Entry, suffix string, rateMetric bool) (float64, error) {
 	return 0.0, fmt.Errorf("metric incomplete or not found: %s", suffix)
 }
 
-// Run the test for 'RunDuration', collect metrics and write them to the 'ReportDirectory'
-func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) error {
+func writeReport(w io.Writer, scenario string, start time.Time, runDuration time.Duration, generatorReport generator.Report, collector *MetricsCollector) error {
+	write := func(pattern string, parts ...any) error {
+		str := fmt.Sprintf(pattern, parts...)
+		if _, err := fmt.Fprintf(w, str); err != nil {
+			return fmt.Errorf("unable to write '%s': %w", str, err)
+		}
+		return nil
+	}
+
+	if err := write("scenario:%s\n", scenario); err != nil {
+		return err
+	}
+
+	if err := write("test_duration_seconds:%d\n", uint64(runDuration.Seconds())); err != nil {
+		return err
+	}
+
+	if err := write("test_duration_actual_seconds:%f\n", time.Since(start).Seconds()); err != nil {
+		return err
+	}
+
+	if err := write("initial_round:%d\n", generatorReport.InitialRound); err != nil {
+		return err
+	}
+
+	for metric, value := range generatorReport.Counters {
+		if err := write("%s:%d\n", metric, value); err != nil {
+			return err
+		}
+	}
+
+	effects := generator.CumulativeEffects(generatorReport)
+	keys := make([]string, 0, len(effects))
+	for k := range effects {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	allTxns := uint64(0)
+	for _, metric := range keys {
+		// Skip this one
+		if metric == "genesis" {
+			continue
+		}
+		txCount := effects[metric]
+		allTxns += txCount
+		str := fmt.Sprintf("transaction_%s_total:%d\n", metric, txCount)
+		if _, err := fmt.Fprintf(w, str); err != nil {
+			return fmt.Errorf("unable to write '%s' metric: %w", str, err)
+		}
+	}
+	str := fmt.Sprintf("transaction_%s_total:%d\n", "ALL", allTxns)
+	if _, err := fmt.Fprintf(w, str); err != nil {
+		return fmt.Errorf("unable to write '%s' metric: %w", str, err)
+	}
+
+	// Record a rate from one of the first data points.
+	if len(collector.Data) > 5 {
+		if err := recordDataToWriter(start, collector.Data[2], "early", w); err != nil {
+			return err
+		}
+	}
+
+	// Also record the final metrics.
+	if err := recordDataToWriter(start, collector.Data[len(collector.Data)-1], "final", w); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Run the test for 'RunDuration', collect metrics and write report to the report file.
+func (r *Args) runTest(w io.Writer, metricsURL string, generatorURL string) error {
 	collector := &MetricsCollector{MetricsURL: fmt.Sprintf("http://%s/metrics", metricsURL)}
 
 	// Run for r.RunDuration
@@ -394,19 +473,8 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 		return fmt.Errorf("problem collecting final metrics (%d / %s): %w", count, time.Since(start), err)
 	}
 
-	// write scenario to report
+	// get generator report
 	scenario := path.Base(r.Path)
-	if _, err := report.WriteString(fmt.Sprintf("scenario:%s\n", scenario)); err != nil {
-		return fmt.Errorf("unable to write scenario to report: %w", err)
-	}
-	// Collect results.
-	durationStr := fmt.Sprintf("test_duration_seconds:%d\ntest_duration_actual_seconds:%f\n",
-		uint64(r.RunDuration.Seconds()),
-		time.Since(start).Seconds())
-	if _, err := report.WriteString(durationStr); err != nil {
-		return fmt.Errorf("unable to write duration metric: %w", err)
-	}
-
 	resp, err := http.Get(fmt.Sprintf("http://%s/report", generatorURL))
 	if err != nil {
 		return fmt.Errorf("generator report query failed")
@@ -417,42 +485,11 @@ func (r *Args) runTest(report *os.File, metricsURL string, generatorURL string) 
 		return fmt.Errorf("problem decoding generator report: %w", err)
 	}
 
-	effects := generator.CumulativeEffects(generatorReport)
-	keys := make([]string, 0, len(effects))
-	for k := range effects {
-		keys = append(keys, k)
+	// write report to file
+	err = writeReport(w, scenario, start, r.RunDuration, generatorReport, collector)
+	if err != nil {
+		return fmt.Errorf("problem writing report: %w", err)
 	}
-	sort.Strings(keys)
-	allTxns := uint64(0)
-	for _, metric := range keys {
-		// Skip this one
-		if metric == "genesis" {
-			continue
-		}
-		txCount := effects[metric]
-		allTxns += txCount
-		str := fmt.Sprintf("transaction_%s_total:%d\n", metric, txCount)
-		if _, err = report.WriteString(str); err != nil {
-			return fmt.Errorf("unable to write transaction_count metric: %w", err)
-		}
-	}
-	str := fmt.Sprintf("transaction_%s_total:%d\n", "ALL", allTxns)
-	if _, err = report.WriteString(str); err != nil {
-		return fmt.Errorf("unable to write transaction_count metric: %w", err)
-	}
-
-	// Record a rate from one of the first data points.
-	if len(collector.Data) > 5 {
-		if err = recordDataToFile(start, collector.Data[2], "early", report); err != nil {
-			return err
-		}
-	}
-
-	// Also record the final metrics.
-	if err = recordDataToFile(start, collector.Data[len(collector.Data)-1], "final", report); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -461,7 +498,7 @@ func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFil
 	f, err := os.OpenFile(ledgerLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	util.MaybeFail(err, "unable to open ledger log file '%s'", ledgerLogFile)
 	log := logging.NewLogger()
-	log.SetLevel(logging.Warn)
+	log.SetLevel(logging.Info)
 	log.SetOutput(f)
 
 	// Start generator.
