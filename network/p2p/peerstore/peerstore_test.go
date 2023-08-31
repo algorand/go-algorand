@@ -80,7 +80,7 @@ func TestPeerstore(t *testing.T) {
 
 }
 
-func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
+func testPhonebookAll(t *testing.T, set []string, ph *PeerStore) {
 	actual := ph.GetAddresses(len(set), PhoneBookEntryRelayRole)
 	for _, got := range actual {
 		ok := false
