@@ -175,6 +175,7 @@ func (n *P2PNetwork) innerStop() {
 		if err != nil {
 			n.log.Warnf("Error closing peer %s: %v", peerID, err)
 		}
+		delete(n.wsPeers, peerID)
 	}
 	n.wsPeersLock.Unlock()
 	closeGroup.Wait()
