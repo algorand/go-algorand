@@ -409,7 +409,7 @@ func (l *Ledger) OnlineTotalStake(rnd basics.Round) (basics.MicroAlgos, error) {
 func (l *Ledger) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.ExpiredOnlineCirculation(rnd, voteRnd)
+	return l.acctsOnline.StakeExpiringBy(rnd, voteRnd)
 }
 
 // ExpiredOnlineCirculation returns the total expired stake at rnd this model produced, while
@@ -640,7 +640,7 @@ func TestOnlineAcctModelScenario(t *testing.T) {
 
 func BenchmarkExpiredOnlineCirculation(b *testing.B) {
 	// set up totalAccounts online accounts in 10k batches
-	totalAccounts := 100_000
+	totalAccounts := 10_000
 	const maxKeyregPerBlock = 10_000
 	// if TOTAL_ACCOUNTS env var set, override totalAccounts
 	if n, err := strconv.Atoi(os.Getenv("TOTAL_ACCOUNTS")); err == nil {
@@ -687,4 +687,8 @@ func BenchmarkExpiredOnlineCirculation(b *testing.B) {
 		//total, err := m.dl.validator.OnlineTotalStake(startRnd + offset)
 		//b.Log("expired circulation", startRnd+offset, startRnd+offset+320, "returned", expiredStake, "total", total)
 	}
+}
+
+func BenchmarkExpiredStakeCache(b *testing.B) {
+
 }

@@ -503,6 +503,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	}
 
 	for _, acctUpdate := range dcc.compactOnlineAccountDeltas.deltas {
+		//// f mt.Printrintf("updating %s (%d) from %d to %d \n", acctUpdate.address, acctUpdate.oldAcct.AccountData.MicroAlgos.Raw, acctUpdate.oldAcct.AccountData.VoteLastValid, acctUpdate.newAcct[0].VoteLastValid)
 		ao.expiringStakeCache.update(acctUpdate)
 	}
 	// drop entries behind our current round, as we don't need to know who has expired in the past
@@ -563,7 +564,7 @@ func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Rou
 		if rnd == 0 {
 			return totalStake, nil
 		}
-		expiredStake, err := ao.ExpiredOnlineCirculation(rnd, voteRnd)
+		expiredStake, err := ao.StakeExpiringBy(rnd, voteRnd)
 		if err != nil {
 			return basics.MicroAlgos{}, err
 		}
@@ -828,13 +829,11 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	}
 }
 
-// VoteLastValidCount returns the number of accounts that will be going offline on round r
-func (ao *onlineAccounts) VoteLastValidCount(r basics.Round) uint64 {
+// StakeExpiringBy returns the total stake that will expire in the given range of rounds
+func (ao *onlineAccounts) StakeExpiringBy(rStart, rEnd basics.Round) (basics.MicroAlgos, error) {
 	ao.accountsMu.RLock()
 	defer ao.accountsMu.RUnlock()
-	//TODO: I destroyed this function
-	// if not found, return 0
-	return 0
+	return basics.MicroAlgos{}, nil
 }
 
 // TopOnlineAccounts returns the top n online accounts, sorted by their normalized
@@ -1001,7 +1000,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 
 		// If set, return total online stake minus all future expired stake by voteRnd
 		if params.ExcludeExpiredCirculation {
-			expiredStake, err := ao.ExpiredOnlineCirculation(rnd, voteRnd)
+			expiredStake, err := ao.StakeExpiringBy(rnd, voteRnd)
 			if err != nil {
 				return nil, basics.MicroAlgos{}, err
 			}
@@ -1063,6 +1062,8 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 		rewardsParams := config.Consensus[roundParams.CurrentProtocol]
 		rewardsLevel := roundParams.RewardsLevel
 
+		//// f mt.Printrintf("rnd: %d, voteRnd: %d, currentDbRound %d, offset %d\n", rnd, voteRnd, currentDbRound, offset)
+
 		// Step 1: get all online accounts from DB for rnd
 		// Not unlocking ao.accountsMu yet, to stay consistent with Step 2
 		var dbRound basics.Round
@@ -1071,11 +1072,18 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 			if err != nil {
 				return err
 			}
-			expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams, rewardsLevel)
+			// first get dbRound to check if the requested round is at the tip of history
+			dbRound, err = ar.AccountsRound()
 			if err != nil {
 				return err
 			}
-			dbRound, err = ar.AccountsRound()
+			// if the requested round is at the tip of history, use the cache
+			// the expiring stake cache holds the expiring stake per round and account, but only holds a view of the data from the lastest db round
+			if rnd == dbRound && false {
+				expiredAccounts, err = ao.expiringStakeCache.getRange(0, voteRnd, rewardsParams, rewardsLevel)
+			} else {
+				expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams, rewardsLevel)
+			}
 			return err
 		})
 		if err != nil {
@@ -1119,6 +1127,7 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 	ao.accountsMu.RUnlock()
 	needUnlock = false
 
+	// f mt.Printrintln("expiredAccounts(acctonline)", len(expiredAccounts))
 	return expiredAccounts, nil
 }
 

@@ -19,80 +19,165 @@ package ledger
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
+// doubleIndex map uses two keys to store a value
+// when adding, it adds the value to both keys.
+// The primary data V is stored at [Ka][Kb]
+// the index Ka is also stored in a secondary map under [Kb]
+// in this way, we can retrieve V by either [Ka][Kb] or [Kb]
+// retreiving [Ka] returns a map of Kb->V
+type doubleIndexMap[Ka, Kb comparable, V any] interface {
+	add(Ka, Kb, V)
+	trim(Ka)
+	remove(Kb)
+	get(Kb) (V, bool)
+	getPrimary(Ka) (map[Kb]V, bool)
+	getSecondary(Kb) (Ka, bool)
+}
+type doubleMap[Ka, Kb comparable, V any] struct {
+	primary   map[Ka]map[Kb]V
+	secondary map[Kb]Ka
+	zeroVal   V
+}
+
+func newDoubleMap[Ka, Kb comparable, V any](zero V) doubleMap[Ka, Kb, V] {
+	return doubleMap[Ka, Kb, V]{
+		primary:   make(map[Ka]map[Kb]V),
+		secondary: make(map[Kb]Ka),
+		zeroVal:   zero,
+	}
+}
+func (d doubleMap[Ka, Kb, V]) add(ka Ka, kb Kb, v V) {
+	// f mt.Printrintln("add:", ka, kb, v)
+	if _, ok := d.primary[ka]; !ok {
+		d.primary[ka] = make(map[Kb]V)
+	}
+	d.primary[ka][kb] = v
+	d.secondary[kb] = ka
+}
+func (d doubleMap[Ka, Kb, V]) trim(ka Ka) {
+	delete(d.primary, ka)
+}
+func (d doubleMap[Ka, Kb, V]) remove(kb Kb) {
+	ka, ok := d.secondary[kb]
+	if !ok {
+		return
+	}
+	delete(d.primary[ka], kb)
+	delete(d.secondary, kb)
+}
+func (d doubleMap[Ka, Kb, V]) get(kb Kb) (V, bool) {
+	ka, ok := d.secondary[kb]
+	if !ok {
+		return d.zeroVal, false
+	}
+	return d.primary[ka][kb], true
+}
+func (d doubleMap[Ka, Kb, V]) getPrimary(ka Ka) (map[Kb]V, bool) {
+	ret, ok := d.primary[ka]
+	// f mt.Printrint("getPrimary:", ka)
+	// f mt.Printrintln(" ret:", ret)
+	return ret, ok
+}
+func (d doubleMap[Ka, Kb, V]) getSecondary(kb Kb) (Ka, bool) {
+	ret, ok := d.secondary[kb]
+	return ret, ok
+}
+func (d doubleMap[Ka, Kb, V]) String() string {
+	return fmt.Sprintf("doubleMap: primary: %v\nsecondary: %v", d.primary, d.secondary)
+}
+
 // onlineAccountAttributeCache is an interface for a cache that keeps some basic record, given onlineAccounts
+// it inittializes from the onlineAccounts persisted data (like from OnlineAccountsAll)
+// it commits updates using the onlineAccountDelta
+// when querying, it takes into account ledgercore deltas
 type onlineAccountAttributeCache[K, V any] interface {
 	init([]trackerdb.PersistedOnlineAccountData)
 	clear()
 	update(onlineAccountDelta)
-	get(K) (V, bool)
+	getRange(K, K, config.ConsensusParams, uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error)
 	trim(K)
 }
 
+// expiringStakeCache is a cache for the stake of an account at a given round
+// it uses a Key of Round, and returns a Value of MicroAlgos expiring on that round
+// it internally uses Address as a secondary key so that it can be updated with account data
 type expiringStakeCache struct {
-	trimBehind basics.Round                       // the round that we have trimmed the cache to
-	m          map[basics.Round]basics.MicroAlgos // count of addresses whos voting expires on this round
+	trimBehind basics.Round                                                    // the round that we have trimmed the cache to
+	microAlgos doubleIndexMap[basics.Round, basics.Address, basics.MicroAlgos] // round->address->stake
 }
 
-// newExpiringStakeCache is a factory function for the expiringStakeCache
 func newExpiringStakeCache() expiringStakeCache {
 	e := expiringStakeCache{}
-	e.m = make(map[basics.Round]basics.MicroAlgos)
+	e.microAlgos = newDoubleMap[basics.Round, basics.Address, basics.MicroAlgos](basics.MicroAlgos{})
 	e.trimBehind = 0
 	return e
 }
 
 func (e expiringStakeCache) init(accts []trackerdb.PersistedOnlineAccountData) {
 	for _, acct := range accts {
-		e.add(acct.AccountData.VoteLastValid, acct.AccountData.MicroAlgos)
+		e.add(acct.AccountData.VoteLastValid, acct.Addr, acct.AccountData.MicroAlgos)
 	}
 }
 
-func (e expiringStakeCache) add(r basics.Round, stake basics.MicroAlgos) {
+func (e expiringStakeCache) add(r basics.Round, addr basics.Address, stake basics.MicroAlgos) {
 	// don't do anything if the round is behind the trimBehind
 	if r < e.trimBehind {
 		return
 	}
-	// if we have not seen this round before, initialize it
-	if _, ok := e.m[r]; !ok {
-		e.m[r] = stake
-	} else {
-		e.m[r] = basics.MicroAlgos{Raw: e.m[r].ToUint64() + stake.ToUint64()}
-	}
+	e.microAlgos.add(r, addr, stake)
+	e.microAlgos.getPrimary(r)
+	// f mt.Printrintf("%p\n", &e)
 }
 
-// sub subtracts the given stake from the given round
-// the caller is expected to have already checked that the update is valid (so underflow is not checked here)
-func (e expiringStakeCache) sub(r basics.Round, stake basics.MicroAlgos) {
-	// don't do anything if the round is behind the trimBehind
-	if r < e.trimBehind {
-		return
-	}
-	// if we have not seen this round before, nothing to subtract from. Should not happen if the caller is managing updates correctly
-	if _, ok := e.m[r]; !ok {
-		return
-	} else {
-		e.m[r] = basics.MicroAlgos{Raw: e.m[r].ToUint64() - stake.ToUint64()}
-	}
+// remove takes an address and removes it from the cache
+func (e expiringStakeCache) remove(addr basics.Address) {
+	e.microAlgos.remove(addr)
 }
 
 func (e expiringStakeCache) update(ad onlineAccountDelta) {
-	old, new := ad.oldAcct.AccountData.VoteLastValid, ad.newAcct[0].VoteLastValid
-	e.sub(old, ad.oldAcct.AccountData.MicroAlgos)
-	e.add(new, ad.newAcct[0].MicroAlgos)
+	e.microAlgos.remove(ad.oldAcct.Addr)
+	// f mt.Printrintln("?????", len(ad.newAcct))
+	finalUpdate := ad.newAcct[len(ad.newAcct)-1]
+	e.microAlgos.add(finalUpdate.VoteLastValid, ad.oldAcct.Addr, finalUpdate.MicroAlgos)
+	// f mt.Printrintf("after update: %v\n", e.microAlgos)
+}
+
+func (e expiringStakeCache) getRange(rStart, rEnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
+	var expiredAccounts map[basics.Address]*ledgercore.OnlineAccountData
+	expiredAccounts = make(map[basics.Address]*ledgercore.OnlineAccountData)
+	for i := rStart; i < rEnd; i++ {
+		acctsStake, ok := e.microAlgos.getPrimary(i)
+		if ok {
+			// f mt.Printrintln("stake:", acctsStake)
+			for addr, stake := range acctsStake {
+				data := trackerdb.BaseOnlineAccountData{
+					MicroAlgos: stake,
+					BaseVotingData: trackerdb.BaseVotingData{
+						VoteLastValid: i,
+					},
+				}
+				x := data.GetOnlineAccountData(proto, rewardsLevel)
+				expiredAccounts[addr] = &x
+			}
+
+		}
+	}
+	// f mt.Printrintln("expiredAccounts:", expiredAccounts)
+	//for _, ex := range expiredAccounts {
+	//// f mt.Printrintln("ex:", ex)
+	//}
+	return expiredAccounts, nil
 }
 
 func (e expiringStakeCache) clear() {
-	e.m = nil
+	e.microAlgos = newDoubleMap[basics.Round, basics.Address, basics.MicroAlgos](basics.MicroAlgos{})
 	e.trimBehind = 0
-}
-
-func (e expiringStakeCache) get(r basics.Round) (basics.MicroAlgos, bool) {
-	ret, ok := e.m[r]
-	return ret, ok
 }
 
 func (e expiringStakeCache) trim(r basics.Round) {
@@ -102,11 +187,11 @@ func (e expiringStakeCache) trim(r basics.Round) {
 	}
 	// otherwise, remove all entries older than vLast
 	for i := e.trimBehind; i < r; i++ {
-		delete(e.m, i)
+		e.microAlgos.trim(i)
 	}
 	e.trimBehind = r
 }
 
 func (e expiringStakeCache) String() string {
-	return fmt.Sprintf("expiringStakeCache: trimBehind: %d, m: %v", e.trimBehind, e.m)
+	return fmt.Sprintf("expiringStakeCache: trimBehind: %d, microalgos: %v", e.trimBehind, e.microAlgos)
 }
