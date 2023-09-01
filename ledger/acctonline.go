@@ -503,7 +503,6 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	}
 
 	for _, acctUpdate := range dcc.compactOnlineAccountDeltas.deltas {
-		//// f mt.Printrintf("updating %s (%d) from %d to %d \n", acctUpdate.address, acctUpdate.oldAcct.AccountData.MicroAlgos.Raw, acctUpdate.oldAcct.AccountData.VoteLastValid, acctUpdate.newAcct[0].VoteLastValid)
 		ao.expiringStakeCache.update(acctUpdate)
 	}
 	// drop entries behind our current round, as we don't need to know who has expired in the past
@@ -564,7 +563,7 @@ func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Rou
 		if rnd == 0 {
 			return totalStake, nil
 		}
-		expiredStake, err := ao.StakeExpiringBy(rnd, voteRnd)
+		expiredStake, err := ao.ExpiredOnlineCirculation(rnd, voteRnd)
 		if err != nil {
 			return basics.MicroAlgos{}, err
 		}
@@ -829,13 +828,6 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 	}
 }
 
-// StakeExpiringBy returns the total stake that will expire in the given range of rounds
-func (ao *onlineAccounts) StakeExpiringBy(rStart, rEnd basics.Round) (basics.MicroAlgos, error) {
-	ao.accountsMu.RLock()
-	defer ao.accountsMu.RUnlock()
-	return basics.MicroAlgos{}, nil
-}
-
 // TopOnlineAccounts returns the top n online accounts, sorted by their normalized
 // balance and address, whose voting keys are valid in voteRnd.
 // The second return value represents the total stake that is online for round == rnd, but will
@@ -1000,7 +992,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 
 		// If set, return total online stake minus all future expired stake by voteRnd
 		if params.ExcludeExpiredCirculation {
-			expiredStake, err := ao.StakeExpiringBy(rnd, voteRnd)
+			expiredStake, err := ao.ExpiredOnlineCirculation(rnd, voteRnd)
 			if err != nil {
 				return nil, basics.MicroAlgos{}, err
 			}
@@ -1031,7 +1023,15 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 	}
 }
 
-func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
+// onlineAcctsExpiredByRound returns the online accounts that expired by the given round, and their account data (with a focus on stake with rewards)
+// it takes the following arguments
+// rnd: the last round for updates to the online accounts (our "perspective" of the online accounts is based on round `rnd`)
+// voteRnd: the round by which an account would need to expire by to be included in the returned map
+// noCache: if true, the expiring stake cache will not be used, even if the requested round is the latest round in the database
+// performance tip: if `rnd` is equal to the latest round in the database, this method will not hit the database and will instead use the expiring stake cache.
+// the expiring stake cache is a cache of the expiring stake per round and account, but only holds a view of the data from the lastest db round
+// returns a map of address to online account data, with rewards applied
+func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round, noCache bool) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
 	needUnlock := false
 	defer func() {
 		if needUnlock {
@@ -1062,8 +1062,6 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 		rewardsParams := config.Consensus[roundParams.CurrentProtocol]
 		rewardsLevel := roundParams.RewardsLevel
 
-		//// f mt.Printrintf("rnd: %d, voteRnd: %d, currentDbRound %d, offset %d\n", rnd, voteRnd, currentDbRound, offset)
-
 		// Step 1: get all online accounts from DB for rnd
 		// Not unlocking ao.accountsMu yet, to stay consistent with Step 2
 		var dbRound basics.Round
@@ -1077,10 +1075,9 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 			if err != nil {
 				return err
 			}
-			// if the requested round is at the tip of history, use the cache
-			// the expiring stake cache holds the expiring stake per round and account, but only holds a view of the data from the lastest db round
-			if rnd == dbRound && false {
-				expiredAccounts, err = ao.expiringStakeCache.getRange(0, voteRnd, rewardsParams, rewardsLevel)
+			// if the requested round is what the db is updated to, use the cache instead of hitting the db
+			if rnd == dbRound && !noCache {
+				expiredAccounts = ao.expiringStakeCache.getRange(0, voteRnd, rewardsParams, rewardsLevel)
 			} else {
 				expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams, rewardsLevel)
 			}
@@ -1127,14 +1124,31 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 	ao.accountsMu.RUnlock()
 	needUnlock = false
 
-	// f mt.Printrintln("expiredAccounts(acctonline)", len(expiredAccounts))
 	return expiredAccounts, nil
 }
 
 // ExpiredOnlineCirculation returns the total online stake for accounts with participation keys registered
 // at round `rnd` that are expired by round `voteRnd`.
 func (ao *onlineAccounts) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
-	expiredAccounts, err := ao.onlineAcctsExpiredByRound(rnd, voteRnd)
+	expiredAccounts, err := ao.onlineAcctsExpiredByRound(rnd, voteRnd, false)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	ot := basics.OverflowTracker{}
+	expiredStake := basics.MicroAlgos{}
+	for _, d := range expiredAccounts {
+		expiredStake = ot.AddA(expiredStake, d.MicroAlgosWithRewards)
+		if ot.Overflowed {
+			return basics.MicroAlgos{}, fmt.Errorf("ExpiredOnlineCirculation: overflow totaling expired stake")
+		}
+	}
+	return expiredStake, nil
+}
+
+// expiredOnlineCirculation_skipCache returns the total online stake for accounts expiring by round `voteRnd`
+// this is a test-only method that skips the expiring stake cache, to confirm `onlineAccountsExpiredByRound` returns correctly regardles of cache
+func (ao *onlineAccounts) expiredOnlineCirculation_skipCache(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	expiredAccounts, err := ao.onlineAcctsExpiredByRound(rnd, voteRnd, true)
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}

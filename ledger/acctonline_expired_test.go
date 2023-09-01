@@ -409,7 +409,7 @@ func (l *Ledger) OnlineTotalStake(rnd basics.Round) (basics.MicroAlgos, error) {
 func (l *Ledger) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.StakeExpiringBy(rnd, voteRnd)
+	return l.acctsOnline.ExpiredOnlineCirculation(rnd, voteRnd)
 }
 
 // ExpiredOnlineCirculation returns the total expired stake at rnd this model produced, while

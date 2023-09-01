@@ -1879,7 +1879,6 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	algops := MicroAlgoOperations{a: a}
-	loops := 0
 
 	// powInt is a helper function to calculate powers of uint64
 	powInt := func(x, y uint64) uint64 {
@@ -2013,11 +2012,6 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	const dbRoundsToCommit = 2
 	for dbCombo := uint64(0); dbCombo < powInt(uint64(len(dbStates)), dbRoundsToCommit); dbCombo++ {
 		for deltaCombo := uint64(0); deltaCombo < powInt(uint64(len(deltaStates)), conf.MaxAcctLookback); deltaCombo++ {
-			loops += 1
-			if loops < 150 {
-				//continue
-			}
-			// f mt.Print("-------------------start-------------------\n")
 
 			var stateA acctState
 			var stateB acctState
@@ -2028,7 +2022,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			ternDelta := strconv.FormatUint(deltaCombo, 3)
 			ternDelta = fmt.Sprintf("%0*s", conf.MaxAcctLookback, ternDelta)
 			// uncomment for debugging
-			// f mt.Printf("db=%d|delta=%d <==> older->%s<-db top | first->%s<-last\n", dbCombo, deltaCombo, ternDb, ternDelta)
+			// fmt.Printf("db=%d|delta=%d <==> older->%s<-db top | first->%s<-last\n", dbCombo, deltaCombo, ternDb, ternDelta)
 
 			targetVoteRnd := rnd +
 				basics.Round(conf.MaxAcctLookback) /* all deltas */ +
@@ -2050,23 +2044,17 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 				switch dbState(d) {
 				case dbOffline:
 					updates.Upsert(addrA, statesA[acctStateOffline])
-					// f mt.Println("addrA offline")
 					updates.Upsert(addrB, statesB[acctStateOffline])
-					// f mt.Println("addrB offline")
 				case dbOnline:
 					updates.Upsert(addrA, statesA[acctStateOnline])
-					// f mt.Println("addrA online")
 					updates.Upsert(addrB, statesB[acctStateOnline])
-					// f mt.Println("addrB online")
 				case dbOnlineExpired:
 					state := statesA[acctStateOnline]
 					state.VoteLastValid = targetVoteRnd - 1
 					updates.Upsert(addrA, state)
-					// f mt.Println("addrA to expire", state.VoteLastValid)
 					state = statesB[acctStateOnline]
 					state.VoteLastValid = targetVoteRnd - 1
 					updates.Upsert(addrB, state)
-					// f mt.Println("addrB to expire", state.VoteLastValid)
 				default:
 					a.Fail("unknown db state")
 				}
@@ -2167,15 +2155,13 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			a.Error(err)
 			a.Contains(err.Error(), fmt.Sprintf("round %d too high", rnd))
 			expiredStake, err := oa.ExpiredOnlineCirculation(rnd-1, targetVoteRnd)
-			// f mt.Println("\ni:", loops)
-			// f mt.Println("from:", rnd-1, "to:", targetVoteRnd)
-			// f mt.Println("expired:", expiredStake)
 			a.NoError(err)
 			a.Equal(expectedExpiredStake, expiredStake)
 			// because this test only checks the expired stake at the tip of history (i.e. the last round),
-			// we can also test that the expired stake cache also has the same value
-
-			// f mt.Print("------------------- end -------------------\n")
+			// we can also test that the expired stake cache also has the same value by using the test-only function which skips the cache
+			expiredStake_noCache, err := oa.expiredOnlineCirculation_skipCache(rnd-1, targetVoteRnd)
+			a.NoError(err)
+			a.Equal(expectedExpiredStake, expiredStake_noCache)
 
 			// restore the original state of accounts A and B
 			updates := ledgercore.AccountDeltas{}
@@ -2301,9 +2287,13 @@ func TestAcctOnline_OnlineAcctsExpiredByRound(t *testing.T) {
 
 	// but still available for lookup via onlineAcctsExpiredByRound
 	// f mt.Println(targetRound, targetRound+10)
-	expAccts, err := oa.onlineAcctsExpiredByRound(targetRound, targetRound+10)
+	// allow the cache to be optinally used, but this test won't use it
+	expAccts, err := oa.onlineAcctsExpiredByRound(targetRound, targetRound+10, false)
 	require.NoError(t, err)
 	require.Len(t, expAccts, numExpiredAccts)
+	expAccts_noCache, err := oa.onlineAcctsExpiredByRound(targetRound, targetRound+10, true)
+	require.NoError(t, err)
+	require.Len(t, expAccts_noCache, numExpiredAccts)
 
 	var expiredStake basics.MicroAlgos
 	for _, expAcct := range expAccts {

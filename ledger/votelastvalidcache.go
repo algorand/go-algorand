@@ -100,7 +100,7 @@ type onlineAccountAttributeCache[K, V any] interface {
 	init([]trackerdb.PersistedOnlineAccountData)
 	clear()
 	update(onlineAccountDelta)
-	getRange(K, K, config.ConsensusParams, uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error)
+	getRange(K, K, config.ConsensusParams, uint64) map[basics.Address]*ledgercore.OnlineAccountData
 	trim(K)
 }
 
@@ -148,13 +148,12 @@ func (e expiringStakeCache) update(ad onlineAccountDelta) {
 	// f mt.Printrintf("after update: %v\n", e.microAlgos)
 }
 
-func (e expiringStakeCache) getRange(rStart, rEnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
+func (e expiringStakeCache) getRange(rStart, rEnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) map[basics.Address]*ledgercore.OnlineAccountData {
 	var expiredAccounts map[basics.Address]*ledgercore.OnlineAccountData
 	expiredAccounts = make(map[basics.Address]*ledgercore.OnlineAccountData)
 	for i := rStart; i < rEnd; i++ {
 		acctsStake, ok := e.microAlgos.getPrimary(i)
 		if ok {
-			// f mt.Printrintln("stake:", acctsStake)
 			for addr, stake := range acctsStake {
 				data := trackerdb.BaseOnlineAccountData{
 					MicroAlgos: stake,
@@ -168,11 +167,7 @@ func (e expiringStakeCache) getRange(rStart, rEnd basics.Round, proto config.Con
 
 		}
 	}
-	// f mt.Printrintln("expiredAccounts:", expiredAccounts)
-	//for _, ex := range expiredAccounts {
-	//// f mt.Printrintln("ex:", ex)
-	//}
-	return expiredAccounts, nil
+	return expiredAccounts
 }
 
 func (e expiringStakeCache) clear() {
