@@ -77,7 +77,7 @@ func (c *CapabilitiesDiscovery) Host() host.Host {
 
 // AddPeer adds a given peer.AddrInfo to the Host's Peerstore, and the DHT's routing table
 func (c *CapabilitiesDiscovery) AddPeer(p peer.AddrInfo) (bool, error) {
-	c.Host().Peerstore().AddAddrs(p.ID, p.Addrs, libpeerstore.TempAddrTTL)
+	c.Host().Peerstore().AddAddrs(p.ID, p.Addrs, libpeerstore.AddressTTL)
 	return c.dht.RoutingTable().TryAddPeer(p.ID, true, true)
 }
 
