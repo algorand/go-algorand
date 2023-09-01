@@ -424,9 +424,14 @@ type readLowestEvent struct {
 
 	// Vote holds the lowest-credential vote.
 	Vote vote
+	// LowestAfterFreeze holds the lowest-credential vote that was received, including
+	// after Vote has been frozen.
+	LowestAfterFreeze vote
 
-	// Filled indicates whether the Vote field is filled
-	Filled bool
+	// Filled and HasLowestAfterFreeze indicates whether the Vote or LowestAfterFreeze
+	// fields are filled, respectively.
+	Filled               bool
+	HasLowestAfterFreeze bool
 }
 
 func (e readLowestEvent) t() eventType {
