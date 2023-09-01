@@ -244,6 +244,25 @@ func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
 
 }
 
+func TestBatchVerifyOneTimeSignaturesAllPass(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vTasks := make([]*SigVerificationTask, 0, 16)
+
+	for x := 0; x < 16; x++ {
+		c := GenerateOneTimeSignatureSecrets(0, 1000)
+		id := randID()
+		s := randString()
+		v := c.OneTimeSignatureVerifier
+		sig := c.Sign(id, s)
+		vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s, Sig: &sig})
+	}
+	results := BatchVerifyOneTimeSignatures(vTasks)
+	for x := 0; x < 16; x++ {
+		require.False(t, results[x], "correct signature failed to verify (ephemeral)")
+	}
+}
+
 func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
 	for _, enabled := range []bool{false, true} {
 		b.Run(fmt.Sprintf("batch=%v", enabled), func(b *testing.B) {

@@ -409,8 +409,7 @@ func TestAsyncQuitLong(t *testing.T) {
 	}
 	wg.Wait()
 	// Since cannot be sure about the last vote when the ctx was done, we allow a difference of 1
-	require.Less(t, sent-received, 1)
-
+	require.LessOrEqual(t, sent-received, 1)
 }
 
 func makeTestService(ledger Ledger, t *testing.T) (*Service, error) {
@@ -432,4 +431,59 @@ func makeTestService(ledger Ledger, t *testing.T) (*Service, error) {
 		Clock:        clock,
 	}
 	return MakeService(params)
+}
+
+// TestAsyncQuitStreamFlush stops the verifier service while sending verification votes to it
+// No results should be lost after they are accepted by verifyEqVote. If any is dropped, avv.wg.Wait() will wait forever.
+// This test focuses on votes in the verifier batch when the context is cancled.
+func TestAsyncQuitStreamFlush(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	sent := 0
+	received := 0
+
+	errChan := make(chan error)
+	ledger, votes, eqVotes, _, _ := generateTestVotes(false, errChan, 1, 1, 0.0)
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	// flush the output chan
+	outChan := make(chan asyncVerifyVoteResponse, 4)
+	go func() {
+		defer wg.Done()
+		for range outChan {
+			received++
+		}
+		return
+	}()
+
+	voteVerifier := MakeStartAsyncVoteVerifier(nil)
+	go func() {
+		x := 0
+		defer wg.Done()
+		for {
+			if x%2 == 0 {
+				voteVerifier.verifyVote(context.Background(), ledger, *votes[0].uv, uint64(votes[0].id), message{}, outChan)
+			} else {
+				voteVerifier.verifyEqVote(context.Background(), ledger, *eqVotes[0].uev, uint64(votes[0].id), message{}, outChan)
+			}
+			sent++
+			select {
+			case <-voteVerifier.workerWaitCh:
+				return
+			default:
+			}
+			x++
+		}
+	}()
+	time.Sleep(100 * time.Millisecond)
+	// the test passes if the wg in Quit does not wait forever
+	voteVerifier.Quit()
+	// noone should be writing to outChan after Quit
+	close(outChan)
+	wg.Wait()
+	// This will not be equal because the votes will be silently dropped in verifyVote
+	require.GreaterOrEqual(t, sent, received)
 }

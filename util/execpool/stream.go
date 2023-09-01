@@ -164,7 +164,14 @@ func (sv *StreamToBatch) batchingLoop() {
 				numberOfBatchAttempts++
 			}
 		case <-sv.ctx.Done():
-			return
+			for {
+				select {
+				case job := <-sv.inputChan:
+					uJobs = append(uJobs, job)
+				default:
+					return
+				}
+			}
 		}
 	}
 }
