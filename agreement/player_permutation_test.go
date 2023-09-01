@@ -467,21 +467,18 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		}
 	case playerNextRound:
 		switch eventN {
-		case proposeVotePresentEventSamePeriod:
-			if p > 0 {
-				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
-			} else {
-				requireActionCount(t, trace, 1, playerN, eventN)
-				expectVerify(t, trace, "Player should verify period 0 msg from past rounds, player: %v, event: %v", playerN, eventN)
-			}
 		case proposeVoteVerifiedEventSamePeriod:
+			// This case should never happen -- player is on R+1 and the voteVerified event is for R.
+			// Player will not queue up a verifyVoteAction for this vote (without DynamicFilterTimeout enabled).
+			// We are asserting the relay behavior player currently implements, but it is not possible given current
+			// code -- you would have filtered the votePresent for this vote.
 			if p > 0 {
 				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
 			} else {
 				requireActionCount(t, trace, 1, playerN, eventN)
 				expectRelay(t, trace, "Player should relay period 0 msg from past rounds, player: %v, event: %v", playerN, eventN)
 			}
-		case softVoteVerifiedEventSamePeriod, softVotePresentEventSamePeriod, proposeVoteVerifiedEventNextPeriod, payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle, bundleVerifiedEventSamePeriod, bundlePresentEventSamePeriod:
+		case proposeVotePresentEventSamePeriod, softVoteVerifiedEventSamePeriod, softVotePresentEventSamePeriod, proposeVoteVerifiedEventNextPeriod, payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle, bundleVerifiedEventSamePeriod, bundlePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
 		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:
