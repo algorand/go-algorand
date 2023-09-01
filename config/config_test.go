@@ -803,3 +803,113 @@ func TestResolveLogPaths(t *testing.T) {
 	require.Equal(t, "mycoolLogDir/node.log", log)
 	require.Equal(t, "myCoolLogArchive/node.archive.log", archive)
 }
+
+func TestStoresCatchpoints(t *testing.T) {
+	var tests = []struct {
+		name               string
+		catchpointTracking int64
+		catchpointInterval uint64
+		archival           bool
+		expected           bool
+	}{
+		{
+			name:               "-1 w/ no catchpoint interval expects false",
+			catchpointTracking: -1,
+			catchpointInterval: 0,
+			expected:           false,
+		},
+		{
+			name:               "-1 expects false",
+			catchpointTracking: -1,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "0 expects false",
+			catchpointTracking: 0,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "0 w/ archival expects true",
+			catchpointTracking: 0,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           true,
+			expected:           true,
+		},
+		{
+			name:               "0 w/ archival & catchpointInterval=0 expects false",
+			catchpointTracking: 0,
+			catchpointInterval: 0,
+			archival:           true,
+			expected:           false,
+		},
+		{
+			name:               "1 expects false",
+			catchpointTracking: 1,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "1 w/ archival expects true",
+			catchpointTracking: 1,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           true,
+			expected:           true,
+		},
+		{
+			name:               "1 w/ archival & catchpointInterval=0 expects false",
+			catchpointTracking: 1,
+			catchpointInterval: 0,
+			archival:           true,
+			expected:           false,
+		},
+		{
+			name:               "2 w/ catchpointInterval=0 expects false",
+			catchpointTracking: 2,
+			catchpointInterval: 0,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "2 expects true",
+			catchpointTracking: 2,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           true,
+		},
+		{
+			name:               "ForceCatchpointFileGenerationTrackingMode expects true",
+			catchpointTracking: ForceCatchpointFileGenerationTrackingMode,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           true,
+		},
+		{
+			name:               "ForceCatchpointFileGenerationTrackingMode w/ catchpointInterval=0 expects false",
+			catchpointTracking: ForceCatchpointFileGenerationTrackingMode,
+			catchpointInterval: 0,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "27 expects false",
+			catchpointTracking: 27,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := GetDefaultLocal()
+			cfg.CatchpointTracking = test.catchpointTracking
+			cfg.CatchpointInterval = test.catchpointInterval
+			cfg.Archival = test.archival
+			require.Equal(t, test.expected, cfg.StoresCatchpoints())
+		})
+	}
+}

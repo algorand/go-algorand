@@ -862,3 +862,26 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 
 	return true
 }
+
+// StoresCatchpoints returns true if the node is configured to store catchpoints
+func (cfg *Local) StoresCatchpoints() bool {
+	switch cfg.CatchpointTracking {
+	case -1:
+		// No catchpoints.
+	default:
+		fallthrough
+	case 0, 1:
+		if cfg.Archival && (cfg.CatchpointInterval > 0) {
+			return true
+		}
+	case 2:
+		if cfg.CatchpointInterval > 0 {
+			return true
+		}
+	case ForceCatchpointFileGenerationTrackingMode:
+		if cfg.CatchpointInterval > 0 {
+			return true
+		}
+	}
+	return false
+}
