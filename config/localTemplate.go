@@ -885,3 +885,14 @@ func (cfg *Local) StoresCatchpoints() bool {
 	}
 	return false
 }
+
+// TracksCatchpoints returns true if the node is configured to track catchpoints
+func (cfg *Local) TracksCatchpoints() bool {
+	if cfg.StoresCatchpoints() {
+		return true
+	}
+	if cfg.CatchpointTracking == 1 && cfg.CatchpointInterval > 0 {
+		return true
+	}
+	return false
+}

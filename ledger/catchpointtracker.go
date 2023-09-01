@@ -163,10 +163,10 @@ func (ct *catchpointTracker) initialize(cfg config.Local, paths DirsAndPrefix) {
 	// the temp file uses the hot data directories
 	ct.tmpDir = paths.HotGenesisDir
 
-	if cfg.StoresCatchpoints() {
+	if cfg.TracksCatchpoints() {
 		ct.catchpointInterval = cfg.CatchpointInterval
-		ct.enableGeneratingCatchpointFiles = true
 	}
+	ct.enableGeneratingCatchpointFiles = cfg.StoresCatchpoints()
 	ct.forceCatchpointFileWriting = cfg.CatchpointTracking == config.ForceCatchpointFileGenerationTrackingMode
 
 	ct.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength

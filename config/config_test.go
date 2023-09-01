@@ -910,6 +910,18 @@ func TestStoresCatchpoints(t *testing.T) {
 			cfg.CatchpointInterval = test.catchpointInterval
 			cfg.Archival = test.archival
 			require.Equal(t, test.expected, cfg.StoresCatchpoints())
+			if cfg.StoresCatchpoints() {
+				require.Equal(t, true, cfg.TracksCatchpoints())
+			}
 		})
 	}
+}
+
+func TestTracksCatchpointsWithoutStoring(t *testing.T) {
+	cfg := GetDefaultLocal()
+	cfg.CatchpointTracking = 1
+	cfg.CatchpointInterval = 10000
+	cfg.Archival = false
+	require.Equal(t, true, cfg.TracksCatchpoints())
+	require.Equal(t, false, cfg.StoresCatchpoints())
 }
