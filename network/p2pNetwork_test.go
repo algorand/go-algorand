@@ -300,5 +300,5 @@ func TestP2PNetworkAddress(t *testing.T) {
 	mockService.id = "invalid peer ID" // this won't parse and encode properly
 	retAddr, ok = netA.Address()
 	require.False(t, ok)
-	require.Empty(t, ok)
+	require.Empty(t, retAddr)
 }
