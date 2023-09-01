@@ -278,7 +278,8 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 // updateCredentialArrivalHistory is called at the end of a successful
 // uninterrupted round (just after ensureAction is generated) to collect
 // credential arrival times to dynamically set the filter timeout.
-// It returns the time of the lowest credential's arrival, if one was
+// It returns the time of the lowest credential's arrival from
+// credentialRoundLag rounds ago, if one was
 // collected and added to lowestCredentialArrivals, or zero otherwise.
 func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.ConsensusVersion) time.Duration {
 	if p.Period != 0 {
