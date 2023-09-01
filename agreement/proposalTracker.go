@@ -41,7 +41,8 @@ type proposalSeeker struct {
 }
 
 // accept compares a given vote with the current lowest-credentialled vote and
-// sets it if freeze has not been called.
+// sets it if freeze has not been called. Returns true if any internal proposalSeeker
+// state has been updated, whether to Lowest or lowestAfterFreeze.
 func (s proposalSeeker) accept(v vote) (proposalSeeker, bool, error) {
 	if s.Frozen {
 		updated := false
