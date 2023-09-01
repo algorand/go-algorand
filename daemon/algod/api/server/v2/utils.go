@@ -26,11 +26,15 @@ import (
 
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -67,11 +71,42 @@ func notImplemented(ctx echo.Context, internal error, external string, log loggi
 	return returnError(ctx, http.StatusNotImplemented, internal, external, log)
 }
 
+func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
+	output := make([]Y, len(input))
+	for i := range input {
+		output[i] = fn(input[i])
+	}
+	return output
+}
+
+func uint64Slice[T ~uint64](s []T) []uint64 {
+	return convertSlice(s, func(t T) uint64 { return uint64(t) })
+}
+
+func stringSlice[T fmt.Stringer](s []T) []string {
+	return convertSlice(s, func(t T) string { return t.String() })
+}
+
+func sliceOrNil[T any](s []T) *[]T {
+	if len(s) == 0 {
+		return nil
+	}
+	return &s
+}
+
 func addrOrNil(addr basics.Address) *string {
 	if addr.IsZero() {
 		return nil
 	}
 	ret := addr.String()
+	return &ret
+}
+
+func digestOrNil(digest crypto.Digest) *[]byte {
+	if digest.IsZero() {
+		return nil
+	}
+	ret := digest.ToSlice()
 	return &ret
 }
 
@@ -84,18 +119,12 @@ func omitEmpty[T comparable](val T) *T {
 	return &val
 }
 
-func byteOrNil(data []byte) *[]byte {
-	if len(data) == 0 {
-		return nil
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
 	}
-	return &data
-}
-
-func nilToZero(numPtr *uint64) uint64 {
-	if numPtr == nil {
-		return 0
-	}
-	return *numPtr
+	return *valPtr
 }
 
 func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
@@ -346,92 +375,122 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	return response
 }
 
-func convertScratchChanges(scratchChanges []simulation.ScratchChange) *[]model.ScratchChange {
-	if len(scratchChanges) == 0 {
-		return nil
+func convertToAVMValue(tv basics.TealValue) model.AvmValue {
+	return model.AvmValue{
+		Type:  uint64(tv.Type),
+		Uint:  omitEmpty(tv.Uint),
+		Bytes: sliceOrNil([]byte(tv.Bytes)),
 	}
-	modelSC := make([]model.ScratchChange, len(scratchChanges))
-	for i, scratchChange := range scratchChanges {
-		modelSC[i] = model.ScratchChange{
-			Slot: scratchChange.Slot,
-			NewValue: model.AvmValue{
-				Type:  uint64(scratchChange.NewValue.Type),
-				Uint:  omitEmpty(scratchChange.NewValue.Uint),
-				Bytes: byteOrNil([]byte(scratchChange.NewValue.Bytes)),
-			},
-		}
-	}
-	return &modelSC
 }
 
-func convertTealValueSliceToModel(tvs []basics.TealValue) *[]model.AvmValue {
-	if len(tvs) == 0 {
-		return nil
+func convertScratchChange(scratchChange simulation.ScratchChange) model.ScratchChange {
+	return model.ScratchChange{
+		Slot:     scratchChange.Slot,
+		NewValue: convertToAVMValue(scratchChange.NewValue),
 	}
-	modelTvs := make([]model.AvmValue, len(tvs))
-	for i := range tvs {
-		modelTvs[i] = model.AvmValue{
-			Type:  uint64(tvs[i].Type),
-			Uint:  omitEmpty(tvs[i].Uint),
-			Bytes: byteOrNil([]byte(tvs[i].Bytes)),
-		}
-	}
-	return &modelTvs
 }
 
-func convertProgramTrace(programTrace []simulation.OpcodeTraceUnit) *[]model.SimulationOpcodeTraceUnit {
-	if len(programTrace) == 0 {
-		return nil
+func convertApplicationState(stateEnum logic.AppStateEnum) string {
+	switch stateEnum {
+	case logic.LocalState:
+		return "l"
+	case logic.GlobalState:
+		return "g"
+	case logic.BoxState:
+		return "b"
+	default:
+		return ""
 	}
-	modelProgramTrace := make([]model.SimulationOpcodeTraceUnit, len(programTrace))
-	for i := range programTrace {
-		var spawnedInnersPtr *[]uint64
-		if len(programTrace[i].SpawnedInners) > 0 {
-			spawnedInners := make([]uint64, len(programTrace[i].SpawnedInners))
-			for j, innerIndex := range programTrace[i].SpawnedInners {
-				spawnedInners[j] = uint64(innerIndex)
-			}
-			spawnedInnersPtr = &spawnedInners
-		}
-		modelProgramTrace[i] = model.SimulationOpcodeTraceUnit{
-			Pc:             programTrace[i].PC,
-			SpawnedInners:  spawnedInnersPtr,
-			StackAdditions: convertTealValueSliceToModel(programTrace[i].StackAdded),
-			StackPopCount:  omitEmpty(programTrace[i].StackPopCount),
-			ScratchChanges: convertScratchChanges(programTrace[i].ScratchSlotChanges),
-		}
+}
+
+func convertApplicationStateOperation(opEnum logic.AppStateOpEnum) string {
+	switch opEnum {
+	case logic.AppStateWrite:
+		return "w"
+	case logic.AppStateDelete:
+		return "d"
+	default:
+		return ""
 	}
-	return &modelProgramTrace
+}
+
+func convertApplicationStateChange(stateChange simulation.StateOperation) model.ApplicationStateOperation {
+	return model.ApplicationStateOperation{
+		Key:          []byte(stateChange.Key),
+		NewValue:     omitEmpty(convertToAVMValue(stateChange.NewValue)),
+		Operation:    convertApplicationStateOperation(stateChange.AppStateOp),
+		AppStateType: convertApplicationState(stateChange.AppState),
+		Account:      addrOrNil(stateChange.Account),
+	}
+}
+
+func convertOpcodeTraceUnit(opcodeTraceUnit simulation.OpcodeTraceUnit) model.SimulationOpcodeTraceUnit {
+	return model.SimulationOpcodeTraceUnit{
+		Pc:             opcodeTraceUnit.PC,
+		SpawnedInners:  sliceOrNil(convertSlice(opcodeTraceUnit.SpawnedInners, func(v int) uint64 { return uint64(v) })),
+		StackAdditions: sliceOrNil(convertSlice(opcodeTraceUnit.StackAdded, convertToAVMValue)),
+		StackPopCount:  omitEmpty(opcodeTraceUnit.StackPopCount),
+		ScratchChanges: sliceOrNil(convertSlice(opcodeTraceUnit.ScratchSlotChanges, convertScratchChange)),
+		StateChanges:   sliceOrNil(convertSlice(opcodeTraceUnit.StateChanges, convertApplicationStateChange)),
+	}
 }
 
 func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTransactionExecTrace {
 	if txnTrace == nil {
 		return nil
 	}
-
-	execTraceModel := model.SimulationTransactionExecTrace{
-		ApprovalProgramTrace:   convertProgramTrace(txnTrace.ApprovalProgramTrace),
-		ClearStateProgramTrace: convertProgramTrace(txnTrace.ClearStateProgramTrace),
-		LogicSigTrace:          convertProgramTrace(txnTrace.LogicSigTrace),
+	return &model.SimulationTransactionExecTrace{
+		ApprovalProgramTrace:   sliceOrNil(convertSlice(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
+		ApprovalProgramHash:    digestOrNil(txnTrace.ApprovalProgramHash),
+		ClearStateProgramTrace: sliceOrNil(convertSlice(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
+		ClearStateProgramHash:  digestOrNil(txnTrace.ClearStateProgramHash),
+		LogicSigTrace:          sliceOrNil(convertSlice(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
+		LogicSigHash:           digestOrNil(txnTrace.LogicSigHash),
+		InnerTrace: sliceOrNil(convertSlice(txnTrace.InnerTraces,
+			func(trace simulation.TransactionTrace) model.SimulationTransactionExecTrace {
+				return *convertTxnTrace(&trace)
+			}),
+		),
 	}
-
-	if len(txnTrace.InnerTraces) > 0 {
-		innerTraces := make([]model.SimulationTransactionExecTrace, len(txnTrace.InnerTraces))
-		for i := range txnTrace.InnerTraces {
-			innerTraces[i] = *convertTxnTrace(&txnTrace.InnerTraces[i])
-		}
-		execTraceModel.InnerTrace = &innerTraces
-	}
-
-	return &execTraceModel
 }
 
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	return PreEncodedSimulateTxnResult{
-		Txn:                    ConvertInnerTxn(&txnResult.Txn),
-		AppBudgetConsumed:      omitEmpty(txnResult.AppBudgetConsumed),
-		LogicSigBudgetConsumed: omitEmpty(txnResult.LogicSigBudgetConsumed),
-		TransactionTrace:       convertTxnTrace(txnResult.Trace),
+		Txn:                      ConvertInnerTxn(&txnResult.Txn),
+		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
+		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
+		TransactionTrace:         convertTxnTrace(txnResult.Trace),
+		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
+	}
+}
+
+func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *model.SimulateUnnamedResourcesAccessed {
+	if resources == nil {
+		return nil
+	}
+	return &model.SimulateUnnamedResourcesAccessed{
+		Accounts: sliceOrNil(stringSlice(maps.Keys(resources.Accounts))),
+		Assets:   sliceOrNil(uint64Slice(maps.Keys(resources.Assets))),
+		Apps:     sliceOrNil(uint64Slice(maps.Keys(resources.Apps))),
+		Boxes: sliceOrNil(convertSlice(maps.Keys(resources.Boxes), func(box logic.BoxRef) model.BoxReference {
+			return model.BoxReference{
+				App:  uint64(box.App),
+				Name: []byte(box.Name),
+			}
+		})),
+		ExtraBoxRefs: omitEmpty(uint64(resources.NumEmptyBoxRefs)),
+		AssetHoldings: sliceOrNil(convertSlice(maps.Keys(resources.AssetHoldings), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
+			return model.AssetHoldingReference{
+				Account: holding.Address.String(),
+				Asset:   uint64(holding.Asset),
+			}
+		})),
+		AppLocals: sliceOrNil(convertSlice(maps.Keys(resources.AppLocals), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
+			return model.ApplicationLocalReference{
+				Account: local.Address.String(),
+				App:     uint64(local.App),
+			}
+		})),
 	}
 }
 
@@ -442,10 +501,11 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	}
 
 	encoded := PreEncodedSimulateTxnGroupResult{
-		Txns:              txnResults,
-		FailureMessage:    omitEmpty(txnGroupResult.FailureMessage),
-		AppBudgetAdded:    omitEmpty(txnGroupResult.AppBudgetAdded),
-		AppBudgetConsumed: omitEmpty(txnGroupResult.AppBudgetConsumed),
+		Txns:                     txnResults,
+		FailureMessage:           omitEmpty(txnGroupResult.FailureMessage),
+		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
+		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
+		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
@@ -460,10 +520,11 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
-			AllowEmptySignatures: omitEmpty(result.EvalOverrides.AllowEmptySignatures),
-			MaxLogSize:           result.EvalOverrides.MaxLogSize,
-			MaxLogCalls:          result.EvalOverrides.MaxLogCalls,
-			ExtraOpcodeBudget:    omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
+			AllowEmptySignatures:  omitEmpty(result.EvalOverrides.AllowEmptySignatures),
+			AllowUnnamedResources: omitEmpty(result.EvalOverrides.AllowUnnamedResources),
+			MaxLogSize:            result.EvalOverrides.MaxLogSize,
+			MaxLogCalls:           result.EvalOverrides.MaxLogCalls,
+			ExtraOpcodeBudget:     omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
 		}
 	}
 
@@ -488,11 +549,12 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		txnGroups[i] = txnGroup.Txns
 	}
 	return simulation.Request{
-		TxnGroups:            txnGroups,
-		AllowEmptySignatures: request.AllowEmptySignatures,
-		AllowMoreLogging:     request.AllowMoreLogging,
-		ExtraOpcodeBudget:    request.ExtraOpcodeBudget,
-		TraceConfig:          request.ExecTraceConfig,
+		TxnGroups:             txnGroups,
+		AllowEmptySignatures:  request.AllowEmptySignatures,
+		AllowMoreLogging:      request.AllowMoreLogging,
+		AllowUnnamedResources: request.AllowUnnamedResources,
+		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
+		TraceConfig:           request.ExecTraceConfig,
 	}
 }
 

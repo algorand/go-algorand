@@ -74,4 +74,5 @@ assert not err, err
 txinfo, err = goal.app_call(joe, app_id, accounts=[goal.account])
 assert not err, err
 
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

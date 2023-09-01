@@ -2370,7 +2370,7 @@ func (ops *OpStream) resolveLabels() {
 }
 
 // AssemblerDefaultVersion what version of code do we emit by default
-// AssemblerDefaultVersion is set to 1 on puprose
+// AssemblerDefaultVersion is set to 1 on purpose
 // to prevent accidental building of v1 official templates with version 2
 // because these templates are not aware of rekeying.
 const AssemblerDefaultVersion = 1

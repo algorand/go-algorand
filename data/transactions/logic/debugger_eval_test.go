@@ -171,7 +171,7 @@ func TestDebuggerLogicSigEval(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			testDbg := testDebugger{}
-			ep := DefaultEvalParams()
+			ep := DefaultSigParams()
 			ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 			TestLogic(t, testCase.program, AssemblerMaxVersion, ep, testCase.evalProblems...)
 
@@ -191,7 +191,7 @@ func TestDebuggerTopLeveLAppEval(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			testDbg := testDebugger{}
-			ep := DefaultEvalParams()
+			ep := DefaultAppParams()
 			ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 			TestApp(t, testCase.program, ep, testCase.evalProblems...)
 
@@ -291,7 +291,7 @@ func TestCallStackUpdate(t *testing.T) {
 	}
 
 	testDbg := testDebugger{}
-	ep := DefaultEvalParams()
+	ep := DefaultSigParams()
 	ep.Tracer = MakeEvalTracerDebuggerAdaptor(&testDbg)
 	TestLogic(t, TestCallStackProgram, AssemblerMaxVersion, ep)
 

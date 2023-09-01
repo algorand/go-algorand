@@ -254,11 +254,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.ledger, node.net)
-	var agreementClock timers.Clock
+	var agreementClock timers.Clock[agreement.TimeoutType]
 	if node.devMode {
-		agreementClock = timers.MakeFrozenClock()
+		agreementClock = timers.MakeFrozenClock[agreement.TimeoutType]()
 	} else {
-		agreementClock = timers.MakeMonotonicClock(time.Now())
+		agreementClock = timers.MakeMonotonicClock[agreement.TimeoutType](time.Now())
 	}
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
@@ -485,14 +485,31 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	return node.broadcastSignedTxGroup(txgroup)
 }
 
+// AsyncBroadcastSignedTxGroup feeds a raw transaction group directly to the transaction pool.
+// This method is intended to be used for performance testing and debugging purposes only.
+func (node *AlgorandFullNode) AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+	return node.txHandler.LocalTransaction(txgroup)
+}
+
 // BroadcastInternalSignedTxGroup broadcasts a transaction group that has already been signed.
 // It is originated internally, and in DevMode, it will not advance the round.
 func (node *AlgorandFullNode) BroadcastInternalSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
 	return node.broadcastSignedTxGroup(txgroup)
 }
 
+var broadcastTxSucceeded = metrics.MakeCounter(metrics.BroadcastSignedTxGroupSucceeded)
+var broadcastTxFailed = metrics.MakeCounter(metrics.BroadcastSignedTxGroupFailed)
+
 // broadcastSignedTxGroup broadcasts a transaction group that has already been signed.
 func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+	defer func() {
+		if err != nil {
+			broadcastTxFailed.Inc(nil)
+		} else {
+			broadcastTxSucceeded.Inc(nil)
+		}
+	}()
+
 	lastRound := node.ledger.Latest()
 	var b bookkeeping.BlockHeader
 	b, err = node.ledger.BlockHdr(lastRound)

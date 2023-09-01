@@ -1,0 +1,60 @@
+#pragma version 9
+txn ApplicationID
+bz end
+
+txn ApplicationArgs 0 // otherAddress
+store 0
+
+txn ApplicationArgs 1 // assetID
+btoi
+store 1
+
+txn ApplicationArgs 2 // otherAppID
+btoi
+store 2
+
+// Account access
+load 0 // otherAddress
+balance
+assert
+
+// Asset params access
+load 1 // assetID
+asset_params_get AssetTotal
+assert
+int 100
+==
+assert
+
+// Asset holding access
+load 0 // otherAddress
+load 1 // assetID
+asset_holding_get AssetBalance
+!
+assert
+!
+assert
+
+// App params access
+load 2 // otherAppID
+app_params_get AppCreator
+assert
+txn Sender
+==
+assert
+
+// App local access
+load 0 // otherAddress
+load 2 // otherAppID
+app_opted_in
+!
+assert
+
+// Box access
+byte "A"
+int 64
+box_create
+assert
+
+end:
+int 1
