@@ -614,13 +614,12 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		case voteFiltered:
 			ver := e.Proto.Version
 			proto := config.Consensus[ver]
-			if !proto.DynamicFilterTimeout || !ef.(filteredEvent).StateUpdated {
-				err := ef.(filteredEvent).Err
-				return append(actions, ignoreAction(e, err))
-			}
 			v := e.Input.Vote
-			a := relayAction(e, protocol.AgreementVoteTag, v.u())
-			return append(actions, a)
+			if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated && proposalUsedForCredentialHistory(p.Round, v.u()) {
+				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+			}
+			err := ef.(filteredEvent).Err
+			return append(actions, ignoreAction(e, err))
 		}
 
 		if e.t() == votePresent {
@@ -715,13 +714,12 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		case voteFiltered:
 			ver := e.Proto.Version
 			proto := config.Consensus[ver]
-			if !proto.DynamicFilterTimeout || !ef.(filteredEvent).StateUpdated {
-				err := ef.(filteredEvent).Err
-				return append(actions, ignoreAction(e, err))
-			}
 			v := e.Input.Vote
-			actions = append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
-			return actions
+			if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated && proposalUsedForCredentialHistory(p.Round, v.u()) {
+				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+			}
+			err := ef.(filteredEvent).Err
+			return append(actions, ignoreAction(e, err))
 		}
 		if e.t() == votePresent {
 			uv := e.Input.UnauthenticatedVote

@@ -150,7 +150,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		v := e.Input.Vote
 
 		err := proposalFresh(e.FreshnessData, v.u())
-		if err != nil {
+		if err != nil && !proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, v.u()) {
 			err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
 			return filteredEvent{T: voteFiltered, Err: err}
 		}
@@ -230,18 +230,21 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 	return nil
 }
 
-// voteFresh determines whether a proposal satisfies freshness rules.
-func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
-	if vote.R.Round < freshData.PlayerRound && freshData.PlayerRound <= vote.R.Round+credentialRoundLag &&
+func proposalUsedForCredentialHistory(curRound round, vote unauthenticatedVote) bool {
+	if vote.R.Round < curRound && curRound <= vote.R.Round+credentialRoundLag &&
 		vote.R.Period == 0 &&
 		vote.R.Step == propose {
 		if dynamicFilterCredentialArrivalHistory > 0 {
 			// continue processing old period 0 votes so we could track their
 			// arrival times and inform setting the filter timeout dynamically.
-			return nil
+			return true
 		}
 	}
+	return false
+}
 
+// voteFresh determines whether a proposal satisfies freshness rules.
+func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
 	switch vote.R.Round {
 	case freshData.PlayerRound:
 		if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > vote.R.Period {
