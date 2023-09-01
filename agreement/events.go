@@ -424,9 +424,14 @@ type readLowestEvent struct {
 
 	// Vote holds the lowest-credential vote.
 	Vote vote
+	// LowestAfterFreeze holds the lowest-credential vote that was received, including
+	// after Vote has been frozen.
+	LowestAfterFreeze vote
 
-	// Filled indicates whether the Vote field is filled
-	Filled bool
+	// Filled and HasLowestAfterFreeze indicates whether the Vote or LowestAfterFreeze
+	// fields are filled, respectively.
+	Filled               bool
+	HasLowestAfterFreeze bool
 }
 
 func (e readLowestEvent) t() eventType {
@@ -979,9 +984,13 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
+// This timestamp is assigned to messages that arrive for round R+1 while the current player
+// is still waiting for quorum on R.
+const pipelinedMessageTimestamp = time.Nanosecond
+
 func getTimestampForEvent(eventRound round, d time.Duration, currentRound round, historicalClocks map[round]historicalClock) time.Duration {
 	if eventRound > currentRound {
-		return time.Duration(1)
+		return pipelinedMessageTimestamp
 	}
 	if eventRound == currentRound {
 		return d

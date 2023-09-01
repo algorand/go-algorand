@@ -279,8 +279,8 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 // uninterrupted round (just after ensureAction is generated) to collect
 // credential arrival times to dynamically set the filter timeout.
 // It returns the time of the lowest credential's arrival from
-// credentialRoundLag rounds ago, if one was
-// collected and added to lowestCredentialArrivals, or zero otherwise.
+// credentialRoundLag rounds ago, if one was collected and added to
+// lowestCredentialArrivals, or zero otherwise.
 func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.ConsensusVersion) time.Duration {
 	if p.Period != 0 {
 		// only append to lowestCredentialArrivals if this was a successful round completing in period 0.
@@ -297,12 +297,12 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 	credHistoryRound := p.Round - credentialRoundLag
 	re := readLowestEvent{T: readLowestVote, Round: credHistoryRound, Period: 0}
 	re = r.dispatch(*p, re, proposalMachineRound, credHistoryRound, 0, 0).(readLowestEvent)
-	if !re.Filled {
+	if !re.HasLowestAfterFreeze {
 		return 0
 	}
 
-	p.lowestCredentialArrivals.store(re.Vote.validatedAt)
-	return re.Vote.validatedAt
+	p.lowestCredentialArrivals.store(re.LowestAfterFreeze.validatedAt)
+	return re.LowestAfterFreeze.validatedAt
 }
 
 // calculateFilterTimeout chooses the appropriate filter timeout.
