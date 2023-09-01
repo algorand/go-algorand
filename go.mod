@@ -31,6 +31,7 @@ require (
 	github.com/labstack/echo/v4 v4.9.1
 	github.com/libp2p/go-libp2p v0.29.1
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
+	github.com/libp2p/go-yamux/v4 v4.0.1
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/miekg/dns v1.1.55
 	github.com/multiformats/go-multiaddr v0.10.1
@@ -105,7 +106,6 @@ require (
 	github.com/libp2p/go-nat v0.2.0 // indirect
 	github.com/libp2p/go-netroute v0.2.1 // indirect
 	github.com/libp2p/go-reuseport v0.3.0 // indirect
-	github.com/libp2p/go-yamux/v4 v4.0.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect

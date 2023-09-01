@@ -3950,7 +3950,7 @@ func (z *player) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(9)
-	var zb0001Mask uint16 /* 10 bits */
+	var zb0001Mask uint16 /* 12 bits */
 	if (*z).OldDeadline == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -11155,7 +11155,7 @@ func (z *vote) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 4 bits */
+	var zb0001Mask uint8 /* 5 bits */
 	if (*z).Cred.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
