@@ -440,7 +440,7 @@ type Local struct {
 	// an archiver or return StatusNotFound (404) when in does not have the requested round, and
 	// BlockServiceCustomFallbackEndpoints is empty.
 	// The archiver is randomly selected, if none is available, will return StatusNotFound (404).
-	EnableBlockServiceFallbackToArchiver bool `version[16]:"true"`
+	EnableBlockServiceFallbackToArchiver bool `version[16]:"true" version[31]:"false"`
 
 	// CatchupBlockValidateMode is a development and testing configuration used by the catchup service.
 	// It can be used to omit certain validations to speed up the catchup process, or to apply extra validations which are redundant in normal operation.
