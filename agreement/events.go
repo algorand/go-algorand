@@ -979,9 +979,13 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
+// This timestamp is assigned to messages that arrive for round R+1 while the current player
+// is still waiting for quorum on R.
+const pipelinedMessageTimestamp = time.Nanosecond
+
 func getTimestampForEvent(eventRound round, d time.Duration, currentRound round, historicalClocks map[round]historicalClock) time.Duration {
 	if eventRound > currentRound {
-		return time.Duration(1)
+		return pipelinedMessageTimestamp
 	}
 	if eventRound == currentRound {
 		return d
