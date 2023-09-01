@@ -1200,7 +1200,7 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 		for j := 1; j < dynamicFilterCredentialArrivalHistory-2; j++ {
 			require.Equal(t, filterTimeoutsPostRecovery[i][j-1], filterTimeoutsPostRecovery[i][j])
 		}
-		require.Less(t, filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-2], filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-3])
+		require.Less(t, filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-1], filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-2])
 	}
 
 	sanityCheck(startRound, 2*round(baseHistoryRounds+2), ledgers)
