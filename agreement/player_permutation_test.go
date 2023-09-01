@@ -357,24 +357,6 @@ func expectRelay(t *testing.T, trace ioTrace, errMsg string, playerN int, eventN
 	}), errMsg, playerN, eventN)
 }
 
-func expectVerify(t *testing.T, trace ioTrace, errMsg string, playerN int, eventN int) {
-	require.Truef(t, trace.ContainsFn(func(b event) bool {
-		if b.t() != wrappedAction {
-			return false
-		}
-
-		wrapper := b.(wrappedActionEvent)
-		if wrapper.action.t() != verifyVote {
-			return false
-		}
-		act := wrapper.action.(cryptoAction)
-		if act.T == verifyVote {
-			return true
-		}
-		return false
-	}), errMsg, playerN, eventN)
-}
-
 func expectDisconnect(t *testing.T, trace ioTrace, errMsg string, playerN int, eventN int) {
 	require.Truef(t, trace.ContainsFn(func(b event) bool {
 		if b.t() != wrappedAction {

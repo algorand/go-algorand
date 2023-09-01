@@ -3322,7 +3322,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtOneSample(t *testing.T) {
 	require.NotZero(t, dynamicFilterCredentialArrivalHistory)
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
 	require.False(t, pWhite.lowestCredentialArrivals.isFull())
-	require.Equal(t, time.Duration(1), pWhite.lowestCredentialArrivals.history[0])
+	require.Equal(t, pipelinedMessageTimestamp, pWhite.lowestCredentialArrivals.history[0])
 }
 
 type fixedHistoricalClock struct{}
@@ -3903,7 +3903,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.NotNil(t, dynamicFilterCredentialArrivalHistory)
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 1)
 	require.False(t, pWhite.lowestCredentialArrivals.isFull())
-	require.Equal(t, time.Duration(1), pWhite.lowestCredentialArrivals.history[0])
+	require.Equal(t, pipelinedMessageTimestamp, pWhite.lowestCredentialArrivals.history[0])
 }
 
 // test that ReceivedAt and ValidateAt timing information are retained in
