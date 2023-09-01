@@ -612,7 +612,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			err := ef.(filteredEvent).Err
 			return append(actions, disconnectAction(e, err))
 		case voteFiltered:
-			if !ef.(filteredEvent).StateUpdated {
+			ver := e.Proto.Version
+			proto := config.Consensus[ver]
+			if !proto.DynamicFilterTimeout || !ef.(filteredEvent).StateUpdated {
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
 			}
@@ -711,7 +713,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			err := makeSerErrf("rejected message since it was invalid: %v", ef.(filteredEvent).Err)
 			return append(actions, disconnectAction(e, err))
 		case voteFiltered:
-			if !ef.(filteredEvent).StateUpdated {
+			ver := e.Proto.Version
+			proto := config.Consensus[ver]
+			if !proto.DynamicFilterTimeout || !ef.(filteredEvent).StateUpdated {
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
 			}
