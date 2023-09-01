@@ -34,6 +34,8 @@ type proposalSeeker struct {
 	// Filled will no longer be modified.
 	Frozen bool
 
+    // lowestAfterFreeze is used to track the lowest credential observed, even
+    // after the Lowest value has been frozen.
 	lowestAfterFreeze    vote
 	hasLowestAfterFreeze bool
 }
