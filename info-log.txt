@@ -1,0 +1,1038 @@
+[154594]2023-09-02 02:33:14.007131325 +0000 UTC m=+1.446190225: file.o: starting Node...
+[154594]2023-09-02 02:33:14.022238158 +0000 UTC m=+1.461297080: file.o: forking the waiting function...
+[154594]2023-09-02 02:33:14.022339596 +0000 UTC m=+1.461398492: file.o: waiting here...
+[154575]2023-09-02 02:33:14.087240076 +0000 UTC m=+1.573018449: file.o: starting Node...
+[154575]2023-09-02 02:33:14.099009903 +0000 UTC m=+1.584788278: file.o: forking the waiting function...
+[154575]2023-09-02 02:33:14.099057664 +0000 UTC m=+1.584836036: file.o: waiting here...
+[154601]2023-09-02 02:33:14.102234438 +0000 UTC m=+1.538812274: file.o: starting Node...
+[154601]2023-09-02 02:33:14.116952532 +0000 UTC m=+1.553530361: file.o: forking the waiting function...
+[154601]2023-09-02 02:33:14.116992471 +0000 UTC m=+1.553570301: file.o: waiting here...
+[154589]2023-09-02 02:33:14.144390775 +0000 UTC m=+1.616988297: file.o: starting Node...
+[154589]2023-09-02 02:33:14.144941471 +0000 UTC m=+1.617538989: file.o: forking the waiting function...
+[154589]2023-09-02 02:33:14.144978962 +0000 UTC m=+1.617576481: file.o: waiting here...
+[154582]2023-09-02 02:33:14.146252792 +0000 UTC m=+1.627234159: file.o: starting Node...
+[154582]2023-09-02 02:33:14.152059612 +0000 UTC m=+1.633040966: file.o: forking the waiting function...
+[154582]2023-09-02 02:33:14.152104799 +0000 UTC m=+1.633086143: file.o: waiting here...
+[154672]2023-09-02 02:33:14.171325256 +0000 UTC m=+0.130788474: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154679]2023-09-02 02:33:14.191753447 +0000 UTC m=+0.078852909: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154691]2023-09-02 02:33:14.211787681 +0000 UTC m=+0.061518392: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154680]2023-09-02 02:33:14.266224423 +0000 UTC m=+0.143527725: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154692]2023-09-02 02:33:14.269205258 +0000 UTC m=+0.101197602: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154573]2023-09-02 02:33:14.389902488 +0000 UTC m=+1.878186336: file.o: starting Node...
+[154573]2023-09-02 02:33:14.391570981 +0000 UTC m=+1.879854819: file.o: forking the waiting function...
+[154573]2023-09-02 02:33:14.39252988 +0000 UTC m=+1.880813720: file.o: waiting here...
+[154594]2023-09-02 02:33:14.424991796 +0000 UTC m=+1.864050700: file.o: starting Node...
+[154594]2023-09-02 02:33:14.442877157 +0000 UTC m=+1.881936070: file.o: forking the waiting function...
+[154594]2023-09-02 02:33:14.442923209 +0000 UTC m=+1.881982105: file.o: waiting here...
+[154711]2023-09-02 02:33:14.45075565 +0000 UTC m=+0.056882248: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154575]2023-09-02 02:33:14.501647648 +0000 UTC m=+1.987426018: file.o: starting Node...
+[154575]2023-09-02 02:33:14.502057811 +0000 UTC m=+1.987836181: file.o: forking the waiting function...
+[154575]2023-09-02 02:33:14.502092968 +0000 UTC m=+1.987871339: file.o: waiting here...
+[154719]2023-09-02 02:33:14.508176357 +0000 UTC m=+0.059102014: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154589]2023-09-02 02:33:14.549402154 +0000 UTC m=+2.021999674: file.o: starting Node...
+[154589]2023-09-02 02:33:14.549860684 +0000 UTC m=+2.022458203: file.o: forking the waiting function...
+[154589]2023-09-02 02:33:14.550588091 +0000 UTC m=+2.023185611: file.o: waiting here...
+[154582]2023-09-02 02:33:14.554995874 +0000 UTC m=+2.035977225: file.o: starting Node...
+[154582]2023-09-02 02:33:14.555471414 +0000 UTC m=+2.036452756: file.o: forking the waiting function...
+[154582]2023-09-02 02:33:14.55550871 +0000 UTC m=+2.036490051: file.o: waiting here...
+[154728]2023-09-02 02:33:14.604917687 +0000 UTC m=+0.099482662: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154601]2023-09-02 02:33:14.629000179 +0000 UTC m=+2.065578009: file.o: starting Node...
+[154601]2023-09-02 02:33:14.633160761 +0000 UTC m=+2.069738591: file.o: forking the waiting function...
+[154601]2023-09-02 02:33:14.633214267 +0000 UTC m=+2.069792096: file.o: waiting here...
+[154737]2023-09-02 02:33:14.649044907 +0000 UTC m=+0.093252579: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154741]2023-09-02 02:33:14.670684826 +0000 UTC m=+0.102081322: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154751]2023-09-02 02:33:14.734564769 +0000 UTC m=+0.094068776: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154594]2023-09-02 02:33:14.746368717 +0000 UTC m=+2.185427618: file.o: starting Node...
+[154594]2023-09-02 02:33:14.752005078 +0000 UTC m=+2.191063985: file.o: forking the waiting function...
+[154594]2023-09-02 02:33:14.752059787 +0000 UTC m=+2.191118690: file.o: waiting here...
+[154573]2023-09-02 02:33:14.795322806 +0000 UTC m=+2.283606648: file.o: starting Node...
+[154573]2023-09-02 02:33:14.80064384 +0000 UTC m=+2.288927678: file.o: forking the waiting function...
+[154573]2023-09-02 02:33:14.800712047 +0000 UTC m=+2.288995884: file.o: waiting here...
+[154575]2023-09-02 02:33:14.805353107 +0000 UTC m=+2.291131478: file.o: starting Node...
+[154575]2023-09-02 02:33:14.810160149 +0000 UTC m=+2.295938556: file.o: forking the waiting function...
+[154575]2023-09-02 02:33:14.810727351 +0000 UTC m=+2.296505723: file.o: waiting here...
+[154762]2023-09-02 02:33:14.834562632 +0000 UTC m=+0.078594667: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154769]2023-09-02 02:33:14.922466133 +0000 UTC m=+0.071202560: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154589]2023-09-02 02:33:14.953379042 +0000 UTC m=+2.425976562: file.o: starting Node...
+[154589]2023-09-02 02:33:14.953761357 +0000 UTC m=+2.426358877: file.o: forking the waiting function...
+[154589]2023-09-02 02:33:14.953798534 +0000 UTC m=+2.426396053: file.o: waiting here...
+[154770]2023-09-02 02:33:15.054933193 +0000 UTC m=+0.241659061: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154582]2023-09-02 02:33:15.059537518 +0000 UTC m=+2.540518860: file.o: starting Node...
+[154582]2023-09-02 02:33:15.063046763 +0000 UTC m=+2.544028113: file.o: forking the waiting function...
+[154582]2023-09-02 02:33:15.063093077 +0000 UTC m=+2.544074420: file.o: waiting here...
+[154788]2023-09-02 02:33:15.066783981 +0000 UTC m=+0.093782512: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154601]2023-09-02 02:33:15.140746422 +0000 UTC m=+2.577324254: file.o: starting Node...
+[154601]2023-09-02 02:33:15.144792025 +0000 UTC m=+2.581369861: file.o: forking the waiting function...
+[154601]2023-09-02 02:33:15.1448369 +0000 UTC m=+2.581414731: file.o: waiting here...
+[154594]2023-09-02 02:33:15.155436072 +0000 UTC m=+2.594494972: file.o: starting Node...
+[154594]2023-09-02 02:33:15.169636172 +0000 UTC m=+2.608695088: file.o: forking the waiting function...
+[154594]2023-09-02 02:33:15.169724674 +0000 UTC m=+2.608783571: file.o: waiting here...
+[154799]2023-09-02 02:33:15.193702134 +0000 UTC m=+0.127095632: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154573]2023-09-02 02:33:15.217881958 +0000 UTC m=+2.706165802: file.o: starting Node...
+[154573]2023-09-02 02:33:15.218875218 +0000 UTC m=+2.707159057: file.o: forking the waiting function...
+[154573]2023-09-02 02:33:15.218922182 +0000 UTC m=+2.707206021: file.o: waiting here...
+[154819]2023-09-02 02:33:15.256849554 +0000 UTC m=+0.078628340: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154813]2023-09-02 02:33:15.28005378 +0000 UTC m=+0.126851009: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154830]2023-09-02 02:33:15.308610782 +0000 UTC m=+0.077896711: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154575]2023-09-02 02:33:15.419298576 +0000 UTC m=+2.905076948: file.o: starting Node...
+[154575]2023-09-02 02:33:15.435604299 +0000 UTC m=+2.921382670: file.o: forking the waiting function...
+[154575]2023-09-02 02:33:15.435667282 +0000 UTC m=+2.921445653: file.o: waiting here...
+[154589]2023-09-02 02:33:15.45623754 +0000 UTC m=+2.928835060: file.o: starting Node...
+[154589]2023-09-02 02:33:15.468076655 +0000 UTC m=+2.940674175: file.o: forking the waiting function...
+[154589]2023-09-02 02:33:15.468119928 +0000 UTC m=+2.940717447: file.o: waiting here...
+[154601]2023-09-02 02:33:15.548121596 +0000 UTC m=+2.984699427: file.o: starting Node...
+[154601]2023-09-02 02:33:15.552434189 +0000 UTC m=+2.989012019: file.o: forking the waiting function...
+[154601]2023-09-02 02:33:15.552489941 +0000 UTC m=+2.989067769: file.o: waiting here...
+[154845]2023-09-02 02:33:15.557142518 +0000 UTC m=+0.114060275: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154582]2023-09-02 02:33:15.566976037 +0000 UTC m=+3.047957389: file.o: starting Node...
+[154582]2023-09-02 02:33:15.568329885 +0000 UTC m=+3.049311228: file.o: forking the waiting function...
+[154582]2023-09-02 02:33:15.568372811 +0000 UTC m=+3.049354154: file.o: waiting here...
+[154594]2023-09-02 02:33:15.574377252 +0000 UTC m=+3.013436164: file.o: starting Node...
+[154594]2023-09-02 02:33:15.575555474 +0000 UTC m=+3.014614377: file.o: forking the waiting function...
+[154594]2023-09-02 02:33:15.575598334 +0000 UTC m=+3.014657238: file.o: waiting here...
+[154573]2023-09-02 02:33:15.625557981 +0000 UTC m=+3.113841820: file.o: starting Node...
+[154573]2023-09-02 02:33:15.626069106 +0000 UTC m=+3.114352944: file.o: forking the waiting function...
+[154573]2023-09-02 02:33:15.626102147 +0000 UTC m=+3.114385985: file.o: waiting here...
+[154852]2023-09-02 02:33:15.651609212 +0000 UTC m=+0.175417973: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154875]2023-09-02 02:33:15.700666588 +0000 UTC m=+0.116240884: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154876]2023-09-02 02:33:15.758249779 +0000 UTC m=+0.143347999: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154869]2023-09-02 02:33:15.765334912 +0000 UTC m=+0.200693924: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154575]2023-09-02 02:33:15.846342106 +0000 UTC m=+3.332120511: file.o: starting Node...
+[154575]2023-09-02 02:33:15.862881495 +0000 UTC m=+3.348659867: file.o: forking the waiting function...
+[154575]2023-09-02 02:33:15.862927017 +0000 UTC m=+3.348705387: file.o: waiting here...
+[154589]2023-09-02 02:33:15.974857563 +0000 UTC m=+3.447455083: file.o: starting Node...
+[154589]2023-09-02 02:33:15.985644545 +0000 UTC m=+3.458242066: file.o: forking the waiting function...
+[154589]2023-09-02 02:33:15.98570902 +0000 UTC m=+3.458306541: file.o: waiting here...
+[154891]2023-09-02 02:33:15.992726495 +0000 UTC m=+0.331885552: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154908]2023-09-02 02:33:16.055992056 +0000 UTC m=+0.145814389: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154601]2023-09-02 02:33:16.06104566 +0000 UTC m=+3.497623492: file.o: starting Node...
+[154601]2023-09-02 02:33:16.062246882 +0000 UTC m=+3.498824712: file.o: forking the waiting function...
+[154601]2023-09-02 02:33:16.062296477 +0000 UTC m=+3.498874309: file.o: waiting here...
+[154594]2023-09-02 02:33:16.079373213 +0000 UTC m=+3.518432111: file.o: starting Node...
+[154594]2023-09-02 02:33:16.092982782 +0000 UTC m=+3.532041688: file.o: forking the waiting function...
+[154594]2023-09-02 02:33:16.093034637 +0000 UTC m=+3.532093534: file.o: waiting here...
+[154582]2023-09-02 02:33:16.173545757 +0000 UTC m=+3.654527100: file.o: starting Node...
+[154582]2023-09-02 02:33:16.184532278 +0000 UTC m=+3.665513620: file.o: forking the waiting function...
+[154582]2023-09-02 02:33:16.184599933 +0000 UTC m=+3.665581276: file.o: waiting here...
+[154921]2023-09-02 02:33:16.2063777 +0000 UTC m=+0.209424922: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154930]2023-09-02 02:33:16.239322728 +0000 UTC m=+0.169521472: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154939]2023-09-02 02:33:16.299894376 +0000 UTC m=+0.195983260: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154946]2023-09-02 02:33:16.329685433 +0000 UTC m=+0.116592637: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154573]2023-09-02 02:33:16.33023875 +0000 UTC m=+3.818522591: file.o: starting Node...
+[154573]2023-09-02 02:33:16.334056135 +0000 UTC m=+3.822340013: file.o: forking the waiting function...
+[154573]2023-09-02 02:33:16.334095444 +0000 UTC m=+3.822379282: file.o: waiting here...
+[154575]2023-09-02 02:33:16.469038801 +0000 UTC m=+3.954817175: file.o: starting Node...
+[154575]2023-09-02 02:33:16.474471711 +0000 UTC m=+3.960250085: file.o: forking the waiting function...
+[154575]2023-09-02 02:33:16.474525304 +0000 UTC m=+3.960303675: file.o: waiting here...
+[154955]2023-09-02 02:33:16.551695557 +0000 UTC m=+0.206537897: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154601]2023-09-02 02:33:16.668477015 +0000 UTC m=+4.105054845: file.o: starting Node...
+[154601]2023-09-02 02:33:16.670974148 +0000 UTC m=+4.107551979: file.o: forking the waiting function...
+[154601]2023-09-02 02:33:16.671017085 +0000 UTC m=+4.107594916: file.o: waiting here...
+[154589]2023-09-02 02:33:16.693020323 +0000 UTC m=+4.165617843: file.o: starting Node...
+[154582]2023-09-02 02:33:16.693838785 +0000 UTC m=+4.174820128: file.o: starting Node...
+[154589]2023-09-02 02:33:16.697035455 +0000 UTC m=+4.169632974: file.o: forking the waiting function...
+[154589]2023-09-02 02:33:16.6970809 +0000 UTC m=+4.169678421: file.o: waiting here...
+[154582]2023-09-02 02:33:16.732922613 +0000 UTC m=+4.213903954: file.o: forking the waiting function...
+[154582]2023-09-02 02:33:16.732975326 +0000 UTC m=+4.213956669: file.o: waiting here...
+[154968]2023-09-02 02:33:16.757234496 +0000 UTC m=+0.269468549: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154594]2023-09-02 02:33:16.798741689 +0000 UTC m=+4.237800597: file.o: starting Node...
+[154594]2023-09-02 02:33:16.804772232 +0000 UTC m=+4.243831130: file.o: forking the waiting function...
+[154594]2023-09-02 02:33:16.804839868 +0000 UTC m=+4.243898765: file.o: waiting here...
+[154983]2023-09-02 02:33:16.82211145 +0000 UTC m=+0.125062671: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154573]2023-09-02 02:33:16.938081743 +0000 UTC m=+4.426365581: file.o: starting Node...
+[154573]2023-09-02 02:33:16.940308214 +0000 UTC m=+4.428592052: file.o: forking the waiting function...
+[154573]2023-09-02 02:33:16.940349819 +0000 UTC m=+4.428633658: file.o: waiting here...
+[154988]2023-09-02 02:33:16.978317134 +0000 UTC m=+0.265464573: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154989]2023-09-02 02:33:17.067874417 +0000 UTC m=+0.311479927: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154575]2023-09-02 02:33:17.083326289 +0000 UTC m=+4.569104660: file.o: starting Node...
+[154575]2023-09-02 02:33:17.095517464 +0000 UTC m=+4.581295834: file.o: forking the waiting function...
+[154575]2023-09-02 02:33:17.095577258 +0000 UTC m=+4.581355628: file.o: waiting here...
+[155006]2023-09-02 02:33:17.162844434 +0000 UTC m=+0.295820796: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[155015]2023-09-02 02:33:17.258533459 +0000 UTC m=+0.286987937: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154601]2023-09-02 02:33:17.382699069 +0000 UTC m=+4.819276902: file.o: starting Node...
+[154601]2023-09-02 02:33:17.38353601 +0000 UTC m=+4.820113840: file.o: forking the waiting function...
+[154601]2023-09-02 02:33:17.383572982 +0000 UTC m=+4.820150812: file.o: waiting here...
+[155027]2023-09-02 02:33:17.426536756 +0000 UTC m=+0.267324345: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154589]2023-09-02 02:33:17.514363509 +0000 UTC m=+4.986961047: file.o: starting Node...
+[154589]2023-09-02 02:33:17.530817813 +0000 UTC m=+5.003415338: file.o: forking the waiting function...
+[154589]2023-09-02 02:33:17.530870715 +0000 UTC m=+5.003468234: file.o: waiting here...
+[154582]2023-09-02 02:33:17.739167938 +0000 UTC m=+5.220149282: file.o: starting Node...
+[154573]2023-09-02 02:33:17.744639788 +0000 UTC m=+5.232923632: file.o: starting Node...
+[154573]2023-09-02 02:33:17.75553793 +0000 UTC m=+5.243821769: file.o: forking the waiting function...
+[154573]2023-09-02 02:33:17.755602581 +0000 UTC m=+5.243886419: file.o: waiting here...
+[154582]2023-09-02 02:33:17.784845917 +0000 UTC m=+5.265827263: file.o: forking the waiting function...
+[154582]2023-09-02 02:33:17.784912308 +0000 UTC m=+5.265893650: file.o: waiting here...
+[155058]2023-09-02 02:33:17.831743565 +0000 UTC m=+0.233965226: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[155044]2023-09-02 02:33:17.904282406 +0000 UTC m=+0.515245888: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[155077]2023-09-02 02:33:18.01047561 +0000 UTC m=+0.228526305: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[155075]2023-09-02 02:33:18.277464354 +0000 UTC m=+0.472407949: : MakeFull!!!!!!!!!!!!!!!!!!!!!!
+[154594]2023-09-02 02:33:35.549220191 +0000 UTC m=+22.988279094: NodeController.gh: attempting SIGTERM
+[154594]2023-09-02 02:33:35.549261319 +0000 UTC m=+22.988320217: NodeController.gh: going for the kill... 30sec
+[154876]2023-09-02 02:33:35.549573431 +0000 UTC m=+19.934671649: node.go: Stopping...
+[154575]2023-09-02 02:33:35.860649768 +0000 UTC m=+23.346428143: NodeController.gh: attempting SIGTERM
+[155027]2023-09-02 02:33:35.86085485 +0000 UTC m=+18.701642464: node.go: Stopping...
+[154575]2023-09-02 02:33:35.860936109 +0000 UTC m=+23.346714500: NodeController.gh: going for the kill... 30sec
+[154601]2023-09-02 02:33:35.940787323 +0000 UTC m=+23.377365153: NodeController.gh: attempting SIGTERM
+[154601]2023-09-02 02:33:35.940824198 +0000 UTC m=+23.377402029: NodeController.gh: going for the kill... 30sec
+[154930]2023-09-02 02:33:35.948490108 +0000 UTC m=+19.878688850: node.go: Stopping...
+[154589]2023-09-02 02:33:36.077441672 +0000 UTC m=+23.550039192: NodeController.gh: attempting SIGTERM
+[154589]2023-09-02 02:33:36.077482426 +0000 UTC m=+23.550079946: NodeController.gh: going for the kill... 30sec
+[155058]2023-09-02 02:33:36.077707779 +0000 UTC m=+18.479929414: node.go: Stopping...
+[154573]2023-09-02 02:33:36.546663298 +0000 UTC m=+24.034947157: NodeController.gh: attempting SIGTERM
+[154573]2023-09-02 02:33:36.546706662 +0000 UTC m=+24.034990500: NodeController.gh: going for the kill... 30sec
+[155077]2023-09-02 02:33:36.546892597 +0000 UTC m=+18.764943272: node.go: Stopping...
+[154582]2023-09-02 02:33:36.561745997 +0000 UTC m=+24.042727340: NodeController.gh: attempting SIGTERM
+[154582]2023-09-02 02:33:36.561781528 +0000 UTC m=+24.042762870: NodeController.gh: going for the kill... 30sec
+[154989]2023-09-02 02:33:36.562066189 +0000 UTC m=+19.805671721: node.go: Stopping...
+[154594]2023-09-02 02:34:05.54950577 +0000 UTC m=+52.988564677: NodeController.gh: SIGKILL 154876 ...
+[154594]2023-09-02 02:34:05.80490681 +0000 UTC m=+53.243965717: file.o: signal: killed
+[154575]2023-09-02 02:34:05.861327799 +0000 UTC m=+53.347106170: NodeController.gh: SIGKILL 155027 ...
+[154601]2023-09-02 02:34:05.941363477 +0000 UTC m=+53.377941305: NodeController.gh: SIGKILL 154930 ...
+[154575]2023-09-02 02:34:06.066655331 +0000 UTC m=+53.552433701: file.o: signal: killed
+[154589]2023-09-02 02:34:06.077886182 +0000 UTC m=+53.550483703: NodeController.gh: SIGKILL 155058 ...
+[154589]2023-09-02 02:34:06.200003397 +0000 UTC m=+53.672600919: file.o: signal: killed
+[154601]2023-09-02 02:34:06.209007345 +0000 UTC m=+53.645585175: file.o: signal: killed
+[154573]2023-09-02 02:34:06.547589797 +0000 UTC m=+54.035873634: NodeController.gh: SIGKILL 155077 ...
+[154582]2023-09-02 02:34:06.562318852 +0000 UTC m=+54.043300194: NodeController.gh: SIGKILL 154989 ...
+[154573]2023-09-02 02:34:06.721302997 +0000 UTC m=+54.209586836: file.o: signal: killed
+[154582]2023-09-02 02:34:06.748779558 +0000 UTC m=+54.229760923: file.o: signal: killed
+[154869]2023-09-02 02:34:34.572771952 +0000 UTC m=+79.008130962: node.go: Stopping...
+[154751]2023-09-02 02:34:34.572776662 +0000 UTC m=+79.932280685: node.go: Stopping...
+[154869]2023-09-02 02:34:34.572802749 +0000 UTC m=+79.008161761: node.go: Stopping...Checkpoint 1
+[154751]2023-09-02 02:34:34.572805883 +0000 UTC m=+79.932309872: node.go: Stopping...Checkpoint 1
+[154869]2023-09-02 02:34:34.57302211 +0000 UTC m=+79.008381122: node.go: Stopping...Checkpoint 2
+[154680]2023-09-02 02:34:34.574430995 +0000 UTC m=+80.451734279: node.go: Stopping...
+[154680]2023-09-02 02:34:34.574457682 +0000 UTC m=+80.451760977: node.go: Stopping...Checkpoint 1
+[154680]2023-09-02 02:34:34.575119701 +0000 UTC m=+80.452422987: node.go: Stopping...Checkpoint 2
+[154813]2023-09-02 02:34:34.575252446 +0000 UTC m=+79.422049687: node.go: Stopping...
+[154751]2023-09-02 02:34:34.573234625 +0000 UTC m=+79.932738614: node.go: Stopping...Checkpoint 2
+[154983]2023-09-02 02:34:34.610214258 +0000 UTC m=+77.913165499: node.go: Stopping...
+[155044]2023-09-02 02:34:34.610612573 +0000 UTC m=+77.221576166: node.go: Stopping...
+[154813]2023-09-02 02:34:34.706392026 +0000 UTC m=+79.553189254: node.go: Stopping...Checkpoint 1
+[154813]2023-09-02 02:34:34.706522705 +0000 UTC m=+79.553319933: node.go: Stopping...Checkpoint 2
+[154680]2023-09-02 02:34:34.843262762 +0000 UTC m=+80.720566046: node.go: Stopping...Checkpoint 3
+[154680]2023-09-02 02:34:34.84329875 +0000 UTC m=+80.720602036: node.go: Stopping...Checkpoint 4
+[154680]2023-09-02 02:34:34.843319108 +0000 UTC m=+80.720622392: node.go: Stopping...Checkpoint 5
+[154680]2023-09-02 02:34:34.843336865 +0000 UTC m=+80.720640152: node.go: Stopping...Checkpoint 6
+[154680]2023-09-02 02:34:34.843384746 +0000 UTC m=+80.720688030: node.go: Stopping...Checkpoint 7
+[154680]2023-09-02 02:34:34.84340338 +0000 UTC m=+80.720706665: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000838300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc000812300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc000812300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154869]2023-09-02 02:34:34.907448486 +0000 UTC m=+79.342807496: node.go: Stopping...Checkpoint 3
+[154869]2023-09-02 02:34:34.907479613 +0000 UTC m=+79.342838624: node.go: Stopping...Checkpoint 4
+[154869]2023-09-02 02:34:34.907505419 +0000 UTC m=+79.342864429: node.go: Stopping...Checkpoint 5
+[154869]2023-09-02 02:34:34.907518918 +0000 UTC m=+79.342877929: node.go: Stopping...Checkpoint 6
+[154869]2023-09-02 02:34:34.907545725 +0000 UTC m=+79.342904735: node.go: Stopping...Checkpoint 7
+[154869]2023-09-02 02:34:34.907557708 +0000 UTC m=+79.342916718: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000a5a700)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0000fb500)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0000fb500)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154751]2023-09-02 02:34:34.911423728 +0000 UTC m=+80.270927717: node.go: Stopping...Checkpoint 3
+[154751]2023-09-02 02:34:34.911473926 +0000 UTC m=+80.270977914: node.go: Stopping...Checkpoint 4
+[154751]2023-09-02 02:34:34.911498177 +0000 UTC m=+80.271002166: node.go: Stopping...Checkpoint 5
+[154751]2023-09-02 02:34:34.911515765 +0000 UTC m=+80.271019753: node.go: Stopping...Checkpoint 6
+[154751]2023-09-02 02:34:34.911541356 +0000 UTC m=+80.271045345: node.go: Stopping...Checkpoint 7
+[154751]2023-09-02 02:34:34.911560359 +0000 UTC m=+80.271064348: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0009f8000)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00052c800)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00052c800)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154813]2023-09-02 02:34:34.963429824 +0000 UTC m=+79.810227052: node.go: Stopping...Checkpoint 3
+[154813]2023-09-02 02:34:34.963474886 +0000 UTC m=+79.810272114: node.go: Stopping...Checkpoint 4
+[154813]2023-09-02 02:34:34.96351178 +0000 UTC m=+79.810309009: node.go: Stopping...Checkpoint 5
+[154813]2023-09-02 02:34:34.963534315 +0000 UTC m=+79.810331543: node.go: Stopping...Checkpoint 6
+[154813]2023-09-02 02:34:34.96357099 +0000 UTC m=+79.810368220: node.go: Stopping...Checkpoint 7
+[154813]2023-09-02 02:34:34.963590201 +0000 UTC m=+79.810387430: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0009b8700)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00007fb00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00007fb00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[155044]2023-09-02 02:34:35.482894923 +0000 UTC m=+78.093858459: node.go: Stopping...Checkpoint 1
+[155044]2023-09-02 02:34:35.483017939 +0000 UTC m=+78.093981415: node.go: Stopping...Checkpoint 2
+[154983]2023-09-02 02:34:35.618039825 +0000 UTC m=+78.920991042: node.go: Stopping...Checkpoint 1
+[154983]2023-09-02 02:34:35.618149517 +0000 UTC m=+78.921100734: node.go: Stopping...Checkpoint 2
+[155044]2023-09-02 02:34:35.76922301 +0000 UTC m=+78.380186485: node.go: Stopping...Checkpoint 3
+[155044]2023-09-02 02:34:35.769273646 +0000 UTC m=+78.380237121: node.go: Stopping...Checkpoint 4
+[155044]2023-09-02 02:34:35.769309503 +0000 UTC m=+78.380272979: node.go: Stopping...Checkpoint 5
+[155044]2023-09-02 02:34:35.769327895 +0000 UTC m=+78.380291370: node.go: Stopping...Checkpoint 6
+[155044]2023-09-02 02:34:35.76935509 +0000 UTC m=+78.380318563: node.go: Stopping...Checkpoint 7
+[155044]2023-09-02 02:34:35.769379094 +0000 UTC m=+78.380342569: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000860300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc000844300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc000844300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154762]2023-09-02 02:34:35.868897287 +0000 UTC m=+81.112929342: node.go: Stopping...
+[154762]2023-09-02 02:34:35.868942371 +0000 UTC m=+81.112974419: node.go: Stopping...Checkpoint 1
+[155006]2023-09-02 02:34:35.869111972 +0000 UTC m=+79.002088339: node.go: Stopping...
+[155006]2023-09-02 02:34:35.869136056 +0000 UTC m=+79.002112408: node.go: Stopping...Checkpoint 1
+[154762]2023-09-02 02:34:35.86917966 +0000 UTC m=+81.113211692: node.go: Stopping...Checkpoint 2
+[154939]2023-09-02 02:34:35.869306561 +0000 UTC m=+79.765395447: node.go: Stopping...
+[155006]2023-09-02 02:34:35.873402775 +0000 UTC m=+79.006379140: node.go: Stopping...Checkpoint 2
+[154672]2023-09-02 02:34:35.873695898 +0000 UTC m=+81.833159116: node.go: Stopping...
+[154672]2023-09-02 02:34:35.873716066 +0000 UTC m=+81.833179284: node.go: Stopping...Checkpoint 1
+[154672]2023-09-02 02:34:35.87454224 +0000 UTC m=+81.834005465: node.go: Stopping...Checkpoint 2
+[154983]2023-09-02 02:34:35.875128893 +0000 UTC m=+79.178080111: node.go: Stopping...Checkpoint 3
+[154983]2023-09-02 02:34:35.875163344 +0000 UTC m=+79.178114562: node.go: Stopping...Checkpoint 4
+[154983]2023-09-02 02:34:35.875184463 +0000 UTC m=+79.178135679: node.go: Stopping...Checkpoint 5
+[154983]2023-09-02 02:34:35.875201534 +0000 UTC m=+79.178152752: node.go: Stopping...Checkpoint 6
+[154983]2023-09-02 02:34:35.875236637 +0000 UTC m=+79.178187855: node.go: Stopping...Checkpoint 7
+[154983]2023-09-02 02:34:35.875254223 +0000 UTC m=+79.178205446: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000164300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00013e300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00013e300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154819]2023-09-02 02:34:35.875839347 +0000 UTC m=+80.697618106: node.go: Stopping...
+[154719]2023-09-02 02:34:35.876538608 +0000 UTC m=+81.427464246: node.go: Stopping...
+[154719]2023-09-02 02:34:35.876560961 +0000 UTC m=+81.427486616: node.go: Stopping...Checkpoint 1
+[154719]2023-09-02 02:34:35.877262794 +0000 UTC m=+81.428188429: node.go: Stopping...Checkpoint 2
+[155006]2023-09-02 02:34:36.098961343 +0000 UTC m=+79.231937709: node.go: Stopping...Checkpoint 3
+[155006]2023-09-02 02:34:36.099008337 +0000 UTC m=+79.231984691: node.go: Stopping...Checkpoint 4
+[155006]2023-09-02 02:34:36.099031439 +0000 UTC m=+79.232007794: node.go: Stopping...Checkpoint 5
+[155006]2023-09-02 02:34:36.099049326 +0000 UTC m=+79.232025689: node.go: Stopping...Checkpoint 6
+[155006]2023-09-02 02:34:36.099075584 +0000 UTC m=+79.232051939: node.go: Stopping...Checkpoint 7
+[155006]2023-09-02 02:34:36.099094115 +0000 UTC m=+79.232070468: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0007ae300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc000794300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc000794300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154719]2023-09-02 02:34:36.099210376 +0000 UTC m=+81.650136015: node.go: Stopping...Checkpoint 3
+[154719]2023-09-02 02:34:36.099258683 +0000 UTC m=+81.650184319: node.go: Stopping...Checkpoint 4
+[154719]2023-09-02 02:34:36.099279696 +0000 UTC m=+81.650205331: node.go: Stopping...Checkpoint 5
+[154719]2023-09-02 02:34:36.099297538 +0000 UTC m=+81.650223172: node.go: Stopping...Checkpoint 6
+[154719]2023-09-02 02:34:36.099337349 +0000 UTC m=+81.650262983: node.go: Stopping...Checkpoint 7
+[154719]2023-09-02 02:34:36.099360123 +0000 UTC m=+81.650285757: node.go: Stopping...Checkpoint 8
+[154762]2023-09-02 02:34:36.099397886 +0000 UTC m=+81.343429917: node.go: Stopping...Checkpoint 3
+[154762]2023-09-02 02:34:36.099426038 +0000 UTC m=+81.343458069: node.go: Stopping...Checkpoint 4
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0009a0700)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0000fbd00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0000fbd00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154762]2023-09-02 02:34:36.099445079 +0000 UTC m=+81.343477110: node.go: Stopping...Checkpoint 5
+[154762]2023-09-02 02:34:36.099470527 +0000 UTC m=+81.343502559: node.go: Stopping...Checkpoint 6
+[154762]2023-09-02 02:34:36.09949948 +0000 UTC m=+81.343531511: node.go: Stopping...Checkpoint 7
+[154762]2023-09-02 02:34:36.099515896 +0000 UTC m=+81.343547928: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000760300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00073a300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00073a300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154672]2023-09-02 02:34:36.099719472 +0000 UTC m=+82.059182688: node.go: Stopping...Checkpoint 3
+[154672]2023-09-02 02:34:36.099746676 +0000 UTC m=+82.059209896: node.go: Stopping...Checkpoint 4
+[154672]2023-09-02 02:34:36.099766086 +0000 UTC m=+82.059229304: node.go: Stopping...Checkpoint 5
+[154672]2023-09-02 02:34:36.099793863 +0000 UTC m=+82.059257081: node.go: Stopping...Checkpoint 6
+[154672]2023-09-02 02:34:36.099820908 +0000 UTC m=+82.059284125: node.go: Stopping...Checkpoint 7
+[154672]2023-09-02 02:34:36.099837069 +0000 UTC m=+82.059300289: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0007a4300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00017c600)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00017c600)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154939]2023-09-02 02:34:37.092956843 +0000 UTC m=+80.989045773: node.go: Stopping...Checkpoint 1
+[154939]2023-09-02 02:34:37.093115603 +0000 UTC m=+80.989204489: node.go: Stopping...Checkpoint 2
+[154691]2023-09-02 02:34:37.192264442 +0000 UTC m=+83.041995154: node.go: Stopping...
+[154691]2023-09-02 02:34:37.192293412 +0000 UTC m=+83.042024344: node.go: Stopping...Checkpoint 1
+[154852]2023-09-02 02:34:37.192308352 +0000 UTC m=+81.716117113: node.go: Stopping...
+[154852]2023-09-02 02:34:37.192338471 +0000 UTC m=+81.716147233: node.go: Stopping...Checkpoint 1
+[154852]2023-09-02 02:34:37.193300215 +0000 UTC m=+81.717108975: node.go: Stopping...Checkpoint 2
+[154691]2023-09-02 02:34:37.194245829 +0000 UTC m=+83.043976541: node.go: Stopping...Checkpoint 2
+[154988]2023-09-02 02:34:37.194948956 +0000 UTC m=+80.482096396: node.go: Stopping...
+[154988]2023-09-02 02:34:37.194973195 +0000 UTC m=+80.482120631: node.go: Stopping...Checkpoint 1
+[154988]2023-09-02 02:34:37.195104752 +0000 UTC m=+80.482252189: node.go: Stopping...Checkpoint 2
+[154921]2023-09-02 02:34:37.196750585 +0000 UTC m=+81.199797820: node.go: Stopping...
+[154788]2023-09-02 02:34:37.205814218 +0000 UTC m=+82.232812764: node.go: Stopping...
+[154788]2023-09-02 02:34:37.205841837 +0000 UTC m=+82.232840364: node.go: Stopping...Checkpoint 1
+[154788]2023-09-02 02:34:37.2060733 +0000 UTC m=+82.233071827: node.go: Stopping...Checkpoint 2
+[154819]2023-09-02 02:34:37.287054805 +0000 UTC m=+82.108833564: node.go: Stopping...Checkpoint 1
+[154819]2023-09-02 02:34:37.287166632 +0000 UTC m=+82.108945393: node.go: Stopping...Checkpoint 2
+[154939]2023-09-02 02:34:37.293210317 +0000 UTC m=+81.189299201: node.go: Stopping...Checkpoint 3
+[154939]2023-09-02 02:34:37.293265395 +0000 UTC m=+81.189354280: node.go: Stopping...Checkpoint 4
+[154939]2023-09-02 02:34:37.293292714 +0000 UTC m=+81.189381601: node.go: Stopping...Checkpoint 5
+[154939]2023-09-02 02:34:37.293317912 +0000 UTC m=+81.189406797: node.go: Stopping...Checkpoint 6
+[154939]2023-09-02 02:34:37.293360009 +0000 UTC m=+81.189448892: node.go: Stopping...Checkpoint 7
+[154939]2023-09-02 02:34:37.293381849 +0000 UTC m=+81.189470735: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000171100)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc000102900)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc000102900)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154691]2023-09-02 02:34:37.344091065 +0000 UTC m=+83.193821776: node.go: Stopping...Checkpoint 3
+[154691]2023-09-02 02:34:37.344156667 +0000 UTC m=+83.193887381: node.go: Stopping...Checkpoint 4
+[154691]2023-09-02 02:34:37.344199974 +0000 UTC m=+83.193930687: node.go: Stopping...Checkpoint 5
+[154691]2023-09-02 02:34:37.344220445 +0000 UTC m=+83.193951359: node.go: Stopping...Checkpoint 6
+[154691]2023-09-02 02:34:37.344263409 +0000 UTC m=+83.193994122: node.go: Stopping...Checkpoint 7
+[154691]2023-09-02 02:34:37.344283795 +0000 UTC m=+83.194014506: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000570300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00054a300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00054a300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154788]2023-09-02 02:34:37.369619628 +0000 UTC m=+82.396618157: node.go: Stopping...Checkpoint 3
+[154788]2023-09-02 02:34:37.400780987 +0000 UTC m=+82.427779514: node.go: Stopping...Checkpoint 4
+[154788]2023-09-02 02:34:37.40083653 +0000 UTC m=+82.427835057: node.go: Stopping...Checkpoint 5
+[154788]2023-09-02 02:34:37.400861604 +0000 UTC m=+82.427860133: node.go: Stopping...Checkpoint 6
+[154788]2023-09-02 02:34:37.400897648 +0000 UTC m=+82.427896174: node.go: Stopping...Checkpoint 7
+[154788]2023-09-02 02:34:37.400916826 +0000 UTC m=+82.427915355: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0005d4300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0005b2300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0005b2300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154988]2023-09-02 02:34:37.397490306 +0000 UTC m=+80.684637743: node.go: Stopping...Checkpoint 3
+[154852]2023-09-02 02:34:37.397513242 +0000 UTC m=+81.921322025: node.go: Stopping...Checkpoint 3
+[154988]2023-09-02 02:34:37.401381799 +0000 UTC m=+80.688529236: node.go: Stopping...Checkpoint 4
+[154988]2023-09-02 02:34:37.401413345 +0000 UTC m=+80.688560781: node.go: Stopping...Checkpoint 5
+[154852]2023-09-02 02:34:37.401419064 +0000 UTC m=+81.925227824: node.go: Stopping...Checkpoint 4
+[154988]2023-09-02 02:34:37.401432488 +0000 UTC m=+80.688579924: node.go: Stopping...Checkpoint 6
+[154852]2023-09-02 02:34:37.401460697 +0000 UTC m=+81.925269483: node.go: Stopping...Checkpoint 5
+[154988]2023-09-02 02:34:37.401466782 +0000 UTC m=+80.688614218: node.go: Stopping...Checkpoint 7
+[154988]2023-09-02 02:34:37.401483706 +0000 UTC m=+80.688631143: node.go: Stopping...Checkpoint 8
+[154852]2023-09-02 02:34:37.401487775 +0000 UTC m=+81.925296536: node.go: Stopping...Checkpoint 6
+[154852]2023-09-02 02:34:37.401525766 +0000 UTC m=+81.925334533: node.go: Stopping...Checkpoint 7
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc00073b800)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0006d7400)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0006d7400)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154852]2023-09-02 02:34:37.401544345 +0000 UTC m=+81.925353105: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000846300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc000598400)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc000598400)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154819]2023-09-02 02:34:37.414466904 +0000 UTC m=+82.236245664: node.go: Stopping...Checkpoint 3
+[154819]2023-09-02 02:34:37.41450624 +0000 UTC m=+82.236284999: node.go: Stopping...Checkpoint 4
+[154819]2023-09-02 02:34:37.414525397 +0000 UTC m=+82.236304157: node.go: Stopping...Checkpoint 5
+[154819]2023-09-02 02:34:37.414543181 +0000 UTC m=+82.236321939: node.go: Stopping...Checkpoint 6
+[154819]2023-09-02 02:34:37.414569738 +0000 UTC m=+82.236348514: node.go: Stopping...Checkpoint 7
+[154819]2023-09-02 02:34:37.414584351 +0000 UTC m=+82.236363111: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000934700)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00017fe00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00017fe00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154921]2023-09-02 02:34:37.864202605 +0000 UTC m=+81.867249861: node.go: Stopping...Checkpoint 1
+[154921]2023-09-02 02:34:37.864298604 +0000 UTC m=+81.867345818: node.go: Stopping...Checkpoint 2
+[154921]2023-09-02 02:34:38.046083309 +0000 UTC m=+82.049130524: node.go: Stopping...Checkpoint 3
+[154921]2023-09-02 02:34:38.046135584 +0000 UTC m=+82.049182799: node.go: Stopping...Checkpoint 4
+[154921]2023-09-02 02:34:38.046156811 +0000 UTC m=+82.049204027: node.go: Stopping...Checkpoint 5
+[154921]2023-09-02 02:34:38.046185071 +0000 UTC m=+82.049232287: node.go: Stopping...Checkpoint 6
+[154921]2023-09-02 02:34:38.046211983 +0000 UTC m=+82.049259199: node.go: Stopping...Checkpoint 7
+[154921]2023-09-02 02:34:38.04622816 +0000 UTC m=+82.049275377: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0006d2300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0006ac300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0006ac300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154741]2023-09-02 02:34:38.517774432 +0000 UTC m=+83.949170930: node.go: Stopping...
+[154741]2023-09-02 02:34:38.517803834 +0000 UTC m=+83.949200331: node.go: Stopping...Checkpoint 1
+[154799]2023-09-02 02:34:38.517813246 +0000 UTC m=+83.451206747: node.go: Stopping...
+[154799]2023-09-02 02:34:38.517831489 +0000 UTC m=+83.451224981: node.go: Stopping...Checkpoint 1
+[154799]2023-09-02 02:34:38.518028535 +0000 UTC m=+83.451422026: node.go: Stopping...Checkpoint 2
+[154875]2023-09-02 02:34:38.518126733 +0000 UTC m=+82.933701030: node.go: Stopping...
+[154875]2023-09-02 02:34:38.518150387 +0000 UTC m=+82.933724684: node.go: Stopping...Checkpoint 1
+[154741]2023-09-02 02:34:38.518199981 +0000 UTC m=+83.949596477: node.go: Stopping...Checkpoint 2
+[154875]2023-09-02 02:34:38.518357256 +0000 UTC m=+82.933931553: node.go: Stopping...Checkpoint 2
+[155075]2023-09-02 02:34:38.53338249 +0000 UTC m=+80.728326077: node.go: Stopping...
+[154692]2023-09-02 02:34:38.533396796 +0000 UTC m=+84.365389237: node.go: Stopping...
+[155075]2023-09-02 02:34:38.533418035 +0000 UTC m=+80.728361609: node.go: Stopping...Checkpoint 1
+[154692]2023-09-02 02:34:38.533420952 +0000 UTC m=+84.365413300: node.go: Stopping...Checkpoint 1
+[155075]2023-09-02 02:34:38.533754481 +0000 UTC m=+80.728698053: node.go: Stopping...Checkpoint 2
+[154946]2023-09-02 02:34:38.533790124 +0000 UTC m=+82.320697331: node.go: Stopping...
+[154946]2023-09-02 02:34:38.5338124 +0000 UTC m=+82.320719602: node.go: Stopping...Checkpoint 1
+[154946]2023-09-02 02:34:38.533966081 +0000 UTC m=+82.320873283: node.go: Stopping...Checkpoint 2
+[154692]2023-09-02 02:34:38.534105775 +0000 UTC m=+84.366098116: node.go: Stopping...Checkpoint 2
+[154946]2023-09-02 02:34:38.712320866 +0000 UTC m=+82.499228069: node.go: Stopping...Checkpoint 3
+[154741]2023-09-02 02:34:38.712317897 +0000 UTC m=+84.143714398: node.go: Stopping...Checkpoint 3
+[154946]2023-09-02 02:34:38.712359883 +0000 UTC m=+82.499267090: node.go: Stopping...Checkpoint 4
+[154875]2023-09-02 02:34:38.712355695 +0000 UTC m=+83.127929992: node.go: Stopping...Checkpoint 3
+[154741]2023-09-02 02:34:38.712366051 +0000 UTC m=+84.143762549: node.go: Stopping...Checkpoint 4
+[154946]2023-09-02 02:34:38.712382719 +0000 UTC m=+82.499289964: node.go: Stopping...Checkpoint 5
+[154875]2023-09-02 02:34:38.71238639 +0000 UTC m=+83.127960686: node.go: Stopping...Checkpoint 4
+[154741]2023-09-02 02:34:38.712407071 +0000 UTC m=+84.143803567: node.go: Stopping...Checkpoint 5
+[154946]2023-09-02 02:34:38.712411737 +0000 UTC m=+82.499318940: node.go: Stopping...Checkpoint 6
+[154875]2023-09-02 02:34:38.71243101 +0000 UTC m=+83.128005307: node.go: Stopping...Checkpoint 5
+[154741]2023-09-02 02:34:38.712430933 +0000 UTC m=+84.143827430: node.go: Stopping...Checkpoint 6
+[154946]2023-09-02 02:34:38.712445482 +0000 UTC m=+82.499352685: node.go: Stopping...Checkpoint 7
+[154875]2023-09-02 02:34:38.712451957 +0000 UTC m=+83.128026252: node.go: Stopping...Checkpoint 6
+[154799]2023-09-02 02:34:38.712458331 +0000 UTC m=+83.645851824: node.go: Stopping...Checkpoint 3
+[154741]2023-09-02 02:34:38.71246553 +0000 UTC m=+84.143862027: node.go: Stopping...Checkpoint 7
+[154946]2023-09-02 02:34:38.712475622 +0000 UTC m=+82.499382825: node.go: Stopping...Checkpoint 8
+[154875]2023-09-02 02:34:38.712480761 +0000 UTC m=+83.128055056: node.go: Stopping...Checkpoint 7
+[154741]2023-09-02 02:34:38.712488128 +0000 UTC m=+84.143884626: node.go: Stopping...Checkpoint 8
+[154799]2023-09-02 02:34:38.712487881 +0000 UTC m=+83.645881373: node.go: Stopping...Checkpoint 4
+[154875]2023-09-02 02:34:38.71250502 +0000 UTC m=+83.128079319: node.go: Stopping...Checkpoint 8
+[154799]2023-09-02 02:34:38.712511562 +0000 UTC m=+83.645905054: node.go: Stopping...Checkpoint 5
+[154799]2023-09-02 02:34:38.712529682 +0000 UTC m=+83.645923175: node.go: Stopping...Checkpoint 6
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0007fa300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0007da300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0007da300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0006e5800)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0000fbd00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0000fbd00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154799]2023-09-02 02:34:38.712554748 +0000 UTC m=+83.645948241: node.go: Stopping...Checkpoint 7
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000752a00)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0000c7700)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0000c7700)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154799]2023-09-02 02:34:38.712574301 +0000 UTC m=+83.645967796: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000526a00)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0005bc400)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0005bc400)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154692]2023-09-02 02:34:38.712905946 +0000 UTC m=+84.544898287: node.go: Stopping...Checkpoint 3
+[154692]2023-09-02 02:34:38.712937291 +0000 UTC m=+84.544929633: node.go: Stopping...Checkpoint 4
+[154692]2023-09-02 02:34:38.71295947 +0000 UTC m=+84.544951811: node.go: Stopping...Checkpoint 5
+[154692]2023-09-02 02:34:38.712980877 +0000 UTC m=+84.544973219: node.go: Stopping...Checkpoint 6
+[154692]2023-09-02 02:34:38.713027074 +0000 UTC m=+84.545019417: node.go: Stopping...Checkpoint 7
+[154692]2023-09-02 02:34:38.713095996 +0000 UTC m=+84.545088365: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc00081c300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0004fa300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0004fa300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[155075]2023-09-02 02:34:38.756890878 +0000 UTC m=+80.951834449: node.go: Stopping...Checkpoint 3
+[155075]2023-09-02 02:34:38.756927126 +0000 UTC m=+80.951870696: node.go: Stopping...Checkpoint 4
+[155075]2023-09-02 02:34:38.756944027 +0000 UTC m=+80.951887597: node.go: Stopping...Checkpoint 5
+[155075]2023-09-02 02:34:38.756958123 +0000 UTC m=+80.951901693: node.go: Stopping...Checkpoint 6
+[155075]2023-09-02 02:34:38.756988343 +0000 UTC m=+80.951931916: node.go: Stopping...Checkpoint 7
+[155075]2023-09-02 02:34:38.75700168 +0000 UTC m=+80.951945269: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0005ff100)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc000664300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc000664300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154845]2023-09-02 02:34:39.929999473 +0000 UTC m=+84.486917226: node.go: Stopping...
+[154770]2023-09-02 02:34:39.929999997 +0000 UTC m=+85.116725867: node.go: Stopping...
+[154845]2023-09-02 02:34:39.930034786 +0000 UTC m=+84.486952539: node.go: Stopping...Checkpoint 1
+[154770]2023-09-02 02:34:39.930038893 +0000 UTC m=+85.116764771: node.go: Stopping...Checkpoint 1
+[154845]2023-09-02 02:34:39.930291969 +0000 UTC m=+84.487209723: node.go: Stopping...Checkpoint 2
+[154770]2023-09-02 02:34:39.930295553 +0000 UTC m=+85.117021401: node.go: Stopping...Checkpoint 2
+[154908]2023-09-02 02:34:39.931225986 +0000 UTC m=+84.021048340: node.go: Stopping...
+[154679]2023-09-02 02:34:39.932894924 +0000 UTC m=+85.819994394: node.go: Stopping...
+[154679]2023-09-02 02:34:39.932916914 +0000 UTC m=+85.820016371: node.go: Stopping...Checkpoint 1
+[154679]2023-09-02 02:34:39.933154139 +0000 UTC m=+85.820253596: node.go: Stopping...Checkpoint 2
+[154968]2023-09-02 02:34:39.936499929 +0000 UTC m=+83.448734219: node.go: Stopping...
+[154728]2023-09-02 02:34:39.937040235 +0000 UTC m=+85.431605430: node.go: Stopping...
+[154728]2023-09-02 02:34:39.937061892 +0000 UTC m=+85.431626865: node.go: Stopping...Checkpoint 1
+[154728]2023-09-02 02:34:39.937295252 +0000 UTC m=+85.431860225: node.go: Stopping...Checkpoint 2
+[154845]2023-09-02 02:34:40.068916162 +0000 UTC m=+84.625833919: node.go: Stopping...Checkpoint 3
+[154845]2023-09-02 02:34:40.069674608 +0000 UTC m=+84.626592367: node.go: Stopping...Checkpoint 4
+[154845]2023-09-02 02:34:40.069708908 +0000 UTC m=+84.626626660: node.go: Stopping...Checkpoint 5
+[154845]2023-09-02 02:34:40.06972833 +0000 UTC m=+84.626646089: node.go: Stopping...Checkpoint 6
+[154845]2023-09-02 02:34:40.069758089 +0000 UTC m=+84.626675843: node.go: Stopping...Checkpoint 7
+[154845]2023-09-02 02:34:40.069774443 +0000 UTC m=+84.626692195: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0007ef800)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00078b400)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00078b400)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154770]2023-09-02 02:34:40.070207053 +0000 UTC m=+85.256932897: node.go: Stopping...Checkpoint 3
+[154770]2023-09-02 02:34:40.070239261 +0000 UTC m=+85.256965104: node.go: Stopping...Checkpoint 4
+[154770]2023-09-02 02:34:40.07026167 +0000 UTC m=+85.256987514: node.go: Stopping...Checkpoint 5
+[154770]2023-09-02 02:34:40.070279519 +0000 UTC m=+85.257005362: node.go: Stopping...Checkpoint 6
+[154770]2023-09-02 02:34:40.070312963 +0000 UTC m=+85.257038807: node.go: Stopping...Checkpoint 7
+[154770]2023-09-02 02:34:40.070327985 +0000 UTC m=+85.257053828: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0007ae300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0000fa700)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0000fa700)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154679]2023-09-02 02:34:40.070419294 +0000 UTC m=+85.957518751: node.go: Stopping...Checkpoint 3
+[154679]2023-09-02 02:34:40.070445021 +0000 UTC m=+85.957544477: node.go: Stopping...Checkpoint 4
+[154679]2023-09-02 02:34:40.070463253 +0000 UTC m=+85.957562713: node.go: Stopping...Checkpoint 5
+[154679]2023-09-02 02:34:40.070480096 +0000 UTC m=+85.957579552: node.go: Stopping...Checkpoint 6
+[154679]2023-09-02 02:34:40.070501028 +0000 UTC m=+85.957600485: node.go: Stopping...Checkpoint 7
+[154679]2023-09-02 02:34:40.070512601 +0000 UTC m=+85.957612058: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0007a4300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc000784300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc000784300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154728]2023-09-02 02:34:40.071275695 +0000 UTC m=+85.565840666: node.go: Stopping...Checkpoint 3
+[154728]2023-09-02 02:34:40.071304328 +0000 UTC m=+85.565869302: node.go: Stopping...Checkpoint 4
+[154728]2023-09-02 02:34:40.071334934 +0000 UTC m=+85.565899906: node.go: Stopping...Checkpoint 5
+[154728]2023-09-02 02:34:40.071349894 +0000 UTC m=+85.565914865: node.go: Stopping...Checkpoint 6
+[154728]2023-09-02 02:34:40.071368621 +0000 UTC m=+85.565933592: node.go: Stopping...Checkpoint 7
+[154728]2023-09-02 02:34:40.07138088 +0000 UTC m=+85.565945852: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000746a00)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc000189d00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc000189d00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154968]2023-09-02 02:34:40.349596261 +0000 UTC m=+83.861830342: node.go: Stopping...Checkpoint 1
+[154968]2023-09-02 02:34:40.34975129 +0000 UTC m=+83.861985344: node.go: Stopping...Checkpoint 2
+[154908]2023-09-02 02:34:40.399946114 +0000 UTC m=+84.489768447: node.go: Stopping...Checkpoint 1
+[154908]2023-09-02 02:34:40.400064549 +0000 UTC m=+84.489886883: node.go: Stopping...Checkpoint 2
+[154968]2023-09-02 02:34:40.494265171 +0000 UTC m=+84.006499224: node.go: Stopping...Checkpoint 3
+[154968]2023-09-02 02:34:40.494311758 +0000 UTC m=+84.006545811: node.go: Stopping...Checkpoint 4
+[154968]2023-09-02 02:34:40.494343915 +0000 UTC m=+84.006577974: node.go: Stopping...Checkpoint 5
+[154968]2023-09-02 02:34:40.494370899 +0000 UTC m=+84.006604954: node.go: Stopping...Checkpoint 6
+[154968]2023-09-02 02:34:40.494424452 +0000 UTC m=+84.006658505: node.go: Stopping...Checkpoint 7
+[154968]2023-09-02 02:34:40.494443289 +0000 UTC m=+84.006677343: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0007c3800)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0001ffa00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0001ffa00)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154908]2023-09-02 02:34:40.518928595 +0000 UTC m=+84.608750928: node.go: Stopping...Checkpoint 3
+[154908]2023-09-02 02:34:40.518980183 +0000 UTC m=+84.608802515: node.go: Stopping...Checkpoint 4
+[154908]2023-09-02 02:34:40.519017541 +0000 UTC m=+84.608839875: node.go: Stopping...Checkpoint 5
+[154908]2023-09-02 02:34:40.519043384 +0000 UTC m=+84.608865716: node.go: Stopping...Checkpoint 6
+[154908]2023-09-02 02:34:40.519078741 +0000 UTC m=+84.608901077: node.go: Stopping...Checkpoint 7
+[154908]2023-09-02 02:34:40.519101846 +0000 UTC m=+84.608924178: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000882300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0001fc500)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0001fc500)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154891]2023-09-02 02:34:41.238777298 +0000 UTC m=+85.577936351: node.go: Stopping...
+[154769]2023-09-02 02:34:41.238779295 +0000 UTC m=+86.387515708: node.go: Stopping...
+[154891]2023-09-02 02:34:41.238803938 +0000 UTC m=+85.577962991: node.go: Stopping...Checkpoint 1
+[154769]2023-09-02 02:34:41.238810678 +0000 UTC m=+86.387547084: node.go: Stopping...Checkpoint 1
+[154891]2023-09-02 02:34:41.238998871 +0000 UTC m=+85.578157925: node.go: Stopping...Checkpoint 2
+[154769]2023-09-02 02:34:41.239086684 +0000 UTC m=+86.387823087: node.go: Stopping...Checkpoint 2
+[154711]2023-09-02 02:34:41.239593677 +0000 UTC m=+86.845720274: node.go: Stopping...
+[154711]2023-09-02 02:34:41.239613237 +0000 UTC m=+86.845739832: node.go: Stopping...Checkpoint 1
+[154955]2023-09-02 02:34:41.239661128 +0000 UTC m=+84.894503463: node.go: Stopping...
+[155015]2023-09-02 02:34:41.239663323 +0000 UTC m=+84.268117781: node.go: Stopping...
+[154830]2023-09-02 02:34:41.239677822 +0000 UTC m=+86.008963750: node.go: Stopping...
+[154955]2023-09-02 02:34:41.239684274 +0000 UTC m=+84.894526610: node.go: Stopping...Checkpoint 1
+[155015]2023-09-02 02:34:41.239687213 +0000 UTC m=+84.268141671: node.go: Stopping...Checkpoint 1
+[154830]2023-09-02 02:34:41.239699239 +0000 UTC m=+86.008985169: node.go: Stopping...Checkpoint 1
+[154955]2023-09-02 02:34:41.239808474 +0000 UTC m=+84.894650809: node.go: Stopping...Checkpoint 2
+[154830]2023-09-02 02:34:41.239823527 +0000 UTC m=+86.009109456: node.go: Stopping...Checkpoint 2
+[155015]2023-09-02 02:34:41.23985903 +0000 UTC m=+84.268313490: node.go: Stopping...Checkpoint 2
+[154711]2023-09-02 02:34:41.239864758 +0000 UTC m=+86.845991357: node.go: Stopping...Checkpoint 2
+[154769]2023-09-02 02:34:41.243918371 +0000 UTC m=+86.392654775: node.go: Stopping...Checkpoint 3
+[155015]2023-09-02 02:34:41.243945044 +0000 UTC m=+84.272399502: node.go: Stopping...Checkpoint 3
+[154769]2023-09-02 02:34:41.243952156 +0000 UTC m=+86.392688560: node.go: Stopping...Checkpoint 4
+[154769]2023-09-02 02:34:41.243973483 +0000 UTC m=+86.392709885: node.go: Stopping...Checkpoint 5
+[155015]2023-09-02 02:34:41.2439746 +0000 UTC m=+84.272429058: node.go: Stopping...Checkpoint 4
+[154769]2023-09-02 02:34:41.243986636 +0000 UTC m=+86.392723039: node.go: Stopping...Checkpoint 6
+[155015]2023-09-02 02:34:41.243994525 +0000 UTC m=+84.272448983: node.go: Stopping...Checkpoint 5
+[154769]2023-09-02 02:34:41.244005862 +0000 UTC m=+86.392742266: node.go: Stopping...Checkpoint 7
+[155015]2023-09-02 02:34:41.244012689 +0000 UTC m=+84.272467148: node.go: Stopping...Checkpoint 6
+[154769]2023-09-02 02:34:41.244019477 +0000 UTC m=+86.392755880: node.go: Stopping...Checkpoint 8
+[155015]2023-09-02 02:34:41.244037317 +0000 UTC m=+84.272491775: node.go: Stopping...Checkpoint 7
+[155015]2023-09-02 02:34:41.24405317 +0000 UTC m=+84.272507649: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc00097a700)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00067b700)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00067b700)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0009e0000)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0006e4300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0006e4300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154891]2023-09-02 02:34:41.249315416 +0000 UTC m=+85.588474469: node.go: Stopping...Checkpoint 3
+[154891]2023-09-02 02:34:41.24935477 +0000 UTC m=+85.588513821: node.go: Stopping...Checkpoint 4
+[154891]2023-09-02 02:34:41.249373594 +0000 UTC m=+85.588532646: node.go: Stopping...Checkpoint 5
+[154891]2023-09-02 02:34:41.249390009 +0000 UTC m=+85.588549061: node.go: Stopping...Checkpoint 6
+[154891]2023-09-02 02:34:41.249414647 +0000 UTC m=+85.588573699: node.go: Stopping...Checkpoint 7
+[154891]2023-09-02 02:34:41.249433919 +0000 UTC m=+85.588592970: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000846300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc000824300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc000824300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154955]2023-09-02 02:34:41.254124694 +0000 UTC m=+84.908967094: node.go: Stopping...Checkpoint 3
+[154955]2023-09-02 02:34:41.254224241 +0000 UTC m=+84.909066575: node.go: Stopping...Checkpoint 4
+[154955]2023-09-02 02:34:41.254244098 +0000 UTC m=+84.909086433: node.go: Stopping...Checkpoint 5
+[154955]2023-09-02 02:34:41.254261561 +0000 UTC m=+84.909103896: node.go: Stopping...Checkpoint 6
+[154955]2023-09-02 02:34:41.254288253 +0000 UTC m=+84.909130587: node.go: Stopping...Checkpoint 7
+[154955]2023-09-02 02:34:41.254302831 +0000 UTC m=+84.909145170: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc00086a300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc00084e300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc00084e300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154711]2023-09-02 02:34:41.257103805 +0000 UTC m=+86.863230399: node.go: Stopping...Checkpoint 3
+[154711]2023-09-02 02:34:41.257181011 +0000 UTC m=+86.863307609: node.go: Stopping...Checkpoint 4
+[154711]2023-09-02 02:34:41.257200347 +0000 UTC m=+86.863326941: node.go: Stopping...Checkpoint 5
+[154711]2023-09-02 02:34:41.257213606 +0000 UTC m=+86.863340201: node.go: Stopping...Checkpoint 6
+[154711]2023-09-02 02:34:41.257232489 +0000 UTC m=+86.863359083: node.go: Stopping...Checkpoint 7
+[154711]2023-09-02 02:34:41.257243864 +0000 UTC m=+86.863370458: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc0007c0300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0007aa300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0007aa300)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
+[154830]2023-09-02 02:34:41.257958935 +0000 UTC m=+86.027244866: node.go: Stopping...Checkpoint 3
+[154830]2023-09-02 02:34:41.258018648 +0000 UTC m=+86.027304577: node.go: Stopping...Checkpoint 4
+[154830]2023-09-02 02:34:41.258045047 +0000 UTC m=+86.027330983: node.go: Stopping...Checkpoint 5
+[154830]2023-09-02 02:34:41.258068475 +0000 UTC m=+86.027354404: node.go: Stopping...Checkpoint 6
+[154830]2023-09-02 02:34:41.258107363 +0000 UTC m=+86.027393291: node.go: Stopping...Checkpoint 7
+[154830]2023-09-02 02:34:41.25815322 +0000 UTC m=+86.027439149: node.go: Stopping...Checkpoint 8
+goroutine 1 [running]:
+runtime/debug.Stack()
+	runtime/debug/stack.go:24 +0x65
+github.com/algorand/go-algorand/node.logPrint({0x1c76117, 0x7}, {0x1dcc981, 0x17}, 0x1)
+	github.com/algorand/go-algorand/node/node.go:182 +0x1d6
+github.com/algorand/go-algorand/node.(*AlgorandFullNode).Stop(0xc000798300)
+	github.com/algorand/go-algorand/node/node.go:454 +0x2d8
+github.com/algorand/go-algorand/daemon/algod.(*Server).Stop(0xc0000fc500)
+	github.com/algorand/go-algorand/daemon/algod/server.go:399 +0x79
+github.com/algorand/go-algorand/daemon/algod.(*Server).Start(0xc0000fc500)
+	github.com/algorand/go-algorand/daemon/algod/server.go:385 +0x11dd
+main.run()
+	github.com/algorand/go-algorand/cmd/algod/main.go:407 +0x235c
+main.main()
+	github.com/algorand/go-algorand/cmd/algod/main.go:62 +0x5a
