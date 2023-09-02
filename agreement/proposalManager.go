@@ -161,6 +161,10 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
+		if err != nil {
+			e.messageEvent.FreshOnlyForCredentialHistoryTracking = true
+		}
+
 		return r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.Round, v.R.Period, 0)
 
 	case payloadPresent:
@@ -218,7 +222,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 // filterVote filters a vote, checking if it is both fresh and not a duplicate.
 func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) error {
 	err := proposalFresh(freshData, uv)
-	if err != nil {
+	if err != nil && !proposalUsedForCredentialHistory(freshData.PlayerRound, uv) {
 		return fmt.Errorf("proposalManager: filtered proposal-vote due to age: %v", err)
 	}
 
@@ -245,6 +249,11 @@ func proposalUsedForCredentialHistory(curRound round, vote unauthenticatedVote) 
 
 // voteFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
+
+	//	if proposalUsedForCredentialHistory(freshData.PlayerRound, vote) {
+	//		return nil
+	//	}
+
 	switch vote.R.Round {
 	case freshData.PlayerRound:
 		if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > vote.R.Period {

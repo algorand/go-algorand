@@ -615,7 +615,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			ver := e.Proto.Version
 			proto := config.Consensus[ver]
 			v := e.Input.Vote
-			if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated && proposalUsedForCredentialHistory(p.Round, v.u()) {
+			if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated {
 				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
 			}
 			err := ef.(filteredEvent).Err
@@ -715,7 +715,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			ver := e.Proto.Version
 			proto := config.Consensus[ver]
 			v := e.Input.Vote
-			if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated && proposalUsedForCredentialHistory(p.Round, v.u()) {
+			if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated {
 				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
 			}
 			err := ef.(filteredEvent).Err

@@ -374,6 +374,24 @@ func expectDisconnect(t *testing.T, trace ioTrace, errMsg string, playerN int, e
 	}), errMsg, playerN, eventN)
 }
 
+func expectVerify(t *testing.T, trace ioTrace, errMsg string, playerN int, eventN int) {
+	require.Truef(t, trace.ContainsFn(func(b event) bool {
+		if b.t() != wrappedAction {
+			return false
+		}
+
+		wrapper := b.(wrappedActionEvent)
+		if wrapper.action.t() != verifyVote {
+			return false
+		}
+		act := wrapper.action.(cryptoAction)
+		if act.T == verifyVote {
+			return true
+		}
+		return false
+	}), errMsg, playerN, eventN)
+}
+
 func requireActionCount(t *testing.T, trace ioTrace, expectedCount, playerN, eventN int) {
 	require.Equalf(t, trace.countAction(), expectedCount, "Player should not emit extra actions, player: %v, event: %v", playerN, eventN)
 }
@@ -456,11 +474,24 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			// code -- you would have filtered the votePresent for this vote.
 			if p > 0 {
 				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
-			} else {
+			} else if config.Consensus[protocol.ConsensusCurrentVersion].DynamicFilterTimeout {
 				requireActionCount(t, trace, 1, playerN, eventN)
 				expectRelay(t, trace, "Player should relay period 0 msg from past rounds, player: %v, event: %v", playerN, eventN)
+			} else {
+				requireActionCount(t, trace, 1, playerN, eventN)
+				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
 			}
-		case proposeVotePresentEventSamePeriod, softVoteVerifiedEventSamePeriod, softVotePresentEventSamePeriod, proposeVoteVerifiedEventNextPeriod, payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle, bundleVerifiedEventSamePeriod, bundlePresentEventSamePeriod:
+		case proposeVotePresentEventSamePeriod:
+			if p > 0 {
+				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
+			} else if config.Consensus[protocol.ConsensusCurrentVersion].DynamicFilterTimeout {
+				requireActionCount(t, trace, 1, playerN, eventN)
+				expectVerify(t, trace, "Player should verify period 0 msg from past rounds, player: %v, event: %v", playerN, eventN)
+			} else {
+				requireActionCount(t, trace, 1, playerN, eventN)
+				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
+			}
+		case softVoteVerifiedEventSamePeriod, softVotePresentEventSamePeriod, proposeVoteVerifiedEventNextPeriod, payloadPresentEvent, payloadVerifiedEvent, payloadVerifiedEventNoMessageHandle, bundleVerifiedEventSamePeriod, bundlePresentEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
 			expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
 		case softVoteVerifiedErrorEventSamePeriod, proposeVoteVerifiedErrorEventSamePeriod, bundleVerifiedErrorEvent:

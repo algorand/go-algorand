@@ -285,6 +285,8 @@ type messageEvent struct {
 	Cancelled bool
 
 	Proto ConsensusVersionView
+
+	FreshOnlyForCredentialHistoryTracking bool
 }
 
 func (e messageEvent) t() eventType {
