@@ -1353,6 +1353,8 @@ func initConsensusProtocols() {
 
 	v38.AgreementFilterTimeoutPeriod0 = 3000 * time.Millisecond
 
+	v38.DynamicFilterTimeout = true
+
 	Consensus[protocol.ConsensusV38] = v38
 
 	// v37 can be upgraded to v38, with an update delay of 12h:

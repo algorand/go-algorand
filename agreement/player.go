@@ -614,12 +614,16 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		case voteFiltered:
 			ver := e.Proto.Version
 			proto := config.Consensus[ver]
-			if !proto.DynamicFilterTimeout || !ef.(filteredEvent).ContinueProcessingVoteForCredentialTracking {
+			if !proto.DynamicFilterTimeout {
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
-			} else if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated {
+			}
+			if ef.(filteredEvent).StateUpdated {
 				v := e.Input.Vote
 				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+			} else if !ef.(filteredEvent).ContinueProcessingVoteForCredentialTracking {
+				err := ef.(filteredEvent).Err
+				return append(actions, ignoreAction(e, err))
 			}
 		}
 
