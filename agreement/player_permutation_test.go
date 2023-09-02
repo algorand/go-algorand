@@ -400,7 +400,7 @@ func requireTraceContains(t *testing.T, trace ioTrace, expected event, playerN, 
 	require.Truef(t, trace.Contains(expected), "Player should emit action, player: %v, event: %v", playerN, eventN)
 }
 
-func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, helper *voteMakerHelper, trace ioTrace) {
+func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, helper *voteMakerHelper, trace ioTrace, dynamicFilterTimeoutEnabled bool) {
 	const r = round(209)
 	const p = period(0)
 	var payload = makeRandomProposalPayload(r)
@@ -474,7 +474,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 			// code -- you would have filtered the votePresent for this vote.
 			if p > 0 {
 				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
-			} else if config.Consensus[protocol.ConsensusCurrentVersion].DynamicFilterTimeout {
+			} else if dynamicFilterTimeoutEnabled {
 				requireActionCount(t, trace, 1, playerN, eventN)
 				expectRelay(t, trace, "Player should relay period 0 msg from past rounds, player: %v, event: %v", playerN, eventN)
 			} else {
@@ -484,7 +484,7 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		case proposeVotePresentEventSamePeriod:
 			if p > 0 {
 				expectIgnore(t, trace, "Player should ignore msg from past rounds, player: %v, event: %v", playerN, eventN)
-			} else if config.Consensus[protocol.ConsensusCurrentVersion].DynamicFilterTimeout {
+			} else if dynamicFilterTimeoutEnabled {
 				requireActionCount(t, trace, 1, playerN, eventN)
 				expectVerify(t, trace, "Player should verify period 0 msg from past rounds, player: %v, event: %v", playerN, eventN)
 			} else {
@@ -805,18 +805,30 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 // Generates a set of player states, router states, and messageEvents and tests all permutations of them
 func TestPlayerPermutation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// check with/without setting dynamic filter timeout
+	playerPermutationCheck(t, false)
+	playerPermutationCheck(t, true)
+}
+
+func playerPermutationCheck(t *testing.T, enableDynamicFilterTimeout bool) {
+	// create a protocol version where dynamic filter is enabled
+	version, _, configCleanup := createDynamicFilterConfig()
+	defer configCleanup()
 
 	for i := 0; i < 7; i++ {
 		for j := 0; j < 14; j++ {
 			_, pMachine, helper := getPlayerPermutation(t, i)
 			inMsg := getMessageEventPermutation(t, j, helper)
+			if enableDynamicFilterTimeout {
+				inMsg.Proto = ConsensusVersionView{Version: version}
+			}
 			err, panicErr := pMachine.transition(inMsg)
 			fmt.Println(pMachine.getTrace().events)
 			fmt.Println("")
 			require.NoErrorf(t, err, "player: %v, event: %v", i, j)
 			require.NoErrorf(t, panicErr, "player: %v, event: %v", i, j)
 
-			verifyPermutationExpectedActions(t, i, j, helper, pMachine.getTrace())
+			verifyPermutationExpectedActions(t, i, j, helper, pMachine.getTrace(), enableDynamicFilterTimeout)
 		}
 	}
 }
