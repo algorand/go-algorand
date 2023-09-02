@@ -133,8 +133,8 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 	switch e.t() {
 	case votePresent:
 		err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
-		// don't filter votes we get if they may be used for tracking credential arrival times
 		if err != nil {
+			// mark filtered votes that may still update the best credential arrival time
 			credTrackingProcessing := proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, e.Input.UnauthenticatedVote)
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), ContinueProcessingVoteForCredentialTracking: credTrackingProcessing}
 		}
@@ -244,7 +244,7 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 
 	qe := voteFilterRequestEvent{RawVote: uv.R}
 	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
-	if sawVote.t() == voteFiltered && !sawVote.(filteredEvent).StateUpdated {
+	if sawVote.t() == voteFiltered {
 		return fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", uv.R.Sender, uv.R.Round, uv.R.Period)
 	}
 	return nil
@@ -265,11 +265,6 @@ func proposalUsedForCredentialHistory(curRound round, vote unauthenticatedVote) 
 
 // voteFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
-
-	//	if proposalUsedForCredentialHistory(freshData.PlayerRound, vote) {
-	//		return nil
-	//	}
-
 	switch vote.R.Round {
 	case freshData.PlayerRound:
 		if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > vote.R.Period {

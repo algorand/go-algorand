@@ -238,7 +238,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, emptyEvent{})
+	b.AddInOutPair(inMsg, emptyEvent{})
 
 	// vote in same round p + 1 should also be fine
 	pV = helper.MakeRandomProposalValue()
@@ -252,7 +252,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, emptyEvent{})
+	b.AddInOutPair(inMsg, emptyEvent{})
 
 	// vote in same round p+ 2 should be filtered
 	pV = helper.MakeRandomProposalValue()
@@ -266,7 +266,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// vote in same round p - 2 should be filtered
 	pV = helper.MakeRandomProposalValue()
@@ -280,7 +280,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// vote in r + 1 should be filtered unless period 0
 	pV = helper.MakeRandomProposalValue()
@@ -294,7 +294,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	pV = helper.MakeRandomProposalValue()
 	uv = helper.MakeUnauthenticatedVote(t, 0, r+1, 0, s, *pV)
@@ -307,7 +307,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, emptyEvent{})
+	b.AddInOutPair(inMsg, emptyEvent{})
 
 	// vote > r + 1 should be filtered
 	pV = helper.MakeRandomProposalValue()
@@ -321,7 +321,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// vote from credentialRoundLag rounds ago and period 0 should continue
 	// processing only for the purpose of tracking credentials.
@@ -350,7 +350,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// vote older than credentialRoundLag should be rejected even if period 0
 	pV = helper.MakeRandomProposalValue()
@@ -364,7 +364,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	// vote older than credentialRoundLag should be rejected on any period
 	pV = helper.MakeRandomProposalValue()
@@ -378,7 +378,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	//b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
 
 	res, err := b.Build().Validate(pM)
 	require.NoError(t, err)
