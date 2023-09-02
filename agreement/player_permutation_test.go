@@ -805,7 +805,8 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 // Generates a set of player states, router states, and messageEvents and tests all permutations of them
 func TestPlayerPermutation(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	// check with/without setting dynamic filter timeout
+	// check with current consensus params and with consensus params that
+	// explicitly enable dynamic filter timeout
 	playerPermutationCheck(t, false)
 	playerPermutationCheck(t, true)
 }
