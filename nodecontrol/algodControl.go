@@ -183,8 +183,17 @@ func (nc *NodeController) StopAlgod() (err error) {
 	return
 }
 
+func logPrint(from, msg string) {
+	f, _ := os.OpenFile("/tmp/mylog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	pid := os.Getpid()
+	f.WriteString(fmt.Sprintf("[%d]%s: %s: %s\n", pid, time.Now().String(), from, msg))
+	//      f.WriteString(string(debug.Stack()))
+	f.Close()
+}
+
 // StartAlgod spins up an algod process and waits for it to begin
 func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, err error) {
+	logPrint("file.o", "starting Node...")
 	// If algod is already running, we can't start again
 	alreadyRunning = nc.algodRunning()
 	if alreadyRunning {
@@ -228,12 +237,17 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 	algodExitChan := make(chan error, 1)
 	startAlgodCompletedChan := make(chan struct{})
 	defer close(startAlgodCompletedChan)
+	logPrint("file.o", "forking the waiting function...")
 	go func() {
 		// this Wait call is important even beyond the scope of this function; it allows the system to
 		// move the process from a "zombie" state into "done" state, and is required for the Signal(0) test.
+		logPrint("file.o", "waiting here...")
 		err := algodCmd.Wait()
 		select {
 		case <-startAlgodCompletedChan:
+			if err != nil {
+				logPrint("file.o", err.Error())
+			}
 			// we've already exited this function, so we want to report to the error to the callback.
 			if args.ExitErrorCallback != nil {
 				args.ExitErrorCallback(nc, err)

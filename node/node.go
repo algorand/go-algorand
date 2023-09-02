@@ -24,6 +24,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -173,9 +174,20 @@ type TxnWithStatus struct {
 	ApplyData transactions.ApplyData
 }
 
+func logPrint(from, msg string, st bool) {
+	f, _ := os.OpenFile("/tmp/mylog.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	pid := os.Getpid()
+	f.WriteString(fmt.Sprintf("[%d]%s: %s: %s\n", pid, time.Now().String(), from, msg))
+	if st {
+		f.WriteString(string(debug.Stack()))
+	}
+	f.Close()
+}
+
 // MakeFull sets up an Algorand full node
 // (i.e., it returns a node that participates in consensus)
 func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
+	logPrint("", "MakeFull!!!!!!!!!!!!!!!!!!!!!!", false)
 	node := new(AlgorandFullNode)
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
@@ -404,16 +416,18 @@ func (node *AlgorandFullNode) ListeningAddress() (string, bool) {
 
 // Stop stops running the node. Once a node is closed, it can never start again.
 func (node *AlgorandFullNode) Stop() {
+	logPrint("node.go", "Stopping...", false)
 	node.mu.Lock()
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
 	}()
-
+	logPrint("node.go", "Stopping...Checkpoint 1", false)
 	node.net.ClearHandlers()
 	if !node.config.DisableNetworking {
 		node.net.Stop()
 	}
+	logPrint("node.go", "Stopping...Checkpoint 2", false)
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
@@ -425,11 +439,19 @@ func (node *AlgorandFullNode) Stop() {
 		node.blockService.Stop()
 		node.ledgerService.Stop()
 	}
+
+	logPrint("node.go", "Stopping...Checkpoint 3", false)
 	node.catchupBlockAuth.Quit()
+	logPrint("node.go", "Stopping...Checkpoint 4", false)
 	node.highPriorityCryptoVerificationPool.Shutdown()
+	logPrint("node.go", "Stopping...Checkpoint 5", false)
 	node.lowPriorityCryptoVerificationPool.Shutdown()
+	logPrint("node.go", "Stopping...Checkpoint 6", false)
 	node.cryptoPool.Shutdown()
+	logPrint("node.go", "Stopping...Checkpoint 7", false)
 	node.cancelCtx()
+	//        node.ledger.Close()
+	logPrint("node.go", "Stopping...Checkpoint 8", true)
 }
 
 // note: unlike the other two functions, this accepts a whole filename

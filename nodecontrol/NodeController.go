@@ -17,6 +17,7 @@
 package nodecontrol
 
 import (
+	"fmt"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -117,19 +118,23 @@ func killPID(pid int) (killed bool, err error) {
 		return false, err
 	}
 
+	logPrint("NodeController.gh", "attempting SIGTERM")
 	err = util.KillProcess(pid, syscall.SIGTERM)
 	if err != nil {
 		return false, err
 	}
+	logPrint("NodeController.gh", "going for the kill... 30sec")
 	waitLong := time.After(time.Second * 30)
 	for {
 		// Send null signal - if process still exists, it'll return nil
 		// So when we get an error, assume it's gone.
 		if err = process.Signal(syscall.Signal(0)); err != nil {
+			logPrint("NodeController.gh", "signalled...")
 			return false, nil
 		}
 		select {
 		case <-waitLong:
+			logPrint("NodeController.gh", fmt.Sprintf("SIGKILL %d ...", pid))
 			return true, util.KillProcess(pid, syscall.SIGKILL)
 		case <-time.After(time.Millisecond * 100):
 		}
