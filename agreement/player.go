@@ -615,13 +615,20 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			ver := e.Proto.Version
 			proto := config.Consensus[ver]
 			if !proto.DynamicFilterTimeout {
+				// Dynamic filter timeout feature disabled, so we filter the
+				// message as usual (keeping earlier behavior)
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
 			}
 			if ef.(filteredEvent).StateUpdated {
+				// Dynamic filter timeout feature enabled, and current message
+				// updated the best credential arrival time
 				v := e.Input.Vote
 				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
 			} else if !ef.(filteredEvent).ContinueProcessingVoteForCredentialTracking {
+				// Dynamic filter timeout feature enabled, and current message
+				// may update the best credential arrival time, so we should
+				// continue processing.
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
 			}

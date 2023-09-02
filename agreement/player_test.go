@@ -2163,7 +2163,6 @@ func TestPlayerRePropagatesProposalPayload(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 	relayPayloadEvent = ev(networkAction{T: broadcast, Tag: protocol.ProposalPayloadTag, CompoundMessage: compoundMessage{Proposal: payloadNext.u()}})
-	fmt.Println(relayPayloadEvent)
 	require.Truef(t, pM.getTrace().Contains(relayPayloadEvent), "Player should relay staged payload over pinned payload on resynch")
 }
 
@@ -3739,6 +3738,10 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// create a protocol version where dynamic lambda is enabled
+	version, _, configCleanup := createDynamicFilterConfig()
+	defer configCleanup()
+
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3761,14 +3764,14 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
 
-	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, protocol.ConsensusFuture, time.Second)
+	assertCorrectReceivedAtSet(t, pWhite, pM, helper, r, p, pP, pV, m, version, time.Second)
 	require.False(t, pWhite.lowestCredentialArrivals.isFull())
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
 	// send votePresent message (mimicking the first AV message validating)
 	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, p, propose, *pV)
 	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
-	inMsg = messageEvent{T: votePresent, Input: unverifiedVoteMsg}
+	inMsg = messageEvent{T: votePresent, Input: unverifiedVoteMsg, Proto: ConsensusVersionView{Version: version}}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3853,10 +3856,14 @@ func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.False(t, pWhite.lowestCredentialArrivals.isFull())
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
+	// create a protocol version where dynamic filter is enabled
+	version, _, configCleanup := createDynamicFilterConfig()
+	defer configCleanup()
+
 	// send votePresent message (mimicking the first AV message validating)
 	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, p, propose, *pV)
 	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
-	inMsg = messageEvent{T: votePresent, Input: unverifiedVoteMsg}
+	inMsg = messageEvent{T: votePresent, Input: unverifiedVoteMsg, Proto: ConsensusVersionView{Version: version}}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
@@ -3941,10 +3948,14 @@ func TestPlayerRetainsLateReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.False(t, pWhite.lowestCredentialArrivals.isFull())
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
+	// create a protocol version where dynamic filter is enabled
+	version, _, configCleanup := createDynamicFilterConfig()
+	defer configCleanup()
+
 	// send votePresent message (mimicking the first AV message validating)
 	vVote = helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, p, propose, *pV)
 	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
-	inMsg = messageEvent{T: votePresent, Input: unverifiedVoteMsg}
+	inMsg = messageEvent{T: votePresent, Input: unverifiedVoteMsg, Proto: ConsensusVersionView{Version: version}}
 	err, panicErr = pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
