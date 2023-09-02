@@ -133,8 +133,10 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 	switch e.t() {
 	case votePresent:
 		err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
+		// don't filter votes we get if they may be used for tracking credential arrival times
 		if err != nil {
-			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
+			credTrackingProcessing := proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, e.Input.UnauthenticatedVote)
+			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), ContinueProcessingVoteForCredentialTracking: credTrackingProcessing}
 		}
 		return emptyEvent{}
 
@@ -150,9 +152,14 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		v := e.Input.Vote
 
 		err := proposalFresh(e.FreshnessData, v.u())
-		if err != nil && !proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, v.u()) {
-			err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
-			return filteredEvent{T: voteFiltered, Err: err}
+		keepForCredentialTracking := false
+		if err != nil {
+			// if we should keep processing this credential message only to record its timestamp, we continue
+			keepForCredentialTracking = proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, v.u())
+			if !keepForCredentialTracking {
+				err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
+				return filteredEvent{T: voteFiltered, Err: err}
+			}
 		}
 
 		if v.R.Round == p.Round {
@@ -161,11 +168,20 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
-		if err != nil {
-			e.messageEvent.FreshOnlyForCredentialHistoryTracking = true
-		}
+		e := r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.Round, v.R.Period, 0)
 
-		return r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.Round, v.R.Period, 0)
+		if keepForCredentialTracking {
+			// we only continued processing this vote to see whether it updates the credential arrival time
+			err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
+			if e.t() == voteFiltered {
+				// indicate whether it updated
+				return filteredEvent{T: voteFiltered, Err: err, StateUpdated: e.(filteredEvent).StateUpdated}
+			}
+			// the proposalMachineRound didn't filter the vote, so it must have had a better credential,
+			// indicate that it did cause updating its state
+			return filteredEvent{T: voteFiltered, Err: err, StateUpdated: true}
+		}
+		return e
 
 	case payloadPresent:
 		propRound := e.Input.UnauthenticatedProposal.Round()
@@ -222,13 +238,13 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 // filterVote filters a vote, checking if it is both fresh and not a duplicate.
 func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) error {
 	err := proposalFresh(freshData, uv)
-	if err != nil && !proposalUsedForCredentialHistory(freshData.PlayerRound, uv) {
+	if err != nil {
 		return fmt.Errorf("proposalManager: filtered proposal-vote due to age: %v", err)
 	}
 
 	qe := voteFilterRequestEvent{RawVote: uv.R}
 	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
-	if sawVote.t() == voteFiltered {
+	if sawVote.t() == voteFiltered && !sawVote.(filteredEvent).StateUpdated {
 		return fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", uv.R.Sender, uv.R.Round, uv.R.Period)
 	}
 	return nil

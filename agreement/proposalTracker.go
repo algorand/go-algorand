@@ -168,7 +168,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		t.Freezer, updated, err = t.Freezer.accept(v)
 		if err != nil {
 			err := errProposalTrackerPS{Sub: err}
-			return filteredEvent{T: voteFiltered, StateUpdated: updated && e.FreshOnlyForCredentialHistoryTracking, Err: makeSerErr(err)}
+			return filteredEvent{T: voteFiltered, StateUpdated: updated, Err: makeSerErr(err)}
 		}
 
 		return proposalAcceptedEvent{

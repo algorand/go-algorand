@@ -285,8 +285,6 @@ type messageEvent struct {
 	Cancelled bool
 
 	Proto ConsensusVersionView
-
-	FreshOnlyForCredentialHistoryTracking bool
 }
 
 func (e messageEvent) t() eventType {
@@ -605,6 +603,11 @@ type filteredEvent struct {
 	// StateUpdated indicates whether the filtered message caused any change in
 	// the state machine
 	StateUpdated bool
+
+	// ContinueProcessingVoteForCredentialTracking indicates whether its a vote
+	// present that we should continue processing only for tracking its
+	// credential arrival time.
+	ContinueProcessingVoteForCredentialTracking bool
 
 	// Err is the reason cryptographic verification failed and is set for
 	// events {proposal,vote,bundle}Malformed.

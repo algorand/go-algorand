@@ -3241,9 +3241,9 @@ func MessageMaxSize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *messageEvent) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 8
+	// map header, size 7
 	// string "Cancelled"
-	o = append(o, 0x88, 0xa9, 0x43, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x6c, 0x65, 0x64)
+	o = append(o, 0x87, 0xa9, 0x43, 0x61, 0x6e, 0x63, 0x65, 0x6c, 0x6c, 0x65, 0x64)
 	o = msgp.AppendBool(o, (*z).Cancelled)
 	// string "Err"
 	o = append(o, 0xa3, 0x45, 0x72, 0x72)
@@ -3252,9 +3252,6 @@ func (z *messageEvent) MarshalMsg(b []byte) (o []byte) {
 	} else {
 		o = msgp.AppendString(o, string(*(*z).Err))
 	}
-	// string "FreshOnlyForCredentialHistoryTracking"
-	o = append(o, 0xd9, 0x25, 0x46, 0x72, 0x65, 0x73, 0x68, 0x4f, 0x6e, 0x6c, 0x79, 0x46, 0x6f, 0x72, 0x43, 0x72, 0x65, 0x64, 0x65, 0x6e, 0x74, 0x69, 0x61, 0x6c, 0x48, 0x69, 0x73, 0x74, 0x6f, 0x72, 0x79, 0x54, 0x72, 0x61, 0x63, 0x6b, 0x69, 0x6e, 0x67)
-	o = msgp.AppendBool(o, (*z).FreshOnlyForCredentialHistoryTracking)
 	// string "Input"
 	o = append(o, 0xa5, 0x49, 0x6e, 0x70, 0x75, 0x74)
 	o = (*z).Input.MarshalMsg(o)
@@ -3382,14 +3379,6 @@ func (z *messageEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 		if zb0001 > 0 {
-			zb0001--
-			(*z).FreshOnlyForCredentialHistoryTracking, bts, err = msgp.ReadBoolBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "FreshOnlyForCredentialHistoryTracking")
-				return
-			}
-		}
-		if zb0001 > 0 {
 			err = msgp.ErrTooManyArrayFields(zb0001)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
@@ -3484,12 +3473,6 @@ func (z *messageEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Proto")
 					return
 				}
-			case "FreshOnlyForCredentialHistoryTracking":
-				(*z).FreshOnlyForCredentialHistoryTracking, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "FreshOnlyForCredentialHistoryTracking")
-					return
-				}
 			default:
 				err = msgp.ErrNoField(string(field))
 				if err != nil {
@@ -3522,13 +3505,13 @@ func (z *messageEvent) Msgsize() (s int) {
 	} else {
 		s += (*z).Tail.Msgsize()
 	}
-	s += 10 + msgp.BoolSize + 6 + (*z).Proto.Msgsize() + 39 + msgp.BoolSize
+	s += 10 + msgp.BoolSize + 6 + (*z).Proto.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *messageEvent) MsgIsZero() bool {
-	return ((*z).T == 0) && ((*z).Input.MsgIsZero()) && ((*z).Err == nil) && ((*z).TaskIndex == 0) && ((*z).Tail == nil) && ((*z).Cancelled == false) && ((*z).Proto.MsgIsZero()) && ((*z).FreshOnlyForCredentialHistoryTracking == false)
+	return ((*z).T == 0) && ((*z).Input.MsgIsZero()) && ((*z).Err == nil) && ((*z).TaskIndex == 0) && ((*z).Tail == nil) && ((*z).Cancelled == false) && ((*z).Proto.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -3537,7 +3520,7 @@ func MessageEventMaxSize() (s int) {
 	panic("Unable to determine max size: String type string(*z.Err) is unbounded")
 	s += 10 + msgp.Uint64Size + 5
 	s += MessageEventMaxSize()
-	s += 10 + msgp.BoolSize + 6 + ConsensusVersionViewMaxSize() + 39 + msgp.BoolSize
+	s += 10 + msgp.BoolSize + 6 + ConsensusVersionViewMaxSize()
 	return
 }
 

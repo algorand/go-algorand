@@ -614,12 +614,13 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		case voteFiltered:
 			ver := e.Proto.Version
 			proto := config.Consensus[ver]
-			v := e.Input.Vote
-			if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated {
+			if !proto.DynamicFilterTimeout || !ef.(filteredEvent).ContinueProcessingVoteForCredentialTracking {
+				err := ef.(filteredEvent).Err
+				return append(actions, ignoreAction(e, err))
+			} else if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated {
+				v := e.Input.Vote
 				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
 			}
-			err := ef.(filteredEvent).Err
-			return append(actions, ignoreAction(e, err))
 		}
 
 		if e.t() == votePresent {
@@ -712,12 +713,6 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			err := makeSerErrf("rejected message since it was invalid: %v", ef.(filteredEvent).Err)
 			return append(actions, disconnectAction(e, err))
 		case voteFiltered:
-			ver := e.Proto.Version
-			proto := config.Consensus[ver]
-			v := e.Input.Vote
-			if proto.DynamicFilterTimeout && ef.(filteredEvent).StateUpdated {
-				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
-			}
 			err := ef.(filteredEvent).Err
 			return append(actions, ignoreAction(e, err))
 		}
