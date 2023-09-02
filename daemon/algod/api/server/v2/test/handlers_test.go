@@ -1810,8 +1810,10 @@ func TestGetProofDefault(t *testing.T) {
 	blkHdr, err := l.BlockHdr(1)
 	a.NoError(err)
 
-	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(string(resp.Hashtype), resp.Treedepth, resp.Proof)
+	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(string(resp.Hashtype), resp.Proof)
 	a.NoError(err)
+
+	a.Equal(uint64(singleLeafProof.TreeDepth), resp.Treedepth)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
 	copy(element.Stib[:], resp.Stibhash[:])
