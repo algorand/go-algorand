@@ -596,11 +596,22 @@ func (e payloadProcessedEvent) ComparableStr() string {
 	return fmt.Sprintf("%v: %.5v", e.t().String(), e.Proposal.BlockDigest.String())
 }
 
+// CredentialTrackingEffect inficates the impact of an event that got filtered
+// on the credential tracking mechanism for the purpose of tracking the time it
+// took the best credential to arrive.
 type CredentialTrackingEffect uint8
 
 const (
+	// NoCredentialTrackingImpact indicates the filtered event had no impact on
+	// the credential tracking mechanism.
 	NoCredentialTrackingImpact CredentialTrackingEffect = iota
+
+	// MayImpactCredentialTracking indicates the filtered event could impact on
+	// the credential tracking mechanism and more processing may be required.
 	MayImpactCredentialTracking
+
+	// NewBestCredential indicates that the filtered event provided a new best
+	// credential for its round.
 	NewBestCredential
 )
 
