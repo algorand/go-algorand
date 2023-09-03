@@ -596,18 +596,22 @@ func (e payloadProcessedEvent) ComparableStr() string {
 	return fmt.Sprintf("%v: %.5v", e.t().String(), e.Proposal.BlockDigest.String())
 }
 
+type CredentialTrackingEffect uint8
+
+const (
+	NoCredentialTrackingImpact CredentialTrackingEffect = iota
+	MayImpactCredentialTracking
+	NewBestCredential
+)
+
 type filteredEvent struct {
 	// {proposal,vote,bundle}{Filtered,Malformed}
 	T eventType
 
-	// StateUpdated indicates whether the filtered message caused any change in
-	// the state machine
-	StateUpdated bool
-
-	// ContinueProcessingVoteForCredentialTracking indicates whether its a vote
-	// present that we should continue processing only for tracking its
-	// credential arrival time.
-	ContinueProcessingVoteForCredentialTracking bool
+	// CredentialTrackingNote indicates the impact of the filtered event on the
+	// credential tracking machinary used for dynamically setting the filter
+	// timeout.
+	CredentialTrackingNote CredentialTrackingEffect
 
 	// Err is the reason cryptographic verification failed and is set for
 	// events {proposal,vote,bundle}Malformed.

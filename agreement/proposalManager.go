@@ -135,8 +135,11 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
 		if err != nil {
 			// mark filtered votes that may still update the best credential arrival time
-			credTrackingProcessing := proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, e.Input.UnauthenticatedVote)
-			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), ContinueProcessingVoteForCredentialTracking: credTrackingProcessing}
+			credTrackingNote := NoCredentialTrackingImpact
+			if proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, e.Input.UnauthenticatedVote) {
+				credTrackingNote = MayImpactCredentialTracking
+			}
+			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), CredentialTrackingNote: credTrackingNote}
 		}
 		return emptyEvent{}
 
@@ -174,12 +177,17 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			// we only continued processing this vote to see whether it updates the credential arrival time
 			err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
 			if e.t() == voteFiltered {
+				credNote := e.(filteredEvent).CredentialTrackingNote
+				if credNote != NewBestCredential && credNote != NoCredentialTrackingImpact {
+					// It should be impossible to hit this condition
+					credNote = NoCredentialTrackingImpact
+				}
 				// indicate whether it updated
-				return filteredEvent{T: voteFiltered, Err: err, StateUpdated: e.(filteredEvent).StateUpdated}
+				return filteredEvent{T: voteFiltered, Err: err, CredentialTrackingNote: credNote}
 			}
 			// the proposalMachineRound didn't filter the vote, so it must have had a better credential,
 			// indicate that it did cause updating its state
-			return filteredEvent{T: voteFiltered, Err: err, StateUpdated: true}
+			return filteredEvent{T: voteFiltered, Err: err, CredentialTrackingNote: NewBestCredential}
 		}
 		return e
 

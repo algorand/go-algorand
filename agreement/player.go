@@ -620,17 +620,21 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
 			}
-			if ef.(filteredEvent).StateUpdated {
+			switch ef.(filteredEvent).CredentialTrackingNote {
+			case NewBestCredential:
 				// Dynamic filter timeout feature enabled, and current message
 				// updated the best credential arrival time
 				v := e.Input.Vote
 				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
-			} else if !ef.(filteredEvent).ContinueProcessingVoteForCredentialTracking {
-				// Dynamic filter timeout feature enabled, and current message
-				// may update the best credential arrival time, so we should
-				// continue processing.
+			case NoCredentialTrackingImpact:
+				// Dynamic filter timeout feature enabled, but current message
+				// may not update the best credential arrival time, so we should
+				// ignore it.
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
+				// There is another case, where the message
+				// MayImpactCredentialTracking. This case does not return here,
+				// so we continue processing the message.
 			}
 		}
 

@@ -336,7 +336,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered, ContinueProcessingVoteForCredentialTracking: true})
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered, CredentialTrackingNote: MayImpactCredentialTracking})
 
 	// vote from credentialRoundLag ago and period > 0 should be filtered
 	pV = helper.MakeRandomProposalValue()

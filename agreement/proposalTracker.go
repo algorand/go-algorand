@@ -43,27 +43,27 @@ type proposalSeeker struct {
 // accept compares a given vote with the current lowest-credentialled vote and
 // sets it if freeze has not been called. Returns true if any internal proposalSeeker
 // state has been updated, whether to Lowest or lowestAfterFreeze.
-func (s proposalSeeker) accept(v vote) (proposalSeeker, bool, error) {
+func (s proposalSeeker) accept(v vote) (proposalSeeker, CredentialTrackingEffect, error) {
 	if s.Frozen {
-		updated := false
+		effect := NoCredentialTrackingImpact
 		// continue tracking and forwarding the lowest proposal even when frozen
 		if !s.hasLowestAfterFreeze || v.Cred.Less(s.lowestAfterFreeze.Cred) {
 			s.lowestAfterFreeze = v
 			s.hasLowestAfterFreeze = true
-			updated = true
+			effect = NewBestCredential
 		}
-		return s, updated, errProposalSeekerFrozen{}
+		return s, effect, errProposalSeekerFrozen{}
 	}
 
 	if s.Filled && !v.Cred.Less(s.Lowest.Cred) {
-		return s, false, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
+		return s, NoCredentialTrackingImpact, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
 	}
 
 	s.Lowest = v
 	s.Filled = true
 	s.lowestAfterFreeze = v
 	s.hasLowestAfterFreeze = true
-	return s, true, nil
+	return s, NewBestCredential, nil
 }
 
 // freeze freezes the state of the proposalSeeker so that future calls no longer
@@ -163,12 +163,12 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
 		}
 
-		var updated bool
+		var effect CredentialTrackingEffect
 		var err error
-		t.Freezer, updated, err = t.Freezer.accept(v)
+		t.Freezer, effect, err = t.Freezer.accept(v)
 		if err != nil {
 			err := errProposalTrackerPS{Sub: err}
-			return filteredEvent{T: voteFiltered, StateUpdated: updated, Err: makeSerErr(err)}
+			return filteredEvent{T: voteFiltered, CredentialTrackingNote: effect, Err: makeSerErr(err)}
 		}
 
 		return proposalAcceptedEvent{
