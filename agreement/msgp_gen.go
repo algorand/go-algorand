@@ -34,6 +34,15 @@ import (
 //           |-----> (*) MsgIsZero
 //           |-----> ConsensusVersionViewMaxSize()
 //
+// CredentialTrackingEffect
+//             |-----> MarshalMsg
+//             |-----> CanMarshalMsg
+//             |-----> (*) UnmarshalMsg
+//             |-----> (*) CanUnmarshalMsg
+//             |-----> Msgsize
+//             |-----> MsgIsZero
+//             |-----> CredentialTrackingEffectMaxSize()
+//
 // Deadline
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
@@ -976,6 +985,58 @@ func ConsensusVersionViewMaxSize() (s int) {
 	s = 1 + 4
 	panic("Unable to determine max size: String type string(*z.Err) is unbounded")
 	s += 8 + protocol.ConsensusVersionMaxSize()
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z CredentialTrackingEffect) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+func (_ CredentialTrackingEffect) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(CredentialTrackingEffect)
+	if !ok {
+		_, ok = (z).(*CredentialTrackingEffect)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *CredentialTrackingEffect) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = CredentialTrackingEffect(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *CredentialTrackingEffect) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CredentialTrackingEffect)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z CredentialTrackingEffect) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z CredentialTrackingEffect) MsgIsZero() bool {
+	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func CredentialTrackingEffectMaxSize() (s int) {
+	s = msgp.Uint8Size
 	return
 }
 
