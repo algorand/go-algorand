@@ -85,13 +85,3 @@ func TestGetBootstrapPeersFailure(t *testing.T) {
 
 	require.Equal(t, 0, len(addrs))
 }
-
-func TestTopicCid(t *testing.T) {
-	/*
-		topicMultihash, err := multihash.Sum([]byte(topic), multihash.SHA2_256, -1)
-		topicCid := cid.NewCidV1(cid.Raw, topicMultihash)
-		require.NoError(t, err)
-		dht1Providers, err := dht1.FindProviders(context.TODO(), topicCid)
-		require.NoError(t, err)
-	*/
-}
